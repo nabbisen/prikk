@@ -1,0 +1,14 @@
+[package]
+name = "prikk-store"
+version = "0.1.0"
+description = "PRIKK storage crate scaffold."
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+prikk-error.workspace = true
+prikk-object.workspace = true
+
+[lints]
+workspace = true

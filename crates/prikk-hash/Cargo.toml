@@ -1,0 +1,10 @@
+[package]
+name = "prikk-hash"
+version = "0.1.0"
+description = "PRIKK hash primitives."
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true

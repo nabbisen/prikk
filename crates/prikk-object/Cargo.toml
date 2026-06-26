@@ -1,0 +1,14 @@
+[package]
+name = "prikk-object"
+version = "0.1.0"
+description = "PRIKK object identity, canonical encoding, and object payload types."
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+prikk-error.workspace = true
+prikk-hash.workspace = true
+
+[lints]
+workspace = true

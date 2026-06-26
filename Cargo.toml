@@ -1,0 +1,32 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/prikk-error",
+    "crates/prikk-hash",
+    "crates/prikk-object",
+    "crates/prikk-store",
+    "crates/prikk-cli",
+]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+authors = ["nabbisen"]
+repository = "https://github.com/nabbisen/prikk"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+panic = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+indexing_slicing = "warn"
+
+[workspace.dependencies]
+prikk-error = { path = "crates/prikk-error" }
+prikk-hash = { path = "crates/prikk-hash" }
+prikk-object = { path = "crates/prikk-object" }
+prikk-store = { path = "crates/prikk-store" }
