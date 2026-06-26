@@ -26,12 +26,13 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo run -p prikk -- init ./sample-repo
 (cd ./sample-repo && ../target/debug/prikk commit --allow-empty -m "initial scaffold")
+(cd ./sample-repo && ../target/debug/prikk seal --allow-no-audit)
 cargo run -p prikk -- verify ./sample-repo
 ```
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-008**.
+Current implementation drop: **0.1.0 PR-009**.
 
 Implemented:
 
@@ -44,12 +45,13 @@ Implemented:
 - Initial RefState publication primitives with flat hashed ref pointer paths.
 - Inline signed RefUpdate log append/replay.
 - Narrow empty-commit scaffold that appends a signed patch envelope to the active WAL.
-- Minimal CLI commands: `init`, `commit --allow-empty -m`, `status`, `verify`, and `--version`.
+- Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
+- Minimal CLI commands: `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `verify`, and `--version`.
 
 Not implemented yet:
 
-- Real worktree diff capture and full seal transaction.
-- Policy-aware ref publication through seal.
+- Real worktree diff capture and worktree state materialization.
+- Policy-aware audit/attestation publication through seal.
 - Patch apply/commutation.
 - Plugin/audit execution.
 - Remote sync.

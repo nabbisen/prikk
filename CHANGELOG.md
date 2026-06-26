@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.0 PR-009
+
+local no-audit seal scaffold that persists active WAL patch envelopes, creates a Block, publishes `heads/main`, and clears the active WAL after success.
+
+- Added `prikk seal --allow-no-audit` as a local no-audit seal scaffold.
+- Seal persists signed patch envelopes from the active WAL into the object store.
+- Seal creates a signed Block object with deterministic scaffold state root.
+- Seal publishes `heads/main` through signed RefState and inline RefUpdate records.
+- Seal truncates the active WAL only after the ref publication succeeds.
+- Added RefState canonical decoding for current-head parent discovery.
+- Kept real worktree materialization, audit plugins, patch algebra, and sync deferred.
+
+# Changelog
+
 ## 0.1.0 PR-008
 
 Narrow empty-commit scaffold that appends a signed patch envelope to the active WAL under `active.lock`.
@@ -12,6 +26,8 @@ Narrow empty-commit scaffold that appends a signed patch envelope to the active 
 
 ## 0.1.0 PR-007
 
+Initial RefState publication primitives, flat ref pointer layout, and inline RefUpdate log verification.
+
 - Added `RefStore` for initial RefState publication primitives.
 - Added flat `refs/by-id/<sha256(ref_name)>.ref` pointer layout helpers.
 - Added ref-specific lock scaffold via `RefLock`.
@@ -23,6 +39,8 @@ Narrow empty-commit scaffold that appends a signed patch envelope to the active 
 
 ## 0.1.0 PR-006
 
+Read-only repository verification for persisted objects and active WAL records.
+
 - Added read-only repository verification in `prikk-store`.
 - Added object-store scan across persisted object type directories.
 - Added verification that object file paths match computed object IDs and canonical fanout paths.
@@ -33,12 +51,16 @@ Narrow empty-commit scaffold that appends a signed patch envelope to the active 
 
 ## 0.1.0 PR-005
 
+Storage cleanup and active-session WAL append/replay.
+
 - Fixed `cargo fmt --check` drift reported against PR-004.
 - Removed unused `ByteCursor::remaining` so strict Clippy dead-code checks pass.
 - Fixed `prikk init [path]` argument handling so CLI tests compile.
 - Updated implementation status and handoff notes for the CI feedback round.
 
 ## 0.1.0 PR-004
+
+Storage cleanup and active-session WAL append/replay.
 
 - Aligned workspace metadata with project Rust instructions: Rust 2024, Apache-2.0, author nabbisen.
 - Split large `prikk-store` and `prikk-object` payload files by logical boundaries.

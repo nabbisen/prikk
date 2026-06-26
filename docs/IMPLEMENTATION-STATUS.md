@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-008
+Version: 0.1.0 PR-009
 
 ## Implemented
 
@@ -21,12 +21,14 @@ Version: 0.1.0 PR-008
 - Read-only repository verification for persisted object files, ref pointers, ref logs, and active WAL records.
 - ActiveSession append API that holds `active.lock` while writing the active WAL.
 - Empty-commit scaffold for manually exercising the commit/WAL path.
-- Minimal CLI for `init`, `commit --allow-empty -m`, `status`, `verify`, and `--version`.
+- Local no-audit seal scaffold that persists WAL patches, creates a Block, publishes `heads/main`, and clears the WAL after publication.
+- RefState canonical decoding for current-head parent discovery.
+- Minimal CLI for `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `verify`, and `--version`.
 
 ## Not Implemented Yet
 
-- Seal transaction.
-- Policy-aware ref publication from seal.
+- Real worktree diff capture and worktree state materialization.
+- Policy-aware audit/attestation publication from seal.
 - Patch apply/inverse/commutation.
 - Conflict witnesses and merge state.
 - WASM plugin host.
@@ -35,6 +37,6 @@ Version: 0.1.0 PR-008
 
 ## Gate Discipline
 
-PR-008 stays within the approved M1 foundation area. It adds a narrow active-session commit
-scaffold that appends a signed patch envelope to the WAL, but it does not yet implement real
-worktree diff capture, seal semantics, patch algebra, plugin execution, or remote sync.
+PR-009 stays within the approved M1/M3 foundation boundary by adding a local no-audit seal scaffold
+for exercising object persistence and ref publication. It does not yet implement real worktree diff
+capture, patch algebra, audit plugin execution, policy enforcement, or remote sync.

@@ -93,6 +93,19 @@ impl Wal {
         decode_records(&bytes)
     }
 
+
+    /// Truncate the WAL after a successful publication that made all entries durable elsewhere.
+    pub fn truncate_empty(&self) -> Result<()> {
+        let Some(parent) = self.path.parent() else {
+            return Err(PrikkError::Io("WAL path has no parent directory".to_string()));
+        };
+        fs::create_dir_all(parent)?;
+        let file = OpenOptions::new().create(true).write(true).truncate(true).open(&self.path)?;
+        file.sync_all()?;
+        sync_directory_best_effort(parent)?;
+        Ok(())
+    }
+
     /// Return the next sequence number for append.
     pub fn next_sequence(&self) -> Result<u64> {
         let replay = self.replay()?;

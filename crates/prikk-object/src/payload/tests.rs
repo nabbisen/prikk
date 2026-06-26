@@ -36,3 +36,25 @@ fn blob_payload_has_stable_object_id() {
         assert_eq!(id_a, id_b);
     }
 }
+
+#[test]
+fn ref_state_payload_decodes_its_canonical_bytes() {
+    use super::{RefKind, RefStatePayload};
+
+    let target = ObjectId::from_canonical_payload(ObjectType::Block, 1, b"block");
+    let previous = ObjectId::from_canonical_payload(ObjectType::RefState, 1, b"prev");
+    let payload = RefStatePayload {
+        ref_name: "heads/main".to_string(),
+        kind: RefKind::Branch,
+        target_object_id: target,
+        update_seq: 2,
+        previous_ref_state_id: Some(previous),
+        required_attestation_ids: Vec::new(),
+    };
+    let bytes = payload.to_canonical_bytes();
+    assert!(bytes.is_ok());
+    if let Ok(bytes) = bytes {
+        let decoded = RefStatePayload::decode_canonical(&bytes);
+        assert_eq!(decoded, Ok(payload));
+    }
+}

@@ -2,13 +2,14 @@
 
 //! PRIKK command-line entry point.
 //!
-//! PR-008 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
-//! ref pointer counts, and read-only repository verification. The commit command deliberately
-//! appends a signed patch envelope to the active WAL only; seal, patch application, and real diff
-//! capture remain later increments.
+//! PR-009 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
+//! a local no-audit seal scaffold, ref pointer counts, and read-only repository verification.
+//! Real diff capture, patch application, audit plugins, and sync remain later increments.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
+
+mod seal;
 
 use prikk_hash::sha256;
 use prikk_object::{
@@ -17,7 +18,7 @@ use prikk_object::{
 };
 use prikk_store::{verify_repository, ActiveSession, RefStore, RepositoryLayout, Wal};
 
-const VERSION: &str = "0.1.0-pr008";
+const VERSION: &str = "0.1.0-pr009";
 
 fn main() -> ExitCode {
     match run() {
@@ -63,6 +64,16 @@ fn run() -> std::result::Result<(), String> {
             println!("note: real diff capture and seal remain later PRs");
             Ok(())
         }
+        Some("seal") => {
+            let root = current_dir()?;
+            let result = seal::run_seal(root, args.collect())?;
+            println!("sealed active WAL into block");
+            println!("patches: {}", result.patch_count);
+            println!("block id: {}", result.block_id);
+            println!("heads/main RefState: {}", result.ref_state_id);
+            println!("note: audit plugins and real worktree materialization remain later PRs");
+            Ok(())
+        }
         Some("status") => {
             let root = current_dir()?;
             let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
@@ -79,7 +90,7 @@ fn run() -> std::result::Result<(), String> {
                 Some(id) => println!("heads/main RefState: {id}"),
                 None => println!("heads/main RefState: <not published>"),
             }
-            println!("status: seal, patch algebra, plugins, and sync not implemented in PR-008");
+            println!("status: patch algebra, plugins, and sync not implemented in PR-009");
             Ok(())
         }
         Some("verify") => {
@@ -121,7 +132,7 @@ fn parse_empty_commit_message(args: Vec<String>) -> std::result::Result<String, 
         }
     }
     if !allow_empty {
-        return Err("PR-008 supports only `prikk commit --allow-empty -m <message>`".to_string());
+        return Err("PR-009 supports only `prikk commit --allow-empty -m <message>`".to_string());
     }
     let Some(message) = message else {
         return Err("empty commit requires -m <message>".to_string());
@@ -173,6 +184,7 @@ fn print_help() {
     println!("  prikk init [path]                         Create a .prikk repository layout");
     println!("  prikk commit --allow-empty -m <message>   Append an empty patch to the active WAL");
     println!("  prikk status                              Check repository and active WAL status");
+    println!("  prikk seal --allow-no-audit              Seal active WAL into heads/main");
     println!("  prikk verify [path]                       Verify objects and WAL records");
     println!("  prikk --version                           Print version");
 }
