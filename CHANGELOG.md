@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0 PR-011
+
+Read-only doctor diagnostics for repository health. Doctor wraps verification results into actionable issue codes without modifying repository data.
+
+- Added read-only doctor diagnostics on top of repository verification.
+- Added `DoctorReport`, `DoctorIssue`, and `DoctorSeverity` for structured health reporting.
+- Added CLI command `prikk doctor [path]`.
+- Doctor reports verification errors as actionable diagnostics without modifying the repository.
+- Doctor warns about trailing partial active-WAL bytes while leaving repair deferred.
+- Added doctor tests for healthy repositories, partial WAL warnings, and verification errors.
+- Kept destructive repair, real diff capture, patch algebra, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-010
 
 Verification hardening for the local no-audit seal scaffold. Verification now checks block references, RefUpdate-to-RefState links, target block existence, and persisted WAL patch counts.

@@ -93,7 +93,6 @@ impl Wal {
         decode_records(&bytes)
     }
 
-
     /// Truncate the WAL after a successful publication that made all entries durable elsewhere.
     pub fn truncate_empty(&self) -> Result<()> {
         let Some(parent) = self.path.parent() else {

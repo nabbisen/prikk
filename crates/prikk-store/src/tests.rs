@@ -3,13 +3,13 @@
 use prikk_object::{
     BlockKind, BlockPayload, CanonicalEncode, EditText, MerkleRoot, ObjectEnvelope, ObjectId,
     ObjectType, Operation, OperationKind, PatchPayload, RefKind, RefStatePayload, RefUpdatePayload,
-    Signature, SignatureAlgorithm,
-    SignerRole,
+    Signature, SignatureAlgorithm, SignerRole,
 };
 
 use crate::{
-    ActiveLock, ActiveSession, FileObjectStore, MemoryObjectStore, ObjectReader, ObjectWriter,
-    RefLock, RefPublication, RefStore, RepositoryLayout, Wal, verify_repository,
+    doctor_repository, ActiveLock, ActiveSession, DoctorSeverity, FileObjectStore, MemoryObjectStore,
+    ObjectReader, ObjectWriter, RefLock, RefPublication, RefStore, RepositoryLayout, Wal,
+    verify_repository,
 };
 
 #[test]
@@ -73,7 +73,6 @@ fn active_lock_rejects_second_writer() {
     }
     let _ = std::fs::remove_dir_all(root);
 }
-
 
 
 #[test]
@@ -251,7 +250,6 @@ fn wal_rejects_unsigned_patch_envelope() {
 }
 
 
-
 #[test]
 fn verify_repository_detects_block_with_missing_patch() {
     let root = unique_temp_dir("block-missing-patch");
@@ -330,6 +328,70 @@ fn verify_repository_detects_object_file_in_wrong_prefix() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+#[test]
+fn doctor_reports_healthy_repository() {
+    let root = unique_temp_dir("doctor-healthy");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let report = doctor_repository(&layout);
+        assert!(report.is_healthy());
+        assert!(report.verification.is_some());
+        assert_eq!(report.count_by_severity(DoctorSeverity::Error), 0);
+        assert_eq!(report.count_by_severity(DoctorSeverity::Info), 1);
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn doctor_reports_trailing_partial_wal_warning() {
+    let root = unique_temp_dir("doctor-partial-wal");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let wal_path = layout.default_queue_wal_path();
+        assert!(std::fs::write(&wal_path, b"partial").is_ok());
+        let report = doctor_repository(&layout);
+        assert!(report.is_healthy());
+        assert_eq!(report.count_by_severity(DoctorSeverity::Warning), 1);
+        assert_eq!(
+            report.verification.as_ref().map(|summary| summary.trailing_partial_wal_bytes),
+            Some(7)
+        );
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn doctor_reports_verification_error() {
+    let root = unique_temp_dir("doctor-bad-block");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let mut store = FileObjectStore::new(layout.clone());
+        let missing_patch = sample_object_id("doctor-missing-patch");
+        let payload = BlockPayload {
+            parent_block_ids: Vec::new(),
+            kind: BlockKind::Root,
+            patch_ids: vec![missing_patch],
+            state_merkle_root: MerkleRoot([0_u8; 32]),
+            snapshot_blob_ref: None,
+        };
+        let payload_bytes = payload.to_canonical_bytes();
+        assert!(payload_bytes.is_ok());
+        if let Ok(payload_bytes) = payload_bytes {
+            let mut block = ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes);
+            assert!(block.add_signature(maintainer_signature()).is_ok());
+            assert!(store.write_object(&block).is_ok());
+            let report = doctor_repository(&layout);
+            assert!(!report.is_healthy());
+            assert_eq!(report.count_by_severity(DoctorSeverity::Error), 1);
+            assert!(report.verification.is_none());
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
 fn signed_patch_envelope() -> ObjectEnvelope {
     let payload = PatchPayload {
         operations: vec![Operation {
@@ -354,7 +416,6 @@ fn signed_patch_envelope() -> ObjectEnvelope {
     assert!(envelope.add_signature(dummy_signature()).is_ok());
     envelope
 }
-
 
 fn signed_empty_block_envelope() -> ObjectEnvelope {
     let payload = BlockPayload {
@@ -444,7 +505,7 @@ fn maintainer_signature() -> Signature {
 
 fn unique_temp_dir(name: &str) -> std::path::PathBuf {
     let mut path = std::env::temp_dir();
-    path.push(format!("prikk-pr007-{name}-{}-{}", std::process::id(), monotonic_suffix()));
+    path.push(format!("prikk-pr011-{name}-{}-{}", std::process::id(), monotonic_suffix()));
     path
 }
 
