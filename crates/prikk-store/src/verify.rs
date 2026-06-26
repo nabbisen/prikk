@@ -1,8 +1,8 @@
 //! Repository verification routines.
 //!
-//! Verification is intentionally read-only in PR-006. It checks object identity, object-type
-//! placement, envelope decoding, and active WAL replay checksums. Repair/truncation belongs to
-//! a later `doctor` increment.
+//! Verification is intentionally read-only in PR-007. It checks object identity, object-type
+//! placement, envelope decoding, ref pointer/log consistency, and active WAL replay checksums.
+//! Repair/truncation belongs to a later `doctor` increment.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -13,6 +13,7 @@ use prikk_object::{ObjectId, ObjectType};
 
 use crate::file_codec::decode_envelope_file;
 use crate::layout::{persisted_object_types, RepositoryLayout};
+use crate::refs::verify_refs;
 use crate::wal::Wal;
 
 /// Verification summary for a single persisted object.
@@ -33,6 +34,10 @@ pub struct RepositoryVerification {
     pub checked_objects: usize,
     /// Number of active WAL records replayed successfully.
     pub checked_wal_records: usize,
+    /// Number of ref pointer files checked successfully.
+    pub checked_refs: usize,
+    /// Number of inline ref-log records checked successfully.
+    pub checked_ref_log_records: usize,
     /// Number of trailing bytes in the active WAL that look like an incomplete final record.
     pub trailing_partial_wal_bytes: usize,
 }
@@ -48,11 +53,14 @@ impl RepositoryVerification {
 /// Verify a repository layout without modifying it.
 pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerification> {
     let checked_objects = verify_objects(layout)?;
+    let ref_verification = verify_refs(layout)?;
     let wal = Wal::new(layout.default_queue_wal_path());
     let replay = wal.replay()?;
     Ok(RepositoryVerification {
         checked_objects,
         checked_wal_records: replay.records.len(),
+        checked_refs: ref_verification.pointer_count,
+        checked_ref_log_records: ref_verification.log_record_count,
         trailing_partial_wal_bytes: replay.trailing_partial_bytes,
     })
 }

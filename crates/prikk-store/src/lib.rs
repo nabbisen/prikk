@@ -3,9 +3,9 @@
 
 //! Storage crate for PRIKK repositories.
 //!
-//! PR-006 contains persistent layout, object storage, WAL durability, and read-only
-//! repository verification. Ref publication, patch algebra, plugin execution, and remote
-//! sync remain separate increments.
+//! PR-007 contains persistent layout, object storage, WAL durability, read-only
+//! repository verification, and initial ref-state/ref-log publication primitives. Patch algebra,
+//! plugin execution, and remote sync remain separate increments.
 
 mod byte_cursor;
 mod file_codec;
@@ -14,6 +14,7 @@ mod layout;
 mod lock;
 mod memory_store;
 mod object_store;
+mod refs;
 mod wal;
 mod verify;
 
@@ -21,8 +22,9 @@ mod verify;
 mod tests;
 
 pub use layout::RepositoryLayout;
-pub use lock::ActiveLock;
+pub use lock::{ActiveLock, RefLock};
 pub use memory_store::MemoryObjectStore;
 pub use object_store::{FileObjectStore, ObjectReader, ObjectWriter};
+pub use refs::{RefLogReplay, RefLogRecord, RefPublication, RefStore};
 pub use wal::{Wal, WalRecord, WalReplay};
 pub use verify::{verify_repository, ObjectVerification, RepositoryVerification};

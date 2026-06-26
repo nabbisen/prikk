@@ -5,6 +5,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use prikk_error::{PrikkError, Result};
+use prikk_hash::{sha256, to_hex};
 use prikk_object::{ObjectId, ObjectType};
 
 use crate::fsutil::{sync_directory_best_effort, write_file_atomically};
@@ -150,6 +151,30 @@ impl RepositoryLayout {
         let prefix = hex_prefix(&hex);
         self.object_type_dir(object_type).join(prefix).join(format!("{hex}.pobj"))
     }
+
+    /// Return the flat ref pointer path for a human-readable ref name.
+    #[must_use]
+    pub fn ref_pointer_path(&self, ref_name: &str) -> PathBuf {
+        self.refs_dir().join("by-id").join(format!("{}.ref", ref_name_storage_key(ref_name)))
+    }
+
+    /// Return the ref log path for a human-readable ref name.
+    #[must_use]
+    pub fn ref_log_path(&self, ref_name: &str) -> PathBuf {
+        self.refs_dir().join("logs").join(format!("{}.log", ref_name_storage_key(ref_name)))
+    }
+
+    /// Return the ref lock path for a human-readable ref name.
+    #[must_use]
+    pub fn ref_lock_path(&self, ref_name: &str) -> PathBuf {
+        self.refs_dir().join("locks").join(format!("{}.lock", ref_name_storage_key(ref_name)))
+    }
+
+    /// Return the ref temporary candidate path for a human-readable ref name.
+    #[must_use]
+    pub fn ref_tmp_path(&self, ref_name: &str) -> PathBuf {
+        self.refs_dir().join("tmp").join(format!("{}.tmp", ref_name_storage_key(ref_name)))
+    }
 }
 
 /// Return persisted object types. RefUpdate is log-inline in v1 and is intentionally absent.
@@ -181,4 +206,8 @@ pub fn object_type_directory_name(object_type: ObjectType) -> &'static str {
 
 fn hex_prefix(hex: &str) -> String {
     hex.chars().take(2).collect()
+}
+
+fn ref_name_storage_key(ref_name: &str) -> String {
+    to_hex(&sha256(ref_name.as_bytes()))
 }

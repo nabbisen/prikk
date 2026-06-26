@@ -2,16 +2,16 @@
 
 //! PRIKK command-line entry point.
 //!
-//! PR-006 exposes minimal repository layout commands, active WAL status, and read-only
-//! repository verification. WAL support is present in the storage crate but not yet
-//! exposed as an end-user commit workflow.
+//! PR-007 exposes minimal repository layout commands, active WAL status, ref pointer counts, and
+//! read-only repository verification. WAL/ref support is present in the storage crate but not yet
+//! exposed as an end-user commit or seal workflow.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use prikk_store::{verify_repository, RepositoryLayout, Wal};
+use prikk_store::{verify_repository, RefStore, RepositoryLayout, Wal};
 
-const VERSION: &str = "0.1.0-pr006";
+const VERSION: &str = "0.1.0-pr007";
 
 fn main() -> ExitCode {
     match run() {
@@ -49,9 +49,15 @@ fn run() -> std::result::Result<(), String> {
             let wal = Wal::new(layout.default_queue_wal_path());
             let replay = wal.replay().map_err(|err| err.to_string())?;
             println!("prikk repository: {}", layout.prikk_dir().display());
+            let ref_store = RefStore::new(layout.clone());
+            let main_ref = ref_store.read_current_ref_state_id("heads/main").map_err(|err| err.to_string())?;
             println!("active WAL records: {}", replay.records.len());
             println!("trailing partial WAL bytes: {}", replay.trailing_partial_bytes);
-            println!("status: refs, patch algebra, plugins, and sync not implemented in PR-006");
+            match main_ref {
+                Some(id) => println!("heads/main RefState: {id}"),
+                None => println!("heads/main RefState: <not published>"),
+            }
+            println!("status: commit, seal, patch algebra, plugins, and sync not implemented in PR-007");
             Ok(())
         }
         Some("verify") => {
@@ -64,6 +70,8 @@ fn run() -> std::result::Result<(), String> {
             println!("verified repository: {}", layout.prikk_dir().display());
             println!("checked objects: {}", report.checked_objects);
             println!("checked WAL records: {}", report.checked_wal_records);
+            println!("checked refs: {}", report.checked_refs);
+            println!("checked ref-log records: {}", report.checked_ref_log_records);
             println!("trailing partial WAL bytes: {}", report.trailing_partial_wal_bytes);
             if report.has_trailing_partial_wal() {
                 println!("warning: active WAL contains an incomplete trailing record");

@@ -1,13 +1,14 @@
 //! Storage tests.
 
 use prikk_object::{
-    CanonicalEncode, EditText, ObjectEnvelope, ObjectType, Operation, OperationKind, PatchPayload,
-    Signature, SignatureAlgorithm, SignerRole,
+    CanonicalEncode, EditText, ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind,
+    PatchPayload, RefKind, RefStatePayload, RefUpdatePayload, Signature, SignatureAlgorithm,
+    SignerRole,
 };
 
 use crate::{
-    ActiveLock, FileObjectStore, MemoryObjectStore, ObjectReader, ObjectWriter, RepositoryLayout,
-    verify_repository, Wal,
+    ActiveLock, FileObjectStore, MemoryObjectStore, ObjectReader, ObjectWriter, RefLock,
+    RefPublication, RefStore, RepositoryLayout, verify_repository, Wal,
 };
 
 #[test]
@@ -68,6 +69,109 @@ fn active_lock_rejects_second_writer() {
         drop(first);
         let third = ActiveLock::acquire(layout.default_active_lock_path());
         assert!(third.is_ok());
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+
+#[test]
+fn ref_lock_rejects_second_writer() {
+    let root = unique_temp_dir("ref-lock");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let first = RefLock::acquire(layout.ref_lock_path("heads/main"));
+        assert!(first.is_ok());
+        let second = RefLock::acquire(layout.ref_lock_path("heads/main"));
+        assert!(second.is_err());
+        drop(first);
+        let third = RefLock::acquire(layout.ref_lock_path("heads/main"));
+        assert!(third.is_ok());
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn ref_store_publishes_ref_state_and_log() {
+    let root = unique_temp_dir("ref-store");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let store = RefStore::new(layout.clone());
+        let target = sample_object_id("target-block");
+        let ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
+        let ref_state_id = ref_state.object_id();
+        let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, target, 1);
+        let publication = RefPublication {
+            ref_name: "heads/main".to_string(),
+            expected_previous_ref_state_id: None,
+            ref_state,
+            ref_update,
+        };
+        let published = store.publish(&publication);
+        assert_eq!(published, Ok(ref_state_id));
+        assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(Some(ref_state_id)));
+        let log = store.replay_log("heads/main");
+        assert!(log.is_ok());
+        if let Ok(log) = log {
+            assert_eq!(log.records.len(), 1);
+            assert_eq!(log.trailing_partial_bytes, 0);
+        }
+        let report = verify_repository(&layout);
+        assert!(report.is_ok());
+        if let Ok(report) = report {
+            assert_eq!(report.checked_refs, 1);
+            assert_eq!(report.checked_ref_log_records, 1);
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn ref_store_rejects_cas_mismatch() {
+    let root = unique_temp_dir("ref-cas");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let store = RefStore::new(layout);
+        let target = sample_object_id("target-block");
+        let bogus_previous = Some(sample_object_id("bogus-previous"));
+        let ref_state = signed_ref_state_envelope("heads/main", bogus_previous, target, 1);
+        let ref_state_id = ref_state.object_id();
+        let ref_update = signed_ref_update_envelope("heads/main", bogus_previous, ref_state_id, target, 1);
+        let publication = RefPublication {
+            ref_name: "heads/main".to_string(),
+            expected_previous_ref_state_id: bogus_previous,
+            ref_state,
+            ref_update,
+        };
+        assert!(store.publish(&publication).is_err());
+        assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(None));
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn verify_repository_detects_missing_ref_state_object() {
+    let root = unique_temp_dir("ref-missing-state");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let store = RefStore::new(layout.clone());
+        let target = sample_object_id("target-block");
+        let ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
+        let ref_state_id = ref_state.object_id();
+        let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, target, 1);
+        let publication = RefPublication {
+            ref_name: "heads/main".to_string(),
+            expected_previous_ref_state_id: None,
+            ref_state,
+            ref_update,
+        };
+        assert!(store.publish(&publication).is_ok());
+        let ref_state_path = layout.object_path(ObjectType::RefState, ref_state_id);
+        assert!(std::fs::remove_file(ref_state_path).is_ok());
+        assert!(verify_repository(&layout).is_err());
     }
     let _ = std::fs::remove_dir_all(root);
 }
@@ -133,6 +237,8 @@ fn verify_repository_counts_objects_and_wal_records() {
         if let Ok(report) = report {
             assert_eq!(report.checked_objects, 1);
             assert_eq!(report.checked_wal_records, 1);
+            assert_eq!(report.checked_refs, 0);
+            assert_eq!(report.checked_ref_log_records, 0);
             assert_eq!(report.trailing_partial_wal_bytes, 0);
         }
     }
@@ -186,6 +292,56 @@ fn signed_patch_envelope() -> ObjectEnvelope {
     envelope
 }
 
+fn signed_ref_state_envelope(
+    ref_name: &str,
+    previous_ref_state_id: Option<ObjectId>,
+    target_object_id: ObjectId,
+    update_seq: u64,
+) -> ObjectEnvelope {
+    let payload = RefStatePayload {
+        ref_name: ref_name.to_string(),
+        kind: RefKind::Branch,
+        target_object_id,
+        update_seq,
+        previous_ref_state_id,
+        required_attestation_ids: Vec::new(),
+    };
+    let payload_bytes = payload.to_canonical_bytes();
+    assert!(payload_bytes.is_ok());
+    let bytes = payload_bytes.unwrap_or_default();
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::RefState, 1, bytes);
+    assert!(envelope.add_signature(maintainer_signature()).is_ok());
+    envelope
+}
+
+fn signed_ref_update_envelope(
+    ref_name: &str,
+    old_ref_state_id: Option<ObjectId>,
+    new_ref_state_id: ObjectId,
+    new_target_object_id: ObjectId,
+    update_seq: u64,
+) -> ObjectEnvelope {
+    let payload = RefUpdatePayload {
+        ref_name: ref_name.to_string(),
+        old_ref_state_id,
+        new_ref_state_id,
+        new_target_object_id,
+        update_seq,
+        created_at: 7,
+        author_key_id: "maintainer-key".to_string(),
+    };
+    let payload_bytes = payload.to_canonical_bytes();
+    assert!(payload_bytes.is_ok());
+    let bytes = payload_bytes.unwrap_or_default();
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::RefUpdate, 1, bytes);
+    assert!(envelope.add_signature(maintainer_signature()).is_ok());
+    envelope
+}
+
+fn sample_object_id(label: &str) -> ObjectId {
+    ObjectId::from_canonical_payload(ObjectType::Blob, 1, label.as_bytes())
+}
+
 fn dummy_signature() -> Signature {
     Signature {
         algorithm: SignatureAlgorithm::Ed25519,
@@ -196,9 +352,19 @@ fn dummy_signature() -> Signature {
     }
 }
 
+fn maintainer_signature() -> Signature {
+    Signature {
+        algorithm: SignatureAlgorithm::Ed25519,
+        key_id: "maintainer-key".to_string(),
+        signature_bytes: vec![5, 6, 7, 8],
+        created_at: 8,
+        signer_role: SignerRole::Maintainer,
+    }
+}
+
 fn unique_temp_dir(name: &str) -> std::path::PathBuf {
     let mut path = std::env::temp_dir();
-    path.push(format!("prikk-pr006-{name}-{}-{}", std::process::id(), monotonic_suffix()));
+    path.push(format!("prikk-pr007-{name}-{}-{}", std::process::id(), monotonic_suffix()));
     path
 }
 

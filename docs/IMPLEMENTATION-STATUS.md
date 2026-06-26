@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-006
+Version: 0.1.0 PR-007
 
 ## Implemented
 
@@ -14,13 +14,18 @@ Version: 0.1.0 PR-006
 - File-backed object store with identity verification on read.
 - Active-session lock scaffold.
 - Active-session WAL append/replay for signed patch envelopes.
-- Read-only repository verification for persisted object files and active WAL records.
+- Ref-specific lock scaffold.
+- RefState object publication primitive.
+- Flat hashed ref pointer paths under `refs/by-id/`.
+- Inline signed RefUpdate log append/replay.
+- Read-only repository verification for persisted object files, ref pointers, ref logs, and active WAL records.
 - Minimal CLI for `init`, `status`, `verify`, and `--version`.
 
 ## Not Implemented Yet
 
-- RefState publication and ref logs.
+- End-user commit command.
 - Seal transaction.
+- Policy-aware ref publication from seal.
 - Patch apply/inverse/commutation.
 - Conflict witnesses and merge state.
 - WASM plugin host.
@@ -29,5 +34,6 @@ Version: 0.1.0 PR-006
 
 ## Gate Discipline
 
-PR-006 stays within the approved M1 foundation area. It verifies existing persisted objects and WAL
-records but does not yet publish refs or implement seal semantics.
+PR-007 stays within the approved M1 foundation area. It adds ref-state and ref-log storage
+primitives but does not yet implement full seal semantics, patch algebra, plugin execution, or
+remote sync.

@@ -1,6 +1,21 @@
 # Changelog
 
+## 0.1.0 PR-007
+
+Initial RefState publication primitives, flat ref pointer layout, and inline RefUpdate log verification.
+
+- Added `RefStore` for initial RefState publication primitives.
+- Added flat `refs/by-id/<sha256(ref_name)>.ref` pointer layout helpers.
+- Added ref-specific lock scaffold via `RefLock`.
+- Added durable ref pointer candidate write and atomic promotion.
+- Added inline signed RefUpdate log append/replay with checksums.
+- Extended repository verification to check ref pointers and ref-log records.
+- Updated CLI `status` and `verify` output with ref-state/ref-log information.
+- Added PR-007 ref publication handoff notes.
+
 ## 0.1.0 PR-006
+
+Read-only repository verification for persisted objects and active WAL records.
 
 - Added read-only repository verification in `prikk-store`.
 - Added object-store scan across persisted object type directories.
@@ -12,12 +27,16 @@
 
 ## 0.1.0 PR-005
 
+Storage cleanup and active-session WAL append/replay.
+
 - Fixed `cargo fmt --check` drift reported against PR-004.
 - Removed unused `ByteCursor::remaining` so strict Clippy dead-code checks pass.
 - Fixed `prikk init [path]` argument handling so CLI tests compile.
 - Updated implementation status and handoff notes for the CI feedback round.
 
 ## 0.1.0 PR-004
+
+Storage cleanup and active-session WAL append/replay.
 
 - Aligned workspace metadata with project Rust instructions: Rust 2024, Apache-2.0, author nabbisen.
 - Split large `prikk-store` and `prikk-object` payload files by logical boundaries.
