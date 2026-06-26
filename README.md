@@ -25,12 +25,13 @@ cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo run -p prikk -- init ./sample-repo
+(cd ./sample-repo && ../target/debug/prikk commit --allow-empty -m "initial scaffold")
 cargo run -p prikk -- verify ./sample-repo
 ```
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-007**.
+Current implementation drop: **0.1.0 PR-008**.
 
 Implemented:
 
@@ -39,14 +40,15 @@ Implemented:
 - Object envelopes with signatures outside identity.
 - Persistent `.prikk/` layout and object store.
 - Active-session WAL append/replay for signed patch envelopes.
-- Read-only repository verification for object files, ref pointers, ref logs, and active WAL records.
+- Read-only repository verification for objects, ref pointers, ref logs, and active WAL.
 - Initial RefState publication primitives with flat hashed ref pointer paths.
 - Inline signed RefUpdate log append/replay.
-- Minimal CLI commands: `init`, `status`, `verify`, and `--version`.
+- Narrow empty-commit scaffold that appends a signed patch envelope to the active WAL.
+- Minimal CLI commands: `init`, `commit --allow-empty -m`, `status`, `verify`, and `--version`.
 
 Not implemented yet:
 
-- End-user commit command and full seal transaction.
+- Real worktree diff capture and full seal transaction.
 - Policy-aware ref publication through seal.
 - Patch apply/commutation.
 - Plugin/audit execution.

@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-007
+Version: 0.1.0 PR-008
 
 ## Implemented
 
@@ -19,11 +19,12 @@ Version: 0.1.0 PR-007
 - Flat hashed ref pointer paths under `refs/by-id/`.
 - Inline signed RefUpdate log append/replay.
 - Read-only repository verification for persisted object files, ref pointers, ref logs, and active WAL records.
-- Minimal CLI for `init`, `status`, `verify`, and `--version`.
+- ActiveSession append API that holds `active.lock` while writing the active WAL.
+- Empty-commit scaffold for manually exercising the commit/WAL path.
+- Minimal CLI for `init`, `commit --allow-empty -m`, `status`, `verify`, and `--version`.
 
 ## Not Implemented Yet
 
-- End-user commit command.
 - Seal transaction.
 - Policy-aware ref publication from seal.
 - Patch apply/inverse/commutation.
@@ -34,6 +35,6 @@ Version: 0.1.0 PR-007
 
 ## Gate Discipline
 
-PR-007 stays within the approved M1 foundation area. It adds ref-state and ref-log storage
-primitives but does not yet implement full seal semantics, patch algebra, plugin execution, or
-remote sync.
+PR-008 stays within the approved M1 foundation area. It adds a narrow active-session commit
+scaffold that appends a signed patch envelope to the WAL, but it does not yet implement real
+worktree diff capture, seal semantics, patch algebra, plugin execution, or remote sync.

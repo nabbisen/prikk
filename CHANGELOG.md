@@ -1,8 +1,16 @@
 # Changelog
 
-## 0.1.0 PR-007
+## 0.1.0 PR-008
 
-Initial RefState publication primitives, flat ref pointer layout, and inline RefUpdate log verification.
+Narrow empty-commit scaffold that appends a signed patch envelope to the active WAL under `active.lock`.
+
+- Added `ActiveSession` as the locked default active-session append boundary.
+- Added CLI `prikk commit --allow-empty -m <message>` as a narrow commit-path scaffold.
+- The commit scaffold writes a signed patch envelope to the active WAL and reports the WAL sequence.
+- Updated `status` and documentation to reflect PR-008.
+- Kept real diff capture, seal, patch algebra, plugin/audit, and sync deferred.
+
+## 0.1.0 PR-007
 
 - Added `RefStore` for initial RefState publication primitives.
 - Added flat `refs/by-id/<sha256(ref_name)>.ref` pointer layout helpers.
@@ -15,8 +23,6 @@ Initial RefState publication primitives, flat ref pointer layout, and inline Ref
 
 ## 0.1.0 PR-006
 
-Read-only repository verification for persisted objects and active WAL records.
-
 - Added read-only repository verification in `prikk-store`.
 - Added object-store scan across persisted object type directories.
 - Added verification that object file paths match computed object IDs and canonical fanout paths.
@@ -27,16 +33,12 @@ Read-only repository verification for persisted objects and active WAL records.
 
 ## 0.1.0 PR-005
 
-Storage cleanup and active-session WAL append/replay.
-
 - Fixed `cargo fmt --check` drift reported against PR-004.
 - Removed unused `ByteCursor::remaining` so strict Clippy dead-code checks pass.
 - Fixed `prikk init [path]` argument handling so CLI tests compile.
 - Updated implementation status and handoff notes for the CI feedback round.
 
 ## 0.1.0 PR-004
-
-Storage cleanup and active-session WAL append/replay.
 
 - Aligned workspace metadata with project Rust instructions: Rust 2024, Apache-2.0, author nabbisen.
 - Split large `prikk-store` and `prikk-object` payload files by logical boundaries.

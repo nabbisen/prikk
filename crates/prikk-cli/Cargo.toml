@@ -7,6 +7,8 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+prikk-hash.workspace = true
+prikk-object.workspace = true
 prikk-store.workspace = true
 
 [lints]
