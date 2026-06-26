@@ -6,7 +6,7 @@ version = 3
 name = "prikk"
 version = "0.1.0"
 dependencies = [
- "prikk-object",
+ "prikk-store",
 ]
 
 [[package]]

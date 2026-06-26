@@ -28,6 +28,10 @@ pub enum PrikkError {
     },
     /// The persistent format version is unsupported.
     UnsupportedFormatVersion(u32),
+    /// A persisted object or record has malformed bytes.
+    MalformedData(String),
+    /// A persisted object was found at a path that does not match its computed ID.
+    Integrity(String),
     /// Placeholder for I/O errors without making this crate depend on std::io::Error in variants.
     Io(String),
 }
@@ -45,6 +49,8 @@ impl fmt::Display for PrikkError {
             Self::UnsupportedFormatVersion(version) => {
                 write!(f, "unsupported format version: {version}")
             }
+            Self::MalformedData(msg) => write!(f, "malformed persisted data: {msg}"),
+            Self::Integrity(msg) => write!(f, "integrity error: {msg}"),
             Self::Io(msg) => write!(f, "i/o error: {msg}"),
         }
     }

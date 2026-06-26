@@ -1,43 +1,37 @@
-# Implementation Status — PR-002
+# PRIKK Implementation Status
 
-Status: CI feedback fix for the initial source drop.
+## Current source drop
+
+`0.1.0-pr003`
 
 ## Implemented
 
-- Workspace layout.
-- First-party unsafe policy.
-- Error taxonomy seed.
-- SHA-256 implementation seed, revised to satisfy strict Clippy indexing policy.
-- Object ID newtype and display/parse helpers.
-- ObjectEnvelope with signatures external to identity.
-- Canonical encoder helpers.
-- Payload shape seed for core object types.
-- Basic tests for SHA-256 and object ID determinism.
+- Workspace scaffold.
+- Object ID formula.
+- Canonical encoding seed.
+- Object envelope shape.
+- Signature metadata shape.
+- Payload shape seed.
+- In-memory object store.
+- File-backed object store.
+- Repository layout initialization.
+- Minimal CLI `init` and `status` commands.
 
-## Fixed from PR-001 feedback
+## Open implementation gates
 
-- Formatting drift reported by `cargo fmt --check`.
-- `clippy::indexing_slicing` violations in `prikk-hash`.
-- Missing documentation on `ObjectTypeMismatch` fields.
-- Missing crate-level documentation for the CLI binary.
+- Safe scaffolding.
+- Object identity and storage foundation increments.
 
-## Not implemented yet
+## Still gated / intentionally deferred
 
-- Ed25519 signing/verification.
-- Trust store.
-- WAL and fsync transaction logic.
-- Object-store persistence.
-- Ref locking and ref publication.
+- WAL durability.
+- RefState/ref-log/CAS.
 - Patch algebra and commutation.
-- Worktree materialization.
-- Plugin host.
+- Plugin ABI/runtime.
+- Audit publication policy.
+- Remote sync.
 
-## Review focus
+## Next likely PR
 
-Reviewers should focus on:
-
-1. whether the revised SHA-256 implementation still passes the known vectors;
-2. whether strict Clippy now remains clean under `-D warnings`;
-3. whether the canonical encoder API is safe to extend without accidental protobuf identity bytes;
-4. whether the ObjectEnvelope separation is clear enough;
-5. whether crate boundaries match the PRIKK architecture.
+PR-004 should introduce the WAL record format and append/replay tests, but it should not advance refs
+or seal publication until the WAL behavior is reviewed independently.

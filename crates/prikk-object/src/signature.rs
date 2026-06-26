@@ -21,6 +21,16 @@ impl SignatureAlgorithm {
     pub const fn code(self) -> u16 {
         self as u16
     }
+
+    /// Parse a stable u16 code.
+    pub fn from_code(code: u16) -> Result<Self> {
+        match code {
+            1 => Ok(Self::Ed25519),
+            other => Err(PrikkError::InvalidSignature(format!(
+                "unknown signature algorithm code: {other}"
+            ))),
+        }
+    }
 }
 
 /// Role bound into signature preimages.
@@ -42,6 +52,19 @@ impl SignerRole {
     #[must_use]
     pub const fn code(self) -> u16 {
         self as u16
+    }
+
+    /// Parse a stable u16 code.
+    pub fn from_code(code: u16) -> Result<Self> {
+        match code {
+            1 => Ok(Self::Author),
+            2 => Ok(Self::Maintainer),
+            3 => Ok(Self::Ci),
+            4 => Ok(Self::Audit),
+            other => Err(PrikkError::InvalidSignature(format!(
+                "unknown signer role code: {other}"
+            ))),
+        }
     }
 }
 

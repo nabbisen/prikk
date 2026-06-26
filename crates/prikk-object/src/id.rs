@@ -36,6 +36,20 @@ impl ObjectType {
         self as u16
     }
 
+    /// Parse a stable u16 code.
+    pub fn from_code(code: u16) -> Result<Self> {
+        match code {
+            1 => Ok(Self::Patch),
+            2 => Ok(Self::Block),
+            3 => Ok(Self::RefState),
+            4 => Ok(Self::Tag),
+            5 => Ok(Self::Attestation),
+            6 => Ok(Self::Blob),
+            7 => Ok(Self::RefUpdate),
+            other => Err(PrikkError::MalformedData(format!("unknown object type code: {other}"))),
+        }
+    }
+
     /// Return a stable human-readable name.
     #[must_use]
     pub const fn name(self) -> &'static str {
