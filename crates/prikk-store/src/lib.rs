@@ -47,7 +47,11 @@ impl MemoryObjectStore {
     }
 
     /// Read and require a specific object type.
-    pub fn read_typed(&self, id: ObjectId, object_type: ObjectType) -> Result<Option<ObjectEnvelope>> {
+    pub fn read_typed(
+        &self,
+        id: ObjectId,
+        object_type: ObjectType,
+    ) -> Result<Option<ObjectEnvelope>> {
         if let Some(object) = self.objects.get(&id) {
             if object.object_type != object_type {
                 return Err(prikk_error::PrikkError::ObjectTypeMismatch {

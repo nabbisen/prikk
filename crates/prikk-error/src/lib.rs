@@ -20,7 +20,12 @@ pub enum PrikkError {
     /// A path-like name failed PRIKK path/ref validation.
     InvalidName(String),
     /// A persistent object had an unexpected type.
-    ObjectTypeMismatch { expected: String, actual: String },
+    ObjectTypeMismatch {
+        /// The object type required by the caller.
+        expected: String,
+        /// The object type actually found in the stored envelope.
+        actual: String,
+    },
     /// The persistent format version is unsupported.
     UnsupportedFormatVersion(u32),
     /// Placeholder for I/O errors without making this crate depend on std::io::Error in variants.

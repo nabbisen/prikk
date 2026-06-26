@@ -1,7 +1,9 @@
 # Prikk
 
-This package is the first implementation drop for PRIKK after FDD approval was confirmed.
-It intentionally starts with the smallest production-quality core slice:
+This package is the second implementation drop for PRIKK after the first local CI feedback round.
+It keeps the PR-001 scope intentionally narrow while fixing formatting, strict Clippy, and missing-docs issues reported by the development environment.
+
+Implemented scope remains the smallest production-quality core slice:
 
 - Rust workspace scaffold.
 - `#![forbid(unsafe_code)]` on first-party crates.
@@ -15,8 +17,16 @@ It intentionally starts with the smallest production-quality core slice:
 
 ## Current scope
 
-This is **PR-001**, not a full M1 implementation. It should be reviewed as the schema/identity starting point.
+This is **PR-002**, not a full M1 implementation. It should be reviewed as a CI-fix update to the schema/identity starting point.
 The WAL, lock protocol, ref publication, patch algebra, plugin execution, and audit publication policy are intentionally not implemented in this drop.
+
+## CI feedback addressed
+
+- Removed strict Clippy `indexing_slicing` failures from the SHA-256 implementation.
+- Added missing documentation for `PrikkError::ObjectTypeMismatch` fields.
+- Added crate-level documentation for the CLI binary.
+- Applied the formatting changes indicated by `cargo fmt --check`.
+- Preserved the existing object-ID golden vector and SHA-256 test vectors.
 
 ## Intended validation
 
@@ -28,7 +38,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-The current execution container used to prepare this artifact did not have `cargo`/`rustc` installed, so the code was not compiled here. The package includes tests and fixtures for the development environment to run immediately.
+The current execution container used to prepare this artifact does not have `cargo`/`rustc` installed, so the code was not compiled here. The package includes tests and fixtures for the development environment to run immediately.
 
 ## Important invariants implemented here
 
@@ -42,7 +52,7 @@ The current execution container used to prepare this artifact did not have `carg
 
 Recommended sequence:
 
-1. PR-002: complete FDD-03 canonical field coverage and golden vectors.
-2. PR-003: object-store write/read/verify using the ObjectEnvelope from this package.
-3. PR-004: WAL record framing and replay.
-4. PR-005: ref-state object + ref pointer layout.
+1. PR-003: complete FDD-03 canonical field coverage and golden vectors.
+2. PR-004: object-store write/read/verify using the ObjectEnvelope from this package.
+3. PR-005: WAL record framing and replay.
+4. PR-006: ref-state object + ref pointer layout.

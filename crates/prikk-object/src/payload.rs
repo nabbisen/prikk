@@ -344,7 +344,7 @@ impl BlockKind {
     }
 }
 
-/// Block payload. Block summaries are intentionally not identity-bearing in PR-001.
+/// Block payload. Block summaries are intentionally not identity-bearing in PR-002.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockPayload {
     /// Parent block IDs, sorted unless FDD later requires a semantic parent role ordering.

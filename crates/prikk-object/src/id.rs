@@ -81,9 +81,8 @@ impl ObjectId {
         schema_version: u32,
         canonical_payload: &[u8],
     ) -> Self {
-        let mut preimage = Vec::with_capacity(
-            OBJECT_ID_DOMAIN.len() + 2 + 4 + 8 + canonical_payload.len(),
-        );
+        let mut preimage =
+            Vec::with_capacity(OBJECT_ID_DOMAIN.len() + 2 + 4 + 8 + canonical_payload.len());
         preimage.extend_from_slice(OBJECT_ID_DOMAIN);
         preimage.extend_from_slice(&object_type.code().to_be_bytes());
         preimage.extend_from_slice(&schema_version.to_be_bytes());
@@ -122,8 +121,15 @@ impl FromStr for ObjectId {
             )));
         }
         let mut out = [0_u8; 32];
-        for (i, pair) in s.as_bytes().chunks_exact(2).enumerate() {
-            out[i] = (hex_value(pair[0])? << 4) | hex_value(pair[1])?;
+        for (slot, pair) in out.iter_mut().zip(s.as_bytes().chunks_exact(2)) {
+            let mut bytes = pair.iter().copied();
+            let high = bytes.next().ok_or_else(|| {
+                PrikkError::InvalidObjectId("hex pair is unexpectedly short".to_string())
+            })?;
+            let low = bytes.next().ok_or_else(|| {
+                PrikkError::InvalidObjectId("hex pair is unexpectedly short".to_string())
+            })?;
+            *slot = (hex_value(high)? << 4) | hex_value(low)?;
         }
         Ok(Self(out))
     }
@@ -150,10 +156,7 @@ mod tests {
         let c = ObjectId::from_canonical_payload(ObjectType::Block, 1, b"payload");
         assert_eq!(a, b);
         assert_ne!(a, c);
-        assert_eq!(
-            a.to_hex(),
-            "5f8711b3f84991d60b65221d66ed5ec260d28cc19c5c4ed3c1fe44d334265fe6"
-        );
+        assert_eq!(a.to_hex(), "5f8711b3f84991d60b65221d66ed5ec260d28cc19c5c4ed3c1fe44d334265fe6");
     }
 
     #[test]

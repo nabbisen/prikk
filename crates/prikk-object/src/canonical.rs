@@ -115,11 +115,7 @@ impl CanonicalWriter {
     }
 
     /// Emit a repeated object-id field. Each item is emitted with the same tag.
-    pub fn repeated_object_id(
-        &mut self,
-        tag: u16,
-        values: &[crate::ObjectId],
-    ) -> Result<()> {
+    pub fn repeated_object_id(&mut self, tag: u16, values: &[crate::ObjectId]) -> Result<()> {
         for value in values {
             self.field_bytes(tag, value.as_bytes())?;
         }
@@ -129,9 +125,7 @@ impl CanonicalWriter {
     /// Emit a raw field.
     pub fn field_raw(&mut self, tag: u16, wire_type: WireType, value: &[u8]) -> Result<()> {
         if tag == 0 {
-            return Err(PrikkError::CanonicalEncoding(
-                "field tag 0 is reserved".to_string(),
-            ));
+            return Err(PrikkError::CanonicalEncoding("field tag 0 is reserved".to_string()));
         }
         if let Some(last) = self.last_tag {
             if tag < last {
@@ -152,7 +146,13 @@ impl CanonicalWriter {
 /// Return true if the slice is strictly sorted and contains no duplicates.
 #[must_use]
 pub fn is_strictly_sorted<T: Ord>(values: &[T]) -> bool {
-    values.windows(2).all(|pair| pair[0] < pair[1])
+    values.windows(2).all(|pair| {
+        let mut items = pair.iter();
+        match (items.next(), items.next()) {
+            (Some(left), Some(right)) => left < right,
+            _ => true,
+        }
+    })
 }
 
 /// Return true if a sequence is exactly `1..=n`.
