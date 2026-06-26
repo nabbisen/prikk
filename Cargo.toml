@@ -1,17 +1,18 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
+    "crates/prikk-cli",
     "crates/prikk-error",
     "crates/prikk-hash",
     "crates/prikk-object",
     "crates/prikk-store",
-    "crates/prikk-cli",
 ]
 
 [workspace.package]
 edition = "2024"
-license = "Apache-2.0"
 rust-version = "1.85"
+
+license = "Apache-2.0"
 authors = ["nabbisen"]
 repository = "https://example.invalid/prikk"
 

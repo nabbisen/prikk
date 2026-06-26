@@ -56,6 +56,6 @@ impl Drop for ActiveLock {
 
 fn write_lock_body(file: &mut File) -> Result<()> {
     writeln!(file, "pid={}", std::process::id())?;
-    writeln!(file, "note=PR-005 lock has no stale-lock stealing yet")?;
+    writeln!(file, "note=PR-006 lock has no stale-lock stealing yet")?;
     Ok(())
 }

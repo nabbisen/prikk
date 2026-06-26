@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-005
+Version: 0.1.0 PR-006
 
 ## Implemented
 
@@ -14,8 +14,8 @@ Version: 0.1.0 PR-005
 - File-backed object store with identity verification on read.
 - Active-session lock scaffold.
 - Active-session WAL append/replay for signed patch envelopes.
-- Minimal CLI for `init`, `status`, and `--version`.
-- PR-005 CI feedback fixes for PR-004 logs.
+- Read-only repository verification for persisted object files and active WAL records.
+- Minimal CLI for `init`, `status`, `verify`, and `--version`.
 
 ## Not Implemented Yet
 
@@ -29,4 +29,5 @@ Version: 0.1.0 PR-005
 
 ## Gate Discipline
 
-PR-005 stays within the approved M1 foundation area. It fixes PR-004 CI feedback and keeps WAL append/replay as the newest implementation boundary. It does not yet publish refs or implement seal semantics.
+PR-006 stays within the approved M1 foundation area. It verifies existing persisted objects and WAL
+records but does not yet publish refs or implement seal semantics.

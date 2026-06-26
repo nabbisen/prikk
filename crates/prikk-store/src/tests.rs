@@ -7,7 +7,7 @@ use prikk_object::{
 
 use crate::{
     ActiveLock, FileObjectStore, MemoryObjectStore, ObjectReader, ObjectWriter, RepositoryLayout,
-    Wal,
+    verify_repository, Wal,
 };
 
 #[test]
@@ -113,6 +113,54 @@ fn wal_rejects_unsigned_patch_envelope() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+
+#[test]
+fn verify_repository_counts_objects_and_wal_records() {
+    let root = unique_temp_dir("verify");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let mut store = FileObjectStore::new(layout.clone());
+        let mut blob = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"payload".to_vec());
+        assert!(blob.add_signature(dummy_signature()).is_ok());
+        assert!(store.write_object(&blob).is_ok());
+
+        let wal = Wal::new(layout.default_queue_wal_path());
+        assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
+
+        let report = verify_repository(&layout);
+        assert!(report.is_ok());
+        if let Ok(report) = report {
+            assert_eq!(report.checked_objects, 1);
+            assert_eq!(report.checked_wal_records, 1);
+            assert_eq!(report.trailing_partial_wal_bytes, 0);
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn verify_repository_detects_object_file_in_wrong_prefix() {
+    let root = unique_temp_dir("verify-wrong-prefix");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let mut store = FileObjectStore::new(layout.clone());
+        let envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"payload".to_vec());
+        let id = store.write_object(&envelope);
+        assert!(id.is_ok());
+        if let Ok(id) = id {
+            let correct = layout.object_path(ObjectType::Blob, id);
+            let wrong_dir = layout.object_type_dir(ObjectType::Blob).join("ff");
+            assert!(std::fs::create_dir_all(&wrong_dir).is_ok());
+            let wrong = wrong_dir.join(format!("{}.pobj", id.to_hex()));
+            assert!(std::fs::rename(correct, wrong).is_ok());
+            assert!(verify_repository(&layout).is_err());
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
 fn signed_patch_envelope() -> ObjectEnvelope {
     let payload = PatchPayload {
         operations: vec![Operation {
@@ -150,7 +198,7 @@ fn dummy_signature() -> Signature {
 
 fn unique_temp_dir(name: &str) -> std::path::PathBuf {
     let mut path = std::env::temp_dir();
-    path.push(format!("prikk-pr005-{name}-{}-{}", std::process::id(), monotonic_suffix()));
+    path.push(format!("prikk-pr006-{name}-{}-{}", std::process::id(), monotonic_suffix()));
     path
 }
 

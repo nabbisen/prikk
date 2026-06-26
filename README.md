@@ -25,11 +25,12 @@ cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo run -p prikk -- init ./sample-repo
+cargo run -p prikk -- verify ./sample-repo
 ```
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-005**.
+Current implementation drop: **0.1.0 PR-006**.
 
 Implemented:
 
@@ -38,11 +39,13 @@ Implemented:
 - Object envelopes with signatures outside identity.
 - Persistent `.prikk/` layout and object store.
 - Active-session WAL append/replay for signed patch envelopes.
-- PR-005 CI fixes for formatting, dead code, and CLI argument handling.
+- Read-only repository verification for object files and active WAL records.
+- Minimal CLI commands: `init`, `status`, `verify`, and `--version`.
 
 Not implemented yet:
 
 - Ref publication and ref logs.
+- Seal transaction.
 - Patch apply/commutation.
 - Plugin/audit execution.
 - Remote sync.

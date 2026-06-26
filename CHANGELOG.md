@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0 PR-006
+
+- Added read-only repository verification in `prikk-store`.
+- Added object-store scan across persisted object type directories.
+- Added verification that object file paths match computed object IDs and canonical fanout paths.
+- Added verification that object envelope types match their object directories.
+- Added active WAL replay verification summary.
+- Added CLI command `prikk verify [path]`.
+- Added PR-006 verification handoff notes.
+
 ## 0.1.0 PR-005
 
 - Fixed `cargo fmt --check` drift reported against PR-004.
