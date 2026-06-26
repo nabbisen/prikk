@@ -3,13 +3,14 @@
 
 //! Storage crate for PRIKK repositories.
 //!
-//! PR-014 contains persistent layout, object storage, WAL durability, deeper read-only
+//! PR-015 contains persistent layout, object storage, WAL durability, deeper read-only
 //! repository verification, initial ref-state/ref-log publication primitives, a narrow
 //! active-session append API, and opt-in safe doctor repairs for incomplete WAL tails and missing
 //! ref pointers. Patch algebra, plugin execution, and remote sync remain separate increments.
 
 mod active;
 mod byte_cursor;
+mod checkout;
 mod doctor;
 mod file_codec;
 mod fsutil;
@@ -26,6 +27,9 @@ mod verify;
 mod tests;
 
 pub use active::{ActiveCommitResult, ActiveSession};
+pub use checkout::{
+    prepare_checkout_plan, CheckoutMaterialization, CheckoutPlan, DEFAULT_CHECKOUT_REF,
+};
 pub use doctor::{
     doctor_repository, repair_repository, DoctorIssue, DoctorRepairOptions, DoctorRepairReport,
     DoctorReport, DoctorSeverity,

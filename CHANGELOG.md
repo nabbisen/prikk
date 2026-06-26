@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0 PR-015
+
+Read-only checkout planning via `prikk checkout --plan-only`.
+
+- Added read-only checkout planning via `prepare_checkout_plan()`.
+- Added CLI command `prikk checkout --plan-only [path] [--ref REF]`.
+- Checkout planning validates the current RefState, target Block, parent Block references, Patch references, and optional snapshot Blob references.
+- The plan reports why real worktree materialization is still blocked: unpublished ref, no-op block, snapshot materialization, or patch engine.
+- Kept real worktree writes, diff capture, patch apply/inverse/commutation, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-014
 
 Read-only sealed-history inspection from the current RefState chain via `prikk log`.

@@ -1,6 +1,7 @@
 //! Storage tests.
 
 mod active;
+mod checkout;
 mod doctor;
 mod helpers;
 mod history;
