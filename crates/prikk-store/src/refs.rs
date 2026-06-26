@@ -136,7 +136,10 @@ pub(crate) fn validate_publication(publication: &RefPublication) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn require_signed_type(envelope: &ObjectEnvelope, object_type: ObjectType) -> Result<()> {
+pub(crate) fn require_signed_type(
+    envelope: &ObjectEnvelope,
+    object_type: ObjectType,
+) -> Result<()> {
     if envelope.object_type != object_type {
         return Err(PrikkError::ObjectTypeMismatch {
             expected: object_type.to_string(),

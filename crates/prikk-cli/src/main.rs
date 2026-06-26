@@ -2,10 +2,10 @@
 
 //! PRIKK command-line entry point.
 //!
-//! PR-011 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
-//! a local no-audit seal scaffold, ref pointer counts, deeper read-only repository verification,
-//! and read-only doctor diagnostics. Real diff capture, patch application, audit plugins, and sync
-//! remain later increments.
+//! PR-012 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
+//! a local no-audit seal scaffold, ref pointer counts, deeper repository verification, and doctor
+//! diagnostics with opt-in safe WAL tail repair. Real diff capture, patch application, audit
+//! plugins, and sync remain later increments.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -18,11 +18,11 @@ use prikk_object::{
     PatchPayload, Signature, SignatureAlgorithm, SignerRole,
 };
 use prikk_store::{
-    doctor_repository, verify_repository, ActiveSession, DoctorSeverity, RefStore, RepositoryLayout,
-    Wal,
+    doctor_repository, repair_repository, verify_repository, ActiveSession, DoctorRepairOptions,
+    DoctorSeverity, RefStore, RepositoryLayout, Wal,
 };
 
-const VERSION: &str = "0.1.0-pr011";
+const VERSION: &str = "0.1.0-pr012";
 
 fn main() -> ExitCode {
     match run() {
@@ -94,7 +94,7 @@ fn run() -> std::result::Result<(), String> {
                 Some(id) => println!("heads/main RefState: {id}"),
                 None => println!("heads/main RefState: <not published>"),
             }
-            println!("status: patch algebra, plugins, and sync not implemented in PR-011");
+            println!("status: patch algebra, plugins, and sync not implemented in PR-012");
             Ok(())
         }
         Some("verify") => {
@@ -105,36 +105,81 @@ fn run() -> std::result::Result<(), String> {
             Ok(())
         }
         Some("doctor") => {
-            let root = optional_path_or_current(args.next())?;
-            let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
-            let report = doctor_repository(&layout);
-            println!("doctor repository: {}", layout.prikk_dir().display());
-            if let Some(verification) = &report.verification {
-                print_verify_report(&layout, verification);
-            }
-            for issue in &report.issues {
+            let doctor_args = parse_doctor_args(args.collect())?;
+            let layout = RepositoryLayout::open(doctor_args.root).map_err(|err| err.to_string())?;
+            if doctor_args.repair_wal_tail {
+                let repair = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())
+                    .map_err(|err| err.to_string())?;
+                println!("doctor repository: {}", layout.prikk_dir().display());
                 println!(
-                    "{} [{}]: {}",
-                    issue.severity.as_str(),
-                    issue.code,
-                    issue.message
+                    "repair: truncated {} trailing WAL byte(s); preserved {} record(s)",
+                    repair.wal_repair.truncated_bytes,
+                    repair.wal_repair.preserved_records
                 );
-                println!("  recommendation: {}", issue.recommendation);
-            }
-            println!(
-                "issue summary: errors={}, warnings={}, info={}",
-                report.count_by_severity(DoctorSeverity::Error),
-                report.count_by_severity(DoctorSeverity::Warning),
-                report.count_by_severity(DoctorSeverity::Info)
-            );
-            if report.is_healthy() {
-                Ok(())
+                print_doctor_report(&layout, &repair.after);
+                if repair.after.is_healthy() {
+                    Ok(())
+                } else {
+                    Err("doctor repair finished but repository health errors remain".to_string())
+                }
             } else {
-                Err("doctor found repository health errors".to_string())
+                let report = doctor_repository(&layout);
+                println!("doctor repository: {}", layout.prikk_dir().display());
+                print_doctor_report(&layout, &report);
+                if report.is_healthy() {
+                    Ok(())
+                } else {
+                    Err("doctor found repository health errors".to_string())
+                }
             }
         }
         Some(other) => Err(format!("unknown command: {other}")),
     }
+}
+
+
+struct DoctorArgs {
+    root: PathBuf,
+    repair_wal_tail: bool,
+}
+
+fn parse_doctor_args(args: Vec<String>) -> std::result::Result<DoctorArgs, String> {
+    let mut repair_wal_tail = false;
+    let mut path = None;
+    for arg in args {
+        match arg.as_str() {
+            "--repair-wal-tail" => repair_wal_tail = true,
+            other if other.starts_with('-') => {
+                return Err(format!("unknown doctor argument: {other}"));
+            }
+            _ => {
+                if path.is_some() {
+                    return Err("doctor accepts at most one path".to_string());
+                }
+                path = Some(arg);
+            }
+        }
+    }
+    Ok(DoctorArgs {
+        root: optional_path_or_current(path)?,
+        repair_wal_tail,
+    })
+}
+
+fn print_doctor_report(layout: &RepositoryLayout, report: &prikk_store::DoctorReport) {
+    if let Some(verification) = &report.verification {
+        print_verify_report(layout, verification);
+    }
+    for issue in &report.issues {
+        println!("{} [{}]: {}", issue.severity.as_str(), issue.code, issue.message);
+        println!("  recommendation: {}", issue.recommendation);
+    }
+    println!(
+        "issue summary: errors={}, warnings={}, info={}",
+        report.count_by_severity(DoctorSeverity::Error),
+        report.count_by_severity(DoctorSeverity::Warning),
+        report.count_by_severity(DoctorSeverity::Info)
+    );
 }
 
 fn parse_empty_commit_message(args: Vec<String>) -> std::result::Result<String, String> {
@@ -154,7 +199,7 @@ fn parse_empty_commit_message(args: Vec<String>) -> std::result::Result<String, 
         }
     }
     if !allow_empty {
-        return Err("PR-011 supports only `prikk commit --allow-empty -m <message>`".to_string());
+        return Err("PR-012 supports only `prikk commit --allow-empty -m <message>`".to_string());
     }
     let Some(message) = message else {
         return Err("empty commit requires -m <message>".to_string());
@@ -229,6 +274,7 @@ fn print_help() {
     println!("  prikk status                              Check repository and active WAL status");
     println!("  prikk seal --allow-no-audit              Seal active WAL into heads/main");
     println!("  prikk verify [path]                       Verify objects and WAL records");
-    println!("  prikk doctor [path]                       Run read-only health diagnostics");
+    println!("  prikk doctor [path]                       Run health diagnostics");
+    println!("  prikk doctor [path] --repair-wal-tail     Truncate incomplete trailing WAL bytes");
     println!("  prikk --version                           Print version");
 }

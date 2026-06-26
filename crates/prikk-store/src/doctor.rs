@@ -1,12 +1,14 @@
-//! Read-only repository doctor diagnostics.
+//! Repository doctor diagnostics and narrowly-scoped repair helpers.
 //!
-//! The doctor command is intentionally non-mutating in PR-011. It wraps verification results into
-//! actionable diagnostics and reserves actual repair or WAL truncation for a later increment.
+//! PR-012 keeps doctor repairs deliberately conservative. The only mutating repair implemented
+//! here is opt-in truncation of an incomplete trailing active-WAL record, which FDD-02 defines as
+//! safe because all preceding records have already passed checksum validation.
 
-use prikk_error::PrikkError;
+use prikk_error::{PrikkError, Result};
 
 use crate::layout::RepositoryLayout;
 use crate::verify::{verify_repository, RepositoryVerification};
+use crate::wal::{Wal, WalRepair};
 
 /// Severity assigned to a doctor diagnostic issue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,7 +33,7 @@ impl DoctorSeverity {
     }
 }
 
-/// One read-only doctor diagnostic.
+/// One doctor diagnostic.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DoctorIssue {
     /// Stable diagnostic code.
@@ -91,7 +93,7 @@ impl DoctorIssue {
     }
 }
 
-/// Read-only doctor report.
+/// Doctor report.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DoctorReport {
     /// Repository verification summary, when verification completed.
@@ -114,7 +116,40 @@ impl DoctorReport {
     }
 }
 
-/// Run read-only doctor diagnostics for a repository layout.
+/// Opt-in repair switches for doctor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DoctorRepairOptions {
+    /// Truncate incomplete trailing bytes from the active WAL after verification confirms that the
+    /// prefix is valid.
+    pub truncate_wal_tail: bool,
+}
+
+impl DoctorRepairOptions {
+    /// Return options that perform no repair.
+    #[must_use]
+    pub const fn none() -> Self {
+        Self { truncate_wal_tail: false }
+    }
+
+    /// Return options that enable only safe active-WAL tail truncation.
+    #[must_use]
+    pub const fn truncate_wal_tail() -> Self {
+        Self { truncate_wal_tail: true }
+    }
+}
+
+/// Report returned by an opt-in doctor repair run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DoctorRepairReport {
+    /// Doctor report before any repair action.
+    pub before: DoctorReport,
+    /// WAL repair summary.
+    pub wal_repair: WalRepair,
+    /// Doctor report after repair action.
+    pub after: DoctorReport,
+}
+
+/// Run doctor diagnostics for a repository layout.
 #[must_use]
 pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
     let mut issues = Vec::new();
@@ -129,10 +164,14 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                 issues.push(DoctorIssue::warning(
                     "PRIKK-DOCTOR-WAL-TRAILING-PARTIAL",
                     format!(
-                        "active WAL has {} trailing byte(s) that look like an incomplete final record",
+                        concat!(
+                            "active WAL has {} trailing byte(s) that look like an incomplete ",
+                            "final record"
+                        ),
                         verification.trailing_partial_wal_bytes
                     ),
-                    "keep the repository unchanged and run a future repair-capable doctor command before sealing",
+                    "run `prikk doctor --repair-wal-tail` to truncate only the incomplete \
+                     final WAL bytes",
                 ));
             }
             DoctorReport { verification: Some(verification), issues }
@@ -144,10 +183,36 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
     }
 }
 
+/// Run an explicitly requested, narrow repair action.
+///
+/// The repair is refused if verification fails for any reason other than a trailing partial WAL
+/// record reported by normal replay. This preserves data until a future, more specific repair
+/// command is implemented.
+pub fn repair_repository(
+    layout: &RepositoryLayout,
+    options: DoctorRepairOptions,
+) -> Result<DoctorRepairReport> {
+    let before = doctor_repository(layout);
+    if !before.is_healthy() {
+        return Err(PrikkError::Integrity(
+            "doctor repair refused because repository verification has errors".to_string(),
+        ));
+    }
+    let wal_repair = if options.truncate_wal_tail {
+        let wal = Wal::new(layout.default_queue_wal_path());
+        wal.truncate_trailing_partial()?
+    } else {
+        WalRepair { preserved_records: 0, truncated_bytes: 0 }
+    };
+    let after = doctor_repository(layout);
+    Ok(DoctorRepairReport { before, wal_repair, after })
+}
+
 fn issue_for_verification_error(error: PrikkError) -> DoctorIssue {
     DoctorIssue::error(
         "PRIKK-DOCTOR-VERIFY-ERROR",
         format!("repository verification failed: {error}"),
-        "do not run seal or publish operations; preserve the repository and inspect the failing path before attempting repair",
+        "do not run seal or publish operations; preserve the repository and inspect the \
+         failing path before attempting repair",
     )
 }

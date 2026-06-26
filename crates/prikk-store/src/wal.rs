@@ -34,6 +34,15 @@ pub struct WalReplay {
     pub trailing_partial_bytes: usize,
 }
 
+/// Result of a safe WAL tail truncation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WalRepair {
+    /// Number of valid records preserved after repair.
+    pub preserved_records: usize,
+    /// Number of trailing partial bytes truncated.
+    pub truncated_bytes: usize,
+}
+
 /// File-backed active-session WAL.
 #[derive(Debug, Clone)]
 pub struct Wal {
@@ -67,7 +76,10 @@ impl Wal {
             ));
         }
         let next_seq = self.next_sequence()?;
-        let record = WalRecord { seq: next_seq, envelope: envelope.clone() };
+        let record = WalRecord {
+            seq: next_seq,
+            envelope: envelope.clone(),
+        };
         let bytes = encode_record(&record)?;
         let Some(parent) = self.path.parent() else {
             return Err(PrikkError::Io("WAL path has no parent directory".to_string()));
@@ -86,11 +98,52 @@ impl Wal {
     /// Replay valid WAL records from the beginning.
     pub fn replay(&self) -> Result<WalReplay> {
         if !self.path.exists() {
-            return Ok(WalReplay { records: Vec::new(), trailing_partial_bytes: 0 });
+            return Ok(WalReplay {
+                records: Vec::new(),
+                trailing_partial_bytes: 0,
+            });
         }
         let mut bytes = Vec::new();
         File::open(&self.path)?.read_to_end(&mut bytes)?;
         decode_records(&bytes)
+    }
+
+    /// Safely truncate an incomplete trailing WAL record, if one exists.
+    ///
+    /// This repairs only the case that FDD-02 defines as safe: valid records followed by an
+    /// incomplete final record. Checksum mismatches in complete records still return an error and
+    /// are not modified.
+    pub fn truncate_trailing_partial(&self) -> Result<WalRepair> {
+        if !self.path.exists() {
+            return Ok(WalRepair {
+                preserved_records: 0,
+                truncated_bytes: 0,
+            });
+        }
+        let replay = self.replay()?;
+        if replay.trailing_partial_bytes == 0 {
+            return Ok(WalRepair {
+                preserved_records: replay.records.len(),
+                truncated_bytes: 0,
+            });
+        }
+        let current_len = fs::metadata(&self.path)?.len();
+        let trailing = u64::try_from(replay.trailing_partial_bytes).map_err(|_| {
+            PrikkError::MalformedData("trailing WAL byte count does not fit u64".to_string())
+        })?;
+        let repaired_len = current_len.checked_sub(trailing).ok_or_else(|| {
+            PrikkError::MalformedData("trailing WAL byte count exceeds file length".to_string())
+        })?;
+        let file = OpenOptions::new().write(true).open(&self.path)?;
+        file.set_len(repaired_len)?;
+        file.sync_all()?;
+        if let Some(parent) = self.path.parent() {
+            sync_directory_best_effort(parent)?;
+        }
+        Ok(WalRepair {
+            preserved_records: replay.records.len(),
+            truncated_bytes: replay.trailing_partial_bytes,
+        })
     }
 
     /// Truncate the WAL after a successful publication that made all entries durable elsewhere.
@@ -137,7 +190,10 @@ fn decode_records(bytes: &[u8]) -> Result<WalReplay> {
     while offset < bytes.len() {
         let remaining = bytes.len().saturating_sub(offset);
         if remaining < WAL_HEADER_LEN {
-            return Ok(WalReplay { records, trailing_partial_bytes: remaining });
+            return Ok(WalReplay {
+                records,
+                trailing_partial_bytes: remaining,
+            });
         }
         let header_end = offset + WAL_HEADER_LEN;
         let header = bytes
@@ -151,7 +207,10 @@ fn decode_records(bytes: &[u8]) -> Result<WalReplay> {
             .checked_add(body_len)
             .ok_or_else(|| PrikkError::MalformedData("WAL body end overflow".to_string()))?;
         let Some(body) = bytes.get(header_end..body_end) else {
-            return Ok(WalReplay { records, trailing_partial_bytes: remaining });
+            return Ok(WalReplay {
+                records,
+                trailing_partial_bytes: remaining,
+            });
         };
         let expected = record_checksum(header_values.seq, header_values.body_len, body);
         if expected != header_values.checksum {
@@ -160,10 +219,16 @@ fn decode_records(bytes: &[u8]) -> Result<WalReplay> {
             )));
         }
         let envelope = decode_envelope_file(body)?;
-        records.push(WalRecord { seq: header_values.seq, envelope });
+        records.push(WalRecord {
+            seq: header_values.seq,
+            envelope,
+        });
         offset = body_end;
     }
-    Ok(WalReplay { records, trailing_partial_bytes: 0 })
+    Ok(WalReplay {
+        records,
+        trailing_partial_bytes: 0,
+    })
 }
 
 struct WalHeader {
@@ -188,7 +253,11 @@ fn parse_header(header: &[u8]) -> Result<WalHeader> {
     if !cursor.is_finished() {
         return Err(PrikkError::MalformedData("trailing bytes in WAL header".to_string()));
     }
-    Ok(WalHeader { seq, body_len, checksum })
+    Ok(WalHeader {
+        seq,
+        body_len,
+        checksum,
+    })
 }
 
 fn record_checksum(seq: u64, body_len: u64, body: &[u8]) -> [u8; 32] {

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0 PR-012
+
+Opt-in safe doctor repair for incomplete active-WAL trailing bytes. Doctor remains conservative and refuses repair when verification reports integrity errors.
+
+- Added opt-in safe doctor repair via `prikk doctor [path] --repair-wal-tail`.
+- Added `WalRepair` and `Wal::truncate_trailing_partial()` for incomplete final WAL records.
+- Added `DoctorRepairOptions`, `DoctorRepairReport`, and `repair_repository()`.
+- Doctor repair refuses to mutate the repository when verification reports integrity errors.
+- Added tests for preserving valid WAL records while truncating only incomplete trailing bytes.
+- Split `prikk-store` tests into logical modules under `src/tests/` to follow project file-size guidance.
+- Kept ref reconstruction, missing-object repair, checksum-mismatch repair, patch algebra, plugins, and sync deferred.
+
 ## 0.1.0 PR-011
 
 Read-only doctor diagnostics for repository health. Doctor wraps verification results into actionable issue codes without modifying repository data.
