@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-013
+Version: 0.1.0 PR-014
 
 ## Implemented
 
@@ -24,7 +24,8 @@ Version: 0.1.0 PR-013
 - Empty-commit scaffold for manually exercising the commit/WAL path.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, publishes `heads/main`, and clears the WAL after publication.
 - Canonical decoding for RefState, RefUpdate, and Block payloads used by verification.
-- Minimal CLI for `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Read-only sealed-history inspection from the current RefState chain.
+- Minimal CLI for `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
 
@@ -36,7 +37,7 @@ Version: 0.1.0 PR-013
 - Audit publication policy.
 - Remote sync.
 
-## Conservative Repairs Added Through PR-013
+## Conservative Repairs Added Through PR-014
 
 - `prikk doctor --repair-wal-tail` truncates only incomplete trailing active-WAL bytes after verification confirms that all preceding records are valid.
 - `prikk doctor --repair-main-ref` reconstructs only a missing `heads/main` pointer from an already-valid ref log and RefState object.
@@ -45,4 +46,4 @@ Version: 0.1.0 PR-013
 
 ## Gate Discipline
 
-PR-013 stays within the approved foundation boundary by adding only narrow FDD-02-style recovery for already-verified data. It does not implement real worktree diff capture, patch algebra, audit plugin execution, policy enforcement, or remote sync.
+PR-014 stays within the approved foundation boundary by adding only read-only history inspection and narrow FDD-02-style recovery for already-verified data. It does not implement real worktree diff capture, patch algebra, audit plugin execution, policy enforcement, or remote sync.

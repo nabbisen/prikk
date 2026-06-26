@@ -1,0 +1,137 @@
+//! Read-only sealed-history inspection helpers.
+//!
+//! PR-014 exposes a small history view built from the current RefState chain. It is intentionally
+//! read-only and does not perform graph traversal beyond the published ref-state lineage.
+
+use std::collections::HashSet;
+
+use prikk_error::{PrikkError, Result};
+use prikk_object::{BlockKind, BlockPayload, ObjectId, ObjectType, RefStatePayload};
+
+use crate::layout::RepositoryLayout;
+use crate::object_store::{FileObjectStore, ObjectReader};
+use crate::refs::RefStore;
+
+/// Default number of history entries shown by the CLI.
+pub const DEFAULT_HISTORY_LIMIT: usize = 20;
+
+/// Read-only history view for a single ref.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefHistory {
+    /// Human-readable ref name.
+    pub ref_name: String,
+    /// Entries ordered from newest to oldest.
+    pub entries: Vec<HistoryEntry>,
+}
+
+impl RefHistory {
+    /// Return true when the ref has no published history.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+}
+
+/// One published RefState and its target Block summary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoryEntry {
+    /// RefState object ID for this publication.
+    pub ref_state_id: ObjectId,
+    /// Target Block object ID.
+    pub block_id: ObjectId,
+    /// Monotonic ref update sequence.
+    pub update_seq: u64,
+    /// Previous RefState object ID, if any.
+    pub previous_ref_state_id: Option<ObjectId>,
+    /// Block kind.
+    pub block_kind: BlockKind,
+    /// Number of parent blocks referenced by the target Block.
+    pub parent_count: usize,
+    /// Number of patches referenced by the target Block.
+    pub patch_count: usize,
+    /// Number of required attestations attached to this RefState.
+    pub required_attestation_count: usize,
+}
+
+/// Load history for a ref, newest first.
+///
+/// The function follows `RefState.previous_ref_state_id` links and validates that every RefState
+/// targets a persisted Block that decodes successfully. `limit == 0` means no entries are returned.
+pub fn load_ref_history(
+    layout: &RepositoryLayout,
+    ref_name: &str,
+    limit: usize,
+) -> Result<RefHistory> {
+    let ref_store = RefStore::new(layout.clone());
+    let object_store = FileObjectStore::new(layout.clone());
+    let mut current = ref_store.read_current_ref_state_id(ref_name)?;
+    let mut entries = Vec::new();
+    let mut seen = HashSet::new();
+
+    while let Some(ref_state_id) = current {
+        if entries.len() >= limit {
+            break;
+        }
+        if !seen.insert(ref_state_id) {
+            return Err(PrikkError::Integrity(format!(
+                "RefState chain for {ref_name} contains a cycle at {ref_state_id}"
+            )));
+        }
+        let ref_state = read_ref_state(&object_store, ref_state_id, ref_name)?;
+        let block = read_block(&object_store, ref_state.target_object_id)?;
+        entries.push(HistoryEntry {
+            ref_state_id,
+            block_id: ref_state.target_object_id,
+            update_seq: ref_state.update_seq,
+            previous_ref_state_id: ref_state.previous_ref_state_id,
+            block_kind: block.kind,
+            parent_count: block.parent_block_ids.len(),
+            patch_count: block.patch_ids.len(),
+            required_attestation_count: ref_state.required_attestation_ids.len(),
+        });
+        current = ref_state.previous_ref_state_id;
+    }
+
+    Ok(RefHistory { ref_name: ref_name.to_string(), entries })
+}
+
+fn read_ref_state(
+    object_store: &FileObjectStore,
+    ref_state_id: ObjectId,
+    ref_name: &str,
+) -> Result<RefStatePayload> {
+    let Some(envelope) = object_store.read_object(ref_state_id)? else {
+        return Err(PrikkError::Integrity(format!(
+            "history RefState {ref_state_id} is missing"
+        )));
+    };
+    if envelope.object_type != ObjectType::RefState {
+        return Err(PrikkError::Integrity(format!(
+            "history object {ref_state_id} is {}, expected RefState",
+            envelope.object_type
+        )));
+    }
+    let payload = RefStatePayload::decode_canonical(&envelope.canonical_payload)?;
+    if payload.ref_name != ref_name {
+        return Err(PrikkError::Integrity(format!(
+            "history RefState {ref_state_id} name mismatch: expected {ref_name}, got {}",
+            payload.ref_name
+        )));
+    }
+    Ok(payload)
+}
+
+fn read_block(object_store: &FileObjectStore, block_id: ObjectId) -> Result<BlockPayload> {
+    let Some(envelope) = object_store.read_object(block_id)? else {
+        return Err(PrikkError::Integrity(format!(
+            "history Block {block_id} is missing"
+        )));
+    };
+    if envelope.object_type != ObjectType::Block {
+        return Err(PrikkError::Integrity(format!(
+            "history object {block_id} is {}, expected Block",
+            envelope.object_type
+        )));
+    }
+    BlockPayload::decode_canonical(&envelope.canonical_payload)
+}

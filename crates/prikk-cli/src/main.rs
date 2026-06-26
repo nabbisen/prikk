@@ -2,10 +2,10 @@
 
 //! PRIKK command-line entry point.
 //!
-//! PR-013 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
-//! a local no-audit seal scaffold, ref pointer counts, deeper repository verification, and doctor
-//! diagnostics with opt-in safe WAL tail and missing-ref-pointer repair. Real diff capture, patch application, audit
-//! plugins, and sync remain later increments.
+//! PR-014 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
+//! a local no-audit seal scaffold, read-only history inspection, deeper repository verification,
+//! and doctor diagnostics with opt-in safe WAL tail and missing-ref-pointer repair. Real diff
+//! capture, patch application, audit plugins, and sync remain later increments.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -18,11 +18,12 @@ use prikk_object::{
     PatchPayload, Signature, SignatureAlgorithm, SignerRole,
 };
 use prikk_store::{
-    doctor_repository, repair_repository, verify_repository, ActiveSession, DoctorRepairOptions,
-    DoctorSeverity, RefStore, RepositoryLayout, Wal,
+    doctor_repository, load_ref_history, repair_repository, verify_repository, ActiveSession,
+    DoctorRepairOptions, DoctorSeverity, RefHistory, RefStore, RepositoryLayout, Wal,
+    DEFAULT_HISTORY_LIMIT,
 };
 
-const VERSION: &str = "0.1.0-pr013";
+const VERSION: &str = "0.1.0-pr014";
 
 fn main() -> ExitCode {
     match run() {
@@ -94,7 +95,15 @@ fn run() -> std::result::Result<(), String> {
                 Some(id) => println!("heads/main RefState: {id}"),
                 None => println!("heads/main RefState: <not published>"),
             }
-            println!("status: patch algebra, plugins, and sync not implemented in PR-013");
+            println!("status: patch algebra, plugins, and sync not implemented in PR-014");
+            Ok(())
+        }
+        Some("log") => {
+            let args = parse_log_args(args.collect())?;
+            let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
+            let history = load_ref_history(&layout, &args.ref_name, args.limit)
+                .map_err(|err| err.to_string())?;
+            print_history(&layout, &history);
             Ok(())
         }
         Some("verify") => {
@@ -148,6 +157,50 @@ fn run() -> std::result::Result<(), String> {
 }
 
 
+struct LogArgs {
+    root: PathBuf,
+    ref_name: String,
+    limit: usize,
+}
+
+fn parse_log_args(args: Vec<String>) -> std::result::Result<LogArgs, String> {
+    let mut path = None;
+    let mut ref_name = "heads/main".to_string();
+    let mut limit = DEFAULT_HISTORY_LIMIT;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--ref" => {
+                let Some(value) = iter.next() else {
+                    return Err("log --ref requires a value".to_string());
+                };
+                if value.trim().is_empty() {
+                    return Err("log --ref must not be empty".to_string());
+                }
+                ref_name = value;
+            }
+            "--limit" => {
+                let Some(value) = iter.next() else {
+                    return Err("log --limit requires a value".to_string());
+                };
+                limit = value
+                    .parse::<usize>()
+                    .map_err(|_| "log --limit must be a non-negative integer".to_string())?;
+            }
+            other if other.starts_with('-') => {
+                return Err(format!("unknown log argument: {other}"));
+            }
+            _ => {
+                if path.is_some() {
+                    return Err("log accepts at most one path".to_string());
+                }
+                path = Some(arg);
+            }
+        }
+    }
+    Ok(LogArgs { root: optional_path_or_current(path)?, ref_name, limit })
+}
+
 struct DoctorArgs {
     root: PathBuf,
     repair_wal_tail: bool,
@@ -178,6 +231,28 @@ fn parse_doctor_args(args: Vec<String>) -> std::result::Result<DoctorArgs, Strin
         repair_wal_tail,
         repair_main_ref,
     })
+}
+
+fn print_history(layout: &RepositoryLayout, history: &RefHistory) {
+    println!("history repository: {}", layout.prikk_dir().display());
+    println!("ref: {}", history.ref_name);
+    if history.is_empty() {
+        println!("history: <empty>");
+        return;
+    }
+    for entry in &history.entries {
+        println!("block {}", entry.block_id);
+        println!("  ref-state: {}", entry.ref_state_id);
+        println!("  update-seq: {}", entry.update_seq);
+        println!("  kind: {:?}", entry.block_kind);
+        println!("  parents: {}", entry.parent_count);
+        println!("  patches: {}", entry.patch_count);
+        println!("  required-attestations: {}", entry.required_attestation_count);
+        match entry.previous_ref_state_id {
+            Some(previous) => println!("  previous-ref-state: {previous}"),
+            None => println!("  previous-ref-state: <none>"),
+        }
+    }
 }
 
 fn print_doctor_report(layout: &RepositoryLayout, report: &prikk_store::DoctorReport) {
@@ -213,7 +288,7 @@ fn parse_empty_commit_message(args: Vec<String>) -> std::result::Result<String, 
         }
     }
     if !allow_empty {
-        return Err("PR-013 supports only `prikk commit --allow-empty -m <message>`".to_string());
+        return Err("PR-014 supports only `prikk commit --allow-empty -m <message>`".to_string());
     }
     let Some(message) = message else {
         return Err("empty commit requires -m <message>".to_string());
@@ -287,6 +362,7 @@ fn print_help() {
     println!("  prikk commit --allow-empty -m <message>   Append an empty patch to the active WAL");
     println!("  prikk status                              Check repository and active WAL status");
     println!("  prikk seal --allow-no-audit              Seal active WAL into heads/main");
+    println!("  prikk log [path] [--limit N] [--ref REF]  Show sealed ref history");
     println!("  prikk verify [path]                       Verify objects and WAL records");
     println!("  prikk doctor [path]                       Run health diagnostics");
     println!("  prikk doctor [path] --repair-wal-tail     Truncate incomplete trailing WAL bytes");

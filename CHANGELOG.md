@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0 PR-014
+
+Read-only sealed-history inspection from the current RefState chain via `prikk log`.
+
+- Added read-only sealed-history inspection via `load_ref_history()`.
+- Added CLI command `prikk log [path] [--limit N] [--ref REF]`.
+- History follows the current RefState chain newest-first and validates each target Block.
+- Added history tests for newest-first ordering and limit handling.
+- Kept real worktree diff capture, patch apply/inverse/commutation, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-013
 
 Opt-in safe doctor repair for incomplete active-WAL trailing bytes and missing `heads/main` pointer reconstruction from verified ref-log data.

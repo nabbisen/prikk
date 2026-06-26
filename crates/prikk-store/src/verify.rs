@@ -1,6 +1,6 @@
 //! Repository verification routines.
 //!
-//! Verification remains read-only in PR-013. It checks object identity, object-type
+//! Verification remains read-only in PR-014. It checks object identity, object-type
 //! placement, envelope decoding, sealed block references, ref pointer/log consistency, and active
 //! WAL replay checksums. Repair/truncation belongs to a later `doctor` increment.
 

@@ -29,6 +29,7 @@ cargo run -p prikk -- init ./sample-repo
 (cd ./sample-repo && ../target/debug/prikk seal --allow-no-audit)
 cargo run -p prikk -- verify ./sample-repo
 cargo run -p prikk -- doctor ./sample-repo
+cargo run -p prikk -- log ./sample-repo
 # If doctor reports only incomplete trailing WAL bytes:
 # cargo run -p prikk -- doctor ./sample-repo --repair-wal-tail
 # If doctor reports only a missing heads/main pointer recoverable from the ref log:
@@ -37,7 +38,7 @@ cargo run -p prikk -- doctor ./sample-repo
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-013**.
+Current implementation drop: **0.1.0 PR-014**.
 
 Implemented:
 
@@ -48,11 +49,12 @@ Implemented:
 - Active-session WAL append/replay for signed patch envelopes.
 - Read-only repository verification for objects, block references, ref pointers, ref logs, and active WAL.
 - `doctor` diagnostics layered on top of verification, with opt-in safe WAL tail and missing-ref-pointer repair.
+- Read-only sealed-history inspection from the current RefState chain.
 - Initial RefState publication primitives with flat hashed ref pointer paths.
 - Inline signed RefUpdate log append/replay with linked payload validation.
 - Narrow empty-commit scaffold that appends a signed patch envelope to the active WAL.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
-- Minimal CLI commands: `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Minimal CLI commands: `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 Not implemented yet:
 

@@ -119,7 +119,7 @@ pub(crate) fn maintainer_signature() -> Signature {
 
 pub(crate) fn unique_temp_dir(name: &str) -> std::path::PathBuf {
     let mut path = std::env::temp_dir();
-    path.push(format!("prikk-pr013-{name}-{}-{}", std::process::id(), monotonic_suffix()));
+    path.push(format!("prikk-pr014-{name}-{}-{}", std::process::id(), monotonic_suffix()));
     path
 }
 

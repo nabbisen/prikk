@@ -1,6 +1,6 @@
 //! Repository doctor diagnostics and narrowly-scoped repair helpers.
 //!
-//! PR-013 keeps doctor repairs deliberately conservative. Mutating repairs are opt-in and
+//! PR-014 keeps doctor repairs deliberately conservative. Mutating repairs are opt-in and
 //! limited to incomplete active-WAL tail truncation plus reconstruction of a missing `heads/main`
 //! pointer from already-verified ref-log and RefState data.
 
