@@ -19,11 +19,6 @@ impl<'a> ByteCursor<'a> {
         self.pos == self.bytes.len()
     }
 
-    /// Return unread byte count.
-    pub(crate) fn remaining(&self) -> usize {
-        self.bytes.len().saturating_sub(self.pos)
-    }
-
     /// Read a fixed-size array.
     pub(crate) fn read_array<const N: usize>(&mut self) -> Result<[u8; N]> {
         let slice = self.read_exact(N)?;

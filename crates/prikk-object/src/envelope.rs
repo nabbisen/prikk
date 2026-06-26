@@ -25,12 +25,7 @@ impl ObjectEnvelope {
         schema_version: u32,
         canonical_payload: Vec<u8>,
     ) -> Self {
-        Self {
-            object_type,
-            schema_version,
-            canonical_payload,
-            signatures: Vec::new(),
-        }
+        Self { object_type, schema_version, canonical_payload, signatures: Vec::new() }
     }
 
     /// Compute this envelope's object ID from its unsigned payload.

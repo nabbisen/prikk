@@ -7,7 +7,7 @@ use prikk_object::{ObjectEnvelope, ObjectId, ObjectType};
 
 use crate::file_codec::{decode_envelope_file, encode_envelope_file};
 use crate::fsutil::{sync_directory_best_effort, write_file_atomically};
-use crate::layout::{persisted_object_types, RepositoryLayout};
+use crate::layout::{RepositoryLayout, persisted_object_types};
 
 /// Read-only object access boundary.
 pub trait ObjectReader {

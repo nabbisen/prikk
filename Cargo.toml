@@ -10,10 +10,10 @@ members = [
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.85"
 license = "Apache-2.0"
+rust-version = "1.85"
 authors = ["nabbisen"]
-repository = "https://github.com/nabbisen/prikk"
+repository = "https://example.invalid/prikk"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

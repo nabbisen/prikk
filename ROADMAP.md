@@ -4,7 +4,7 @@ This repository follows the design-first PRIKK roadmap.
 
 ## Current Increment
 
-- 0.1.0 PR-004: storage cleanup and active-session WAL append/replay.
+- 0.1.0 PR-005: storage cleanup and active-session WAL append/replay.
 
 ## Next Increments
 

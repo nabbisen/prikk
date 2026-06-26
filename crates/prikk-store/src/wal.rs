@@ -132,8 +132,9 @@ fn decode_records(bytes: &[u8]) -> Result<WalReplay> {
             .get(offset..header_end)
             .ok_or_else(|| PrikkError::MalformedData("WAL header range overflow".to_string()))?;
         let header_values = parse_header(header)?;
-        let body_len = usize::try_from(header_values.body_len)
-            .map_err(|_| PrikkError::MalformedData("WAL body length does not fit usize".to_string()))?;
+        let body_len = usize::try_from(header_values.body_len).map_err(|_| {
+            PrikkError::MalformedData("WAL body length does not fit usize".to_string())
+        })?;
         let body_end = header_end
             .checked_add(body_len)
             .ok_or_else(|| PrikkError::MalformedData("WAL body end overflow".to_string()))?;

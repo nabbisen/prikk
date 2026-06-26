@@ -3,7 +3,7 @@
 
 //! Storage crate for PRIKK repositories.
 //!
-//! PR-004 contains persistent layout, object storage, and the first WAL durability layer. Ref
+//! PR-005 contains persistent layout, object storage, and the first WAL durability layer. Ref
 //! publication, patch algebra, plugin execution, and remote sync remain separate increments.
 
 mod byte_cursor;

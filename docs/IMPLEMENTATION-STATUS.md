@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-004
+Version: 0.1.0 PR-005
 
 ## Implemented
 
@@ -15,6 +15,7 @@ Version: 0.1.0 PR-004
 - Active-session lock scaffold.
 - Active-session WAL append/replay for signed patch envelopes.
 - Minimal CLI for `init`, `status`, and `--version`.
+- PR-005 CI feedback fixes for PR-004 logs.
 
 ## Not Implemented Yet
 
@@ -28,5 +29,4 @@ Version: 0.1.0 PR-004
 
 ## Gate Discipline
 
-PR-004 stays within the approved M1 foundation area. It adds WAL append/replay but does not yet
-publish refs or implement seal semantics.
+PR-005 stays within the approved M1 foundation area. It fixes PR-004 CI feedback and keeps WAL append/replay as the newest implementation boundary. It does not yet publish refs or implement seal semantics.

@@ -60,10 +60,8 @@ fn compress(h: &mut [u32; 8], chunk: &[u8]) {
     for i in 16..64 {
         let s0 = small_sigma0(word_at(&w, i - 15));
         let s1 = small_sigma1(word_at(&w, i - 2));
-        let value = word_at(&w, i - 16)
-            .wrapping_add(s0)
-            .wrapping_add(word_at(&w, i - 7))
-            .wrapping_add(s1);
+        let value =
+            word_at(&w, i - 16).wrapping_add(s0).wrapping_add(word_at(&w, i - 7)).wrapping_add(s1);
         if let Some(slot) = w.get_mut(i) {
             *slot = value;
         }

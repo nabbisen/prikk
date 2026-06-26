@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0 PR-005
+
+- Fixed `cargo fmt --check` drift reported against PR-004.
+- Removed unused `ByteCursor::remaining` so strict Clippy dead-code checks pass.
+- Fixed `prikk init [path]` argument handling so CLI tests compile.
+- Updated implementation status and handoff notes for the CI feedback round.
+
 ## 0.1.0 PR-004
 
 - Aligned workspace metadata with project Rust instructions: Rust 2024, Apache-2.0, author nabbisen.

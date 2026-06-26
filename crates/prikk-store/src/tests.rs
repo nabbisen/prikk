@@ -150,7 +150,7 @@ fn dummy_signature() -> Signature {
 
 fn unique_temp_dir(name: &str) -> std::path::PathBuf {
     let mut path = std::env::temp_dir();
-    path.push(format!("prikk-pr004-{name}-{}-{}", std::process::id(), monotonic_suffix()));
+    path.push(format!("prikk-pr005-{name}-{}-{}", std::process::id(), monotonic_suffix()));
     path
 }
 

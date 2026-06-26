@@ -14,6 +14,6 @@ pub mod signature;
 
 pub use canonical::{CanonicalEncode, CanonicalWriter};
 pub use envelope::ObjectEnvelope;
-pub use id::{ObjectId, ObjectType, OBJECT_ID_DOMAIN};
+pub use id::{OBJECT_ID_DOMAIN, ObjectId, ObjectType};
 pub use payload::*;
 pub use signature::{Signature, SignatureAlgorithm, SignerRole};

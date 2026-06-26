@@ -29,7 +29,7 @@ cargo run -p prikk -- init ./sample-repo
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-004**.
+Current implementation drop: **0.1.0 PR-005**.
 
 Implemented:
 
@@ -38,6 +38,7 @@ Implemented:
 - Object envelopes with signatures outside identity.
 - Persistent `.prikk/` layout and object store.
 - Active-session WAL append/replay for signed patch envelopes.
+- PR-005 CI fixes for formatting, dead code, and CLI argument handling.
 
 Not implemented yet:
 

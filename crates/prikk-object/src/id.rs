@@ -153,9 +153,7 @@ fn hex_value(byte: u8) -> Result<u8> {
     match byte {
         b'0'..=b'9' => Ok(byte - b'0'),
         b'a'..=b'f' => Ok(byte - b'a' + 10),
-        _ => Err(PrikkError::InvalidObjectId(
-            "object IDs must use lowercase hex only".to_string(),
-        )),
+        _ => Err(PrikkError::InvalidObjectId("object IDs must use lowercase hex only".to_string())),
     }
 }
 
