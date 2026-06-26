@@ -1,6 +1,9 @@
 //! Payload tests.
 
-use super::{BlobPayload, EditText, Operation, OperationKind, PatchPayload};
+use super::{
+    BlobPayload, BlockKind, BlockPayload, EditText, MerkleRoot, Operation, OperationKind,
+    PatchPayload, RefKind, RefStatePayload, RefUpdatePayload,
+};
 use crate::{CanonicalEncode, ObjectId, ObjectType};
 
 #[test]
@@ -39,8 +42,6 @@ fn blob_payload_has_stable_object_id() {
 
 #[test]
 fn ref_state_payload_decodes_its_canonical_bytes() {
-    use super::{RefKind, RefStatePayload};
-
     let target = ObjectId::from_canonical_payload(ObjectType::Block, 1, b"block");
     let previous = ObjectId::from_canonical_payload(ObjectType::RefState, 1, b"prev");
     let payload = RefStatePayload {
@@ -55,6 +56,46 @@ fn ref_state_payload_decodes_its_canonical_bytes() {
     assert!(bytes.is_ok());
     if let Ok(bytes) = bytes {
         let decoded = RefStatePayload::decode_canonical(&bytes);
+        assert_eq!(decoded, Ok(payload));
+    }
+}
+
+#[test]
+fn block_payload_decodes_its_canonical_bytes() {
+    let patch = ObjectId::from_canonical_payload(ObjectType::Patch, 1, b"patch");
+    let payload = BlockPayload {
+        parent_block_ids: Vec::new(),
+        kind: BlockKind::Root,
+        patch_ids: vec![patch],
+        state_merkle_root: MerkleRoot([7_u8; 32]),
+        snapshot_blob_ref: None,
+    };
+    let bytes = payload.to_canonical_bytes();
+    assert!(bytes.is_ok());
+    if let Ok(bytes) = bytes {
+        let decoded = BlockPayload::decode_canonical(&bytes);
+        assert_eq!(decoded, Ok(payload));
+    }
+}
+
+#[test]
+fn ref_update_payload_decodes_its_canonical_bytes() {
+    let previous = ObjectId::from_canonical_payload(ObjectType::RefState, 1, b"prev");
+    let current = ObjectId::from_canonical_payload(ObjectType::RefState, 1, b"current");
+    let block = ObjectId::from_canonical_payload(ObjectType::Block, 1, b"block");
+    let payload = RefUpdatePayload {
+        ref_name: "heads/main".to_string(),
+        old_ref_state_id: Some(previous),
+        new_ref_state_id: current,
+        new_target_object_id: block,
+        update_seq: 2,
+        created_at: 9,
+        author_key_id: "maintainer-key".to_string(),
+    };
+    let bytes = payload.to_canonical_bytes();
+    assert!(bytes.is_ok());
+    if let Ok(bytes) = bytes {
+        let decoded = RefUpdatePayload::decode_canonical(&bytes);
         assert_eq!(decoded, Ok(payload));
     }
 }

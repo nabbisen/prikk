@@ -28,6 +28,20 @@ impl BlockKind {
     pub const fn code(self) -> u16 {
         self as u16
     }
+
+    /// Parse a stable block-kind code.
+    pub fn from_code(code: u32) -> Result<Self> {
+        match code {
+            1 => Ok(Self::Root),
+            2 => Ok(Self::Normal),
+            3 => Ok(Self::Merge),
+            4 => Ok(Self::Repair),
+            5 => Ok(Self::Import),
+            other => Err(PrikkError::MalformedData(format!(
+                "unknown block kind code: {other}"
+            ))),
+        }
+    }
 }
 
 /// Block payload. Block summaries are intentionally not identity-bearing.
@@ -43,6 +57,156 @@ pub struct BlockPayload {
     pub state_merkle_root: MerkleRoot,
     /// Optional full snapshot blob reference.
     pub snapshot_blob_ref: Option<ObjectId>,
+}
+
+
+impl BlockPayload {
+    /// Decode a block payload from PRIKK canonical TLV bytes.
+    pub fn decode_canonical(bytes: &[u8]) -> Result<Self> {
+        let mut cursor = BlockCanonicalCursor::new(bytes);
+        let mut parent_block_ids = Vec::new();
+        let mut kind = None;
+        let mut patch_ids = Vec::new();
+        let mut state_merkle_root = None;
+        let mut snapshot_blob_ref = None;
+        while let Some(field) = cursor.next_field()? {
+            match field.tag {
+                1 => parent_block_ids.push(field.read_object_id()?),
+                2 => kind = Some(BlockKind::from_code(field.read_u32()?)?),
+                3 => patch_ids.push(field.read_object_id()?),
+                4 => state_merkle_root = Some(MerkleRoot(field.read_array::<32>()?)),
+                5 => snapshot_blob_ref = Some(field.read_object_id()?),
+                other => {
+                    return Err(PrikkError::MalformedData(format!(
+                        "unknown Block field tag: {other}"
+                    )));
+                }
+            }
+        }
+        let payload = Self {
+            parent_block_ids,
+            kind: kind.ok_or_else(|| {
+                PrikkError::MalformedData("Block missing kind".to_string())
+            })?,
+            patch_ids,
+            state_merkle_root: state_merkle_root.ok_or_else(|| {
+                PrikkError::MalformedData("Block missing state_merkle_root".to_string())
+            })?,
+            snapshot_blob_ref,
+        };
+        if !is_strictly_sorted(&payload.parent_block_ids) {
+            return Err(PrikkError::MalformedData(
+                "Block parent IDs are not sorted and unique".to_string(),
+            ));
+        }
+        Ok(payload)
+    }
+}
+
+struct BlockCanonicalCursor<'a> {
+    bytes: &'a [u8],
+    pos: usize,
+    last_tag: Option<u16>,
+}
+
+impl<'a> BlockCanonicalCursor<'a> {
+    const fn new(bytes: &'a [u8]) -> Self {
+        Self { bytes, pos: 0, last_tag: None }
+    }
+
+    fn next_field(&mut self) -> Result<Option<BlockCanonicalField<'a>>> {
+        if self.pos == self.bytes.len() {
+            return Ok(None);
+        }
+        let tag = u16::from_be_bytes(self.read_array::<2>()?);
+        if tag == 0 {
+            return Err(PrikkError::MalformedData("field tag 0 is reserved".to_string()));
+        }
+        if let Some(last) = self.last_tag {
+            if tag < last {
+                return Err(PrikkError::MalformedData(format!(
+                    "field tag order violation: {tag} after {last}"
+                )));
+            }
+        }
+        self.last_tag = Some(tag);
+        let wire_type = self.read_u8()?;
+        let len = usize::try_from(u64::from_be_bytes(self.read_array::<8>()?)).map_err(|_| {
+            PrikkError::MalformedData("canonical field length does not fit usize".to_string())
+        })?;
+        let value = self.read_exact(len)?;
+        Ok(Some(BlockCanonicalField { tag, wire_type, value }))
+    }
+
+    fn read_u8(&mut self) -> Result<u8> {
+        let value = self.read_exact(1)?;
+        let Some(byte) = value.first() else {
+            return Err(PrikkError::MalformedData("unexpected empty byte".to_string()));
+        };
+        Ok(*byte)
+    }
+
+    fn read_array<const N: usize>(&mut self) -> Result<[u8; N]> {
+        let bytes = self.read_exact(N)?;
+        let mut out = [0_u8; N];
+        out.copy_from_slice(bytes);
+        Ok(out)
+    }
+
+    fn read_exact(&mut self, len: usize) -> Result<&'a [u8]> {
+        let end = self
+            .pos
+            .checked_add(len)
+            .ok_or_else(|| PrikkError::MalformedData("canonical range overflow".to_string()))?;
+        let Some(slice) = self.bytes.get(self.pos..end) else {
+            return Err(PrikkError::MalformedData(
+                "unexpected end of canonical payload".to_string(),
+            ));
+        };
+        self.pos = end;
+        Ok(slice)
+    }
+}
+
+struct BlockCanonicalField<'a> {
+    tag: u16,
+    wire_type: u8,
+    value: &'a [u8],
+}
+
+impl<'a> BlockCanonicalField<'a> {
+    fn read_u32(&self) -> Result<u32> {
+        self.require_wire(crate::canonical::WireType::U32)?;
+        Ok(u32::from_be_bytes(self.read_array::<4>()?))
+    }
+
+    fn read_object_id(&self) -> Result<ObjectId> {
+        self.require_wire(crate::canonical::WireType::Bytes)?;
+        Ok(ObjectId::from_bytes(self.read_array::<32>()?))
+    }
+
+    fn require_wire(&self, expected: crate::canonical::WireType) -> Result<()> {
+        if self.wire_type == expected as u8 {
+            return Ok(());
+        }
+        Err(PrikkError::MalformedData(format!(
+            "field {} has wrong wire type: expected {}, got {}",
+            self.tag, expected as u8, self.wire_type
+        )))
+    }
+
+    fn read_array<const N: usize>(&self) -> Result<[u8; N]> {
+        if self.value.len() != N {
+            return Err(PrikkError::MalformedData(format!(
+                "field {} expected {N} bytes, got {}",
+                self.tag,
+                self.value.len()
+            )));
+        }
+        let mut out = [0_u8; N];
+        out.copy_from_slice(self.value);
+        Ok(out)
+    }
 }
 
 impl CanonicalEncode for BlockPayload {

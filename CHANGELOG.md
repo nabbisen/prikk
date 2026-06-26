@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0 PR-010
+
+Verification hardening for the local no-audit seal scaffold. Verification now checks block references, RefUpdate-to-RefState links, target block existence, and persisted WAL patch counts.
+
+- Strengthened read-only repository verification after the no-audit seal scaffold.
+- Added BlockPayload canonical decoding.
+- Verification now checks that persisted Block objects reference existing patch, parent-block, and snapshot-blob objects.
+- Added RefUpdatePayload canonical decoding.
+- Ref-log verification now validates decoded RefUpdate payloads against their referenced RefState objects and target blocks.
+- `prikk verify` now reports checked block count and active WAL records already persisted as patch objects.
+- Kept real worktree materialization, audit plugins, patch algebra, and sync deferred.
+
 ## 0.1.0 PR-009
 
 local no-audit seal scaffold that persists active WAL patch envelopes, creates a Block, publishes `heads/main`, and clears the active WAL after success.
@@ -11,8 +23,6 @@ local no-audit seal scaffold that persists active WAL patch envelopes, creates a
 - Seal truncates the active WAL only after the ref publication succeeds.
 - Added RefState canonical decoding for current-head parent discovery.
 - Kept real worktree materialization, audit plugins, patch algebra, and sync deferred.
-
-# Changelog
 
 ## 0.1.0 PR-008
 

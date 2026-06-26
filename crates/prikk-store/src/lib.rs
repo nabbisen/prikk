@@ -3,7 +3,7 @@
 
 //! Storage crate for PRIKK repositories.
 //!
-//! PR-009 contains persistent layout, object storage, WAL durability, read-only
+//! PR-010 contains persistent layout, object storage, WAL durability, deeper read-only
 //! repository verification, initial ref-state/ref-log publication primitives, and a narrow
 //! active-session append API. Patch algebra, plugin execution, and remote sync remain separate
 //! increments.

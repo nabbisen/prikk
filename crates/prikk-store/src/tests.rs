@@ -1,8 +1,9 @@
 //! Storage tests.
 
 use prikk_object::{
-    CanonicalEncode, EditText, ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind,
-    PatchPayload, RefKind, RefStatePayload, RefUpdatePayload, Signature, SignatureAlgorithm,
+    BlockKind, BlockPayload, CanonicalEncode, EditText, MerkleRoot, ObjectEnvelope, ObjectId,
+    ObjectType, Operation, OperationKind, PatchPayload, RefKind, RefStatePayload, RefUpdatePayload,
+    Signature, SignatureAlgorithm,
     SignerRole,
 };
 
@@ -122,8 +123,11 @@ fn ref_store_publishes_ref_state_and_log() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
+        let mut object_store = FileObjectStore::new(layout.clone());
+        let block = signed_empty_block_envelope();
+        let target = block.object_id();
+        assert!(object_store.write_object(&block).is_ok());
         let store = RefStore::new(layout.clone());
-        let target = sample_object_id("target-block");
         let ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
         let ref_state_id = ref_state.object_id();
         let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, target, 1);
@@ -183,8 +187,11 @@ fn verify_repository_detects_missing_ref_state_object() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
+        let mut object_store = FileObjectStore::new(layout.clone());
+        let block = signed_empty_block_envelope();
+        let target = block.object_id();
+        assert!(object_store.write_object(&block).is_ok());
         let store = RefStore::new(layout.clone());
-        let target = sample_object_id("target-block");
         let ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
         let ref_state_id = ref_state.object_id();
         let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, target, 1);
@@ -244,6 +251,34 @@ fn wal_rejects_unsigned_patch_envelope() {
 }
 
 
+
+#[test]
+fn verify_repository_detects_block_with_missing_patch() {
+    let root = unique_temp_dir("block-missing-patch");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let mut store = FileObjectStore::new(layout.clone());
+        let missing_patch = sample_object_id("missing-patch");
+        let payload = BlockPayload {
+            parent_block_ids: Vec::new(),
+            kind: BlockKind::Root,
+            patch_ids: vec![missing_patch],
+            state_merkle_root: MerkleRoot([0_u8; 32]),
+            snapshot_blob_ref: None,
+        };
+        let payload_bytes = payload.to_canonical_bytes();
+        assert!(payload_bytes.is_ok());
+        if let Ok(payload_bytes) = payload_bytes {
+            let mut block = ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes);
+            assert!(block.add_signature(maintainer_signature()).is_ok());
+            assert!(store.write_object(&block).is_ok());
+            assert!(verify_repository(&layout).is_err());
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
 #[test]
 fn verify_repository_counts_objects_and_wal_records() {
     let root = unique_temp_dir("verify");
@@ -262,7 +297,9 @@ fn verify_repository_counts_objects_and_wal_records() {
         assert!(report.is_ok());
         if let Ok(report) = report {
             assert_eq!(report.checked_objects, 1);
+            assert_eq!(report.checked_blocks, 0);
             assert_eq!(report.checked_wal_records, 1);
+            assert_eq!(report.persisted_wal_patches, 0);
             assert_eq!(report.checked_refs, 0);
             assert_eq!(report.checked_ref_log_records, 0);
             assert_eq!(report.trailing_partial_wal_bytes, 0);
@@ -315,6 +352,23 @@ fn signed_patch_envelope() -> ObjectEnvelope {
     let bytes = payload_bytes.unwrap_or_default();
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, bytes);
     assert!(envelope.add_signature(dummy_signature()).is_ok());
+    envelope
+}
+
+
+fn signed_empty_block_envelope() -> ObjectEnvelope {
+    let payload = BlockPayload {
+        parent_block_ids: Vec::new(),
+        kind: BlockKind::Root,
+        patch_ids: Vec::new(),
+        state_merkle_root: MerkleRoot([0_u8; 32]),
+        snapshot_blob_ref: None,
+    };
+    let payload_bytes = payload.to_canonical_bytes();
+    assert!(payload_bytes.is_ok());
+    let bytes = payload_bytes.unwrap_or_default();
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Block, 1, bytes);
+    assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
 }
 

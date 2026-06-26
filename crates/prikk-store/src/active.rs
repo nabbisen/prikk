@@ -1,6 +1,6 @@
 //! Active-session commit helpers.
 //!
-//! This module is the narrow PR-009 boundary between higher-level commit construction and the
+//! This module is the narrow boundary between higher-level commit construction and the
 //! durable active WAL. It owns lock acquisition for the default active session and appends only
 //! already-constructed, signed patch envelopes.
 

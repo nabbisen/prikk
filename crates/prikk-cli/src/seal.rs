@@ -1,4 +1,4 @@
-//! Minimal local seal command implementation for PR-009.
+//! Minimal local seal command implementation.
 //!
 //! This module publishes the currently active WAL as one Block and advances `heads/main` through
 //! the existing RefState/RefUpdate primitives. It deliberately does not implement audit plugins,
@@ -30,7 +30,7 @@ pub struct SealCommandResult {
     pub ref_state_id: prikk_object::ObjectId,
 }
 
-/// Parse and run the PR-009 seal scaffold.
+/// Parse and run the local seal scaffold.
 pub fn run_seal(
     root: PathBuf,
     args: Vec<String>,
@@ -49,7 +49,7 @@ fn parse_seal_args(args: Vec<String>) -> std::result::Result<(), String> {
         }
     }
     if !allow_no_audit {
-        return Err("PR-009 seal requires --allow-no-audit".to_string());
+        return Err("seal scaffold requires --allow-no-audit".to_string());
     }
     Ok(())
 }

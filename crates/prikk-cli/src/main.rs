@@ -2,8 +2,9 @@
 
 //! PRIKK command-line entry point.
 //!
-//! PR-009 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
-//! a local no-audit seal scaffold, ref pointer counts, and read-only repository verification.
+//! PR-010 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
+//! a local no-audit seal scaffold, ref pointer counts, and deeper read-only repository
+//! verification.
 //! Real diff capture, patch application, audit plugins, and sync remain later increments.
 
 use std::path::PathBuf;
@@ -18,7 +19,7 @@ use prikk_object::{
 };
 use prikk_store::{verify_repository, ActiveSession, RefStore, RepositoryLayout, Wal};
 
-const VERSION: &str = "0.1.0-pr009";
+const VERSION: &str = "0.1.0-pr010";
 
 fn main() -> ExitCode {
     match run() {
@@ -90,7 +91,7 @@ fn run() -> std::result::Result<(), String> {
                 Some(id) => println!("heads/main RefState: {id}"),
                 None => println!("heads/main RefState: <not published>"),
             }
-            println!("status: patch algebra, plugins, and sync not implemented in PR-009");
+            println!("status: patch algebra, plugins, and sync not implemented in PR-010");
             Ok(())
         }
         Some("verify") => {
@@ -102,7 +103,9 @@ fn run() -> std::result::Result<(), String> {
             let report = verify_repository(&layout).map_err(|err| err.to_string())?;
             println!("verified repository: {}", layout.prikk_dir().display());
             println!("checked objects: {}", report.checked_objects);
+            println!("checked blocks: {}", report.checked_blocks);
             println!("checked WAL records: {}", report.checked_wal_records);
+            println!("persisted WAL patches: {}", report.persisted_wal_patches);
             println!("checked refs: {}", report.checked_refs);
             println!("checked ref-log records: {}", report.checked_ref_log_records);
             println!("trailing partial WAL bytes: {}", report.trailing_partial_wal_bytes);
@@ -132,7 +135,7 @@ fn parse_empty_commit_message(args: Vec<String>) -> std::result::Result<String, 
         }
     }
     if !allow_empty {
-        return Err("PR-009 supports only `prikk commit --allow-empty -m <message>`".to_string());
+        return Err("PR-010 supports only `prikk commit --allow-empty -m <message>`".to_string());
     }
     let Some(message) = message else {
         return Err("empty commit requires -m <message>".to_string());

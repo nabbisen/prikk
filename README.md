@@ -32,7 +32,7 @@ cargo run -p prikk -- verify ./sample-repo
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-009**.
+Current implementation drop: **0.1.0 PR-010**.
 
 Implemented:
 
@@ -41,9 +41,9 @@ Implemented:
 - Object envelopes with signatures outside identity.
 - Persistent `.prikk/` layout and object store.
 - Active-session WAL append/replay for signed patch envelopes.
-- Read-only repository verification for objects, ref pointers, ref logs, and active WAL.
+- Read-only repository verification for objects, block references, ref pointers, ref logs, and active WAL.
 - Initial RefState publication primitives with flat hashed ref pointer paths.
-- Inline signed RefUpdate log append/replay.
+- Inline signed RefUpdate log append/replay with linked payload validation.
 - Narrow empty-commit scaffold that appends a signed patch envelope to the active WAL.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
 - Minimal CLI commands: `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `verify`, and `--version`.

@@ -153,6 +153,57 @@ impl CanonicalEncode for RefUpdatePayload {
     }
 }
 
+impl RefUpdatePayload {
+    /// Decode a RefUpdate payload from PRIKK canonical TLV bytes.
+    pub fn decode_canonical(bytes: &[u8]) -> Result<Self> {
+        let mut cursor = CanonicalCursor::new(bytes);
+        let mut ref_name = None;
+        let mut old_ref_state_id = None;
+        let mut new_ref_state_id = None;
+        let mut new_target_object_id = None;
+        let mut update_seq = None;
+        let mut created_at = None;
+        let mut author_key_id = None;
+        while let Some(field) = cursor.next_field()? {
+            match field.tag {
+                1 => ref_name = Some(field.read_string()?),
+                2 => old_ref_state_id = Some(field.read_object_id()?),
+                3 => new_ref_state_id = Some(field.read_object_id()?),
+                4 => new_target_object_id = Some(field.read_object_id()?),
+                5 => update_seq = Some(field.read_u64()?),
+                6 => created_at = Some(field.read_u64()?),
+                7 => author_key_id = Some(field.read_string()?),
+                other => {
+                    return Err(PrikkError::MalformedData(format!(
+                        "unknown RefUpdate field tag: {other}"
+                    )));
+                }
+            }
+        }
+        Ok(Self {
+            ref_name: ref_name.ok_or_else(|| {
+                PrikkError::MalformedData("RefUpdate missing ref_name".to_string())
+            })?,
+            old_ref_state_id,
+            new_ref_state_id: new_ref_state_id.ok_or_else(|| {
+                PrikkError::MalformedData("RefUpdate missing new_ref_state_id".to_string())
+            })?,
+            new_target_object_id: new_target_object_id.ok_or_else(|| {
+                PrikkError::MalformedData("RefUpdate missing new_target_object_id".to_string())
+            })?,
+            update_seq: update_seq.ok_or_else(|| {
+                PrikkError::MalformedData("RefUpdate missing update_seq".to_string())
+            })?,
+            created_at: created_at.ok_or_else(|| {
+                PrikkError::MalformedData("RefUpdate missing created_at".to_string())
+            })?,
+            author_key_id: author_key_id.ok_or_else(|| {
+                PrikkError::MalformedData("RefUpdate missing author_key_id".to_string())
+            })?,
+        })
+    }
+}
+
 struct CanonicalCursor<'a> {
     bytes: &'a [u8],
     pos: usize,
