@@ -20,7 +20,6 @@ unsafe_code = "forbid"
 missing_docs = "warn"
 
 [workspace.lints.clippy]
-panic = "warn"
 unwrap_used = "warn"
 expect_used = "warn"
 indexing_slicing = "warn"

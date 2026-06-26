@@ -1,37 +1,32 @@
 # PRIKK Implementation Status
 
-## Current source drop
-
-`0.1.0-pr003`
+Version: 0.1.0 PR-004
 
 ## Implemented
 
-- Workspace scaffold.
-- Object ID formula.
-- Canonical encoding seed.
-- Object envelope shape.
-- Signature metadata shape.
-- Payload shape seed.
-- In-memory object store.
-- File-backed object store.
-- Repository layout initialization.
-- Minimal CLI `init` and `status` commands.
+- Rust workspace scaffold.
+- Shared error taxonomy.
+- First-party SHA-256 implementation for early object identity tests.
+- Deterministic canonical TLV encoder seed.
+- Object IDs and object envelopes.
+- Core payload shape seeds.
+- Persistent `.prikk/` repository layout.
+- File-backed object store with identity verification on read.
+- Active-session lock scaffold.
+- Active-session WAL append/replay for signed patch envelopes.
+- Minimal CLI for `init`, `status`, and `--version`.
 
-## Open implementation gates
+## Not Implemented Yet
 
-- Safe scaffolding.
-- Object identity and storage foundation increments.
-
-## Still gated / intentionally deferred
-
-- WAL durability.
-- RefState/ref-log/CAS.
-- Patch algebra and commutation.
-- Plugin ABI/runtime.
+- RefState publication and ref logs.
+- Seal transaction.
+- Patch apply/inverse/commutation.
+- Conflict witnesses and merge state.
+- WASM plugin host.
 - Audit publication policy.
 - Remote sync.
 
-## Next likely PR
+## Gate Discipline
 
-PR-004 should introduce the WAL record format and append/replay tests, but it should not advance refs
-or seal publication until the WAL behavior is reviewed independently.
+PR-004 stays within the approved M1 foundation area. It adds WAL append/replay but does not yet
+publish refs or implement seal semantics.

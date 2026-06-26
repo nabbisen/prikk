@@ -1,43 +1,51 @@
 # Prikk
 
-PRIKK is a next-generation VCS prototype built around content-addressed objects,
-block-oriented patch theory, and design-first implementation gates.
+![Status](https://img.shields.io/badge/status-early--implementation-orange)
+![License](https://img.shields.io/badge/license-Apache--2.0-blue)
+![Rust](https://img.shields.io/badge/rust-2024-orange)
 
-This source drop is **PR-003**. It extends the PR-002 object-identity scaffold with
-the first persistent repository/storage layer.
+**A next-generation, design-first VCS built around block-oriented patch theory.**
 
-## Implemented in PR-003
+## Overview
 
-- Rust workspace scaffold retained from PR-001/PR-002.
-- Deterministic object identity and canonical payload types.
-- Object envelopes with signatures outside identity.
-- Repository layout creation via `RepositoryLayout::init`.
-- File-backed object store with object-type directories and hash-prefix fanout.
-- Simple envelope file codec for round-tripping signed object envelopes.
-- Object read integrity checks: stored envelope ID must match the requested ID.
-- Minimal CLI commands:
-  - `prikk init [path]`
-  - `prikk status`
-  - `prikk --version`
+PRIKK is an experimental distributed version control system focused on ease of use, safety,
+resilience, flexibility, and long-term performance. The implementation follows the approved FDD
+sequence: object identity and storage first, then WAL/ref durability, patch algebra, plugins, and
+sync.
 
-## Still intentionally not implemented
+## Why / When
 
-- WAL append/replay.
-- RefState publication and ref logs.
-- Locking protocol.
-- Patch apply/inverse/commutation.
-- Plugin host and audit publication.
-- Remote sync.
+Use PRIKK development builds when evaluating the architecture or contributing to the implementation.
+Do not use PRIKK for real project history yet.
 
-Those remain separate PRs so each durability/security boundary can be reviewed independently.
-
-## Expected local checks
+## Quick Start
 
 ```sh
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo run -p prikk -- init ./sample-repo
 ```
 
-This environment still does not include `cargo`/`rustc`, so these checks were not executed here.
-Please run them on the development machine and return logs for the next fix cycle.
+## Design Notes
+
+Current implementation drop: **0.1.0 PR-004**.
+
+Implemented:
+
+- Rust workspace scaffold.
+- Deterministic canonical object identity seed.
+- Object envelopes with signatures outside identity.
+- Persistent `.prikk/` layout and object store.
+- Active-session WAL append/replay for signed patch envelopes.
+
+Not implemented yet:
+
+- Ref publication and ref logs.
+- Patch apply/commutation.
+- Plugin/audit execution.
+- Remote sync.
+
+## More Detail
+
+Full documentation is kept under `docs/src` and is structured for mdBook.

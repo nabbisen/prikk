@@ -1,43 +1,31 @@
 # Changelog
 
-## 0.1.0-pr003
+## 0.1.0 PR-004
 
-### Added
+- Aligned workspace metadata with project Rust instructions: Rust 2024, Apache-2.0, author nabbisen.
+- Split large `prikk-store` and `prikk-object` payload files by logical boundaries.
+- Added `LICENSE`, `NOTICE`, and mdBook-compatible `docs/src` seed.
+- Fixed PR-003 storage transcription defects before extending storage work.
+- Added active-session file lock scaffold.
+- Added file-backed WAL append/replay for signed patch envelopes.
+- Added WAL tests for signed patch round-trip and unsigned-patch rejection.
+- Updated CLI status output to report active WAL replay state.
 
-- Repository layout creation under `.prikk/`.
-- `RepositoryLayout` path model in `prikk-store`.
-- `FileObjectStore` for persistent object envelope writes and reads.
-- Deterministic envelope file codec for storage round-trips.
-- Integrity checks when reading file-backed objects.
-- Minimal `prikk init [path]` and `prikk status` commands.
-- PR-003 implementation handoff document.
+## 0.1.0 PR-003
 
-### Changed
+- Added `.prikk/` repository layout creation.
+- Added file-backed object store.
+- Added persistent object envelope file codec.
+- Added minimal `prikk init` and `prikk status` commands.
 
-- CLI banner updated to `0.1.0-pr003`.
-- `prikk-store` is now a concrete early storage crate rather than only a trait scaffold.
+## 0.1.0 PR-002
 
-### Still deferred
+- Fixed formatting and strict Clippy warnings from PR-001 logs.
+- Added missing documentation in `prikk-error` and CLI crate.
 
-- WAL implementation.
-- RefState/ref-log implementation.
-- Patch algebra implementation.
-- Plugin/audit implementation.
-- Remote sync.
+## 0.1.0 PR-001
 
-## 0.1.0-pr002
-
-### Fixed
-
-- Formatting drift reported by `cargo fmt --check`.
-- Strict Clippy `indexing_slicing` failures in `prikk-hash`.
-- Missing documentation warnings in `prikk-error` and CLI.
-
-## 0.1.0-pr001
-
-### Added
-
-- Initial workspace scaffold.
-- Object identity seed.
-- Canonical encoding seed.
-- Object envelopes and in-memory object store boundary.
+- Added initial Rust workspace scaffold.
+- Added object ID formula seed.
+- Added deterministic canonical encoding seed.
+- Added object envelope and in-memory object store.

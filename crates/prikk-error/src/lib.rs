@@ -32,6 +32,10 @@ pub enum PrikkError {
     MalformedData(String),
     /// A persisted object was found at a path that does not match its computed ID.
     Integrity(String),
+    /// A lock could not be acquired because another writer may be active.
+    LockConflict(String),
+    /// The requested object type cannot be persisted in the requested store.
+    UnsupportedObjectType(String),
     /// Placeholder for I/O errors without making this crate depend on std::io::Error in variants.
     Io(String),
 }
@@ -51,6 +55,8 @@ impl fmt::Display for PrikkError {
             }
             Self::MalformedData(msg) => write!(f, "malformed persisted data: {msg}"),
             Self::Integrity(msg) => write!(f, "integrity error: {msg}"),
+            Self::LockConflict(msg) => write!(f, "lock conflict: {msg}"),
+            Self::UnsupportedObjectType(msg) => write!(f, "unsupported object type: {msg}"),
             Self::Io(msg) => write!(f, "i/o error: {msg}"),
         }
     }

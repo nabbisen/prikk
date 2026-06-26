@@ -8,6 +8,7 @@ rust-version.workspace = true
 
 [dependencies]
 prikk-error.workspace = true
+prikk-hash.workspace = true
 prikk-object.workspace = true
 
 [lints]
