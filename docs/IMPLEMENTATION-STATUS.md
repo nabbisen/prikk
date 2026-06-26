@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-012
+Version: 0.1.0 PR-013
 
 ## Implemented
 
@@ -24,7 +24,7 @@ Version: 0.1.0 PR-012
 - Empty-commit scaffold for manually exercising the commit/WAL path.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, publishes `heads/main`, and clears the WAL after publication.
 - Canonical decoding for RefState, RefUpdate, and Block payloads used by verification.
-- Minimal CLI for `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `verify`, `doctor`, `doctor --repair-wal-tail`, and `--version`.
+- Minimal CLI for `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
 
@@ -36,12 +36,13 @@ Version: 0.1.0 PR-012
 - Audit publication policy.
 - Remote sync.
 
-## Conservative Repair Added in PR-012
+## Conservative Repairs Added Through PR-013
 
 - `prikk doctor --repair-wal-tail` truncates only incomplete trailing active-WAL bytes after verification confirms that all preceding records are valid.
+- `prikk doctor --repair-main-ref` reconstructs only a missing `heads/main` pointer from an already-valid ref log and RefState object.
 - Repair refuses to mutate the repository when verification reports integrity errors.
-- Ref reconstruction, missing-object repair, checksum-mismatch repair, object quarantine, and GC remain deferred.
+- Missing-object repair, checksum-mismatch repair, object quarantine, GC, and malformed-log repair remain deferred.
 
 ## Gate Discipline
 
-PR-012 stays within the approved foundation boundary by adding only the FDD-02-safe WAL tail repair. It does not implement real worktree diff capture, patch algebra, audit plugin execution, policy enforcement, or remote sync.
+PR-013 stays within the approved foundation boundary by adding only narrow FDD-02-style recovery for already-verified data. It does not implement real worktree diff capture, patch algebra, audit plugin execution, policy enforcement, or remote sync.

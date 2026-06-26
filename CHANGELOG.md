@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0 PR-013
+
+Opt-in safe doctor repair for incomplete active-WAL trailing bytes and missing `heads/main` pointer reconstruction from verified ref-log data.
+
+- Added guarded ref-pointer reconstruction for a missing `heads/main` pointer.
+- Added `RefRecoveryCandidate` and `RefRecoveryRepair`.
+- Added doctor warning `PRIKK-DOCTOR-REF-POINTER-MISSING` when the ref log and RefState object are valid but the pointer is absent.
+- Added `prikk doctor [path] --repair-main-ref` for opt-in pointer reconstruction.
+- Added tests for direct RefStore reconstruction and doctor-driven reconstruction.
+- Kept malformed-log repair, missing-object repair, ref-log rewriting, patch algebra, plugins, and sync deferred.
+
 ## 0.1.0 PR-012
 
 Opt-in safe doctor repair for incomplete active-WAL trailing bytes. Doctor remains conservative and refuses repair when verification reports integrity errors.

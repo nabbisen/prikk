@@ -120,3 +120,41 @@ fn verify_repository_detects_missing_ref_state_object() {
     }
     let _ = std::fs::remove_dir_all(root);
 }
+
+#[test]
+fn ref_store_reconstructs_missing_pointer_from_log() {
+    let root = unique_temp_dir("ref-reconstruct");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let mut object_store = FileObjectStore::new(layout.clone());
+        let block = signed_empty_block_envelope();
+        let target = block.object_id();
+        assert!(object_store.write_object(&block).is_ok());
+        let store = RefStore::new(layout.clone());
+        let ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
+        let ref_state_id = ref_state.object_id();
+        let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, target, 1);
+        let publication = RefPublication {
+            ref_name: "heads/main".to_string(),
+            expected_previous_ref_state_id: None,
+            ref_state,
+            ref_update,
+        };
+        assert!(store.publish(&publication).is_ok());
+        assert!(std::fs::remove_file(layout.ref_pointer_path("heads/main")).is_ok());
+        assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(None));
+        let candidate = store.recoverable_missing_ref("heads/main");
+        assert!(candidate.is_ok());
+        assert_eq!(candidate.ok().flatten().map(|value| value.ref_state_id), Some(ref_state_id));
+        let repair = store.reconstruct_missing_ref_from_log("heads/main");
+        assert!(repair.is_ok());
+        if let Ok(repair) = repair {
+            assert!(repair.wrote_pointer);
+            assert_eq!(repair.ref_state_id, ref_state_id);
+        }
+        assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(Some(ref_state_id)));
+        assert!(verify_repository(&layout).is_ok());
+    }
+    let _ = std::fs::remove_dir_all(root);
+}

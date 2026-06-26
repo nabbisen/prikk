@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::helpers::{
-    maintainer_signature, sample_object_id, signed_patch_envelope, unique_temp_dir,
+    maintainer_signature, sample_object_id, signed_empty_block_envelope, signed_patch_envelope, unique_temp_dir,
 };
 
 #[test]
@@ -125,6 +125,51 @@ fn doctor_repair_truncates_only_trailing_partial_wal() {
             assert_eq!(replay.records.len(), 1);
             assert_eq!(replay.trailing_partial_bytes, 0);
         }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn doctor_repair_reconstructs_missing_main_ref_pointer() {
+    let root = unique_temp_dir("doctor-repair-main-ref");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let mut object_store = FileObjectStore::new(layout.clone());
+        let block = signed_empty_block_envelope();
+        let target = block.object_id();
+        assert!(object_store.write_object(&block).is_ok());
+        let store = crate::RefStore::new(layout.clone());
+        let ref_state = crate::tests::helpers::signed_ref_state_envelope("heads/main", None, target, 1);
+        let ref_state_id = ref_state.object_id();
+        let ref_update = crate::tests::helpers::signed_ref_update_envelope(
+            "heads/main",
+            None,
+            ref_state_id,
+            target,
+            1,
+        );
+        let publication = crate::RefPublication {
+            ref_name: "heads/main".to_string(),
+            expected_previous_ref_state_id: None,
+            ref_state,
+            ref_update,
+        };
+        assert!(store.publish(&publication).is_ok());
+        assert!(std::fs::remove_file(layout.ref_pointer_path("heads/main")).is_ok());
+
+        let before = doctor_repository(&layout);
+        assert!(before.is_healthy());
+        assert_eq!(before.count_by_severity(DoctorSeverity::Warning), 1);
+
+        let repair = repair_repository(&layout, DoctorRepairOptions::reconstruct_main_ref());
+        assert!(repair.is_ok());
+        if let Ok(repair) = repair {
+            assert_eq!(repair.ref_repair.as_ref().map(|value| value.wrote_pointer), Some(true));
+            assert!(repair.after.is_healthy());
+            assert_eq!(repair.after.count_by_severity(DoctorSeverity::Warning), 0);
+        }
+        assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(Some(ref_state_id)));
     }
     let _ = std::fs::remove_dir_all(root);
 }

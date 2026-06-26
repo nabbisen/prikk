@@ -1,12 +1,13 @@
 //! Repository doctor diagnostics and narrowly-scoped repair helpers.
 //!
-//! PR-012 keeps doctor repairs deliberately conservative. The only mutating repair implemented
-//! here is opt-in truncation of an incomplete trailing active-WAL record, which FDD-02 defines as
-//! safe because all preceding records have already passed checksum validation.
+//! PR-013 keeps doctor repairs deliberately conservative. Mutating repairs are opt-in and
+//! limited to incomplete active-WAL tail truncation plus reconstruction of a missing `heads/main`
+//! pointer from already-verified ref-log and RefState data.
 
 use prikk_error::{PrikkError, Result};
 
 use crate::layout::RepositoryLayout;
+use crate::refs::{RefRecoveryRepair, RefStore};
 use crate::verify::{verify_repository, RepositoryVerification};
 use crate::wal::{Wal, WalRepair};
 
@@ -122,19 +123,27 @@ pub struct DoctorRepairOptions {
     /// Truncate incomplete trailing bytes from the active WAL after verification confirms that the
     /// prefix is valid.
     pub truncate_wal_tail: bool,
+    /// Reconstruct `heads/main` from a valid ref log when the pointer file is missing.
+    pub reconstruct_main_ref: bool,
 }
 
 impl DoctorRepairOptions {
     /// Return options that perform no repair.
     #[must_use]
     pub const fn none() -> Self {
-        Self { truncate_wal_tail: false }
+        Self { truncate_wal_tail: false, reconstruct_main_ref: false }
     }
 
     /// Return options that enable only safe active-WAL tail truncation.
     #[must_use]
     pub const fn truncate_wal_tail() -> Self {
-        Self { truncate_wal_tail: true }
+        Self { truncate_wal_tail: true, reconstruct_main_ref: false }
+    }
+
+    /// Return options that enable only guarded `heads/main` pointer reconstruction.
+    #[must_use]
+    pub const fn reconstruct_main_ref() -> Self {
+        Self { truncate_wal_tail: false, reconstruct_main_ref: true }
     }
 }
 
@@ -145,6 +154,8 @@ pub struct DoctorRepairReport {
     pub before: DoctorReport,
     /// WAL repair summary.
     pub wal_repair: WalRepair,
+    /// Ref pointer reconstruction summary, if requested.
+    pub ref_repair: Option<RefRecoveryRepair>,
     /// Doctor report after repair action.
     pub after: DoctorReport,
 }
@@ -174,6 +185,7 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                      final WAL bytes",
                 ));
             }
+            add_missing_main_ref_issue(layout, &mut issues);
             DoctorReport { verification: Some(verification), issues }
         }
         Err(error) => {
@@ -204,8 +216,35 @@ pub fn repair_repository(
     } else {
         WalRepair { preserved_records: 0, truncated_bytes: 0 }
     };
+    let ref_repair = if options.reconstruct_main_ref {
+        let ref_store = RefStore::new(layout.clone());
+        Some(ref_store.reconstruct_missing_ref_from_log("heads/main")?)
+    } else {
+        None
+    };
     let after = doctor_repository(layout);
-    Ok(DoctorRepairReport { before, wal_repair, after })
+    Ok(DoctorRepairReport { before, wal_repair, ref_repair, after })
+}
+
+fn add_missing_main_ref_issue(layout: &RepositoryLayout, issues: &mut Vec<DoctorIssue>) {
+    let ref_store = RefStore::new(layout.clone());
+    match ref_store.recoverable_missing_ref("heads/main") {
+        Ok(Some(candidate)) => issues.push(DoctorIssue::warning(
+            "PRIKK-DOCTOR-REF-POINTER-MISSING",
+            format!(
+                "heads/main pointer is missing but ref log can recover RefState {} at update {}",
+                candidate.ref_state_id,
+                candidate.update_seq
+            ),
+            "run `prikk doctor --repair-main-ref` to reconstruct only the missing heads/main              pointer from the verified ref log",
+        )),
+        Ok(None) => {}
+        Err(error) => issues.push(DoctorIssue::error(
+            "PRIKK-DOCTOR-REF-RECOVERY-ERROR",
+            format!("heads/main ref recovery analysis failed: {error}"),
+            "preserve the repository and inspect refs/logs before attempting ref repair",
+        )),
+    }
 }
 
 fn issue_for_verification_error(error: PrikkError) -> DoctorIssue {

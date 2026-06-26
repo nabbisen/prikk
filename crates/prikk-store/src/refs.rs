@@ -1,6 +1,6 @@
 //! Ref-state pointer and ref-log publication primitives.
 //!
-//! PR-007 implements the storage mechanics needed before a full seal command exists: a RefState is
+//! PR-007 introduced the storage mechanics needed before a full seal command exists: a RefState is
 //! stored as a normal content-addressed object, the ref file is a durable pointer to that object,
 //! and RefUpdate entries are stored inline in an append-only log. The module does not yet perform
 //! publication-policy evaluation or patch/block sealing.
@@ -10,15 +10,40 @@ mod pointer;
 mod verify;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{ObjectEnvelope, ObjectId, ObjectType};
+use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, RefUpdatePayload};
 
 use crate::fsutil::sync_directory_best_effort;
 use crate::layout::RepositoryLayout;
 use crate::lock::RefLock;
-use crate::object_store::{FileObjectStore, ObjectWriter};
+use crate::object_store::{FileObjectStore, ObjectReader, ObjectWriter};
 
 pub use log::{RefLogRecord, RefLogReplay};
 pub(crate) use verify::verify_refs;
+
+
+/// Recoverable ref candidate reconstructed from an append-only ref log.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefRecoveryCandidate {
+    /// Human-readable ref name.
+    pub ref_name: String,
+    /// RefState ID selected by the latest valid ref-log record.
+    pub ref_state_id: ObjectId,
+    /// Target Block ID selected by the RefState.
+    pub target_object_id: ObjectId,
+    /// Update sequence of the latest ref-log record.
+    pub update_seq: u64,
+}
+
+/// Result of a guarded ref-pointer reconstruction attempt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefRecoveryRepair {
+    /// Human-readable ref name.
+    pub ref_name: String,
+    /// RefState ID reconstructed into the pointer file.
+    pub ref_state_id: ObjectId,
+    /// Whether a pointer file was written.
+    pub wrote_pointer: bool,
+}
 
 /// Inputs for a single ref publication primitive.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,6 +120,101 @@ impl RefStore {
         log::replay_log(&self.layout, ref_name)
     }
 
+    /// Return a recoverable ref-pointer candidate when the pointer is missing but the log is valid.
+    pub fn recoverable_missing_ref(
+        &self,
+        ref_name: &str,
+    ) -> Result<Option<RefRecoveryCandidate>> {
+        if self.read_current_ref_state_id(ref_name)?.is_some() {
+            return Ok(None);
+        }
+        let replay = self.replay_log(ref_name)?;
+        if replay.records.is_empty() {
+            return Ok(None);
+        }
+        if replay.trailing_partial_bytes != 0 {
+            return Err(PrikkError::Integrity(format!(
+                "ref log for {ref_name} has trailing partial bytes"
+            )));
+        }
+        let object_store = FileObjectStore::new(self.layout.clone());
+        let mut previous_ref_state_id = None;
+        let mut latest = None;
+        for record in &replay.records {
+            let update = RefUpdatePayload::decode_canonical(&record.envelope.canonical_payload)?;
+            if update.ref_name != ref_name {
+                return Err(PrikkError::Integrity(format!(
+                    "ref-log record name mismatch: expected {ref_name}, got {}",
+                    update.ref_name
+                )));
+            }
+            if update.old_ref_state_id != previous_ref_state_id {
+                return Err(PrikkError::Integrity(format!(
+                    "ref-log chain mismatch for {ref_name} at update {}",
+                    update.update_seq
+                )));
+            }
+            let ref_state = verified_ref_state_payload(
+                &object_store,
+                update.new_ref_state_id,
+                ref_name,
+                update.new_target_object_id,
+            )?;
+            if ref_state.previous_ref_state_id != update.old_ref_state_id {
+                return Err(PrikkError::Integrity(format!(
+                    "RefState previous link disagrees with RefUpdate for {ref_name}"
+                )));
+            }
+            if ref_state.update_seq != update.update_seq {
+                return Err(PrikkError::Integrity(format!(
+                    "RefState update sequence disagrees with RefUpdate for {ref_name}"
+                )));
+            }
+            previous_ref_state_id = Some(update.new_ref_state_id);
+            latest = Some(update);
+        }
+        let Some(update) = latest else {
+            return Ok(None);
+        };
+        Ok(Some(RefRecoveryCandidate {
+            ref_name: ref_name.to_string(),
+            ref_state_id: update.new_ref_state_id,
+            target_object_id: update.new_target_object_id,
+            update_seq: update.update_seq,
+        }))
+    }
+
+    /// Reconstruct a missing ref pointer from the latest valid log record.
+    ///
+    /// This method is deliberately narrow: it writes only the pointer file for a ref whose log and
+    /// target RefState object already verify. It does not synthesize objects or repair malformed
+    /// logs.
+    pub fn reconstruct_missing_ref_from_log(&self, ref_name: &str) -> Result<RefRecoveryRepair> {
+        let ref_lock = RefLock::acquire(self.layout.ref_lock_path(ref_name))?;
+        if let Some(current) = self.read_current_ref_state_id(ref_name)? {
+            drop(ref_lock);
+            return Ok(RefRecoveryRepair {
+                ref_name: ref_name.to_string(),
+                ref_state_id: current,
+                wrote_pointer: false,
+            });
+        }
+        let candidate = self.recoverable_missing_ref(ref_name)?.ok_or_else(|| {
+            PrikkError::Integrity(format!(
+                "ref {ref_name} has no recoverable committed ref-log record"
+            ))
+        })?;
+        self.write_ref_pointer_candidate(ref_name, candidate.ref_state_id)?;
+        self.ensure_current_matches(ref_name, None)?;
+        self.promote_ref_pointer_candidate(ref_name)?;
+        drop(ref_lock);
+        Ok(RefRecoveryRepair {
+            ref_name: ref_name.to_string(),
+            ref_state_id: candidate.ref_state_id,
+            wrote_pointer: true,
+        })
+    }
+
     fn ensure_current_matches(
         &self,
         ref_name: &str,
@@ -125,6 +245,49 @@ impl RefStore {
         sync_directory_best_effort(parent)?;
         Ok(())
     }
+}
+
+
+fn verified_ref_state_payload(
+    object_store: &FileObjectStore,
+    ref_state_id: ObjectId,
+    ref_name: &str,
+    target_object_id: ObjectId,
+) -> Result<RefStatePayload> {
+    let Some(envelope) = object_store.read_typed(ref_state_id, ObjectType::RefState)? else {
+        return Err(PrikkError::Integrity(format!(
+            "missing RefState object for ref recovery: {ref_state_id}"
+        )));
+    };
+    if envelope.signatures.is_empty() {
+        return Err(PrikkError::Integrity(format!(
+            "RefState {ref_state_id} is unsigned"
+        )));
+    }
+    let payload = RefStatePayload::decode_canonical(&envelope.canonical_payload)?;
+    if payload.ref_name != ref_name {
+        return Err(PrikkError::Integrity(format!(
+            "RefState {ref_state_id} name mismatch: expected {ref_name}, got {}",
+            payload.ref_name
+        )));
+    }
+    if payload.target_object_id != target_object_id {
+        return Err(PrikkError::Integrity(format!(
+            "RefState {ref_state_id} target disagrees with ref log for {ref_name}"
+        )));
+    }
+    let Some(target) = object_store.read_object(target_object_id)? else {
+        return Err(PrikkError::Integrity(format!(
+            "RefState {ref_state_id} targets missing block {target_object_id}"
+        )));
+    };
+    if target.object_type != ObjectType::Block {
+        return Err(PrikkError::Integrity(format!(
+            "RefState {ref_state_id} targets {}, expected block",
+            target.object_type
+        )));
+    }
+    Ok(payload)
 }
 
 pub(crate) fn validate_publication(publication: &RefPublication) -> Result<()> {

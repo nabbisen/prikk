@@ -2,9 +2,9 @@
 
 //! PRIKK command-line entry point.
 //!
-//! PR-012 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
+//! PR-013 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
 //! a local no-audit seal scaffold, ref pointer counts, deeper repository verification, and doctor
-//! diagnostics with opt-in safe WAL tail repair. Real diff capture, patch application, audit
+//! diagnostics with opt-in safe WAL tail and missing-ref-pointer repair. Real diff capture, patch application, audit
 //! plugins, and sync remain later increments.
 
 use std::path::PathBuf;
@@ -22,7 +22,7 @@ use prikk_store::{
     DoctorSeverity, RefStore, RepositoryLayout, Wal,
 };
 
-const VERSION: &str = "0.1.0-pr012";
+const VERSION: &str = "0.1.0-pr013";
 
 fn main() -> ExitCode {
     match run() {
@@ -94,7 +94,7 @@ fn run() -> std::result::Result<(), String> {
                 Some(id) => println!("heads/main RefState: {id}"),
                 None => println!("heads/main RefState: <not published>"),
             }
-            println!("status: patch algebra, plugins, and sync not implemented in PR-012");
+            println!("status: patch algebra, plugins, and sync not implemented in PR-013");
             Ok(())
         }
         Some("verify") => {
@@ -107,15 +107,25 @@ fn run() -> std::result::Result<(), String> {
         Some("doctor") => {
             let doctor_args = parse_doctor_args(args.collect())?;
             let layout = RepositoryLayout::open(doctor_args.root).map_err(|err| err.to_string())?;
-            if doctor_args.repair_wal_tail {
-                let repair = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())
-                    .map_err(|err| err.to_string())?;
+            if doctor_args.repair_wal_tail || doctor_args.repair_main_ref {
+                let options = DoctorRepairOptions {
+                    truncate_wal_tail: doctor_args.repair_wal_tail,
+                    reconstruct_main_ref: doctor_args.repair_main_ref,
+                };
+                let repair = repair_repository(&layout, options).map_err(|err| err.to_string())?;
                 println!("doctor repository: {}", layout.prikk_dir().display());
                 println!(
                     "repair: truncated {} trailing WAL byte(s); preserved {} record(s)",
                     repair.wal_repair.truncated_bytes,
                     repair.wal_repair.preserved_records
                 );
+                if let Some(ref_repair) = &repair.ref_repair {
+                    println!(
+                        "repair: {} heads/main pointer for RefState {}",
+                        if ref_repair.wrote_pointer { "reconstructed" } else { "kept existing" },
+                        ref_repair.ref_state_id
+                    );
+                }
                 print_doctor_report(&layout, &repair.after);
                 if repair.after.is_healthy() {
                     Ok(())
@@ -141,14 +151,17 @@ fn run() -> std::result::Result<(), String> {
 struct DoctorArgs {
     root: PathBuf,
     repair_wal_tail: bool,
+    repair_main_ref: bool,
 }
 
 fn parse_doctor_args(args: Vec<String>) -> std::result::Result<DoctorArgs, String> {
     let mut repair_wal_tail = false;
+    let mut repair_main_ref = false;
     let mut path = None;
     for arg in args {
         match arg.as_str() {
             "--repair-wal-tail" => repair_wal_tail = true,
+            "--repair-main-ref" => repair_main_ref = true,
             other if other.starts_with('-') => {
                 return Err(format!("unknown doctor argument: {other}"));
             }
@@ -163,6 +176,7 @@ fn parse_doctor_args(args: Vec<String>) -> std::result::Result<DoctorArgs, Strin
     Ok(DoctorArgs {
         root: optional_path_or_current(path)?,
         repair_wal_tail,
+        repair_main_ref,
     })
 }
 
@@ -199,7 +213,7 @@ fn parse_empty_commit_message(args: Vec<String>) -> std::result::Result<String, 
         }
     }
     if !allow_empty {
-        return Err("PR-012 supports only `prikk commit --allow-empty -m <message>`".to_string());
+        return Err("PR-013 supports only `prikk commit --allow-empty -m <message>`".to_string());
     }
     let Some(message) = message else {
         return Err("empty commit requires -m <message>".to_string());
@@ -276,5 +290,6 @@ fn print_help() {
     println!("  prikk verify [path]                       Verify objects and WAL records");
     println!("  prikk doctor [path]                       Run health diagnostics");
     println!("  prikk doctor [path] --repair-wal-tail     Truncate incomplete trailing WAL bytes");
+    println!("  prikk doctor [path] --repair-main-ref     Reconstruct a missing heads/main pointer");
     println!("  prikk --version                           Print version");
 }

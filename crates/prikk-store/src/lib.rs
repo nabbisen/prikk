@@ -3,9 +3,9 @@
 
 //! Storage crate for PRIKK repositories.
 //!
-//! PR-012 contains persistent layout, object storage, WAL durability, deeper read-only
+//! PR-013 contains persistent layout, object storage, WAL durability, deeper read-only
 //! repository verification, initial ref-state/ref-log publication primitives, a narrow
-//! active-session append API, and an opt-in safe doctor repair for incomplete WAL tails. Patch
+//! active-session append API, and opt-in safe doctor repairs for incomplete WAL tails and missing ref pointers. Patch
 //! algebra, plugin execution, and remote sync remain separate increments.
 
 mod active;
@@ -33,6 +33,8 @@ pub use layout::RepositoryLayout;
 pub use lock::{ActiveLock, RefLock};
 pub use memory_store::MemoryObjectStore;
 pub use object_store::{FileObjectStore, ObjectReader, ObjectWriter};
-pub use refs::{RefLogReplay, RefLogRecord, RefPublication, RefStore};
+pub use refs::{
+    RefLogReplay, RefLogRecord, RefPublication, RefRecoveryCandidate, RefRecoveryRepair, RefStore,
+};
 pub use wal::{Wal, WalRecord, WalReplay, WalRepair};
 pub use verify::{verify_repository, ObjectVerification, RepositoryVerification};
