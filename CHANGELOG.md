@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0 PR-017
+
+Opt-in snapshot materialization via `prikk checkout --snapshot-materialize`, still without patch replay.
+
+- Added opt-in snapshot materialization via `prikk checkout --snapshot-materialize [path] [--ref REF]`.
+- Added `materialize_snapshot_checkout()` and `SnapshotMaterializationReport`.
+- Snapshot materialization writes only files from validated snapshot manifests.
+- Refuses to overwrite existing files with different content.
+- Refuses symlinked parent directories, symlink targets, non-file targets, and paths under `.prikk/`.
+- Added tests for writing new files, idempotent materialization, conflicting existing files, and metadata-path rejection.
+- Kept patch replay, Unicode NFC normalization, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-016
 
 snapshot-manifest validation and path-safety scaffolding via `prikk checkout --snapshot-plan`.

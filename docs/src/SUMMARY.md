@@ -5,3 +5,4 @@
 - [History Inspection](history.md)
 - [Checkout Planning](checkout.md)
 - [Snapshot Checkout Planning](snapshot-checkout.md)
+- [Snapshot Materialization](snapshot-materialization.md)

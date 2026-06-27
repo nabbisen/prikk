@@ -39,7 +39,7 @@ cargo run -p prikk -- doctor ./sample-repo
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-016**.
+Current implementation drop: **0.1.0 PR-017**.
 
 Implemented:
 
@@ -52,16 +52,16 @@ Implemented:
 - `doctor` diagnostics layered on top of verification, with opt-in safe WAL tail and missing-ref-pointer repair.
 - Read-only sealed-history inspection from the current RefState chain.
 - Read-only checkout planning that validates the current RefState target and reports materialization blockers.
-- Snapshot-manifest validation and path-safety checks for future snapshot checkout materialization.
+- Snapshot-manifest validation, path-safety checks, and opt-in snapshot materialization.
 - Initial RefState publication primitives with flat hashed ref pointer paths.
 - Inline signed RefUpdate log append/replay with linked payload validation.
 - Narrow empty-commit scaffold that appends a signed patch envelope to the active WAL.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
-- Minimal CLI commands: `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Minimal CLI commands: `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 Not implemented yet:
 
-- Real worktree diff capture and worktree state materialization.
+- Real worktree diff capture and patch-based worktree state materialization.
 - Policy-aware audit/attestation publication through seal.
 - Patch apply/commutation.
 - Plugin/audit execution.
@@ -70,3 +70,6 @@ Not implemented yet:
 ## More Detail
 
 Full documentation is kept under `docs/src` and is structured for mdBook.
+
+
+PR-017 adds opt-in snapshot materialization. It writes only validated snapshot files, never applies patches, never removes files, and refuses conflicting existing files.

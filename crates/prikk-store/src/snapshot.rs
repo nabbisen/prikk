@@ -1,7 +1,6 @@
 //! Snapshot-manifest validation for future checkout materialization.
 //!
-//! Snapshot bytes are stored inside Blob objects. PR-016 validates and plans snapshot content but
-//! deliberately does not write worktree files.
+//! Snapshot bytes are stored inside Blob objects. PR-017 validates snapshot content and feeds an explicit snapshot materializer.
 
 use prikk_error::{PrikkError, Result};
 

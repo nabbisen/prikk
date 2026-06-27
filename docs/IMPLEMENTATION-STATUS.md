@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-016
+Version: 0.1.0 PR-017
 
 ## Implemented
 
@@ -48,4 +48,4 @@ Version: 0.1.0 PR-016
 
 ## Gate Discipline
 
-PR-016 stays within the approved foundation boundary by adding only read-only history inspection, checkout planning, snapshot-manifest validation, path-safety checks, and narrow FDD-02-style recovery for already-verified data. It does not implement real worktree diff capture, patch algebra, audit plugin execution, policy enforcement, or remote sync.
+PR-017 stays within the approved foundation boundary by adding only read-only history inspection, checkout planning, snapshot-manifest validation, path-safety checks, and narrow FDD-02-style recovery for already-verified data. It does not implement real worktree diff capture, patch algebra, audit plugin execution, policy enforcement, or remote sync.

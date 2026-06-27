@@ -1,6 +1,6 @@
 //! Checkout planning helpers.
 //!
-//! PR-016 extends a read-only checkout planning. It validates the current ref-state target and the
+//! PR-017 keeps a read-only checkout planning. It validates the current ref-state target and the
 //! referenced block/patch objects, then reports what a future materializer would need to do. It
 //! deliberately does not write the worktree and does not apply patch algebra.
 

@@ -1,19 +1,24 @@
 # Checkout Planning
 
-PR-016 includes a read-only checkout plan:
+PR-017 includes a read-only checkout plan:
 
 ```sh
 prikk checkout --plan-only [path] [--ref heads/main]
 ```
 
-The command validates the current RefState target and reports whether a future checkout would need
-snapshot materialization or patch application. It intentionally does not modify the worktree.
+The command validates the current RefState target and reports whether checkout would need snapshot
+materialization or patch application.
 
-For snapshot-backed blocks, use:
+For snapshot-backed blocks, first validate the snapshot manifest:
 
 ```sh
 prikk checkout --snapshot-plan [path] [--ref heads/main]
 ```
 
-That command validates the snapshot manifest and path-safety constraints, but still does not write
-files.
+Then explicitly materialize validated snapshot files:
+
+```sh
+prikk checkout --snapshot-materialize [path] [--ref heads/main]
+```
+
+Snapshot materialization writes only validated regular files. Patch replay remains deferred.

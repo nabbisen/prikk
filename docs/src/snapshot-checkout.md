@@ -1,6 +1,6 @@
 # Snapshot Checkout Planning
 
-PR-016 adds a read-only snapshot checkout planning path.
+PR-017 keeps a read-only snapshot checkout planning path.
 
 The command:
 
@@ -22,4 +22,4 @@ The current path-safety scaffold is deliberately conservative. It rejects:
 - non-ASCII paths until Unicode NFC normalization is implemented
 - duplicate paths and case-insensitive collisions
 
-Real snapshot materialization remains deferred to a later PR.
+Use `prikk checkout --snapshot-materialize` to write validated snapshot files. Patch replay remains deferred.

@@ -2,9 +2,9 @@
 
 //! PRIKK command-line entry point.
 //!
-//! PR-016 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
+//! PR-017 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
 //! a local no-audit seal scaffold, read-only history inspection, checkout and snapshot-manifest
-//! planning, deeper repository verification, and doctor diagnostics with opt-in safe WAL tail and
+//! planning, conservative snapshot materialization, deeper repository verification, and doctor diagnostics with opt-in safe WAL tail and
 //! missing-ref-pointer repair. Real diff capture, patch application, audit plugins, and sync remain
 //! later increments.
 
@@ -19,13 +19,13 @@ use prikk_object::{
     PatchPayload, Signature, SignatureAlgorithm, SignerRole,
 };
 use prikk_store::{
-    doctor_repository, load_ref_history, prepare_checkout_plan, prepare_snapshot_checkout_plan,
+    doctor_repository, load_ref_history, materialize_snapshot_checkout, prepare_checkout_plan, prepare_snapshot_checkout_plan,
     repair_repository, verify_repository, ActiveSession, CheckoutMaterialization, CheckoutPlan,
     DoctorRepairOptions, DoctorSeverity, RefHistory, RefStore, RepositoryLayout, Wal,
     DEFAULT_CHECKOUT_REF, DEFAULT_HISTORY_LIMIT,
 };
 
-const VERSION: &str = "0.1.0-pr016";
+const VERSION: &str = "0.1.0-pr017";
 
 fn main() -> ExitCode {
     match run() {
@@ -78,7 +78,7 @@ fn run() -> std::result::Result<(), String> {
             println!("patches: {}", result.patch_count);
             println!("block id: {}", result.block_id);
             println!("heads/main RefState: {}", result.ref_state_id);
-            println!("note: audit plugins and real worktree materialization remain later PRs");
+            println!("note: audit plugins and patch-based worktree materialization remain later PRs");
             Ok(())
         }
         Some("status") => {
@@ -98,7 +98,7 @@ fn run() -> std::result::Result<(), String> {
                 None => println!("heads/main RefState: <not published>"),
             }
             println!(
-                "status: patch algebra, worktree materialization, plugins, and sync not implemented in PR-016"
+                "status: patch algebra, patch-based worktree materialization, plugins, and sync not implemented in PR-017"
             );
             Ok(())
         }
@@ -123,6 +123,11 @@ fn run() -> std::result::Result<(), String> {
                     let plan = prepare_snapshot_checkout_plan(&layout, &args.ref_name)
                         .map_err(|err| err.to_string())?;
                     print_snapshot_checkout_plan(&layout, &plan);
+                }
+                CheckoutMode::SnapshotMaterialize => {
+                    let report = materialize_snapshot_checkout(&layout, &args.ref_name)
+                        .map_err(|err| err.to_string())?;
+                    print_snapshot_materialization_report(&layout, &report);
                 }
             }
             Ok(())
@@ -233,6 +238,7 @@ struct CheckoutArgs {
 enum CheckoutMode {
     PlanOnly,
     SnapshotPlan,
+    SnapshotMaterialize,
 }
 
 fn parse_checkout_args(args: Vec<String>) -> std::result::Result<CheckoutArgs, String> {
@@ -244,6 +250,9 @@ fn parse_checkout_args(args: Vec<String>) -> std::result::Result<CheckoutArgs, S
         match arg.as_str() {
             "--plan-only" => set_checkout_mode(&mut mode, CheckoutMode::PlanOnly)?,
             "--snapshot-plan" => set_checkout_mode(&mut mode, CheckoutMode::SnapshotPlan)?,
+            "--snapshot-materialize" => {
+                set_checkout_mode(&mut mode, CheckoutMode::SnapshotMaterialize)?
+            }
             "--ref" => {
                 let Some(value) = iter.next() else {
                     return Err("checkout --ref requires a value".to_string());
@@ -266,7 +275,7 @@ fn parse_checkout_args(args: Vec<String>) -> std::result::Result<CheckoutArgs, S
     }
     let Some(mode) = mode else {
         return Err(
-            "PR-016 supports `prikk checkout --plan-only` or `prikk checkout --snapshot-plan`"
+            "PR-017 supports `prikk checkout --plan-only`, `--snapshot-plan`, or `--snapshot-materialize`"
                 .to_string(),
         );
     };
@@ -348,11 +357,11 @@ fn print_checkout_plan(layout: &RepositoryLayout, plan: &CheckoutPlan) {
         }
         CheckoutMaterialization::RequiresSnapshotMaterialization => {
             println!(
-                "note: use `prikk checkout --snapshot-plan` to validate the snapshot manifest"
+                "note: use `prikk checkout --snapshot-plan` to validate, or `--snapshot-materialize` to write safely"
             );
         }
         CheckoutMaterialization::RequiresPatchEngine => {
-            println!("note: patch application/algebra is deferred after PR-016");
+            println!("note: patch application/algebra is deferred after PR-017");
         }
     }
 }
@@ -369,7 +378,27 @@ fn print_snapshot_checkout_plan(
     for path in &plan.paths {
         println!("  file: {path}");
     }
-    println!("note: PR-016 validates the snapshot manifest but does not write the worktree");
+    println!("note: use `prikk checkout --snapshot-materialize` to write validated snapshot files");
+}
+
+
+fn print_snapshot_materialization_report(
+    layout: &RepositoryLayout,
+    report: &prikk_store::SnapshotMaterializationReport,
+) {
+    println!(
+        "snapshot materialization repository: {}",
+        layout.prikk_dir().display()
+    );
+    println!("ref: {}", report.ref_name);
+    println!("planned files: {}", report.planned_files);
+    println!("written files: {}", report.written_files);
+    println!("unchanged files: {}", report.unchanged_files);
+    println!("snapshot content bytes: {}", report.total_content_bytes);
+    for path in &report.paths {
+        println!("  file: {path}");
+    }
+    println!("note: this path writes only snapshot-backed files and never applies patches");
 }
 
 fn print_history(layout: &RepositoryLayout, history: &RefHistory) {
@@ -427,7 +456,7 @@ fn parse_empty_commit_message(args: Vec<String>) -> std::result::Result<String, 
         }
     }
     if !allow_empty {
-        return Err("PR-016 supports only `prikk commit --allow-empty -m <message>`".to_string());
+        return Err("PR-017 supports only `prikk commit --allow-empty -m <message>`".to_string());
     }
     let Some(message) = message else {
         return Err("empty commit requires -m <message>".to_string());
@@ -505,6 +534,9 @@ fn print_help() {
     println!("  prikk checkout --plan-only [path] [--ref REF]      Show a safe checkout plan");
     println!(
         "  prikk checkout --snapshot-plan [path] [--ref REF]  Validate snapshot manifest paths"
+    );
+    println!(
+        "  prikk checkout --snapshot-materialize [path] [--ref REF]  Safely write snapshot files"
     );
     println!("  prikk verify [path]                       Verify objects and WAL records");
     println!("  prikk doctor [path]                       Run health diagnostics");

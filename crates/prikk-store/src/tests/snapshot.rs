@@ -115,3 +115,101 @@ fn signed_snapshot_block_envelope(snapshot_blob_ref: prikk_object::ObjectId) -> 
     assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
 }
+
+#[test]
+fn snapshot_materialization_writes_new_files() {
+    let root = unique_temp_dir("snapshot-materialize");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let published = publish_snapshot_block(&layout, "src/main.rs", b"fn main() {}\n");
+        assert!(published.is_ok());
+        let report = crate::materialize_snapshot_checkout(&layout, "heads/main");
+        assert!(report.is_ok());
+        if let Ok(report) = report {
+            assert_eq!(report.planned_files, 1);
+            assert_eq!(report.written_files, 1);
+            assert_eq!(report.unchanged_files, 0);
+        }
+        let written = std::fs::read(root.join("src").join("main.rs"));
+        assert!(written.is_ok_and(|x| x == b"fn main() {}\n".to_vec()));
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn snapshot_materialization_is_idempotent_for_same_bytes() {
+    let root = unique_temp_dir("snapshot-materialize-idempotent");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let published = publish_snapshot_block(&layout, "README.md", b"hello\n");
+        assert!(published.is_ok());
+        assert!(crate::materialize_snapshot_checkout(&layout, "heads/main").is_ok());
+        let second = crate::materialize_snapshot_checkout(&layout, "heads/main");
+        assert!(second.is_ok());
+        if let Ok(second) = second {
+            assert_eq!(second.written_files, 0);
+            assert_eq!(second.unchanged_files, 1);
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn snapshot_materialization_refuses_conflicting_existing_file() {
+    let root = unique_temp_dir("snapshot-materialize-conflict");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let published = publish_snapshot_block(&layout, "README.md", b"snapshot\n");
+        assert!(published.is_ok());
+        let write = std::fs::write(root.join("README.md"), b"local\n");
+        assert!(write.is_ok());
+        let report = crate::materialize_snapshot_checkout(&layout, "heads/main");
+        assert!(report.is_err());
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn repo_path_rejects_metadata_directory() {
+    assert!(RepoPath::parse(".prikk/FORMAT").is_err());
+    assert!(RepoPath::parse(".PRIKK/FORMAT").is_err());
+}
+
+fn publish_snapshot_block(
+    layout: &RepositoryLayout,
+    path: &str,
+    bytes: &[u8],
+) -> prikk_error::Result<prikk_object::ObjectId> {
+    let mut object_store = FileObjectStore::new(layout.clone());
+    let path = RepoPath::parse(path)?;
+    let manifest = SnapshotManifest {
+        files: vec![SnapshotEntry { path, bytes: bytes.to_vec() }],
+    };
+    let snapshot_bytes = manifest.encode()?;
+    let blob = BlobPayload { bytes: snapshot_bytes };
+    let blob_bytes = blob.to_canonical_bytes()?;
+    let mut blob_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob_bytes);
+    blob_envelope.add_signature(maintainer_signature())?;
+    let blob_id = blob_envelope.object_id();
+    object_store.write_object(&blob_envelope)?;
+
+    let block = signed_snapshot_block_envelope(blob_id);
+    let block_id = block.object_id();
+    object_store.write_object(&block)?;
+
+    let ref_store = RefStore::new(layout.clone());
+    let ref_state = signed_ref_state_envelope("heads/main", None, block_id, 1);
+    let ref_state_id = ref_state.object_id();
+    let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, block_id, 1);
+    let publication = RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_state,
+        ref_update,
+    };
+    ref_store.publish(&publication)?;
+    Ok(block_id)
+}

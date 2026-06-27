@@ -1,6 +1,6 @@
 //! Repository-relative path validation for safe worktree planning.
 //!
-//! PR-016 intentionally starts with a conservative ASCII-only path subset. This avoids pretending
+//! PR-017 intentionally keeps with a conservative ASCII-only path subset. This avoids pretending
 //! to perform Unicode NFC normalization before the final path-normalization dependency decision is
 //! made. Future PRs may relax this once normalization is implemented and tested.
 
@@ -66,7 +66,12 @@ pub fn validate_repo_path(value: &str) -> Result<()> {
             "control characters are not allowed in repository paths".to_string(),
         ));
     }
-    for component in value.split('/') {
+    for (index, component) in value.split('/').enumerate() {
+        if index == 0 && component.eq_ignore_ascii_case(".prikk") {
+            return Err(PrikkError::InvalidName(
+                "repository paths must not target the .prikk metadata directory".to_string(),
+            ));
+        }
         validate_component(component)?;
     }
     Ok(())

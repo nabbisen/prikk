@@ -3,10 +3,9 @@
 
 //! Storage crate for PRIKK repositories.
 //!
-//! PR-016 contains persistent layout, object storage, WAL durability, deeper read-only
+//! PR-017 contains persistent layout, object storage, WAL durability, deeper read-only
 //! repository verification, initial ref-state/ref-log publication primitives, a narrow
-//! active-session append API, and opt-in safe doctor repairs for incomplete WAL tails and missing
-//! ref pointers. Patch algebra, plugin execution, and remote sync remain separate increments.
+//! active-session append API, opt-in safe doctor repairs, and conservative snapshot materialization. Patch algebra, plugin execution, and remote sync remain separate increments.
 
 mod active;
 mod byte_cursor;
@@ -24,6 +23,7 @@ mod refs;
 mod snapshot;
 mod wal;
 mod verify;
+mod worktree;
 
 #[cfg(test)]
 mod tests;
@@ -49,3 +49,4 @@ pub use refs::{
 pub use snapshot::{SnapshotEntry, SnapshotManifest};
 pub use wal::{Wal, WalRecord, WalReplay, WalRepair};
 pub use verify::{verify_repository, ObjectVerification, RepositoryVerification};
+pub use worktree::{materialize_snapshot_checkout, SnapshotMaterializationReport};
