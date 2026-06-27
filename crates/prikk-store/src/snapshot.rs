@@ -1,6 +1,7 @@
 //! Snapshot-manifest validation for future checkout materialization.
 //!
-//! Snapshot bytes are stored inside Blob objects. PR-017 validates snapshot content and feeds an explicit snapshot materializer.
+//! Snapshot bytes are stored inside Blob objects. PR-017 validates snapshot content and feeds an
+//! explicit snapshot materializer.
 
 use prikk_error::{PrikkError, Result};
 

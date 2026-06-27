@@ -29,6 +29,7 @@ cargo run -p prikk -- init ./sample-repo
 (cd ./sample-repo && ../target/debug/prikk seal --allow-no-audit)
 cargo run -p prikk -- log ./sample-repo
 cargo run -p prikk -- checkout --plan-only ./sample-repo
+cargo run -p prikk -- worktree-status ./sample-repo
 cargo run -p prikk -- verify ./sample-repo
 cargo run -p prikk -- doctor ./sample-repo
 # If doctor reports only incomplete trailing WAL bytes:
@@ -39,7 +40,7 @@ cargo run -p prikk -- doctor ./sample-repo
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-017**.
+Current implementation drop: **0.1.0 PR-018**.
 
 Implemented:
 
@@ -52,16 +53,16 @@ Implemented:
 - `doctor` diagnostics layered on top of verification, with opt-in safe WAL tail and missing-ref-pointer repair.
 - Read-only sealed-history inspection from the current RefState chain.
 - Read-only checkout planning that validates the current RefState target and reports materialization blockers.
-- Snapshot-manifest validation, path-safety checks, and opt-in snapshot materialization.
+- Snapshot-manifest validation, path-safety checks, opt-in snapshot materialization, and read-only worktree status.
 - Initial RefState publication primitives with flat hashed ref pointer paths.
 - Inline signed RefUpdate log append/replay with linked payload validation.
 - Narrow empty-commit scaffold that appends a signed patch envelope to the active WAL.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
-- Minimal CLI commands: `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Minimal CLI commands: `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 Not implemented yet:
 
-- Real worktree diff capture and patch-based worktree state materialization.
+- Real worktree diff capture into PatchPayload operations and patch-based worktree state materialization.
 - Policy-aware audit/attestation publication through seal.
 - Patch apply/commutation.
 - Plugin/audit execution.
@@ -72,4 +73,4 @@ Not implemented yet:
 Full documentation is kept under `docs/src` and is structured for mdBook.
 
 
-PR-017 adds opt-in snapshot materialization. It writes only validated snapshot files, never applies patches, never removes files, and refuses conflicting existing files.
+PR-018 adds read-only worktree status against snapshot-backed baselines. It reports missing, modified, untracked, and unsupported paths without creating patch operations.

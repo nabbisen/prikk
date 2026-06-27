@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0 PR-018
+
+Read-only worktree status against snapshot-backed baselines, still without patch operation generation or patch replay.
+
+- Added read-only worktree status via `prikk worktree-status [path] [--ref REF]`.
+- Added `worktree_status()`, `WorktreeStatusReport`, `WorktreeChange`, and `WorktreeChangeKind`.
+- Status compares the current worktree with a snapshot manifest baseline.
+- Reports missing tracked files, modified tracked files, untracked files, and unsupported unsafe paths.
+- Ignores `.prikk/` metadata and performs no writes.
+- Added tests for clean, modified, missing, and untracked snapshot-baseline worktrees.
+- Kept patch operation generation, patch replay status, Unicode NFC normalization, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-017
 
 Opt-in snapshot materialization via `prikk checkout --snapshot-materialize`, still without patch replay.

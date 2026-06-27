@@ -12,7 +12,8 @@ use crate::{
 };
 
 use super::helpers::{
-    maintainer_signature, sample_object_id, signed_empty_block_envelope, signed_patch_envelope, unique_temp_dir,
+    maintainer_signature, sample_object_id, signed_empty_block_envelope, signed_patch_envelope,
+    unique_temp_dir,
 };
 
 #[test]
@@ -140,7 +141,8 @@ fn doctor_repair_reconstructs_missing_main_ref_pointer() {
         let target = block.object_id();
         assert!(object_store.write_object(&block).is_ok());
         let store = crate::RefStore::new(layout.clone());
-        let ref_state = crate::tests::helpers::signed_ref_state_envelope("heads/main", None, target, 1);
+        let ref_state =
+            crate::tests::helpers::signed_ref_state_envelope("heads/main", None, target, 1);
         let ref_state_id = ref_state.object_id();
         let ref_update = crate::tests::helpers::signed_ref_update_envelope(
             "heads/main",

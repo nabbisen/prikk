@@ -236,7 +236,8 @@ fn add_missing_main_ref_issue(layout: &RepositoryLayout, issues: &mut Vec<Doctor
                 candidate.ref_state_id,
                 candidate.update_seq
             ),
-            "run `prikk doctor --repair-main-ref` to reconstruct only the missing heads/main              pointer from the verified ref log",
+            "run `prikk doctor --repair-main-ref` to reconstruct only the missing \
+             heads/main pointer from the verified ref log",
         )),
         Ok(None) => {}
         Err(error) => issues.push(DoctorIssue::error(

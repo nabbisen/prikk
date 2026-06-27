@@ -10,3 +10,5 @@ mod snapshot;
 mod storage;
 mod verify;
 mod wal;
+
+mod worktree_status;
