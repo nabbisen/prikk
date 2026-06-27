@@ -5,9 +5,9 @@ use prikk_object::{
 };
 
 use crate::{
-    commit_worktree_changes, materialize_snapshot_checkout, FileObjectStore, ObjectWriter,
-    RefPublication, RefStore, RepoPath, RepositoryLayout, SnapshotEntry, SnapshotManifest,
-    Wal, WorktreePatchOperationKind,
+    commit_worktree_changes, commit_worktree_changes_with_options, materialize_snapshot_checkout,
+    FileObjectStore, ObjectWriter, RefPublication, RefStore, RepoPath, RepositoryLayout,
+    SnapshotEntry, SnapshotManifest, Wal, WorktreePatchCommitOptions, WorktreePatchOperationKind,
 };
 
 use super::helpers::{
@@ -36,6 +36,65 @@ fn worktree_patch_commit_records_modified_file() {
                 assert_eq!(replay.records.len(), 1);
                 assert_eq!(replay.records[0].envelope.object_id(), report.patch_id);
             }
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn worktree_patch_commit_can_emit_full_file_text_edit() {
+    let root = unique_temp_dir("worktree-patch-text-edit");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        assert!(publish_snapshot_block(&layout, "README.md", b"hello\n").is_ok());
+        assert!(materialize_snapshot_checkout(&layout, "heads/main").is_ok());
+        assert!(std::fs::write(root.join("README.md"), b"changed\n").is_ok());
+        let report = commit_worktree_changes_with_options(
+            &layout,
+            "heads/main",
+            "change text",
+            WorktreePatchCommitOptions::prefer_text_edits(),
+        );
+        assert!(report.is_ok());
+        if let Ok(report) = report {
+            assert_eq!(report.operation_count, 1);
+            assert_eq!(report.referenced_blob_count, 0);
+            assert_eq!(report.text_edit_count, 1);
+            assert_eq!(report.changes.len(), 1);
+            assert_eq!(report.changes[0].operation, WorktreePatchOperationKind::EditText);
+            let replay = Wal::new(layout.default_queue_wal_path()).replay();
+            assert!(replay.is_ok());
+            if let Ok(replay) = replay {
+                assert_eq!(replay.records.len(), 1);
+                assert_eq!(replay.records[0].envelope.object_id(), report.patch_id);
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn worktree_patch_text_mode_falls_back_for_binary_modified_file() {
+    let root = unique_temp_dir("worktree-patch-text-binary-fallback");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        assert!(publish_snapshot_block(&layout, "data.bin", &[0xff, 0x00]).is_ok());
+        assert!(materialize_snapshot_checkout(&layout, "heads/main").is_ok());
+        assert!(std::fs::write(root.join("data.bin"), &[0xfe, 0x01]).is_ok());
+        let report = commit_worktree_changes_with_options(
+            &layout,
+            "heads/main",
+            "change binary",
+            WorktreePatchCommitOptions::prefer_text_edits(),
+        );
+        assert!(report.is_ok());
+        if let Ok(report) = report {
+            assert_eq!(report.operation_count, 1);
+            assert_eq!(report.referenced_blob_count, 2);
+            assert_eq!(report.text_edit_count, 0);
+            assert_eq!(report.changes[0].operation, WorktreePatchOperationKind::ReplaceBinary);
         }
     }
     let _ = std::fs::remove_dir_all(root);

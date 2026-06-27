@@ -8,7 +8,7 @@ prikk worktree-status [path] [--ref REF]
 
 The command compares the current worktree with the snapshot manifest referenced by the selected ref.
 It reports missing, modified, untracked, and unsupported paths.
-It does not generate patch operations yet.
+It does not write the worktree. Patch generation is handled separately by `prikk commit --from-worktree`.
 
 The scanner is intentionally conservative:
 

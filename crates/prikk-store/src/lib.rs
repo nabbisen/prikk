@@ -3,12 +3,13 @@
 
 //! Storage crate for PRIKK repositories.
 //!
-//! PR-024 contains persistent layout, object storage, WAL durability, deeper read-only
+//! PR-025 contains persistent layout, object storage, WAL durability, deeper read-only
 //! repository verification, initial ref-state/ref-log publication primitives, a narrow
 //! active-session append API, opt-in safe doctor repairs, conservative snapshot materialization,
 //! read-only worktree status, minimal worktree-to-patch draft generation, supported patch replay
 //! planning and materialization, explicit opt-in deletion of patch-removed files, and conservative
-//! full-file text edit replay. Full patch algebra, plugin execution, and remote sync remain
+//! full-file text edit replay, and opt-in full-file text edit generation from worktree changes.
+//! Full patch algebra, plugin execution, and remote sync remain
 //! separate increments.
 
 mod active;
@@ -30,8 +31,8 @@ mod snapshot;
 mod wal;
 mod verify;
 mod worktree;
-mod worktree_status;
 mod worktree_patch;
+mod worktree_status;
 
 #[cfg(test)]
 mod tests;
@@ -68,6 +69,6 @@ pub use worktree_status::{
     worktree_status, WorktreeChange, WorktreeChangeKind, WorktreeStatusReport,
 };
 pub use worktree_patch::{
-    commit_worktree_changes, WorktreePatchCommitReport, WorktreePatchOperationKind,
-    WorktreePatchOperationSummary,
+    commit_worktree_changes, commit_worktree_changes_with_options, WorktreePatchCommitOptions,
+    WorktreePatchCommitReport, WorktreePatchOperationKind, WorktreePatchOperationSummary,
 };

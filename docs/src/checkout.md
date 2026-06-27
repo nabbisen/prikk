@@ -21,4 +21,4 @@ Then explicitly materialize validated snapshot files:
 prikk checkout --snapshot-materialize [path] [--ref heads/main]
 ```
 
-Snapshot materialization writes only validated regular files. Patch replay remains deferred.
+Snapshot materialization writes only validated regular files. Supported patch replay and materialization are available through `--patch-plan`, `--patch-materialize`, and `--patch-materialize-delete`, but full patch algebra remains deferred.

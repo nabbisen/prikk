@@ -2,13 +2,12 @@
 
 //! PRIKK command-line entry point.
 //!
-//! PR-022 exposes minimal repository layout commands, active WAL status, empty and snapshot-baseline
-//! worktree commit scaffolds, supported file-level patch replay planning/materialization and
-//! explicit patch deletion planning, a
-//! local no-audit seal scaffold, read-only history inspection, checkout and snapshot-manifest
-//! planning, conservative snapshot materialization, read-only worktree status,
-//! deeper repository verification, and doctor diagnostics with opt-in repairs. Patch application,
-//! audit plugins, and sync remain later increments.
+//! PR-025 exposes minimal repository layout commands, active WAL status, empty and snapshot-baseline
+//! worktree commit scaffolds, opt-in full-file text edit generation, supported patch replay
+//! planning/materialization, explicit patch deletion planning, a local no-audit seal scaffold,
+//! read-only history inspection, checkout planning, conservative snapshot materialization,
+//! read-only worktree status, repository verification, and doctor diagnostics with opt-in repairs.
+//! Arbitrary-span text diffs, full patch algebra, audit plugins, and sync remain later increments.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -19,23 +18,26 @@ mod output;
 mod seal;
 
 use args::{
-    current_dir, optional_path_or_current, parse_checkout_args, parse_commit_args, parse_doctor_args,
-    parse_log_args, parse_worktree_status_args, CheckoutMode, CommitMode,
+    current_dir, optional_path_or_current, parse_checkout_args, parse_commit_args,
+    parse_doctor_args, parse_log_args, parse_worktree_status_args, CheckoutMode, CommitMode,
 };
 use commit::empty_patch_envelope;
 use output::{
     print_checkout_plan, print_doctor_report, print_help, print_history,
-    print_patch_deletion_plan, print_patch_materialization_report, print_patch_replay_plan, print_snapshot_checkout_plan,
-    print_snapshot_materialization_report, print_verify_report, print_worktree_status,
+    print_patch_deletion_plan, print_patch_materialization_report, print_patch_replay_plan,
+    print_snapshot_checkout_plan, print_snapshot_materialization_report, print_verify_report,
+    print_worktree_status,
 };
 use prikk_store::{
-    commit_worktree_changes, doctor_repository, load_ref_history, materialize_patch_checkout, materialize_patch_checkout_with_deletions,
-    materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan, prepare_patch_replay_plan,
-    prepare_snapshot_checkout_plan, repair_repository, verify_repository, worktree_status,
-    ActiveSession, DoctorRepairOptions, RefStore, RepositoryLayout, Wal,
+    commit_worktree_changes_with_options, doctor_repository, load_ref_history,
+    materialize_patch_checkout, materialize_patch_checkout_with_deletions,
+    materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan,
+    prepare_patch_replay_plan, prepare_snapshot_checkout_plan, repair_repository,
+    verify_repository, worktree_status, ActiveSession, DoctorRepairOptions, RefStore,
+    RepositoryLayout, Wal, WorktreePatchCommitOptions,
 };
 
-const VERSION: &str = "0.1.0-pr022";
+const VERSION: &str = "0.1.0-pr025";
 
 fn main() -> ExitCode {
     match run() {
@@ -96,20 +98,34 @@ fn run_commit(args: Vec<String>) -> std::result::Result<(), String> {
             println!("WAL sequence: {}", result.wal_sequence);
         }
         CommitMode::FromWorktree => {
-            let report = commit_worktree_changes(&layout, &args.ref_name, &args.message)
-                .map_err(|err| err.to_string())?;
+            let options = if args.text_edits {
+                WorktreePatchCommitOptions::prefer_text_edits()
+            } else {
+                WorktreePatchCommitOptions::file_level()
+            };
+            let report = commit_worktree_changes_with_options(
+                &layout,
+                &args.ref_name,
+                &args.message,
+                options,
+            )
+            .map_err(|err| err.to_string())?;
             println!("recorded worktree patch in active WAL");
             println!("baseline ref: {}", report.ref_name);
             println!("patch id: {}", report.patch_id);
             println!("WAL sequence: {}", report.wal_sequence);
             println!("operations: {}", report.operation_count);
             println!("referenced blobs: {}", report.referenced_blob_count);
+            println!("text edits: {}", report.text_edit_count);
             for change in &report.changes {
                 println!("  {} {}", change.operation.as_str(), change.path);
             }
         }
     }
-    println!("note: patch replay/algebra, rename detection, audit plugins, and sync remain later PRs");
+    println!(
+        "note: arbitrary-span text diffs, patch algebra, rename detection, audit plugins, and \
+         sync remain later PRs"
+    );
     Ok(())
 }
 
@@ -141,8 +157,8 @@ fn run_status() -> std::result::Result<(), String> {
         None => println!("heads/main RefState: <not published>"),
     }
     println!(
-        "status: patch algebra, patch-based worktree materialization, plugins, and sync not \
-         implemented in PR-022"
+        "status: arbitrary-span text diffs, plugins, and sync not \
+         implemented in PR-025"
     );
     Ok(())
 }

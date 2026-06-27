@@ -76,8 +76,8 @@ pub(crate) fn print_patch_replay_plan(layout: &RepositoryLayout, plan: &PatchRep
         println!("  file: {path}");
     }
     println!(
-        "note: this replays only CreateFile/DeleteFile/ReplaceBinary; text edits, renames, \
-         conflicts, and full patch algebra remain later PRs"
+        "note: this replays CreateFile/DeleteFile/ReplaceBinary and full-file EditText only; \
+         arbitrary spans, renames, conflicts, and full patch algebra remain later PRs"
     );
 }
 
@@ -174,7 +174,10 @@ pub(crate) fn print_worktree_status(layout: &RepositoryLayout, report: &Worktree
             println!("  {} {} — {}", change.kind.as_str(), change.path, change.detail);
         }
     }
-    println!("note: use `prikk commit --from-worktree -m <message>` to draft minimal file-level operations");
+    println!(
+        "note: use `prikk commit --from-worktree -m <message>` for coarse file-level \
+         operations, or add `--text-edits` for conservative full-file UTF-8 edits"
+    );
 }
 
 /// Print ref history.
@@ -242,7 +245,7 @@ pub(crate) fn print_help(version: &str) {
     println!("Usage:");
     println!("  prikk init [path]                         Create a .prikk repository layout");
     println!("  prikk commit --allow-empty -m <message>   Append an empty patch to the active WAL");
-    println!("  prikk commit --from-worktree -m <message> Append snapshot-baseline changes to WAL");
+    println!("  prikk commit --from-worktree [--text-edits] -m <message> Append worktree changes");
     println!("  prikk status                              Check repository and active WAL status");
     println!("  prikk seal --allow-no-audit              Seal active WAL into heads/main");
     println!("  prikk log [path] [--limit N] [--ref REF]  Show sealed ref history");

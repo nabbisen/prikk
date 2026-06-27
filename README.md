@@ -33,6 +33,8 @@ cargo run -p prikk -- checkout --patch-plan ./sample-repo
 cargo run -p prikk -- checkout --patch-materialize ./sample-repo
 cargo run -p prikk -- checkout --patch-delete-plan ./sample-repo
 cargo run -p prikk -- worktree-status ./sample-repo
+# After editing a UTF-8 tracked file inside ./sample-repo:
+# (cd ./sample-repo && ../target/debug/prikk commit --from-worktree --text-edits -m "edit text")
 cargo run -p prikk -- verify ./sample-repo
 cargo run -p prikk -- doctor ./sample-repo
 # If doctor reports only incomplete trailing WAL bytes:
@@ -43,7 +45,7 @@ cargo run -p prikk -- doctor ./sample-repo
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-024**.
+Current implementation drop: **0.1.0 PR-025**.
 
 Implemented:
 
@@ -57,16 +59,16 @@ Implemented:
 - Read-only sealed-history inspection from the current RefState chain.
 - Snapshot-manifest validation, path-safety checks, opt-in snapshot materialization, and read-only worktree status.
 - Initial RefState publication primitives with flat hashed ref pointer paths.
-- Narrow empty-commit and snapshot-baseline worktree commit scaffolds.
+- Narrow empty-commit and snapshot-baseline worktree commit scaffolds, including opt-in full-file UTF-8 `EditText` generation.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
 - Supported patch replay planning and materialization for `CreateFile`, `DeleteFile`, `ReplaceBinary`, and conservative full-file `EditText`.
 - Explicit deletion planning and opt-in deletion of patch-removed files whose bytes still match the old blob.
-- Content-anchored `EditText` scaffold with fixed 32-byte span hashes, anchor-id validation, and conservative full-file exact-span replay for `anchor_id = "full-file"`.
-- Minimal CLI commands: `init`, `commit --allow-empty -m`, `commit --from-worktree -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Content-anchored `EditText` scaffold with fixed 32-byte span hashes, anchor-id validation, conservative full-file exact-span replay for `anchor_id = "full-file"`, and opt-in worktree generation for modified UTF-8 files.
+- Minimal CLI commands: `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 Not implemented yet:
 
-- Rename detection, arbitrary text-span discovery/generation, full patch algebra, and general destructive checkout pruning.
+- Rename detection, arbitrary text-span discovery/generation, inverse generation, commutation, full patch algebra, and general destructive checkout pruning.
 - Policy-aware audit/attestation publication through seal.
 - Plugin/audit execution.
 - Remote sync.

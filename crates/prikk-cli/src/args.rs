@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use prikk_store::{DEFAULT_CHECKOUT_REF, DEFAULT_HISTORY_LIMIT};
 
-
 /// Parsed commit command arguments.
 pub(crate) struct CommitArgs {
     /// Commit mode.
@@ -13,6 +12,8 @@ pub(crate) struct CommitArgs {
     pub(crate) message: String,
     /// Baseline ref for worktree commits.
     pub(crate) ref_name: String,
+    /// Whether to prefer conservative full-file text edit generation.
+    pub(crate) text_edits: bool,
 }
 
 /// Commit command mode.
@@ -172,7 +173,7 @@ pub(crate) fn parse_checkout_args(
     let Some(mode) = mode else {
         return Err(
             concat!(
-                "PR-022 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
+                "PR-025 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
                 "`--snapshot-materialize`, `--patch-plan`, `--patch-materialize`, ",
                 "`--patch-delete-plan`, or `--patch-materialize-delete`",
             )
@@ -250,11 +251,13 @@ pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<Commit
     let mut mode = None;
     let mut message = None;
     let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
+    let mut text_edits = false;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--allow-empty" => set_commit_mode(&mut mode, CommitMode::AllowEmpty)?,
             "--from-worktree" => set_commit_mode(&mut mode, CommitMode::FromWorktree)?,
+            "--text-edits" => text_edits = true,
             "--ref" => {
                 let Some(value) = iter.next() else {
                     return Err("commit --ref requires a value".to_string());
@@ -275,7 +278,7 @@ pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<Commit
     }
     let Some(mode) = mode else {
         return Err(
-            "PR-022 supports `prikk commit --allow-empty -m <message>` or `--from-worktree -m <message>`"
+            "PR-025 supports `prikk commit --allow-empty -m <message>` or `--from-worktree [--text-edits] -m <message>`"
                 .to_string(),
         );
     };
@@ -285,7 +288,10 @@ pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<Commit
     if message.trim().is_empty() {
         return Err("commit message must not be empty".to_string());
     }
-    Ok(CommitArgs { mode, message, ref_name })
+    if text_edits && mode != CommitMode::FromWorktree {
+        return Err("commit --text-edits requires --from-worktree".to_string());
+    }
+    Ok(CommitArgs { mode, message, ref_name, text_edits })
 }
 
 /// Return an optional path or the current working directory.

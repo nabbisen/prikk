@@ -1,8 +1,9 @@
 //! Worktree-to-patch draft generation.
 //!
-//! PR-019 turns snapshot-baseline worktree changes into a minimal signed Patch envelope and appends
-//! it to the active WAL. This is still a scaffold: it emits file-level create/delete/replace
-//! operations only. Rename detection, text-span edits, patch replay, and full algebra remain later
+//! PR-025 turns snapshot-baseline worktree changes into a minimal signed Patch envelope and appends
+//! it to the active WAL. By default it emits coarse file-level create/delete/replace operations.
+//! With opt-in text mode it emits conservative full-file `EditText` operations for UTF-8
+//! modifications. Rename detection, arbitrary-span text diffs, and full algebra remain later
 //! increments.
 
 use std::collections::BTreeMap;
@@ -12,8 +13,8 @@ use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;
 use prikk_object::{
     BlobPayload, CanonicalEncode, CreateFile, DeleteFile, ObjectEnvelope, ObjectId, ObjectType,
-    Operation, OperationKind, PatchPayload, ReplaceBinary, Signature, SignatureAlgorithm,
-    SignerRole,
+    text_span_hash, EditText, Operation, OperationKind, PatchPayload, ReplaceBinary, Signature,
+    SignatureAlgorithm, SignerRole,
 };
 
 use crate::active::ActiveSession;
@@ -37,6 +38,8 @@ pub struct WorktreePatchCommitReport {
     pub operation_count: usize,
     /// Number of Blob object references written or reused for operation payloads.
     pub referenced_blob_count: usize,
+    /// Number of full-file `EditText` operations emitted.
+    pub text_edit_count: usize,
     /// Operation summaries in emitted order.
     pub changes: Vec<WorktreePatchOperationSummary>,
 }
@@ -59,6 +62,8 @@ pub enum WorktreePatchOperationKind {
     DeleteFile,
     /// A modified tracked file will be represented as `ReplaceBinary`.
     ReplaceBinary,
+    /// A modified UTF-8 tracked file will be represented as full-file `EditText`.
+    EditText,
 }
 
 impl WorktreePatchOperationKind {
@@ -69,7 +74,35 @@ impl WorktreePatchOperationKind {
             Self::CreateFile => "create-file",
             Self::DeleteFile => "delete-file",
             Self::ReplaceBinary => "replace-binary",
+            Self::EditText => "edit-text",
         }
+    }
+}
+
+/// Options for generating a patch from snapshot-baseline worktree changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WorktreePatchCommitOptions {
+    /// Prefer conservative full-file `EditText` for UTF-8 modified tracked files.
+    pub prefer_text_edits: bool,
+}
+
+impl WorktreePatchCommitOptions {
+    /// Return the default coarse file-level patch generation mode.
+    #[must_use]
+    pub const fn file_level() -> Self {
+        Self { prefer_text_edits: false }
+    }
+
+    /// Return the opt-in full-file text-edit generation mode.
+    #[must_use]
+    pub const fn prefer_text_edits() -> Self {
+        Self { prefer_text_edits: true }
+    }
+}
+
+impl Default for WorktreePatchCommitOptions {
+    fn default() -> Self {
+        Self::file_level()
     }
 }
 
@@ -78,6 +111,21 @@ pub fn commit_worktree_changes(
     layout: &RepositoryLayout,
     ref_name: &str,
     message: &str,
+) -> Result<WorktreePatchCommitReport> {
+    commit_worktree_changes_with_options(
+        layout,
+        ref_name,
+        message,
+        WorktreePatchCommitOptions::file_level(),
+    )
+}
+
+/// Generate a minimal patch using explicit worktree patch generation options.
+pub fn commit_worktree_changes_with_options(
+    layout: &RepositoryLayout,
+    ref_name: &str,
+    message: &str,
+    options: WorktreePatchCommitOptions,
 ) -> Result<WorktreePatchCommitReport> {
     if message.trim().is_empty() {
         return Err(PrikkError::InvalidName("commit message must not be empty".to_string()));
@@ -99,6 +147,7 @@ pub fn commit_worktree_changes(
     let mut operations = Vec::new();
     let mut summaries = Vec::new();
     let mut referenced_blob_count = 0_usize;
+    let mut text_edit_count = 0_usize;
 
     for change in &status.changes {
         let path = RepoPath::parse(&change.path)?;
@@ -135,6 +184,22 @@ pub fn commit_worktree_changes(
                     ))
                 })?;
                 let new_bytes = read_regular_worktree_file(layout, &path)?;
+                if options.prefer_text_edits {
+                    if let Some(edit) = full_file_text_edit(&path, old_bytes, &new_bytes) {
+                        operations.push(Operation {
+                            op_seq,
+                            op_id: Some(format!("edit-text-{}", path.as_str())),
+                            preconditions: Vec::new(),
+                            kind: OperationKind::EditText(edit),
+                        });
+                        summaries.push(WorktreePatchOperationSummary {
+                            path: path.as_str().to_string(),
+                            operation: WorktreePatchOperationKind::EditText,
+                        });
+                        text_edit_count += 1;
+                        continue;
+                    }
+                }
                 let old_blob_id = write_blob(&mut object_store, old_bytes)?;
                 let new_blob_id = write_blob(&mut object_store, &new_bytes)?;
                 referenced_blob_count += 2;
@@ -199,7 +264,19 @@ pub fn commit_worktree_changes(
         wal_sequence,
         operation_count: payload.operations.len(),
         referenced_blob_count,
+        text_edit_count,
         changes: summaries,
+    })
+}
+
+fn full_file_text_edit(path: &RepoPath, old_bytes: &[u8], new_bytes: &[u8]) -> Option<EditText> {
+    let new_text = std::str::from_utf8(new_bytes).ok()?;
+    std::str::from_utf8(old_bytes).ok()?;
+    Some(EditText {
+        path: path.as_str().to_string(),
+        anchor_id: "full-file".to_string(),
+        old_span_hash: text_span_hash(old_bytes),
+        replacement: new_text.to_string(),
     })
 }
 

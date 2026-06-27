@@ -21,6 +21,7 @@ Supported operation subset:
 - `CreateFile`
 - `DeleteFile`
 - `ReplaceBinary`
+- full-file `EditText` (`anchor_id = "full-file"`)
 
 Safety boundaries:
 
@@ -31,7 +32,7 @@ Safety boundaries:
 - Deletion is refused unless the current worktree bytes still match the old Blob precondition.
 - Extra untracked files are never deleted.
 - Symlinked parents, symlink targets, non-file targets, and `.prikk/` metadata paths remain refused.
-- Text edits, renames, chmod, symlinks, merge conflicts, inverse logic, and full patch algebra remain later increments.
+- Arbitrary-span text edits, renames, chmod, symlinks, merge conflicts, inverse logic, and full patch algebra remain later increments.
 
 This command is useful for exercising the current PRIKK object/WAL/ref/block pipeline end-to-end,
 but it is not yet a complete checkout implementation.

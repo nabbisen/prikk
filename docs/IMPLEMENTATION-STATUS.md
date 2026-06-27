@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-024
+Version: 0.1.0 PR-025
 
 ## Implemented
 
@@ -29,8 +29,8 @@ Version: 0.1.0 PR-024
 - Snapshot-manifest validation and conservative repository path-safety checks for snapshot materialization and status.
 - Read-only worktree status against snapshot-backed baselines.
 - Explicit deletion planning and opt-in deletion for files removed by supported patch replay.
-- Content-anchored `EditText` validation scaffold with fixed 32-byte span hashes, anchor ID validation, and conservative full-file exact-span replay.
-- Minimal CLI for `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Content-anchored `EditText` validation scaffold with fixed 32-byte span hashes, anchor ID validation, conservative full-file exact-span replay, and opt-in worktree generation for full-file UTF-8 edits.
+- Minimal CLI for `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
 
@@ -51,7 +51,7 @@ Version: 0.1.0 PR-024
 
 ## Gate Discipline
 
-PR-024 stays within the approved foundation boundary by adding only conservative full-file exact-span text replay. It does not generate text edits from worktree diffs, discover arbitrary spans, commute patches, resolve conflicts, or implement audit plugin execution, policy enforcement, or remote sync.
+PR-025 stays within the approved foundation boundary by adding only opt-in full-file text edit generation for UTF-8 modified files. It does not discover arbitrary spans, minimize text diffs, generate inverse patches, commute patches, resolve conflicts, or implement audit plugin execution, policy enforcement, or remote sync.
 
 ## 0.1.0 PR-022
 
@@ -69,3 +69,8 @@ Added a content-anchored text edit validation scaffold. `EditText` now uses a fi
 ## 0.1.0 PR-024
 
 Added conservative full-file `EditText` replay. Only `anchor_id = "full-file"` is supported, and replay requires the current full file bytes to match the recorded `old_span_hash`. Arbitrary content-span discovery, text-diff generation, inverse, commutation, and conflict witnesses remain deferred.
+
+
+## 0.1.0 PR-025
+
+Added opt-in full-file `EditText` generation from worktree modifications. The default worktree commit path remains coarse file-level `ReplaceBinary` for modified tracked files. With `--text-edits`, modified tracked files become `EditText` only when both old and new bytes are valid UTF-8; otherwise they fall back to `ReplaceBinary`. Arbitrary span discovery, minimized text diffs, inverse generation, commutation, and conflict witnesses remain deferred.

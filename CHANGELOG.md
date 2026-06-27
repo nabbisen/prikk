@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0 PR-025
+
+Opt-in full-file `EditText` generation from UTF-8 worktree modifications.
+
+- Added opt-in full-file `EditText` generation from snapshot-baseline worktree modifications.
+- Added `WorktreePatchCommitOptions` and `commit_worktree_changes_with_options()`.
+- Added CLI support for `prikk commit --from-worktree --text-edits -m <message>`.
+- Kept default `commit --from-worktree` behavior compatible: modified tracked files still emit `ReplaceBinary` unless text mode is requested.
+- Text mode emits `EditText` only when both baseline and current file bytes are valid UTF-8; binary or invalid UTF-8 modifications fall back to `ReplaceBinary`.
+- Added worktree patch tests for text edit emission and binary fallback.
+- Kept arbitrary span discovery, text diff minimization, inverse, commutation, conflict witnesses, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-024
 
 Conservative full-file `EditText` replay for exact-span replacements.
