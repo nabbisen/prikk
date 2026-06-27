@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-023
+Version: 0.1.0 PR-024
 
 ## Implemented
 
@@ -29,14 +29,14 @@ Version: 0.1.0 PR-023
 - Snapshot-manifest validation and conservative repository path-safety checks for snapshot materialization and status.
 - Read-only worktree status against snapshot-backed baselines.
 - Explicit deletion planning and opt-in deletion for files removed by supported patch replay.
-- Content-anchored `EditText` validation scaffold with fixed 32-byte span hashes and anchor ID validation.
+- Content-anchored `EditText` validation scaffold with fixed 32-byte span hashes, anchor ID validation, and conservative full-file exact-span replay.
 - Minimal CLI for `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
 
 - General destructive worktree pruning and full patch-based checkout semantics.
 - Policy-aware audit/attestation publication from seal.
-- Full patch algebra: text edit replay, inverse, commutation, confluence, and conflict witnesses.
+- Full patch algebra: arbitrary text-span replay, inverse, commutation, confluence, and conflict witnesses.
 - Conflict witnesses and merge state.
 - WASM plugin host.
 - Audit publication policy.
@@ -51,7 +51,7 @@ Version: 0.1.0 PR-023
 
 ## Gate Discipline
 
-PR-023 stays within the approved foundation boundary by adding only data-model validation for future content-anchored text edits. It does not generate, replay, commute, or resolve text edits and does not implement audit plugin execution, policy enforcement, or remote sync.
+PR-024 stays within the approved foundation boundary by adding only conservative full-file exact-span text replay. It does not generate text edits from worktree diffs, discover arbitrary spans, commute patches, resolve conflicts, or implement audit plugin execution, policy enforcement, or remote sync.
 
 ## 0.1.0 PR-022
 
@@ -64,3 +64,8 @@ Added opt-in supported patch replay materialization. This is an M2 bridge scaffo
 ## 0.1.0 PR-023
 
 Added a content-anchored text edit validation scaffold. `EditText` now uses a fixed 32-byte old-span hash, anchor IDs are validated, and tests pin basic span-hash stability. Text diff generation, text replay, inverse, commutation, and conflicted merge states remain deferred.
+
+
+## 0.1.0 PR-024
+
+Added conservative full-file `EditText` replay. Only `anchor_id = "full-file"` is supported, and replay requires the current full file bytes to match the recorded `old_span_hash`. Arbitrary content-span discovery, text-diff generation, inverse, commutation, and conflict witnesses remain deferred.

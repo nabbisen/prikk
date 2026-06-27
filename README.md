@@ -43,7 +43,7 @@ cargo run -p prikk -- doctor ./sample-repo
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-023**.
+Current implementation drop: **0.1.0 PR-024**.
 
 Implemented:
 
@@ -59,14 +59,14 @@ Implemented:
 - Initial RefState publication primitives with flat hashed ref pointer paths.
 - Narrow empty-commit and snapshot-baseline worktree commit scaffolds.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
-- Supported file-level patch replay planning and materialization for `CreateFile`, `DeleteFile`, and `ReplaceBinary`.
+- Supported patch replay planning and materialization for `CreateFile`, `DeleteFile`, `ReplaceBinary`, and conservative full-file `EditText`.
 - Explicit deletion planning and opt-in deletion of patch-removed files whose bytes still match the old blob.
-- First content-anchored `EditText` payload validation scaffold: fixed 32-byte span hashes and anchor-id validation.
+- Content-anchored `EditText` scaffold with fixed 32-byte span hashes, anchor-id validation, and conservative full-file exact-span replay for `anchor_id = "full-file"`.
 - Minimal CLI commands: `init`, `commit --allow-empty -m`, `commit --from-worktree -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 Not implemented yet:
 
-- Rename detection, content-anchored text-span edit generation/replay, full patch algebra, and general destructive checkout pruning.
+- Rename detection, arbitrary text-span discovery/generation, full patch algebra, and general destructive checkout pruning.
 - Policy-aware audit/attestation publication through seal.
 - Plugin/audit execution.
 - Remote sync.

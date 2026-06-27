@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0 PR-024
+
+Conservative full-file `EditText` replay for exact-span replacements.
+
+- Added conservative `EditText` replay for full-file exact-span replacements.
+- Added canonical decode support for `EditText` patch operations in the supported patch replay decoder.
+- Added `full-file` anchor replay validation: current file bytes must be valid UTF-8 and must hash to the recorded `old_span_hash`.
+- Split supported patch-operation decoding into `patch_replay/decode.rs` to keep the replay module within the project file-size guidance.
+- Added a patch replay test for full-file text edit replay.
+- Kept worktree text diff generation, arbitrary span discovery, inverse, commutation, conflict witnesses, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-023
 
 Explicit patch deletion planning and opt-in removal of files deleted by supported patch replay.
