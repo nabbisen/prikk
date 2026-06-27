@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0 PR-019
+
+Minimal worktree-to-patch draft generation for missing, modified, and untracked files, still without patch replay or full algebra.
+
+- Added minimal worktree-to-patch draft generation from snapshot-baseline changes.
+- Added `prikk commit --from-worktree -m <message>`.
+- Emits file-level `CreateFile`, `DeleteFile`, and `ReplaceBinary` operations only.
+- Writes Blob objects referenced by generated operations before appending the Patch envelope to WAL.
+- Keeps rename detection, content-anchored text-span edits, patch replay, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-018
 
 Read-only worktree status against snapshot-backed baselines, still without patch operation generation or patch replay.

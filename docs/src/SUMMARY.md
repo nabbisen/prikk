@@ -7,3 +7,5 @@
 - [Snapshot Checkout Planning](snapshot-checkout.md)
 - [Snapshot Materialization](snapshot-materialization.md)
 - [Worktree Status](worktree-status.md)
+
+- [Worktree Patch Drafts](worktree-patch.md)

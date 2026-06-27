@@ -40,7 +40,7 @@ cargo run -p prikk -- doctor ./sample-repo
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-018**.
+Current implementation drop: **0.1.0 PR-019**.
 
 Implemented:
 
@@ -58,11 +58,11 @@ Implemented:
 - Inline signed RefUpdate log append/replay with linked payload validation.
 - Narrow empty-commit scaffold that appends a signed patch envelope to the active WAL.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
-- Minimal CLI commands: `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Minimal CLI commands: `init`, `commit --allow-empty -m`, `commit --from-worktree -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 Not implemented yet:
 
-- Real worktree diff capture into PatchPayload operations and patch-based worktree state materialization.
+- Rename detection, content-anchored text-span edit generation, patch replay, and patch-based worktree state materialization.
 - Policy-aware audit/attestation publication through seal.
 - Patch apply/commutation.
 - Plugin/audit execution.
@@ -72,5 +72,3 @@ Not implemented yet:
 
 Full documentation is kept under `docs/src` and is structured for mdBook.
 
-
-PR-018 adds read-only worktree status against snapshot-backed baselines. It reports missing, modified, untracked, and unsupported paths without creating patch operations.

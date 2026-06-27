@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-018
+Version: 0.1.0 PR-019
 
 ## Implemented
 
@@ -49,4 +49,4 @@ Version: 0.1.0 PR-018
 
 ## Gate Discipline
 
-PR-018 stays within the approved foundation boundary by adding only read-only worktree status against already-validated snapshot baselines. It does not implement real patch operation generation, patch replay checkout, patch algebra, audit plugin execution, policy enforcement, or remote sync.
+PR-019 stays within the approved foundation boundary by adding minimal worktree-to-patch draft generation from already-validated snapshot baselines. It emits file-level CreateFile/DeleteFile/ReplaceBinary operations only and does not implement patch replay checkout, full patch algebra, audit plugin execution, policy enforcement, or remote sync.

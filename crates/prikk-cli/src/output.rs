@@ -42,7 +42,7 @@ pub(crate) fn print_checkout_plan(layout: &RepositoryLayout, plan: &CheckoutPlan
             );
         }
         CheckoutMaterialization::RequiresPatchEngine => {
-            println!("note: patch application/algebra is deferred after PR-018");
+            println!("note: patch application/algebra is deferred after PR-019");
         }
     }
 }
@@ -101,7 +101,7 @@ pub(crate) fn print_worktree_status(layout: &RepositoryLayout, report: &Worktree
             println!("  {} {} — {}", change.kind.as_str(), change.path, change.detail);
         }
     }
-    println!("note: PR-018 reports changes only; it does not create patch operations yet");
+    println!("note: use `prikk commit --from-worktree -m <message>` to draft minimal file-level operations");
 }
 
 /// Print ref history.
@@ -169,6 +169,7 @@ pub(crate) fn print_help(version: &str) {
     println!("Usage:");
     println!("  prikk init [path]                         Create a .prikk repository layout");
     println!("  prikk commit --allow-empty -m <message>   Append an empty patch to the active WAL");
+    println!("  prikk commit --from-worktree -m <message> Append snapshot-baseline changes to WAL");
     println!("  prikk status                              Check repository and active WAL status");
     println!("  prikk seal --allow-no-audit              Seal active WAL into heads/main");
     println!("  prikk log [path] [--limit N] [--ref REF]  Show sealed ref history");

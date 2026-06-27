@@ -4,6 +4,26 @@ use std::path::PathBuf;
 
 use prikk_store::{DEFAULT_CHECKOUT_REF, DEFAULT_HISTORY_LIMIT};
 
+
+/// Parsed commit command arguments.
+pub(crate) struct CommitArgs {
+    /// Commit mode.
+    pub(crate) mode: CommitMode,
+    /// Commit message.
+    pub(crate) message: String,
+    /// Baseline ref for worktree commits.
+    pub(crate) ref_name: String,
+}
+
+/// Commit command mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CommitMode {
+    /// Append the existing placeholder empty patch.
+    AllowEmpty,
+    /// Generate a minimal patch from snapshot-baseline worktree changes.
+    FromWorktree,
+}
+
 /// Parsed log command arguments.
 pub(crate) struct LogArgs {
     /// Repository root.
@@ -134,7 +154,7 @@ pub(crate) fn parse_checkout_args(
     let Some(mode) = mode else {
         return Err(
             concat!(
-                "PR-018 supports `prikk checkout --plan-only`, `--snapshot-plan`, or ",
+                "PR-019 supports `prikk checkout --plan-only`, `--snapshot-plan`, or ",
                 "`--snapshot-materialize`",
             )
                 .to_string(),
@@ -206,14 +226,25 @@ pub(crate) fn parse_doctor_args(args: Vec<String>) -> std::result::Result<Doctor
     })
 }
 
-/// Parse the narrow empty commit scaffold arguments.
-pub(crate) fn parse_empty_commit_message(args: Vec<String>) -> std::result::Result<String, String> {
-    let mut allow_empty = false;
+/// Parse commit scaffold arguments.
+pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<CommitArgs, String> {
+    let mut mode = None;
     let mut message = None;
+    let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
-            "--allow-empty" => allow_empty = true,
+            "--allow-empty" => set_commit_mode(&mut mode, CommitMode::AllowEmpty)?,
+            "--from-worktree" => set_commit_mode(&mut mode, CommitMode::FromWorktree)?,
+            "--ref" => {
+                let Some(value) = iter.next() else {
+                    return Err("commit --ref requires a value".to_string());
+                };
+                if value.trim().is_empty() {
+                    return Err("commit --ref must not be empty".to_string());
+                }
+                ref_name = value;
+            }
             "-m" | "--message" => {
                 let Some(value) = iter.next() else {
                     return Err("commit message option requires a value".to_string());
@@ -223,16 +254,19 @@ pub(crate) fn parse_empty_commit_message(args: Vec<String>) -> std::result::Resu
             other => return Err(format!("unknown commit argument: {other}")),
         }
     }
-    if !allow_empty {
-        return Err("PR-018 supports only `prikk commit --allow-empty -m <message>`".to_string());
-    }
+    let Some(mode) = mode else {
+        return Err(
+            "PR-019 supports `prikk commit --allow-empty -m <message>` or `--from-worktree -m <message>`"
+                .to_string(),
+        );
+    };
     let Some(message) = message else {
-        return Err("empty commit requires -m <message>".to_string());
+        return Err("commit requires -m <message>".to_string());
     };
     if message.trim().is_empty() {
         return Err("commit message must not be empty".to_string());
     }
-    Ok(message)
+    Ok(CommitArgs { mode, message, ref_name })
 }
 
 /// Return an optional path or the current working directory.
@@ -256,6 +290,17 @@ fn set_checkout_mode(
 ) -> std::result::Result<(), String> {
     if mode.is_some() {
         return Err("checkout accepts only one mode flag".to_string());
+    }
+    *mode = Some(next);
+    Ok(())
+}
+
+fn set_commit_mode(
+    mode: &mut Option<CommitMode>,
+    next: CommitMode,
+) -> std::result::Result<(), String> {
+    if mode.is_some() {
+        return Err("commit accepts only one mode flag".to_string());
     }
     *mode = Some(next);
     Ok(())

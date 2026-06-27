@@ -12,3 +12,4 @@ mod verify;
 mod wal;
 
 mod worktree_status;
+mod worktree_patch;

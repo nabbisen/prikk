@@ -2,11 +2,11 @@
 
 //! PRIKK command-line entry point.
 //!
-//! PR-018 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
-//! a local no-audit seal scaffold, read-only history inspection, checkout and snapshot-manifest
-//! planning, conservative snapshot materialization, read-only worktree status, deeper repository
-//! verification, and doctor diagnostics with opt-in safe WAL tail and missing-ref-pointer repair.
-//! Real patch generation, patch application, audit plugins, and sync remain later increments.
+//! PR-019 exposes minimal repository layout commands, active WAL status, empty and snapshot-baseline
+//! worktree commit scaffolds, a local no-audit seal scaffold, read-only history inspection, checkout
+//! and snapshot-manifest planning, conservative snapshot materialization, read-only worktree status,
+//! deeper repository verification, and doctor diagnostics with opt-in repairs. Patch application,
+//! audit plugins, and sync remain later increments.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -17,8 +17,8 @@ mod output;
 mod seal;
 
 use args::{
-    current_dir, optional_path_or_current, parse_checkout_args, parse_doctor_args,
-    parse_empty_commit_message, parse_log_args, parse_worktree_status_args, CheckoutMode,
+    current_dir, optional_path_or_current, parse_checkout_args, parse_commit_args, parse_doctor_args,
+    parse_log_args, parse_worktree_status_args, CheckoutMode, CommitMode,
 };
 use commit::empty_patch_envelope;
 use output::{
@@ -27,12 +27,12 @@ use output::{
     print_worktree_status,
 };
 use prikk_store::{
-    doctor_repository, load_ref_history, materialize_snapshot_checkout, prepare_checkout_plan,
-    prepare_snapshot_checkout_plan, repair_repository, verify_repository, worktree_status,
-    ActiveSession, DoctorRepairOptions, RefStore, RepositoryLayout, Wal,
+    commit_worktree_changes, doctor_repository, load_ref_history, materialize_snapshot_checkout,
+    prepare_checkout_plan, prepare_snapshot_checkout_plan, repair_repository, verify_repository,
+    worktree_status, ActiveSession, DoctorRepairOptions, RefStore, RepositoryLayout, Wal,
 };
 
-const VERSION: &str = "0.1.0-pr018";
+const VERSION: &str = "0.1.0-pr019";
 
 fn main() -> ExitCode {
     match run() {
@@ -79,17 +79,34 @@ fn run_init(path: Option<String>) -> std::result::Result<(), String> {
 }
 
 fn run_commit(args: Vec<String>) -> std::result::Result<(), String> {
-    let message = parse_empty_commit_message(args)?;
+    let args = parse_commit_args(args)?;
     let root = current_dir()?;
     let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
-    let envelope = empty_patch_envelope(&message)?;
-    let patch_id = envelope.object_id();
-    let session = ActiveSession::new(layout);
-    let result = session.append_patch(&envelope).map_err(|err| err.to_string())?;
-    println!("recorded empty patch in active WAL");
-    println!("patch id: {patch_id}");
-    println!("WAL sequence: {}", result.wal_sequence);
-    println!("note: real diff capture and seal remain later PRs");
+    match args.mode {
+        CommitMode::AllowEmpty => {
+            let envelope = empty_patch_envelope(&args.message)?;
+            let patch_id = envelope.object_id();
+            let session = ActiveSession::new(layout);
+            let result = session.append_patch(&envelope).map_err(|err| err.to_string())?;
+            println!("recorded empty patch in active WAL");
+            println!("patch id: {patch_id}");
+            println!("WAL sequence: {}", result.wal_sequence);
+        }
+        CommitMode::FromWorktree => {
+            let report = commit_worktree_changes(&layout, &args.ref_name, &args.message)
+                .map_err(|err| err.to_string())?;
+            println!("recorded worktree patch in active WAL");
+            println!("baseline ref: {}", report.ref_name);
+            println!("patch id: {}", report.patch_id);
+            println!("WAL sequence: {}", report.wal_sequence);
+            println!("operations: {}", report.operation_count);
+            println!("referenced blobs: {}", report.referenced_blob_count);
+            for change in &report.changes {
+                println!("  {} {}", change.operation.as_str(), change.path);
+            }
+        }
+    }
+    println!("note: patch replay/algebra, rename detection, audit plugins, and sync remain later PRs");
     Ok(())
 }
 
@@ -122,7 +139,7 @@ fn run_status() -> std::result::Result<(), String> {
     }
     println!(
         "status: patch algebra, patch-based worktree materialization, plugins, and sync not \
-         implemented in PR-018"
+         implemented in PR-019"
     );
     Ok(())
 }

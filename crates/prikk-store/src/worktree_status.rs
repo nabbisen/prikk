@@ -1,6 +1,6 @@
 //! Read-only worktree status against a snapshot baseline.
 //!
-//! PR-018 compares the current worktree with the snapshot manifest referenced by a published block.
+//! PR-019 compares the current worktree with the snapshot manifest referenced by a published block.
 //! It is intentionally read-only and does not create patch operations yet.
 
 use std::collections::BTreeSet;
