@@ -12,6 +12,7 @@ mod verify;
 mod wal;
 mod patch_replay;
 mod patch_checkout;
+mod patch_inverse;
 
 mod worktree_status;
 mod worktree_patch;

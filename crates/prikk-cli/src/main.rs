@@ -2,11 +2,12 @@
 
 //! PRIKK command-line entry point.
 //!
-//! PR-025 exposes minimal repository layout commands, active WAL status, empty and snapshot-baseline
-//! worktree commit scaffolds, opt-in full-file text edit generation, supported patch replay
-//! planning/materialization, explicit patch deletion planning, a local no-audit seal scaffold,
-//! read-only history inspection, checkout planning, conservative snapshot materialization,
-//! read-only worktree status, repository verification, and doctor diagnostics with opt-in repairs.
+//! PR-026 exposes minimal repository layout commands, active WAL status, empty and
+//! snapshot-baseline worktree commit scaffolds, opt-in full-file text edit generation,
+//! read-only inverse planning, supported patch replay planning/materialization, explicit patch
+//! deletion planning, a local no-audit seal scaffold, read-only history inspection, checkout
+//! planning, conservative snapshot materialization, read-only worktree status, repository
+//! verification, and doctor diagnostics with opt-in repairs.
 //! Arbitrary-span text diffs, full patch algebra, audit plugins, and sync remain later increments.
 
 use std::path::PathBuf;
@@ -19,12 +20,14 @@ mod seal;
 
 use args::{
     current_dir, optional_path_or_current, parse_checkout_args, parse_commit_args,
-    parse_doctor_args, parse_log_args, parse_worktree_status_args, CheckoutMode, CommitMode,
+    parse_doctor_args, parse_inverse_plan_args, parse_log_args, parse_worktree_status_args,
+    CheckoutMode, CommitMode,
 };
 use commit::empty_patch_envelope;
 use output::{
     print_checkout_plan, print_doctor_report, print_help, print_history,
-    print_patch_deletion_plan, print_patch_materialization_report, print_patch_replay_plan,
+    print_patch_deletion_plan, print_patch_inverse_plan, print_patch_materialization_report,
+    print_patch_replay_plan,
     print_snapshot_checkout_plan, print_snapshot_materialization_report, print_verify_report,
     print_worktree_status,
 };
@@ -32,12 +35,13 @@ use prikk_store::{
     commit_worktree_changes_with_options, doctor_repository, load_ref_history,
     materialize_patch_checkout, materialize_patch_checkout_with_deletions,
     materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan,
-    prepare_patch_replay_plan, prepare_snapshot_checkout_plan, repair_repository,
+    prepare_patch_inverse_plan, prepare_patch_replay_plan, prepare_snapshot_checkout_plan,
+    repair_repository,
     verify_repository, worktree_status, ActiveSession, DoctorRepairOptions, RefStore,
     RepositoryLayout, Wal, WorktreePatchCommitOptions,
 };
 
-const VERSION: &str = "0.1.0-pr025";
+const VERSION: &str = "0.1.0-pr026";
 
 fn main() -> ExitCode {
     match run() {
@@ -66,6 +70,7 @@ fn run() -> std::result::Result<(), String> {
         Some("status") => run_status(),
         Some("log") => run_log(args.collect()),
         Some("checkout") => run_checkout(args.collect()),
+        Some("inverse-plan") => run_inverse_plan(args.collect()),
         Some("worktree-status") => run_worktree_status(args.collect()),
         Some("verify") => run_verify(args.next()),
         Some("doctor") => run_doctor(args.collect()),
@@ -158,7 +163,7 @@ fn run_status() -> std::result::Result<(), String> {
     }
     println!(
         "status: arbitrary-span text diffs, plugins, and sync not \
-         implemented in PR-025"
+         implemented in PR-026"
     );
     Ok(())
 }
@@ -215,6 +220,16 @@ fn run_checkout(args: Vec<String>) -> std::result::Result<(), String> {
             print_patch_materialization_report(&layout, &report);
         }
     }
+    Ok(())
+}
+
+
+fn run_inverse_plan(args: Vec<String>) -> std::result::Result<(), String> {
+    let args = parse_inverse_plan_args(args)?;
+    let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
+    let plan = prepare_patch_inverse_plan(&layout, &args.ref_name)
+        .map_err(|err| err.to_string())?;
+    print_patch_inverse_plan(&layout, &plan);
     Ok(())
 }
 

@@ -2,7 +2,8 @@
 
 use prikk_store::{
     CheckoutMaterialization, CheckoutPlan, DoctorSeverity, PatchDeletionPlan,
-    PatchMaterializationReport, PatchReplayPlan, RefHistory, RepositoryLayout,
+    PatchInversePlan, PatchMaterializationReport, PatchReplayPlan, RefHistory,
+    RepositoryLayout,
     SnapshotCheckoutPlan, SnapshotMaterializationReport, WorktreeChangeKind, WorktreeStatusReport,
 };
 
@@ -43,7 +44,9 @@ pub(crate) fn print_checkout_plan(layout: &RepositoryLayout, plan: &CheckoutPlan
             );
         }
         CheckoutMaterialization::RequiresPatchEngine => {
-            println!("note: use `prikk checkout --patch-plan` for the supported file-level replay scaffold");
+            println!(
+                "note: use `prikk checkout --patch-plan` for supported replay planning"
+            );
         }
     }
 }
@@ -97,7 +100,7 @@ pub(crate) fn print_patch_deletion_plan(layout: &RepositoryLayout, plan: &PatchD
         println!("  refused: {} — {}", conflict.path, conflict.reason);
     }
     println!(
-        "note: only files explicitly removed by patch replay are eligible; arbitrary extra files are never deleted"
+        "note: only explicit patch-deleted files are eligible; extra files are never deleted"
     );
 }
 
@@ -151,6 +154,31 @@ pub(crate) fn print_snapshot_materialization_report(
         println!("  file: {path}");
     }
     println!("note: this path writes only snapshot-backed files and never applies patches");
+}
+
+
+/// Print a supported patch inverse plan.
+pub(crate) fn print_patch_inverse_plan(layout: &RepositoryLayout, plan: &PatchInversePlan) {
+    println!("patch inverse plan repository: {}", layout.prikk_dir().display());
+    println!("ref: {}", plan.ref_name);
+    println!("target block: {}", plan.target_block_id);
+    println!("blocks inspected: {}", plan.block_count);
+    println!("patches inspected: {}", plan.patch_count);
+    println!("original operations: {}", plan.original_operation_count);
+    println!("inverse operations: {}", plan.inverse_operation_count);
+    println!("unsigned inverse patch id hint: {}", plan.inverse_patch_id_hint);
+    for operation in &plan.operations {
+        println!(
+            "  {:04} {} {}",
+            operation.op_seq,
+            operation.kind.as_str(),
+            operation.path
+        );
+    }
+    println!(
+        "note: this is a non-mutating unsigned inverse plan for the supported operation subset; \
+         rollback refs, authorization, conflicts, and full patch algebra remain later PRs"
+    );
 }
 
 /// Print a worktree status report.
@@ -266,8 +294,9 @@ pub(crate) fn print_help(version: &str) {
         "  prikk checkout --patch-delete-plan [path] [--ref REF]  Plan explicit patch deletions"
     );
     println!(
-        "  prikk checkout --patch-materialize-delete [path] [--ref REF]  Write and delete patch-removed files"
+        "  prikk checkout --patch-materialize-delete [path] [--ref REF]  Write/delete patch files"
     );
+    println!("  prikk inverse-plan [path] [--ref REF]     Plan an unsigned inverse patch");
     println!(
         "  prikk worktree-status [path] [--ref REF]  Report changes against snapshot baseline"
     );

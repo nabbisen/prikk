@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0 PR-026
+
+Read-only inverse planning for the supported patch-operation subset.
+
+- Added read-only inverse planning for the supported patch-operation subset.
+- Added `prepare_patch_inverse_plan()` and `PatchInversePlan`.
+- Added CLI command `prikk inverse-plan [path] [--ref REF]`.
+- Derives unsigned inverse Patch payloads for supported `CreateFile`, `DeleteFile`, `ReplaceBinary`, and full-file `EditText` operations.
+- Reports an unsigned inverse Patch ID hint without writing or publishing it.
+- Kept rollback refs, authorization policy, conflict witnesses, commutation, confluence, arbitrary-span inverse handling, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-025
 
 Opt-in full-file `EditText` generation from UTF-8 worktree modifications.

@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-mod decode;
+pub(crate) mod decode;
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{

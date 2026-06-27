@@ -32,6 +32,7 @@ cargo run -p prikk -- checkout --plan-only ./sample-repo
 cargo run -p prikk -- checkout --patch-plan ./sample-repo
 cargo run -p prikk -- checkout --patch-materialize ./sample-repo
 cargo run -p prikk -- checkout --patch-delete-plan ./sample-repo
+cargo run -p prikk -- inverse-plan ./sample-repo
 cargo run -p prikk -- worktree-status ./sample-repo
 # After editing a UTF-8 tracked file inside ./sample-repo:
 # (cd ./sample-repo && ../target/debug/prikk commit --from-worktree --text-edits -m "edit text")
@@ -45,7 +46,7 @@ cargo run -p prikk -- doctor ./sample-repo
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-025**.
+Current implementation drop: **0.1.0 PR-026**.
 
 Implemented:
 
@@ -63,12 +64,13 @@ Implemented:
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
 - Supported patch replay planning and materialization for `CreateFile`, `DeleteFile`, `ReplaceBinary`, and conservative full-file `EditText`.
 - Explicit deletion planning and opt-in deletion of patch-removed files whose bytes still match the old blob.
+- Read-only unsigned inverse planning for the supported patch-operation subset.
 - Content-anchored `EditText` scaffold with fixed 32-byte span hashes, anchor-id validation, conservative full-file exact-span replay for `anchor_id = "full-file"`, and opt-in worktree generation for modified UTF-8 files.
-- Minimal CLI commands: `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Minimal CLI commands: `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 Not implemented yet:
 
-- Rename detection, arbitrary text-span discovery/generation, inverse generation, commutation, full patch algebra, and general destructive checkout pruning.
+- Rename detection, arbitrary text-span discovery/generation, rollback refs, commutation, full patch algebra, and general destructive checkout pruning.
 - Policy-aware audit/attestation publication through seal.
 - Plugin/audit execution.
 - Remote sync.

@@ -13,3 +13,4 @@
 - [Supported Patch Materialization](patch-materialization.md)
 - [Supported Patch Deletions](patch-deletions.md)
 - [Content-Anchored Text Edits](text-edits.md)
+- [Supported Patch Inverse Planning](patch-inverse.md)

@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-025
+Version: 0.1.0 PR-026
 
 ## Implemented
 
@@ -30,13 +30,14 @@ Version: 0.1.0 PR-025
 - Read-only worktree status against snapshot-backed baselines.
 - Explicit deletion planning and opt-in deletion for files removed by supported patch replay.
 - Content-anchored `EditText` validation scaffold with fixed 32-byte span hashes, anchor ID validation, conservative full-file exact-span replay, and opt-in worktree generation for full-file UTF-8 edits.
-- Minimal CLI for `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Read-only unsigned inverse planning for the supported patch-operation subset.
+- Minimal CLI for `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
 
 - General destructive worktree pruning and full patch-based checkout semantics.
 - Policy-aware audit/attestation publication from seal.
-- Full patch algebra: arbitrary text-span replay, inverse, commutation, confluence, and conflict witnesses.
+- Full patch algebra: arbitrary text-span replay, mutating rollback, commutation, confluence, and conflict witnesses.
 - Conflict witnesses and merge state.
 - WASM plugin host.
 - Audit publication policy.
@@ -51,7 +52,7 @@ Version: 0.1.0 PR-025
 
 ## Gate Discipline
 
-PR-025 stays within the approved foundation boundary by adding only opt-in full-file text edit generation for UTF-8 modified files. It does not discover arbitrary spans, minimize text diffs, generate inverse patches, commute patches, resolve conflicts, or implement audit plugin execution, policy enforcement, or remote sync.
+PR-026 stays within the approved foundation boundary by adding only read-only unsigned inverse planning for the supported patch subset. It does not mutate refs, authorize rollback, discover arbitrary spans, minimize text diffs, commute patches, resolve conflicts, or implement audit plugin execution, policy enforcement, or remote sync.
 
 ## 0.1.0 PR-022
 
@@ -74,3 +75,8 @@ Added conservative full-file `EditText` replay. Only `anchor_id = "full-file"` i
 ## 0.1.0 PR-025
 
 Added opt-in full-file `EditText` generation from worktree modifications. The default worktree commit path remains coarse file-level `ReplaceBinary` for modified tracked files. With `--text-edits`, modified tracked files become `EditText` only when both old and new bytes are valid UTF-8; otherwise they fall back to `ReplaceBinary`. Arbitrary span discovery, minimized text diffs, inverse generation, commutation, and conflict witnesses remain deferred.
+
+## 0.1.0 PR-026
+
+Added read-only inverse planning for the supported patch-operation subset. `prikk inverse-plan [path] [--ref REF]` validates the sealed single-parent chain, derives an unsigned inverse Patch payload for `CreateFile`, `DeleteFile`, `ReplaceBinary`, and full-file `EditText`, and reports a deterministic unsigned Patch ID hint. Rollback refs, authorization policy, commutation, confluence, arbitrary-span inverse handling, audit plugins, and sync remain deferred.
+

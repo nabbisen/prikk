@@ -1,0 +1,137 @@
+//! Read helpers for supported inverse planning.
+
+use std::collections::{BTreeMap, HashSet};
+
+use prikk_error::{PrikkError, Result};
+use prikk_object::{
+    BlobPayload, BlockPayload, CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType,
+    RefStatePayload,
+};
+
+use crate::layout::RepositoryLayout;
+use crate::object_store::FileObjectStore;
+use crate::refs::RefStore;
+use crate::snapshot::SnapshotManifest;
+
+/// Read the current target Block ID for a ref.
+pub(super) fn current_target_block(
+    layout: &RepositoryLayout,
+    object_store: &FileObjectStore,
+    ref_name: &str,
+) -> Result<ObjectId> {
+    let ref_store = RefStore::new(layout.clone());
+    let ref_state_id = ref_store.read_current_ref_state_id(ref_name)?.ok_or_else(|| {
+        PrikkError::Integrity(format!("ref {ref_name} is not published"))
+    })?;
+    let envelope = object_store
+        .read_typed(ref_state_id, ObjectType::RefState)?
+        .ok_or_else(|| {
+            PrikkError::Integrity(format!(
+                "ref {ref_name} points to missing RefState {ref_state_id}"
+            ))
+        })?;
+    let ref_state = RefStatePayload::decode_canonical(&envelope.canonical_payload)?;
+    if ref_state.ref_name != ref_name {
+        return Err(PrikkError::Integrity(format!(
+            "RefState name mismatch: expected {ref_name}, got {}",
+            ref_state.ref_name
+        )));
+    }
+    Ok(ref_state.target_object_id)
+}
+
+/// Return the single-parent chain from oldest to newest.
+pub(super) fn single_parent_chain(
+    object_store: &FileObjectStore,
+    target: ObjectId,
+) -> Result<Vec<ObjectId>> {
+    let mut newest_first = Vec::new();
+    let mut seen = HashSet::new();
+    let mut current = Some(target);
+    while let Some(block_id) = current {
+        if !seen.insert(block_id) {
+            return Err(PrikkError::Integrity(format!(
+                "block parent chain contains a cycle at {block_id}"
+            )));
+        }
+        let block = read_block(object_store, block_id)?;
+        if block.parent_block_ids.len() > 1 {
+            return Err(PrikkError::UnsupportedObjectType(format!(
+                "inverse planning supports single-parent chains only; block has {} parents",
+                block.parent_block_ids.len()
+            )));
+        }
+        newest_first.push(block_id);
+        current = block.parent_block_ids.first().copied();
+    }
+    newest_first.reverse();
+    Ok(newest_first)
+}
+
+/// Read and decode a Block payload.
+pub(super) fn read_block(
+    object_store: &FileObjectStore,
+    block_id: ObjectId,
+) -> Result<BlockPayload> {
+    let envelope = object_store
+        .read_typed(block_id, ObjectType::Block)?
+        .ok_or_else(|| PrikkError::Integrity(format!("missing Block {block_id}")))?;
+    BlockPayload::decode_canonical(&envelope.canonical_payload)
+}
+
+/// Read a Patch envelope.
+pub(super) fn read_patch(
+    object_store: &FileObjectStore,
+    patch_id: ObjectId,
+) -> Result<ObjectEnvelope> {
+    object_store
+        .read_typed(patch_id, ObjectType::Patch)?
+        .ok_or_else(|| PrikkError::Integrity(format!("missing Patch {patch_id}")))
+}
+
+/// Load a snapshot manifest into a path-to-bytes map.
+pub(super) fn load_snapshot_files(
+    object_store: &FileObjectStore,
+    snapshot_blob_ref: ObjectId,
+) -> Result<BTreeMap<String, Vec<u8>>> {
+    let envelope = object_store
+        .read_typed(snapshot_blob_ref, ObjectType::Blob)?
+        .ok_or_else(|| {
+            PrikkError::Integrity(format!("missing snapshot Blob {snapshot_blob_ref}"))
+        })?;
+    let blob = BlobPayload::decode_canonical(&envelope.canonical_payload)?;
+    let manifest = SnapshotManifest::decode(&blob.bytes)?;
+    let mut files = BTreeMap::new();
+    for entry in manifest.files {
+        files.insert(entry.path.as_str().to_string(), entry.bytes);
+    }
+    Ok(files)
+}
+
+/// Read raw bytes from a Blob object.
+pub(super) fn read_blob_bytes(
+    object_store: &FileObjectStore,
+    blob_id: ObjectId,
+) -> Result<Vec<u8>> {
+    let envelope = object_store
+        .read_typed(blob_id, ObjectType::Blob)?
+        .ok_or_else(|| PrikkError::Integrity(format!("missing Blob {blob_id}")))?;
+    let blob = BlobPayload::decode_canonical(&envelope.canonical_payload)?;
+    Ok(blob.bytes)
+}
+
+/// Ensure bytes identify as the expected Blob object ID.
+pub(super) fn ensure_blob_matches(bytes: &[u8], expected: ObjectId) -> Result<()> {
+    let payload = BlobPayload { bytes: bytes.to_vec() };
+    let id = ObjectId::from_canonical_payload(
+        ObjectType::Blob,
+        1,
+        &payload.to_canonical_bytes()?,
+    );
+    if id == expected {
+        return Ok(());
+    }
+    Err(PrikkError::Integrity(format!(
+        "operation old_blob_id mismatch: expected {expected}, got {id}"
+    )))
+}
