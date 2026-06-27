@@ -1,8 +1,9 @@
 //! CLI output helpers.
 
 use prikk_store::{
-    CheckoutMaterialization, CheckoutPlan, DoctorSeverity, RefHistory, RepositoryLayout,
-    SnapshotCheckoutPlan, SnapshotMaterializationReport, WorktreeChangeKind, WorktreeStatusReport,
+    CheckoutMaterialization, CheckoutPlan, DoctorSeverity, PatchReplayPlan, RefHistory,
+    RepositoryLayout, SnapshotCheckoutPlan, SnapshotMaterializationReport, WorktreeChangeKind,
+    WorktreeStatusReport,
 };
 
 /// Print a checkout plan.
@@ -42,7 +43,7 @@ pub(crate) fn print_checkout_plan(layout: &RepositoryLayout, plan: &CheckoutPlan
             );
         }
         CheckoutMaterialization::RequiresPatchEngine => {
-            println!("note: patch application/algebra is deferred after PR-019");
+            println!("note: use `prikk checkout --patch-plan` for the supported file-level replay scaffold");
         }
     }
 }
@@ -58,6 +59,26 @@ pub(crate) fn print_snapshot_checkout_plan(layout: &RepositoryLayout, plan: &Sna
         println!("  file: {path}");
     }
     println!("note: use `prikk checkout --snapshot-materialize` to write validated snapshot files");
+}
+
+
+/// Print a supported patch replay plan.
+pub(crate) fn print_patch_replay_plan(layout: &RepositoryLayout, plan: &PatchReplayPlan) {
+    println!("patch replay plan repository: {}", layout.prikk_dir().display());
+    println!("ref: {}", plan.ref_name);
+    println!("target block: {}", plan.target_block_id);
+    println!("blocks replayed: {}", plan.block_count);
+    println!("patches replayed: {}", plan.patch_count);
+    println!("operations applied: {}", plan.applied_operation_count);
+    println!("result files: {}", plan.file_count);
+    println!("result content bytes: {}", plan.total_content_bytes);
+    for path in &plan.paths {
+        println!("  file: {path}");
+    }
+    println!(
+        "note: this replays only CreateFile/DeleteFile/ReplaceBinary; text edits, renames, \
+         conflicts, and full patch algebra remain later PRs"
+    );
 }
 
 /// Print a snapshot materialization report.
@@ -179,6 +200,9 @@ pub(crate) fn print_help(version: &str) {
     );
     println!(
         "  prikk checkout --snapshot-materialize [path] [--ref REF]  Safely write snapshot files"
+    );
+    println!(
+        "  prikk checkout --patch-plan [path] [--ref REF]  Replay supported file-level patches"
     );
     println!(
         "  prikk worktree-status [path] [--ref REF]  Report changes against snapshot baseline"

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0 PR-020
+
+Minimal worktree-to-patch draft generation for missing, modified, and untracked files, still without patch replay or full algebra.
+
+- Added read-only supported patch replay planning via `prikk checkout --patch-plan`.
+- Added `prepare_patch_replay_plan()` and `PatchReplayPlan`.
+- Replays single-parent block chains from oldest to newest.
+- Loads snapshot Blob baselines and applies supported `CreateFile`, `DeleteFile`, and `ReplaceBinary` operations.
+- Verifies `old_blob_id` preconditions for delete/replace operations.
+- Keeps text-span edits, renames, chmod, symlinks, merge/conflict algebra, and worktree writes deferred.
+
 ## 0.1.0 PR-019
 
 Minimal worktree-to-patch draft generation for missing, modified, and untracked files, still without patch replay or full algebra.

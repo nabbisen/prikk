@@ -9,3 +9,4 @@
 - [Worktree Status](worktree-status.md)
 
 - [Worktree Patch Drafts](worktree-patch.md)
+- [Supported Patch Replay](patch-replay.md)

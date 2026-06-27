@@ -3,10 +3,11 @@
 
 //! Storage crate for PRIKK repositories.
 //!
-//! PR-019 contains persistent layout, object storage, WAL durability, deeper read-only
+//! PR-020 contains persistent layout, object storage, WAL durability, deeper read-only
 //! repository verification, initial ref-state/ref-log publication primitives, a narrow
 //! active-session append API, opt-in safe doctor repairs, conservative snapshot materialization,
-//! read-only worktree status, and minimal worktree-to-patch draft generation. Patch algebra,
+//! read-only worktree status, minimal worktree-to-patch draft generation, and supported file-level
+//! patch replay planning. Patch algebra,
 //! plugin execution, and remote sync remain separate increments.
 
 mod active;
@@ -21,6 +22,7 @@ mod lock;
 mod memory_store;
 mod object_store;
 mod path;
+mod patch_replay;
 mod refs;
 mod snapshot;
 mod wal;
@@ -47,6 +49,7 @@ pub use lock::{ActiveLock, RefLock};
 pub use memory_store::MemoryObjectStore;
 pub use object_store::{FileObjectStore, ObjectReader, ObjectWriter};
 pub use path::{validate_no_path_collisions, validate_repo_path, RepoPath};
+pub use patch_replay::{prepare_patch_replay_plan, PatchReplayPlan};
 pub use refs::{
     RefLogReplay, RefLogRecord, RefPublication, RefRecoveryCandidate, RefRecoveryRepair, RefStore,
 };

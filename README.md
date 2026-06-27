@@ -29,6 +29,7 @@ cargo run -p prikk -- init ./sample-repo
 (cd ./sample-repo && ../target/debug/prikk seal --allow-no-audit)
 cargo run -p prikk -- log ./sample-repo
 cargo run -p prikk -- checkout --plan-only ./sample-repo
+cargo run -p prikk -- checkout --patch-plan ./sample-repo
 cargo run -p prikk -- worktree-status ./sample-repo
 cargo run -p prikk -- verify ./sample-repo
 cargo run -p prikk -- doctor ./sample-repo
@@ -40,7 +41,7 @@ cargo run -p prikk -- doctor ./sample-repo
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-019**.
+Current implementation drop: **0.1.0 PR-020**.
 
 Implemented:
 
@@ -58,11 +59,13 @@ Implemented:
 - Inline signed RefUpdate log append/replay with linked payload validation.
 - Narrow empty-commit scaffold that appends a signed patch envelope to the active WAL.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
-- Minimal CLI commands: `init`, `commit --allow-empty -m`, `commit --from-worktree -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+
+- Supported file-level patch replay planning for `CreateFile`, `DeleteFile`, and `ReplaceBinary`.
+- Minimal CLI commands: `init`, `commit --allow-empty -m`, `commit --from-worktree -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 Not implemented yet:
 
-- Rename detection, content-anchored text-span edit generation, patch replay, and patch-based worktree state materialization.
+- Rename detection, content-anchored text-span edit generation, full patch algebra, and patch-based worktree state materialization.
 - Policy-aware audit/attestation publication through seal.
 - Patch apply/commutation.
 - Plugin/audit execution.

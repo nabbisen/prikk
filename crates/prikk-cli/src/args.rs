@@ -53,6 +53,8 @@ pub(crate) enum CheckoutMode {
     SnapshotPlan,
     /// Opt-in snapshot materialization.
     SnapshotMaterialize,
+    /// Read-only supported patch replay planning.
+    PatchPlan,
 }
 
 /// Parsed worktree-status command arguments.
@@ -130,7 +132,8 @@ pub(crate) fn parse_checkout_args(
             "--snapshot-plan" => set_checkout_mode(&mut mode, CheckoutMode::SnapshotPlan)?,
             "--snapshot-materialize" => {
                 set_checkout_mode(&mut mode, CheckoutMode::SnapshotMaterialize)?
-            }
+            },
+            "--patch-plan" => set_checkout_mode(&mut mode, CheckoutMode::PatchPlan)?,
             "--ref" => {
                 let Some(value) = iter.next() else {
                     return Err("checkout --ref requires a value".to_string());
@@ -154,10 +157,10 @@ pub(crate) fn parse_checkout_args(
     let Some(mode) = mode else {
         return Err(
             concat!(
-                "PR-019 supports `prikk checkout --plan-only`, `--snapshot-plan`, or ",
-                "`--snapshot-materialize`",
+                "PR-020 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
+                "`--snapshot-materialize`, or `--patch-plan`",
             )
-                .to_string(),
+            .to_string(),
         );
     };
     Ok(CheckoutArgs {
@@ -256,7 +259,7 @@ pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<Commit
     }
     let Some(mode) = mode else {
         return Err(
-            "PR-019 supports `prikk commit --allow-empty -m <message>` or `--from-worktree -m <message>`"
+            "PR-020 supports `prikk commit --allow-empty -m <message>` or `--from-worktree -m <message>`"
                 .to_string(),
         );
     };

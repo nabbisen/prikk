@@ -5,7 +5,7 @@ This repository follows the design-first PRIKK roadmap.
 ## Current Increment
 
 - 0.1.0 PR-018: read-only worktree status against snapshot-backed baselines.
-- 0.1.0 PR-019: minimal worktree-to-patch draft generation for missing, modified, and untracked files, still without patch replay or full algebra.
+- 0.1.0 PR-020: minimal worktree-to-patch draft generation for missing, modified, and untracked files, still without patch replay or full algebra.
 
 ## Next Increments
 
@@ -14,3 +14,8 @@ This repository follows the design-first PRIKK roadmap.
 3. PR-022+: audit/plugin and sync work remain gated by their dedicated plans.
 
 Final feature scope remains governed by the FDDs and RFCs.
+
+
+## PR-020 note
+
+PR-020 adds read-only replay planning for the supported file-level operation subset. Full patch algebra remains a later milestone.

@@ -12,7 +12,7 @@ pub mod id;
 pub mod payload;
 pub mod signature;
 
-pub use canonical::{CanonicalEncode, CanonicalWriter};
+pub use canonical::{CanonicalEncode, CanonicalWriter, WireType};
 pub use envelope::ObjectEnvelope;
 pub use id::{OBJECT_ID_DOMAIN, ObjectId, ObjectType};
 pub use payload::*;
