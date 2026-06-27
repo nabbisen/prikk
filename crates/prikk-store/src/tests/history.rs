@@ -5,11 +5,13 @@ use prikk_object::{
 };
 
 use crate::{
-    FileObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout, load_ref_history,
+    FileObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout,
+    load_ref_history, verify_repository,
 };
 
 use super::helpers::{
-    maintainer_signature, signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
+    maintainer_signature, rollback_patch_envelope, signed_ref_state_envelope,
+    signed_ref_update_envelope, unique_temp_dir,
 };
 
 #[test]
@@ -111,6 +113,64 @@ fn history_respects_limit() {
         let history = load_ref_history(&layout, "heads/main", 0);
         assert!(history.is_ok());
         assert_eq!(history.ok().map(|value| value.entries.len()), Some(0));
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn history_and_verify_classify_sealed_rollback_block() {
+    let root = unique_temp_dir("history-rollback-block");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let mut object_store = FileObjectStore::new(layout.clone());
+        let rollback_patch = rollback_patch_envelope();
+        let rollback_patch_id = rollback_patch.object_id();
+        assert!(object_store.write_object(&rollback_patch).is_ok());
+
+        let block = signed_block_envelope(
+            BlockKind::Normal,
+            Vec::new(),
+            vec![rollback_patch_id],
+        );
+        let block_id = block.object_id();
+        assert!(object_store.write_object(&block).is_ok());
+
+        let ref_store = RefStore::new(layout.clone());
+        let ref_state = signed_ref_state_envelope("heads/main", None, block_id, 1);
+        let ref_state_id = ref_state.object_id();
+        let ref_update = signed_ref_update_envelope(
+            "heads/main",
+            None,
+            ref_state_id,
+            block_id,
+            1,
+        );
+        let publication = RefPublication {
+            ref_name: "heads/main".to_string(),
+            expected_previous_ref_state_id: None,
+            ref_state,
+            ref_update,
+        };
+        assert!(ref_store.publish(&publication).is_ok());
+
+        let history = load_ref_history(&layout, "heads/main", 20);
+        assert!(history.is_ok());
+        if let Ok(history) = history {
+            let entry = history.entries.first();
+            assert!(entry.is_some());
+            if let Some(entry) = entry {
+                assert!(entry.is_rollback_block);
+                assert_eq!(entry.rollback_patch_count, 1);
+            }
+        }
+
+        let verification = verify_repository(&layout);
+        assert!(verification.is_ok());
+        if let Ok(verification) = verification {
+            assert_eq!(verification.checked_rollback_blocks, 1);
+            assert_eq!(verification.checked_sealed_rollback_patches, 1);
+        }
     }
     let _ = std::fs::remove_dir_all(root);
 }

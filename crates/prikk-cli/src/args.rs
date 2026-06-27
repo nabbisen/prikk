@@ -207,7 +207,7 @@ pub(crate) fn parse_checkout_args(
     let Some(mode) = mode else {
         return Err(
             concat!(
-                "PR-029 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
+                "PR-030 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
                 "`--snapshot-materialize`, `--patch-plan`, `--patch-materialize`, ",
                 "`--patch-delete-plan`, or `--patch-materialize-delete`",
             )
@@ -466,7 +466,7 @@ pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<Commit
     let Some(mode) = mode else {
         return Err(
             concat!(
-                "PR-029 supports `prikk commit --allow-empty -m <message>` or ",
+                "PR-030 supports `prikk commit --allow-empty -m <message>` or ",
                 "`--from-worktree [--text-edits] -m <message>`",
             )
             .to_string(),

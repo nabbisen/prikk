@@ -1,8 +1,9 @@
 //! Shared test fixtures.
 
 use prikk_object::{
-    BlockKind, BlockPayload, CanonicalEncode, EditText, MerkleRoot, ObjectEnvelope, ObjectId,
-    ObjectType, Operation, OperationKind, PatchPayload, RefKind, RefStatePayload, RefUpdatePayload,
+    BlockKind, BlockPayload, CanonicalEncode, CreateFile, EditText, MerkleRoot, ObjectEnvelope,
+    ObjectId, ObjectType, Operation, OperationKind, PatchPayload, RefKind, RefStatePayload,
+    RefUpdatePayload,
     Signature, SignatureAlgorithm, SignerRole,
 };
 
@@ -28,6 +29,32 @@ pub(crate) fn signed_patch_envelope() -> ObjectEnvelope {
     let bytes = payload_bytes.unwrap_or_default();
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, bytes);
     assert!(envelope.add_signature(dummy_signature()).is_ok());
+    envelope
+}
+
+
+/// Return a supported rollback-marked Patch envelope for sealed-history classification tests.
+pub(crate) fn rollback_patch_envelope() -> ObjectEnvelope {
+    let payload = PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::CreateFile(CreateFile {
+                path: "rollback.txt".to_string(),
+                blob_id: sample_object_id("rollback-created"),
+                mode: 0o100644,
+            }),
+        }],
+        parent_patch_ids: Vec::new(),
+        intent: None,
+        preconditions: Vec::new(),
+    };
+    let payload_bytes = payload.to_canonical_bytes();
+    assert!(payload_bytes.is_ok());
+    let bytes = payload_bytes.unwrap_or_default();
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, bytes);
+    assert!(envelope.add_signature(rollback_signature()).is_ok());
     envelope
 }
 
@@ -103,6 +130,17 @@ pub(crate) fn dummy_signature() -> Signature {
         key_id: "author-key".to_string(),
         signature_bytes: vec![1, 2, 3, 4],
         created_at: 7,
+        signer_role: SignerRole::Author,
+    }
+}
+
+
+pub(crate) fn rollback_signature() -> Signature {
+    Signature {
+        algorithm: SignatureAlgorithm::Ed25519,
+        key_id: "dev-placeholder-rollback-author".to_string(),
+        signature_bytes: vec![9, 9, 9, 9],
+        created_at: 9,
         signer_role: SignerRole::Author,
     }
 }

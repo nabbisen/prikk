@@ -11,6 +11,7 @@ use prikk_object::{BlockKind, BlockPayload, ObjectId, ObjectType, RefStatePayloa
 use crate::layout::RepositoryLayout;
 use crate::object_store::{FileObjectStore, ObjectReader};
 use crate::refs::RefStore;
+use crate::rollback_verify::verify_rollback_patch_envelope;
 
 /// Default number of history entries shown by the CLI.
 pub const DEFAULT_HISTORY_LIMIT: usize = 20;
@@ -51,6 +52,10 @@ pub struct HistoryEntry {
     pub patch_count: usize,
     /// Number of required attestations attached to this RefState.
     pub required_attestation_count: usize,
+    /// Number of rollback-marked Patch objects in the target Block.
+    pub rollback_patch_count: usize,
+    /// Whether this entry's target Block contains at least one rollback-marked Patch.
+    pub is_rollback_block: bool,
 }
 
 /// Load history for a ref, newest first.
@@ -79,6 +84,11 @@ pub fn load_ref_history(
         }
         let ref_state = read_ref_state(&object_store, ref_state_id, ref_name)?;
         let block = read_block(&object_store, ref_state.target_object_id)?;
+        let rollback_patch_count = count_rollback_patches(
+            &object_store,
+            ref_state.target_object_id,
+            &block.patch_ids,
+        )?;
         entries.push(HistoryEntry {
             ref_state_id,
             block_id: ref_state.target_object_id,
@@ -88,6 +98,8 @@ pub fn load_ref_history(
             parent_count: block.parent_block_ids.len(),
             patch_count: block.patch_ids.len(),
             required_attestation_count: ref_state.required_attestation_ids.len(),
+            rollback_patch_count,
+            is_rollback_block: rollback_patch_count != 0,
         });
         current = ref_state.previous_ref_state_id;
     }
@@ -119,6 +131,29 @@ fn read_ref_state(
         )));
     }
     Ok(payload)
+}
+
+
+fn count_rollback_patches(
+    object_store: &FileObjectStore,
+    block_id: ObjectId,
+    patch_ids: &[ObjectId],
+) -> Result<usize> {
+    let mut count = 0_usize;
+    for patch_id in patch_ids {
+        let Some(envelope) = object_store.read_typed(*patch_id, ObjectType::Patch)? else {
+            return Err(PrikkError::Integrity(format!(
+                "history Block {block_id} references missing Patch {patch_id}"
+            )));
+        };
+        let context = format!("history Block {block_id} Patch {patch_id}");
+        if verify_rollback_patch_envelope(&envelope, &context)? {
+            count = count.checked_add(1).ok_or_else(|| {
+                PrikkError::Integrity("history rollback patch count overflow".to_string())
+            })?;
+        }
+    }
+    Ok(count)
 }
 
 fn read_block(object_store: &FileObjectStore, block_id: ObjectId) -> Result<BlockPayload> {

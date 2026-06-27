@@ -7,7 +7,7 @@ prikk inverse-plan [path] [--ref REF]
 ```
 
 The command walks the same single-parent sealed block chain used by supported patch replay. While
-validating and replaying the chain, PRIKK derives an unsigned inverse Patch payload in reverse
+validating and replaying the chain, Prikk derives an unsigned inverse Patch payload in reverse
 application order.
 
 Supported inverse shapes in PR-026:

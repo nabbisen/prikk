@@ -323,8 +323,10 @@ pub(crate) fn print_history(layout: &RepositoryLayout, history: &RefHistory) {
         println!("  ref-state: {}", entry.ref_state_id);
         println!("  update-seq: {}", entry.update_seq);
         println!("  kind: {:?}", entry.block_kind);
+        println!("  rollback-block: {}", entry.is_rollback_block);
         println!("  parents: {}", entry.parent_count);
         println!("  patches: {}", entry.patch_count);
+        println!("  rollback-patches: {}", entry.rollback_patch_count);
         println!("  required-attestations: {}", entry.required_attestation_count);
         match entry.previous_ref_state_id {
             Some(previous) => println!("  previous-ref-state: {previous}"),
@@ -358,6 +360,11 @@ pub(crate) fn print_verify_report(
     println!("verified repository: {}", layout.prikk_dir().display());
     println!("checked objects: {}", report.checked_objects);
     println!("checked blocks: {}", report.checked_blocks);
+    println!("checked rollback blocks: {}", report.checked_rollback_blocks);
+    println!(
+        "checked sealed rollback patches: {}",
+        report.checked_sealed_rollback_patches
+    );
     println!("checked WAL records: {}", report.checked_wal_records);
     println!("persisted WAL patches: {}", report.persisted_wal_patches);
     println!("checked refs: {}", report.checked_refs);
@@ -382,7 +389,7 @@ pub(crate) fn print_help(version: &str) {
     println!("  prikk commit --from-worktree [--text-edits] -m <message> Append worktree changes");
     println!("  prikk status                              Check repository and active WAL status");
     println!("  prikk seal --allow-no-audit              Seal active WAL into heads/main");
-    println!("  prikk log [path] [--limit N] [--ref REF]  Show sealed ref history");
+    println!("  prikk log [path] [--limit N] [--ref REF]  Show sealed ref history including rollback blocks");
     println!("  prikk checkout --plan-only [path] [--ref REF]      Show a safe checkout plan");
     println!(
         "  prikk checkout --snapshot-plan [path] [--ref REF]  Validate snapshot manifest paths"
@@ -414,7 +421,7 @@ pub(crate) fn print_help(version: &str) {
     println!(
         "  prikk worktree-status [path] [--ref REF]  Report changes against snapshot baseline"
     );
-    println!("  prikk verify [path]                       Verify objects and WAL records");
+    println!("  prikk verify [path]                       Verify objects, rollback blocks, and WAL records");
     println!("  prikk doctor [path]                       Run health diagnostics");
     println!("  prikk doctor [path] --repair-wal-tail     Truncate incomplete trailing WAL bytes");
     println!(

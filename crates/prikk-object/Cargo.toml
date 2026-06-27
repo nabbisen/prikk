@@ -1,14 +1,17 @@
 [package]
-name = "prikk-object"
-version = "0.1.0"
-description = "PRIKK object identity, canonical encoding, and object payload types."
-edition.workspace = true
-license.workspace = true
-rust-version.workspace = true
+name        = "prikk-object"
+description = "Prikk object identity, canonical encoding, and object payload types."
+readme      = "../../README.md"
+version.workspace       = true
+edition.workspace       = true
+rust-version.workspace  = true
+license.workspace       = true
+authors.workspace       = true
+repository.workspace    = true
 
 [dependencies]
-prikk-error.workspace = true
-prikk-hash.workspace = true
+prikk-error                 = { workspace = true }
+prikk-hash                  = { workspace = true }
 
 [lints]
 workspace = true

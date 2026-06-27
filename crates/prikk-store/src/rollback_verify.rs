@@ -1,13 +1,13 @@
 //! Verification helpers for rollback draft patches.
 //!
-//! PR-029 keeps rollback publication non-mutating, but makes rollback drafts easier to audit before
+//! PR-030 keeps rollback publication non-mutating, but makes rollback drafts easier to audit before
 //! seal. The active WAL verifier can now classify rollback draft records by their dedicated
 //! development signature marker and validate that their Patch payload remains in the supported
 //! replay subset. The stronger `verify_active_rollback_draft` API additionally compares the WAL
 //! payload with the inverse Patch that would be derived from the currently published ref.
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{CanonicalEncode, ObjectId, ObjectType};
+use prikk_object::{CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType};
 
 use crate::layout::RepositoryLayout;
 use crate::patch_inverse::prepare_patch_inverse_plan;
@@ -91,21 +91,41 @@ pub fn verify_active_rollback_draft(
 pub(crate) fn verify_rollback_draft_wal_records(records: &[WalRecord]) -> Result<usize> {
     let mut rollback_drafts = 0_usize;
     for record in records {
-        if is_rollback_draft_envelope(&record.envelope) {
-            verify_rollback_marker(record)?;
-            let decoded = decode_supported_patch_operations(&record.envelope.canonical_payload)?;
-            if decoded.is_empty() {
-                return Err(PrikkError::Integrity(format!(
-                    "rollback draft WAL record {} has no supported inverse operations",
-                    record.seq
-                )));
-            }
+        let context = format!("rollback draft WAL record {}", record.seq);
+        if verify_rollback_patch_envelope(&record.envelope, &context)? {
             rollback_drafts = rollback_drafts.checked_add(1).ok_or_else(|| {
                 PrikkError::Integrity("rollback draft WAL count overflow".to_string())
             })?;
         }
     }
     Ok(rollback_drafts)
+}
+
+/// Verify a rollback-marked Patch envelope and return whether it is a rollback patch.
+///
+/// Non-rollback Patch envelopes return `Ok(false)`. Rollback-marked envelopes must decode under
+/// the currently supported replay subset and must contain at least one inverse operation. This
+/// helper is shared by active-WAL verification and sealed Block/history classification.
+pub(crate) fn verify_rollback_patch_envelope(
+    envelope: &ObjectEnvelope,
+    context: &str,
+) -> Result<bool> {
+    if !is_rollback_draft_envelope(envelope) {
+        return Ok(false);
+    }
+    if envelope.object_type != ObjectType::Patch {
+        return Err(PrikkError::Integrity(format!(
+            "{context} is {}, expected patch",
+            envelope.object_type
+        )));
+    }
+    let decoded = decode_supported_patch_operations(&envelope.canonical_payload)?;
+    if decoded.is_empty() {
+        return Err(PrikkError::Integrity(format!(
+            "{context} has no supported inverse operations"
+        )));
+    }
+    Ok(true)
 }
 
 fn single_wal_record(records: &[WalRecord]) -> Result<Option<&WalRecord>> {

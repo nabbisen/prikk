@@ -34,5 +34,5 @@ Safety boundaries:
 - Symlinked parents, symlink targets, non-file targets, and `.prikk/` metadata paths remain refused.
 - Arbitrary-span text edits, renames, chmod, symlinks, merge conflicts, inverse logic, and full patch algebra remain later increments.
 
-This command is useful for exercising the current PRIKK object/WAL/ref/block pipeline end-to-end,
+This command is useful for exercising the current Prikk object/WAL/ref/block pipeline end-to-end,
 but it is not yet a complete checkout implementation.

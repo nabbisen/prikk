@@ -43,6 +43,8 @@ After reviewing and verifying the draft, the existing local seal scaffold can pu
 prikk seal --allow-no-audit
 ```
 
+PR-030 keeps that seal path unchanged, but `prikk log` and `prikk verify` now classify the sealed Block as a rollback Block when it contains rollback-marked Patch objects.
+
 Supported inverse operation subset:
 
 - `CreateFile` -> `DeleteFile`

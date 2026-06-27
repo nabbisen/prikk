@@ -17,3 +17,4 @@
 - [Rollback Preview](rollback-preview.md)
 - [Rollback Draft](rollback-draft.md)
 - [Rollback Draft Verification](rollback-draft-verify.md)
+- [Sealed Rollback History](sealed-rollback-history.md)

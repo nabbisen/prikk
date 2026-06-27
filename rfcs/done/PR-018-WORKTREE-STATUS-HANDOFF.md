@@ -16,7 +16,7 @@ It does not create patch operations, apply patch algebra, or modify the worktree
   - missing tracked files;
   - modified tracked files;
   - untracked worktree files;
-  - unsupported paths that cannot be represented as safe PRIKK paths.
+  - unsupported paths that cannot be represented as safe Prikk paths.
 - Status is based only on snapshot manifests. Patch-replay baselines remain deferred.
 
 ## Acceptance / QA Checklist

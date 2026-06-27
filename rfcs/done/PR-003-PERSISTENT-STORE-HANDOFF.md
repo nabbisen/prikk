@@ -1,4 +1,4 @@
-# PRIKK PR-003 Persistent Store Handoff
+# Prikk PR-003 Persistent Store Handoff
 
 ## Purpose
 

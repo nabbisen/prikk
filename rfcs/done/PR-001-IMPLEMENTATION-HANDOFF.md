@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Start PRIKK implementation with the smallest durable foundation: object identity, canonical encoding boundaries, object envelope shape, and crate scaffolding.
+Start Prikk implementation with the smallest durable foundation: object identity, canonical encoding boundaries, object envelope shape, and crate scaffolding.
 
 ## Scope included
 

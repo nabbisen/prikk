@@ -63,7 +63,7 @@ pub enum WorktreeChangeKind {
     Modified,
     /// A worktree file is not present in the snapshot baseline.
     Untracked,
-    /// A worktree path could not be safely represented as a PRIKK repo path.
+    /// A worktree path could not be safely represented as a Prikk repo path.
     UnsupportedPath,
 }
 
@@ -199,7 +199,7 @@ fn scan_untracked(
                     path: path.display().to_string(),
                     kind: WorktreeChangeKind::UnsupportedPath,
                     detail: format!(
-                        "worktree path is not representable as a safe PRIKK path: {err}"
+                        "worktree path is not representable as a safe Prikk path: {err}"
                     ),
                 });
             }

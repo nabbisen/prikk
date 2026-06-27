@@ -9,24 +9,26 @@ members = [
 ]
 
 [workspace.package]
-edition = "2024"
-rust-version = "1.85"
-
-license = "Apache-2.0"
-authors = ["nabbisen"]
-repository = "https://github.com/nabbisen/prikk"
-
-[workspace.lints.rust]
-unsafe_code = "forbid"
-missing_docs = "warn"
-
-[workspace.lints.clippy]
-unwrap_used = "warn"
-expect_used = "warn"
-indexing_slicing = "warn"
+version         = "0.0.1"
+edition         = "2024"
+rust-version    = "1.85"
+license             = "Apache-2.0"
+authors             = ["nabbisen"]
+repository          = "https://github.com/nabbisen/prikk"
+categories          = []
+keywords            = []
 
 [workspace.dependencies]
-prikk-error = { path = "crates/prikk-error" }
-prikk-hash = { path = "crates/prikk-hash" }
-prikk-object = { path = "crates/prikk-object" }
-prikk-store = { path = "crates/prikk-store" }
+prikk-error                 = { version = "0", path = "crates/prikk-error" }
+prikk-hash                  = { version = "0", path = "crates/prikk-hash" }
+prikk-object                = { version = "0", path = "crates/prikk-object" }
+prikk-store                 = { version = "0", path = "crates/prikk-store" }
+
+[workspace.lints.rust]
+unsafe_code         = "forbid"
+missing_docs        = "warn"
+
+[workspace.lints.clippy]
+unwrap_used         = "warn"
+expect_used         = "warn"
+indexing_slicing    = "warn"

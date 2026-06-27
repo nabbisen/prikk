@@ -12,8 +12,8 @@ It also adds an opt-in materialization mode that removes eligible files:
 prikk checkout --patch-materialize-delete [path] [--ref REF]
 ```
 
-Deletion is intentionally narrow. PRIKK deletes only files that the replayed patch chain removed
-with a `DeleteFile` operation. Before removing a worktree file, PRIKK checks that the current file
+Deletion is intentionally narrow. Prikk deletes only files that the replayed patch chain removed
+with a `DeleteFile` operation. Before removing a worktree file, Prikk checks that the current file
 bytes still match the operation's old Blob precondition.
 
 Safety boundaries:

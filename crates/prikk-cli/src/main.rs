@@ -1,10 +1,10 @@
 #![forbid(unsafe_code)]
 
-//! PRIKK command-line entry point.
+//! Prikk command-line entry point.
 //!
-//! PR-029 exposes minimal repository layout commands, active WAL status, empty and
+//! PR-030 exposes minimal repository layout commands, active WAL status, empty and
 //! snapshot-baseline worktree commit scaffolds, opt-in full-file text edit generation,
-//! read-only inverse planning, rollback preview, rollback draft append/verification,
+//! read-only inverse planning, rollback preview, rollback draft append/verification, sealed rollback classification,
 //! supported patch replay planning/materialization, explicit patch deletion planning, a local
 //! no-audit seal scaffold, read-only history inspection, checkout planning, conservative snapshot
 //! materialization, read-only worktree status, repository verification, and doctor diagnostics.
@@ -44,7 +44,7 @@ use prikk_store::{
     WorktreePatchCommitOptions,
 };
 
-const VERSION: &str = "0.1.0-pr029";
+const VERSION: &str = "0.1.0-pr030";
 
 fn main() -> ExitCode {
     match run() {
@@ -90,7 +90,7 @@ fn run_init(path: Option<String>) -> std::result::Result<(), String> {
         None => current_dir()?,
     };
     RepositoryLayout::init(root.clone()).map_err(|err| err.to_string())?;
-    println!("initialized PRIKK repository at {}", root.join(".prikk").display());
+    println!("initialized Prikk repository at {}", root.join(".prikk").display());
     Ok(())
 }
 
@@ -169,7 +169,7 @@ fn run_status() -> std::result::Result<(), String> {
     }
     println!(
         "status: arbitrary-span text diffs, plugins, and sync not \
-         implemented in PR-029"
+         implemented in PR-030"
     );
     Ok(())
 }

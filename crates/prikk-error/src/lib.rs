@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-//! Shared error taxonomy for PRIKK crates.
+//! Shared error taxonomy for Prikk crates.
 
 use core::fmt;
 
@@ -17,7 +17,7 @@ pub enum PrikkError {
     InvalidObjectId(String),
     /// A signature had an invalid form or did not match its envelope context.
     InvalidSignature(String),
-    /// A path-like name failed PRIKK path/ref validation.
+    /// A path-like name failed Prikk path/ref validation.
     InvalidName(String),
     /// A persistent object had an unexpected type.
     ObjectTypeMismatch {

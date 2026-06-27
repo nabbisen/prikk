@@ -12,7 +12,7 @@ pub struct BlobPayload {
 }
 
 impl BlobPayload {
-    /// Decode a blob payload from PRIKK canonical TLV bytes.
+    /// Decode a blob payload from Prikk canonical TLV bytes.
     pub fn decode_canonical(bytes: &[u8]) -> Result<Self> {
         let mut cursor = BlobCursor { bytes, pos: 0, last_tag: None };
         let mut blob = None;

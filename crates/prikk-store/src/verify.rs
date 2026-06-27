@@ -15,7 +15,9 @@ use crate::file_codec::decode_envelope_file;
 use crate::layout::{RepositoryLayout, persisted_object_types};
 use crate::object_store::FileObjectStore;
 use crate::refs::verify_refs;
-use crate::rollback_verify::verify_rollback_draft_wal_records;
+use crate::rollback_verify::{
+    verify_rollback_draft_wal_records, verify_rollback_patch_envelope,
+};
 use crate::wal::Wal;
 
 /// Verification summary for a single persisted object.
@@ -27,6 +29,8 @@ pub struct ObjectVerification {
     pub object_type: ObjectType,
     /// The object file path that was checked.
     pub path: PathBuf,
+    /// Rollback-marked Patch references verified for this object when it is a Block.
+    pub rollback_patch_count: usize,
 }
 
 /// Repository verification summary.
@@ -38,6 +42,10 @@ pub struct RepositoryVerification {
     pub checked_wal_records: usize,
     /// Number of persisted block objects whose references were checked.
     pub checked_blocks: usize,
+    /// Number of persisted Block objects classified as rollback blocks.
+    pub checked_rollback_blocks: usize,
+    /// Number of sealed rollback-marked Patch objects referenced by verified Blocks.
+    pub checked_sealed_rollback_patches: usize,
     /// Number of active WAL patch records that already exist as persisted patch objects.
     pub persisted_wal_patches: usize,
     /// Number of ref pointer files checked successfully.
@@ -71,6 +79,8 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
         checked_objects: object_summary.object_count,
         checked_wal_records: replay.records.len(),
         checked_blocks: object_summary.block_count,
+        checked_rollback_blocks: object_summary.rollback_block_count,
+        checked_sealed_rollback_patches: object_summary.rollback_patch_count,
         persisted_wal_patches,
         checked_refs: ref_verification.pointer_count,
         checked_ref_log_records: ref_verification.log_record_count,
@@ -83,24 +93,49 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
 struct ObjectSummary {
     object_count: usize,
     block_count: usize,
+    rollback_block_count: usize,
+    rollback_patch_count: usize,
+}
+
+impl ObjectSummary {
+    const fn empty() -> Self {
+        Self {
+            object_count: 0,
+            block_count: 0,
+            rollback_block_count: 0,
+            rollback_patch_count: 0,
+        }
+    }
+
+    fn add(&mut self, other: Self) -> Result<()> {
+        self.object_count = self.object_count.checked_add(other.object_count).ok_or_else(|| {
+            PrikkError::Integrity("object verification count overflow".to_string())
+        })?;
+        self.block_count = self.block_count.checked_add(other.block_count).ok_or_else(|| {
+            PrikkError::Integrity("block verification count overflow".to_string())
+        })?;
+        self.rollback_block_count = self
+            .rollback_block_count
+            .checked_add(other.rollback_block_count)
+            .ok_or_else(|| PrikkError::Integrity("rollback block count overflow".to_string()))?;
+        self.rollback_patch_count = self
+            .rollback_patch_count
+            .checked_add(other.rollback_patch_count)
+            .ok_or_else(|| PrikkError::Integrity("rollback patch count overflow".to_string()))?;
+        Ok(())
+    }
 }
 
 fn verify_objects(
     layout: &RepositoryLayout,
     object_store: &FileObjectStore,
 ) -> Result<ObjectSummary> {
-    let mut object_count = 0_usize;
-    let mut block_count = 0_usize;
+    let mut summary = ObjectSummary::empty();
     for object_type in persisted_object_types() {
         let type_summary = verify_object_type(layout, object_store, object_type)?;
-        object_count = object_count.checked_add(type_summary.object_count).ok_or_else(|| {
-            PrikkError::Integrity("object verification count overflow".to_string())
-        })?;
-        block_count = block_count.checked_add(type_summary.block_count).ok_or_else(|| {
-            PrikkError::Integrity("block verification count overflow".to_string())
-        })?;
+        summary.add(type_summary)?;
     }
-    Ok(ObjectSummary { object_count, block_count })
+    Ok(summary)
 }
 
 fn verify_object_type(
@@ -110,10 +145,9 @@ fn verify_object_type(
 ) -> Result<ObjectSummary> {
     let dir = layout.object_type_dir(object_type);
     if !dir.exists() {
-        return Ok(ObjectSummary { object_count: 0, block_count: 0 });
+        return Ok(ObjectSummary::empty());
     }
-    let mut object_count = 0_usize;
-    let mut block_count = 0_usize;
+    let mut summary = ObjectSummary::empty();
     for prefix_entry in fs::read_dir(&dir)? {
         let prefix_entry = prefix_entry?;
         let prefix_path = prefix_entry.path();
@@ -127,14 +161,9 @@ fn verify_object_type(
             )));
         }
         let prefix_summary = verify_prefix_dir(layout, object_store, object_type, &prefix_path)?;
-        object_count = object_count.checked_add(prefix_summary.object_count).ok_or_else(|| {
-            PrikkError::Integrity("object verification count overflow".to_string())
-        })?;
-        block_count = block_count.checked_add(prefix_summary.block_count).ok_or_else(|| {
-            PrikkError::Integrity("block verification count overflow".to_string())
-        })?;
+        summary.add(prefix_summary)?;
     }
-    Ok(ObjectSummary { object_count, block_count })
+    Ok(summary)
 }
 
 fn verify_prefix_dir(
@@ -143,8 +172,7 @@ fn verify_prefix_dir(
     object_type: ObjectType,
     prefix_path: &Path,
 ) -> Result<ObjectSummary> {
-    let mut object_count = 0_usize;
-    let mut block_count = 0_usize;
+    let mut summary = ObjectSummary::empty();
     for file_entry in fs::read_dir(prefix_path)? {
         let file_entry = file_entry?;
         let path = file_entry.path();
@@ -158,16 +186,28 @@ fn verify_prefix_dir(
             continue;
         }
         let object = verify_object_file(layout, object_store, object_type, &path)?;
-        object_count = object_count.checked_add(1).ok_or_else(|| {
+        summary.object_count = summary.object_count.checked_add(1).ok_or_else(|| {
             PrikkError::Integrity("object verification count overflow".to_string())
         })?;
         if object.object_type == ObjectType::Block {
-            block_count = block_count.checked_add(1).ok_or_else(|| {
+            summary.block_count = summary.block_count.checked_add(1).ok_or_else(|| {
                 PrikkError::Integrity("block verification count overflow".to_string())
             })?;
+            if object.rollback_patch_count != 0 {
+                summary.rollback_block_count =
+                    summary.rollback_block_count.checked_add(1).ok_or_else(|| {
+                        PrikkError::Integrity("rollback block count overflow".to_string())
+                    })?;
+                summary.rollback_patch_count = summary
+                    .rollback_patch_count
+                    .checked_add(object.rollback_patch_count)
+                    .ok_or_else(|| {
+                        PrikkError::Integrity("rollback patch count overflow".to_string())
+                    })?;
+            }
         }
     }
-    Ok(ObjectSummary { object_count, block_count })
+    Ok(summary)
 }
 
 fn verify_object_file(
@@ -204,28 +244,46 @@ fn verify_object_file(
             computed
         )));
     }
-    if object_type == ObjectType::Block {
-        verify_block_payload(object_store, object_id, &envelope.canonical_payload)?;
-    }
-    Ok(ObjectVerification { object_id, object_type, path: path.to_path_buf() })
+    let rollback_patch_count = if object_type == ObjectType::Block {
+        verify_block_payload(object_store, object_id, &envelope.canonical_payload)?
+    } else {
+        0
+    };
+    Ok(ObjectVerification {
+        object_id,
+        object_type,
+        path: path.to_path_buf(),
+        rollback_patch_count,
+    })
 }
 
 fn verify_block_payload(
     object_store: &FileObjectStore,
     block_id: ObjectId,
     canonical_payload: &[u8],
-) -> Result<()> {
+) -> Result<usize> {
     let payload = BlockPayload::decode_canonical(canonical_payload)?;
     for parent in &payload.parent_block_ids {
         ensure_object_exists(object_store, ObjectType::Block, *parent, "parent block", block_id)?;
     }
+    let mut rollback_patch_count = 0_usize;
     for patch in &payload.patch_ids {
-        ensure_object_exists(object_store, ObjectType::Patch, *patch, "block patch", block_id)?;
+        let Some(envelope) = object_store.read_typed(*patch, ObjectType::Patch)? else {
+            return Err(PrikkError::Integrity(format!(
+                "object {block_id} references missing block patch {patch}"
+            )));
+        };
+        let context = format!("sealed Block {block_id} Patch {patch}");
+        if verify_rollback_patch_envelope(&envelope, &context)? {
+            rollback_patch_count = rollback_patch_count.checked_add(1).ok_or_else(|| {
+                PrikkError::Integrity("sealed rollback patch count overflow".to_string())
+            })?;
+        }
     }
     if let Some(snapshot) = payload.snapshot_blob_ref {
         ensure_object_exists(object_store, ObjectType::Blob, snapshot, "snapshot blob", block_id)?;
     }
-    Ok(())
+    Ok(rollback_patch_count)
 }
 
 fn ensure_object_exists(

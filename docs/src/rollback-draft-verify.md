@@ -21,6 +21,8 @@ This makes the PR-028 rollback draft path easier to audit before `seal --allow-n
 
 `prikk verify` also counts active WAL records classified as rollback drafts. For those records, verification decodes the Patch payload under the supported replay subset. This check is intentionally weaker than `rollback-draft-verify` because repository-level verification has no selected ref target.
 
+PR-030 additionally counts sealed rollback Blocks and sealed rollback-marked Patch references after a rollback draft has been sealed through the existing seal path.
+
 ## Current limits
 
 Rollback draft verification still does not implement:

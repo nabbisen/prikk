@@ -1,6 +1,6 @@
 //! Mutating rollback draft append for the supported patch subset.
 //!
-//! PR-029 deliberately keeps rollback publication and worktree mutation out of scope. This module
+//! PR-030 deliberately keeps rollback publication and worktree mutation out of scope. This module
 //! validates the same supported inverse plan used by rollback preview, requires an empty active
 //! WAL, signs the unsigned inverse Patch with a dedicated rollback draft marker key, and
 //! appends that Patch envelope to the active WAL under the active-session lock. The existing seal

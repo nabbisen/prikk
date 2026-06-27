@@ -9,7 +9,7 @@ use prikk_hash::{sha256, to_hex};
 /// Single domain used for object identity preimages.
 pub const OBJECT_ID_DOMAIN: &[u8] = b"PRIKK-OBJECT-ID-v1";
 
-/// A PRIKK object type code.
+/// A Prikk object type code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u16)]
 pub enum ObjectType {

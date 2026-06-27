@@ -1,6 +1,6 @@
-# PRIKK Implementation Status
+# Prikk Implementation Status
 
-Version: 0.1.0 PR-029
+Version: 0.1.0 PR-030
 
 ## Implemented
 
@@ -18,19 +18,19 @@ Version: 0.1.0 PR-029
 - RefState object publication primitive.
 - Flat hashed ref pointer paths under `refs/by-id/`.
 - Inline signed RefUpdate log append/replay.
-- Read-only repository verification for persisted object files, sealed block references, ref pointers, ref logs, and active WAL records.
+- Read-only repository verification for persisted object files, sealed block references, sealed rollback Patch classification, ref pointers, ref logs, and active WAL records.
 - Doctor diagnostics that convert verification outcomes into actionable issue codes.
 - ActiveSession append API that holds `active.lock` while writing the active WAL.
 - Empty-commit scaffold for manually exercising the commit/WAL path.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, publishes `heads/main`, and clears the WAL after publication.
 - Canonical decoding for RefState, RefUpdate, and Block payloads used by verification.
-- Read-only sealed-history inspection from the current RefState chain.
+- Read-only sealed-history inspection from the current RefState chain, including rollback block classification.
 - Read-only checkout planning that validates current RefState, Block, parent Block, Patch, and optional snapshot Blob references.
 - Snapshot-manifest validation and conservative repository path-safety checks for snapshot materialization and status.
 - Read-only worktree status against snapshot-backed baselines.
 - Explicit deletion planning and opt-in deletion for files removed by supported patch replay.
 - Content-anchored `EditText` validation scaffold with fixed 32-byte span hashes, anchor ID validation, conservative full-file exact-span replay, and opt-in worktree generation for full-file UTF-8 edits.
-- Read-only unsigned inverse planning, non-mutating rollback preview, and conservative rollback draft append and verification for the supported patch-operation subset.
+- Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append and verification, and sealed rollback block classification for the supported patch-operation subset.
 - Minimal CLI for `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
@@ -52,7 +52,7 @@ Version: 0.1.0 PR-029
 
 ## Gate Discipline
 
-PR-029 stays within the approved foundation boundary by verifying only an active rollback draft already present in the WAL. It does not publish rollback refs, authorize rollback, modify the worktree, discover arbitrary spans, minimize text diffs, commute patches, resolve conflicts, or implement audit plugin execution, policy enforcement, or remote sync.
+PR-030 stays within the approved foundation boundary by classifying rollback-marked Patches after normal seal. It does not publish rollback-specific refs, authorize rollback, modify the worktree, discover arbitrary spans, minimize text diffs, commute patches, resolve conflicts, or implement audit plugin execution, policy enforcement, or remote sync.
 
 ## 0.1.0 PR-022
 
@@ -93,3 +93,8 @@ Added conservative rollback draft append for the supported patch-operation subse
 ## 0.1.0 PR-029
 
 Added active rollback draft verification for the supported patch-operation subset. `prikk rollback-draft-verify [path] [--ref REF]` requires an active WAL containing exactly one rollback draft, validates the dedicated rollback signature marker, decodes the Patch payload under the supported replay subset, and compares it with the inverse Patch currently derived from the selected ref. It performs no writes and leaves seal publication, rollback refs, authorization policy, worktree writes, arbitrary-span rollback, commutation, confluence, audit plugins, and sync deferred.
+
+
+## 0.1.0 PR-030
+
+Added sealed rollback block classification. `prikk log` marks history entries whose target Blocks contain rollback-marked Patch objects, and `prikk verify` counts sealed rollback Blocks and sealed rollback Patch references. Active rollback draft verification remains available before seal. Rollback-specific ref publication, rollback authorization policy, worktree writes, arbitrary-span rollback, commutation, confluence, audit plugins, and sync remain deferred.

@@ -1,4 +1,4 @@
-//! Canonical payload shapes for PRIKK object types.
+//! Canonical payload shapes for Prikk object types.
 
 pub mod attestation;
 pub mod blob;

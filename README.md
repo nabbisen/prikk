@@ -1,4 +1,4 @@
-# PRIKK
+# Prikk
 
 ![Status](https://img.shields.io/badge/status-early--implementation-orange)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
@@ -8,15 +8,15 @@
 
 ## Overview
 
-PRIKK is an experimental distributed version control system focused on ease of use, safety,
+Prikk is an experimental distributed version control system focused on ease of use, safety,
 resilience, flexibility, and long-term performance. The implementation follows the approved FDD
 sequence: object identity and storage first, then WAL/ref durability, patch algebra, plugins, and
 sync.
 
 ## Why / When
 
-Use PRIKK development builds when evaluating the architecture or contributing to the implementation.
-Do not use PRIKK for real project history yet.
+Use Prikk development builds when evaluating the architecture or contributing to the implementation.
+Do not use Prikk for real project history yet.
 
 ## Quick Start
 
@@ -36,6 +36,7 @@ cargo run -p prikk -- inverse-plan ./sample-repo
 cargo run -p prikk -- rollback-preview ./sample-repo
 cargo run -p prikk -- rollback-draft --append-inverse ./sample-repo -m "draft rollback"
 cargo run -p prikk -- rollback-draft-verify ./sample-repo
+# After sealing that rollback draft, `log` and `verify` classify the sealed rollback block.
 cargo run -p prikk -- worktree-status ./sample-repo
 # After editing a UTF-8 tracked file inside ./sample-repo:
 # (cd ./sample-repo && ../target/debug/prikk commit --from-worktree --text-edits -m "edit text")
@@ -49,7 +50,7 @@ cargo run -p prikk -- doctor ./sample-repo
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-029**.
+Current implementation drop: **0.1.0 PR-030**.
 
 Implemented:
 
@@ -58,16 +59,16 @@ Implemented:
 - Object envelopes with signatures outside identity.
 - Persistent `.prikk/` layout and object store.
 - Active-session WAL append/replay for signed patch envelopes.
-- Read-only repository verification for objects, block references, ref pointers, ref logs, and active WAL.
+- Read-only repository verification for objects, block references, sealed rollback Patch classification, ref pointers, ref logs, and active WAL.
 - `doctor` diagnostics layered on top of verification, with opt-in safe WAL tail and missing-ref-pointer repair.
-- Read-only sealed-history inspection from the current RefState chain.
+- Read-only sealed-history inspection from the current RefState chain, including rollback block labels.
 - Snapshot-manifest validation, path-safety checks, opt-in snapshot materialization, and read-only worktree status.
 - Initial RefState publication primitives with flat hashed ref pointer paths.
 - Narrow empty-commit and snapshot-baseline worktree commit scaffolds, including opt-in full-file UTF-8 `EditText` generation.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
 - Supported patch replay planning and materialization for `CreateFile`, `DeleteFile`, `ReplaceBinary`, and conservative full-file `EditText`.
 - Explicit deletion planning and opt-in deletion of patch-removed files whose bytes still match the old blob.
-- Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append, and active rollback draft verification for the supported patch-operation subset.
+- Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append, active rollback draft verification, and sealed rollback block classification for the supported patch-operation subset.
 - Content-anchored `EditText` scaffold with fixed 32-byte span hashes, anchor-id validation, conservative full-file exact-span replay for `anchor_id = "full-file"`, and opt-in worktree generation for modified UTF-8 files.
 - Minimal CLI commands: `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 

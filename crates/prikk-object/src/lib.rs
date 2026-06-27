@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-//! Object identity and canonical payload definitions for PRIKK.
+//! Object identity and canonical payload definitions for Prikk.
 //!
 //! This crate deliberately does **not** use protobuf bytes for object identity. It implements a
 //! small deterministic canonical encoder seed that can be extended as FDD-03 matures.

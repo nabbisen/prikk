@@ -1,15 +1,20 @@
 [package]
-name = "prikk"
-version = "0.1.0"
-description = "PRIKK CLI initial scaffold."
-edition.workspace = true
-license.workspace = true
-rust-version.workspace = true
+name        = "prikk"
+description = "Prikk CLI initial scaffold."
+readme      = "../../README.md"
+version.workspace       = true
+edition.workspace       = true
+rust-version.workspace  = true
+license.workspace       = true
+authors.workspace       = true
+repository.workspace    = true
+categories.workspace    = true
+keywords.workspace      = true
 
 [dependencies]
-prikk-hash.workspace = true
-prikk-object.workspace = true
-prikk-store.workspace = true
+prikk-hash                  = { workspace = true }
+prikk-object                = { workspace = true }
+prikk-store                 = { workspace = true }
 
 [lints]
 workspace = true

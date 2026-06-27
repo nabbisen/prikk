@@ -52,7 +52,7 @@ pub struct RefStatePayload {
 }
 
 impl RefStatePayload {
-    /// Decode a RefState payload from PRIKK canonical TLV bytes.
+    /// Decode a RefState payload from Prikk canonical TLV bytes.
     pub fn decode_canonical(bytes: &[u8]) -> Result<Self> {
         let mut cursor = CanonicalCursor::new(bytes);
         let mut ref_name = None;
@@ -154,7 +154,7 @@ impl CanonicalEncode for RefUpdatePayload {
 }
 
 impl RefUpdatePayload {
-    /// Decode a RefUpdate payload from PRIKK canonical TLV bytes.
+    /// Decode a RefUpdate payload from Prikk canonical TLV bytes.
     pub fn decode_canonical(bytes: &[u8]) -> Result<Self> {
         let mut cursor = CanonicalCursor::new(bytes);
         let mut ref_name = None;

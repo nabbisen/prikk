@@ -1,6 +1,6 @@
 //! Deterministic canonical encoding helpers.
 //!
-//! The encoding is a minimal TLV seed for PRIKK identity bytes. Field tags are local to each
+//! The encoding is a minimal TLV seed for Prikk identity bytes. Field tags are local to each
 //! payload definition. This module is intentionally small and explicit: callers must encode fields
 //! in the order defined by their payload contracts.
 
@@ -24,7 +24,7 @@ pub enum WireType {
     Record = 6,
 }
 
-/// Trait for values that can emit PRIKK canonical bytes.
+/// Trait for values that can emit Prikk canonical bytes.
 pub trait CanonicalEncode {
     /// Encode this value into canonical bytes.
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()>;

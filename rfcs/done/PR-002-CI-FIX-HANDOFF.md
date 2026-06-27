@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This update responds to the first development-environment validation of PR-001. It does not expand PRIKK's implementation scope. Its purpose is to make the initial source drop pass the expected formatting, Clippy, and test gates.
+This update responds to the first development-environment validation of PR-001. It does not expand Prikk's implementation scope. Its purpose is to make the initial source drop pass the expected formatting, Clippy, and test gates.
 
 ## Input logs reviewed
 

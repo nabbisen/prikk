@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-//! Hash primitives used by PRIKK.
+//! Hash primitives used by Prikk.
 //!
 //! This crate intentionally contains a tiny first-party SHA-256 implementation for the initial
 //! source drop so the object identity path does not depend on external crates. A later RFC-backed

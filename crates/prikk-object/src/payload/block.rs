@@ -61,7 +61,7 @@ pub struct BlockPayload {
 
 
 impl BlockPayload {
-    /// Decode a block payload from PRIKK canonical TLV bytes.
+    /// Decode a block payload from Prikk canonical TLV bytes.
     pub fn decode_canonical(bytes: &[u8]) -> Result<Self> {
         let mut cursor = BlockCanonicalCursor::new(bytes);
         let mut parent_block_ids = Vec::new();
