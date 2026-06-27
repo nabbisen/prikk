@@ -2,7 +2,7 @@
 
 use prikk_error::{PrikkError, Result};
 
-use crate::canonical::{is_strictly_sorted, WireType};
+use crate::canonical::{WireType, is_strictly_sorted};
 use crate::{CanonicalEncode, CanonicalWriter, ObjectId};
 
 /// Ref kind.
@@ -212,7 +212,11 @@ struct CanonicalCursor<'a> {
 
 impl<'a> CanonicalCursor<'a> {
     const fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, pos: 0, last_tag: None }
+        Self {
+            bytes,
+            pos: 0,
+            last_tag: None,
+        }
     }
 
     fn next_field(&mut self) -> Result<Option<CanonicalField<'a>>> {
@@ -221,7 +225,9 @@ impl<'a> CanonicalCursor<'a> {
         }
         let tag = u16::from_be_bytes(self.read_array::<2>()?);
         if tag == 0 {
-            return Err(PrikkError::MalformedData("field tag 0 is reserved".to_string()));
+            return Err(PrikkError::MalformedData(
+                "field tag 0 is reserved".to_string(),
+            ));
         }
         if let Some(last) = self.last_tag {
             if tag < last {
@@ -236,13 +242,19 @@ impl<'a> CanonicalCursor<'a> {
             PrikkError::MalformedData("canonical field length does not fit usize".to_string())
         })?;
         let value = self.read_exact(len)?;
-        Ok(Some(CanonicalField { tag, wire_type, value }))
+        Ok(Some(CanonicalField {
+            tag,
+            wire_type,
+            value,
+        }))
     }
 
     fn read_u8(&mut self) -> Result<u8> {
         let value = self.read_exact(1)?;
         let Some(byte) = value.first() else {
-            return Err(PrikkError::MalformedData("unexpected empty byte".to_string()));
+            return Err(PrikkError::MalformedData(
+                "unexpected empty byte".to_string(),
+            ));
         };
         Ok(*byte)
     }

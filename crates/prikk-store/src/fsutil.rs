@@ -9,7 +9,9 @@ use prikk_error::{PrikkError, Result};
 /// Write a file through a temporary path, fsync the file, rename it, and fsync the parent.
 pub(crate) fn write_file_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
     let Some(parent) = path.parent() else {
-        return Err(PrikkError::Io("atomic write path has no parent directory".to_string()));
+        return Err(PrikkError::Io(
+            "atomic write path has no parent directory".to_string(),
+        ));
     };
     fs::create_dir_all(parent)?;
     let tmp_path = temporary_path(path);
@@ -25,7 +27,10 @@ pub(crate) fn write_file_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
 
 /// Return a process-local temporary path next to the destination.
 pub(crate) fn temporary_path(path: &Path) -> PathBuf {
-    let mut file_name = path.file_name().map(|name| name.to_os_string()).unwrap_or_default();
+    let mut file_name = path
+        .file_name()
+        .map(|name| name.to_os_string())
+        .unwrap_or_default();
     file_name.push(format!(".tmp.{}", std::process::id()));
     path.with_file_name(file_name)
 }

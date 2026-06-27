@@ -1,14 +1,14 @@
 //! Patch inverse planning tests.
 
 use prikk_object::{
-    text_span_hash, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile,
-    DeleteFile, EditText, MerkleRoot, ObjectEnvelope, ObjectType, Operation, OperationKind,
-    PatchPayload, ReplaceBinary,
+    BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile, DeleteFile, EditText,
+    MerkleRoot, ObjectEnvelope, ObjectType, Operation, OperationKind, PatchPayload, ReplaceBinary,
+    text_span_hash,
 };
 
 use crate::{
-    prepare_patch_inverse_plan, FileObjectStore, ObjectWriter, PatchInverseOperationKind,
-    RefPublication, RefStore, RepoPath, RepositoryLayout, SnapshotEntry, SnapshotManifest,
+    FileObjectStore, ObjectWriter, PatchInverseOperationKind, RefPublication, RefStore, RepoPath,
+    RepositoryLayout, SnapshotEntry, SnapshotManifest, prepare_patch_inverse_plan,
 };
 
 use super::helpers::{
@@ -43,7 +43,11 @@ fn inverse_plan_reverses_supported_file_operations() {
                 .map(|operation| operation.path.as_str())
                 .collect();
             assert_eq!(paths, vec!["extra.txt", "old.txt", "README.md"]);
-            let seqs: Vec<u32> = plan.operations.iter().map(|operation| operation.op_seq).collect();
+            let seqs: Vec<u32> = plan
+                .operations
+                .iter()
+                .map(|operation| operation.op_seq)
+                .collect();
             assert_eq!(seqs, vec![1, 2, 3]);
             assert_eq!(plan.inverse_payload.operations.len(), 3);
         }
@@ -80,8 +84,11 @@ fn inverse_plan_builds_full_file_text_inverse() {
                 panic!("expected one inverse operation");
             }
             assert!(operations.next().is_none());
-            let kinds: Vec<PatchInverseOperationKind> =
-                plan.operations.iter().map(|operation| operation.kind).collect();
+            let kinds: Vec<PatchInverseOperationKind> = plan
+                .operations
+                .iter()
+                .map(|operation| operation.kind)
+                .collect();
             assert_eq!(kinds, vec![PatchInverseOperationKind::EditText]);
         }
     }
@@ -97,17 +104,30 @@ fn publish_snapshot_then_patch_block(layout: &RepositoryLayout) -> prikk_error::
 
     let snapshot_manifest = SnapshotManifest {
         files: vec![
-            SnapshotEntry { path: RepoPath::parse("README.md")?, bytes: b"hello\n".to_vec() },
-            SnapshotEntry { path: RepoPath::parse("old.txt")?, bytes: b"old\n".to_vec() },
+            SnapshotEntry {
+                path: RepoPath::parse("README.md")?,
+                bytes: b"hello\n".to_vec(),
+            },
+            SnapshotEntry {
+                path: RepoPath::parse("old.txt")?,
+                bytes: b"old\n".to_vec(),
+            },
         ],
     };
-    let snapshot_blob = BlobPayload { bytes: snapshot_manifest.encode()? };
+    let snapshot_blob = BlobPayload {
+        bytes: snapshot_manifest.encode()?,
+    };
     let snapshot_bytes = snapshot_blob.to_canonical_bytes()?;
     let mut snapshot_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, snapshot_bytes);
     snapshot_envelope.add_signature(maintainer_signature())?;
     let snapshot_blob_id = object_store.write_object(&snapshot_envelope)?;
 
-    let root_block = signed_block(BlockKind::Root, Vec::new(), Vec::new(), Some(snapshot_blob_id));
+    let root_block = signed_block(
+        BlockKind::Root,
+        Vec::new(),
+        Vec::new(),
+        Some(snapshot_blob_id),
+    );
     let root_block_id = object_store.write_object(&root_block)?;
 
     let patch_payload = PatchPayload {
@@ -159,13 +179,20 @@ fn publish_text_edit_block(layout: &RepositoryLayout) -> prikk_error::Result<()>
             bytes: original.to_vec(),
         }],
     };
-    let snapshot_blob = BlobPayload { bytes: snapshot_manifest.encode()? };
+    let snapshot_blob = BlobPayload {
+        bytes: snapshot_manifest.encode()?,
+    };
     let snapshot_bytes = snapshot_blob.to_canonical_bytes()?;
     let mut snapshot_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, snapshot_bytes);
     snapshot_envelope.add_signature(maintainer_signature())?;
     let snapshot_blob_id = object_store.write_object(&snapshot_envelope)?;
 
-    let root_block = signed_block(BlockKind::Root, Vec::new(), Vec::new(), Some(snapshot_blob_id));
+    let root_block = signed_block(
+        BlockKind::Root,
+        Vec::new(),
+        Vec::new(),
+        Some(snapshot_blob_id),
+    );
     let root_block_id = object_store.write_object(&root_block)?;
 
     let patch_payload = PatchPayload {
@@ -208,13 +235,8 @@ fn publish_root_then_patch_ref(
     let ref_store = RefStore::new(layout.clone());
     let root_ref_state = signed_ref_state_envelope("heads/main", None, root_block_id, 1);
     let root_ref_state_id = root_ref_state.object_id();
-    let root_ref_update = signed_ref_update_envelope(
-        "heads/main",
-        None,
-        root_ref_state_id,
-        root_block_id,
-        1,
-    );
+    let root_ref_update =
+        signed_ref_update_envelope("heads/main", None, root_ref_state_id, root_block_id, 1);
     ref_store.publish(&RefPublication {
         ref_name: "heads/main".to_string(),
         expected_previous_ref_state_id: None,
@@ -222,12 +244,8 @@ fn publish_root_then_patch_ref(
         ref_update: root_ref_update,
     })?;
 
-    let patch_ref_state = signed_ref_state_envelope(
-        "heads/main",
-        Some(root_ref_state_id),
-        patch_block_id,
-        2,
-    );
+    let patch_ref_state =
+        signed_ref_state_envelope("heads/main", Some(root_ref_state_id), patch_block_id, 2);
     let patch_ref_state_id = patch_ref_state.object_id();
     let patch_ref_update = signed_ref_update_envelope(
         "heads/main",
@@ -236,19 +254,23 @@ fn publish_root_then_patch_ref(
         patch_block_id,
         2,
     );
-    ref_store.publish(&RefPublication {
-        ref_name: "heads/main".to_string(),
-        expected_previous_ref_state_id: Some(root_ref_state_id),
-        ref_state: patch_ref_state,
-        ref_update: patch_ref_update,
-    }).map(|_object_id| ())
+    ref_store
+        .publish(&RefPublication {
+            ref_name: "heads/main".to_string(),
+            expected_previous_ref_state_id: Some(root_ref_state_id),
+            ref_state: patch_ref_state,
+            ref_update: patch_ref_update,
+        })
+        .map(|_object_id| ())
 }
 
 fn write_blob(
     store: &mut FileObjectStore,
     bytes: &[u8],
 ) -> prikk_error::Result<prikk_object::ObjectId> {
-    let payload = BlobPayload { bytes: bytes.to_vec() };
+    let payload = BlobPayload {
+        bytes: bytes.to_vec(),
+    };
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, payload.to_canonical_bytes()?);
     envelope.add_signature(maintainer_signature())?;
     store.write_object(&envelope)
@@ -269,11 +291,8 @@ fn signed_block(
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
-    let mut envelope = ObjectEnvelope::unsigned(
-        ObjectType::Block,
-        1,
-        payload_bytes.unwrap_or_default(),
-    );
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes.unwrap_or_default());
     assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
 }

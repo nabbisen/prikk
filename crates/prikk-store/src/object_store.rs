@@ -108,7 +108,9 @@ impl ObjectWriter for FileObjectStore {
             return Ok(id);
         }
         let Some(parent) = path.parent() else {
-            return Err(PrikkError::Io("object path has no parent directory".to_string()));
+            return Err(PrikkError::Io(
+                "object path has no parent directory".to_string(),
+            ));
         };
         fs::create_dir_all(parent)?;
         let bytes = encode_envelope_file(envelope)?;

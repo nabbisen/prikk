@@ -7,8 +7,8 @@ use prikk_object::{
 };
 
 use crate::{
-    doctor_repository, repair_repository, DoctorRepairOptions, DoctorSeverity, FileObjectStore,
-    ObjectWriter, RepositoryLayout, Wal,
+    DoctorRepairOptions, DoctorSeverity, FileObjectStore, ObjectWriter, RepositoryLayout, Wal,
+    doctor_repository, repair_repository,
 };
 
 use super::helpers::{
@@ -43,7 +43,10 @@ fn doctor_reports_trailing_partial_wal_warning() {
         assert!(report.is_healthy());
         assert_eq!(report.count_by_severity(DoctorSeverity::Warning), 1);
         assert_eq!(
-            report.verification.as_ref().map(|summary| summary.trailing_partial_wal_bytes),
+            report
+                .verification
+                .as_ref()
+                .map(|summary| summary.trailing_partial_wal_bytes),
             Some(7)
         );
     }
@@ -100,7 +103,10 @@ fn doctor_repair_truncates_only_trailing_partial_wal() {
         let before = doctor_repository(&layout);
         assert!(before.is_healthy());
         assert_eq!(
-            before.verification.as_ref().map(|summary| summary.trailing_partial_wal_bytes),
+            before
+                .verification
+                .as_ref()
+                .map(|summary| summary.trailing_partial_wal_bytes),
             Some(7)
         );
 
@@ -167,11 +173,17 @@ fn doctor_repair_reconstructs_missing_main_ref_pointer() {
         let repair = repair_repository(&layout, DoctorRepairOptions::reconstruct_main_ref());
         assert!(repair.is_ok());
         if let Ok(repair) = repair {
-            assert_eq!(repair.ref_repair.as_ref().map(|value| value.wrote_pointer), Some(true));
+            assert_eq!(
+                repair.ref_repair.as_ref().map(|value| value.wrote_pointer),
+                Some(true)
+            );
             assert!(repair.after.is_healthy());
             assert_eq!(repair.after.count_by_severity(DoctorSeverity::Warning), 0);
         }
-        assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(Some(ref_state_id)));
+        assert_eq!(
+            store.read_current_ref_state_id("heads/main"),
+            Ok(Some(ref_state_id))
+        );
     }
     let _ = std::fs::remove_dir_all(root);
 }

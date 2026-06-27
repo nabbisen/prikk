@@ -5,8 +5,9 @@ use prikk_object::{
 };
 
 use crate::{
-    materialize_snapshot_checkout, worktree_status, FileObjectStore, ObjectWriter, RefPublication,
-    RefStore, RepoPath, RepositoryLayout, SnapshotEntry, SnapshotManifest, WorktreeChangeKind,
+    FileObjectStore, ObjectWriter, RefPublication, RefStore, RepoPath, RepositoryLayout,
+    SnapshotEntry, SnapshotManifest, WorktreeChangeKind, materialize_snapshot_checkout,
+    worktree_status,
 };
 
 use super::helpers::{
@@ -97,10 +98,15 @@ fn publish_snapshot_block(
     let mut object_store = FileObjectStore::new(layout.clone());
     let path = RepoPath::parse(path)?;
     let manifest = SnapshotManifest {
-        files: vec![SnapshotEntry { path, bytes: bytes.to_vec() }],
+        files: vec![SnapshotEntry {
+            path,
+            bytes: bytes.to_vec(),
+        }],
     };
     let snapshot_bytes = manifest.encode()?;
-    let blob = BlobPayload { bytes: snapshot_bytes };
+    let blob = BlobPayload {
+        bytes: snapshot_bytes,
+    };
     let blob_bytes = blob.to_canonical_bytes()?;
     let mut blob_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob_bytes);
     blob_envelope.add_signature(maintainer_signature())?;
@@ -135,11 +141,8 @@ fn signed_snapshot_block_envelope(snapshot_blob_ref: prikk_object::ObjectId) -> 
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
-    let mut envelope = ObjectEnvelope::unsigned(
-        ObjectType::Block,
-        1,
-        payload_bytes.unwrap_or_default(),
-    );
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes.unwrap_or_default());
     assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
 }

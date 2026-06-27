@@ -15,8 +15,8 @@ use prikk_object::{
 
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
-use crate::patch_inverse::{prepare_patch_inverse_plan, PatchInverseOperationSummary};
-use crate::rollback_preview::{prepare_rollback_preview, RollbackPreviewChange};
+use crate::patch_inverse::{PatchInverseOperationSummary, prepare_patch_inverse_plan};
+use crate::rollback_preview::{RollbackPreviewChange, prepare_rollback_preview};
 use crate::wal::Wal;
 
 pub(crate) const DEV_ROLLBACK_AUTHOR_KEY_ID: &str = "dev-placeholder-rollback-author";
@@ -93,12 +93,8 @@ pub fn append_rollback_draft(
 
     let canonical_payload = inverse.inverse_payload.to_canonical_bytes()?;
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, canonical_payload);
-    let signature = rollback_author_signature(
-        &envelope,
-        ref_name,
-        inverse.target_block_id,
-        message,
-    );
+    let signature =
+        rollback_author_signature(&envelope, ref_name, inverse.target_block_id, message);
     envelope.add_signature(signature)?;
     let inverse_patch_id = envelope.object_id();
 

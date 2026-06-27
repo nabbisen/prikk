@@ -39,7 +39,10 @@ impl WorktreeStatusReport {
     /// Count changes by kind.
     #[must_use]
     pub fn count_kind(&self, kind: WorktreeChangeKind) -> usize {
-        self.changes.iter().filter(|change| change.kind == kind).count()
+        self.changes
+            .iter()
+            .filter(|change| change.kind == kind)
+            .count()
     }
 }
 
@@ -126,7 +129,13 @@ pub fn worktree_status(layout: &RepositoryLayout, ref_name: &str) -> Result<Work
         }
     }
 
-    scan_untracked(layout.root(), layout.root(), &baseline_paths, &seen_paths, &mut changes)?;
+    scan_untracked(
+        layout.root(),
+        layout.root(),
+        &baseline_paths,
+        &seen_paths,
+        &mut changes,
+    )?;
     changes.sort_by(|left, right| {
         left.path
             .cmp(&right.path)

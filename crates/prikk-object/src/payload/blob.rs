@@ -14,7 +14,11 @@ pub struct BlobPayload {
 impl BlobPayload {
     /// Decode a blob payload from Prikk canonical TLV bytes.
     pub fn decode_canonical(bytes: &[u8]) -> Result<Self> {
-        let mut cursor = BlobCursor { bytes, pos: 0, last_tag: None };
+        let mut cursor = BlobCursor {
+            bytes,
+            pos: 0,
+            last_tag: None,
+        };
         let mut blob = None;
         while let Some(field) = cursor.next_field()? {
             match field.tag {
@@ -30,7 +34,8 @@ impl BlobPayload {
             }
         }
         Ok(Self {
-            bytes: blob.ok_or_else(|| PrikkError::MalformedData("Blob missing bytes".to_string()))?,
+            bytes: blob
+                .ok_or_else(|| PrikkError::MalformedData("Blob missing bytes".to_string()))?,
         })
     }
 }
@@ -55,7 +60,9 @@ impl<'a> BlobCursor<'a> {
         }
         let tag = u16::from_be_bytes(self.read_array::<2>()?);
         if tag == 0 {
-            return Err(PrikkError::MalformedData("field tag 0 is reserved".to_string()));
+            return Err(PrikkError::MalformedData(
+                "field tag 0 is reserved".to_string(),
+            ));
         }
         if let Some(last) = self.last_tag {
             if tag < last {
@@ -70,13 +77,19 @@ impl<'a> BlobCursor<'a> {
             PrikkError::MalformedData("canonical field length does not fit usize".to_string())
         })?;
         let value = self.read_exact(len)?;
-        Ok(Some(BlobField { tag, wire_type, value }))
+        Ok(Some(BlobField {
+            tag,
+            wire_type,
+            value,
+        }))
     }
 
     fn read_u8(&mut self) -> Result<u8> {
         let value = self.read_exact(1)?;
         let Some(byte) = value.first() else {
-            return Err(PrikkError::MalformedData("unexpected empty byte".to_string()));
+            return Err(PrikkError::MalformedData(
+                "unexpected empty byte".to_string(),
+            ));
         };
         Ok(*byte)
     }

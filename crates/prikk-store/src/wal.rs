@@ -82,11 +82,16 @@ impl Wal {
         };
         let bytes = encode_record(&record)?;
         let Some(parent) = self.path.parent() else {
-            return Err(PrikkError::Io("WAL path has no parent directory".to_string()));
+            return Err(PrikkError::Io(
+                "WAL path has no parent directory".to_string(),
+            ));
         };
         fs::create_dir_all(parent)?;
         let is_new = !self.path.exists();
-        let mut file = OpenOptions::new().create(true).append(true).open(&self.path)?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)?;
         file.write_all(&bytes)?;
         file.sync_all()?;
         if is_new {
@@ -149,10 +154,16 @@ impl Wal {
     /// Truncate the WAL after a successful publication that made all entries durable elsewhere.
     pub fn truncate_empty(&self) -> Result<()> {
         let Some(parent) = self.path.parent() else {
-            return Err(PrikkError::Io("WAL path has no parent directory".to_string()));
+            return Err(PrikkError::Io(
+                "WAL path has no parent directory".to_string(),
+            ));
         };
         fs::create_dir_all(parent)?;
-        let file = OpenOptions::new().create(true).write(true).truncate(true).open(&self.path)?;
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&self.path)?;
         file.sync_all()?;
         sync_directory_best_effort(parent)?;
         Ok(())
@@ -241,7 +252,9 @@ fn parse_header(header: &[u8]) -> Result<WalHeader> {
     let mut cursor = ByteCursor::new(header);
     let magic = cursor.read_array::<8>()?;
     if &magic != WAL_RECORD_MAGIC {
-        return Err(PrikkError::MalformedData("invalid WAL record magic".to_string()));
+        return Err(PrikkError::MalformedData(
+            "invalid WAL record magic".to_string(),
+        ));
     }
     let version = cursor.read_u16()?;
     if version != WAL_RECORD_VERSION {
@@ -251,7 +264,9 @@ fn parse_header(header: &[u8]) -> Result<WalHeader> {
     let body_len = cursor.read_u64()?;
     let checksum = cursor.read_array::<32>()?;
     if !cursor.is_finished() {
-        return Err(PrikkError::MalformedData("trailing bytes in WAL header".to_string()));
+        return Err(PrikkError::MalformedData(
+            "trailing bytes in WAL header".to_string(),
+        ));
     }
     Ok(WalHeader {
         seq,

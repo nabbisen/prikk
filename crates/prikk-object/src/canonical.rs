@@ -125,7 +125,9 @@ impl CanonicalWriter {
     /// Emit a raw field.
     pub fn field_raw(&mut self, tag: u16, wire_type: WireType, value: &[u8]) -> Result<()> {
         if tag == 0 {
-            return Err(PrikkError::CanonicalEncoding("field tag 0 is reserved".to_string()));
+            return Err(PrikkError::CanonicalEncoding(
+                "field tag 0 is reserved".to_string(),
+            ));
         }
         if let Some(last) = self.last_tag {
             if tag < last {
@@ -137,7 +139,8 @@ impl CanonicalWriter {
         self.last_tag = Some(tag);
         self.bytes.extend_from_slice(&tag.to_be_bytes());
         self.bytes.push(wire_type as u8);
-        self.bytes.extend_from_slice(&(value.len() as u64).to_be_bytes());
+        self.bytes
+            .extend_from_slice(&(value.len() as u64).to_be_bytes());
         self.bytes.extend_from_slice(value);
         Ok(())
     }
@@ -158,7 +161,10 @@ pub fn is_strictly_sorted<T: Ord>(values: &[T]) -> bool {
 /// Return true if a sequence is exactly `1..=n`.
 #[must_use]
 pub fn is_contiguous_op_seq(values: &[u32]) -> bool {
-    values.iter().enumerate().all(|(idx, value)| *value as usize == idx + 1)
+    values
+        .iter()
+        .enumerate()
+        .all(|(idx, value)| *value as usize == idx + 1)
 }
 
 #[cfg(test)]

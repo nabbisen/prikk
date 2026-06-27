@@ -24,17 +24,17 @@ mod layout;
 mod lock;
 mod memory_store;
 mod object_store;
-mod path;
 mod patch_checkout;
 mod patch_inverse;
 mod patch_replay;
+mod path;
 mod refs;
 mod rollback_draft;
 mod rollback_preview;
 mod rollback_verify;
 mod snapshot;
-mod wal;
 mod verify;
+mod wal;
 mod worktree;
 mod worktree_patch;
 mod worktree_status;
@@ -44,46 +44,45 @@ mod tests;
 
 pub use active::{ActiveCommitResult, ActiveSession};
 pub use checkout::{
-    prepare_checkout_plan, prepare_snapshot_checkout_plan, CheckoutMaterialization, CheckoutPlan,
-    SnapshotCheckoutPlan, DEFAULT_CHECKOUT_REF,
+    CheckoutMaterialization, CheckoutPlan, DEFAULT_CHECKOUT_REF, SnapshotCheckoutPlan,
+    prepare_checkout_plan, prepare_snapshot_checkout_plan,
 };
 pub use doctor::{
-    doctor_repository, repair_repository, DoctorIssue, DoctorRepairOptions, DoctorRepairReport,
-    DoctorReport, DoctorSeverity,
+    DoctorIssue, DoctorRepairOptions, DoctorRepairReport, DoctorReport, DoctorSeverity,
+    doctor_repository, repair_repository,
 };
 pub use history::{DEFAULT_HISTORY_LIMIT, HistoryEntry, RefHistory, load_ref_history};
 pub use layout::RepositoryLayout;
 pub use lock::{ActiveLock, RefLock};
 pub use memory_store::MemoryObjectStore;
 pub use object_store::{FileObjectStore, ObjectReader, ObjectWriter};
-pub use path::{validate_no_path_collisions, validate_repo_path, RepoPath};
 pub use patch_checkout::{
+    PatchDeletionConflict, PatchDeletionPlan, PatchMaterializationReport,
     materialize_patch_checkout, materialize_patch_checkout_with_deletions,
-    plan_patch_checkout_deletions, PatchDeletionConflict, PatchDeletionPlan,
-    PatchMaterializationReport,
+    plan_patch_checkout_deletions,
 };
 pub use patch_inverse::{
-    prepare_patch_inverse_plan, PatchInverseOperationKind, PatchInverseOperationSummary,
-    PatchInversePlan,
+    PatchInverseOperationKind, PatchInverseOperationSummary, PatchInversePlan,
+    prepare_patch_inverse_plan,
 };
-pub use patch_replay::{prepare_patch_replay_plan, PatchReplayPlan};
-pub use rollback_draft::{append_rollback_draft, RollbackDraftReport};
+pub use patch_replay::{PatchReplayPlan, prepare_patch_replay_plan};
+pub use path::{RepoPath, validate_no_path_collisions, validate_repo_path};
 pub use refs::{
-    RefLogReplay, RefLogRecord, RefPublication, RefRecoveryCandidate, RefRecoveryRepair, RefStore,
+    RefLogRecord, RefLogReplay, RefPublication, RefRecoveryCandidate, RefRecoveryRepair, RefStore,
 };
+pub use rollback_draft::{RollbackDraftReport, append_rollback_draft};
 pub use rollback_preview::{
-    prepare_rollback_preview, RollbackPreviewChange, RollbackPreviewChangeKind,
-    RollbackPreviewPlan,
+    RollbackPreviewChange, RollbackPreviewChangeKind, RollbackPreviewPlan, prepare_rollback_preview,
 };
-pub use rollback_verify::{verify_active_rollback_draft, RollbackDraftVerification};
+pub use rollback_verify::{RollbackDraftVerification, verify_active_rollback_draft};
 pub use snapshot::{SnapshotEntry, SnapshotManifest};
-pub use wal::{Wal, WalRecord, WalReplay, WalRepair};
-pub use verify::{verify_repository, ObjectVerification, RepositoryVerification};
-pub use worktree::{materialize_snapshot_checkout, SnapshotMaterializationReport};
-pub use worktree_status::{
-    worktree_status, WorktreeChange, WorktreeChangeKind, WorktreeStatusReport,
-};
+pub use verify::{ObjectVerification, RepositoryVerification, verify_repository};
+pub use wal::{Wal, WalRecord, WalRepair, WalReplay};
+pub use worktree::{SnapshotMaterializationReport, materialize_snapshot_checkout};
 pub use worktree_patch::{
-    commit_worktree_changes, commit_worktree_changes_with_options, WorktreePatchCommitOptions,
-    WorktreePatchCommitReport, WorktreePatchOperationKind, WorktreePatchOperationSummary,
+    WorktreePatchCommitOptions, WorktreePatchCommitReport, WorktreePatchOperationKind,
+    WorktreePatchOperationSummary, commit_worktree_changes, commit_worktree_changes_with_options,
+};
+pub use worktree_status::{
+    WorktreeChange, WorktreeChangeKind, WorktreeStatusReport, worktree_status,
 };

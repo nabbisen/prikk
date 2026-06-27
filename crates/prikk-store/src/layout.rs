@@ -141,7 +141,8 @@ impl RepositoryLayout {
     /// Return the object directory for a persisted object type.
     #[must_use]
     pub fn object_type_dir(&self, object_type: ObjectType) -> PathBuf {
-        self.objects_dir().join(object_type_directory_name(object_type))
+        self.objects_dir()
+            .join(object_type_directory_name(object_type))
     }
 
     /// Return the storage path for a persisted object ID and type.
@@ -149,31 +150,41 @@ impl RepositoryLayout {
     pub fn object_path(&self, object_type: ObjectType, id: ObjectId) -> PathBuf {
         let hex = id.to_hex();
         let prefix = hex_prefix(&hex);
-        self.object_type_dir(object_type).join(prefix).join(format!("{hex}.pobj"))
+        self.object_type_dir(object_type)
+            .join(prefix)
+            .join(format!("{hex}.pobj"))
     }
 
     /// Return the flat ref pointer path for a human-readable ref name.
     #[must_use]
     pub fn ref_pointer_path(&self, ref_name: &str) -> PathBuf {
-        self.refs_dir().join("by-id").join(format!("{}.ref", ref_name_storage_key(ref_name)))
+        self.refs_dir()
+            .join("by-id")
+            .join(format!("{}.ref", ref_name_storage_key(ref_name)))
     }
 
     /// Return the ref log path for a human-readable ref name.
     #[must_use]
     pub fn ref_log_path(&self, ref_name: &str) -> PathBuf {
-        self.refs_dir().join("logs").join(format!("{}.log", ref_name_storage_key(ref_name)))
+        self.refs_dir()
+            .join("logs")
+            .join(format!("{}.log", ref_name_storage_key(ref_name)))
     }
 
     /// Return the ref lock path for a human-readable ref name.
     #[must_use]
     pub fn ref_lock_path(&self, ref_name: &str) -> PathBuf {
-        self.refs_dir().join("locks").join(format!("{}.lock", ref_name_storage_key(ref_name)))
+        self.refs_dir()
+            .join("locks")
+            .join(format!("{}.lock", ref_name_storage_key(ref_name)))
     }
 
     /// Return the ref temporary candidate path for a human-readable ref name.
     #[must_use]
     pub fn ref_tmp_path(&self, ref_name: &str) -> PathBuf {
-        self.refs_dir().join("tmp").join(format!("{}.tmp", ref_name_storage_key(ref_name)))
+        self.refs_dir()
+            .join("tmp")
+            .join(format!("{}.tmp", ref_name_storage_key(ref_name)))
     }
 }
 

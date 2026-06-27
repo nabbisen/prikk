@@ -16,9 +16,9 @@ pub use blob::BlobPayload;
 pub use block::{BlockKind, BlockPayload};
 pub use common::{Intent, MerkleRoot, OperationCondition, OperationConditionEntry};
 pub use patch::{
-    text_span_hash, validate_text_anchor_id, ChangePerm, CreateFile, CreateSymlink, DeleteFile,
-    EditText, Operation, OperationKind, PatchPayload, RenamePath, ReplaceBinary,
-    TEXT_SPAN_HASH_BYTES,
+    ChangePerm, CreateFile, CreateSymlink, DeleteFile, EditText, Operation, OperationKind,
+    PatchPayload, RenamePath, ReplaceBinary, TEXT_SPAN_HASH_BYTES, text_span_hash,
+    validate_text_anchor_id,
 };
 pub use refs::{RefKind, RefStatePayload, RefUpdatePayload};
 pub use tag::TagPayload;

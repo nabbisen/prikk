@@ -51,14 +51,21 @@ fn decode_ref_pointer(bytes: &[u8]) -> Result<RefPointer> {
     let mut cursor = ByteCursor::new(bytes);
     let magic = cursor.read_array::<8>()?;
     if &magic != REF_POINTER_MAGIC {
-        return Err(PrikkError::MalformedData("invalid ref pointer magic".to_string()));
+        return Err(PrikkError::MalformedData(
+            "invalid ref pointer magic".to_string(),
+        ));
     }
     let ref_name_bytes = cursor.read_bytes_u64()?;
     let ref_name = String::from_utf8(ref_name_bytes)
         .map_err(|err| PrikkError::MalformedData(format!("invalid ref name utf-8: {err}")))?;
     let ref_state_id = ObjectId::from_bytes(cursor.read_array::<32>()?);
     if !cursor.is_finished() {
-        return Err(PrikkError::MalformedData("trailing bytes in ref pointer".to_string()));
+        return Err(PrikkError::MalformedData(
+            "trailing bytes in ref pointer".to_string(),
+        ));
     }
-    Ok(RefPointer { ref_name, ref_state_id })
+    Ok(RefPointer {
+        ref_name,
+        ref_state_id,
+    })
 }

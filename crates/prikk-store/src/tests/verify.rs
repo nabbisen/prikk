@@ -4,11 +4,10 @@ use prikk_object::{
     BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType,
 };
 
-use crate::{verify_repository, FileObjectStore, ObjectWriter, RepositoryLayout, Wal};
+use crate::{FileObjectStore, ObjectWriter, RepositoryLayout, Wal, verify_repository};
 
 use super::helpers::{
-    dummy_signature, maintainer_signature, sample_object_id, signed_patch_envelope,
-    unique_temp_dir,
+    dummy_signature, maintainer_signature, sample_object_id, signed_patch_envelope, unique_temp_dir,
 };
 
 #[test]

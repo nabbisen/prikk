@@ -1,7 +1,7 @@
 //! Canonical patch-operation decoder used by supported replay.
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{validate_text_anchor_id, ObjectId, WireType, TEXT_SPAN_HASH_BYTES};
+use prikk_object::{ObjectId, TEXT_SPAN_HASH_BYTES, WireType, validate_text_anchor_id};
 
 use crate::path::RepoPath;
 
@@ -98,7 +98,9 @@ fn decode_operation(bytes: &[u8]) -> Result<SupportedPatchOperation> {
         }
     }
     let Some(_) = op_seq else {
-        return Err(PrikkError::MalformedData("Operation missing op_seq".to_string()));
+        return Err(PrikkError::MalformedData(
+            "Operation missing op_seq".to_string(),
+        ));
     };
     operation.ok_or_else(|| PrikkError::MalformedData("Operation missing kind".to_string()))
 }
@@ -127,8 +129,8 @@ fn decode_create_file(bytes: &[u8]) -> Result<SupportedPatchOperation> {
             }
         }
     }
-    let path = path
-        .ok_or_else(|| PrikkError::MalformedData("CreateFile missing path".to_string()))?;
+    let path =
+        path.ok_or_else(|| PrikkError::MalformedData("CreateFile missing path".to_string()))?;
     RepoPath::parse(&path)?;
     let blob_id = blob_id
         .ok_or_else(|| PrikkError::MalformedData("CreateFile missing blob_id".to_string()))?;
@@ -150,8 +152,8 @@ fn decode_delete_file(bytes: &[u8]) -> Result<SupportedPatchOperation> {
             }
         }
     }
-    let path = path
-        .ok_or_else(|| PrikkError::MalformedData("DeleteFile missing path".to_string()))?;
+    let path =
+        path.ok_or_else(|| PrikkError::MalformedData("DeleteFile missing path".to_string()))?;
     RepoPath::parse(&path)?;
     let old_blob_id = old_blob_id
         .ok_or_else(|| PrikkError::MalformedData("DeleteFile missing old_blob_id".to_string()))?;
@@ -177,7 +179,8 @@ fn decode_edit_text(bytes: &[u8]) -> Result<SupportedPatchOperation> {
             }
         }
     }
-    let path = path.ok_or_else(|| PrikkError::MalformedData("EditText missing path".to_string()))?;
+    let path =
+        path.ok_or_else(|| PrikkError::MalformedData("EditText missing path".to_string()))?;
     RepoPath::parse(&path)?;
     let anchor_id = anchor_id
         .ok_or_else(|| PrikkError::MalformedData("EditText missing anchor_id".to_string()))?;
@@ -186,7 +189,12 @@ fn decode_edit_text(bytes: &[u8]) -> Result<SupportedPatchOperation> {
         .ok_or_else(|| PrikkError::MalformedData("EditText missing old_span_hash".to_string()))?;
     let replacement = replacement
         .ok_or_else(|| PrikkError::MalformedData("EditText missing replacement".to_string()))?;
-    Ok(SupportedPatchOperation::EditText { path, anchor_id, old_span_hash, replacement })
+    Ok(SupportedPatchOperation::EditText {
+        path,
+        anchor_id,
+        old_span_hash,
+        replacement,
+    })
 }
 
 fn decode_replace_binary(bytes: &[u8]) -> Result<SupportedPatchOperation> {
@@ -206,8 +214,8 @@ fn decode_replace_binary(bytes: &[u8]) -> Result<SupportedPatchOperation> {
             }
         }
     }
-    let path = path
-        .ok_or_else(|| PrikkError::MalformedData("ReplaceBinary missing path".to_string()))?;
+    let path =
+        path.ok_or_else(|| PrikkError::MalformedData("ReplaceBinary missing path".to_string()))?;
     RepoPath::parse(&path)?;
     let old_blob_id = old_blob_id.ok_or_else(|| {
         PrikkError::MalformedData("ReplaceBinary missing old_blob_id".to_string())
@@ -215,7 +223,11 @@ fn decode_replace_binary(bytes: &[u8]) -> Result<SupportedPatchOperation> {
     let new_blob_id = new_blob_id.ok_or_else(|| {
         PrikkError::MalformedData("ReplaceBinary missing new_blob_id".to_string())
     })?;
-    Ok(SupportedPatchOperation::ReplaceBinary { path, old_blob_id, new_blob_id })
+    Ok(SupportedPatchOperation::ReplaceBinary {
+        path,
+        old_blob_id,
+        new_blob_id,
+    })
 }
 
 struct TlvCursor<'a> {
@@ -226,7 +238,11 @@ struct TlvCursor<'a> {
 
 impl<'a> TlvCursor<'a> {
     const fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, pos: 0, last_tag: None }
+        Self {
+            bytes,
+            pos: 0,
+            last_tag: None,
+        }
     }
 
     fn next_field(&mut self) -> Result<Option<TlvField<'a>>> {
@@ -235,7 +251,9 @@ impl<'a> TlvCursor<'a> {
         }
         let tag = u16::from_be_bytes(self.read_array::<2>()?);
         if tag == 0 {
-            return Err(PrikkError::MalformedData("field tag 0 is reserved".to_string()));
+            return Err(PrikkError::MalformedData(
+                "field tag 0 is reserved".to_string(),
+            ));
         }
         if let Some(last) = self.last_tag {
             if tag < last {
@@ -250,13 +268,19 @@ impl<'a> TlvCursor<'a> {
             PrikkError::MalformedData("canonical field length does not fit usize".to_string())
         })?;
         let value = self.read_exact(len)?;
-        Ok(Some(TlvField { tag, wire_type, value }))
+        Ok(Some(TlvField {
+            tag,
+            wire_type,
+            value,
+        }))
     }
 
     fn read_u8(&mut self) -> Result<u8> {
         let bytes = self.read_exact(1)?;
         let Some(byte) = bytes.first() else {
-            return Err(PrikkError::MalformedData("unexpected empty byte".to_string()));
+            return Err(PrikkError::MalformedData(
+                "unexpected empty byte".to_string(),
+            ));
         };
         Ok(*byte)
     }

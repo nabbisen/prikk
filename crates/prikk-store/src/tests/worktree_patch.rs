@@ -5,9 +5,9 @@ use prikk_object::{
 };
 
 use crate::{
-    commit_worktree_changes, commit_worktree_changes_with_options, materialize_snapshot_checkout,
     FileObjectStore, ObjectWriter, RefPublication, RefStore, RepoPath, RepositoryLayout,
     SnapshotEntry, SnapshotManifest, Wal, WorktreePatchCommitOptions, WorktreePatchOperationKind,
+    commit_worktree_changes, commit_worktree_changes_with_options, materialize_snapshot_checkout,
 };
 
 use super::helpers::{
@@ -29,7 +29,10 @@ fn worktree_patch_commit_records_modified_file() {
             assert_eq!(report.operation_count, 1);
             assert_eq!(report.referenced_blob_count, 2);
             assert_eq!(report.changes.len(), 1);
-            assert_eq!(report.changes[0].operation, WorktreePatchOperationKind::ReplaceBinary);
+            assert_eq!(
+                report.changes[0].operation,
+                WorktreePatchOperationKind::ReplaceBinary
+            );
             let replay = Wal::new(layout.default_queue_wal_path()).replay();
             assert!(replay.is_ok());
             if let Ok(replay) = replay {
@@ -62,7 +65,10 @@ fn worktree_patch_commit_can_emit_full_file_text_edit() {
             assert_eq!(report.referenced_blob_count, 0);
             assert_eq!(report.text_edit_count, 1);
             assert_eq!(report.changes.len(), 1);
-            assert_eq!(report.changes[0].operation, WorktreePatchOperationKind::EditText);
+            assert_eq!(
+                report.changes[0].operation,
+                WorktreePatchOperationKind::EditText
+            );
             let replay = Wal::new(layout.default_queue_wal_path()).replay();
             assert!(replay.is_ok());
             if let Ok(replay) = replay {
@@ -94,7 +100,10 @@ fn worktree_patch_text_mode_falls_back_for_binary_modified_file() {
             assert_eq!(report.operation_count, 1);
             assert_eq!(report.referenced_blob_count, 2);
             assert_eq!(report.text_edit_count, 0);
-            assert_eq!(report.changes[0].operation, WorktreePatchOperationKind::ReplaceBinary);
+            assert_eq!(
+                report.changes[0].operation,
+                WorktreePatchOperationKind::ReplaceBinary
+            );
         }
     }
     let _ = std::fs::remove_dir_all(root);
@@ -114,7 +123,10 @@ fn worktree_patch_commit_records_untracked_file() {
         if let Ok(report) = report {
             assert_eq!(report.operation_count, 1);
             assert_eq!(report.referenced_blob_count, 1);
-            assert_eq!(report.changes[0].operation, WorktreePatchOperationKind::CreateFile);
+            assert_eq!(
+                report.changes[0].operation,
+                WorktreePatchOperationKind::CreateFile
+            );
         }
     }
     let _ = std::fs::remove_dir_all(root);
@@ -142,10 +154,15 @@ fn publish_snapshot_block(
     let mut object_store = FileObjectStore::new(layout.clone());
     let path = RepoPath::parse(path)?;
     let manifest = SnapshotManifest {
-        files: vec![SnapshotEntry { path, bytes: bytes.to_vec() }],
+        files: vec![SnapshotEntry {
+            path,
+            bytes: bytes.to_vec(),
+        }],
     };
     let snapshot_bytes = manifest.encode()?;
-    let blob = BlobPayload { bytes: snapshot_bytes };
+    let blob = BlobPayload {
+        bytes: snapshot_bytes,
+    };
     let blob_bytes = blob.to_canonical_bytes()?;
     let mut blob_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob_bytes);
     blob_envelope.add_signature(maintainer_signature())?;
@@ -180,11 +197,8 @@ fn signed_snapshot_block_envelope(snapshot_blob_ref: prikk_object::ObjectId) -> 
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
-    let mut envelope = ObjectEnvelope::unsigned(
-        ObjectType::Block,
-        1,
-        payload_bytes.unwrap_or_default(),
-    );
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes.unwrap_or_default());
     assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
 }

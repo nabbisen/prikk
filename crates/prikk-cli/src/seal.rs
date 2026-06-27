@@ -12,8 +12,7 @@ use prikk_object::{
     RefStatePayload, RefUpdatePayload, Signature, SignatureAlgorithm, SignerRole,
 };
 use prikk_store::{
-    ActiveLock, FileObjectStore, ObjectWriter, RefPublication, RefStore,
-    RepositoryLayout, Wal,
+    ActiveLock, FileObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout, Wal,
 };
 
 const DEFAULT_BRANCH_REF: &str = "heads/main";
@@ -58,8 +57,8 @@ fn seal_active_no_audit(
     layout: RepositoryLayout,
     ref_name: &str,
 ) -> std::result::Result<SealCommandResult, String> {
-    let _active_lock = ActiveLock::acquire(layout.default_active_lock_path())
-        .map_err(|err| err.to_string())?;
+    let _active_lock =
+        ActiveLock::acquire(layout.default_active_lock_path()).map_err(|err| err.to_string())?;
     let wal = Wal::new(layout.default_queue_wal_path());
     let replay = wal.replay().map_err(|err| err.to_string())?;
     if replay.trailing_partial_bytes != 0 {
@@ -82,20 +81,31 @@ fn seal_active_no_audit(
         .unwrap_or_default();
     let block_payload = BlockPayload {
         parent_block_ids,
-        kind: if current.is_some() { BlockKind::Normal } else { BlockKind::Root },
+        kind: if current.is_some() {
+            BlockKind::Normal
+        } else {
+            BlockKind::Root
+        },
         patch_ids: patch_ids.clone(),
         state_merkle_root: scaffold_state_root(&patch_ids),
         snapshot_blob_ref: None,
     };
     let block_envelope = signed_envelope(
         ObjectType::Block,
-        block_payload.to_canonical_bytes().map_err(|err| err.to_string())?,
+        block_payload
+            .to_canonical_bytes()
+            .map_err(|err| err.to_string())?,
         SignerRole::Maintainer,
         DEV_MAINTAINER_KEY_ID,
         b"prikk.dev.block-signature.v1",
     )?;
-    let block_id = object_store.write_object(&block_envelope).map_err(|err| err.to_string())?;
-    let update_seq = current.as_ref().map(|state| state.update_seq + 1).unwrap_or(1);
+    let block_id = object_store
+        .write_object(&block_envelope)
+        .map_err(|err| err.to_string())?;
+    let update_seq = current
+        .as_ref()
+        .map(|state| state.update_seq + 1)
+        .unwrap_or(1);
     let previous_ref_state_id = current.as_ref().map(|state| state.ref_state_id);
     let ref_state_payload = RefStatePayload {
         ref_name: ref_name.to_string(),
@@ -107,7 +117,9 @@ fn seal_active_no_audit(
     };
     let ref_state_envelope = signed_envelope(
         ObjectType::RefState,
-        ref_state_payload.to_canonical_bytes().map_err(|err| err.to_string())?,
+        ref_state_payload
+            .to_canonical_bytes()
+            .map_err(|err| err.to_string())?,
         SignerRole::Maintainer,
         DEV_MAINTAINER_KEY_ID,
         b"prikk.dev.ref-state-signature.v1",
@@ -124,7 +136,9 @@ fn seal_active_no_audit(
     };
     let ref_update_envelope = signed_envelope(
         ObjectType::RefUpdate,
-        ref_update_payload.to_canonical_bytes().map_err(|err| err.to_string())?,
+        ref_update_payload
+            .to_canonical_bytes()
+            .map_err(|err| err.to_string())?,
         SignerRole::Maintainer,
         DEV_MAINTAINER_KEY_ID,
         b"prikk.dev.ref-update-signature.v1",
@@ -135,7 +149,9 @@ fn seal_active_no_audit(
         ref_state: ref_state_envelope,
         ref_update: ref_update_envelope,
     };
-    let published_ref_state_id = ref_store.publish(&publication).map_err(|err| err.to_string())?;
+    let published_ref_state_id = ref_store
+        .publish(&publication)
+        .map_err(|err| err.to_string())?;
     wal.truncate_empty().map_err(|err| err.to_string())?;
     Ok(SealCommandResult {
         patch_count: patch_ids.len(),
@@ -156,7 +172,9 @@ fn persist_wal_patches(
                 record.seq, record.envelope.object_type
             ));
         }
-        let id = object_store.write_object(&record.envelope).map_err(|err| err.to_string())?;
+        let id = object_store
+            .write_object(&record.envelope)
+            .map_err(|err| err.to_string())?;
         patch_ids.push(id);
     }
     Ok(patch_ids)

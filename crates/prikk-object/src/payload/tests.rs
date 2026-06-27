@@ -2,10 +2,10 @@
 
 use super::{
     BlobPayload, BlockKind, BlockPayload, EditText, MerkleRoot, Operation, OperationKind,
-    text_span_hash, validate_text_anchor_id, PatchPayload, RefKind, RefStatePayload, RefUpdatePayload,
+    PatchPayload, RefKind, RefStatePayload, RefUpdatePayload, text_span_hash,
+    validate_text_anchor_id,
 };
 use crate::{CanonicalEncode, ObjectId, ObjectType};
-
 
 #[test]
 fn text_anchor_ids_are_validated() {
@@ -57,7 +57,9 @@ fn patch_operations_must_be_contiguous() {
 
 #[test]
 fn blob_payload_has_stable_object_id() {
-    let payload = BlobPayload { bytes: b"hello".to_vec() };
+    let payload = BlobPayload {
+        bytes: b"hello".to_vec(),
+    };
     let bytes_a = payload.to_canonical_bytes();
     let bytes_b = payload.to_canonical_bytes();
     assert_eq!(bytes_a, bytes_b);

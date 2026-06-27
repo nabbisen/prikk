@@ -9,13 +9,13 @@ use std::collections::BTreeMap;
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    text_span_hash, CanonicalEncode, CreateFile, DeleteFile, EditText, ObjectEnvelope, ObjectId,
-    ObjectType, Operation, OperationKind, PatchPayload, ReplaceBinary,
+    CanonicalEncode, CreateFile, DeleteFile, EditText, ObjectEnvelope, ObjectId, ObjectType,
+    Operation, OperationKind, PatchPayload, ReplaceBinary, text_span_hash,
 };
 
 use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
-use crate::patch_replay::decode::{decode_supported_patch_operations, SupportedPatchOperation};
+use crate::patch_replay::decode::{SupportedPatchOperation, decode_supported_patch_operations};
 
 mod read;
 
@@ -130,12 +130,8 @@ pub fn prepare_patch_inverse_plan(
         preconditions: Vec::new(),
     };
     let inverse_payload_bytes = inverse_payload.to_canonical_bytes()?;
-    let inverse_patch_id_hint = ObjectEnvelope::unsigned(
-        ObjectType::Patch,
-        1,
-        inverse_payload_bytes,
-    )
-    .object_id();
+    let inverse_patch_id_hint =
+        ObjectEnvelope::unsigned(ObjectType::Patch, 1, inverse_payload_bytes).object_id();
 
     Ok(PatchInversePlan {
         ref_name: ref_name.to_string(),
@@ -168,7 +164,10 @@ fn derive_inverse_operation(
                 op_seq: 0,
                 op_id: Some(format!("inverse-delete-{path}")),
                 preconditions: Vec::new(),
-                kind: OperationKind::DeleteFile(DeleteFile { path, old_blob_id: blob_id }),
+                kind: OperationKind::DeleteFile(DeleteFile {
+                    path,
+                    old_blob_id: blob_id,
+                }),
             })
         }
         SupportedPatchOperation::DeleteFile { path, old_blob_id } => {
@@ -188,7 +187,11 @@ fn derive_inverse_operation(
                 }),
             })
         }
-        SupportedPatchOperation::ReplaceBinary { path, old_blob_id, new_blob_id } => {
+        SupportedPatchOperation::ReplaceBinary {
+            path,
+            old_blob_id,
+            new_blob_id,
+        } => {
             let old_bytes = files.get(&path).ok_or_else(|| {
                 PrikkError::Integrity(format!("ReplaceBinary path is absent: {path}"))
             })?;
@@ -206,9 +209,12 @@ fn derive_inverse_operation(
                 }),
             })
         }
-        SupportedPatchOperation::EditText { path, anchor_id, old_span_hash, replacement } => {
-            derive_full_file_text_inverse(files, path, anchor_id, old_span_hash, replacement)
-        }
+        SupportedPatchOperation::EditText {
+            path,
+            anchor_id,
+            old_span_hash,
+            replacement,
+        } => derive_full_file_text_inverse(files, path, anchor_id, old_span_hash, replacement),
     }
 }
 
@@ -228,7 +234,9 @@ fn derive_full_file_text_inverse(
         .get(&path)
         .ok_or_else(|| PrikkError::Integrity(format!("EditText path is absent: {path}")))?;
     let old_text = std::str::from_utf8(old_bytes).map_err(|err| {
-        PrikkError::Integrity(format!("EditText target is not valid UTF-8 for {path}: {err}"))
+        PrikkError::Integrity(format!(
+            "EditText target is not valid UTF-8 for {path}: {err}"
+        ))
     })?;
     let actual_hash = text_span_hash(old_bytes);
     if actual_hash != old_span_hash {
@@ -254,9 +262,9 @@ fn derive_full_file_text_inverse(
 
 fn renumber_operations(operations: &mut [Operation]) -> Result<()> {
     for (index, operation) in operations.iter_mut().enumerate() {
-        let next = index.checked_add(1).ok_or_else(|| {
-            PrikkError::CanonicalEncoding("operation count overflow".to_string())
-        })?;
+        let next = index
+            .checked_add(1)
+            .ok_or_else(|| PrikkError::CanonicalEncoding("operation count overflow".to_string()))?;
         operation.op_seq = u32::try_from(next).map_err(|_| {
             PrikkError::CanonicalEncoding("operation count exceeds u32".to_string())
         })?;
@@ -287,7 +295,11 @@ fn summarize_operations(operations: &[Operation]) -> Vec<PatchInverseOperationSu
                     unreachable!("inverse plan contains unsupported operation kind")
                 }
             };
-            PatchInverseOperationSummary { op_seq: operation.op_seq, path, kind }
+            PatchInverseOperationSummary {
+                op_seq: operation.op_seq,
+                path,
+                kind,
+            }
         })
         .collect()
 }

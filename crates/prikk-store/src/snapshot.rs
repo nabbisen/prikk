@@ -5,7 +5,7 @@
 
 use prikk_error::{PrikkError, Result};
 
-use crate::path::{validate_no_path_collisions, RepoPath};
+use crate::path::{RepoPath, validate_no_path_collisions};
 
 const SNAPSHOT_MAGIC: &[u8] = b"PRIKK-SNAPSHOT-MANIFEST-v1\n";
 
@@ -34,7 +34,9 @@ impl SnapshotManifest {
             ));
         };
         if !bytes.starts_with(SNAPSHOT_MAGIC) {
-            return Err(PrikkError::MalformedData("snapshot manifest magic mismatch".to_string()));
+            return Err(PrikkError::MalformedData(
+                "snapshot manifest magic mismatch".to_string(),
+            ));
         }
         let mut files = Vec::new();
         while !rest.is_empty() {
@@ -58,7 +60,10 @@ impl SnapshotManifest {
             })?;
             let (content, after_content) = read_exact(rest, content_len)?;
             rest = after_content;
-            files.push(SnapshotEntry { path, bytes: content.to_vec() });
+            files.push(SnapshotEntry {
+                path,
+                bytes: content.to_vec(),
+            });
         }
         let manifest = Self { files };
         manifest.validate_order_and_collisions()?;
@@ -86,7 +91,10 @@ impl SnapshotManifest {
     /// Return the total number of content bytes across entries.
     #[must_use]
     pub fn total_content_bytes(&self) -> u64 {
-        self.files.iter().map(|entry| entry.bytes.len() as u64).sum()
+        self.files
+            .iter()
+            .map(|entry| entry.bytes.len() as u64)
+            .sum()
     }
 
     fn validate_order_and_collisions(&self) -> Result<()> {
@@ -123,10 +131,14 @@ fn read_u64(bytes: &[u8]) -> Result<(u64, &[u8])> {
 
 fn read_exact(bytes: &[u8], len: usize) -> Result<(&[u8], &[u8])> {
     let Some(value) = bytes.get(..len) else {
-        return Err(PrikkError::MalformedData("unexpected end of snapshot manifest".to_string()));
+        return Err(PrikkError::MalformedData(
+            "unexpected end of snapshot manifest".to_string(),
+        ));
     };
     let Some(rest) = bytes.get(len..) else {
-        return Err(PrikkError::MalformedData("snapshot manifest range overflow".to_string()));
+        return Err(PrikkError::MalformedData(
+            "snapshot manifest range overflow".to_string(),
+        ));
     };
     Ok((value, rest))
 }

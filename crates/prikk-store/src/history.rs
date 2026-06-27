@@ -84,11 +84,8 @@ pub fn load_ref_history(
         }
         let ref_state = read_ref_state(&object_store, ref_state_id, ref_name)?;
         let block = read_block(&object_store, ref_state.target_object_id)?;
-        let rollback_patch_count = count_rollback_patches(
-            &object_store,
-            ref_state.target_object_id,
-            &block.patch_ids,
-        )?;
+        let rollback_patch_count =
+            count_rollback_patches(&object_store, ref_state.target_object_id, &block.patch_ids)?;
         entries.push(HistoryEntry {
             ref_state_id,
             block_id: ref_state.target_object_id,
@@ -104,7 +101,10 @@ pub fn load_ref_history(
         current = ref_state.previous_ref_state_id;
     }
 
-    Ok(RefHistory { ref_name: ref_name.to_string(), entries })
+    Ok(RefHistory {
+        ref_name: ref_name.to_string(),
+        entries,
+    })
 }
 
 fn read_ref_state(
@@ -132,7 +132,6 @@ fn read_ref_state(
     }
     Ok(payload)
 }
-
 
 fn count_rollback_patches(
     object_store: &FileObjectStore,

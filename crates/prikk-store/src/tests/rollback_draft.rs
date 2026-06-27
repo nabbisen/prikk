@@ -2,7 +2,7 @@
 
 use prikk_object::ObjectType;
 
-use crate::{append_rollback_draft, RepositoryLayout, Wal};
+use crate::{RepositoryLayout, Wal, append_rollback_draft};
 
 use super::helpers::{signed_patch_envelope, unique_temp_dir};
 use super::patch_replay::{publish_snapshot_then_patch_block, publish_text_edit_block};

@@ -5,8 +5,8 @@ use prikk_object::{
 };
 
 use crate::{
-    prepare_checkout_plan, CheckoutMaterialization, FileObjectStore, ObjectWriter, RefPublication,
-    RefStore, RepositoryLayout,
+    CheckoutMaterialization, FileObjectStore, ObjectWriter, RefPublication, RefStore,
+    RepositoryLayout, prepare_checkout_plan,
 };
 
 use super::helpers::{
@@ -24,7 +24,10 @@ fn checkout_plan_reports_unpublished_ref() {
         assert!(plan.is_ok());
         if let Ok(plan) = plan {
             assert!(!plan.has_target_block());
-            assert_eq!(plan.materialization, CheckoutMaterialization::UnpublishedRef);
+            assert_eq!(
+                plan.materialization,
+                CheckoutMaterialization::UnpublishedRef
+            );
             assert_eq!(plan.patch_count, 0);
         }
     }
@@ -64,7 +67,10 @@ fn checkout_plan_validates_current_block_and_patch_refs() {
             assert!(plan.has_target_block());
             assert_eq!(plan.block_id, Some(block_id));
             assert_eq!(plan.patch_count, 1);
-            assert_eq!(plan.materialization, CheckoutMaterialization::RequiresPatchEngine);
+            assert_eq!(
+                plan.materialization,
+                CheckoutMaterialization::RequiresPatchEngine
+            );
         }
     }
     let _ = std::fs::remove_dir_all(root);
@@ -77,11 +83,8 @@ fn checkout_plan_rejects_missing_patch_refs() {
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
         let mut object_store = FileObjectStore::new(layout.clone());
-        let missing_patch_id = prikk_object::ObjectId::from_canonical_payload(
-            ObjectType::Patch,
-            1,
-            b"missing patch",
-        );
+        let missing_patch_id =
+            prikk_object::ObjectId::from_canonical_payload(ObjectType::Patch, 1, b"missing patch");
         let block = signed_block_envelope(BlockKind::Normal, Vec::new(), vec![missing_patch_id]);
         let block_id = block.object_id();
         assert!(object_store.write_object(&block).is_ok());
@@ -118,11 +121,8 @@ fn signed_block_envelope(
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
-    let mut envelope = ObjectEnvelope::unsigned(
-        ObjectType::Block,
-        1,
-        payload_bytes.unwrap_or_default(),
-    );
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes.unwrap_or_default());
     assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
 }

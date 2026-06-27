@@ -11,8 +11,8 @@ pub(crate) mod decode;
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    text_span_hash, BlobPayload, BlockPayload, CanonicalEncode, ObjectEnvelope, ObjectId,
-    ObjectType, RefStatePayload,
+    BlobPayload, BlockPayload, CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType,
+    RefStatePayload, text_span_hash,
 };
 
 use crate::layout::RepositoryLayout;
@@ -21,7 +21,7 @@ use crate::path::RepoPath;
 use crate::refs::RefStore;
 use crate::snapshot::{SnapshotEntry, SnapshotManifest};
 
-use decode::{decode_supported_patch_operations, SupportedPatchOperation};
+use decode::{SupportedPatchOperation, decode_supported_patch_operations};
 
 /// Read-only result of replaying supported patch operations to an in-memory snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -156,9 +156,9 @@ fn current_target_block(
     ref_name: &str,
 ) -> Result<ObjectId> {
     let ref_store = RefStore::new(layout.clone());
-    let ref_state_id = ref_store.read_current_ref_state_id(ref_name)?.ok_or_else(|| {
-        PrikkError::Integrity(format!("ref {ref_name} is not published"))
-    })?;
+    let ref_state_id = ref_store
+        .read_current_ref_state_id(ref_name)?
+        .ok_or_else(|| PrikkError::Integrity(format!("ref {ref_name} is not published")))?;
     let envelope = object_store
         .read_typed(ref_state_id, ObjectType::RefState)?
         .ok_or_else(|| {
@@ -234,7 +234,10 @@ fn load_snapshot_files(
 fn files_to_manifest(files: BTreeMap<String, Vec<u8>>) -> Result<SnapshotManifest> {
     let mut entries = Vec::with_capacity(files.len());
     for (path, bytes) in files {
-        entries.push(SnapshotEntry { path: RepoPath::parse(&path)?, bytes });
+        entries.push(SnapshotEntry {
+            path: RepoPath::parse(&path)?,
+            bytes,
+        });
     }
     Ok(SnapshotManifest { files: entries })
 }
@@ -270,7 +273,11 @@ fn apply_supported_operation(
             files.remove(&path);
             deleted_files.insert(path, deleted);
         }
-        SupportedPatchOperation::ReplaceBinary { path, old_blob_id, new_blob_id } => {
+        SupportedPatchOperation::ReplaceBinary {
+            path,
+            old_blob_id,
+            new_blob_id,
+        } => {
             let old_bytes = files.get(&path).ok_or_else(|| {
                 PrikkError::Integrity(format!("ReplaceBinary path is absent: {path}"))
             })?;
@@ -278,7 +285,12 @@ fn apply_supported_operation(
             let new_bytes = read_blob_bytes(object_store, new_blob_id)?;
             files.insert(path, new_bytes);
         }
-        SupportedPatchOperation::EditText { path, anchor_id, old_span_hash, replacement } => {
+        SupportedPatchOperation::EditText {
+            path,
+            anchor_id,
+            old_span_hash,
+            replacement,
+        } => {
             apply_full_file_text_edit(files, path, anchor_id, old_span_hash, replacement)?;
         }
     }
@@ -324,12 +336,10 @@ fn read_blob_bytes(object_store: &FileObjectStore, blob_id: ObjectId) -> Result<
 }
 
 fn ensure_blob_matches(bytes: &[u8], expected: ObjectId) -> Result<()> {
-    let payload = BlobPayload { bytes: bytes.to_vec() };
-    let id = ObjectId::from_canonical_payload(
-        ObjectType::Blob,
-        1,
-        &payload.to_canonical_bytes()?,
-    );
+    let payload = BlobPayload {
+        bytes: bytes.to_vec(),
+    };
+    let id = ObjectId::from_canonical_payload(ObjectType::Blob, 1, &payload.to_canonical_bytes()?);
     if id == expected {
         return Ok(());
     }
@@ -337,4 +347,3 @@ fn ensure_blob_matches(bytes: &[u8], expected: ObjectId) -> Result<()> {
         "operation old_blob_id mismatch: expected {expected}, got {id}"
     )))
 }
-

@@ -5,8 +5,8 @@ use prikk_object::{
 };
 
 use crate::{
-    prepare_snapshot_checkout_plan, FileObjectStore, ObjectWriter, RefPublication, RefStore,
-    RepoPath, RepositoryLayout, SnapshotEntry, SnapshotManifest,
+    FileObjectStore, ObjectWriter, RefPublication, RefStore, RepoPath, RepositoryLayout,
+    SnapshotEntry, SnapshotManifest, prepare_snapshot_checkout_plan,
 };
 
 use super::helpers::{
@@ -33,8 +33,14 @@ fn snapshot_manifest_rejects_case_collisions() {
     if let (Ok(upper), Ok(lower)) = (upper, lower) {
         let manifest = SnapshotManifest {
             files: vec![
-                SnapshotEntry { path: upper, bytes: b"a".to_vec() },
-                SnapshotEntry { path: lower, bytes: b"b".to_vec() },
+                SnapshotEntry {
+                    path: upper,
+                    bytes: b"a".to_vec(),
+                },
+                SnapshotEntry {
+                    path: lower,
+                    bytes: b"b".to_vec(),
+                },
             ],
         };
         assert!(manifest.encode().is_err());
@@ -53,18 +59,20 @@ fn snapshot_checkout_plan_validates_snapshot_manifest() {
             Err(err) => panic!("test path should validate: {err}"),
         };
         let manifest = SnapshotManifest {
-            files: vec![SnapshotEntry { path, bytes: b"fn main() {}\n".to_vec() }],
+            files: vec![SnapshotEntry {
+                path,
+                bytes: b"fn main() {}\n".to_vec(),
+            }],
         };
         let snapshot_bytes = manifest.encode();
         assert!(snapshot_bytes.is_ok());
-        let blob = BlobPayload { bytes: snapshot_bytes.unwrap_or_default() };
+        let blob = BlobPayload {
+            bytes: snapshot_bytes.unwrap_or_default(),
+        };
         let blob_bytes = blob.to_canonical_bytes();
         assert!(blob_bytes.is_ok());
-        let mut blob_envelope = ObjectEnvelope::unsigned(
-            ObjectType::Blob,
-            1,
-            blob_bytes.unwrap_or_default(),
-        );
+        let mut blob_envelope =
+            ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob_bytes.unwrap_or_default());
         assert!(blob_envelope.add_signature(maintainer_signature()).is_ok());
         let blob_id = blob_envelope.object_id();
         assert!(object_store.write_object(&blob_envelope).is_ok());
@@ -107,11 +115,8 @@ fn signed_snapshot_block_envelope(snapshot_blob_ref: prikk_object::ObjectId) -> 
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
-    let mut envelope = ObjectEnvelope::unsigned(
-        ObjectType::Block,
-        1,
-        payload_bytes.unwrap_or_default(),
-    );
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes.unwrap_or_default());
     assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
 }
@@ -186,10 +191,15 @@ fn publish_snapshot_block(
     let mut object_store = FileObjectStore::new(layout.clone());
     let path = RepoPath::parse(path)?;
     let manifest = SnapshotManifest {
-        files: vec![SnapshotEntry { path, bytes: bytes.to_vec() }],
+        files: vec![SnapshotEntry {
+            path,
+            bytes: bytes.to_vec(),
+        }],
     };
     let snapshot_bytes = manifest.encode()?;
-    let blob = BlobPayload { bytes: snapshot_bytes };
+    let blob = BlobPayload {
+        bytes: snapshot_bytes,
+    };
     let blob_bytes = blob.to_canonical_bytes()?;
     let mut blob_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob_bytes);
     blob_envelope.add_signature(maintainer_signature())?;

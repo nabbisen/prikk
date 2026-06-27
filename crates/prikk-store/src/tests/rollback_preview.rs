@@ -1,6 +1,6 @@
 //! Rollback preview tests.
 
-use crate::{prepare_rollback_preview, RollbackPreviewChangeKind, RepositoryLayout};
+use crate::{RepositoryLayout, RollbackPreviewChangeKind, prepare_rollback_preview};
 
 use super::helpers::unique_temp_dir;
 use super::patch_replay::{publish_snapshot_then_patch_block, publish_text_edit_block};

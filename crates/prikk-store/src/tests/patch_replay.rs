@@ -1,14 +1,14 @@
 //! Patch replay planning tests.
 
 use prikk_object::{
-    text_span_hash, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile,
-    DeleteFile, EditText, MerkleRoot, ObjectEnvelope, ObjectType, Operation, OperationKind,
-    PatchPayload, ReplaceBinary,
+    BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile, DeleteFile, EditText,
+    MerkleRoot, ObjectEnvelope, ObjectType, Operation, OperationKind, PatchPayload, ReplaceBinary,
+    text_span_hash,
 };
 
 use crate::{
-    prepare_patch_replay_plan, FileObjectStore, ObjectWriter, RefPublication, RefStore, RepoPath,
-    RepositoryLayout, SnapshotEntry, SnapshotManifest,
+    FileObjectStore, ObjectWriter, RefPublication, RefStore, RepoPath, RepositoryLayout,
+    SnapshotEntry, SnapshotManifest, prepare_patch_replay_plan,
 };
 
 use super::helpers::{
@@ -73,17 +73,30 @@ pub(crate) fn publish_snapshot_then_patch_block(
 
     let snapshot_manifest = SnapshotManifest {
         files: vec![
-            SnapshotEntry { path: RepoPath::parse("README.md")?, bytes: b"hello\n".to_vec() },
-            SnapshotEntry { path: RepoPath::parse("old.txt")?, bytes: b"old\n".to_vec() },
+            SnapshotEntry {
+                path: RepoPath::parse("README.md")?,
+                bytes: b"hello\n".to_vec(),
+            },
+            SnapshotEntry {
+                path: RepoPath::parse("old.txt")?,
+                bytes: b"old\n".to_vec(),
+            },
         ],
     };
-    let snapshot_blob = BlobPayload { bytes: snapshot_manifest.encode()? };
+    let snapshot_blob = BlobPayload {
+        bytes: snapshot_manifest.encode()?,
+    };
     let snapshot_bytes = snapshot_blob.to_canonical_bytes()?;
     let mut snapshot_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, snapshot_bytes);
     snapshot_envelope.add_signature(maintainer_signature())?;
     let snapshot_blob_id = object_store.write_object(&snapshot_envelope)?;
 
-    let root_block = signed_block(BlockKind::Root, Vec::new(), Vec::new(), Some(snapshot_blob_id));
+    let root_block = signed_block(
+        BlockKind::Root,
+        Vec::new(),
+        Vec::new(),
+        Some(snapshot_blob_id),
+    );
     let root_block_id = object_store.write_object(&root_block)?;
 
     let patch_payload = PatchPayload {
@@ -122,11 +135,8 @@ pub(crate) fn publish_snapshot_then_patch_block(
         intent: None,
         preconditions: Vec::new(),
     };
-    let mut patch = ObjectEnvelope::unsigned(
-        ObjectType::Patch,
-        1,
-        patch_payload.to_canonical_bytes()?,
-    );
+    let mut patch =
+        ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch_payload.to_canonical_bytes()?);
     patch.add_signature(dummy_signature())?;
     let patch_id = object_store.write_object(&patch)?;
 
@@ -136,13 +146,8 @@ pub(crate) fn publish_snapshot_then_patch_block(
     let ref_store = RefStore::new(layout.clone());
     let root_ref_state = signed_ref_state_envelope("heads/main", None, root_block_id, 1);
     let root_ref_state_id = root_ref_state.object_id();
-    let root_ref_update = signed_ref_update_envelope(
-        "heads/main",
-        None,
-        root_ref_state_id,
-        root_block_id,
-        1,
-    );
+    let root_ref_update =
+        signed_ref_update_envelope("heads/main", None, root_ref_state_id, root_block_id, 1);
     ref_store.publish(&RefPublication {
         ref_name: "heads/main".to_string(),
         expected_previous_ref_state_id: None,
@@ -150,12 +155,8 @@ pub(crate) fn publish_snapshot_then_patch_block(
         ref_update: root_ref_update,
     })?;
 
-    let patch_ref_state = signed_ref_state_envelope(
-        "heads/main",
-        Some(root_ref_state_id),
-        patch_block_id,
-        2,
-    );
+    let patch_ref_state =
+        signed_ref_state_envelope("heads/main", Some(root_ref_state_id), patch_block_id, 2);
     let patch_ref_state_id = patch_ref_state.object_id();
     let patch_ref_update = signed_ref_update_envelope(
         "heads/main",
@@ -174,9 +175,7 @@ pub(crate) fn publish_snapshot_then_patch_block(
 }
 
 /// Publish a snapshot root followed by a full-file text-edit patch block.
-pub(crate) fn publish_text_edit_block(
-    layout: &RepositoryLayout,
-) -> prikk_error::Result<()> {
+pub(crate) fn publish_text_edit_block(layout: &RepositoryLayout) -> prikk_error::Result<()> {
     let mut object_store = FileObjectStore::new(layout.clone());
     let original = b"hello text\n";
     let snapshot_manifest = SnapshotManifest {
@@ -185,13 +184,20 @@ pub(crate) fn publish_text_edit_block(
             bytes: original.to_vec(),
         }],
     };
-    let snapshot_blob = BlobPayload { bytes: snapshot_manifest.encode()? };
+    let snapshot_blob = BlobPayload {
+        bytes: snapshot_manifest.encode()?,
+    };
     let snapshot_bytes = snapshot_blob.to_canonical_bytes()?;
     let mut snapshot_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, snapshot_bytes);
     snapshot_envelope.add_signature(maintainer_signature())?;
     let snapshot_blob_id = object_store.write_object(&snapshot_envelope)?;
 
-    let root_block = signed_block(BlockKind::Root, Vec::new(), Vec::new(), Some(snapshot_blob_id));
+    let root_block = signed_block(
+        BlockKind::Root,
+        Vec::new(),
+        Vec::new(),
+        Some(snapshot_blob_id),
+    );
     let root_block_id = object_store.write_object(&root_block)?;
 
     let patch_payload = PatchPayload {
@@ -210,11 +216,8 @@ pub(crate) fn publish_text_edit_block(
         intent: None,
         preconditions: Vec::new(),
     };
-    let mut patch = ObjectEnvelope::unsigned(
-        ObjectType::Patch,
-        1,
-        patch_payload.to_canonical_bytes()?,
-    );
+    let mut patch =
+        ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch_payload.to_canonical_bytes()?);
     patch.add_signature(dummy_signature())?;
     let patch_id = object_store.write_object(&patch)?;
 
@@ -224,13 +227,8 @@ pub(crate) fn publish_text_edit_block(
     let ref_store = RefStore::new(layout.clone());
     let root_ref_state = signed_ref_state_envelope("heads/main", None, root_block_id, 1);
     let root_ref_state_id = root_ref_state.object_id();
-    let root_ref_update = signed_ref_update_envelope(
-        "heads/main",
-        None,
-        root_ref_state_id,
-        root_block_id,
-        1,
-    );
+    let root_ref_update =
+        signed_ref_update_envelope("heads/main", None, root_ref_state_id, root_block_id, 1);
     ref_store.publish(&RefPublication {
         ref_name: "heads/main".to_string(),
         expected_previous_ref_state_id: None,
@@ -261,7 +259,9 @@ fn write_blob(
     store: &mut FileObjectStore,
     bytes: &[u8],
 ) -> prikk_error::Result<prikk_object::ObjectId> {
-    let payload = BlobPayload { bytes: bytes.to_vec() };
+    let payload = BlobPayload {
+        bytes: bytes.to_vec(),
+    };
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, payload.to_canonical_bytes()?);
     envelope.add_signature(maintainer_signature())?;
     store.write_object(&envelope)
@@ -282,11 +282,8 @@ fn signed_block(
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
-    let mut envelope = ObjectEnvelope::unsigned(
-        ObjectType::Block,
-        1,
-        payload_bytes.unwrap_or_default(),
-    );
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes.unwrap_or_default());
     assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
 }

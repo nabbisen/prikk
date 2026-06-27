@@ -60,8 +60,10 @@ fn compress(h: &mut [u32; 8], chunk: &[u8]) {
     for i in 16..64 {
         let s0 = small_sigma0(word_at(&w, i - 15));
         let s1 = small_sigma1(word_at(&w, i - 2));
-        let value =
-            word_at(&w, i - 16).wrapping_add(s0).wrapping_add(word_at(&w, i - 7)).wrapping_add(s1);
+        let value = word_at(&w, i - 16)
+            .wrapping_add(s0)
+            .wrapping_add(word_at(&w, i - 7))
+            .wrapping_add(s1);
         if let Some(slot) = w.get_mut(i) {
             *slot = value;
         }
@@ -80,7 +82,11 @@ fn compress(h: &mut [u32; 8], chunk: &[u8]) {
     for (constant, word) in K.iter().copied().zip(w.iter().copied()) {
         let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
         let ch = (e & f) ^ ((!e) & g);
-        let temp1 = hh.wrapping_add(s1).wrapping_add(ch).wrapping_add(constant).wrapping_add(word);
+        let temp1 = hh
+            .wrapping_add(s1)
+            .wrapping_add(ch)
+            .wrapping_add(constant)
+            .wrapping_add(word);
         let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
         let maj = (a & b) ^ (a & c) ^ (b & c);
         let temp2 = s0.wrapping_add(maj);

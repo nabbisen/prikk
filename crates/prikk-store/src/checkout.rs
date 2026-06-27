@@ -44,7 +44,6 @@ impl CheckoutPlan {
     }
 }
 
-
 /// Read-only plan for validating a snapshot-backed checkout.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotCheckoutPlan {
@@ -85,7 +84,6 @@ impl CheckoutMaterialization {
         }
     }
 }
-
 
 /// Prepare and validate a snapshot-backed checkout plan without writing the worktree.
 pub fn prepare_snapshot_checkout_plan(
@@ -185,21 +183,30 @@ fn load_block(object_store: &FileObjectStore, block_id: ObjectId) -> Result<Bloc
 
 fn validate_block_references(object_store: &FileObjectStore, block: &BlockPayload) -> Result<()> {
     for parent in &block.parent_block_ids {
-        if object_store.read_typed(*parent, ObjectType::Block)?.is_none() {
+        if object_store
+            .read_typed(*parent, ObjectType::Block)?
+            .is_none()
+        {
             return Err(PrikkError::Integrity(format!(
                 "checkout target references missing parent Block {parent}"
             )));
         }
     }
     for patch in &block.patch_ids {
-        if object_store.read_typed(*patch, ObjectType::Patch)?.is_none() {
+        if object_store
+            .read_typed(*patch, ObjectType::Patch)?
+            .is_none()
+        {
             return Err(PrikkError::Integrity(format!(
                 "checkout target references missing Patch {patch}"
             )));
         }
     }
     if let Some(snapshot) = block.snapshot_blob_ref {
-        if object_store.read_typed(snapshot, ObjectType::Blob)?.is_none() {
+        if object_store
+            .read_typed(snapshot, ObjectType::Blob)?
+            .is_none()
+        {
             return Err(PrikkError::Integrity(format!(
                 "checkout target references missing snapshot Blob {snapshot}"
             )));

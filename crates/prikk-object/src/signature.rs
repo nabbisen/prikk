@@ -61,9 +61,9 @@ impl SignerRole {
             2 => Ok(Self::Maintainer),
             3 => Ok(Self::Ci),
             4 => Ok(Self::Audit),
-            other => {
-                Err(PrikkError::InvalidSignature(format!("unknown signer role code: {other}")))
-            }
+            other => Err(PrikkError::InvalidSignature(format!(
+                "unknown signer role code: {other}"
+            ))),
         }
     }
 }

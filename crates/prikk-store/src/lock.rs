@@ -64,7 +64,9 @@ impl Drop for RefLock {
 
 fn acquire_lock_file(path: &Path, kind: &str) -> Result<()> {
     let Some(parent) = path.parent() else {
-        return Err(PrikkError::Io(format!("{kind} lock path has no parent directory")));
+        return Err(PrikkError::Io(format!(
+            "{kind} lock path has no parent directory"
+        )));
     };
     fs::create_dir_all(parent)?;
     let mut file = match OpenOptions::new().write(true).create_new(true).open(path) {

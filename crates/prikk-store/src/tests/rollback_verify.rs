@@ -3,8 +3,7 @@
 use prikk_object::{SignatureAlgorithm, SignerRole};
 
 use crate::{
-    append_rollback_draft, verify_active_rollback_draft, verify_repository, RepositoryLayout,
-    Wal,
+    RepositoryLayout, Wal, append_rollback_draft, verify_active_rollback_draft, verify_repository,
 };
 
 use super::helpers::{signed_patch_envelope, unique_temp_dir};

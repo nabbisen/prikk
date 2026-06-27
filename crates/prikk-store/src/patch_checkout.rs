@@ -11,7 +11,7 @@ use prikk_error::{PrikkError, Result};
 
 use crate::fsutil::sync_directory_best_effort;
 use crate::layout::RepositoryLayout;
-use crate::patch_replay::{replay_supported_patch_chain, PatchReplayDeletedFile};
+use crate::patch_replay::{PatchReplayDeletedFile, replay_supported_patch_chain};
 use crate::worktree::materialize_manifest_entries;
 
 /// Result of an opt-in patch replay materialization.
@@ -227,9 +227,16 @@ fn analyze_deletions(root: &Path, deleted: &[PatchReplayDeletedFile]) -> Result<
             });
             continue;
         }
-        deletable.push(DeletableFile { path: deleted_file.clone(), target });
+        deletable.push(DeletableFile {
+            path: deleted_file.clone(),
+            target,
+        });
     }
-    Ok(DeletionAnalysis { deletable, already_absent, conflicts })
+    Ok(DeletionAnalysis {
+        deletable,
+        already_absent,
+        conflicts,
+    })
 }
 
 fn apply_deletions(deletable: &[DeletableFile]) -> Result<usize> {

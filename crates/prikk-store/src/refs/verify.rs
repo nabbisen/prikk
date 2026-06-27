@@ -26,7 +26,10 @@ pub(crate) fn verify_refs(layout: &RepositoryLayout) -> Result<RefVerification> 
     let object_store = FileObjectStore::new(layout.clone());
     let pointer_count = verify_ref_pointers(layout, &object_store)?;
     let log_count = verify_ref_logs(layout, &object_store)?;
-    Ok(RefVerification { pointer_count, log_record_count: log_count })
+    Ok(RefVerification {
+        pointer_count,
+        log_record_count: log_count,
+    })
 }
 
 fn verify_ref_pointers(layout: &RepositoryLayout, object_store: &FileObjectStore) -> Result<usize> {
@@ -164,7 +167,9 @@ fn ensure_block_exists(
     block_id: ObjectId,
     owner: ObjectId,
 ) -> Result<()> {
-    let exists = object_store.read_typed(block_id, ObjectType::Block)?.is_some();
+    let exists = object_store
+        .read_typed(block_id, ObjectType::Block)?
+        .is_some();
     if exists {
         return Ok(());
     }

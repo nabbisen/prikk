@@ -20,7 +20,6 @@ use crate::object_store::{FileObjectStore, ObjectReader, ObjectWriter};
 pub use log::{RefLogRecord, RefLogReplay};
 pub(crate) use verify::verify_refs;
 
-
 /// Recoverable ref candidate reconstructed from an append-only ref log.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RefRecoveryCandidate {
@@ -121,10 +120,7 @@ impl RefStore {
     }
 
     /// Return a recoverable ref-pointer candidate when the pointer is missing but the log is valid.
-    pub fn recoverable_missing_ref(
-        &self,
-        ref_name: &str,
-    ) -> Result<Option<RefRecoveryCandidate>> {
+    pub fn recoverable_missing_ref(&self, ref_name: &str) -> Result<Option<RefRecoveryCandidate>> {
         if self.read_current_ref_state_id(ref_name)?.is_some() {
             return Ok(None);
         }
@@ -215,11 +211,7 @@ impl RefStore {
         })
     }
 
-    fn ensure_current_matches(
-        &self,
-        ref_name: &str,
-        expected: Option<ObjectId>,
-    ) -> Result<()> {
+    fn ensure_current_matches(&self, ref_name: &str, expected: Option<ObjectId>) -> Result<()> {
         let current = self.read_current_ref_state_id(ref_name)?;
         if current != expected {
             return Err(PrikkError::LockConflict(format!(
@@ -238,7 +230,9 @@ impl RefStore {
         let candidate = self.layout.ref_tmp_path(ref_name);
         let pointer = self.layout.ref_pointer_path(ref_name);
         let Some(parent) = pointer.parent() else {
-            return Err(PrikkError::Io("ref pointer path has no parent directory".to_string()));
+            return Err(PrikkError::Io(
+                "ref pointer path has no parent directory".to_string(),
+            ));
         };
         std::fs::create_dir_all(parent)?;
         std::fs::rename(candidate, &pointer)?;
@@ -246,7 +240,6 @@ impl RefStore {
         Ok(())
     }
 }
-
 
 fn verified_ref_state_payload(
     object_store: &FileObjectStore,
@@ -292,7 +285,9 @@ fn verified_ref_state_payload(
 
 pub(crate) fn validate_publication(publication: &RefPublication) -> Result<()> {
     if publication.ref_name.is_empty() {
-        return Err(PrikkError::InvalidName("ref name must not be empty".to_string()));
+        return Err(PrikkError::InvalidName(
+            "ref name must not be empty".to_string(),
+        ));
     }
     require_signed_type(&publication.ref_state, ObjectType::RefState)?;
     require_signed_type(&publication.ref_update, ObjectType::RefUpdate)?;

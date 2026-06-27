@@ -40,10 +40,14 @@ impl RepoPath {
 /// Validate that a path is safe for v1 worktree materialization.
 pub fn validate_repo_path(value: &str) -> Result<()> {
     if value.is_empty() {
-        return Err(PrikkError::InvalidName("repository path must not be empty".to_string()));
+        return Err(PrikkError::InvalidName(
+            "repository path must not be empty".to_string(),
+        ));
     }
     if value.starts_with('/') {
-        return Err(PrikkError::InvalidName("absolute paths are not allowed".to_string()));
+        return Err(PrikkError::InvalidName(
+            "absolute paths are not allowed".to_string(),
+        ));
     }
     if value.contains('\\') {
         return Err(PrikkError::InvalidName(
@@ -100,10 +104,14 @@ pub fn validate_no_path_collisions(paths: &[RepoPath]) -> Result<()> {
 
 fn validate_component(component: &str) -> Result<()> {
     if component.is_empty() {
-        return Err(PrikkError::InvalidName("empty path components are not allowed".to_string()));
+        return Err(PrikkError::InvalidName(
+            "empty path components are not allowed".to_string(),
+        ));
     }
     if component == "." || component == ".." {
-        return Err(PrikkError::InvalidName("dot path components are not allowed".to_string()));
+        return Err(PrikkError::InvalidName(
+            "dot path components are not allowed".to_string(),
+        ));
     }
     if component.ends_with(' ') || component.ends_with('.') {
         return Err(PrikkError::InvalidName(
@@ -119,7 +127,11 @@ fn validate_component(component: &str) -> Result<()> {
 }
 
 fn is_windows_reserved_name(component: &str) -> bool {
-    let base = component.split('.').next().unwrap_or(component).to_ascii_uppercase();
+    let base = component
+        .split('.')
+        .next()
+        .unwrap_or(component)
+        .to_ascii_uppercase();
     matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL")
         || matches!(
             base.as_str(),

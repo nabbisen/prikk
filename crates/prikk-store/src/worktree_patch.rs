@@ -12,9 +12,9 @@ use std::fs;
 use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;
 use prikk_object::{
-    BlobPayload, CanonicalEncode, CreateFile, DeleteFile, ObjectEnvelope, ObjectId, ObjectType,
-    text_span_hash, EditText, Operation, OperationKind, PatchPayload, ReplaceBinary, Signature,
-    SignatureAlgorithm, SignerRole,
+    BlobPayload, CanonicalEncode, CreateFile, DeleteFile, EditText, ObjectEnvelope, ObjectId,
+    ObjectType, Operation, OperationKind, PatchPayload, ReplaceBinary, Signature,
+    SignatureAlgorithm, SignerRole, text_span_hash,
 };
 
 use crate::active::ActiveSession;
@@ -23,7 +23,7 @@ use crate::layout::RepositoryLayout;
 use crate::object_store::{FileObjectStore, ObjectReader, ObjectWriter};
 use crate::path::RepoPath;
 use crate::snapshot::SnapshotManifest;
-use crate::worktree_status::{worktree_status, WorktreeChangeKind};
+use crate::worktree_status::{WorktreeChangeKind, worktree_status};
 
 /// Result of creating and appending a patch from snapshot-baseline worktree changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,13 +90,17 @@ impl WorktreePatchCommitOptions {
     /// Return the default coarse file-level patch generation mode.
     #[must_use]
     pub const fn file_level() -> Self {
-        Self { prefer_text_edits: false }
+        Self {
+            prefer_text_edits: false,
+        }
     }
 
     /// Return the opt-in full-file text-edit generation mode.
     #[must_use]
     pub const fn prefer_text_edits() -> Self {
-        Self { prefer_text_edits: true }
+        Self {
+            prefer_text_edits: true,
+        }
     }
 }
 
@@ -128,7 +132,9 @@ pub fn commit_worktree_changes_with_options(
     options: WorktreePatchCommitOptions,
 ) -> Result<WorktreePatchCommitReport> {
     if message.trim().is_empty() {
-        return Err(PrikkError::InvalidName("commit message must not be empty".to_string()));
+        return Err(PrikkError::InvalidName(
+            "commit message must not be empty".to_string(),
+        ));
     }
     let status = worktree_status(layout, ref_name)?;
     if status.is_clean() {
@@ -256,7 +262,9 @@ pub fn commit_worktree_changes_with_options(
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload_bytes);
     envelope.add_signature(dev_author_signature(message))?;
     let patch_id = envelope.object_id();
-    let wal_sequence = ActiveSession::new(layout.clone()).append_patch(&envelope)?.wal_sequence;
+    let wal_sequence = ActiveSession::new(layout.clone())
+        .append_patch(&envelope)?
+        .wal_sequence;
 
     Ok(WorktreePatchCommitReport {
         ref_name: ref_name.to_string(),
@@ -308,7 +316,9 @@ fn load_snapshot_baseline(
 }
 
 fn write_blob(object_store: &mut FileObjectStore, bytes: &[u8]) -> Result<ObjectId> {
-    let payload = BlobPayload { bytes: bytes.to_vec() };
+    let payload = BlobPayload {
+        bytes: bytes.to_vec(),
+    };
     let canonical_payload = payload.to_canonical_bytes()?;
     let envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, canonical_payload);
     object_store.write_object(&envelope)

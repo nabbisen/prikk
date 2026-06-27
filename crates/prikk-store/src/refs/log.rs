@@ -41,7 +41,9 @@ pub(crate) fn append_log_record(
 ) -> Result<()> {
     let path = layout.ref_log_path(ref_name);
     let Some(parent) = path.parent() else {
-        return Err(PrikkError::Io("ref log path has no parent directory".to_string()));
+        return Err(PrikkError::Io(
+            "ref log path has no parent directory".to_string(),
+        ));
     };
     fs::create_dir_all(parent)?;
     let record = encode_log_record(envelope)?;
@@ -59,7 +61,10 @@ pub(crate) fn append_log_record(
 pub(crate) fn replay_log(layout: &RepositoryLayout, ref_name: &str) -> Result<RefLogReplay> {
     let path = layout.ref_log_path(ref_name);
     if !path.exists() {
-        return Ok(RefLogReplay { records: Vec::new(), trailing_partial_bytes: 0 });
+        return Ok(RefLogReplay {
+            records: Vec::new(),
+            trailing_partial_bytes: 0,
+        });
     }
     let mut bytes = Vec::new();
     File::open(path)?.read_to_end(&mut bytes)?;
@@ -90,14 +95,17 @@ fn decode_log_records(bytes: &[u8]) -> Result<RefLogReplay> {
     while offset < bytes.len() {
         let remaining = bytes.len().saturating_sub(offset);
         if remaining < REF_LOG_HEADER_LEN {
-            return Ok(RefLogReplay { records, trailing_partial_bytes: remaining });
+            return Ok(RefLogReplay {
+                records,
+                trailing_partial_bytes: remaining,
+            });
         }
         let header_end = offset
             .checked_add(REF_LOG_HEADER_LEN)
             .ok_or_else(|| PrikkError::MalformedData("ref-log header overflow".to_string()))?;
-        let header = bytes
-            .get(offset..header_end)
-            .ok_or_else(|| PrikkError::MalformedData("ref-log header range overflow".to_string()))?;
+        let header = bytes.get(offset..header_end).ok_or_else(|| {
+            PrikkError::MalformedData("ref-log header range overflow".to_string())
+        })?;
         let header_values = parse_log_header(header)?;
         let body_len = usize::try_from(header_values.body_len).map_err(|_| {
             PrikkError::MalformedData("ref-log body length does not fit usize".to_string())
@@ -106,7 +114,10 @@ fn decode_log_records(bytes: &[u8]) -> Result<RefLogReplay> {
             .checked_add(body_len)
             .ok_or_else(|| PrikkError::MalformedData("ref-log body end overflow".to_string()))?;
         let Some(body) = bytes.get(header_end..body_end) else {
-            return Ok(RefLogReplay { records, trailing_partial_bytes: remaining });
+            return Ok(RefLogReplay {
+                records,
+                trailing_partial_bytes: remaining,
+            });
         };
         let expected = log_record_checksum(header_values.body_len, body);
         if expected != header_values.checksum {
@@ -119,7 +130,10 @@ fn decode_log_records(bytes: &[u8]) -> Result<RefLogReplay> {
         records.push(RefLogRecord { envelope });
         offset = body_end;
     }
-    Ok(RefLogReplay { records, trailing_partial_bytes: 0 })
+    Ok(RefLogReplay {
+        records,
+        trailing_partial_bytes: 0,
+    })
 }
 
 struct RefLogHeader {
@@ -131,7 +145,9 @@ fn parse_log_header(header: &[u8]) -> Result<RefLogHeader> {
     let mut cursor = ByteCursor::new(header);
     let magic = cursor.read_array::<8>()?;
     if &magic != REF_LOG_MAGIC {
-        return Err(PrikkError::MalformedData("invalid ref-log record magic".to_string()));
+        return Err(PrikkError::MalformedData(
+            "invalid ref-log record magic".to_string(),
+        ));
     }
     let version = cursor.read_u16()?;
     if version != REF_LOG_VERSION {
@@ -140,7 +156,9 @@ fn parse_log_header(header: &[u8]) -> Result<RefLogHeader> {
     let body_len = cursor.read_u64()?;
     let checksum = cursor.read_array::<32>()?;
     if !cursor.is_finished() {
-        return Err(PrikkError::MalformedData("trailing bytes in ref-log header".to_string()));
+        return Err(PrikkError::MalformedData(
+            "trailing bytes in ref-log header".to_string(),
+        ));
     }
     Ok(RefLogHeader { body_len, checksum })
 }

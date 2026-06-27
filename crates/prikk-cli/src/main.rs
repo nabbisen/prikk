@@ -19,29 +19,27 @@ mod output;
 mod seal;
 
 use args::{
-    current_dir, optional_path_or_current, parse_checkout_args, parse_commit_args,
-    parse_doctor_args, parse_inverse_plan_args, parse_log_args, parse_rollback_draft_args,
-    parse_rollback_draft_verify_args, parse_rollback_preview_args, parse_worktree_status_args,
-    CheckoutMode, CommitMode,
+    CheckoutMode, CommitMode, current_dir, optional_path_or_current, parse_checkout_args,
+    parse_commit_args, parse_doctor_args, parse_inverse_plan_args, parse_log_args,
+    parse_rollback_draft_args, parse_rollback_draft_verify_args, parse_rollback_preview_args,
+    parse_worktree_status_args,
 };
 use commit::empty_patch_envelope;
 use output::{
-    print_checkout_plan, print_doctor_report, print_help, print_history,
-    print_patch_deletion_plan, print_patch_inverse_plan, print_patch_materialization_report,
-    print_patch_replay_plan, print_rollback_draft_report,
-    print_rollback_draft_verification, print_rollback_preview_plan, print_snapshot_checkout_plan,
-    print_snapshot_materialization_report, print_verify_report,
+    print_checkout_plan, print_doctor_report, print_help, print_history, print_patch_deletion_plan,
+    print_patch_inverse_plan, print_patch_materialization_report, print_patch_replay_plan,
+    print_rollback_draft_report, print_rollback_draft_verification, print_rollback_preview_plan,
+    print_snapshot_checkout_plan, print_snapshot_materialization_report, print_verify_report,
     print_worktree_status,
 };
 use prikk_store::{
-    append_rollback_draft, commit_worktree_changes_with_options, doctor_repository,
-    load_ref_history, materialize_patch_checkout, materialize_patch_checkout_with_deletions,
-    materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan,
-    prepare_patch_inverse_plan, prepare_patch_replay_plan, prepare_rollback_preview,
-    prepare_snapshot_checkout_plan, repair_repository, verify_active_rollback_draft,
-    verify_repository, worktree_status,
     ActiveSession, DoctorRepairOptions, RefStore, RepositoryLayout, Wal,
-    WorktreePatchCommitOptions,
+    WorktreePatchCommitOptions, append_rollback_draft, commit_worktree_changes_with_options,
+    doctor_repository, load_ref_history, materialize_patch_checkout,
+    materialize_patch_checkout_with_deletions, materialize_snapshot_checkout,
+    plan_patch_checkout_deletions, prepare_checkout_plan, prepare_patch_inverse_plan,
+    prepare_patch_replay_plan, prepare_rollback_preview, prepare_snapshot_checkout_plan,
+    repair_repository, verify_active_rollback_draft, verify_repository, worktree_status,
 };
 
 const VERSION: &str = "0.1.0-pr030";
@@ -90,7 +88,10 @@ fn run_init(path: Option<String>) -> std::result::Result<(), String> {
         None => current_dir()?,
     };
     RepositoryLayout::init(root.clone()).map_err(|err| err.to_string())?;
-    println!("initialized Prikk repository at {}", root.join(".prikk").display());
+    println!(
+        "initialized Prikk repository at {}",
+        root.join(".prikk").display()
+    );
     Ok(())
 }
 
@@ -103,7 +104,9 @@ fn run_commit(args: Vec<String>) -> std::result::Result<(), String> {
             let envelope = empty_patch_envelope(&args.message)?;
             let patch_id = envelope.object_id();
             let session = ActiveSession::new(layout);
-            let result = session.append_patch(&envelope).map_err(|err| err.to_string())?;
+            let result = session
+                .append_patch(&envelope)
+                .map_err(|err| err.to_string())?;
             println!("recorded empty patch in active WAL");
             println!("patch id: {patch_id}");
             println!("WAL sequence: {}", result.wal_sequence);
@@ -162,7 +165,10 @@ fn run_status() -> std::result::Result<(), String> {
         .read_current_ref_state_id("heads/main")
         .map_err(|err| err.to_string())?;
     println!("active WAL records: {}", replay.records.len());
-    println!("trailing partial WAL bytes: {}", replay.trailing_partial_bytes);
+    println!(
+        "trailing partial WAL bytes: {}",
+        replay.trailing_partial_bytes
+    );
     match main_ref {
         Some(id) => println!("heads/main RefState: {id}"),
         None => println!("heads/main RefState: <not published>"),
@@ -177,8 +183,8 @@ fn run_status() -> std::result::Result<(), String> {
 fn run_log(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_log_args(args)?;
     let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
-    let history = load_ref_history(&layout, &args.ref_name, args.limit)
-        .map_err(|err| err.to_string())?;
+    let history =
+        load_ref_history(&layout, &args.ref_name, args.limit).map_err(|err| err.to_string())?;
     print_history(&layout, &history);
     Ok(())
 }
@@ -188,8 +194,8 @@ fn run_checkout(args: Vec<String>) -> std::result::Result<(), String> {
     let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
     match args.mode {
         CheckoutMode::PlanOnly => {
-            let plan = prepare_checkout_plan(&layout, &args.ref_name)
-                .map_err(|err| err.to_string())?;
+            let plan =
+                prepare_checkout_plan(&layout, &args.ref_name).map_err(|err| err.to_string())?;
             print_checkout_plan(&layout, &plan);
         }
         CheckoutMode::SnapshotPlan => {
@@ -232,8 +238,8 @@ fn run_checkout(args: Vec<String>) -> std::result::Result<(), String> {
 fn run_inverse_plan(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_inverse_plan_args(args)?;
     let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
-    let plan = prepare_patch_inverse_plan(&layout, &args.ref_name)
-        .map_err(|err| err.to_string())?;
+    let plan =
+        prepare_patch_inverse_plan(&layout, &args.ref_name).map_err(|err| err.to_string())?;
     print_patch_inverse_plan(&layout, &plan);
     Ok(())
 }
@@ -241,8 +247,7 @@ fn run_inverse_plan(args: Vec<String>) -> std::result::Result<(), String> {
 fn run_rollback_preview(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_rollback_preview_args(args)?;
     let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
-    let plan = prepare_rollback_preview(&layout, &args.ref_name)
-        .map_err(|err| err.to_string())?;
+    let plan = prepare_rollback_preview(&layout, &args.ref_name).map_err(|err| err.to_string())?;
     print_rollback_preview_plan(&layout, &plan);
     Ok(())
 }
@@ -259,8 +264,8 @@ fn run_rollback_draft(args: Vec<String>) -> std::result::Result<(), String> {
 fn run_rollback_draft_verify(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_rollback_draft_verify_args(args)?;
     let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
-    let report = verify_active_rollback_draft(&layout, &args.ref_name)
-        .map_err(|err| err.to_string())?;
+    let report =
+        verify_active_rollback_draft(&layout, &args.ref_name).map_err(|err| err.to_string())?;
     print_rollback_draft_verification(&layout, &report);
     Ok(())
 }
@@ -302,7 +307,11 @@ fn run_doctor(args: Vec<String>) -> std::result::Result<(), String> {
         if let Some(ref_repair) = &repair.ref_repair {
             println!(
                 "repair: {} heads/main pointer for RefState {}",
-                if ref_repair.wrote_pointer { "reconstructed" } else { "kept existing" },
+                if ref_repair.wrote_pointer {
+                    "reconstructed"
+                } else {
+                    "kept existing"
+                },
                 ref_repair.ref_state_id
             );
         }

@@ -8,7 +8,7 @@ use prikk_error::{PrikkError, Result};
 
 use crate::layout::RepositoryLayout;
 use crate::refs::{RefRecoveryRepair, RefStore};
-use crate::verify::{verify_repository, RepositoryVerification};
+use crate::verify::{RepositoryVerification, verify_repository};
 use crate::wal::{Wal, WalRepair};
 
 /// Severity assigned to a doctor diagnostic issue.
@@ -107,13 +107,19 @@ impl DoctorReport {
     /// Return true if no error-severity issue was found.
     #[must_use]
     pub fn is_healthy(&self) -> bool {
-        !self.issues.iter().any(|issue| issue.severity == DoctorSeverity::Error)
+        !self
+            .issues
+            .iter()
+            .any(|issue| issue.severity == DoctorSeverity::Error)
     }
 
     /// Count issues with a given severity.
     #[must_use]
     pub fn count_by_severity(&self, severity: DoctorSeverity) -> usize {
-        self.issues.iter().filter(|issue| issue.severity == severity).count()
+        self.issues
+            .iter()
+            .filter(|issue| issue.severity == severity)
+            .count()
     }
 }
 
@@ -131,19 +137,28 @@ impl DoctorRepairOptions {
     /// Return options that perform no repair.
     #[must_use]
     pub const fn none() -> Self {
-        Self { truncate_wal_tail: false, reconstruct_main_ref: false }
+        Self {
+            truncate_wal_tail: false,
+            reconstruct_main_ref: false,
+        }
     }
 
     /// Return options that enable only safe active-WAL tail truncation.
     #[must_use]
     pub const fn truncate_wal_tail() -> Self {
-        Self { truncate_wal_tail: true, reconstruct_main_ref: false }
+        Self {
+            truncate_wal_tail: true,
+            reconstruct_main_ref: false,
+        }
     }
 
     /// Return options that enable only guarded `heads/main` pointer reconstruction.
     #[must_use]
     pub const fn reconstruct_main_ref() -> Self {
-        Self { truncate_wal_tail: false, reconstruct_main_ref: true }
+        Self {
+            truncate_wal_tail: false,
+            reconstruct_main_ref: true,
+        }
     }
 }
 
@@ -186,11 +201,17 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                 ));
             }
             add_missing_main_ref_issue(layout, &mut issues);
-            DoctorReport { verification: Some(verification), issues }
+            DoctorReport {
+                verification: Some(verification),
+                issues,
+            }
         }
         Err(error) => {
             issues.push(issue_for_verification_error(error));
-            DoctorReport { verification: None, issues }
+            DoctorReport {
+                verification: None,
+                issues,
+            }
         }
     }
 }
@@ -214,7 +235,10 @@ pub fn repair_repository(
         let wal = Wal::new(layout.default_queue_wal_path());
         wal.truncate_trailing_partial()?
     } else {
-        WalRepair { preserved_records: 0, truncated_bytes: 0 }
+        WalRepair {
+            preserved_records: 0,
+            truncated_bytes: 0,
+        }
     };
     let ref_repair = if options.reconstruct_main_ref {
         let ref_store = RefStore::new(layout.clone());
@@ -223,7 +247,12 @@ pub fn repair_repository(
         None
     };
     let after = doctor_repository(layout);
-    Ok(DoctorRepairReport { before, wal_repair, ref_repair, after })
+    Ok(DoctorRepairReport {
+        before,
+        wal_repair,
+        ref_repair,
+        after,
+    })
 }
 
 fn add_missing_main_ref_issue(layout: &RepositoryLayout, issues: &mut Vec<DoctorIssue>) {
@@ -233,8 +262,7 @@ fn add_missing_main_ref_issue(layout: &RepositoryLayout, issues: &mut Vec<Doctor
             "PRIKK-DOCTOR-REF-POINTER-MISSING",
             format!(
                 "heads/main pointer is missing but ref log can recover RefState {} at update {}",
-                candidate.ref_state_id,
-                candidate.update_seq
+                candidate.ref_state_id, candidate.update_seq
             ),
             "run `prikk doctor --repair-main-ref` to reconstruct only the missing \
              heads/main pointer from the verified ref log",

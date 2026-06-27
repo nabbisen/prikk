@@ -18,9 +18,13 @@ pub(crate) fn empty_patch_envelope(message: &str) -> std::result::Result<ObjectE
             value: OperationCondition::OldContentHash(message_hash.to_vec()),
         }],
     };
-    let payload_bytes = payload.to_canonical_bytes().map_err(|err| err.to_string())?;
+    let payload_bytes = payload
+        .to_canonical_bytes()
+        .map_err(|err| err.to_string())?;
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload_bytes);
-    envelope.add_signature(dev_author_signature(message)).map_err(|err| err.to_string())?;
+    envelope
+        .add_signature(dev_author_signature(message))
+        .map_err(|err| err.to_string())?;
     Ok(envelope)
 }
 

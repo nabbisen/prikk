@@ -3,8 +3,8 @@
 use prikk_object::ObjectType;
 
 use crate::{
-    verify_repository, FileObjectStore, ObjectWriter, RefLock, RefPublication, RefStore,
-    RepositoryLayout,
+    FileObjectStore, ObjectWriter, RefLock, RefPublication, RefStore, RepositoryLayout,
+    verify_repository,
 };
 
 use super::helpers::{
@@ -51,7 +51,10 @@ fn ref_store_publishes_ref_state_and_log() {
         };
         let published = store.publish(&publication);
         assert_eq!(published, Ok(ref_state_id));
-        assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(Some(ref_state_id)));
+        assert_eq!(
+            store.read_current_ref_state_id("heads/main"),
+            Ok(Some(ref_state_id))
+        );
         let log = store.replay_log("heads/main");
         assert!(log.is_ok());
         if let Ok(log) = log {
@@ -146,14 +149,20 @@ fn ref_store_reconstructs_missing_pointer_from_log() {
         assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(None));
         let candidate = store.recoverable_missing_ref("heads/main");
         assert!(candidate.is_ok());
-        assert_eq!(candidate.ok().flatten().map(|value| value.ref_state_id), Some(ref_state_id));
+        assert_eq!(
+            candidate.ok().flatten().map(|value| value.ref_state_id),
+            Some(ref_state_id)
+        );
         let repair = store.reconstruct_missing_ref_from_log("heads/main");
         assert!(repair.is_ok());
         if let Ok(repair) = repair {
             assert!(repair.wrote_pointer);
             assert_eq!(repair.ref_state_id, ref_state_id);
         }
-        assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(Some(ref_state_id)));
+        assert_eq!(
+            store.read_current_ref_state_id("heads/main"),
+            Ok(Some(ref_state_id))
+        );
         assert!(verify_repository(&layout).is_ok());
     }
     let _ = std::fs::remove_dir_all(root);

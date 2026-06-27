@@ -15,9 +15,7 @@ use crate::file_codec::decode_envelope_file;
 use crate::layout::{RepositoryLayout, persisted_object_types};
 use crate::object_store::FileObjectStore;
 use crate::refs::verify_refs;
-use crate::rollback_verify::{
-    verify_rollback_draft_wal_records, verify_rollback_patch_envelope,
-};
+use crate::rollback_verify::{verify_rollback_draft_wal_records, verify_rollback_patch_envelope};
 use crate::wal::Wal;
 
 /// Verification summary for a single persisted object.
@@ -108,12 +106,18 @@ impl ObjectSummary {
     }
 
     fn add(&mut self, other: Self) -> Result<()> {
-        self.object_count = self.object_count.checked_add(other.object_count).ok_or_else(|| {
-            PrikkError::Integrity("object verification count overflow".to_string())
-        })?;
-        self.block_count = self.block_count.checked_add(other.block_count).ok_or_else(|| {
-            PrikkError::Integrity("block verification count overflow".to_string())
-        })?;
+        self.object_count = self
+            .object_count
+            .checked_add(other.object_count)
+            .ok_or_else(|| {
+                PrikkError::Integrity("object verification count overflow".to_string())
+            })?;
+        self.block_count = self
+            .block_count
+            .checked_add(other.block_count)
+            .ok_or_else(|| {
+                PrikkError::Integrity("block verification count overflow".to_string())
+            })?;
         self.rollback_block_count = self
             .rollback_block_count
             .checked_add(other.rollback_block_count)
@@ -264,7 +268,13 @@ fn verify_block_payload(
 ) -> Result<usize> {
     let payload = BlockPayload::decode_canonical(canonical_payload)?;
     for parent in &payload.parent_block_ids {
-        ensure_object_exists(object_store, ObjectType::Block, *parent, "parent block", block_id)?;
+        ensure_object_exists(
+            object_store,
+            ObjectType::Block,
+            *parent,
+            "parent block",
+            block_id,
+        )?;
     }
     let mut rollback_patch_count = 0_usize;
     for patch in &payload.patch_ids {
@@ -281,7 +291,13 @@ fn verify_block_payload(
         }
     }
     if let Some(snapshot) = payload.snapshot_blob_ref {
-        ensure_object_exists(object_store, ObjectType::Blob, snapshot, "snapshot blob", block_id)?;
+        ensure_object_exists(
+            object_store,
+            ObjectType::Blob,
+            snapshot,
+            "snapshot blob",
+            block_id,
+        )?;
     }
     Ok(rollback_patch_count)
 }

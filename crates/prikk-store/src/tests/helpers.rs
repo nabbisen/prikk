@@ -3,8 +3,7 @@
 use prikk_object::{
     BlockKind, BlockPayload, CanonicalEncode, CreateFile, EditText, MerkleRoot, ObjectEnvelope,
     ObjectId, ObjectType, Operation, OperationKind, PatchPayload, RefKind, RefStatePayload,
-    RefUpdatePayload,
-    Signature, SignatureAlgorithm, SignerRole,
+    RefUpdatePayload, Signature, SignatureAlgorithm, SignerRole,
 };
 
 pub(crate) fn signed_patch_envelope() -> ObjectEnvelope {
@@ -31,7 +30,6 @@ pub(crate) fn signed_patch_envelope() -> ObjectEnvelope {
     assert!(envelope.add_signature(dummy_signature()).is_ok());
     envelope
 }
-
 
 /// Return a supported rollback-marked Patch envelope for sealed-history classification tests.
 pub(crate) fn rollback_patch_envelope() -> ObjectEnvelope {
@@ -134,7 +132,6 @@ pub(crate) fn dummy_signature() -> Signature {
     }
 }
 
-
 pub(crate) fn rollback_signature() -> Signature {
     Signature {
         algorithm: SignatureAlgorithm::Ed25519,
@@ -157,7 +154,11 @@ pub(crate) fn maintainer_signature() -> Signature {
 
 pub(crate) fn unique_temp_dir(name: &str) -> std::path::PathBuf {
     let mut path = std::env::temp_dir();
-    path.push(format!("prikk-pr014-{name}-{}-{}", std::process::id(), monotonic_suffix()));
+    path.push(format!(
+        "prikk-pr014-{name}-{}-{}",
+        std::process::id(),
+        monotonic_suffix()
+    ));
     path
 }
 

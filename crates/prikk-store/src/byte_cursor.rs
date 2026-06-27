@@ -71,7 +71,9 @@ impl<'a> ByteCursor<'a> {
             .checked_add(len)
             .ok_or_else(|| PrikkError::MalformedData("record length overflow".to_string()))?;
         let Some(slice) = self.bytes.get(self.pos..end) else {
-            return Err(PrikkError::MalformedData("unexpected end of record".to_string()));
+            return Err(PrikkError::MalformedData(
+                "unexpected end of record".to_string(),
+            ));
         };
         self.pos = end;
         Ok(slice)

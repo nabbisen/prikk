@@ -20,9 +20,9 @@ pub(super) fn current_target_block(
     ref_name: &str,
 ) -> Result<ObjectId> {
     let ref_store = RefStore::new(layout.clone());
-    let ref_state_id = ref_store.read_current_ref_state_id(ref_name)?.ok_or_else(|| {
-        PrikkError::Integrity(format!("ref {ref_name} is not published"))
-    })?;
+    let ref_state_id = ref_store
+        .read_current_ref_state_id(ref_name)?
+        .ok_or_else(|| PrikkError::Integrity(format!("ref {ref_name} is not published")))?;
     let envelope = object_store
         .read_typed(ref_state_id, ObjectType::RefState)?
         .ok_or_else(|| {
@@ -122,12 +122,10 @@ pub(super) fn read_blob_bytes(
 
 /// Ensure bytes identify as the expected Blob object ID.
 pub(super) fn ensure_blob_matches(bytes: &[u8], expected: ObjectId) -> Result<()> {
-    let payload = BlobPayload { bytes: bytes.to_vec() };
-    let id = ObjectId::from_canonical_payload(
-        ObjectType::Blob,
-        1,
-        &payload.to_canonical_bytes()?,
-    );
+    let payload = BlobPayload {
+        bytes: bytes.to_vec(),
+    };
+    let id = ObjectId::from_canonical_payload(ObjectType::Blob, 1, &payload.to_canonical_bytes()?);
     if id == expected {
         return Ok(());
     }

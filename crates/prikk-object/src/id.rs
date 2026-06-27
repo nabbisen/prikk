@@ -46,7 +46,9 @@ impl ObjectType {
             5 => Ok(Self::Attestation),
             6 => Ok(Self::Blob),
             7 => Ok(Self::RefUpdate),
-            other => Err(PrikkError::MalformedData(format!("unknown object type code: {other}"))),
+            other => Err(PrikkError::MalformedData(format!(
+                "unknown object type code: {other}"
+            ))),
         }
     }
 
@@ -153,7 +155,9 @@ fn hex_value(byte: u8) -> Result<u8> {
     match byte {
         b'0'..=b'9' => Ok(byte - b'0'),
         b'a'..=b'f' => Ok(byte - b'a' + 10),
-        _ => Err(PrikkError::InvalidObjectId("object IDs must use lowercase hex only".to_string())),
+        _ => Err(PrikkError::InvalidObjectId(
+            "object IDs must use lowercase hex only".to_string(),
+        )),
     }
 }
 
@@ -168,7 +172,10 @@ mod tests {
         let c = ObjectId::from_canonical_payload(ObjectType::Block, 1, b"payload");
         assert_eq!(a, b);
         assert_ne!(a, c);
-        assert_eq!(a.to_hex(), "5f8711b3f84991d60b65221d66ed5ec260d28cc19c5c4ed3c1fe44d334265fe6");
+        assert_eq!(
+            a.to_hex(),
+            "5f8711b3f84991d60b65221d66ed5ec260d28cc19c5c4ed3c1fe44d334265fe6"
+        );
     }
 
     #[test]

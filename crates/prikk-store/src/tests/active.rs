@@ -39,7 +39,10 @@ fn active_session_appends_signed_patch_under_lock() {
         assert!(replay.is_ok());
         if let Ok(replay) = replay {
             assert_eq!(replay.records.len(), 1);
-            assert_eq!(replay.records.first().map(|record| &record.envelope), Some(&envelope));
+            assert_eq!(
+                replay.records.first().map(|record| &record.envelope),
+                Some(&envelope)
+            );
         }
     }
     let _ = std::fs::remove_dir_all(root);

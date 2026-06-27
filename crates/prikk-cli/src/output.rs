@@ -1,10 +1,10 @@
 //! CLI output helpers.
 
 use prikk_store::{
-    CheckoutMaterialization, CheckoutPlan, DoctorSeverity, PatchDeletionPlan,
-    PatchInversePlan, PatchMaterializationReport, PatchReplayPlan, RefHistory,
-    RepositoryLayout, RollbackDraftReport, RollbackDraftVerification, RollbackPreviewPlan,
-    SnapshotCheckoutPlan, SnapshotMaterializationReport, WorktreeChangeKind, WorktreeStatusReport,
+    CheckoutMaterialization, CheckoutPlan, DoctorSeverity, PatchDeletionPlan, PatchInversePlan,
+    PatchMaterializationReport, PatchReplayPlan, RefHistory, RepositoryLayout, RollbackDraftReport,
+    RollbackDraftVerification, RollbackPreviewPlan, SnapshotCheckoutPlan,
+    SnapshotMaterializationReport, WorktreeChangeKind, WorktreeStatusReport,
 };
 
 /// Print a checkout plan.
@@ -44,16 +44,17 @@ pub(crate) fn print_checkout_plan(layout: &RepositoryLayout, plan: &CheckoutPlan
             );
         }
         CheckoutMaterialization::RequiresPatchEngine => {
-            println!(
-                "note: use `prikk checkout --patch-plan` for supported replay planning"
-            );
+            println!("note: use `prikk checkout --patch-plan` for supported replay planning");
         }
     }
 }
 
 /// Print a snapshot checkout plan.
 pub(crate) fn print_snapshot_checkout_plan(layout: &RepositoryLayout, plan: &SnapshotCheckoutPlan) {
-    println!("snapshot checkout plan repository: {}", layout.prikk_dir().display());
+    println!(
+        "snapshot checkout plan repository: {}",
+        layout.prikk_dir().display()
+    );
     print_checkout_plan(layout, &plan.checkout);
     println!("snapshot blob: {}", plan.snapshot_blob_id);
     println!("snapshot files: {}", plan.file_count);
@@ -66,7 +67,10 @@ pub(crate) fn print_snapshot_checkout_plan(layout: &RepositoryLayout, plan: &Sna
 
 /// Print a supported patch replay plan.
 pub(crate) fn print_patch_replay_plan(layout: &RepositoryLayout, plan: &PatchReplayPlan) {
-    println!("patch replay plan repository: {}", layout.prikk_dir().display());
+    println!(
+        "patch replay plan repository: {}",
+        layout.prikk_dir().display()
+    );
     println!("ref: {}", plan.ref_name);
     println!("target block: {}", plan.target_block_id);
     println!("blocks replayed: {}", plan.block_count);
@@ -85,7 +89,10 @@ pub(crate) fn print_patch_replay_plan(layout: &RepositoryLayout, plan: &PatchRep
 
 /// Print a patch checkout deletion plan.
 pub(crate) fn print_patch_deletion_plan(layout: &RepositoryLayout, plan: &PatchDeletionPlan) {
-    println!("patch deletion plan repository: {}", layout.prikk_dir().display());
+    println!(
+        "patch deletion plan repository: {}",
+        layout.prikk_dir().display()
+    );
     println!("ref: {}", plan.ref_name);
     println!("planned deletions: {}", plan.planned_deletions);
     println!("deletable files: {}", plan.deletable_files);
@@ -97,9 +104,7 @@ pub(crate) fn print_patch_deletion_plan(layout: &RepositoryLayout, plan: &PatchD
     for conflict in &plan.conflicts {
         println!("  refused: {} — {}", conflict.path, conflict.reason);
     }
-    println!(
-        "note: only explicit patch-deleted files are eligible; extra files are never deleted"
-    );
+    println!("note: only explicit patch-deleted files are eligible; extra files are never deleted");
 }
 
 /// Print a patch replay materialization report.
@@ -156,14 +161,20 @@ pub(crate) fn print_snapshot_materialization_report(
 
 /// Print a supported patch inverse plan.
 pub(crate) fn print_patch_inverse_plan(layout: &RepositoryLayout, plan: &PatchInversePlan) {
-    println!("patch inverse plan repository: {}", layout.prikk_dir().display());
+    println!(
+        "patch inverse plan repository: {}",
+        layout.prikk_dir().display()
+    );
     println!("ref: {}", plan.ref_name);
     println!("target block: {}", plan.target_block_id);
     println!("blocks inspected: {}", plan.block_count);
     println!("patches inspected: {}", plan.patch_count);
     println!("original operations: {}", plan.original_operation_count);
     println!("inverse operations: {}", plan.inverse_operation_count);
-    println!("unsigned inverse patch id hint: {}", plan.inverse_patch_id_hint);
+    println!(
+        "unsigned inverse patch id hint: {}",
+        plan.inverse_patch_id_hint
+    );
     for operation in &plan.operations {
         println!(
             "  {:04} {} {}",
@@ -179,17 +190,20 @@ pub(crate) fn print_patch_inverse_plan(layout: &RepositoryLayout, plan: &PatchIn
 }
 
 /// Print a rollback preview plan.
-pub(crate) fn print_rollback_preview_plan(
-    layout: &RepositoryLayout,
-    plan: &RollbackPreviewPlan,
-) {
-    println!("rollback preview repository: {}", layout.prikk_dir().display());
+pub(crate) fn print_rollback_preview_plan(layout: &RepositoryLayout, plan: &RollbackPreviewPlan) {
+    println!(
+        "rollback preview repository: {}",
+        layout.prikk_dir().display()
+    );
     println!("ref: {}", plan.ref_name);
     println!("target block: {}", plan.target_block_id);
     println!("blocks validated: {}", plan.block_count);
     println!("patches validated: {}", plan.patch_count);
     println!("inverse operations: {}", plan.inverse_operation_count);
-    println!("unsigned inverse patch id hint: {}", plan.inverse_patch_id_hint);
+    println!(
+        "unsigned inverse patch id hint: {}",
+        plan.inverse_patch_id_hint
+    );
     println!("current files: {}", plan.current_file_count);
     println!("current content bytes: {}", plan.current_content_bytes);
     println!("preview files: {}", plan.preview_file_count);
@@ -233,11 +247,11 @@ pub(crate) fn print_rollback_preview_plan(
 }
 
 /// Print a rollback draft append report.
-pub(crate) fn print_rollback_draft_report(
-    layout: &RepositoryLayout,
-    report: &RollbackDraftReport,
-) {
-    println!("rollback draft repository: {}", layout.prikk_dir().display());
+pub(crate) fn print_rollback_draft_report(layout: &RepositoryLayout, report: &RollbackDraftReport) {
+    println!(
+        "rollback draft repository: {}",
+        layout.prikk_dir().display()
+    );
     println!("ref: {}", report.ref_name);
     println!("target block: {}", report.target_block_id);
     println!("inverse patch: {}", report.inverse_patch_id);
@@ -268,7 +282,10 @@ pub(crate) fn print_rollback_draft_verification(
     layout: &RepositoryLayout,
     report: &RollbackDraftVerification,
 ) {
-    println!("rollback draft verification repository: {}", layout.prikk_dir().display());
+    println!(
+        "rollback draft verification repository: {}",
+        layout.prikk_dir().display()
+    );
     println!("ref: {}", report.ref_name);
     println!("target block: {}", report.target_block_id);
     println!("draft patch: {}", report.draft_patch_id);
@@ -285,13 +302,25 @@ pub(crate) fn print_rollback_draft_verification(
 
 /// Print a worktree status report.
 pub(crate) fn print_worktree_status(layout: &RepositoryLayout, report: &WorktreeStatusReport) {
-    println!("worktree-status repository: {}", layout.prikk_dir().display());
+    println!(
+        "worktree-status repository: {}",
+        layout.prikk_dir().display()
+    );
     println!("ref: {}", report.ref_name);
     println!("tracked files: {}", report.tracked_files);
     println!("unchanged files: {}", report.unchanged_files);
-    println!("missing files: {}", report.count_kind(WorktreeChangeKind::Missing));
-    println!("modified files: {}", report.count_kind(WorktreeChangeKind::Modified));
-    println!("untracked files: {}", report.count_kind(WorktreeChangeKind::Untracked));
+    println!(
+        "missing files: {}",
+        report.count_kind(WorktreeChangeKind::Missing)
+    );
+    println!(
+        "modified files: {}",
+        report.count_kind(WorktreeChangeKind::Modified)
+    );
+    println!(
+        "untracked files: {}",
+        report.count_kind(WorktreeChangeKind::Untracked)
+    );
     println!(
         "unsupported paths: {}",
         report.count_kind(WorktreeChangeKind::UnsupportedPath)
@@ -301,7 +330,12 @@ pub(crate) fn print_worktree_status(layout: &RepositoryLayout, report: &Worktree
     } else {
         println!("worktree: changed against snapshot baseline");
         for change in &report.changes {
-            println!("  {} {} — {}", change.kind.as_str(), change.path, change.detail);
+            println!(
+                "  {} {} — {}",
+                change.kind.as_str(),
+                change.path,
+                change.detail
+            );
         }
     }
     println!(
@@ -327,7 +361,10 @@ pub(crate) fn print_history(layout: &RepositoryLayout, history: &RefHistory) {
         println!("  parents: {}", entry.parent_count);
         println!("  patches: {}", entry.patch_count);
         println!("  rollback-patches: {}", entry.rollback_patch_count);
-        println!("  required-attestations: {}", entry.required_attestation_count);
+        println!(
+            "  required-attestations: {}",
+            entry.required_attestation_count
+        );
         match entry.previous_ref_state_id {
             Some(previous) => println!("  previous-ref-state: {previous}"),
             None => println!("  previous-ref-state: <none>"),
@@ -341,7 +378,12 @@ pub(crate) fn print_doctor_report(layout: &RepositoryLayout, report: &prikk_stor
         print_verify_report(layout, verification);
     }
     for issue in &report.issues {
-        println!("{} [{}]: {}", issue.severity.as_str(), issue.code, issue.message);
+        println!(
+            "{} [{}]: {}",
+            issue.severity.as_str(),
+            issue.code,
+            issue.message
+        );
         println!("  recommendation: {}", issue.recommendation);
     }
     println!(
@@ -360,7 +402,10 @@ pub(crate) fn print_verify_report(
     println!("verified repository: {}", layout.prikk_dir().display());
     println!("checked objects: {}", report.checked_objects);
     println!("checked blocks: {}", report.checked_blocks);
-    println!("checked rollback blocks: {}", report.checked_rollback_blocks);
+    println!(
+        "checked rollback blocks: {}",
+        report.checked_rollback_blocks
+    );
     println!(
         "checked sealed rollback patches: {}",
         report.checked_sealed_rollback_patches
@@ -368,12 +413,18 @@ pub(crate) fn print_verify_report(
     println!("checked WAL records: {}", report.checked_wal_records);
     println!("persisted WAL patches: {}", report.persisted_wal_patches);
     println!("checked refs: {}", report.checked_refs);
-    println!("checked ref-log records: {}", report.checked_ref_log_records);
+    println!(
+        "checked ref-log records: {}",
+        report.checked_ref_log_records
+    );
     println!(
         "checked rollback draft WAL records: {}",
         report.checked_rollback_draft_records
     );
-    println!("trailing partial WAL bytes: {}", report.trailing_partial_wal_bytes);
+    println!(
+        "trailing partial WAL bytes: {}",
+        report.trailing_partial_wal_bytes
+    );
     if report.has_trailing_partial_wal() {
         println!("warning: active WAL contains an incomplete trailing record");
     }
@@ -389,7 +440,9 @@ pub(crate) fn print_help(version: &str) {
     println!("  prikk commit --from-worktree [--text-edits] -m <message> Append worktree changes");
     println!("  prikk status                              Check repository and active WAL status");
     println!("  prikk seal --allow-no-audit              Seal active WAL into heads/main");
-    println!("  prikk log [path] [--limit N] [--ref REF]  Show sealed ref history including rollback blocks");
+    println!(
+        "  prikk log [path] [--limit N] [--ref REF]  Show sealed ref history including rollback blocks"
+    );
     println!("  prikk checkout --plan-only [path] [--ref REF]      Show a safe checkout plan");
     println!(
         "  prikk checkout --snapshot-plan [path] [--ref REF]  Validate snapshot manifest paths"
@@ -415,13 +468,13 @@ pub(crate) fn print_help(version: &str) {
         "  prikk rollback-draft --append-inverse [path] [--ref REF] \
          -m <message> Append inverse Patch"
     );
-    println!(
-        "  prikk rollback-draft-verify [path] [--ref REF] Verify active rollback Patch"
-    );
+    println!("  prikk rollback-draft-verify [path] [--ref REF] Verify active rollback Patch");
     println!(
         "  prikk worktree-status [path] [--ref REF]  Report changes against snapshot baseline"
     );
-    println!("  prikk verify [path]                       Verify objects, rollback blocks, and WAL records");
+    println!(
+        "  prikk verify [path]                       Verify objects, rollback blocks, and WAL records"
+    );
     println!("  prikk doctor [path]                       Run health diagnostics");
     println!("  prikk doctor [path] --repair-wal-tail     Truncate incomplete trailing WAL bytes");
     println!(

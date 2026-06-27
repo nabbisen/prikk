@@ -160,9 +160,7 @@ pub(crate) fn parse_log_args(args: Vec<String>) -> std::result::Result<LogArgs, 
 }
 
 /// Parse `prikk checkout` arguments.
-pub(crate) fn parse_checkout_args(
-    args: Vec<String>,
-) -> std::result::Result<CheckoutArgs, String> {
+pub(crate) fn parse_checkout_args(args: Vec<String>) -> std::result::Result<CheckoutArgs, String> {
     let mut mode = None;
     let mut path = None;
     let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
@@ -173,17 +171,13 @@ pub(crate) fn parse_checkout_args(
             "--snapshot-plan" => set_checkout_mode(&mut mode, CheckoutMode::SnapshotPlan)?,
             "--snapshot-materialize" => {
                 set_checkout_mode(&mut mode, CheckoutMode::SnapshotMaterialize)?
-            },
+            }
             "--patch-plan" => set_checkout_mode(&mut mode, CheckoutMode::PatchPlan)?,
-            "--patch-materialize" => {
-                set_checkout_mode(&mut mode, CheckoutMode::PatchMaterialize)?
-            },
-            "--patch-delete-plan" => {
-                set_checkout_mode(&mut mode, CheckoutMode::PatchDeletePlan)?
-            },
+            "--patch-materialize" => set_checkout_mode(&mut mode, CheckoutMode::PatchMaterialize)?,
+            "--patch-delete-plan" => set_checkout_mode(&mut mode, CheckoutMode::PatchDeletePlan)?,
             "--patch-materialize-delete" => {
                 set_checkout_mode(&mut mode, CheckoutMode::PatchMaterializeDelete)?
-            },
+            }
             "--ref" => {
                 let Some(value) = iter.next() else {
                     return Err("checkout --ref requires a value".to_string());
@@ -192,10 +186,10 @@ pub(crate) fn parse_checkout_args(
                     return Err("checkout --ref must not be empty".to_string());
                 }
                 ref_name = value;
-            },
+            }
             other if other.starts_with('-') => {
                 return Err(format!("unknown checkout argument: {other}"));
-            },
+            }
             _ => {
                 if path.is_some() {
                     return Err("checkout accepts at most one path".to_string());
@@ -205,14 +199,12 @@ pub(crate) fn parse_checkout_args(
         }
     }
     let Some(mode) = mode else {
-        return Err(
-            concat!(
-                "PR-030 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
-                "`--snapshot-materialize`, `--patch-plan`, `--patch-materialize`, ",
-                "`--patch-delete-plan`, or `--patch-materialize-delete`",
-            )
-            .to_string(),
-        );
+        return Err(concat!(
+            "PR-030 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
+            "`--snapshot-materialize`, `--patch-plan`, `--patch-materialize`, ",
+            "`--patch-delete-plan`, or `--patch-materialize-delete`",
+        )
+        .to_string());
     };
     Ok(CheckoutArgs {
         root: optional_path_or_current(path)?,
@@ -250,7 +242,10 @@ pub(crate) fn parse_inverse_plan_args(
             }
         }
     }
-    Ok(InversePlanArgs { root: optional_path_or_current(path)?, ref_name })
+    Ok(InversePlanArgs {
+        root: optional_path_or_current(path)?,
+        ref_name,
+    })
 }
 
 /// Parse `prikk rollback-preview` arguments.
@@ -270,7 +265,7 @@ pub(crate) fn parse_rollback_preview_args(
                     return Err("rollback-preview --ref must not be empty".to_string());
                 }
                 ref_name = value;
-            },
+            }
             other if other.starts_with('-') => {
                 return Err(format!("unknown rollback-preview argument: {other}"));
             }
@@ -282,7 +277,10 @@ pub(crate) fn parse_rollback_preview_args(
             }
         }
     }
-    Ok(RollbackPreviewArgs { root: optional_path_or_current(path)?, ref_name })
+    Ok(RollbackPreviewArgs {
+        root: optional_path_or_current(path)?,
+        ref_name,
+    })
 }
 
 /// Parse `prikk rollback-draft` arguments.
@@ -305,13 +303,13 @@ pub(crate) fn parse_rollback_draft_args(
                     return Err("rollback-draft --ref must not be empty".to_string());
                 }
                 ref_name = value;
-            },
+            }
             "-m" | "--message" => {
                 let Some(value) = iter.next() else {
                     return Err("rollback-draft message option requires a value".to_string());
                 };
                 message = Some(value);
-            },
+            }
             other if other.starts_with('-') => {
                 return Err(format!("unknown rollback-draft argument: {other}"));
             }
@@ -356,7 +354,7 @@ pub(crate) fn parse_rollback_draft_verify_args(
                     return Err("rollback-draft-verify --ref must not be empty".to_string());
                 }
                 ref_name = value;
-            },
+            }
             other if other.starts_with('-') => {
                 return Err(format!("unknown rollback-draft-verify argument: {other}"));
             }
@@ -391,7 +389,7 @@ pub(crate) fn parse_worktree_status_args(
                     return Err("worktree-status --ref must not be empty".to_string());
                 }
                 ref_name = value;
-            },
+            }
             other if other.starts_with('-') => {
                 return Err(format!("unknown worktree-status argument: {other}"));
             }
@@ -403,7 +401,10 @@ pub(crate) fn parse_worktree_status_args(
             }
         }
     }
-    Ok(WorktreeStatusArgs { root: optional_path_or_current(path)?, ref_name })
+    Ok(WorktreeStatusArgs {
+        root: optional_path_or_current(path)?,
+        ref_name,
+    })
 }
 
 /// Parse `prikk doctor` arguments.
@@ -464,13 +465,11 @@ pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<Commit
         }
     }
     let Some(mode) = mode else {
-        return Err(
-            concat!(
-                "PR-030 supports `prikk commit --allow-empty -m <message>` or ",
-                "`--from-worktree [--text-edits] -m <message>`",
-            )
-            .to_string(),
-        );
+        return Err(concat!(
+            "PR-030 supports `prikk commit --allow-empty -m <message>` or ",
+            "`--from-worktree [--text-edits] -m <message>`",
+        )
+        .to_string());
     };
     let Some(message) = message else {
         return Err("commit requires -m <message>".to_string());
@@ -481,7 +480,12 @@ pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<Commit
     if text_edits && mode != CommitMode::FromWorktree {
         return Err("commit --text-edits requires --from-worktree".to_string());
     }
-    Ok(CommitArgs { mode, message, ref_name, text_edits })
+    Ok(CommitArgs {
+        mode,
+        message,
+        ref_name,
+        text_edits,
+    })
 }
 
 /// Return an optional path or the current working directory.

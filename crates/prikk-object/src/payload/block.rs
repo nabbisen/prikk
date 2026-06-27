@@ -59,7 +59,6 @@ pub struct BlockPayload {
     pub snapshot_blob_ref: Option<ObjectId>,
 }
 
-
 impl BlockPayload {
     /// Decode a block payload from Prikk canonical TLV bytes.
     pub fn decode_canonical(bytes: &[u8]) -> Result<Self> {
@@ -85,9 +84,8 @@ impl BlockPayload {
         }
         let payload = Self {
             parent_block_ids,
-            kind: kind.ok_or_else(|| {
-                PrikkError::MalformedData("Block missing kind".to_string())
-            })?,
+            kind: kind
+                .ok_or_else(|| PrikkError::MalformedData("Block missing kind".to_string()))?,
             patch_ids,
             state_merkle_root: state_merkle_root.ok_or_else(|| {
                 PrikkError::MalformedData("Block missing state_merkle_root".to_string())
@@ -111,7 +109,11 @@ struct BlockCanonicalCursor<'a> {
 
 impl<'a> BlockCanonicalCursor<'a> {
     const fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, pos: 0, last_tag: None }
+        Self {
+            bytes,
+            pos: 0,
+            last_tag: None,
+        }
     }
 
     fn next_field(&mut self) -> Result<Option<BlockCanonicalField<'a>>> {
@@ -120,7 +122,9 @@ impl<'a> BlockCanonicalCursor<'a> {
         }
         let tag = u16::from_be_bytes(self.read_array::<2>()?);
         if tag == 0 {
-            return Err(PrikkError::MalformedData("field tag 0 is reserved".to_string()));
+            return Err(PrikkError::MalformedData(
+                "field tag 0 is reserved".to_string(),
+            ));
         }
         if let Some(last) = self.last_tag {
             if tag < last {
@@ -135,13 +139,19 @@ impl<'a> BlockCanonicalCursor<'a> {
             PrikkError::MalformedData("canonical field length does not fit usize".to_string())
         })?;
         let value = self.read_exact(len)?;
-        Ok(Some(BlockCanonicalField { tag, wire_type, value }))
+        Ok(Some(BlockCanonicalField {
+            tag,
+            wire_type,
+            value,
+        }))
     }
 
     fn read_u8(&mut self) -> Result<u8> {
         let value = self.read_exact(1)?;
         let Some(byte) = value.first() else {
-            return Err(PrikkError::MalformedData("unexpected empty byte".to_string()));
+            return Err(PrikkError::MalformedData(
+                "unexpected empty byte".to_string(),
+            ));
         };
         Ok(*byte)
     }

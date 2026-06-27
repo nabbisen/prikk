@@ -63,7 +63,6 @@ pub fn materialize_snapshot_checkout(
     })
 }
 
-
 /// Result of materializing a validated manifest into a worktree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ManifestMaterializationReport {
@@ -86,7 +85,10 @@ pub(crate) fn materialize_manifest_entries(
             EntryWriteOutcome::Unchanged => unchanged_files += 1,
         }
     }
-    Ok(ManifestMaterializationReport { written_files, unchanged_files })
+    Ok(ManifestMaterializationReport {
+        written_files,
+        unchanged_files,
+    })
 }
 
 fn load_snapshot_manifest(

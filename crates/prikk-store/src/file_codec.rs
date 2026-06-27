@@ -32,7 +32,9 @@ pub(crate) fn decode_envelope_file(bytes: &[u8]) -> Result<ObjectEnvelope> {
     let mut cursor = ByteCursor::new(bytes);
     let magic = cursor.read_array::<8>()?;
     if &magic != ENVELOPE_FILE_MAGIC {
-        return Err(PrikkError::MalformedData("invalid object file magic".to_string()));
+        return Err(PrikkError::MalformedData(
+            "invalid object file magic".to_string(),
+        ));
     }
     let object_type = ObjectType::from_code(cursor.read_u16()?)?;
     let schema_version = cursor.read_u32()?;
@@ -43,9 +45,16 @@ pub(crate) fn decode_envelope_file(bytes: &[u8]) -> Result<ObjectEnvelope> {
         signatures.push(read_signature(&mut cursor)?);
     }
     if !cursor.is_finished() {
-        return Err(PrikkError::MalformedData("trailing bytes in object file".to_string()));
+        return Err(PrikkError::MalformedData(
+            "trailing bytes in object file".to_string(),
+        ));
     }
-    let envelope = ObjectEnvelope { object_type, schema_version, canonical_payload, signatures };
+    let envelope = ObjectEnvelope {
+        object_type,
+        schema_version,
+        canonical_payload,
+        signatures,
+    };
     envelope.validate()?;
     Ok(envelope)
 }
@@ -56,7 +65,13 @@ fn read_signature(cursor: &mut ByteCursor<'_>) -> Result<Signature> {
     let key_id = cursor.read_string_u16()?;
     let created_at = cursor.read_u64()?;
     let signature_bytes = cursor.read_bytes_u32()?;
-    Ok(Signature { algorithm, key_id, signature_bytes, created_at, signer_role })
+    Ok(Signature {
+        algorithm,
+        key_id,
+        signature_bytes,
+        created_at,
+        signer_role,
+    })
 }
 
 pub(crate) fn push_u16(out: &mut Vec<u8>, value: u16) {

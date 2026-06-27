@@ -5,8 +5,8 @@ use prikk_object::{
 };
 
 use crate::{
-    FileObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout,
-    load_ref_history, verify_repository,
+    FileObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout, load_ref_history,
+    verify_repository,
 };
 
 use super::helpers::{
@@ -38,19 +38,12 @@ fn history_reports_published_ref_state_chain_newest_first() {
         };
         assert!(ref_store.publish(&publication_1).is_ok());
 
-        let normal_block = signed_block_envelope(
-            BlockKind::Normal,
-            vec![root_block_id],
-            Vec::new(),
-        );
+        let normal_block =
+            signed_block_envelope(BlockKind::Normal, vec![root_block_id], Vec::new());
         let normal_block_id = normal_block.object_id();
         assert!(object_store.write_object(&normal_block).is_ok());
-        let ref_state_2 = signed_ref_state_envelope(
-            "heads/main",
-            Some(ref_state_1_id),
-            normal_block_id,
-            2,
-        );
+        let ref_state_2 =
+            signed_ref_state_envelope("heads/main", Some(ref_state_1_id), normal_block_id, 2);
         let ref_state_2_id = ref_state_2.object_id();
         let ref_update_2 = signed_ref_update_envelope(
             "heads/main",
@@ -75,7 +68,10 @@ fn history_reports_published_ref_state_chain_newest_first() {
                 history.entries.first().map(|entry| entry.block_id),
                 Some(normal_block_id)
             );
-            assert_eq!(history.entries.first().map(|entry| entry.update_seq), Some(2));
+            assert_eq!(
+                history.entries.first().map(|entry| entry.update_seq),
+                Some(2)
+            );
             assert_eq!(
                 history.entries.get(1).map(|entry| entry.block_id),
                 Some(root_block_id)
@@ -128,24 +124,14 @@ fn history_and_verify_classify_sealed_rollback_block() {
         let rollback_patch_id = rollback_patch.object_id();
         assert!(object_store.write_object(&rollback_patch).is_ok());
 
-        let block = signed_block_envelope(
-            BlockKind::Normal,
-            Vec::new(),
-            vec![rollback_patch_id],
-        );
+        let block = signed_block_envelope(BlockKind::Normal, Vec::new(), vec![rollback_patch_id]);
         let block_id = block.object_id();
         assert!(object_store.write_object(&block).is_ok());
 
         let ref_store = RefStore::new(layout.clone());
         let ref_state = signed_ref_state_envelope("heads/main", None, block_id, 1);
         let ref_state_id = ref_state.object_id();
-        let ref_update = signed_ref_update_envelope(
-            "heads/main",
-            None,
-            ref_state_id,
-            block_id,
-            1,
-        );
+        let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, block_id, 1);
         let publication = RefPublication {
             ref_name: "heads/main".to_string(),
             expected_previous_ref_state_id: None,
@@ -189,11 +175,8 @@ fn signed_block_envelope(
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
-    let mut envelope = ObjectEnvelope::unsigned(
-        ObjectType::Block,
-        1,
-        payload_bytes.unwrap_or_default(),
-    );
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes.unwrap_or_default());
     assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
 }
