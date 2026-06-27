@@ -6,6 +6,35 @@ use crate::canonical::{is_contiguous_op_seq, is_strictly_sorted};
 use crate::payload::common::{Intent, OperationCondition, OperationConditionEntry};
 use crate::{CanonicalEncode, CanonicalWriter, ObjectId};
 
+/// Number of bytes in a content-anchored text span hash.
+pub const TEXT_SPAN_HASH_BYTES: usize = 32;
+
+/// Compute the stable hash used by content-anchored text edit preconditions.
+#[must_use]
+pub fn text_span_hash(bytes: &[u8]) -> [u8; TEXT_SPAN_HASH_BYTES] {
+    prikk_hash::sha256(bytes)
+}
+
+/// Validate a stable content-anchor identifier.
+pub fn validate_text_anchor_id(value: &str) -> Result<()> {
+    if value.is_empty() {
+        return Err(PrikkError::CanonicalEncoding(
+            "text anchor id must not be empty".to_string(),
+        ));
+    }
+    if !value.is_ascii() {
+        return Err(PrikkError::CanonicalEncoding(
+            "text anchor id must be ASCII in v1".to_string(),
+        ));
+    }
+    if value.bytes().any(|byte| byte < 0x21 || byte == 0x7f) {
+        return Err(PrikkError::CanonicalEncoding(
+            "text anchor id must not contain whitespace or control characters".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 /// Patch payload.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PatchPayload {
@@ -142,21 +171,38 @@ impl CanonicalEncode for DeleteFile {
     }
 }
 
-/// Text edit payload using content anchor identity.
+/// Text edit payload using content-anchor identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditText {
     /// Repo-relative UTF-8 path.
     pub path: String,
     /// Stable content-anchor identifier.
+    ///
+    /// This is a logical span identity, not a byte or line offset. Presentation offsets may be
+    /// derived by later layers, but they are never part of the patch precondition identity.
     pub anchor_id: String,
     /// Old content hash precondition for the edited span.
-    pub old_span_hash: Vec<u8>,
+    pub old_span_hash: [u8; TEXT_SPAN_HASH_BYTES],
     /// Replacement text.
     pub replacement: String,
 }
 
+impl EditText {
+    /// Validate the content-anchor part of the edit contract.
+    pub fn validate(&self) -> Result<()> {
+        if self.path.is_empty() {
+            return Err(PrikkError::CanonicalEncoding(
+                "EditText path must not be empty".to_string(),
+            ));
+        }
+        validate_text_anchor_id(&self.anchor_id)?;
+        Ok(())
+    }
+}
+
 impl CanonicalEncode for EditText {
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
+        self.validate()?;
         writer.field_string(1, &self.path)?;
         writer.field_string(2, &self.anchor_id)?;
         writer.field_bytes(3, &self.old_span_hash)?;

@@ -15,7 +15,7 @@ pub(crate) fn signed_patch_envelope() -> ObjectEnvelope {
             kind: OperationKind::EditText(EditText {
                 path: "a.txt".to_string(),
                 anchor_id: "anchor-1".to_string(),
-                old_span_hash: vec![1, 2, 3],
+                old_span_hash: [3_u8; 32].into(),
                 replacement: "hello".to_string(),
             }),
         }],

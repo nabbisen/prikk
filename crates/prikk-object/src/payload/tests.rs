@@ -2,9 +2,37 @@
 
 use super::{
     BlobPayload, BlockKind, BlockPayload, EditText, MerkleRoot, Operation, OperationKind,
-    PatchPayload, RefKind, RefStatePayload, RefUpdatePayload,
+    text_span_hash, validate_text_anchor_id, PatchPayload, RefKind, RefStatePayload, RefUpdatePayload,
 };
 use crate::{CanonicalEncode, ObjectId, ObjectType};
+
+
+#[test]
+fn text_anchor_ids_are_validated() {
+    assert!(validate_text_anchor_id("anchor-1").is_ok());
+    assert!(validate_text_anchor_id("").is_err());
+    assert!(validate_text_anchor_id("with space").is_err());
+}
+
+#[test]
+fn text_span_hash_is_stable() {
+    let a = text_span_hash(b"hello");
+    let b = text_span_hash(b"hello");
+    let c = text_span_hash(b"world");
+    assert_eq!(a, b);
+    assert_ne!(a, c);
+}
+
+#[test]
+fn edit_text_rejects_empty_anchor() {
+    let op = EditText {
+        path: "a.txt".to_string(),
+        anchor_id: String::new(),
+        old_span_hash: [0_u8; 32],
+        replacement: "hello".to_string(),
+    };
+    assert!(op.to_canonical_bytes().is_err());
+}
 
 #[test]
 fn patch_operations_must_be_contiguous() {
@@ -16,7 +44,7 @@ fn patch_operations_must_be_contiguous() {
             kind: OperationKind::EditText(EditText {
                 path: "a.txt".to_string(),
                 anchor_id: "anchor".to_string(),
-                old_span_hash: vec![1],
+                old_span_hash: [1_u8; 32],
                 replacement: "hello".to_string(),
             }),
         }],

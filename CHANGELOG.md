@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0 PR-023
+
+Explicit patch deletion planning and opt-in removal of files deleted by supported patch replay.
+
+- Added a content-anchored text edit payload validation scaffold.
+- Added fixed `TEXT_SPAN_HASH_BYTES = 32` and `text_span_hash(bytes)`.
+- Added `validate_text_anchor_id()` for v1 anchor identifier validation.
+- Changed `EditText.old_span_hash` to a fixed 32-byte value.
+- Added tests for anchor validation, stable span hashing, and invalid anchor rejection.
+- Fixed a replay-source transcription defect in the supported `ReplaceBinary` branch.
+- Kept worktree text diff generation, text replay, inverse, commutation, conflict witnesses, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-022
 
 Explicit patch deletion planning and opt-in removal of files deleted by supported patch replay.
