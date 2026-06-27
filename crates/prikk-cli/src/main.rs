@@ -2,10 +2,11 @@
 
 //! PRIKK command-line entry point.
 //!
-//! PR-026 exposes minimal repository layout commands, active WAL status, empty and
+//! PR-027 exposes minimal repository layout commands, active WAL status, empty and
 //! snapshot-baseline worktree commit scaffolds, opt-in full-file text edit generation,
-//! read-only inverse planning, supported patch replay planning/materialization, explicit patch
-//! deletion planning, a local no-audit seal scaffold, read-only history inspection, checkout
+//! read-only inverse planning and rollback preview, supported patch replay
+//! planning/materialization, explicit patch deletion planning, a local no-audit seal scaffold,
+//! read-only history inspection, checkout
 //! planning, conservative snapshot materialization, read-only worktree status, repository
 //! verification, and doctor diagnostics with opt-in repairs.
 //! Arbitrary-span text diffs, full patch algebra, audit plugins, and sync remain later increments.
@@ -20,14 +21,15 @@ mod seal;
 
 use args::{
     current_dir, optional_path_or_current, parse_checkout_args, parse_commit_args,
-    parse_doctor_args, parse_inverse_plan_args, parse_log_args, parse_worktree_status_args,
+    parse_doctor_args, parse_inverse_plan_args, parse_log_args, parse_rollback_preview_args,
+    parse_worktree_status_args,
     CheckoutMode, CommitMode,
 };
 use commit::empty_patch_envelope;
 use output::{
     print_checkout_plan, print_doctor_report, print_help, print_history,
     print_patch_deletion_plan, print_patch_inverse_plan, print_patch_materialization_report,
-    print_patch_replay_plan,
+    print_patch_replay_plan, print_rollback_preview_plan,
     print_snapshot_checkout_plan, print_snapshot_materialization_report, print_verify_report,
     print_worktree_status,
 };
@@ -35,13 +37,13 @@ use prikk_store::{
     commit_worktree_changes_with_options, doctor_repository, load_ref_history,
     materialize_patch_checkout, materialize_patch_checkout_with_deletions,
     materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan,
-    prepare_patch_inverse_plan, prepare_patch_replay_plan, prepare_snapshot_checkout_plan,
-    repair_repository,
+    prepare_patch_inverse_plan, prepare_patch_replay_plan, prepare_rollback_preview,
+    prepare_snapshot_checkout_plan, repair_repository,
     verify_repository, worktree_status, ActiveSession, DoctorRepairOptions, RefStore,
     RepositoryLayout, Wal, WorktreePatchCommitOptions,
 };
 
-const VERSION: &str = "0.1.0-pr026";
+const VERSION: &str = "0.1.0-pr027";
 
 fn main() -> ExitCode {
     match run() {
@@ -71,6 +73,7 @@ fn run() -> std::result::Result<(), String> {
         Some("log") => run_log(args.collect()),
         Some("checkout") => run_checkout(args.collect()),
         Some("inverse-plan") => run_inverse_plan(args.collect()),
+        Some("rollback-preview") => run_rollback_preview(args.collect()),
         Some("worktree-status") => run_worktree_status(args.collect()),
         Some("verify") => run_verify(args.next()),
         Some("doctor") => run_doctor(args.collect()),
@@ -163,7 +166,7 @@ fn run_status() -> std::result::Result<(), String> {
     }
     println!(
         "status: arbitrary-span text diffs, plugins, and sync not \
-         implemented in PR-026"
+         implemented in PR-027"
     );
     Ok(())
 }
@@ -230,6 +233,15 @@ fn run_inverse_plan(args: Vec<String>) -> std::result::Result<(), String> {
     let plan = prepare_patch_inverse_plan(&layout, &args.ref_name)
         .map_err(|err| err.to_string())?;
     print_patch_inverse_plan(&layout, &plan);
+    Ok(())
+}
+
+fn run_rollback_preview(args: Vec<String>) -> std::result::Result<(), String> {
+    let args = parse_rollback_preview_args(args)?;
+    let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
+    let plan = prepare_rollback_preview(&layout, &args.ref_name)
+        .map_err(|err| err.to_string())?;
+    print_rollback_preview_plan(&layout, &plan);
     Ok(())
 }
 

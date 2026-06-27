@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0 PR-027
+
+Non-mutating rollback preview for the supported patch-operation subset.
+
+- Added non-mutating rollback preview for the supported patch-operation subset.
+- Added `prepare_rollback_preview()` and `RollbackPreviewPlan`.
+- Added CLI command `prikk rollback-preview [path] [--ref REF]`.
+- Combines unsigned inverse planning with supported patch replay validation.
+- Compares the current replayed target state with the latest snapshot baseline and reports `would-create`, `would-delete`, and `would-replace` file-level changes.
+- Kept rollback refs, authorization policy, worktree writes, commutation, confluence, arbitrary-span rollback, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-026
 
 Read-only inverse planning for the supported patch-operation subset.

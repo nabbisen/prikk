@@ -73,6 +73,14 @@ pub(crate) struct InversePlanArgs {
     pub(crate) ref_name: String,
 }
 
+/// Parsed rollback-preview command arguments.
+pub(crate) struct RollbackPreviewArgs {
+    /// Repository root.
+    pub(crate) root: PathBuf,
+    /// Ref to inspect.
+    pub(crate) ref_name: String,
+}
+
 /// Parsed worktree-status command arguments.
 pub(crate) struct WorktreeStatusArgs {
     /// Repository root.
@@ -182,7 +190,7 @@ pub(crate) fn parse_checkout_args(
     let Some(mode) = mode else {
         return Err(
             concat!(
-                "PR-026 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
+                "PR-027 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
                 "`--snapshot-materialize`, `--patch-plan`, `--patch-materialize`, ",
                 "`--patch-delete-plan`, or `--patch-materialize-delete`",
             )
@@ -227,6 +235,38 @@ pub(crate) fn parse_inverse_plan_args(
         }
     }
     Ok(InversePlanArgs { root: optional_path_or_current(path)?, ref_name })
+}
+
+/// Parse `prikk rollback-preview` arguments.
+pub(crate) fn parse_rollback_preview_args(
+    args: Vec<String>,
+) -> std::result::Result<RollbackPreviewArgs, String> {
+    let mut path = None;
+    let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--ref" => {
+                let Some(value) = iter.next() else {
+                    return Err("rollback-preview --ref requires a value".to_string());
+                };
+                if value.trim().is_empty() {
+                    return Err("rollback-preview --ref must not be empty".to_string());
+                }
+                ref_name = value;
+            },
+            other if other.starts_with('-') => {
+                return Err(format!("unknown rollback-preview argument: {other}"));
+            }
+            _ => {
+                if path.is_some() {
+                    return Err("rollback-preview accepts at most one path".to_string());
+                }
+                path = Some(arg);
+            }
+        }
+    }
+    Ok(RollbackPreviewArgs { root: optional_path_or_current(path)?, ref_name })
 }
 
 /// Parse `prikk worktree-status` arguments.
@@ -321,7 +361,7 @@ pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<Commit
     let Some(mode) = mode else {
         return Err(
             concat!(
-                "PR-026 supports `prikk commit --allow-empty -m <message>` or ",
+                "PR-027 supports `prikk commit --allow-empty -m <message>` or ",
                 "`--from-worktree [--text-edits] -m <message>`",
             )
             .to_string(),

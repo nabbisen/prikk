@@ -4,16 +4,16 @@ This repository follows the design-first PRIKK roadmap.
 
 ## Current Increment
 
-- 0.1.0 PR-026: read-only inverse planning for the supported patch-operation subset.
+- 0.1.0 PR-027: non-mutating rollback preview for the supported patch-operation subset.
 
 ## Next Increments
 
-1. PR-027: begin conflict/inverse evidence scaffolding or expand arbitrary-span text-edit support only after the patch-engine plan is reviewed.
-2. PR-028: design rollback/ref-policy boundaries before any mutating inverse command.
-3. PR-029+: audit/plugin and sync work remain gated by their dedicated plans.
+1. PR-028: design rollback/ref-policy boundaries before any mutating inverse command.
+2. PR-029: begin conflict/inverse evidence scaffolding or expand arbitrary-span text-edit support only after the patch-engine plan is reviewed.
+3. PR-030+: audit/plugin and sync work remain gated by their dedicated plans.
 
 Final feature scope remains governed by the FDDs and RFCs.
 
-## PR-026 Note
+## PR-027 Note
 
-PR-026 adds read-only inverse planning for the supported patch-operation subset. It validates the sealed single-parent patch chain, derives an unsigned inverse Patch payload for `CreateFile`, `DeleteFile`, `ReplaceBinary`, and full-file `EditText`, and reports a deterministic unsigned Patch ID hint. Rollback refs, authorization policy, conflict witnesses, commutation, confluence, arbitrary-span inverse handling, audit plugins, and sync remain deferred.
+PR-027 adds a non-mutating rollback preview. It derives the unsigned inverse plan, validates the supported replay target, and compares the current replayed state with the latest snapshot baseline. It reports what files rollback would create, delete, or replace, but it does not write objects, append WAL records, publish refs, modify the worktree, or authorize rollback. Rollback refs, authorization policy, conflict witnesses, commutation, confluence, arbitrary-span rollback, audit plugins, and sync remain deferred.

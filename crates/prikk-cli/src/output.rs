@@ -3,7 +3,7 @@
 use prikk_store::{
     CheckoutMaterialization, CheckoutPlan, DoctorSeverity, PatchDeletionPlan,
     PatchInversePlan, PatchMaterializationReport, PatchReplayPlan, RefHistory,
-    RepositoryLayout,
+    RepositoryLayout, RollbackPreviewPlan,
     SnapshotCheckoutPlan, SnapshotMaterializationReport, WorktreeChangeKind, WorktreeStatusReport,
 };
 
@@ -181,6 +181,60 @@ pub(crate) fn print_patch_inverse_plan(layout: &RepositoryLayout, plan: &PatchIn
     );
 }
 
+/// Print a rollback preview plan.
+pub(crate) fn print_rollback_preview_plan(
+    layout: &RepositoryLayout,
+    plan: &RollbackPreviewPlan,
+) {
+    println!("rollback preview repository: {}", layout.prikk_dir().display());
+    println!("ref: {}", plan.ref_name);
+    println!("target block: {}", plan.target_block_id);
+    println!("blocks validated: {}", plan.block_count);
+    println!("patches validated: {}", plan.patch_count);
+    println!("inverse operations: {}", plan.inverse_operation_count);
+    println!("unsigned inverse patch id hint: {}", plan.inverse_patch_id_hint);
+    println!("current files: {}", plan.current_file_count);
+    println!("current content bytes: {}", plan.current_content_bytes);
+    println!("preview files: {}", plan.preview_file_count);
+    println!("preview content bytes: {}", plan.preview_content_bytes);
+    println!("changes: {}", plan.change_count);
+    println!("would create: {}", plan.would_create_files);
+    println!("would delete: {}", plan.would_delete_files);
+    println!("would replace: {}", plan.would_replace_files);
+    for change in &plan.changes {
+        match (change.current_bytes, change.preview_bytes) {
+            (Some(current), Some(preview)) => println!(
+                "  {} {} current-bytes={} preview-bytes={}",
+                change.kind.as_str(),
+                change.path,
+                current,
+                preview
+            ),
+            (Some(current), None) => println!(
+                "  {} {} current-bytes={} preview-bytes=<absent>",
+                change.kind.as_str(),
+                change.path,
+                current
+            ),
+            (None, Some(preview)) => println!(
+                "  {} {} current-bytes=<absent> preview-bytes={}",
+                change.kind.as_str(),
+                change.path,
+                preview
+            ),
+            (None, None) => println!(
+                "  {} {} current-bytes=<absent> preview-bytes=<absent>",
+                change.kind.as_str(),
+                change.path
+            ),
+        }
+    }
+    println!(
+        "note: this is a non-mutating rollback preview to the latest snapshot baseline; \
+         rollback refs, authorization, worktree writes, and full patch algebra remain later PRs"
+    );
+}
+
 /// Print a worktree status report.
 pub(crate) fn print_worktree_status(layout: &RepositoryLayout, report: &WorktreeStatusReport) {
     println!("worktree-status repository: {}", layout.prikk_dir().display());
@@ -297,6 +351,7 @@ pub(crate) fn print_help(version: &str) {
         "  prikk checkout --patch-materialize-delete [path] [--ref REF]  Write/delete patch files"
     );
     println!("  prikk inverse-plan [path] [--ref REF]     Plan an unsigned inverse patch");
+    println!("  prikk rollback-preview [path] [--ref REF] Preview non-mutating rollback");
     println!(
         "  prikk worktree-status [path] [--ref REF]  Report changes against snapshot baseline"
     );

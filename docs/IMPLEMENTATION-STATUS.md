@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-026
+Version: 0.1.0 PR-027
 
 ## Implemented
 
@@ -30,8 +30,8 @@ Version: 0.1.0 PR-026
 - Read-only worktree status against snapshot-backed baselines.
 - Explicit deletion planning and opt-in deletion for files removed by supported patch replay.
 - Content-anchored `EditText` validation scaffold with fixed 32-byte span hashes, anchor ID validation, conservative full-file exact-span replay, and opt-in worktree generation for full-file UTF-8 edits.
-- Read-only unsigned inverse planning for the supported patch-operation subset.
-- Minimal CLI for `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Read-only unsigned inverse planning and non-mutating rollback preview for the supported patch-operation subset.
+- Minimal CLI for `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
 
@@ -52,7 +52,7 @@ Version: 0.1.0 PR-026
 
 ## Gate Discipline
 
-PR-026 stays within the approved foundation boundary by adding only read-only unsigned inverse planning for the supported patch subset. It does not mutate refs, authorize rollback, discover arbitrary spans, minimize text diffs, commute patches, resolve conflicts, or implement audit plugin execution, policy enforcement, or remote sync.
+PR-027 stays within the approved foundation boundary by adding only non-mutating rollback preview for the supported patch subset. It does not write inverse patches, mutate refs, authorize rollback, modify the worktree, discover arbitrary spans, minimize text diffs, commute patches, resolve conflicts, or implement audit plugin execution, policy enforcement, or remote sync.
 
 ## 0.1.0 PR-022
 
@@ -80,3 +80,7 @@ Added opt-in full-file `EditText` generation from worktree modifications. The de
 
 Added read-only inverse planning for the supported patch-operation subset. `prikk inverse-plan [path] [--ref REF]` validates the sealed single-parent chain, derives an unsigned inverse Patch payload for `CreateFile`, `DeleteFile`, `ReplaceBinary`, and full-file `EditText`, and reports a deterministic unsigned Patch ID hint. Rollback refs, authorization policy, commutation, confluence, arbitrary-span inverse handling, audit plugins, and sync remain deferred.
 
+
+## 0.1.0 PR-027
+
+Added non-mutating rollback preview for the supported patch-operation subset. `prikk rollback-preview [path] [--ref REF]` derives the unsigned inverse plan, validates supported replay, and reports file-level `would-create`, `would-delete`, and `would-replace` changes against the latest snapshot baseline. Rollback refs, authorization policy, worktree writes, commutation, confluence, arbitrary-span rollback, audit plugins, and sync remain deferred.

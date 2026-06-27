@@ -61,7 +61,10 @@ fn patch_replay_applies_full_file_text_edit() {
     let _ = std::fs::remove_dir_all(root);
 }
 
-fn publish_snapshot_then_patch_block(layout: &RepositoryLayout) -> prikk_error::Result<()> {
+/// Publish a snapshot root followed by a supported file-operation patch block.
+pub(crate) fn publish_snapshot_then_patch_block(
+    layout: &RepositoryLayout,
+) -> prikk_error::Result<()> {
     let mut object_store = FileObjectStore::new(layout.clone());
     let readme_v1 = write_blob(&mut object_store, b"hello\n")?;
     let old_blob = write_blob(&mut object_store, b"old\n")?;
@@ -170,7 +173,10 @@ fn publish_snapshot_then_patch_block(layout: &RepositoryLayout) -> prikk_error::
     Ok(())
 }
 
-fn publish_text_edit_block(layout: &RepositoryLayout) -> prikk_error::Result<()> {
+/// Publish a snapshot root followed by a full-file text-edit patch block.
+pub(crate) fn publish_text_edit_block(
+    layout: &RepositoryLayout,
+) -> prikk_error::Result<()> {
     let mut object_store = FileObjectStore::new(layout.clone());
     let original = b"hello text\n";
     let snapshot_manifest = SnapshotManifest {

@@ -85,6 +85,9 @@ pub(crate) struct PatchReplaySnapshot {
     pub(crate) manifest: SnapshotManifest,
     /// Files explicitly removed by replayed patches and still absent in the final manifest.
     pub(crate) deleted_files: Vec<PatchReplayDeletedFile>,
+    /// Latest snapshot baseline used as the rollback-preview target for the supported replay
+    /// window.
+    pub(crate) baseline_manifest: SnapshotManifest,
 }
 
 /// A file explicitly deleted while replaying the supported patch subset.
@@ -110,11 +113,13 @@ pub(crate) fn replay_supported_patch_chain(
     let mut deleted_files = BTreeMap::new();
     let mut patch_count = 0_usize;
     let mut applied_operation_count = 0_usize;
+    let mut baseline_files = BTreeMap::new();
 
     for block_id in &block_ids {
         let block = read_block(&object_store, *block_id)?;
         if let Some(snapshot_blob_ref) = block.snapshot_blob_ref {
             files = load_snapshot_files(&object_store, snapshot_blob_ref)?;
+            baseline_files = files.clone();
             deleted_files.clear();
         }
         for patch_id in block.patch_ids {
@@ -141,6 +146,7 @@ pub(crate) fn replay_supported_patch_chain(
         applied_operation_count,
         manifest: files_to_manifest(files)?,
         deleted_files: deleted_files.into_values().collect(),
+        baseline_manifest: files_to_manifest(baseline_files)?,
     })
 }
 
