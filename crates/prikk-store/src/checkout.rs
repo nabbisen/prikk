@@ -1,15 +1,16 @@
 //! Checkout planning helpers.
 //!
-//! PR-015 introduces a read-only checkout plan. It validates the current ref-state target and the
+//! PR-016 extends a read-only checkout planning. It validates the current ref-state target and the
 //! referenced block/patch objects, then reports what a future materializer would need to do. It
 //! deliberately does not write the worktree and does not apply patch algebra.
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{BlockKind, BlockPayload, ObjectId, ObjectType, RefStatePayload};
+use prikk_object::{BlobPayload, BlockKind, BlockPayload, ObjectId, ObjectType, RefStatePayload};
 
 use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
 use crate::refs::RefStore;
+use crate::snapshot::SnapshotManifest;
 
 /// Default ref used by checkout planning.
 pub const DEFAULT_CHECKOUT_REF: &str = "heads/main";
@@ -43,6 +44,22 @@ impl CheckoutPlan {
     }
 }
 
+
+/// Read-only plan for validating a snapshot-backed checkout.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SnapshotCheckoutPlan {
+    /// Base checkout plan.
+    pub checkout: CheckoutPlan,
+    /// Snapshot Blob object ID.
+    pub snapshot_blob_id: ObjectId,
+    /// Number of files in the snapshot manifest.
+    pub file_count: usize,
+    /// Total content bytes in the snapshot manifest.
+    pub total_content_bytes: u64,
+    /// Validated repository-relative paths in materialization order.
+    pub paths: Vec<String>,
+}
+
 /// What blocks a checkout from becoming a real worktree materialization in this stage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheckoutMaterialization {
@@ -67,6 +84,40 @@ impl CheckoutMaterialization {
             Self::RequiresPatchEngine => "requires-patch-engine",
         }
     }
+}
+
+
+/// Prepare and validate a snapshot-backed checkout plan without writing the worktree.
+pub fn prepare_snapshot_checkout_plan(
+    layout: &RepositoryLayout,
+    ref_name: &str,
+) -> Result<SnapshotCheckoutPlan> {
+    let checkout = prepare_checkout_plan(layout, ref_name)?;
+    let Some(snapshot_blob_id) = checkout.snapshot_blob_ref else {
+        return Err(PrikkError::Integrity(format!(
+            "checkout target for {ref_name} does not contain a snapshot blob"
+        )));
+    };
+    let object_store = FileObjectStore::new(layout.clone());
+    let Some(envelope) = object_store.read_typed(snapshot_blob_id, ObjectType::Blob)? else {
+        return Err(PrikkError::Integrity(format!(
+            "snapshot Blob {snapshot_blob_id} is missing"
+        )));
+    };
+    let blob = BlobPayload::decode_canonical(&envelope.canonical_payload)?;
+    let manifest = SnapshotManifest::decode(&blob.bytes)?;
+    let paths = manifest
+        .files
+        .iter()
+        .map(|entry| entry.path.as_str().to_string())
+        .collect();
+    Ok(SnapshotCheckoutPlan {
+        checkout,
+        snapshot_blob_id,
+        file_count: manifest.files.len(),
+        total_content_bytes: manifest.total_content_bytes(),
+        paths,
+    })
 }
 
 /// Prepare a checkout plan for a ref without modifying the worktree.

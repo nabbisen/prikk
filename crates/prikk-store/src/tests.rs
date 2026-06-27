@@ -6,6 +6,7 @@ mod doctor;
 mod helpers;
 mod history;
 mod refs;
+mod snapshot;
 mod storage;
 mod verify;
 mod wal;

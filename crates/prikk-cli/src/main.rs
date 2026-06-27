@@ -2,10 +2,11 @@
 
 //! PRIKK command-line entry point.
 //!
-//! PR-015 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
-//! a local no-audit seal scaffold, read-only history inspection, checkout planning, deeper repository verification,
-//! and doctor diagnostics with opt-in safe WAL tail and missing-ref-pointer repair. Real diff
-//! capture, patch application, audit plugins, and sync remain later increments.
+//! PR-016 exposes minimal repository layout commands, active WAL status, an empty-commit scaffold,
+//! a local no-audit seal scaffold, read-only history inspection, checkout and snapshot-manifest
+//! planning, deeper repository verification, and doctor diagnostics with opt-in safe WAL tail and
+//! missing-ref-pointer repair. Real diff capture, patch application, audit plugins, and sync remain
+//! later increments.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -18,12 +19,13 @@ use prikk_object::{
     PatchPayload, Signature, SignatureAlgorithm, SignerRole,
 };
 use prikk_store::{
-    doctor_repository, load_ref_history, prepare_checkout_plan, repair_repository, verify_repository,
-    ActiveSession, CheckoutMaterialization, CheckoutPlan, DoctorRepairOptions, DoctorSeverity,
-    RefHistory, RefStore, RepositoryLayout, Wal, DEFAULT_CHECKOUT_REF, DEFAULT_HISTORY_LIMIT,
+    doctor_repository, load_ref_history, prepare_checkout_plan, prepare_snapshot_checkout_plan,
+    repair_repository, verify_repository, ActiveSession, CheckoutMaterialization, CheckoutPlan,
+    DoctorRepairOptions, DoctorSeverity, RefHistory, RefStore, RepositoryLayout, Wal,
+    DEFAULT_CHECKOUT_REF, DEFAULT_HISTORY_LIMIT,
 };
 
-const VERSION: &str = "0.1.0-pr015";
+const VERSION: &str = "0.1.0-pr016";
 
 fn main() -> ExitCode {
     match run() {
@@ -95,7 +97,9 @@ fn run() -> std::result::Result<(), String> {
                 Some(id) => println!("heads/main RefState: {id}"),
                 None => println!("heads/main RefState: <not published>"),
             }
-            println!("status: patch algebra, worktree materialization, plugins, and sync not implemented in PR-015");
+            println!(
+                "status: patch algebra, worktree materialization, plugins, and sync not implemented in PR-016"
+            );
             Ok(())
         }
         Some("log") => {
@@ -109,9 +113,18 @@ fn run() -> std::result::Result<(), String> {
         Some("checkout") => {
             let args = parse_checkout_args(args.collect())?;
             let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
-            let plan = prepare_checkout_plan(&layout, &args.ref_name)
-                .map_err(|err| err.to_string())?;
-            print_checkout_plan(&layout, &plan);
+            match args.mode {
+                CheckoutMode::PlanOnly => {
+                    let plan = prepare_checkout_plan(&layout, &args.ref_name)
+                        .map_err(|err| err.to_string())?;
+                    print_checkout_plan(&layout, &plan);
+                }
+                CheckoutMode::SnapshotPlan => {
+                    let plan = prepare_snapshot_checkout_plan(&layout, &args.ref_name)
+                        .map_err(|err| err.to_string())?;
+                    print_snapshot_checkout_plan(&layout, &plan);
+                }
+            }
             Ok(())
         }
         Some("verify") => {
@@ -213,16 +226,24 @@ fn parse_log_args(args: Vec<String>) -> std::result::Result<LogArgs, String> {
 struct CheckoutArgs {
     root: PathBuf,
     ref_name: String,
+    mode: CheckoutMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CheckoutMode {
+    PlanOnly,
+    SnapshotPlan,
 }
 
 fn parse_checkout_args(args: Vec<String>) -> std::result::Result<CheckoutArgs, String> {
-    let mut plan_only = false;
+    let mut mode = None;
     let mut path = None;
     let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
-            "--plan-only" => plan_only = true,
+            "--plan-only" => set_checkout_mode(&mut mode, CheckoutMode::PlanOnly)?,
+            "--snapshot-plan" => set_checkout_mode(&mut mode, CheckoutMode::SnapshotPlan)?,
             "--ref" => {
                 let Some(value) = iter.next() else {
                     return Err("checkout --ref requires a value".to_string());
@@ -243,12 +264,24 @@ fn parse_checkout_args(args: Vec<String>) -> std::result::Result<CheckoutArgs, S
             }
         }
     }
-    if !plan_only {
+    let Some(mode) = mode else {
         return Err(
-            "PR-015 supports only `prikk checkout --plan-only [path] [--ref REF]`".to_string(),
+            "PR-016 supports `prikk checkout --plan-only` or `prikk checkout --snapshot-plan`"
+                .to_string(),
         );
+    };
+    Ok(CheckoutArgs { root: optional_path_or_current(path)?, ref_name, mode })
+}
+
+fn set_checkout_mode(
+    mode: &mut Option<CheckoutMode>,
+    next: CheckoutMode,
+) -> std::result::Result<(), String> {
+    if mode.is_some() {
+        return Err("checkout accepts only one of --plan-only or --snapshot-plan".to_string());
     }
-    Ok(CheckoutArgs { root: optional_path_or_current(path)?, ref_name })
+    *mode = Some(next);
+    Ok(())
 }
 
 struct DoctorArgs {
@@ -314,12 +347,29 @@ fn print_checkout_plan(layout: &RepositoryLayout, plan: &CheckoutPlan) {
             println!("note: no worktree changes would be needed for this block");
         }
         CheckoutMaterialization::RequiresSnapshotMaterialization => {
-            println!("note: snapshot materialization is deferred after PR-015");
+            println!(
+                "note: use `prikk checkout --snapshot-plan` to validate the snapshot manifest"
+            );
         }
         CheckoutMaterialization::RequiresPatchEngine => {
-            println!("note: patch application/algebra is deferred after PR-015");
+            println!("note: patch application/algebra is deferred after PR-016");
         }
     }
+}
+
+fn print_snapshot_checkout_plan(
+    layout: &RepositoryLayout,
+    plan: &prikk_store::SnapshotCheckoutPlan,
+) {
+    println!("snapshot checkout plan repository: {}", layout.prikk_dir().display());
+    print_checkout_plan(layout, &plan.checkout);
+    println!("snapshot blob: {}", plan.snapshot_blob_id);
+    println!("snapshot files: {}", plan.file_count);
+    println!("snapshot content bytes: {}", plan.total_content_bytes);
+    for path in &plan.paths {
+        println!("  file: {path}");
+    }
+    println!("note: PR-016 validates the snapshot manifest but does not write the worktree");
 }
 
 fn print_history(layout: &RepositoryLayout, history: &RefHistory) {
@@ -377,7 +427,7 @@ fn parse_empty_commit_message(args: Vec<String>) -> std::result::Result<String, 
         }
     }
     if !allow_empty {
-        return Err("PR-015 supports only `prikk commit --allow-empty -m <message>`".to_string());
+        return Err("PR-016 supports only `prikk commit --allow-empty -m <message>`".to_string());
     }
     let Some(message) = message else {
         return Err("empty commit requires -m <message>".to_string());
@@ -452,10 +502,15 @@ fn print_help() {
     println!("  prikk status                              Check repository and active WAL status");
     println!("  prikk seal --allow-no-audit              Seal active WAL into heads/main");
     println!("  prikk log [path] [--limit N] [--ref REF]  Show sealed ref history");
-    println!("  prikk checkout --plan-only [path] [--ref REF]  Show a safe checkout plan");
+    println!("  prikk checkout --plan-only [path] [--ref REF]      Show a safe checkout plan");
+    println!(
+        "  prikk checkout --snapshot-plan [path] [--ref REF]  Validate snapshot manifest paths"
+    );
     println!("  prikk verify [path]                       Verify objects and WAL records");
     println!("  prikk doctor [path]                       Run health diagnostics");
     println!("  prikk doctor [path] --repair-wal-tail     Truncate incomplete trailing WAL bytes");
-    println!("  prikk doctor [path] --repair-main-ref     Reconstruct a missing heads/main pointer");
+    println!(
+        "  prikk doctor [path] --repair-main-ref     Reconstruct a missing heads/main pointer"
+    );
     println!("  prikk --version                           Print version");
 }

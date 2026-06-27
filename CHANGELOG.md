@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0 PR-016
+
+snapshot-manifest validation and path-safety scaffolding via `prikk checkout --snapshot-plan`.
+
+- Added conservative repository-relative path validation for future worktree materialization.
+- Added snapshot-manifest decode/encode scaffolding stored inside Blob objects.
+- Added read-only snapshot checkout planning via `prepare_snapshot_checkout_plan()`.
+- Added CLI command `prikk checkout --snapshot-plan [path] [--ref REF]`.
+- Snapshot planning validates absolute/traversal paths, Windows reserved names, duplicate paths, and case-insensitive collisions.
+- Kept actual worktree writes, snapshot materialization, real diff capture, patch apply/inverse/commutation, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-015
 
 Read-only checkout planning via `prikk checkout --plan-only`.

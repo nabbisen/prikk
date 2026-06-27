@@ -1,4 +1,4 @@
-# Prikk
+# PRIKK
 
 ![Status](https://img.shields.io/badge/status-early--implementation-orange)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
@@ -39,7 +39,7 @@ cargo run -p prikk -- doctor ./sample-repo
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-015**.
+Current implementation drop: **0.1.0 PR-016**.
 
 Implemented:
 
@@ -52,11 +52,12 @@ Implemented:
 - `doctor` diagnostics layered on top of verification, with opt-in safe WAL tail and missing-ref-pointer repair.
 - Read-only sealed-history inspection from the current RefState chain.
 - Read-only checkout planning that validates the current RefState target and reports materialization blockers.
+- Snapshot-manifest validation and path-safety checks for future snapshot checkout materialization.
 - Initial RefState publication primitives with flat hashed ref pointer paths.
 - Inline signed RefUpdate log append/replay with linked payload validation.
 - Narrow empty-commit scaffold that appends a signed patch envelope to the active WAL.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
-- Minimal CLI commands: `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Minimal CLI commands: `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 Not implemented yet:
 

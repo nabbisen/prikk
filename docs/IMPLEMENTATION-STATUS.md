@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-015
+Version: 0.1.0 PR-016
 
 ## Implemented
 
@@ -26,7 +26,8 @@ Version: 0.1.0 PR-015
 - Canonical decoding for RefState, RefUpdate, and Block payloads used by verification.
 - Read-only sealed-history inspection from the current RefState chain.
 - Read-only checkout planning that validates current RefState, Block, parent Block, Patch, and optional snapshot Blob references.
-- Minimal CLI for `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Snapshot-manifest validation and conservative repository path-safety checks for future snapshot materialization.
+- Minimal CLI for `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
 
@@ -47,4 +48,4 @@ Version: 0.1.0 PR-015
 
 ## Gate Discipline
 
-PR-015 stays within the approved foundation boundary by adding only read-only history inspection, checkout planning, and narrow FDD-02-style recovery for already-verified data. It does not implement real worktree diff capture, patch algebra, audit plugin execution, policy enforcement, or remote sync.
+PR-016 stays within the approved foundation boundary by adding only read-only history inspection, checkout planning, snapshot-manifest validation, path-safety checks, and narrow FDD-02-style recovery for already-verified data. It does not implement real worktree diff capture, patch algebra, audit plugin execution, policy enforcement, or remote sync.
