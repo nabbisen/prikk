@@ -14,6 +14,7 @@ mod patch_replay;
 mod patch_checkout;
 mod patch_inverse;
 mod rollback_preview;
+mod rollback_draft;
 
 mod worktree_status;
 mod worktree_patch;

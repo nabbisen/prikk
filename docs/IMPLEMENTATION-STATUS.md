@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-027
+Version: 0.1.0 PR-028
 
 ## Implemented
 
@@ -30,14 +30,14 @@ Version: 0.1.0 PR-027
 - Read-only worktree status against snapshot-backed baselines.
 - Explicit deletion planning and opt-in deletion for files removed by supported patch replay.
 - Content-anchored `EditText` validation scaffold with fixed 32-byte span hashes, anchor ID validation, conservative full-file exact-span replay, and opt-in worktree generation for full-file UTF-8 edits.
-- Read-only unsigned inverse planning and non-mutating rollback preview for the supported patch-operation subset.
-- Minimal CLI for `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Read-only unsigned inverse planning, non-mutating rollback preview, and conservative rollback draft append for the supported patch-operation subset.
+- Minimal CLI for `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
 
 - General destructive worktree pruning and full patch-based checkout semantics.
 - Policy-aware audit/attestation publication from seal.
-- Full patch algebra: arbitrary text-span replay, mutating rollback, commutation, confluence, and conflict witnesses.
+- Full patch algebra: arbitrary text-span replay, rollback ref publication, commutation, confluence, and conflict witnesses.
 - Conflict witnesses and merge state.
 - WASM plugin host.
 - Audit publication policy.
@@ -52,7 +52,7 @@ Version: 0.1.0 PR-027
 
 ## Gate Discipline
 
-PR-027 stays within the approved foundation boundary by adding only non-mutating rollback preview for the supported patch subset. It does not write inverse patches, mutate refs, authorize rollback, modify the worktree, discover arbitrary spans, minimize text diffs, commute patches, resolve conflicts, or implement audit plugin execution, policy enforcement, or remote sync.
+PR-028 stays within the approved foundation boundary by appending only a signed inverse Patch draft to an empty active WAL. It does not publish rollback refs, authorize rollback, modify the worktree, discover arbitrary spans, minimize text diffs, commute patches, resolve conflicts, or implement audit plugin execution, policy enforcement, or remote sync.
 
 ## 0.1.0 PR-022
 
@@ -84,3 +84,8 @@ Added read-only inverse planning for the supported patch-operation subset. `prik
 ## 0.1.0 PR-027
 
 Added non-mutating rollback preview for the supported patch-operation subset. `prikk rollback-preview [path] [--ref REF]` derives the unsigned inverse plan, validates supported replay, and reports file-level `would-create`, `would-delete`, and `would-replace` changes against the latest snapshot baseline. Rollback refs, authorization policy, worktree writes, commutation, confluence, arbitrary-span rollback, audit plugins, and sync remain deferred.
+
+
+## 0.1.0 PR-028
+
+Added conservative rollback draft append for the supported patch-operation subset. `prikk rollback-draft --append-inverse [path] [--ref REF] -m <message>` derives the supported inverse Patch, validates rollback-preview consistency, requires an empty active WAL, and appends one signed inverse Patch envelope to the active WAL. Rollback refs, authorization policy, worktree writes, arbitrary-span rollback, commutation, confluence, audit plugins, and sync remain deferred.

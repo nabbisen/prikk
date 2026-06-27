@@ -64,7 +64,6 @@ pub(crate) enum CheckoutMode {
     PatchMaterializeDelete,
 }
 
-
 /// Parsed inverse-plan command arguments.
 pub(crate) struct InversePlanArgs {
     /// Repository root.
@@ -79,6 +78,16 @@ pub(crate) struct RollbackPreviewArgs {
     pub(crate) root: PathBuf,
     /// Ref to inspect.
     pub(crate) ref_name: String,
+}
+
+/// Parsed rollback-draft command arguments.
+pub(crate) struct RollbackDraftArgs {
+    /// Repository root.
+    pub(crate) root: PathBuf,
+    /// Ref to inspect.
+    pub(crate) ref_name: String,
+    /// Rollback draft message.
+    pub(crate) message: String,
 }
 
 /// Parsed worktree-status command arguments.
@@ -190,7 +199,7 @@ pub(crate) fn parse_checkout_args(
     let Some(mode) = mode else {
         return Err(
             concat!(
-                "PR-027 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
+                "PR-028 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
                 "`--snapshot-materialize`, `--patch-plan`, `--patch-materialize`, ",
                 "`--patch-delete-plan`, or `--patch-materialize-delete`",
             )
@@ -203,7 +212,6 @@ pub(crate) fn parse_checkout_args(
         mode,
     })
 }
-
 
 /// Parse `prikk inverse-plan` arguments.
 pub(crate) fn parse_inverse_plan_args(
@@ -267,6 +275,60 @@ pub(crate) fn parse_rollback_preview_args(
         }
     }
     Ok(RollbackPreviewArgs { root: optional_path_or_current(path)?, ref_name })
+}
+
+/// Parse `prikk rollback-draft` arguments.
+pub(crate) fn parse_rollback_draft_args(
+    args: Vec<String>,
+) -> std::result::Result<RollbackDraftArgs, String> {
+    let mut path = None;
+    let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
+    let mut message = None;
+    let mut append_inverse = false;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--append-inverse" => append_inverse = true,
+            "--ref" => {
+                let Some(value) = iter.next() else {
+                    return Err("rollback-draft --ref requires a value".to_string());
+                };
+                if value.trim().is_empty() {
+                    return Err("rollback-draft --ref must not be empty".to_string());
+                }
+                ref_name = value;
+            },
+            "-m" | "--message" => {
+                let Some(value) = iter.next() else {
+                    return Err("rollback-draft message option requires a value".to_string());
+                };
+                message = Some(value);
+            },
+            other if other.starts_with('-') => {
+                return Err(format!("unknown rollback-draft argument: {other}"));
+            }
+            _ => {
+                if path.is_some() {
+                    return Err("rollback-draft accepts at most one path".to_string());
+                }
+                path = Some(arg);
+            }
+        }
+    }
+    if !append_inverse {
+        return Err("rollback-draft requires --append-inverse".to_string());
+    }
+    let Some(message) = message else {
+        return Err("rollback-draft requires -m <message>".to_string());
+    };
+    if message.trim().is_empty() {
+        return Err("rollback-draft message must not be empty".to_string());
+    }
+    Ok(RollbackDraftArgs {
+        root: optional_path_or_current(path)?,
+        ref_name,
+        message,
+    })
 }
 
 /// Parse `prikk worktree-status` arguments.
@@ -361,7 +423,7 @@ pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<Commit
     let Some(mode) = mode else {
         return Err(
             concat!(
-                "PR-027 supports `prikk commit --allow-empty -m <message>` or ",
+                "PR-028 supports `prikk commit --allow-empty -m <message>` or ",
                 "`--from-worktree [--text-edits] -m <message>`",
             )
             .to_string(),

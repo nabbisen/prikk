@@ -3,7 +3,7 @@
 use prikk_store::{
     CheckoutMaterialization, CheckoutPlan, DoctorSeverity, PatchDeletionPlan,
     PatchInversePlan, PatchMaterializationReport, PatchReplayPlan, RefHistory,
-    RepositoryLayout, RollbackPreviewPlan,
+    RepositoryLayout, RollbackDraftReport, RollbackPreviewPlan,
     SnapshotCheckoutPlan, SnapshotMaterializationReport, WorktreeChangeKind, WorktreeStatusReport,
 };
 
@@ -64,7 +64,6 @@ pub(crate) fn print_snapshot_checkout_plan(layout: &RepositoryLayout, plan: &Sna
     println!("note: use `prikk checkout --snapshot-materialize` to write validated snapshot files");
 }
 
-
 /// Print a supported patch replay plan.
 pub(crate) fn print_patch_replay_plan(layout: &RepositoryLayout, plan: &PatchReplayPlan) {
     println!("patch replay plan repository: {}", layout.prikk_dir().display());
@@ -83,7 +82,6 @@ pub(crate) fn print_patch_replay_plan(layout: &RepositoryLayout, plan: &PatchRep
          arbitrary spans, renames, conflicts, and full patch algebra remain later PRs"
     );
 }
-
 
 /// Print a patch checkout deletion plan.
 pub(crate) fn print_patch_deletion_plan(layout: &RepositoryLayout, plan: &PatchDeletionPlan) {
@@ -155,7 +153,6 @@ pub(crate) fn print_snapshot_materialization_report(
     }
     println!("note: this path writes only snapshot-backed files and never applies patches");
 }
-
 
 /// Print a supported patch inverse plan.
 pub(crate) fn print_patch_inverse_plan(layout: &RepositoryLayout, plan: &PatchInversePlan) {
@@ -232,6 +229,37 @@ pub(crate) fn print_rollback_preview_plan(
     println!(
         "note: this is a non-mutating rollback preview to the latest snapshot baseline; \
          rollback refs, authorization, worktree writes, and full patch algebra remain later PRs"
+    );
+}
+
+/// Print a rollback draft append report.
+pub(crate) fn print_rollback_draft_report(
+    layout: &RepositoryLayout,
+    report: &RollbackDraftReport,
+) {
+    println!("rollback draft repository: {}", layout.prikk_dir().display());
+    println!("ref: {}", report.ref_name);
+    println!("target block: {}", report.target_block_id);
+    println!("inverse patch: {}", report.inverse_patch_id);
+    println!("WAL sequence: {}", report.wal_sequence);
+    println!("blocks inspected: {}", report.block_count);
+    println!("patches inspected: {}", report.patch_count);
+    println!("inverse operations: {}", report.inverse_operation_count);
+    println!("preview changes: {}", report.preview_change_count);
+    println!("would create: {}", report.would_create_files);
+    println!("would delete: {}", report.would_delete_files);
+    println!("would replace: {}", report.would_replace_files);
+    for operation in &report.operations {
+        println!(
+            "  {:04} {} {}",
+            operation.op_seq,
+            operation.kind.as_str(),
+            operation.path
+        );
+    }
+    println!(
+        "note: this appended a signed inverse Patch draft to the active WAL only; run seal later \
+         to publish it, and rollback refs, audit policy, and worktree writes remain later PRs"
     );
 }
 
@@ -352,6 +380,10 @@ pub(crate) fn print_help(version: &str) {
     );
     println!("  prikk inverse-plan [path] [--ref REF]     Plan an unsigned inverse patch");
     println!("  prikk rollback-preview [path] [--ref REF] Preview non-mutating rollback");
+    println!(
+        "  prikk rollback-draft --append-inverse [path] [--ref REF] \
+         -m <message> Append inverse Patch"
+    );
     println!(
         "  prikk worktree-status [path] [--ref REF]  Report changes against snapshot baseline"
     );

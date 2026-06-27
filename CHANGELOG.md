@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0 PR-028
+
+Conservative rollback draft append to an empty active WAL.
+
+- Added conservative rollback draft append for the supported patch-operation subset.
+- Added `append_rollback_draft()` and `RollbackDraftReport`.
+- Added CLI command `prikk rollback-draft --append-inverse [path] [--ref REF] -m <message>`.
+- Requires an explicit `--append-inverse` flag, a non-empty message, an empty active WAL, and no partial WAL tail.
+- Appends a signed inverse Patch envelope to the active WAL only; ref publication remains the existing `seal --allow-no-audit` path.
+- Kept rollback ref policy, authorization, worktree mutation, arbitrary-span rollback, commutation, confluence, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-027
 
 Non-mutating rollback preview for the supported patch-operation subset.
