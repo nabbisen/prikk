@@ -80,6 +80,19 @@ pub(crate) struct PatchReplaySnapshot {
     pub(crate) applied_operation_count: usize,
     /// Resulting file manifest.
     pub(crate) manifest: SnapshotManifest,
+    /// Files explicitly removed by replayed patches and still absent in the final manifest.
+    pub(crate) deleted_files: Vec<PatchReplayDeletedFile>,
+}
+
+/// A file explicitly deleted while replaying the supported patch subset.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PatchReplayDeletedFile {
+    /// Validated repository-relative path that was removed.
+    pub(crate) path: RepoPath,
+    /// Blob ID recorded as the delete precondition.
+    pub(crate) old_blob_id: ObjectId,
+    /// Bytes that must still be present before an opt-in destructive delete may occur.
+    pub(crate) old_bytes: Vec<u8>,
 }
 
 /// Replay the supported operation subset into a validated in-memory manifest.
@@ -91,6 +104,7 @@ pub(crate) fn replay_supported_patch_chain(
     let target_block_id = current_target_block(layout, &object_store, ref_name)?;
     let block_ids = single_parent_chain(&object_store, target_block_id)?;
     let mut files = BTreeMap::new();
+    let mut deleted_files = BTreeMap::new();
     let mut patch_count = 0_usize;
     let mut applied_operation_count = 0_usize;
 
@@ -98,12 +112,13 @@ pub(crate) fn replay_supported_patch_chain(
         let block = read_block(&object_store, *block_id)?;
         if let Some(snapshot_blob_ref) = block.snapshot_blob_ref {
             files = load_snapshot_files(&object_store, snapshot_blob_ref)?;
+            deleted_files.clear();
         }
         for patch_id in block.patch_ids {
             let patch = read_patch(&object_store, patch_id)?;
             let operations = decode_supported_patch_operations(&patch.canonical_payload)?;
             for operation in operations {
-                apply_supported_operation(&object_store, &mut files, operation)?;
+                apply_supported_operation(&object_store, &mut files, &mut deleted_files, operation)?;
                 applied_operation_count += 1;
             }
             patch_count += 1;
@@ -117,6 +132,7 @@ pub(crate) fn replay_supported_patch_chain(
         patch_count,
         applied_operation_count,
         manifest: files_to_manifest(files)?,
+        deleted_files: deleted_files.into_values().collect(),
     })
 }
 
@@ -210,6 +226,7 @@ fn files_to_manifest(files: BTreeMap<String, Vec<u8>>) -> Result<SnapshotManifes
 fn apply_supported_operation(
     object_store: &FileObjectStore,
     files: &mut BTreeMap<String, Vec<u8>>,
+    deleted_files: &mut BTreeMap<String, PatchReplayDeletedFile>,
     operation: SupportedPatchOperation,
 ) -> Result<()> {
     match operation {
@@ -220,6 +237,7 @@ fn apply_supported_operation(
                 )));
             }
             let bytes = read_blob_bytes(object_store, blob_id)?;
+            deleted_files.remove(&path);
             files.insert(path, bytes);
         }
         SupportedPatchOperation::DeleteFile { path, old_blob_id } => {
@@ -227,7 +245,14 @@ fn apply_supported_operation(
                 PrikkError::Integrity(format!("DeleteFile path is absent: {path}"))
             })?;
             ensure_blob_matches(old_bytes, old_blob_id)?;
+            let repo_path = RepoPath::parse(&path)?;
+            let deleted = PatchReplayDeletedFile {
+                path: repo_path,
+                old_blob_id,
+                old_bytes: old_bytes.clone(),
+            };
             files.remove(&path);
+            deleted_files.insert(path, deleted);
         }
         SupportedPatchOperation::ReplaceBinary { path, old_blob_id, new_blob_id } => {
             let old_bytes = files.get(&path).ok_or_else(|| {

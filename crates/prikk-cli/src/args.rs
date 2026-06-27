@@ -57,6 +57,10 @@ pub(crate) enum CheckoutMode {
     PatchPlan,
     /// Opt-in materialization from supported patch replay.
     PatchMaterialize,
+    /// Read-only deletion plan for explicit patch-removed files.
+    PatchDeletePlan,
+    /// Opt-in patch materialization plus explicit patch-removed file deletion.
+    PatchMaterializeDelete,
 }
 
 /// Parsed worktree-status command arguments.
@@ -139,6 +143,12 @@ pub(crate) fn parse_checkout_args(
             "--patch-materialize" => {
                 set_checkout_mode(&mut mode, CheckoutMode::PatchMaterialize)?
             },
+            "--patch-delete-plan" => {
+                set_checkout_mode(&mut mode, CheckoutMode::PatchDeletePlan)?
+            },
+            "--patch-materialize-delete" => {
+                set_checkout_mode(&mut mode, CheckoutMode::PatchMaterializeDelete)?
+            },
             "--ref" => {
                 let Some(value) = iter.next() else {
                     return Err("checkout --ref requires a value".to_string());
@@ -162,8 +172,9 @@ pub(crate) fn parse_checkout_args(
     let Some(mode) = mode else {
         return Err(
             concat!(
-                "PR-021 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
-                "`--snapshot-materialize`, `--patch-plan`, or `--patch-materialize`",
+                "PR-022 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
+                "`--snapshot-materialize`, `--patch-plan`, `--patch-materialize`, ",
+                "`--patch-delete-plan`, or `--patch-materialize-delete`",
             )
             .to_string(),
         );
@@ -264,7 +275,7 @@ pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<Commit
     }
     let Some(mode) = mode else {
         return Err(
-            "PR-021 supports `prikk commit --allow-empty -m <message>` or `--from-worktree -m <message>`"
+            "PR-022 supports `prikk commit --allow-empty -m <message>` or `--from-worktree -m <message>`"
                 .to_string(),
         );
     };

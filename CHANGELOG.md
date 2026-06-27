@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0 PR-022
+
+Explicit patch deletion planning and opt-in removal of files deleted by supported patch replay.
+
+- Added read-only explicit deletion planning via `prikk checkout --patch-delete-plan`.
+- Added opt-in deletion during supported patch materialization via `prikk checkout --patch-materialize-delete`.
+- Deletion is limited to files explicitly removed by replayed `DeleteFile` operations.
+- Deletion is refused unless the current worktree file bytes still match the operation's old Blob bytes.
+- Arbitrary untracked files and modified deleted files are never removed.
+- Added deletion planning/materialization tests and documentation.
+- Kept general destructive pruning, text edits, renames, chmod, symlinks, merge/conflict algebra, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-021
 
 Opt-in supported patch replay materialization without destructive removals.

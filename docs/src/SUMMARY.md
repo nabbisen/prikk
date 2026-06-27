@@ -11,3 +11,4 @@
 - [Worktree Patch Drafts](worktree-patch.md)
 - [Supported Patch Replay](patch-replay.md)
 - [Supported Patch Materialization](patch-materialization.md)
+- [Supported Patch Deletions](patch-deletions.md)

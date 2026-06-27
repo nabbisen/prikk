@@ -1,9 +1,9 @@
 //! CLI output helpers.
 
 use prikk_store::{
-    CheckoutMaterialization, CheckoutPlan, DoctorSeverity, PatchMaterializationReport,
-    PatchReplayPlan, RefHistory, RepositoryLayout, SnapshotCheckoutPlan,
-    SnapshotMaterializationReport, WorktreeChangeKind, WorktreeStatusReport,
+    CheckoutMaterialization, CheckoutPlan, DoctorSeverity, PatchDeletionPlan,
+    PatchMaterializationReport, PatchReplayPlan, RefHistory, RepositoryLayout,
+    SnapshotCheckoutPlan, SnapshotMaterializationReport, WorktreeChangeKind, WorktreeStatusReport,
 };
 
 /// Print a checkout plan.
@@ -81,6 +81,26 @@ pub(crate) fn print_patch_replay_plan(layout: &RepositoryLayout, plan: &PatchRep
     );
 }
 
+
+/// Print a patch checkout deletion plan.
+pub(crate) fn print_patch_deletion_plan(layout: &RepositoryLayout, plan: &PatchDeletionPlan) {
+    println!("patch deletion plan repository: {}", layout.prikk_dir().display());
+    println!("ref: {}", plan.ref_name);
+    println!("planned deletions: {}", plan.planned_deletions);
+    println!("deletable files: {}", plan.deletable_files);
+    println!("already absent files: {}", plan.already_absent_files);
+    println!("deletion conflicts: {}", plan.conflicts.len());
+    for path in &plan.deletable_paths {
+        println!("  delete: {path}");
+    }
+    for conflict in &plan.conflicts {
+        println!("  refused: {} — {}", conflict.path, conflict.reason);
+    }
+    println!(
+        "note: only files explicitly removed by patch replay are eligible; arbitrary extra files are never deleted"
+    );
+}
+
 /// Print a patch replay materialization report.
 pub(crate) fn print_patch_materialization_report(
     layout: &RepositoryLayout,
@@ -97,13 +117,19 @@ pub(crate) fn print_patch_materialization_report(
     println!("planned files: {}", report.planned_files);
     println!("written files: {}", report.written_files);
     println!("unchanged files: {}", report.unchanged_files);
+    println!("deleted files: {}", report.deleted_files);
+    println!(
+        "already absent deleted files: {}",
+        report.already_absent_deleted_files
+    );
+    println!("deletion conflicts: {}", report.deletion_conflicts);
     println!("result content bytes: {}", report.total_content_bytes);
     for path in &report.paths {
         println!("  file: {path}");
     }
     println!(
-        "note: this materializes the supported patch replay result but never deletes extra \
-         worktree files"
+        "note: this materializes the supported patch replay result; opt-in deletion removes only \
+         explicit patch-deleted files whose current bytes still match the old blob"
     );
 }
 
@@ -232,6 +258,12 @@ pub(crate) fn print_help(version: &str) {
     );
     println!(
         "  prikk checkout --patch-materialize [path] [--ref REF]  Safely write patch replay files"
+    );
+    println!(
+        "  prikk checkout --patch-delete-plan [path] [--ref REF]  Plan explicit patch deletions"
+    );
+    println!(
+        "  prikk checkout --patch-materialize-delete [path] [--ref REF]  Write and delete patch-removed files"
     );
     println!(
         "  prikk worktree-status [path] [--ref REF]  Report changes against snapshot baseline"

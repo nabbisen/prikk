@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-021
+Version: 0.1.0 PR-022
 
 ## Implemented
 
@@ -28,11 +28,12 @@ Version: 0.1.0 PR-021
 - Read-only checkout planning that validates current RefState, Block, parent Block, Patch, and optional snapshot Blob references.
 - Snapshot-manifest validation and conservative repository path-safety checks for snapshot materialization and status.
 - Read-only worktree status against snapshot-backed baselines.
-- Minimal CLI for `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Explicit deletion planning and opt-in deletion for files removed by supported patch replay.
+- Minimal CLI for `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
 
-- Destructive worktree removals and full patch-based checkout semantics.
+- General destructive worktree pruning and full patch-based checkout semantics.
 - Policy-aware audit/attestation publication from seal.
 - Full patch algebra: text edit replay, inverse, commutation, confluence, and conflict witnesses.
 - Conflict witnesses and merge state.
@@ -49,7 +50,11 @@ Version: 0.1.0 PR-021
 
 ## Gate Discipline
 
-PR-021 stays within the approved foundation boundary by adding opt-in materialization from the supported patch replay result. It handles file-level CreateFile/DeleteFile/ReplaceBinary only, refuses conflicting existing files, never deletes extra files, and does not implement full algebra, audit plugin execution, policy enforcement, or remote sync.
+PR-022 stays within the approved foundation boundary by adding explicit deletion planning and opt-in deletion for files removed by supported patch replay. It handles file-level CreateFile/DeleteFile/ReplaceBinary only, refuses conflicting existing files, deletes only files whose current bytes match the old Blob precondition, and does not implement full algebra, audit plugin execution, policy enforcement, or remote sync.
+
+## 0.1.0 PR-022
+
+Added explicit deletion planning and opt-in deletion during supported patch materialization. This is an M2 bridge scaffold, intentionally limited to files removed by replayed DeleteFile operations whose current bytes still match the recorded old Blob. It does not implement algebraic commutation, conflicted states, text edits, or general destructive pruning.
 
 ## 0.1.0 PR-021
 
