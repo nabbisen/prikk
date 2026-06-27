@@ -48,19 +48,12 @@ pub fn materialize_snapshot_checkout(
 ) -> Result<SnapshotMaterializationReport> {
     let plan = prepare_snapshot_checkout_plan(layout, ref_name)?;
     let manifest = load_snapshot_manifest(layout, plan.snapshot_blob_id)?;
-    let mut written_files = 0_usize;
-    let mut unchanged_files = 0_usize;
-    for entry in &manifest.files {
-        match materialize_entry(layout.root(), entry)? {
-            EntryWriteOutcome::Written => written_files += 1,
-            EntryWriteOutcome::Unchanged => unchanged_files += 1,
-        }
-    }
+    let write_report = materialize_manifest_entries(layout.root(), &manifest)?;
     Ok(SnapshotMaterializationReport {
         ref_name: ref_name.to_string(),
         planned_files: manifest.files.len(),
-        written_files,
-        unchanged_files,
+        written_files: write_report.written_files,
+        unchanged_files: write_report.unchanged_files,
         total_content_bytes: manifest.total_content_bytes(),
         paths: manifest
             .files
@@ -68,6 +61,32 @@ pub fn materialize_snapshot_checkout(
             .map(|entry| entry.path.as_str().to_string())
             .collect(),
     })
+}
+
+
+/// Result of materializing a validated manifest into a worktree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ManifestMaterializationReport {
+    /// Number of files written by this invocation.
+    pub(crate) written_files: usize,
+    /// Number of files already present with identical bytes.
+    pub(crate) unchanged_files: usize,
+}
+
+/// Materialize a validated manifest into `root` without deleting extra files.
+pub(crate) fn materialize_manifest_entries(
+    root: &Path,
+    manifest: &SnapshotManifest,
+) -> Result<ManifestMaterializationReport> {
+    let mut written_files = 0_usize;
+    let mut unchanged_files = 0_usize;
+    for entry in &manifest.files {
+        match materialize_entry(root, entry)? {
+            EntryWriteOutcome::Written => written_files += 1,
+            EntryWriteOutcome::Unchanged => unchanged_files += 1,
+        }
+    }
+    Ok(ManifestMaterializationReport { written_files, unchanged_files })
 }
 
 fn load_snapshot_manifest(

@@ -55,6 +55,8 @@ pub(crate) enum CheckoutMode {
     SnapshotMaterialize,
     /// Read-only supported patch replay planning.
     PatchPlan,
+    /// Opt-in materialization from supported patch replay.
+    PatchMaterialize,
 }
 
 /// Parsed worktree-status command arguments.
@@ -134,6 +136,9 @@ pub(crate) fn parse_checkout_args(
                 set_checkout_mode(&mut mode, CheckoutMode::SnapshotMaterialize)?
             },
             "--patch-plan" => set_checkout_mode(&mut mode, CheckoutMode::PatchPlan)?,
+            "--patch-materialize" => {
+                set_checkout_mode(&mut mode, CheckoutMode::PatchMaterialize)?
+            },
             "--ref" => {
                 let Some(value) = iter.next() else {
                     return Err("checkout --ref requires a value".to_string());
@@ -142,10 +147,10 @@ pub(crate) fn parse_checkout_args(
                     return Err("checkout --ref must not be empty".to_string());
                 }
                 ref_name = value;
-            }
+            },
             other if other.starts_with('-') => {
                 return Err(format!("unknown checkout argument: {other}"));
-            }
+            },
             _ => {
                 if path.is_some() {
                     return Err("checkout accepts at most one path".to_string());
@@ -157,8 +162,8 @@ pub(crate) fn parse_checkout_args(
     let Some(mode) = mode else {
         return Err(
             concat!(
-                "PR-020 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
-                "`--snapshot-materialize`, or `--patch-plan`",
+                "PR-021 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
+                "`--snapshot-materialize`, `--patch-plan`, or `--patch-materialize`",
             )
             .to_string(),
         );
@@ -187,7 +192,7 @@ pub(crate) fn parse_worktree_status_args(
                     return Err("worktree-status --ref must not be empty".to_string());
                 }
                 ref_name = value;
-            }
+            },
             other if other.starts_with('-') => {
                 return Err(format!("unknown worktree-status argument: {other}"));
             }
@@ -259,7 +264,7 @@ pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<Commit
     }
     let Some(mode) = mode else {
         return Err(
-            "PR-020 supports `prikk commit --allow-empty -m <message>` or `--from-worktree -m <message>`"
+            "PR-021 supports `prikk commit --allow-empty -m <message>` or `--from-worktree -m <message>`"
                 .to_string(),
         );
     };

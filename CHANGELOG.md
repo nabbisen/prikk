@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0 PR-021
+
+Opt-in supported patch replay materialization without destructive removals.
+
+- Added opt-in supported patch replay materialization via `prikk checkout --patch-materialize`.
+- Added `materialize_patch_checkout()` and `PatchMaterializationReport`.
+- Reuses the PR-020 supported replay subset: `CreateFile`, `DeleteFile`, and `ReplaceBinary`.
+- Writes only validated replay-result files through the same conservative materializer used by snapshot checkout.
+- Refuses conflicting existing files and never deletes extra worktree files.
+- Keeps destructive removal, content-anchored text edit replay, renames, chmod, symlinks, merge/conflict algebra, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-020
 
 Minimal worktree-to-patch draft generation for missing, modified, and untracked files, still without patch replay or full algebra.

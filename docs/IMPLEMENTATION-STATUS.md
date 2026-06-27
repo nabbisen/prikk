@@ -1,6 +1,6 @@
 # PRIKK Implementation Status
 
-Version: 0.1.0 PR-020
+Version: 0.1.0 PR-021
 
 ## Implemented
 
@@ -28,11 +28,11 @@ Version: 0.1.0 PR-020
 - Read-only checkout planning that validates current RefState, Block, parent Block, Patch, and optional snapshot Blob references.
 - Snapshot-manifest validation and conservative repository path-safety checks for snapshot materialization and status.
 - Read-only worktree status against snapshot-backed baselines.
-- Minimal CLI for `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Minimal CLI for `init`, `commit --allow-empty -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
 
-- Real worktree diff capture and worktree state materialization.
+- Destructive worktree removals and full patch-based checkout semantics.
 - Policy-aware audit/attestation publication from seal.
 - Full patch algebra: text edit replay, inverse, commutation, confluence, and conflict witnesses.
 - Conflict witnesses and merge state.
@@ -49,10 +49,8 @@ Version: 0.1.0 PR-020
 
 ## Gate Discipline
 
-PR-020 stays within the approved foundation boundary by adding minimal worktree-to-patch draft generation plus read-only supported patch replay planning. It handles file-level CreateFile/DeleteFile/ReplaceBinary only and does not implement full algebra, worktree-writing patch checkout, audit plugin execution, policy enforcement, or remote sync.
+PR-021 stays within the approved foundation boundary by adding opt-in materialization from the supported patch replay result. It handles file-level CreateFile/DeleteFile/ReplaceBinary only, refuses conflicting existing files, never deletes extra files, and does not implement full algebra, audit plugin execution, policy enforcement, or remote sync.
 
-## 0.1.0 PR-020
+## 0.1.0 PR-021
 
-Added read-only supported patch replay planning. This is an M2 bridge scaffold, but intentionally
-limited to file-level operations that already exist in PR-019. It does not implement algebraic
-commutation, conflicted states, or worktree writes.
+Added opt-in supported patch replay materialization. This is an M2 bridge scaffold, intentionally limited to file-level operations that already exist in PR-019/PR-020. It does not implement algebraic commutation, conflicted states, text edits, or destructive worktree removals.

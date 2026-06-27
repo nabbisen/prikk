@@ -2,9 +2,10 @@
 
 //! PRIKK command-line entry point.
 //!
-//! PR-020 exposes minimal repository layout commands, active WAL status, empty and snapshot-baseline
-//! worktree commit scaffolds, supported file-level patch replay planning, a local no-audit seal scaffold, read-only history inspection, checkout
-//! and snapshot-manifest planning, conservative snapshot materialization, read-only worktree status,
+//! PR-021 exposes minimal repository layout commands, active WAL status, empty and snapshot-baseline
+//! worktree commit scaffolds, supported file-level patch replay planning and materialization, a
+//! local no-audit seal scaffold, read-only history inspection, checkout and snapshot-manifest
+//! planning, conservative snapshot materialization, read-only worktree status,
 //! deeper repository verification, and doctor diagnostics with opt-in repairs. Patch application,
 //! audit plugins, and sync remain later increments.
 
@@ -22,18 +23,18 @@ use args::{
 };
 use commit::empty_patch_envelope;
 use output::{
-    print_checkout_plan, print_doctor_report, print_help, print_history, print_patch_replay_plan,
-    print_snapshot_checkout_plan, print_snapshot_materialization_report, print_verify_report,
-    print_worktree_status,
+    print_checkout_plan, print_doctor_report, print_help, print_history,
+    print_patch_materialization_report, print_patch_replay_plan, print_snapshot_checkout_plan,
+    print_snapshot_materialization_report, print_verify_report, print_worktree_status,
 };
 use prikk_store::{
-    commit_worktree_changes, doctor_repository, load_ref_history, materialize_snapshot_checkout,
-    prepare_checkout_plan, prepare_patch_replay_plan, prepare_snapshot_checkout_plan, repair_repository,
-    verify_repository, worktree_status, ActiveSession, DoctorRepairOptions, RefStore,
-    RepositoryLayout, Wal,
+    commit_worktree_changes, doctor_repository, load_ref_history, materialize_patch_checkout,
+    materialize_snapshot_checkout, prepare_checkout_plan, prepare_patch_replay_plan,
+    prepare_snapshot_checkout_plan, repair_repository, verify_repository, worktree_status,
+    ActiveSession, DoctorRepairOptions, RefStore, RepositoryLayout, Wal,
 };
 
-const VERSION: &str = "0.1.0-pr020";
+const VERSION: &str = "0.1.0-pr021";
 
 fn main() -> ExitCode {
     match run() {
@@ -140,7 +141,7 @@ fn run_status() -> std::result::Result<(), String> {
     }
     println!(
         "status: patch algebra, patch-based worktree materialization, plugins, and sync not \
-         implemented in PR-020"
+         implemented in PR-021"
     );
     Ok(())
 }
@@ -177,6 +178,11 @@ fn run_checkout(args: Vec<String>) -> std::result::Result<(), String> {
             let plan = prepare_patch_replay_plan(&layout, &args.ref_name)
                 .map_err(|err| err.to_string())?;
             print_patch_replay_plan(&layout, &plan);
+        }
+        CheckoutMode::PatchMaterialize => {
+            let report = materialize_patch_checkout(&layout, &args.ref_name)
+                .map_err(|err| err.to_string())?;
+            print_patch_materialization_report(&layout, &report);
         }
     }
     Ok(())

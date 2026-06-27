@@ -1,9 +1,9 @@
 //! CLI output helpers.
 
 use prikk_store::{
-    CheckoutMaterialization, CheckoutPlan, DoctorSeverity, PatchReplayPlan, RefHistory,
-    RepositoryLayout, SnapshotCheckoutPlan, SnapshotMaterializationReport, WorktreeChangeKind,
-    WorktreeStatusReport,
+    CheckoutMaterialization, CheckoutPlan, DoctorSeverity, PatchMaterializationReport,
+    PatchReplayPlan, RefHistory, RepositoryLayout, SnapshotCheckoutPlan,
+    SnapshotMaterializationReport, WorktreeChangeKind, WorktreeStatusReport,
 };
 
 /// Print a checkout plan.
@@ -78,6 +78,32 @@ pub(crate) fn print_patch_replay_plan(layout: &RepositoryLayout, plan: &PatchRep
     println!(
         "note: this replays only CreateFile/DeleteFile/ReplaceBinary; text edits, renames, \
          conflicts, and full patch algebra remain later PRs"
+    );
+}
+
+/// Print a patch replay materialization report.
+pub(crate) fn print_patch_materialization_report(
+    layout: &RepositoryLayout,
+    report: &PatchMaterializationReport,
+) {
+    println!(
+        "patch materialization repository: {}",
+        layout.prikk_dir().display()
+    );
+    println!("ref: {}", report.ref_name);
+    println!("blocks replayed: {}", report.block_count);
+    println!("patches replayed: {}", report.patch_count);
+    println!("operations applied: {}", report.applied_operation_count);
+    println!("planned files: {}", report.planned_files);
+    println!("written files: {}", report.written_files);
+    println!("unchanged files: {}", report.unchanged_files);
+    println!("result content bytes: {}", report.total_content_bytes);
+    for path in &report.paths {
+        println!("  file: {path}");
+    }
+    println!(
+        "note: this materializes the supported patch replay result but never deletes extra \
+         worktree files"
     );
 }
 
@@ -203,6 +229,9 @@ pub(crate) fn print_help(version: &str) {
     );
     println!(
         "  prikk checkout --patch-plan [path] [--ref REF]  Replay supported file-level patches"
+    );
+    println!(
+        "  prikk checkout --patch-materialize [path] [--ref REF]  Safely write patch replay files"
     );
     println!(
         "  prikk worktree-status [path] [--ref REF]  Report changes against snapshot baseline"

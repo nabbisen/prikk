@@ -11,6 +11,7 @@ mod storage;
 mod verify;
 mod wal;
 mod patch_replay;
+mod patch_checkout;
 
 mod worktree_status;
 mod worktree_patch;

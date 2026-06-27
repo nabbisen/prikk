@@ -4,18 +4,18 @@ This repository follows the design-first PRIKK roadmap.
 
 ## Current Increment
 
-- 0.1.0 PR-018: read-only worktree status against snapshot-backed baselines.
-- 0.1.0 PR-020: minimal worktree-to-patch draft generation for missing, modified, and untracked files, still without patch replay or full algebra.
+- 0.1.0 PR-020: read-only supported patch replay planning for file-level operations.
+- 0.1.0 PR-021: opt-in supported patch replay materialization without destructive removals.
 
 ## Next Increments
 
-1. PR-020: patch apply/inverse foundations after the patch-engine implementation plan is reviewed.
-2. PR-021: content-anchored text edit generation and safer patch replay boundaries.
-3. PR-022+: audit/plugin and sync work remain gated by their dedicated plans.
+1. PR-022: patch replay cleanup and removal-safety design, or begin content-anchored text edit replay scaffolding.
+2. PR-023: patch apply/inverse foundations after the patch-engine implementation plan is reviewed.
+3. PR-024+: audit/plugin and sync work remain gated by their dedicated plans.
 
 Final feature scope remains governed by the FDDs and RFCs.
 
 
-## PR-020 note
+## PR-021 note
 
-PR-020 adds read-only replay planning for the supported file-level operation subset. Full patch algebra remains a later milestone.
+PR-021 adds opt-in worktree materialization from the supported patch replay result. It still refuses conflicting existing files and never deletes extra files. Full patch algebra remains a later milestone.

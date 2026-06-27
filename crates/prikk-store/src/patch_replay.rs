@@ -46,6 +46,47 @@ pub fn prepare_patch_replay_plan(
     layout: &RepositoryLayout,
     ref_name: &str,
 ) -> Result<PatchReplayPlan> {
+    let snapshot = replay_supported_patch_chain(layout, ref_name)?;
+    let paths = snapshot
+        .manifest
+        .files
+        .iter()
+        .map(|entry| entry.path.as_str().to_string())
+        .collect();
+    Ok(PatchReplayPlan {
+        ref_name: snapshot.ref_name,
+        target_block_id: snapshot.target_block_id,
+        block_count: snapshot.block_count,
+        patch_count: snapshot.patch_count,
+        applied_operation_count: snapshot.applied_operation_count,
+        file_count: snapshot.manifest.files.len(),
+        total_content_bytes: snapshot.manifest.total_content_bytes(),
+        paths,
+    })
+}
+
+/// In-memory replay result used by patch checkout materialization.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PatchReplaySnapshot {
+    /// Ref used as the replay target.
+    pub(crate) ref_name: String,
+    /// Target block ID.
+    pub(crate) target_block_id: ObjectId,
+    /// Number of blocks replayed from oldest to newest.
+    pub(crate) block_count: usize,
+    /// Number of patch objects replayed.
+    pub(crate) patch_count: usize,
+    /// Number of supported operations applied.
+    pub(crate) applied_operation_count: usize,
+    /// Resulting file manifest.
+    pub(crate) manifest: SnapshotManifest,
+}
+
+/// Replay the supported operation subset into a validated in-memory manifest.
+pub(crate) fn replay_supported_patch_chain(
+    layout: &RepositoryLayout,
+    ref_name: &str,
+) -> Result<PatchReplaySnapshot> {
     let object_store = FileObjectStore::new(layout.clone());
     let target_block_id = current_target_block(layout, &object_store, ref_name)?;
     let block_ids = single_parent_chain(&object_store, target_block_id)?;
@@ -69,21 +110,13 @@ pub fn prepare_patch_replay_plan(
         }
     }
 
-    let manifest = files_to_manifest(files)?;
-    let paths = manifest
-        .files
-        .iter()
-        .map(|entry| entry.path.as_str().to_string())
-        .collect();
-    Ok(PatchReplayPlan {
+    Ok(PatchReplaySnapshot {
         ref_name: ref_name.to_string(),
         target_block_id,
         block_count: block_ids.len(),
         patch_count,
         applied_operation_count,
-        file_count: manifest.files.len(),
-        total_content_bytes: manifest.total_content_bytes(),
-        paths,
+        manifest: files_to_manifest(files)?,
     })
 }
 
