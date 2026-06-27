@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0 PR-029
+
+Active rollback draft verification before seal.
+
+- Added active rollback draft verification for the supported patch-operation subset.
+- Added `verify_active_rollback_draft()` and `RollbackDraftVerification`.
+- Added CLI command `prikk rollback-draft-verify [path] [--ref REF]`.
+- Rollback drafts now use a dedicated development signature marker key: `dev-placeholder-rollback-author`.
+- Repository verification now counts rollback draft WAL records and validates that rollback draft payloads decode under the supported replay subset.
+- Kept seal publication, rollback refs, rollback authorization, worktree mutation, arbitrary-span rollback, commutation, confluence, audit plugins, and sync deferred.
+
 ## 0.1.0 PR-028
 
 Conservative rollback draft append to an empty active WAL.

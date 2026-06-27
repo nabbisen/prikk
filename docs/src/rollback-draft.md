@@ -31,7 +31,13 @@ What it does not mutate:
 - it does not modify the worktree.
 - it does not authorize rollback by policy.
 
-After reviewing the draft, the existing local seal scaffold can publish it:
+PR-029 adds a pre-seal verification command:
+
+```sh
+prikk rollback-draft-verify [path] [--ref REF]
+```
+
+After reviewing and verifying the draft, the existing local seal scaffold can publish it:
 
 ```sh
 prikk seal --allow-no-audit

@@ -35,6 +35,7 @@ cargo run -p prikk -- checkout --patch-delete-plan ./sample-repo
 cargo run -p prikk -- inverse-plan ./sample-repo
 cargo run -p prikk -- rollback-preview ./sample-repo
 cargo run -p prikk -- rollback-draft --append-inverse ./sample-repo -m "draft rollback"
+cargo run -p prikk -- rollback-draft-verify ./sample-repo
 cargo run -p prikk -- worktree-status ./sample-repo
 # After editing a UTF-8 tracked file inside ./sample-repo:
 # (cd ./sample-repo && ../target/debug/prikk commit --from-worktree --text-edits -m "edit text")
@@ -48,7 +49,7 @@ cargo run -p prikk -- doctor ./sample-repo
 
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-028**.
+Current implementation drop: **0.1.0 PR-029**.
 
 Implemented:
 
@@ -66,9 +67,9 @@ Implemented:
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
 - Supported patch replay planning and materialization for `CreateFile`, `DeleteFile`, `ReplaceBinary`, and conservative full-file `EditText`.
 - Explicit deletion planning and opt-in deletion of patch-removed files whose bytes still match the old blob.
-- Read-only unsigned inverse planning, non-mutating rollback preview, and conservative rollback draft append for the supported patch-operation subset.
+- Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append, and active rollback draft verification for the supported patch-operation subset.
 - Content-anchored `EditText` scaffold with fixed 32-byte span hashes, anchor-id validation, conservative full-file exact-span replay for `anchor_id = "full-file"`, and opt-in worktree generation for modified UTF-8 files.
-- Minimal CLI commands: `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Minimal CLI commands: `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 Not implemented yet:
 

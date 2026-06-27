@@ -15,6 +15,7 @@ use crate::file_codec::decode_envelope_file;
 use crate::layout::{RepositoryLayout, persisted_object_types};
 use crate::object_store::FileObjectStore;
 use crate::refs::verify_refs;
+use crate::rollback_verify::verify_rollback_draft_wal_records;
 use crate::wal::Wal;
 
 /// Verification summary for a single persisted object.
@@ -43,6 +44,8 @@ pub struct RepositoryVerification {
     pub checked_refs: usize,
     /// Number of inline ref-log records checked successfully.
     pub checked_ref_log_records: usize,
+    /// Number of active WAL records classified and decoded as rollback drafts.
+    pub checked_rollback_draft_records: usize,
     /// Number of trailing bytes in the active WAL that look like an incomplete final record.
     pub trailing_partial_wal_bytes: usize,
 }
@@ -63,6 +66,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
     let wal = Wal::new(layout.default_queue_wal_path());
     let replay = wal.replay()?;
     let persisted_wal_patches = verify_wal_persistence(&object_store, &replay.records)?;
+    let checked_rollback_draft_records = verify_rollback_draft_wal_records(&replay.records)?;
     Ok(RepositoryVerification {
         checked_objects: object_summary.object_count,
         checked_wal_records: replay.records.len(),
@@ -70,6 +74,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
         persisted_wal_patches,
         checked_refs: ref_verification.pointer_count,
         checked_ref_log_records: ref_verification.log_record_count,
+        checked_rollback_draft_records,
         trailing_partial_wal_bytes: replay.trailing_partial_bytes,
     })
 }

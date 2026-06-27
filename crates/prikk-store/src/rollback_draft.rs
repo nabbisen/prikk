@@ -1,8 +1,8 @@
 //! Mutating rollback draft append for the supported patch subset.
 //!
-//! PR-028 deliberately keeps rollback publication and worktree mutation out of scope. This module
+//! PR-029 deliberately keeps rollback publication and worktree mutation out of scope. This module
 //! validates the same supported inverse plan used by rollback preview, requires an empty active
-//! WAL, signs the unsigned inverse Patch with the current development placeholder author key, and
+//! WAL, signs the unsigned inverse Patch with a dedicated rollback draft marker key, and
 //! appends that Patch envelope to the active WAL under the active-session lock. The existing seal
 //! path is still responsible for publishing refs later.
 
@@ -19,7 +19,16 @@ use crate::patch_inverse::{prepare_patch_inverse_plan, PatchInverseOperationSumm
 use crate::rollback_preview::{prepare_rollback_preview, RollbackPreviewChange};
 use crate::wal::Wal;
 
-const DEV_ROLLBACK_AUTHOR_KEY_ID: &str = "dev-placeholder-author";
+pub(crate) const DEV_ROLLBACK_AUTHOR_KEY_ID: &str = "dev-placeholder-rollback-author";
+
+/// Return true when a Patch envelope carries the current rollback-draft author marker.
+pub(crate) fn is_rollback_draft_envelope(envelope: &ObjectEnvelope) -> bool {
+    envelope.object_type == ObjectType::Patch
+        && envelope.signatures.iter().any(|signature| {
+            signature.signer_role == SignerRole::Author
+                && signature.key_id == DEV_ROLLBACK_AUTHOR_KEY_ID
+        })
+}
 
 /// Result of appending a supported inverse Patch draft to the active WAL.
 #[derive(Debug, Clone, PartialEq, Eq)]

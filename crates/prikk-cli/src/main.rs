@@ -2,13 +2,12 @@
 
 //! PRIKK command-line entry point.
 //!
-//! PR-028 exposes minimal repository layout commands, active WAL status, empty and
+//! PR-029 exposes minimal repository layout commands, active WAL status, empty and
 //! snapshot-baseline worktree commit scaffolds, opt-in full-file text edit generation,
-//! read-only inverse planning, rollback preview, rollback draft append, supported patch replay
-//! planning/materialization, explicit patch deletion planning, a local no-audit seal scaffold,
-//! read-only history inspection, checkout
-//! planning, conservative snapshot materialization, read-only worktree status, repository
-//! verification, and doctor diagnostics with opt-in repairs.
+//! read-only inverse planning, rollback preview, rollback draft append/verification,
+//! supported patch replay planning/materialization, explicit patch deletion planning, a local
+//! no-audit seal scaffold, read-only history inspection, checkout planning, conservative snapshot
+//! materialization, read-only worktree status, repository verification, and doctor diagnostics.
 //! Arbitrary-span text diffs, full patch algebra, audit plugins, and sync remain later increments.
 
 use std::path::PathBuf;
@@ -22,14 +21,16 @@ mod seal;
 use args::{
     current_dir, optional_path_or_current, parse_checkout_args, parse_commit_args,
     parse_doctor_args, parse_inverse_plan_args, parse_log_args, parse_rollback_draft_args,
-    parse_rollback_preview_args, parse_worktree_status_args, CheckoutMode, CommitMode,
+    parse_rollback_draft_verify_args, parse_rollback_preview_args, parse_worktree_status_args,
+    CheckoutMode, CommitMode,
 };
 use commit::empty_patch_envelope;
 use output::{
     print_checkout_plan, print_doctor_report, print_help, print_history,
     print_patch_deletion_plan, print_patch_inverse_plan, print_patch_materialization_report,
-    print_patch_replay_plan, print_rollback_draft_report, print_rollback_preview_plan,
-    print_snapshot_checkout_plan, print_snapshot_materialization_report, print_verify_report,
+    print_patch_replay_plan, print_rollback_draft_report,
+    print_rollback_draft_verification, print_rollback_preview_plan, print_snapshot_checkout_plan,
+    print_snapshot_materialization_report, print_verify_report,
     print_worktree_status,
 };
 use prikk_store::{
@@ -37,12 +38,13 @@ use prikk_store::{
     load_ref_history, materialize_patch_checkout, materialize_patch_checkout_with_deletions,
     materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan,
     prepare_patch_inverse_plan, prepare_patch_replay_plan, prepare_rollback_preview,
-    prepare_snapshot_checkout_plan, repair_repository, verify_repository, worktree_status,
+    prepare_snapshot_checkout_plan, repair_repository, verify_active_rollback_draft,
+    verify_repository, worktree_status,
     ActiveSession, DoctorRepairOptions, RefStore, RepositoryLayout, Wal,
     WorktreePatchCommitOptions,
 };
 
-const VERSION: &str = "0.1.0-pr028";
+const VERSION: &str = "0.1.0-pr029";
 
 fn main() -> ExitCode {
     match run() {
@@ -74,6 +76,7 @@ fn run() -> std::result::Result<(), String> {
         Some("inverse-plan") => run_inverse_plan(args.collect()),
         Some("rollback-preview") => run_rollback_preview(args.collect()),
         Some("rollback-draft") => run_rollback_draft(args.collect()),
+        Some("rollback-draft-verify") => run_rollback_draft_verify(args.collect()),
         Some("worktree-status") => run_worktree_status(args.collect()),
         Some("verify") => run_verify(args.next()),
         Some("doctor") => run_doctor(args.collect()),
@@ -166,7 +169,7 @@ fn run_status() -> std::result::Result<(), String> {
     }
     println!(
         "status: arbitrary-span text diffs, plugins, and sync not \
-         implemented in PR-028"
+         implemented in PR-029"
     );
     Ok(())
 }
@@ -250,6 +253,15 @@ fn run_rollback_draft(args: Vec<String>) -> std::result::Result<(), String> {
     let report = append_rollback_draft(&layout, &args.ref_name, &args.message)
         .map_err(|err| err.to_string())?;
     print_rollback_draft_report(&layout, &report);
+    Ok(())
+}
+
+fn run_rollback_draft_verify(args: Vec<String>) -> std::result::Result<(), String> {
+    let args = parse_rollback_draft_verify_args(args)?;
+    let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
+    let report = verify_active_rollback_draft(&layout, &args.ref_name)
+        .map_err(|err| err.to_string())?;
+    print_rollback_draft_verification(&layout, &report);
     Ok(())
 }
 

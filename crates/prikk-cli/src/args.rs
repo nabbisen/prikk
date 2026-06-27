@@ -90,6 +90,14 @@ pub(crate) struct RollbackDraftArgs {
     pub(crate) message: String,
 }
 
+/// Parsed rollback-draft-verify command arguments.
+pub(crate) struct RollbackDraftVerifyArgs {
+    /// Repository root.
+    pub(crate) root: PathBuf,
+    /// Ref to inspect.
+    pub(crate) ref_name: String,
+}
+
 /// Parsed worktree-status command arguments.
 pub(crate) struct WorktreeStatusArgs {
     /// Repository root.
@@ -199,7 +207,7 @@ pub(crate) fn parse_checkout_args(
     let Some(mode) = mode else {
         return Err(
             concat!(
-                "PR-028 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
+                "PR-029 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
                 "`--snapshot-materialize`, `--patch-plan`, `--patch-materialize`, ",
                 "`--patch-delete-plan`, or `--patch-materialize-delete`",
             )
@@ -331,6 +339,41 @@ pub(crate) fn parse_rollback_draft_args(
     })
 }
 
+/// Parse `prikk rollback-draft-verify` arguments.
+pub(crate) fn parse_rollback_draft_verify_args(
+    args: Vec<String>,
+) -> std::result::Result<RollbackDraftVerifyArgs, String> {
+    let mut path = None;
+    let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--ref" => {
+                let Some(value) = iter.next() else {
+                    return Err("rollback-draft-verify --ref requires a value".to_string());
+                };
+                if value.trim().is_empty() {
+                    return Err("rollback-draft-verify --ref must not be empty".to_string());
+                }
+                ref_name = value;
+            },
+            other if other.starts_with('-') => {
+                return Err(format!("unknown rollback-draft-verify argument: {other}"));
+            }
+            _ => {
+                if path.is_some() {
+                    return Err("rollback-draft-verify accepts at most one path".to_string());
+                }
+                path = Some(arg);
+            }
+        }
+    }
+    Ok(RollbackDraftVerifyArgs {
+        root: optional_path_or_current(path)?,
+        ref_name,
+    })
+}
+
 /// Parse `prikk worktree-status` arguments.
 pub(crate) fn parse_worktree_status_args(
     args: Vec<String>,
@@ -423,7 +466,7 @@ pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<Commit
     let Some(mode) = mode else {
         return Err(
             concat!(
-                "PR-028 supports `prikk commit --allow-empty -m <message>` or ",
+                "PR-029 supports `prikk commit --allow-empty -m <message>` or ",
                 "`--from-worktree [--text-edits] -m <message>`",
             )
             .to_string(),

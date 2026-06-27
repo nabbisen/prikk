@@ -3,14 +3,14 @@
 
 //! Storage crate for PRIKK repositories.
 //!
-//! PR-028 contains persistent layout, object storage, WAL durability, deeper read-only
+//! PR-029 contains persistent layout, object storage, WAL durability, deeper read-only
 //! repository verification, initial ref-state/ref-log publication primitives, a narrow
 //! active-session append API, opt-in safe doctor repairs, conservative snapshot materialization,
 //! read-only worktree status, minimal worktree-to-patch draft generation, supported patch replay
 //! planning and materialization, explicit opt-in deletion of patch-removed files, conservative
 //! full-file text edit replay, opt-in full-file text edit generation from worktree changes, and
-//! read-only inverse planning for the supported patch subset, non-mutating rollback preview, and
-//! conservative rollback draft append to an empty active WAL.
+//! read-only inverse planning for the supported patch subset, non-mutating rollback preview,
+//! conservative rollback draft append to an empty active WAL, and rollback draft verification.
 //! Full patch algebra, plugin execution, and remote sync remain separate increments.
 
 mod active;
@@ -31,6 +31,7 @@ mod patch_replay;
 mod refs;
 mod rollback_draft;
 mod rollback_preview;
+mod rollback_verify;
 mod snapshot;
 mod wal;
 mod verify;
@@ -74,6 +75,7 @@ pub use rollback_preview::{
     prepare_rollback_preview, RollbackPreviewChange, RollbackPreviewChangeKind,
     RollbackPreviewPlan,
 };
+pub use rollback_verify::{verify_active_rollback_draft, RollbackDraftVerification};
 pub use snapshot::{SnapshotEntry, SnapshotManifest};
 pub use wal::{Wal, WalRecord, WalReplay, WalRepair};
 pub use verify::{verify_repository, ObjectVerification, RepositoryVerification};

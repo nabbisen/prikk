@@ -3,7 +3,7 @@
 use prikk_store::{
     CheckoutMaterialization, CheckoutPlan, DoctorSeverity, PatchDeletionPlan,
     PatchInversePlan, PatchMaterializationReport, PatchReplayPlan, RefHistory,
-    RepositoryLayout, RollbackDraftReport, RollbackPreviewPlan,
+    RepositoryLayout, RollbackDraftReport, RollbackDraftVerification, RollbackPreviewPlan,
     SnapshotCheckoutPlan, SnapshotMaterializationReport, WorktreeChangeKind, WorktreeStatusReport,
 };
 
@@ -263,6 +263,26 @@ pub(crate) fn print_rollback_draft_report(
     );
 }
 
+/// Print a rollback draft verification report.
+pub(crate) fn print_rollback_draft_verification(
+    layout: &RepositoryLayout,
+    report: &RollbackDraftVerification,
+) {
+    println!("rollback draft verification repository: {}", layout.prikk_dir().display());
+    println!("ref: {}", report.ref_name);
+    println!("target block: {}", report.target_block_id);
+    println!("draft patch: {}", report.draft_patch_id);
+    println!("WAL sequence: {}", report.wal_sequence);
+    println!("blocks inspected: {}", report.block_count);
+    println!("patches inspected: {}", report.patch_count);
+    println!("inverse operations: {}", report.inverse_operation_count);
+    println!("decoded operations: {}", report.decoded_operation_count);
+    println!(
+        "note: this validates the active rollback draft against the current inverse plan only; \
+         seal, rollback refs, authorization, audit policy, and worktree writes remain separate"
+    );
+}
+
 /// Print a worktree status report.
 pub(crate) fn print_worktree_status(layout: &RepositoryLayout, report: &WorktreeStatusReport) {
     println!("worktree-status repository: {}", layout.prikk_dir().display());
@@ -342,6 +362,10 @@ pub(crate) fn print_verify_report(
     println!("persisted WAL patches: {}", report.persisted_wal_patches);
     println!("checked refs: {}", report.checked_refs);
     println!("checked ref-log records: {}", report.checked_ref_log_records);
+    println!(
+        "checked rollback draft WAL records: {}",
+        report.checked_rollback_draft_records
+    );
     println!("trailing partial WAL bytes: {}", report.trailing_partial_wal_bytes);
     if report.has_trailing_partial_wal() {
         println!("warning: active WAL contains an incomplete trailing record");
@@ -383,6 +407,9 @@ pub(crate) fn print_help(version: &str) {
     println!(
         "  prikk rollback-draft --append-inverse [path] [--ref REF] \
          -m <message> Append inverse Patch"
+    );
+    println!(
+        "  prikk rollback-draft-verify [path] [--ref REF] Verify active rollback Patch"
     );
     println!(
         "  prikk worktree-status [path] [--ref REF]  Report changes against snapshot baseline"
