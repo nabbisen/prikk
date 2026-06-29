@@ -1,8 +1,24 @@
 # Changelog
 
-# Changelog
+## 0.1.3 — Documentation / release hygiene
 
-## 0.1.2 — DC-09 Phase 4.4 (step 2b.2R-2: create_node nonzero guard)
+Documentation-only release. No source code change; identity anchors unchanged
+(empty-PATCH `510ab866…5157`, populated `24031b48…c854`).
+
+- Replaced `README.md` (maintainer-updated).
+- Folded the v0.1.2 release-note errata: the four ignored `prikk-store` tests are now
+  explained as DEV-ONLY worktree-authoring checkpoint tests, and worktree-authoring re-enable
+  is added to the carry-forwards.
+- CHANGELOG hygiene: removed a duplicate top heading and consolidated the v0.1.2 sub-slices
+  under a single `0.1.2` release heading.
+
+## 0.1.2 — DC-09 Phase 4.3 / 4.4 internal node-model groundwork
+
+Internal/unwired node-model groundwork: store decode-model promotion, the node-lifecycle
+substrate, and the lifecycle-cache trust ladder. Not consumed by any command path; identity
+anchors unchanged.
+
+### Phase 4.4 step 2b.2R-2 — create_node nonzero guard
 
 Pre-threading substrate hardening from the 2b.2R review (P2): `NodeLifecycleState::create_node`
 now rejects the reserved all-zero `node_id` at the central node-introduction boundary,
@@ -10,7 +26,7 @@ matching `seed_live_node` / `seed_tombstone`, instead of relying on decode/gener
 correctness. Validation-only; both anchors unchanged. Test: `create_node_rejects_all_zero_node_id`
 (restoration-equivalent re-create with a nonzero id continues to clear the tombstone).
 
-## 0.1.2 — DC-09 Phase 4.4 (step 2b.2R: live/tombstone overlap closure)
+### Phase 4.4 step 2b.2R — live/tombstone overlap closure
 
 Closes a substrate P1 found in the steps 3–4 review: `NodeLifecycleState` could hold a node
 as both live and tombstoned after delete → restoration-equivalent re-create, which violated
@@ -27,7 +43,7 @@ restore cache. Model/validation correction only; both anchors unchanged.
   passes consistency; a post-restore baseline cache (node live, no tombstone) compares equal
   to the replayed state.
 
-## 0.1.2 — DC-09 Phase 4.4 (step 2b.2-3/4: replay-derived + compared rungs)
+### Phase 4.4 step 2b.2-3/4 — replay-derived + compared rungs
 
 Adds the top trust rungs and the decisive right-provenance/false-tombstone guarantee. Still a
 private, unwired slice — no apply/seal/verify path consumes a cache. Additive; both anchors
@@ -52,7 +68,7 @@ unchanged.
   block from genesis — applies when the real resolver lands in threading) and P2-3 (structured
   error taxonomy before recovery/doctor branches on classes).
 
-## 0.1.2 — DC-09 Phase 4.4 (step 2b.2-2: walked-chain provenance)
+### Phase 4.4 step 2b.2-2 — walked-chain provenance
 
 Makes lifecycle-cache provenance **operational**: the `replay_window_hash` is recomputed
 over the actually walked single-parent block chain, never over cache-supplied data. Still a
@@ -74,7 +90,7 @@ anchors unchanged.
 - Tests: matching walked chain accepted; window-hash mismatch, merge block, non-genesis
   horizon, cycle, and genesis-before-horizon each rejected.
 
-## 0.1.2 — DC-09 Phase 4.4 (step 2b.2-1: blob-kind verification + Validated rung)
+### Phase 4.4 step 2b.2-1 — blob-kind verification + Validated rung
 
 Opens 4.4-2b.2 proper with the first blob-kind verification step and the first trust rung.
 Still a private, unwired codec/import slice — no apply/seal/verify identity decision uses a
@@ -98,7 +114,7 @@ cache. Additive; both anchors unchanged.
   verified `read_enum_u16` guards the wire type exactly once — the apparent double was two
   distinct call sites (node_kind tag 3, parent_policy tag 4), nothing to remove (N2).
 
-## 0.1.2 — DC-09 Phase 4.4 (step 2b.2: lifecycle cache codec hardening)
+### Phase 4.4 step 2b.2 — lifecycle cache codec hardening
 
 Corrective patch opening 4.4-2b.2, closing the 4.4-2b.1 review errata. Validation-only;
 no new data, no wiring into replay; both anchors unchanged.
@@ -122,7 +138,7 @@ no new data, no wiring into replay; both anchors unchanged.
 - **P2-2 (error taxonomy)** remains a message-class mapping for now, per the review — to be
   promoted to a structured class before any recovery/doctor path depends on the outcomes.
 
-## 0.1.2 — DC-09 Phase 4.4 (step 2b.1: lifecycle cache codec)
+### Phase 4.4 step 2b.1 — lifecycle cache codec
 
 Adds the persisted lifecycle-cache wire format and its decoder/importer
 (`lifecycle_cache`), a derived, rebuildable accelerator for `NodeLifecycleState`. Per
@@ -148,7 +164,7 @@ anchors unchanged.
   `ReplayDerivedLifecycleState` / `ComparedLifecycleCache` ladder is exposed yet, so no
   type here can be mistaken for replay-derived authority.
 
-## 0.1.2 — DC-09 Phase 4.4 (step 2a: baseline seeding substrate)
+### Phase 4.4 step 2a — baseline seeding substrate
 
 Adds the baseline-seeding API to `NodeLifecycleState` and closes the substrate-level
 4.4-2 errata, so a baseline cache cannot inject node state an operation could not.
@@ -172,7 +188,7 @@ Additive and identity-neutral; both anchors unchanged.
   the symlink `normalized_mode == 0` parse check, and threading `NodeLifecycleState`
   through replay/inverse/rollback.
 
-## 0.1.2 — DC-09 Phase 4.4 (step 1: node lifecycle substrate)
+### Phase 4.4 step 1 — node lifecycle substrate
 
 Introduces the node-aware replay substrate. Additive and identity-neutral: a new
 isolated module with no changes to any object/payload/encode path; both identity
@@ -200,7 +216,7 @@ anchors are unchanged.
   pipeline in the next 4.4 step (which first settles how the clean-tree baseline
   carries node identity).
 
-## 0.1.2 — DC-09 Phase 4.3 (store decode-model promotion)
+### Phase 4.3 — store decode-model promotion
 
 Promotes the store patch decoder from a two-variant, path-keyed supported subset
 into a typed node-addressed stream over all seven FDD-03 §9.3 operation kinds.

@@ -1,8 +1,9 @@
 # Prikk
 
 ![Status](https://img.shields.io/badge/status-early--implementation-orange)
-![License](https://img.shields.io/badge/license-Apache--2.0-blue)
-![Rust](https://img.shields.io/badge/rust-2024-orange)
+[![license](https://img.shields.io/crates/l/prikk.svg)](LICENSE)
+[![matten docs.rs](https://img.shields.io/docsrs/prikk?label=prikk%20docs)](https://docs.rs/prikk)
+[![matten crates.io](https://img.shields.io/crates/v/prikk.svg?label=prikk)](https://crates.io/crates/prikk)
 
 **A next-generation, design-first VCS built around block-oriented patch theory.**
 
