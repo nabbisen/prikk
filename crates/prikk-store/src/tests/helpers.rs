@@ -1,7 +1,7 @@
 //! Shared test fixtures.
 
 use prikk_object::{
-    BlockKind, BlockPayload, CanonicalEncode, CreateFile, EditText, MerkleRoot, ObjectEnvelope,
+    BlockKind, BlockPayload, CanonicalEncode, CreateFile, MerkleRoot, NodeId, ObjectEnvelope,
     ObjectId, ObjectType, Operation, OperationKind, PatchPayload, RefKind, RefStatePayload,
     RefUpdatePayload, Signature, SignatureAlgorithm, SignerRole,
 };
@@ -12,11 +12,11 @@ pub(crate) fn signed_patch_envelope() -> ObjectEnvelope {
             op_seq: 1,
             op_id: None,
             preconditions: Vec::new(),
-            kind: OperationKind::EditText(EditText {
+            kind: OperationKind::CreateFile(CreateFile {
                 path: "a.txt".to_string(),
-                anchor_id: "anchor-1".to_string(),
-                old_span_hash: [3_u8; 32].into(),
-                replacement: "hello".to_string(),
+                node_id: NodeId::from_bytes([0x51; 32]),
+                blob_id: sample_object_id("patch-envelope-blob"),
+                mode: 0o100_644,
             }),
         }],
         parent_patch_ids: Vec::new(),
@@ -40,6 +40,7 @@ pub(crate) fn rollback_patch_envelope() -> ObjectEnvelope {
             preconditions: Vec::new(),
             kind: OperationKind::CreateFile(CreateFile {
                 path: "rollback.txt".to_string(),
+                node_id: NodeId::from_bytes([0x73; 32]),
                 blob_id: sample_object_id("rollback-created"),
                 mode: 0o100644,
             }),

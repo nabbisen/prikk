@@ -4,6 +4,7 @@ pub mod attestation;
 pub mod blob;
 pub mod block;
 pub mod common;
+pub mod node;
 pub mod patch;
 pub mod refs;
 pub mod tag;
@@ -12,12 +13,13 @@ pub mod tag;
 mod tests;
 
 pub use attestation::{AttestationPayload, AttestationStatus, PluginResultEntry};
-pub use blob::BlobPayload;
+pub use blob::{BlobKind, BlobPayload};
 pub use block::{BlockKind, BlockPayload};
 pub use common::{Intent, MerkleRoot, OperationCondition, OperationConditionEntry};
+pub use node::{NODE_ID_BYTES, NodeId, NodeKind};
 pub use patch::{
-    ChangePerm, CreateFile, CreateSymlink, DeleteFile, EditText, Operation, OperationKind,
-    PatchPayload, RenamePath, ReplaceBinary, TEXT_SPAN_HASH_BYTES, text_span_hash,
+    ChangePerm, CreateFile, CreateSymlink, DeleteNode, DeleteNodePreimage, EditText, Operation,
+    OperationKind, PatchPayload, RenamePath, ReplaceBinary, TEXT_SPAN_HASH_BYTES, text_span_hash,
     validate_text_anchor_id,
 };
 pub use refs::{RefKind, RefStatePayload, RefUpdatePayload};

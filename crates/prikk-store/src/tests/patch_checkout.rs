@@ -1,8 +1,9 @@
 //! Patch checkout materialization tests.
 
 use prikk_object::{
-    BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile, DeleteFile, MerkleRoot,
-    ObjectEnvelope, ObjectType, Operation, OperationKind, PatchPayload, ReplaceBinary,
+    BlobKind, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile, DeleteNode,
+    DeleteNodePreimage, MerkleRoot, NodeId, NodeKind, ObjectEnvelope, ObjectType, Operation,
+    OperationKind, PatchPayload,
 };
 
 use crate::{
@@ -28,12 +29,12 @@ fn patch_materialization_writes_replayed_files() {
         if let Ok(report) = report {
             assert_eq!(report.block_count, 2);
             assert_eq!(report.patch_count, 1);
-            assert_eq!(report.applied_operation_count, 3);
+            assert_eq!(report.applied_operation_count, 2);
             assert_eq!(report.planned_files, 2);
             assert_eq!(report.written_files, 2);
             assert_eq!(report.unchanged_files, 0);
         }
-        assert!(std::fs::read(root.join("README.md")).is_ok_and(|x| x == b"changed\n".to_vec()));
+        assert!(std::fs::read(root.join("README.md")).is_ok_and(|x| x == b"hello\n".to_vec()));
         assert!(std::fs::read(root.join("extra.txt")).is_ok_and(|x| x == b"extra\n".to_vec()));
         assert!(!root.join("old.txt").exists());
     }
@@ -108,7 +109,7 @@ fn patch_materialization_with_deletions_removes_matching_old_file() {
             assert_eq!(report.already_absent_deleted_files, 0);
             assert_eq!(report.deletion_conflicts, 0);
         }
-        assert!(std::fs::read(root.join("README.md")).is_ok_and(|x| x == b"changed\n".to_vec()));
+        assert!(std::fs::read(root.join("README.md")).is_ok_and(|x| x == b"hello\n".to_vec()));
         assert!(std::fs::read(root.join("extra.txt")).is_ok_and(|x| x == b"extra\n".to_vec()));
         assert!(!root.join("old.txt").exists());
     }
@@ -133,9 +134,7 @@ fn patch_materialization_with_deletions_refuses_modified_removed_file() {
 
 fn publish_snapshot_then_patch_block(layout: &RepositoryLayout) -> prikk_error::Result<()> {
     let mut object_store = FileObjectStore::new(layout.clone());
-    let readme_v1 = write_blob(&mut object_store, b"hello\n")?;
     let old_blob = write_blob(&mut object_store, b"old\n")?;
-    let readme_v2 = write_blob(&mut object_store, b"changed\n")?;
     let extra_blob = write_blob(&mut object_store, b"extra\n")?;
 
     let snapshot_manifest = SnapshotManifest {
@@ -150,9 +149,7 @@ fn publish_snapshot_then_patch_block(layout: &RepositoryLayout) -> prikk_error::
             },
         ],
     };
-    let snapshot_blob = BlobPayload {
-        bytes: snapshot_manifest.encode()?,
-    };
+    let snapshot_blob = BlobPayload::new(BlobKind::Snapshot, snapshot_manifest.encode()?);
     let snapshot_bytes = snapshot_blob.to_canonical_bytes()?;
     let mut snapshot_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, snapshot_bytes);
     snapshot_envelope.add_signature(maintainer_signature())?;
@@ -172,27 +169,23 @@ fn publish_snapshot_then_patch_block(layout: &RepositoryLayout) -> prikk_error::
                 op_seq: 1,
                 op_id: None,
                 preconditions: Vec::new(),
-                kind: OperationKind::ReplaceBinary(ReplaceBinary {
-                    path: "README.md".to_string(),
-                    old_blob_id: readme_v1,
-                    new_blob_id: readme_v2,
+                kind: OperationKind::DeleteNode(DeleteNode {
+                    path: "old.txt".to_string(),
+                    node_id: NodeId::from_bytes([0x71; 32]),
+                    old_node_kind: NodeKind::TextFile,
+                    preimage: DeleteNodePreimage::File {
+                        old_blob_id: old_blob,
+                        old_mode: 0o100644,
+                    },
                 }),
             },
             Operation {
                 op_seq: 2,
                 op_id: None,
                 preconditions: Vec::new(),
-                kind: OperationKind::DeleteFile(DeleteFile {
-                    path: "old.txt".to_string(),
-                    old_blob_id: old_blob,
-                }),
-            },
-            Operation {
-                op_seq: 3,
-                op_id: None,
-                preconditions: Vec::new(),
                 kind: OperationKind::CreateFile(CreateFile {
                     path: "extra.txt".to_string(),
+                    node_id: NodeId::from_bytes([0x72; 32]),
                     blob_id: extra_blob,
                     mode: 0o100644,
                 }),
@@ -245,9 +238,7 @@ fn write_blob(
     store: &mut FileObjectStore,
     bytes: &[u8],
 ) -> prikk_error::Result<prikk_object::ObjectId> {
-    let payload = BlobPayload {
-        bytes: bytes.to_vec(),
-    };
+    let payload = BlobPayload::new(BlobKind::Text, bytes.to_vec());
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, payload.to_canonical_bytes()?);
     envelope.add_signature(maintainer_signature())?;
     store.write_object(&envelope)

@@ -6,22 +6,35 @@
 
 use prikk_error::{PrikkError, Result};
 
-/// Wire type code for canonical field values.
+/// Canonical field value type — FDD-03 §7.1 `value_type`. (The Rust type keeps the
+/// historical name `WireType`; its codes and semantics are the normative
+/// §7.1 table.) The `u8` code is part of every field record and therefore part of
+/// object identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum WireType {
-    /// UTF-8 string bytes.
-    String = 1,
-    /// Opaque byte string.
-    Bytes = 2,
-    /// Unsigned 32-bit integer, big-endian.
-    U32 = 3,
-    /// Unsigned 64-bit integer, big-endian.
-    U64 = 4,
     /// Boolean as one byte, 0 or 1.
-    Bool = 5,
+    Bool = 0x01,
+    /// Unsigned 16-bit integer, big-endian.
+    U16 = 0x02,
+    /// Unsigned 32-bit integer, big-endian.
+    U32 = 0x03,
+    /// Unsigned 64-bit integer, big-endian.
+    U64 = 0x04,
+    /// Discriminated `enum_u16` value, big-endian.
+    EnumU16 = 0x05,
+    /// UTF-8 string bytes.
+    String = 0x10,
+    /// Opaque byte string.
+    Bytes = 0x11,
+    /// 32-byte object identifier.
+    ObjectId = 0x12,
+    /// Normalized repo-relative UTF-8 path.
+    RepoPath = 0x13,
     /// Nested canonical record bytes.
-    Record = 6,
+    Record = 0x20,
+    /// Item of a repeated record list.
+    RecordListItem = 0x21,
 }
 
 /// Trait for values that can emit Prikk canonical bytes.
@@ -91,6 +104,27 @@ impl CanonicalWriter {
         self.field_raw(tag, WireType::Bool, &encoded)
     }
 
+    /// Emit a u16 field.
+    pub fn field_u16(&mut self, tag: u16, value: u16) -> Result<()> {
+        self.field_raw(tag, WireType::U16, &value.to_be_bytes())
+    }
+
+    /// Emit an `enum_u16` field (discriminated enum value).
+    pub fn field_enum_u16(&mut self, tag: u16, value: u16) -> Result<()> {
+        self.field_raw(tag, WireType::EnumU16, &value.to_be_bytes())
+    }
+
+    /// Emit an object-id field (32 bytes, `value_type` `object_id`).
+    pub fn field_object_id(&mut self, tag: u16, value: &crate::ObjectId) -> Result<()> {
+        self.field_raw(tag, WireType::ObjectId, value.as_bytes())
+    }
+
+    /// Emit a repo-path field. The caller passes an already-normalized
+    /// repo-relative UTF-8 path.
+    pub fn field_repo_path(&mut self, tag: u16, value: &str) -> Result<()> {
+        self.field_raw(tag, WireType::RepoPath, value.as_bytes())
+    }
+
     /// Emit a nested canonical record.
     pub fn field_record<T: CanonicalEncode>(&mut self, tag: u16, value: &T) -> Result<()> {
         let mut nested = CanonicalWriter::new();
@@ -106,6 +140,30 @@ impl CanonicalWriter {
         Ok(())
     }
 
+    /// Emit a single record-list item (`value_type` `record_list_item`).
+    pub fn field_record_list_item<T: CanonicalEncode>(
+        &mut self,
+        tag: u16,
+        value: &T,
+    ) -> Result<()> {
+        let mut nested = CanonicalWriter::new();
+        value.encode_canonical(&mut nested)?;
+        self.field_raw(tag, WireType::RecordListItem, &nested.finish())
+    }
+
+    /// Emit a repeated record list using `record_list_item` framing. Each item is
+    /// emitted with the same tag.
+    pub fn repeated_record_list<T: CanonicalEncode>(
+        &mut self,
+        tag: u16,
+        values: &[T],
+    ) -> Result<()> {
+        for value in values {
+            self.field_record_list_item(tag, value)?;
+        }
+        Ok(())
+    }
+
     /// Emit a repeated string field. Each item is emitted with the same tag.
     pub fn repeated_string(&mut self, tag: u16, values: &[String]) -> Result<()> {
         for value in values {
@@ -114,10 +172,11 @@ impl CanonicalWriter {
         Ok(())
     }
 
-    /// Emit a repeated object-id field. Each item is emitted with the same tag.
+    /// Emit a repeated object-id field. Each item is emitted with the same tag,
+    /// using the `object_id` value_type (FDD-03 §7.1).
     pub fn repeated_object_id(&mut self, tag: u16, values: &[crate::ObjectId]) -> Result<()> {
         for value in values {
-            self.field_bytes(tag, value.as_bytes())?;
+            self.field_object_id(tag, value)?;
         }
         Ok(())
     }

@@ -14,19 +14,28 @@ pub const OBJECT_ID_DOMAIN: &[u8] = b"PRIKK-OBJECT-ID-v1";
 #[repr(u16)]
 pub enum ObjectType {
     /// Patch object.
-    Patch = 1,
+    Patch = 0x01,
     /// Block object.
-    Block = 2,
+    Block = 0x02,
     /// RefState object.
-    RefState = 3,
+    RefState = 0x03,
+    /// RefUpdate event. Object-envelope type stored inline in `refs/logs/`
+    /// (journal then log), not a permanent object-store directory.
+    RefUpdate = 0x04,
     /// Tag object.
-    Tag = 4,
+    Tag = 0x05,
     /// Attestation object.
-    Attestation = 5,
+    Attestation = 0x06,
     /// Blob object.
-    Blob = 6,
-    /// Inline ref-update event payload when promoted to object form in future versions.
-    RefUpdate = 7,
+    Blob = 0x07,
+    /// Rebuildable block-summary cache. Uses the canonical codec for
+    /// reproducibility but is never a root of trust or part of block identity.
+    BlockSummaryCache = 0x08,
+    /// Signed doctor-repair note stored inline in `refs/recovery/`. Never a
+    /// `RefUpdate` substitute (FDD-02 §10.4).
+    RecoveryNote = 0x09,
+    /// Project identity anchor; its `ObjectId` is the `project_id` (FDD-03 §9.13).
+    ProjectGenesis = 0x0A,
 }
 
 impl ObjectType {
@@ -39,13 +48,16 @@ impl ObjectType {
     /// Parse a stable u16 code.
     pub fn from_code(code: u16) -> Result<Self> {
         match code {
-            1 => Ok(Self::Patch),
-            2 => Ok(Self::Block),
-            3 => Ok(Self::RefState),
-            4 => Ok(Self::Tag),
-            5 => Ok(Self::Attestation),
-            6 => Ok(Self::Blob),
-            7 => Ok(Self::RefUpdate),
+            0x01 => Ok(Self::Patch),
+            0x02 => Ok(Self::Block),
+            0x03 => Ok(Self::RefState),
+            0x04 => Ok(Self::RefUpdate),
+            0x05 => Ok(Self::Tag),
+            0x06 => Ok(Self::Attestation),
+            0x07 => Ok(Self::Blob),
+            0x08 => Ok(Self::BlockSummaryCache),
+            0x09 => Ok(Self::RecoveryNote),
+            0x0A => Ok(Self::ProjectGenesis),
             other => Err(PrikkError::MalformedData(format!(
                 "unknown object type code: {other}"
             ))),
@@ -59,10 +71,13 @@ impl ObjectType {
             Self::Patch => "patch",
             Self::Block => "block",
             Self::RefState => "ref-state",
+            Self::RefUpdate => "ref-update",
             Self::Tag => "tag",
             Self::Attestation => "attestation",
             Self::Blob => "blob",
-            Self::RefUpdate => "ref-update",
+            Self::BlockSummaryCache => "block-summary-cache",
+            Self::RecoveryNote => "recovery-note",
+            Self::ProjectGenesis => "project-genesis",
         }
     }
 }

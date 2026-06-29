@@ -4,6 +4,7 @@ use prikk_error::{PrikkError, Result};
 
 use crate::canonical::{is_contiguous_op_seq, is_strictly_sorted};
 use crate::payload::common::{Intent, OperationCondition, OperationConditionEntry};
+use crate::payload::node::{NodeId, NodeKind};
 use crate::{CanonicalEncode, CanonicalWriter, ObjectId};
 
 /// Number of bytes in a content-anchored text span hash.
@@ -51,6 +52,11 @@ pub struct PatchPayload {
 impl PatchPayload {
     /// Validate ordering and duplicate constraints.
     pub fn validate(&self) -> Result<()> {
+        if self.operations.is_empty() {
+            return Err(PrikkError::CanonicalEncoding(
+                "patch operations must contain at least one operation".to_string(),
+            ));
+        }
         let op_seq: Vec<u32> = self.operations.iter().map(|op| op.op_seq).collect();
         if !is_contiguous_op_seq(&op_seq) {
             return Err(PrikkError::CanonicalEncoding(
@@ -74,10 +80,10 @@ impl PatchPayload {
 impl CanonicalEncode for PatchPayload {
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
         self.validate()?;
-        writer.repeated_record(1, &self.operations)?;
+        writer.repeated_record_list(1, &self.operations)?;
         writer.repeated_object_id(2, &self.parent_patch_ids)?;
         if let Some(intent) = self.intent {
-            writer.field_u32(3, u32::from(intent.code()))?;
+            writer.field_enum_u16(3, intent.code())?;
         }
         writer.repeated_record(4, &self.preconditions)?;
         Ok(())
@@ -104,7 +110,7 @@ impl CanonicalEncode for Operation {
         writer.repeated_record(3, &self.preconditions)?;
         match &self.kind {
             OperationKind::CreateFile(value) => writer.field_record(10, value)?,
-            OperationKind::DeleteFile(value) => writer.field_record(11, value)?,
+            OperationKind::DeleteNode(value) => writer.field_record(11, value)?,
             OperationKind::EditText(value) => writer.field_record(12, value)?,
             OperationKind::RenamePath(value) => writer.field_record(13, value)?,
             OperationKind::ChangePerm(value) => writer.field_record(14, value)?,
@@ -120,8 +126,8 @@ impl CanonicalEncode for Operation {
 pub enum OperationKind {
     /// Create a text or binary file.
     CreateFile(CreateFile),
-    /// Delete a file.
-    DeleteFile(DeleteFile),
+    /// Delete a node.
+    DeleteNode(DeleteNode),
     /// Edit text using content-anchored spans.
     EditText(EditText),
     /// Rename a path.
@@ -134,39 +140,118 @@ pub enum OperationKind {
     ReplaceBinary(ReplaceBinary),
 }
 
-/// Create file payload.
+/// Create file payload (FDD-03 §9.3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateFile {
-    /// Repo-relative UTF-8 path.
+    /// Repo-relative UTF-8 path (`repo_path`).
     pub path: String,
-    /// Initial blob ID.
+    /// Node identity (`bytes`, 32).
+    pub node_id: NodeId,
+    /// Initial blob ID (`object_id`).
     pub blob_id: ObjectId,
-    /// Mode bits.
+    /// Mode bits (`u32`).
     pub mode: u32,
 }
 
-impl CanonicalEncode for CreateFile {
-    fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
-        writer.field_string(1, &self.path)?;
-        writer.field_bytes(2, self.blob_id.as_bytes())?;
-        writer.field_u32(3, self.mode)?;
+impl CreateFile {
+    /// Reject an all-zero `node_id`; FDD-03 §9.3 forbids the reserved value in any
+    /// persisted node-bearing operation, and the encoder produces identity bytes.
+    pub fn validate(&self) -> Result<()> {
+        if self.node_id.is_zero() {
+            return Err(PrikkError::CanonicalEncoding(
+                "CreateFile node_id must be nonzero".to_string(),
+            ));
+        }
         Ok(())
     }
 }
 
-/// Delete file payload.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DeleteFile {
-    /// Repo-relative UTF-8 path.
-    pub path: String,
-    /// Previous blob ID needed for inverse/repair reachability.
-    pub old_blob_id: ObjectId,
+impl CanonicalEncode for CreateFile {
+    fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
+        self.validate()?;
+        writer.field_repo_path(1, &self.path)?;
+        writer.field_bytes(2, self.node_id.as_bytes())?;
+        writer.field_object_id(3, &self.blob_id)?;
+        writer.field_u32(4, self.mode)?;
+        Ok(())
+    }
 }
 
-impl CanonicalEncode for DeleteFile {
+/// Discriminated deletion preimage (FDD-03 §9.3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeleteNodePreimage {
+    /// File or binary node: blob + mode preimage.
+    File {
+        /// Previous blob ID (`object_id`).
+        old_blob_id: ObjectId,
+        /// Previous mode bits (`u32`).
+        old_mode: u32,
+    },
+    /// Symlink node: target preimage.
+    Symlink {
+        /// Previous symlink target (`utf8`).
+        old_target: String,
+    },
+}
+
+/// Delete a node (FDD-03 §9.3; the wire tag is retained as `delete_file`). The
+/// preimage is discriminated by `old_node_kind`: text/binary file nodes carry
+/// `old_blob_id` + `old_mode`; symlink nodes carry `old_target`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteNode {
+    /// Repo-relative UTF-8 path (`repo_path`).
+    pub path: String,
+    /// Node identity (`bytes`, 32).
+    pub node_id: NodeId,
+    /// Previous node kind (`enum_u16`); must agree with the preimage.
+    pub old_node_kind: NodeKind,
+    /// Discriminated deletion preimage.
+    pub preimage: DeleteNodePreimage,
+}
+
+impl DeleteNode {
+    /// Reject `old_node_kind` / preimage discriminator mismatches and an all-zero
+    /// `node_id` (FDD-03 §9.3 forbids the reserved value in any node-bearing op).
+    pub fn validate(&self) -> Result<()> {
+        if self.node_id.is_zero() {
+            return Err(PrikkError::CanonicalEncoding(
+                "DeleteNode node_id must be nonzero".to_string(),
+            ));
+        }
+        let consistent = matches!(
+            (self.old_node_kind, &self.preimage),
+            (
+                NodeKind::TextFile | NodeKind::BinaryFile,
+                DeleteNodePreimage::File { .. }
+            ) | (NodeKind::Symlink, DeleteNodePreimage::Symlink { .. })
+        );
+        if !consistent {
+            return Err(PrikkError::CanonicalEncoding(
+                "DeleteNode old_node_kind does not match preimage discriminator".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl CanonicalEncode for DeleteNode {
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
-        writer.field_string(1, &self.path)?;
-        writer.field_bytes(2, self.old_blob_id.as_bytes())?;
+        self.validate()?;
+        writer.field_repo_path(1, &self.path)?;
+        writer.field_bytes(2, self.node_id.as_bytes())?;
+        writer.field_enum_u16(3, self.old_node_kind.code())?;
+        match &self.preimage {
+            DeleteNodePreimage::File {
+                old_blob_id,
+                old_mode,
+            } => {
+                writer.field_object_id(4, old_blob_id)?;
+                writer.field_u32(6, *old_mode)?;
+            }
+            DeleteNodePreimage::Symlink { old_target } => {
+                writer.field_string(5, old_target)?;
+            }
+        }
         Ok(())
     }
 }
@@ -174,28 +259,51 @@ impl CanonicalEncode for DeleteFile {
 /// Text edit payload using content-anchor identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditText {
-    /// Repo-relative UTF-8 path.
-    pub path: String,
-    /// Stable content-anchor identifier.
-    ///
-    /// This is a logical span identity, not a byte or line offset. Presentation offsets may be
-    /// derived by later layers, but they are never part of the patch precondition identity.
-    pub anchor_id: String,
-    /// Old content hash precondition for the edited span.
+    /// Node identity (`bytes`, 32). EditText is node-addressed, not path-addressed.
+    pub node_id: NodeId,
+    /// Content-anchor span identity (`bytes`, 32; FDD-01 §5.1).
+    pub span_id: [u8; TEXT_SPAN_HASH_BYTES],
+    /// SHA-256 of `old_span_text`; the validator binds the two.
     pub old_span_hash: [u8; TEXT_SPAN_HASH_BYTES],
-    /// Replacement text.
-    pub replacement: String,
+    /// Bounded left-context hash (`bytes`, 32).
+    pub left_anchor_hash: [u8; TEXT_SPAN_HASH_BYTES],
+    /// Bounded right-context hash (`bytes`, 32).
+    pub right_anchor_hash: [u8; TEXT_SPAN_HASH_BYTES],
+    /// New span bytes (`bytes`); UTF-8 text for v1, stored verbatim (never NFC).
+    pub replacement_text: Vec<u8>,
+    /// Optional presentation hint (line); not part of algebraic identity.
+    pub presentation_hint_line: Option<u32>,
+    /// Optional presentation hint (column); not part of algebraic identity.
+    pub presentation_hint_column: Option<u32>,
+    /// Old span bytes (`bytes`); UTF-8 for v1, verbatim; inverse material.
+    pub old_span_text: Vec<u8>,
 }
 
 impl EditText {
-    /// Validate the content-anchor part of the edit contract.
+    /// Validate the FDD-03 §9.3 EditText record contract: nonzero `node_id`,
+    /// `old_span_hash == SHA-256(old_span_text)`, and both span-text fields are
+    /// well-formed UTF-8 (non-UTF-8 content must use `ReplaceBinary`).
     pub fn validate(&self) -> Result<()> {
-        if self.path.is_empty() {
+        if self.node_id.is_zero() {
             return Err(PrikkError::CanonicalEncoding(
-                "EditText path must not be empty".to_string(),
+                "EditText node_id must be nonzero".to_string(),
             ));
         }
-        validate_text_anchor_id(&self.anchor_id)?;
+        if self.old_span_hash != text_span_hash(&self.old_span_text) {
+            return Err(PrikkError::CanonicalEncoding(
+                "EditText old_span_hash must equal SHA-256(old_span_text)".to_string(),
+            ));
+        }
+        if core::str::from_utf8(&self.old_span_text).is_err() {
+            return Err(PrikkError::CanonicalEncoding(
+                "EditText old_span_text must be well-formed UTF-8".to_string(),
+            ));
+        }
+        if core::str::from_utf8(&self.replacement_text).is_err() {
+            return Err(PrikkError::CanonicalEncoding(
+                "EditText replacement_text must be well-formed UTF-8".to_string(),
+            ));
+        }
         Ok(())
     }
 }
@@ -203,64 +311,121 @@ impl EditText {
 impl CanonicalEncode for EditText {
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
         self.validate()?;
-        writer.field_string(1, &self.path)?;
-        writer.field_string(2, &self.anchor_id)?;
+        writer.field_bytes(1, self.node_id.as_bytes())?;
+        writer.field_bytes(2, &self.span_id)?;
         writer.field_bytes(3, &self.old_span_hash)?;
-        writer.field_string(4, &self.replacement)?;
+        writer.field_bytes(4, &self.left_anchor_hash)?;
+        writer.field_bytes(5, &self.right_anchor_hash)?;
+        writer.field_bytes(6, &self.replacement_text)?;
+        if let Some(line) = self.presentation_hint_line {
+            writer.field_u32(7, line)?;
+        }
+        if let Some(column) = self.presentation_hint_column {
+            writer.field_u32(8, column)?;
+        }
+        writer.field_bytes(9, &self.old_span_text)?;
         Ok(())
     }
 }
 
-/// Rename path payload.
+/// Rename path payload (FDD-03 §9.3, node-addressed).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenamePath {
-    /// Source path.
-    pub src: String,
-    /// Destination path.
-    pub dst: String,
+    /// Node identity (`bytes`, 32).
+    pub node_id: NodeId,
+    /// Old repo-relative path (`repo_path`).
+    pub old_path: String,
+    /// New repo-relative path (`repo_path`).
+    pub new_path: String,
+}
+
+impl RenamePath {
+    /// Reject an all-zero `node_id`; FDD-03 §9.3 forbids the reserved value in any
+    /// persisted node-bearing operation, and the encoder produces identity bytes.
+    pub fn validate(&self) -> Result<()> {
+        if self.node_id.is_zero() {
+            return Err(PrikkError::CanonicalEncoding(
+                "RenamePath node_id must be nonzero".to_string(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl CanonicalEncode for RenamePath {
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
-        writer.field_string(1, &self.src)?;
-        writer.field_string(2, &self.dst)?;
+        self.validate()?;
+        writer.field_bytes(1, self.node_id.as_bytes())?;
+        writer.field_repo_path(2, &self.old_path)?;
+        writer.field_repo_path(3, &self.new_path)?;
         Ok(())
     }
 }
 
-/// Permission change payload.
+/// Permission change payload (FDD-03 §9.3, node-addressed).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChangePerm {
-    /// Path.
-    pub path: String,
-    /// Old mode.
+    /// Node identity (`bytes`, 32).
+    pub node_id: NodeId,
+    /// Old mode bits (`u32`).
     pub old_mode: u32,
-    /// New mode.
+    /// New mode bits (`u32`).
     pub new_mode: u32,
+}
+
+impl ChangePerm {
+    /// Reject an all-zero `node_id` (FDD-03 §9.3).
+    pub fn validate(&self) -> Result<()> {
+        if self.node_id.is_zero() {
+            return Err(PrikkError::CanonicalEncoding(
+                "ChangePerm node_id must be nonzero".to_string(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl CanonicalEncode for ChangePerm {
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
-        writer.field_string(1, &self.path)?;
+        self.validate()?;
+        writer.field_bytes(1, self.node_id.as_bytes())?;
         writer.field_u32(2, self.old_mode)?;
         writer.field_u32(3, self.new_mode)?;
         Ok(())
     }
 }
 
-/// Symlink creation payload.
+/// Symlink creation payload (FDD-03 §9.3). Note tag order: `path` (1), then
+/// `node_id` (2), then `target` (3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateSymlink {
-    /// Link path.
+    /// Repo-relative UTF-8 path (`repo_path`).
     pub path: String,
-    /// Link target string.
+    /// Node identity (`bytes`, 32).
+    pub node_id: NodeId,
+    /// Symlink target (`utf8_string`). Static escape/four-boundary validation
+    /// (FDD-04 §5.4a / §13.1) is a later increment; this reconciles identity bytes.
     pub target: String,
+}
+
+impl CreateSymlink {
+    /// Reject an all-zero `node_id` (FDD-03 §9.3).
+    pub fn validate(&self) -> Result<()> {
+        if self.node_id.is_zero() {
+            return Err(PrikkError::CanonicalEncoding(
+                "CreateSymlink node_id must be nonzero".to_string(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl CanonicalEncode for CreateSymlink {
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
-        writer.field_string(1, &self.path)?;
-        writer.field_string(2, &self.target)?;
+        self.validate()?;
+        writer.field_repo_path(1, &self.path)?;
+        writer.field_bytes(2, self.node_id.as_bytes())?;
+        writer.field_string(3, &self.target)?;
         Ok(())
     }
 }
@@ -268,19 +433,33 @@ impl CanonicalEncode for CreateSymlink {
 /// Binary replacement payload.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplaceBinary {
-    /// Path.
-    pub path: String,
-    /// Old blob ID.
+    /// Node identity (`bytes`, 32).
+    pub node_id: NodeId,
+    /// Old blob ID (`object_id`).
     pub old_blob_id: ObjectId,
-    /// New blob ID.
+    /// New blob ID (`object_id`).
     pub new_blob_id: ObjectId,
+}
+
+impl ReplaceBinary {
+    /// Reject an all-zero `node_id`; FDD-03 §9.3 forbids the reserved value in any
+    /// persisted node-bearing operation, and the encoder produces identity bytes.
+    pub fn validate(&self) -> Result<()> {
+        if self.node_id.is_zero() {
+            return Err(PrikkError::CanonicalEncoding(
+                "ReplaceBinary node_id must be nonzero".to_string(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl CanonicalEncode for ReplaceBinary {
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
-        writer.field_string(1, &self.path)?;
-        writer.field_bytes(2, self.old_blob_id.as_bytes())?;
-        writer.field_bytes(3, self.new_blob_id.as_bytes())?;
+        self.validate()?;
+        writer.field_bytes(1, self.node_id.as_bytes())?;
+        writer.field_object_id(2, &self.old_blob_id)?;
+        writer.field_object_id(3, &self.new_blob_id)?;
         Ok(())
     }
 }

@@ -1,14 +1,14 @@
 //! Patch inverse planning tests.
 
 use prikk_object::{
-    BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile, DeleteFile, EditText,
-    MerkleRoot, ObjectEnvelope, ObjectType, Operation, OperationKind, PatchPayload, ReplaceBinary,
-    text_span_hash,
+    BlobKind, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile, DeleteNode,
+    DeleteNodePreimage, MerkleRoot, NodeId, NodeKind, ObjectEnvelope, ObjectType, Operation,
+    OperationKind, PatchPayload,
 };
 
 use crate::{
-    FileObjectStore, ObjectWriter, PatchInverseOperationKind, RefPublication, RefStore, RepoPath,
-    RepositoryLayout, SnapshotEntry, SnapshotManifest, prepare_patch_inverse_plan,
+    FileObjectStore, ObjectWriter, RefPublication, RefStore, RepoPath, RepositoryLayout,
+    SnapshotEntry, SnapshotManifest, prepare_patch_inverse_plan,
 };
 
 use super::helpers::{
@@ -29,67 +29,27 @@ fn inverse_plan_reverses_supported_file_operations() {
         if let Ok(plan) = plan {
             assert_eq!(plan.block_count, 2);
             assert_eq!(plan.patch_count, 1);
-            assert_eq!(plan.original_operation_count, 3);
-            assert_eq!(plan.inverse_operation_count, 3);
+            assert_eq!(plan.original_operation_count, 2);
+            assert_eq!(plan.inverse_operation_count, 2);
             let labels: Vec<&str> = plan
                 .operations
                 .iter()
                 .map(|operation| operation.kind.as_str())
                 .collect();
-            assert_eq!(labels, vec!["delete-file", "create-file", "replace-binary"]);
+            assert_eq!(labels, vec!["delete-file", "create-file"]);
             let paths: Vec<&str> = plan
                 .operations
                 .iter()
                 .map(|operation| operation.path.as_str())
                 .collect();
-            assert_eq!(paths, vec!["extra.txt", "old.txt", "README.md"]);
+            assert_eq!(paths, vec!["extra.txt", "old.txt"]);
             let seqs: Vec<u32> = plan
                 .operations
                 .iter()
                 .map(|operation| operation.op_seq)
                 .collect();
-            assert_eq!(seqs, vec![1, 2, 3]);
-            assert_eq!(plan.inverse_payload.operations.len(), 3);
-        }
-    }
-    let _ = std::fs::remove_dir_all(root);
-}
-
-#[test]
-fn inverse_plan_builds_full_file_text_inverse() {
-    let root = unique_temp_dir("patch-inverse-edit-text");
-    let layout = RepositoryLayout::init(root.clone());
-    assert!(layout.is_ok());
-    if let Ok(layout) = layout {
-        let result = publish_text_edit_block(&layout);
-        assert!(result.is_ok());
-        let plan = prepare_patch_inverse_plan(&layout, "heads/main");
-        assert!(plan.is_ok());
-        if let Ok(plan) = plan {
-            assert_eq!(plan.original_operation_count, 1);
-            assert_eq!(plan.inverse_operation_count, 1);
-            let mut operations = plan.inverse_payload.operations.iter();
-            if let Some(operation) = operations.next() {
-                assert_eq!(operation.op_seq, 1);
-                match &operation.kind {
-                    OperationKind::EditText(edit) => {
-                        assert_eq!(edit.path, "note.txt");
-                        assert_eq!(edit.anchor_id, "full-file");
-                        assert_eq!(edit.old_span_hash, text_span_hash(b"changed text"));
-                        assert_eq!(edit.replacement, "hello text\n");
-                    }
-                    _ => panic!("expected inverse EditText"),
-                }
-            } else {
-                panic!("expected one inverse operation");
-            }
-            assert!(operations.next().is_none());
-            let kinds: Vec<PatchInverseOperationKind> = plan
-                .operations
-                .iter()
-                .map(|operation| operation.kind)
-                .collect();
-            assert_eq!(kinds, vec![PatchInverseOperationKind::EditText]);
+            assert_eq!(seqs, vec![1, 2]);
+            assert_eq!(plan.inverse_payload.operations.len(), 2);
         }
     }
     let _ = std::fs::remove_dir_all(root);
@@ -97,9 +57,7 @@ fn inverse_plan_builds_full_file_text_inverse() {
 
 fn publish_snapshot_then_patch_block(layout: &RepositoryLayout) -> prikk_error::Result<()> {
     let mut object_store = FileObjectStore::new(layout.clone());
-    let readme_v1 = write_blob(&mut object_store, b"hello\n")?;
     let old_blob = write_blob(&mut object_store, b"old\n")?;
-    let readme_v2 = write_blob(&mut object_store, b"changed\n")?;
     let extra_blob = write_blob(&mut object_store, b"extra\n")?;
 
     let snapshot_manifest = SnapshotManifest {
@@ -114,9 +72,7 @@ fn publish_snapshot_then_patch_block(layout: &RepositoryLayout) -> prikk_error::
             },
         ],
     };
-    let snapshot_blob = BlobPayload {
-        bytes: snapshot_manifest.encode()?,
-    };
+    let snapshot_blob = BlobPayload::new(BlobKind::Snapshot, snapshot_manifest.encode()?);
     let snapshot_bytes = snapshot_blob.to_canonical_bytes()?;
     let mut snapshot_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, snapshot_bytes);
     snapshot_envelope.add_signature(maintainer_signature())?;
@@ -136,77 +92,28 @@ fn publish_snapshot_then_patch_block(layout: &RepositoryLayout) -> prikk_error::
                 op_seq: 1,
                 op_id: None,
                 preconditions: Vec::new(),
-                kind: OperationKind::ReplaceBinary(ReplaceBinary {
-                    path: "README.md".to_string(),
-                    old_blob_id: readme_v1,
-                    new_blob_id: readme_v2,
+                kind: OperationKind::DeleteNode(DeleteNode {
+                    path: "old.txt".to_string(),
+                    node_id: NodeId::from_bytes([0x71; 32]),
+                    old_node_kind: NodeKind::TextFile,
+                    preimage: DeleteNodePreimage::File {
+                        old_blob_id: old_blob,
+                        old_mode: 0o100644,
+                    },
                 }),
             },
             Operation {
                 op_seq: 2,
                 op_id: None,
                 preconditions: Vec::new(),
-                kind: OperationKind::DeleteFile(DeleteFile {
-                    path: "old.txt".to_string(),
-                    old_blob_id: old_blob,
-                }),
-            },
-            Operation {
-                op_seq: 3,
-                op_id: None,
-                preconditions: Vec::new(),
                 kind: OperationKind::CreateFile(CreateFile {
                     path: "extra.txt".to_string(),
+                    node_id: NodeId::from_bytes([0x72; 32]),
                     blob_id: extra_blob,
                     mode: 0o100644,
                 }),
             },
         ],
-        parent_patch_ids: Vec::new(),
-        intent: None,
-        preconditions: Vec::new(),
-    };
-    let patch_id = write_patch(&mut object_store, patch_payload)?;
-    publish_root_then_patch_ref(layout, root_block_id, patch_id)
-}
-
-fn publish_text_edit_block(layout: &RepositoryLayout) -> prikk_error::Result<()> {
-    let mut object_store = FileObjectStore::new(layout.clone());
-    let original = b"hello text\n";
-    let snapshot_manifest = SnapshotManifest {
-        files: vec![SnapshotEntry {
-            path: RepoPath::parse("note.txt")?,
-            bytes: original.to_vec(),
-        }],
-    };
-    let snapshot_blob = BlobPayload {
-        bytes: snapshot_manifest.encode()?,
-    };
-    let snapshot_bytes = snapshot_blob.to_canonical_bytes()?;
-    let mut snapshot_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, snapshot_bytes);
-    snapshot_envelope.add_signature(maintainer_signature())?;
-    let snapshot_blob_id = object_store.write_object(&snapshot_envelope)?;
-
-    let root_block = signed_block(
-        BlockKind::Root,
-        Vec::new(),
-        Vec::new(),
-        Some(snapshot_blob_id),
-    );
-    let root_block_id = object_store.write_object(&root_block)?;
-
-    let patch_payload = PatchPayload {
-        operations: vec![Operation {
-            op_seq: 1,
-            op_id: None,
-            preconditions: Vec::new(),
-            kind: OperationKind::EditText(EditText {
-                path: "note.txt".to_string(),
-                anchor_id: "full-file".to_string(),
-                old_span_hash: text_span_hash(original),
-                replacement: "changed text".to_string(),
-            }),
-        }],
         parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
@@ -268,9 +175,7 @@ fn write_blob(
     store: &mut FileObjectStore,
     bytes: &[u8],
 ) -> prikk_error::Result<prikk_object::ObjectId> {
-    let payload = BlobPayload {
-        bytes: bytes.to_vec(),
-    };
+    let payload = BlobPayload::new(BlobKind::Text, bytes.to_vec());
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, payload.to_canonical_bytes()?);
     envelope.add_signature(maintainer_signature())?;
     store.write_object(&envelope)
@@ -295,4 +200,89 @@ fn signed_block(
         ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes.unwrap_or_default());
     assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
+}
+
+/// Publish a snapshot containing a binary file, then a block whose only operation
+/// deletes it as a `BINARY_FILE` node referencing a `BlobKind::Binary` blob. This
+/// exercises inverse(DeleteNode) over a binary blob through the kind-aware
+/// `ensure_blob_matches_node_kind` consume-path check (FDD-03 §9.3).
+fn publish_binary_file_delete_block(layout: &RepositoryLayout) -> prikk_error::Result<()> {
+    let mut object_store = FileObjectStore::new(layout.clone());
+    let bin_bytes: Vec<u8> = vec![0x00, 0x01, 0xff, 0x10];
+    let bin_blob = BlobPayload::new(BlobKind::Binary, bin_bytes.clone());
+    let mut bin_envelope =
+        ObjectEnvelope::unsigned(ObjectType::Blob, 1, bin_blob.to_canonical_bytes()?);
+    bin_envelope.add_signature(maintainer_signature())?;
+    let bin_blob_id = object_store.write_object(&bin_envelope)?;
+
+    let snapshot_manifest = SnapshotManifest {
+        files: vec![SnapshotEntry {
+            path: RepoPath::parse("data.bin")?,
+            bytes: bin_bytes,
+        }],
+    };
+    let snapshot_blob = BlobPayload::new(BlobKind::Snapshot, snapshot_manifest.encode()?);
+    let mut snapshot_envelope =
+        ObjectEnvelope::unsigned(ObjectType::Blob, 1, snapshot_blob.to_canonical_bytes()?);
+    snapshot_envelope.add_signature(maintainer_signature())?;
+    let snapshot_blob_id = object_store.write_object(&snapshot_envelope)?;
+
+    let root_block = signed_block(
+        BlockKind::Root,
+        Vec::new(),
+        Vec::new(),
+        Some(snapshot_blob_id),
+    );
+    let root_block_id = object_store.write_object(&root_block)?;
+
+    let patch_payload = PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::DeleteNode(DeleteNode {
+                path: "data.bin".to_string(),
+                node_id: NodeId::from_bytes([0x81; 32]),
+                old_node_kind: NodeKind::BinaryFile,
+                preimage: DeleteNodePreimage::File {
+                    old_blob_id: bin_blob_id,
+                    old_mode: 0o100644,
+                },
+            }),
+        }],
+        parent_patch_ids: Vec::new(),
+        intent: None,
+        preconditions: Vec::new(),
+    };
+    let patch_id = write_patch(&mut object_store, patch_payload)?;
+    publish_root_then_patch_ref(layout, root_block_id, patch_id)
+}
+
+#[test]
+fn inverse_plan_reverses_binary_file_deletion() {
+    let root = unique_temp_dir("patch-inverse-binary-delete");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        assert!(publish_binary_file_delete_block(&layout).is_ok());
+        let plan = prepare_patch_inverse_plan(&layout, "heads/main");
+        assert!(
+            plan.is_ok(),
+            "binary-file DeleteNode inverse should succeed"
+        );
+        if let Ok(plan) = plan {
+            assert_eq!(plan.original_operation_count, 1);
+            assert_eq!(plan.inverse_operation_count, 1);
+            // inverse(DeleteNode) reconstructs the file via CreateFile.
+            assert_eq!(
+                plan.operations.first().map(|op| op.kind.as_str()),
+                Some("create-file")
+            );
+            assert_eq!(
+                plan.operations.first().map(|op| op.path.as_str()),
+                Some("data.bin")
+            );
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
 }

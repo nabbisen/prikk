@@ -14,6 +14,7 @@
 //! Full patch algebra, plugin execution, and remote sync remain separate increments.
 
 mod active;
+mod blob_access;
 mod byte_cursor;
 mod checkout;
 mod doctor;

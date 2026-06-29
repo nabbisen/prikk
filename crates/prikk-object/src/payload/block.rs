@@ -71,7 +71,7 @@ impl BlockPayload {
         while let Some(field) = cursor.next_field()? {
             match field.tag {
                 1 => parent_block_ids.push(field.read_object_id()?),
-                2 => kind = Some(BlockKind::from_code(field.read_u32()?)?),
+                2 => kind = Some(BlockKind::from_code(u32::from(field.read_enum_u16()?))?),
                 3 => patch_ids.push(field.read_object_id()?),
                 4 => state_merkle_root = Some(MerkleRoot(field.read_array::<32>()?)),
                 5 => snapshot_blob_ref = Some(field.read_object_id()?),
@@ -185,14 +185,14 @@ struct BlockCanonicalField<'a> {
 }
 
 impl<'a> BlockCanonicalField<'a> {
-    fn read_u32(&self) -> Result<u32> {
-        self.require_wire(crate::canonical::WireType::U32)?;
-        Ok(u32::from_be_bytes(self.read_array::<4>()?))
+    fn read_object_id(&self) -> Result<ObjectId> {
+        self.require_wire(crate::canonical::WireType::ObjectId)?;
+        Ok(ObjectId::from_bytes(self.read_array::<32>()?))
     }
 
-    fn read_object_id(&self) -> Result<ObjectId> {
-        self.require_wire(crate::canonical::WireType::Bytes)?;
-        Ok(ObjectId::from_bytes(self.read_array::<32>()?))
+    fn read_enum_u16(&self) -> Result<u16> {
+        self.require_wire(crate::canonical::WireType::EnumU16)?;
+        Ok(u16::from_be_bytes(self.read_array::<2>()?))
     }
 
     fn require_wire(&self, expected: crate::canonical::WireType) -> Result<()> {
@@ -227,11 +227,11 @@ impl CanonicalEncode for BlockPayload {
             ));
         }
         writer.repeated_object_id(1, &self.parent_block_ids)?;
-        writer.field_u32(2, u32::from(self.kind.code()))?;
+        writer.field_enum_u16(2, self.kind.code())?;
         writer.repeated_object_id(3, &self.patch_ids)?;
         writer.field_bytes(4, &self.state_merkle_root.0)?;
         if let Some(snapshot) = self.snapshot_blob_ref {
-            writer.field_bytes(5, snapshot.as_bytes())?;
+            writer.field_object_id(5, &snapshot)?;
         }
         Ok(())
     }

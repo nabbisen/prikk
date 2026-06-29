@@ -82,8 +82,9 @@ pub(crate) fn print_patch_replay_plan(layout: &RepositoryLayout, plan: &PatchRep
         println!("  file: {path}");
     }
     println!(
-        "note: this replays CreateFile/DeleteFile/ReplaceBinary and full-file EditText only; \
-         arbitrary spans, renames, conflicts, and full patch algebra remain later PRs"
+        "note: this replays CreateFile/DeleteNode/ReplaceBinary only; EditText \
+         span-anchored apply, renames, conflicts, and full patch algebra remain \
+         later PRs"
     );
 }
 

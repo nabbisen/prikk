@@ -5,7 +5,7 @@ use prikk_object::ObjectType;
 use crate::{RepositoryLayout, Wal, append_rollback_draft};
 
 use super::helpers::{signed_patch_envelope, unique_temp_dir};
-use super::patch_replay::{publish_snapshot_then_patch_block, publish_text_edit_block};
+use super::patch_replay::publish_snapshot_then_patch_block;
 
 #[test]
 fn rollback_draft_appends_inverse_patch_to_empty_active_wal() {
@@ -20,8 +20,8 @@ fn rollback_draft_appends_inverse_patch_to_empty_active_wal() {
         if let Ok(report) = report {
             assert_eq!(report.ref_name, "heads/main");
             assert_eq!(report.wal_sequence, 1);
-            assert_eq!(report.inverse_operation_count, 3);
-            assert_eq!(report.preview_change_count, 3);
+            assert_eq!(report.inverse_operation_count, 2);
+            assert_eq!(report.preview_change_count, 2);
             let wal = Wal::new(layout.default_queue_wal_path());
             let replay = wal.replay();
             assert!(replay.is_ok());
@@ -36,25 +36,6 @@ fn rollback_draft_appends_inverse_patch_to_empty_active_wal() {
                     assert!(!first.envelope.canonical_payload.is_empty());
                 }
             }
-        }
-    }
-    let _ = std::fs::remove_dir_all(root);
-}
-
-#[test]
-fn rollback_draft_supports_full_file_text_inverse() {
-    let root = unique_temp_dir("rollback-draft-text");
-    let layout = RepositoryLayout::init(root.clone());
-    assert!(layout.is_ok());
-    if let Ok(layout) = layout {
-        let result = publish_text_edit_block(&layout);
-        assert!(result.is_ok());
-        let report = append_rollback_draft(&layout, "heads/main", "rollback text");
-        assert!(report.is_ok());
-        if let Ok(report) = report {
-            assert_eq!(report.inverse_operation_count, 1);
-            assert_eq!(report.preview_change_count, 1);
-            assert_eq!(report.would_replace_files, 1);
         }
     }
     let _ = std::fs::remove_dir_all(root);

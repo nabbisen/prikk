@@ -64,11 +64,11 @@ impl RefStatePayload {
         while let Some(field) = cursor.next_field()? {
             match field.tag {
                 1 => ref_name = Some(field.read_string()?),
-                2 => kind = Some(RefKind::from_code(field.read_u32()?)?),
-                3 => target_object_id = Some(field.read_object_id()?),
-                4 => update_seq = Some(field.read_u64()?),
-                5 => previous_ref_state_id = Some(field.read_object_id()?),
-                6 => required_attestation_ids.push(field.read_object_id()?),
+                2 => target_object_id = Some(field.read_object_id()?),
+                3 => update_seq = Some(field.read_u64()?),
+                4 => previous_ref_state_id = Some(field.read_object_id()?),
+                5 => required_attestation_ids.push(field.read_object_id()?),
+                6 => kind = Some(RefKind::from_code(u32::from(field.read_enum_u16()?))?),
                 other => {
                     return Err(PrikkError::MalformedData(format!(
                         "unknown RefState field tag: {other}"
@@ -108,13 +108,13 @@ impl CanonicalEncode for RefStatePayload {
             ));
         }
         writer.field_string(1, &self.ref_name)?;
-        writer.field_u32(2, u32::from(self.kind.code()))?;
-        writer.field_bytes(3, self.target_object_id.as_bytes())?;
-        writer.field_u64(4, self.update_seq)?;
+        writer.field_object_id(2, &self.target_object_id)?;
+        writer.field_u64(3, self.update_seq)?;
         if let Some(previous) = self.previous_ref_state_id {
-            writer.field_bytes(5, previous.as_bytes())?;
+            writer.field_object_id(4, &previous)?;
         }
-        writer.repeated_object_id(6, &self.required_attestation_ids)?;
+        writer.repeated_object_id(5, &self.required_attestation_ids)?;
+        writer.field_enum_u16(6, self.kind.code())?;
         Ok(())
     }
 }
@@ -142,10 +142,10 @@ impl CanonicalEncode for RefUpdatePayload {
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
         writer.field_string(1, &self.ref_name)?;
         if let Some(old) = self.old_ref_state_id {
-            writer.field_bytes(2, old.as_bytes())?;
+            writer.field_object_id(2, &old)?;
         }
-        writer.field_bytes(3, self.new_ref_state_id.as_bytes())?;
-        writer.field_bytes(4, self.new_target_object_id.as_bytes())?;
+        writer.field_object_id(3, &self.new_ref_state_id)?;
+        writer.field_object_id(4, &self.new_target_object_id)?;
         writer.field_u64(5, self.update_seq)?;
         writer.field_u64(6, self.created_at)?;
         writer.field_string(7, &self.author_key_id)?;
@@ -294,19 +294,19 @@ impl<'a> CanonicalField<'a> {
             .map_err(|err| PrikkError::MalformedData(format!("invalid UTF-8 string: {err}")))
     }
 
-    fn read_u32(&self) -> Result<u32> {
-        self.require_wire(WireType::U32)?;
-        Ok(u32::from_be_bytes(self.read_array::<4>()?))
-    }
-
     fn read_u64(&self) -> Result<u64> {
         self.require_wire(WireType::U64)?;
         Ok(u64::from_be_bytes(self.read_array::<8>()?))
     }
 
     fn read_object_id(&self) -> Result<ObjectId> {
-        self.require_wire(WireType::Bytes)?;
+        self.require_wire(WireType::ObjectId)?;
         Ok(ObjectId::from_bytes(self.read_array::<32>()?))
+    }
+
+    fn read_enum_u16(&self) -> Result<u16> {
+        self.require_wire(WireType::EnumU16)?;
+        Ok(u16::from_be_bytes(self.read_array::<2>()?))
     }
 
     fn require_wire(&self, expected: WireType) -> Result<()> {

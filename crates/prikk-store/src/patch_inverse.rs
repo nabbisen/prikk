@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    CanonicalEncode, CreateFile, DeleteFile, EditText, ObjectEnvelope, ObjectId, ObjectType,
-    Operation, OperationKind, PatchPayload, ReplaceBinary, text_span_hash,
+    CanonicalEncode, CreateFile, DeleteNode, DeleteNodePreimage, ObjectEnvelope, ObjectId,
+    ObjectType, Operation, OperationKind, PatchPayload,
 };
 
 use crate::layout::RepositoryLayout;
@@ -20,8 +20,8 @@ use crate::patch_replay::decode::{SupportedPatchOperation, decode_supported_patc
 mod read;
 
 use read::{
-    current_target_block, ensure_blob_matches, load_snapshot_files, read_blob_bytes, read_block,
-    read_patch, single_parent_chain,
+    current_target_block, load_snapshot_files, read_blob_bytes_with_kind, read_block, read_patch,
+    single_parent_chain,
 };
 
 /// Read-only inverse plan for the supported patch-operation subset.
@@ -152,29 +152,49 @@ fn derive_inverse_operation(
     operation: SupportedPatchOperation,
 ) -> Result<Operation> {
     match operation {
-        SupportedPatchOperation::CreateFile { path, blob_id } => {
+        SupportedPatchOperation::CreateFile {
+            path,
+            node_id,
+            blob_id,
+            mode,
+        } => {
             if files.contains_key(&path) {
                 return Err(PrikkError::Integrity(format!(
                     "CreateFile would overwrite existing path {path}"
                 )));
             }
-            let bytes = read_blob_bytes(object_store, blob_id)?;
+            let (old_node_kind, bytes) = read_blob_bytes_with_kind(object_store, blob_id)?;
             files.insert(path.clone(), bytes);
             Ok(Operation {
                 op_seq: 0,
                 op_id: Some(format!("inverse-delete-{path}")),
                 preconditions: Vec::new(),
-                kind: OperationKind::DeleteFile(DeleteFile {
+                kind: OperationKind::DeleteNode(DeleteNode {
                     path,
-                    old_blob_id: blob_id,
+                    node_id,
+                    old_node_kind,
+                    preimage: DeleteNodePreimage::File {
+                        old_blob_id: blob_id,
+                        old_mode: mode,
+                    },
                 }),
             })
         }
-        SupportedPatchOperation::DeleteFile { path, old_blob_id } => {
+        SupportedPatchOperation::DeleteNode {
+            path,
+            node_id,
+            old_node_kind,
+            old_blob_id,
+            old_mode,
+        } => {
             let old_bytes = files.get(&path).ok_or_else(|| {
-                PrikkError::Integrity(format!("DeleteFile path is absent: {path}"))
+                PrikkError::Integrity(format!("DeleteNode path is absent: {path}"))
             })?;
-            ensure_blob_matches(old_bytes, old_blob_id)?;
+            crate::blob_access::ensure_blob_matches_node_kind(
+                old_bytes,
+                old_blob_id,
+                old_node_kind,
+            )?;
             files.remove(&path);
             Ok(Operation {
                 op_seq: 0,
@@ -182,82 +202,13 @@ fn derive_inverse_operation(
                 preconditions: Vec::new(),
                 kind: OperationKind::CreateFile(CreateFile {
                     path,
+                    node_id,
                     blob_id: old_blob_id,
-                    mode: 0o100644,
+                    mode: old_mode,
                 }),
             })
         }
-        SupportedPatchOperation::ReplaceBinary {
-            path,
-            old_blob_id,
-            new_blob_id,
-        } => {
-            let old_bytes = files.get(&path).ok_or_else(|| {
-                PrikkError::Integrity(format!("ReplaceBinary path is absent: {path}"))
-            })?;
-            ensure_blob_matches(old_bytes, old_blob_id)?;
-            let new_bytes = read_blob_bytes(object_store, new_blob_id)?;
-            files.insert(path.clone(), new_bytes);
-            Ok(Operation {
-                op_seq: 0,
-                op_id: Some(format!("inverse-replace-{path}")),
-                preconditions: Vec::new(),
-                kind: OperationKind::ReplaceBinary(ReplaceBinary {
-                    path,
-                    old_blob_id: new_blob_id,
-                    new_blob_id: old_blob_id,
-                }),
-            })
-        }
-        SupportedPatchOperation::EditText {
-            path,
-            anchor_id,
-            old_span_hash,
-            replacement,
-        } => derive_full_file_text_inverse(files, path, anchor_id, old_span_hash, replacement),
     }
-}
-
-fn derive_full_file_text_inverse(
-    files: &mut BTreeMap<String, Vec<u8>>,
-    path: String,
-    anchor_id: String,
-    old_span_hash: [u8; 32],
-    replacement: String,
-) -> Result<Operation> {
-    if anchor_id != "full-file" {
-        return Err(PrikkError::UnsupportedObjectType(format!(
-            "inverse planning supports only full-file EditText anchors; got {anchor_id}"
-        )));
-    }
-    let old_bytes = files
-        .get(&path)
-        .ok_or_else(|| PrikkError::Integrity(format!("EditText path is absent: {path}")))?;
-    let old_text = std::str::from_utf8(old_bytes).map_err(|err| {
-        PrikkError::Integrity(format!(
-            "EditText target is not valid UTF-8 for {path}: {err}"
-        ))
-    })?;
-    let actual_hash = text_span_hash(old_bytes);
-    if actual_hash != old_span_hash {
-        return Err(PrikkError::Integrity(format!(
-            "EditText old_span_hash mismatch for {path}"
-        )));
-    }
-    let replacement_bytes = replacement.as_bytes().to_vec();
-    let inverse = Operation {
-        op_seq: 0,
-        op_id: Some(format!("inverse-edit-text-{path}")),
-        preconditions: Vec::new(),
-        kind: OperationKind::EditText(EditText {
-            path: path.clone(),
-            anchor_id,
-            old_span_hash: text_span_hash(&replacement_bytes),
-            replacement: old_text.to_string(),
-        }),
-    };
-    files.insert(path, replacement_bytes);
-    Ok(inverse)
 }
 
 fn renumber_operations(operations: &mut [Operation]) -> Result<()> {
@@ -280,16 +231,12 @@ fn summarize_operations(operations: &[Operation]) -> Vec<PatchInverseOperationSu
                 OperationKind::CreateFile(value) => {
                     (PatchInverseOperationKind::CreateFile, value.path.clone())
                 }
-                OperationKind::DeleteFile(value) => {
+                OperationKind::DeleteNode(value) => {
                     (PatchInverseOperationKind::DeleteFile, value.path.clone())
                 }
-                OperationKind::ReplaceBinary(value) => {
-                    (PatchInverseOperationKind::ReplaceBinary, value.path.clone())
-                }
-                OperationKind::EditText(value) => {
-                    (PatchInverseOperationKind::EditText, value.path.clone())
-                }
-                OperationKind::RenamePath(_)
+                OperationKind::ReplaceBinary(_)
+                | OperationKind::EditText(_)
+                | OperationKind::RenamePath(_)
                 | OperationKind::ChangePerm(_)
                 | OperationKind::CreateSymlink(_) => {
                     unreachable!("inverse plan contains unsupported operation kind")

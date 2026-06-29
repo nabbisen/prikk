@@ -12,6 +12,9 @@ pub mod id;
 pub mod payload;
 pub mod signature;
 
+#[cfg(test)]
+mod vectors;
+
 pub use canonical::{CanonicalEncode, CanonicalWriter, WireType};
 pub use envelope::ObjectEnvelope;
 pub use id::{OBJECT_ID_DOMAIN, ObjectId, ObjectType};

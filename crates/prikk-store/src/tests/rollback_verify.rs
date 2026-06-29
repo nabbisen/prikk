@@ -24,8 +24,8 @@ fn rollback_draft_verify_matches_current_inverse_plan() {
         if let Ok(verification) = verification {
             assert_eq!(verification.ref_name, "heads/main");
             assert_eq!(verification.wal_sequence, 1);
-            assert_eq!(verification.inverse_operation_count, 3);
-            assert_eq!(verification.decoded_operation_count, 3);
+            assert_eq!(verification.inverse_operation_count, 2);
+            assert_eq!(verification.decoded_operation_count, 2);
         }
         let repository = verify_repository(&layout);
         assert!(repository.is_ok());

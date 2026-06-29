@@ -5,7 +5,7 @@
 //! deliberately does not write the worktree and does not apply patch algebra.
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{BlobPayload, BlockKind, BlockPayload, ObjectId, ObjectType, RefStatePayload};
+use prikk_object::{BlockKind, BlockPayload, ObjectId, ObjectType, RefStatePayload};
 
 use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
@@ -102,8 +102,8 @@ pub fn prepare_snapshot_checkout_plan(
             "snapshot Blob {snapshot_blob_id} is missing"
         )));
     };
-    let blob = BlobPayload::decode_canonical(&envelope.canonical_payload)?;
-    let manifest = SnapshotManifest::decode(&blob.bytes)?;
+    let snapshot_content = crate::blob_access::decode_snapshot_blob(&envelope.canonical_payload)?;
+    let manifest = SnapshotManifest::decode(&snapshot_content)?;
     let paths = manifest
         .files
         .iter()

@@ -1,7 +1,8 @@
 //! Worktree patch draft tests.
 
 use prikk_object::{
-    BlobPayload, BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType,
+    BlobKind, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope,
+    ObjectType,
 };
 
 use crate::{
@@ -15,6 +16,10 @@ use super::helpers::{
 };
 
 #[test]
+#[ignore = "DEV-ONLY checkpoint: worktree modified-file authoring is disabled \
+            pending the node model. §9.3 ReplaceBinary/EditText are node-addressed. \
+            Restoration tracker: DC-09 Phase 4 increment 4.4 (path->node_id \
+            tracking; ReplaceBinary binary-only blob check; EditText FDD-01 §7.2.1)."]
 fn worktree_patch_commit_records_modified_file() {
     let root = unique_temp_dir("worktree-patch-modified");
     let layout = RepositoryLayout::init(root.clone());
@@ -45,6 +50,10 @@ fn worktree_patch_commit_records_modified_file() {
 }
 
 #[test]
+#[ignore = "DEV-ONLY checkpoint: worktree text-edit authoring is disabled pending \
+            the node model. §9.3 EditText is node-addressed and span-anchored. \
+            Restoration tracker: DC-09 Phase 4 increment 4.4 (path->node_id \
+            tracking) + FDD-01 §7.2.1 (span anchoring). Re-enable there."]
 fn worktree_patch_commit_can_emit_full_file_text_edit() {
     let root = unique_temp_dir("worktree-patch-text-edit");
     let layout = RepositoryLayout::init(root.clone());
@@ -81,6 +90,10 @@ fn worktree_patch_commit_can_emit_full_file_text_edit() {
 }
 
 #[test]
+#[ignore = "DEV-ONLY checkpoint: worktree modified-file authoring is disabled \
+            pending the node model. §9.3 ReplaceBinary is node-addressed. \
+            Restoration tracker: DC-09 Phase 4 increment 4.4 (path->node_id \
+            tracking + binary-only blob check)."]
 fn worktree_patch_text_mode_falls_back_for_binary_modified_file() {
     let root = unique_temp_dir("worktree-patch-text-binary-fallback");
     let layout = RepositoryLayout::init(root.clone());
@@ -110,6 +123,10 @@ fn worktree_patch_text_mode_falls_back_for_binary_modified_file() {
 }
 
 #[test]
+#[ignore = "DEV-ONLY checkpoint: worktree create/delete authoring is disabled \
+            pending the node model. Restoration tracker: DC-09 Phase 4 increment \
+            4.4 (path->node_id tracking) + 4.4a (node_id minting). Re-enable this \
+            test there; not releaseable until then."]
 fn worktree_patch_commit_records_untracked_file() {
     let root = unique_temp_dir("worktree-patch-untracked");
     let layout = RepositoryLayout::init(root.clone());
@@ -160,9 +177,7 @@ fn publish_snapshot_block(
         }],
     };
     let snapshot_bytes = manifest.encode()?;
-    let blob = BlobPayload {
-        bytes: snapshot_bytes,
-    };
+    let blob = BlobPayload::new(BlobKind::Snapshot, snapshot_bytes);
     let blob_bytes = blob.to_canonical_bytes()?;
     let mut blob_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob_bytes);
     blob_envelope.add_signature(maintainer_signature())?;

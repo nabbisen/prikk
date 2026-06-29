@@ -4,14 +4,61 @@ use prikk_error::{PrikkError, Result};
 
 use crate::{CanonicalEncode, CanonicalWriter};
 
-/// Blob payload.
+/// Blob kind. FDD-03 §9.3.0 / §9.11 `blob_kind` (`enum_u16`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u16)]
+pub enum BlobKind {
+    /// Text file content.
+    Text = 0x0001,
+    /// Binary file content.
+    Binary = 0x0002,
+    /// Full worktree snapshot.
+    Snapshot = 0x0003,
+}
+
+impl BlobKind {
+    /// Stable code.
+    #[must_use]
+    pub const fn code(self) -> u16 {
+        self as u16
+    }
+
+    /// Parse a stable code. Rejects `0x0000` (INVALID/reserved) and unknown values.
+    pub fn from_code(code: u16) -> Result<Self> {
+        match code {
+            0x0001 => Ok(Self::Text),
+            0x0002 => Ok(Self::Binary),
+            0x0003 => Ok(Self::Snapshot),
+            other => Err(PrikkError::MalformedData(format!(
+                "unknown or reserved blob_kind code: {other:#06x}"
+            ))),
+        }
+    }
+}
+
+/// Blob payload. FDD-03 §9.11.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlobPayload {
-    /// Blob bytes.
-    pub bytes: Vec<u8>,
+    /// Blob kind.
+    pub blob_kind: BlobKind,
+    /// Blob content bytes.
+    pub content: Vec<u8>,
+    /// Declared size; must equal `content.len()` in v1.
+    pub declared_size: u64,
 }
 
 impl BlobPayload {
+    /// Construct a blob with `declared_size` set to the content length.
+    #[must_use]
+    pub fn new(blob_kind: BlobKind, content: Vec<u8>) -> Self {
+        let declared_size = content.len() as u64;
+        Self {
+            blob_kind,
+            content,
+            declared_size,
+        }
+    }
+
     /// Decode a blob payload from Prikk canonical TLV bytes.
     pub fn decode_canonical(bytes: &[u8]) -> Result<Self> {
         let mut cursor = BlobCursor {
@@ -19,12 +66,24 @@ impl BlobPayload {
             pos: 0,
             last_tag: None,
         };
-        let mut blob = None;
+        let mut blob_kind = None;
+        let mut content = None;
+        let mut declared_size = None;
         while let Some(field) = cursor.next_field()? {
             match field.tag {
                 1 => {
+                    field.require_wire(crate::canonical::WireType::EnumU16)?;
+                    blob_kind = Some(BlobKind::from_code(u16::from_be_bytes(
+                        field.read_array::<2>()?,
+                    ))?);
+                }
+                2 => {
                     field.require_wire(crate::canonical::WireType::Bytes)?;
-                    blob = Some(field.value.to_vec());
+                    content = Some(field.value.to_vec());
+                }
+                3 => {
+                    field.require_wire(crate::canonical::WireType::U64)?;
+                    declared_size = Some(u64::from_be_bytes(field.read_array::<8>()?));
                 }
                 other => {
                     return Err(PrikkError::MalformedData(format!(
@@ -33,16 +92,38 @@ impl BlobPayload {
                 }
             }
         }
+        let blob_kind = blob_kind
+            .ok_or_else(|| PrikkError::MalformedData("Blob missing blob_kind".to_string()))?;
+        let content =
+            content.ok_or_else(|| PrikkError::MalformedData("Blob missing content".to_string()))?;
+        let declared_size = declared_size
+            .ok_or_else(|| PrikkError::MalformedData("Blob missing declared_size".to_string()))?;
+        if declared_size != content.len() as u64 {
+            return Err(PrikkError::MalformedData(format!(
+                "Blob declared_size {declared_size} does not match content length {}",
+                content.len()
+            )));
+        }
         Ok(Self {
-            bytes: blob
-                .ok_or_else(|| PrikkError::MalformedData("Blob missing bytes".to_string()))?,
+            blob_kind,
+            content,
+            declared_size,
         })
     }
 }
 
 impl CanonicalEncode for BlobPayload {
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
-        writer.field_bytes(1, &self.bytes)?;
+        if self.declared_size != self.content.len() as u64 {
+            return Err(PrikkError::CanonicalEncoding(format!(
+                "Blob declared_size {} does not match content length {}",
+                self.declared_size,
+                self.content.len()
+            )));
+        }
+        writer.field_enum_u16(1, self.blob_kind.code())?;
+        writer.field_bytes(2, &self.content)?;
+        writer.field_u64(3, self.declared_size)?;
         Ok(())
     }
 }
@@ -123,6 +204,19 @@ struct BlobField<'a> {
 }
 
 impl BlobField<'_> {
+    fn read_array<const N: usize>(&self) -> Result<[u8; N]> {
+        if self.value.len() != N {
+            return Err(PrikkError::MalformedData(format!(
+                "field {} expected {N} bytes, got {}",
+                self.tag,
+                self.value.len()
+            )));
+        }
+        let mut out = [0_u8; N];
+        out.copy_from_slice(self.value);
+        Ok(out)
+    }
+
     fn require_wire(&self, expected: crate::canonical::WireType) -> Result<()> {
         if self.wire_type == expected as u8 {
             return Ok(());

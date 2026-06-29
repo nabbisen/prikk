@@ -1,7 +1,8 @@
 //! Snapshot path-safety and checkout-plan tests.
 
 use prikk_object::{
-    BlobPayload, BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType,
+    BlobKind, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope,
+    ObjectType,
 };
 
 use crate::{
@@ -66,9 +67,7 @@ fn snapshot_checkout_plan_validates_snapshot_manifest() {
         };
         let snapshot_bytes = manifest.encode();
         assert!(snapshot_bytes.is_ok());
-        let blob = BlobPayload {
-            bytes: snapshot_bytes.unwrap_or_default(),
-        };
+        let blob = BlobPayload::new(BlobKind::Snapshot, snapshot_bytes.unwrap_or_default());
         let blob_bytes = blob.to_canonical_bytes();
         assert!(blob_bytes.is_ok());
         let mut blob_envelope =
@@ -197,9 +196,7 @@ fn publish_snapshot_block(
         }],
     };
     let snapshot_bytes = manifest.encode()?;
-    let blob = BlobPayload {
-        bytes: snapshot_bytes,
-    };
+    let blob = BlobPayload::new(BlobKind::Snapshot, snapshot_bytes);
     let blob_bytes = blob.to_canonical_bytes()?;
     let mut blob_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob_bytes);
     blob_envelope.add_signature(maintainer_signature())?;

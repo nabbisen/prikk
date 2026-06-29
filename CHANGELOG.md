@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.0 DC-09 Phase 4.2
+
+Operation-record identity reconciliation to FDD-03 §9.3 (code reconciliation effort,
+architect-ratified across increments 4.2a–4.2e). Identity/read-validation surface
+only; application of node-addressed operations is deferred to the node model.
+
+- Reconciled all seven operation-kind payloads to their FDD-03 §9.3 records: `CreateFile`,
+  `DeleteNode` (was `DeleteFile`), `EditText` (node-addressed, span-anchored, 9-field),
+  `ReplaceBinary` (node-addressed), `RenamePath`, `ChangePerm`, `CreateSymlink` — all
+  node-bearing records reject an all-zero `node_id` on encode and decode.
+- Enforced the FDD-03 §9.2 operation-kind oneof on the read path (a record with more
+  than one kind field is rejected as malformed, not decoded last-wins).
+- Enforced the FDD-03 §9.2.1 `op_seq` canonical invariant on the read path
+  (one-based, contiguous, unique, physical order == ascending `op_seq`).
+- Added the `ReplaceBinary` binary-only blob-kind enforcement primitive
+  (`ensure_blob_kind_is_binary`); wiring into real application is deferred to the node model.
+- Retired the pre-FDD full-file `EditText` apply/inverse path and its worktree generation.
+- **Worktree patch authoring (`commit --from-worktree`) is fail-closed in this snapshot**
+  for create/delete/modify/text changes: every §9.3 mutation operation is node-addressed
+  and requires node-id tracking and minting (deferred to increments 4.4/4.4a). This release
+  does not support worktree authoring; replay of node-addressed operations is likewise deferred.
+- Byte-level `(tag, value_type)` layout tests and read-side validator negatives added for
+  every operation record; empty-PATCH anchor and the populated framing vector held throughout.
+
 ## 0.1.0 PR-030
 
 Sealed rollback block/history classification after normal seal.

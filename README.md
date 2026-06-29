@@ -64,9 +64,9 @@ Implemented:
 - Read-only sealed-history inspection from the current RefState chain, including rollback block labels.
 - Snapshot-manifest validation, path-safety checks, opt-in snapshot materialization, and read-only worktree status.
 - Initial RefState publication primitives with flat hashed ref pointer paths.
-- Narrow empty-commit and snapshot-baseline worktree commit scaffolds, including opt-in full-file UTF-8 `EditText` generation.
+- Narrow empty-commit and snapshot-baseline worktree commit scaffolds. As of the DC-09 §9.3 operation-record reconciliation, worktree patch authoring (`commit --from-worktree`) is fail-closed pending the node model: every §9.3 mutation operation is node-addressed and needs node-id tracking/minting (not yet implemented).
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
-- Supported patch replay planning and materialization for `CreateFile`, `DeleteFile`, `ReplaceBinary`, and conservative full-file `EditText`.
+- Supported patch replay planning and materialization for `CreateFile` and `DeleteNode`. `EditText` and `ReplaceBinary` are reconciled to their FDD-03 §9.3 node-addressed records but their application is deferred to the node model; `RenamePath`/`ChangePerm`/`CreateSymlink` records are reconciled and read-validated, application deferred.
 - Explicit deletion planning and opt-in deletion of patch-removed files whose bytes still match the old blob.
 - Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append, active rollback draft verification, and sealed rollback block classification for the supported patch-operation subset.
 - Content-anchored `EditText` scaffold with fixed 32-byte span hashes, anchor-id validation, conservative full-file exact-span replay for `anchor_id = "full-file"`, and opt-in worktree generation for modified UTF-8 files.

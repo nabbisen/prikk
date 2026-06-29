@@ -1,5 +1,14 @@
 # Worktree Patch Drafts
 
+> **Status (DC-09 §9.3 reconciliation).** The behavior described below is the
+> PR-025 target. After the §9.3 operation-record reconciliation, every mutation
+> operation is node-addressed, so `commit --from-worktree` currently **fails closed**
+> for all change kinds pending the node model (path->node_id tracking and node-id
+> minting, increments 4.4/4.4a). Full-file `EditText` has been retired in favor of the
+> §9.3 node-addressed, span-anchored `EditText` record (application deferred). The
+> commands here are not functional in this snapshot.
+
+
 PR-025 supports two worktree patch draft modes.
 
 The default mode keeps the PR-019 coarse file-level behavior:

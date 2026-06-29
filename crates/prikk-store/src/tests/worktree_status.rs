@@ -1,7 +1,8 @@
 //! Worktree status tests.
 
 use prikk_object::{
-    BlobPayload, BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType,
+    BlobKind, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope,
+    ObjectType,
 };
 
 use crate::{
@@ -104,9 +105,7 @@ fn publish_snapshot_block(
         }],
     };
     let snapshot_bytes = manifest.encode()?;
-    let blob = BlobPayload {
-        bytes: snapshot_bytes,
-    };
+    let blob = BlobPayload::new(BlobKind::Snapshot, snapshot_bytes);
     let blob_bytes = blob.to_canonical_bytes()?;
     let mut blob_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob_bytes);
     blob_envelope.add_signature(maintainer_signature())?;

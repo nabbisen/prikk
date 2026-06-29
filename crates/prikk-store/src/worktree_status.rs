@@ -8,7 +8,7 @@ use std::fs;
 use std::path::Path;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{BlobPayload, ObjectType};
+use prikk_object::ObjectType;
 
 use crate::checkout::prepare_snapshot_checkout_plan;
 use crate::layout::RepositoryLayout;
@@ -166,8 +166,8 @@ fn load_snapshot_manifest(
             actual: envelope.object_type.to_string(),
         });
     }
-    let blob = BlobPayload::decode_canonical(&envelope.canonical_payload)?;
-    SnapshotManifest::decode(&blob.bytes)
+    let snapshot_content = crate::blob_access::decode_snapshot_blob(&envelope.canonical_payload)?;
+    SnapshotManifest::decode(&snapshot_content)
 }
 
 fn scan_untracked(

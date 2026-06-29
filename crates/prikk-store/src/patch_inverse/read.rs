@@ -3,10 +3,7 @@
 use std::collections::{BTreeMap, HashSet};
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{
-    BlobPayload, BlockPayload, CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType,
-    RefStatePayload,
-};
+use prikk_object::{BlockPayload, ObjectEnvelope, ObjectId, ObjectType, RefStatePayload};
 
 use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
@@ -99,8 +96,8 @@ pub(super) fn load_snapshot_files(
         .ok_or_else(|| {
             PrikkError::Integrity(format!("missing snapshot Blob {snapshot_blob_ref}"))
         })?;
-    let blob = BlobPayload::decode_canonical(&envelope.canonical_payload)?;
-    let manifest = SnapshotManifest::decode(&blob.bytes)?;
+    let snapshot_content = crate::blob_access::decode_snapshot_blob(&envelope.canonical_payload)?;
+    let manifest = SnapshotManifest::decode(&snapshot_content)?;
     let mut files = BTreeMap::new();
     for entry in manifest.files {
         files.insert(entry.path.as_str().to_string(), entry.bytes);
@@ -108,28 +105,14 @@ pub(super) fn load_snapshot_files(
     Ok(files)
 }
 
-/// Read raw bytes from a Blob object.
-pub(super) fn read_blob_bytes(
+/// Read a file-content Blob, returning the derived node kind and bytes. Used to
+/// fill `DeleteNode.old_node_kind` when inverting a `CreateFile`.
+pub(super) fn read_blob_bytes_with_kind(
     object_store: &FileObjectStore,
     blob_id: ObjectId,
-) -> Result<Vec<u8>> {
+) -> Result<(prikk_object::NodeKind, Vec<u8>)> {
     let envelope = object_store
         .read_typed(blob_id, ObjectType::Blob)?
         .ok_or_else(|| PrikkError::Integrity(format!("missing Blob {blob_id}")))?;
-    let blob = BlobPayload::decode_canonical(&envelope.canonical_payload)?;
-    Ok(blob.bytes)
-}
-
-/// Ensure bytes identify as the expected Blob object ID.
-pub(super) fn ensure_blob_matches(bytes: &[u8], expected: ObjectId) -> Result<()> {
-    let payload = BlobPayload {
-        bytes: bytes.to_vec(),
-    };
-    let id = ObjectId::from_canonical_payload(ObjectType::Blob, 1, &payload.to_canonical_bytes()?);
-    if id == expected {
-        return Ok(());
-    }
-    Err(PrikkError::Integrity(format!(
-        "operation old_blob_id mismatch: expected {expected}, got {id}"
-    )))
+    crate::blob_access::decode_file_content_blob_with_kind(&envelope.canonical_payload)
 }

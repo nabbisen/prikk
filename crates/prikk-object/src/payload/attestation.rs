@@ -2,7 +2,6 @@
 
 use prikk_error::{PrikkError, Result};
 
-use crate::canonical::is_strictly_sorted;
 use crate::{CanonicalEncode, CanonicalWriter, ObjectId};
 
 /// Attestation status.
@@ -27,37 +26,41 @@ impl AttestationStatus {
     }
 }
 
-/// Plugin result entry, sorted by plugin ID.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+/// Plugin result entry, sorted by plugin ID. FDD-03 §9.10. The canonical sort key
+/// is `plugin_id` only (see `results_sorted_by_plugin_id`), so a full-record
+/// ordering is deliberately not derived.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PluginResultEntry {
     /// Plugin ID.
     pub plugin_id: String,
+    /// Plugin version.
+    pub plugin_version: String,
     /// Status.
     pub status: AttestationStatus,
-    /// Report object ID.
-    pub report_blob_id: Option<ObjectId>,
+    /// Report hash (not an object id).
+    pub report_hash: Vec<u8>,
+    /// Number of findings reported.
+    pub finding_count: u32,
 }
 
 impl CanonicalEncode for PluginResultEntry {
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
         writer.field_string(1, &self.plugin_id)?;
-        writer.field_u32(2, u32::from(self.status.code()))?;
-        if let Some(report) = self.report_blob_id {
-            writer.field_bytes(3, report.as_bytes())?;
-        }
+        writer.field_string(2, &self.plugin_version)?;
+        writer.field_enum_u16(3, self.status.code())?;
+        writer.field_bytes(4, &self.report_hash)?;
+        writer.field_u32(5, self.finding_count)?;
         Ok(())
     }
 }
 
-/// Attestation payload.
+/// Attestation payload. FDD-03 §9.9.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AttestationPayload {
     /// Target block ID.
     pub target_block_id: ObjectId,
     /// Policy version string.
     pub policy_version: String,
-    /// Policy hash.
-    pub policy_hash: Vec<u8>,
     /// Plugin-set hash.
     pub plugin_set_hash: Vec<u8>,
     /// Results sorted by plugin ID.
@@ -70,21 +73,30 @@ pub struct AttestationPayload {
     pub is_reproducible_offline: bool,
 }
 
+/// FDD-03 §9.9 sort key for `results`: strictly ascending by `plugin_id` UTF-8
+/// bytes. Strictness also forbids duplicate `plugin_id` values. No secondary key is
+/// used in v1, so later fields never participate in canonical ordering.
+fn results_sorted_by_plugin_id(results: &[PluginResultEntry]) -> bool {
+    results.windows(2).all(|pair| match pair {
+        [a, b] => a.plugin_id.as_bytes() < b.plugin_id.as_bytes(),
+        _ => true,
+    })
+}
+
 impl CanonicalEncode for AttestationPayload {
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
-        if !is_strictly_sorted(&self.results) {
+        if !results_sorted_by_plugin_id(&self.results) {
             return Err(PrikkError::CanonicalEncoding(
-                "plugin results must be sorted and unique by plugin_id".to_string(),
+                "plugin results must be strictly ordered and unique by plugin_id".to_string(),
             ));
         }
-        writer.field_bytes(1, self.target_block_id.as_bytes())?;
+        writer.field_object_id(1, &self.target_block_id)?;
         writer.field_string(2, &self.policy_version)?;
-        writer.field_bytes(3, &self.policy_hash)?;
-        writer.field_bytes(4, &self.plugin_set_hash)?;
-        writer.repeated_record(5, &self.results)?;
-        writer.field_u32(6, u32::from(self.status.code()))?;
-        writer.field_u64(7, self.created_at)?;
-        writer.field_bool(8, self.is_reproducible_offline)?;
+        writer.field_bytes(3, &self.plugin_set_hash)?;
+        writer.repeated_record_list(4, &self.results)?;
+        writer.field_enum_u16(5, self.status.code())?;
+        writer.field_u64(6, self.created_at)?;
+        writer.field_bool(7, self.is_reproducible_offline)?;
         Ok(())
     }
 }

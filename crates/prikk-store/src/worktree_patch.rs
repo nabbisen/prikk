@@ -1,27 +1,23 @@
 //! Worktree-to-patch draft generation.
 //!
 //! PR-025 turns snapshot-baseline worktree changes into a minimal signed Patch envelope and appends
-//! it to the active WAL. By default it emits coarse file-level create/delete/replace operations.
-//! With opt-in text mode it emits conservative full-file `EditText` operations for UTF-8
-//! modifications. Rename detection, arbitrary-span text diffs, and full algebra remain later
-//! increments.
+//! it to the active WAL. It emits coarse file-level replace operations for modified files.
+//! Create, delete, and opt-in text-edit authoring are deferred to the node model (node_id minting/
+//! tracking, increment 4.4/4.4a; §9.3 EditText additionally needs FDD-01 §7.2.1 span anchoring).
+//! Rename detection, arbitrary-span text diffs, and full algebra remain later increments.
 
 use std::collections::BTreeMap;
-use std::fs;
 
 use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;
 use prikk_object::{
-    BlobPayload, CanonicalEncode, CreateFile, DeleteFile, EditText, ObjectEnvelope, ObjectId,
-    ObjectType, Operation, OperationKind, PatchPayload, ReplaceBinary, Signature,
-    SignatureAlgorithm, SignerRole, text_span_hash,
+    BlobKind, BlobPayload, CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, Signature,
+    SignatureAlgorithm, SignerRole,
 };
 
-use crate::active::ActiveSession;
 use crate::checkout::prepare_snapshot_checkout_plan;
 use crate::layout::RepositoryLayout;
 use crate::object_store::{FileObjectStore, ObjectReader, ObjectWriter};
-use crate::path::RepoPath;
 use crate::snapshot::SnapshotManifest;
 use crate::worktree_status::{WorktreeChangeKind, worktree_status};
 
@@ -38,7 +34,8 @@ pub struct WorktreePatchCommitReport {
     pub operation_count: usize,
     /// Number of Blob object references written or reused for operation payloads.
     pub referenced_blob_count: usize,
-    /// Number of full-file `EditText` operations emitted.
+    /// Number of `EditText` operations emitted. Always 0 while text-edit authoring is
+    /// deferred to the node model (increment 4.4 + FDD-01 §7.2.1).
     pub text_edit_count: usize,
     /// Operation summaries in emitted order.
     pub changes: Vec<WorktreePatchOperationSummary>,
@@ -62,7 +59,7 @@ pub enum WorktreePatchOperationKind {
     DeleteFile,
     /// A modified tracked file will be represented as `ReplaceBinary`.
     ReplaceBinary,
-    /// A modified UTF-8 tracked file will be represented as full-file `EditText`.
+    /// A modified UTF-8 tracked file would be represented as `EditText` (authoring deferred).
     EditText,
 }
 
@@ -82,7 +79,9 @@ impl WorktreePatchOperationKind {
 /// Options for generating a patch from snapshot-baseline worktree changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WorktreePatchCommitOptions {
-    /// Prefer conservative full-file `EditText` for UTF-8 modified tracked files.
+    /// Prefer `EditText` for UTF-8 modified tracked files. NOTE: text-edit authoring is
+    /// currently deferred to the node model, so enabling this makes modified-file commits
+    /// fail closed rather than emit a node-bearing EditText with a fabricated node_id.
     pub prefer_text_edits: bool,
 }
 
@@ -95,7 +94,7 @@ impl WorktreePatchCommitOptions {
         }
     }
 
-    /// Return the opt-in full-file text-edit generation mode.
+    /// Return the opt-in text-edit generation mode (authoring deferred to the node model).
     #[must_use]
     pub const fn prefer_text_edits() -> Self {
         Self {
@@ -125,11 +124,18 @@ pub fn commit_worktree_changes(
 }
 
 /// Generate a minimal patch using explicit worktree patch generation options.
+///
+/// As of increment 4.2c, every §9.3 mutation operation (`CreateFile`, `DeleteNode`,
+/// `EditText`, `ReplaceBinary`) is node-addressed, so worktree authoring of all
+/// change kinds fails closed pending the node model (path->node_id tracking and
+/// node_id minting, increments 4.4/4.4a; `EditText` also needs FDD-01 §7.2.1). The
+/// blob-writing, op-sequencing, signing, and WAL-append helpers are retained as the
+/// substrate the node model re-enables.
 pub fn commit_worktree_changes_with_options(
     layout: &RepositoryLayout,
     ref_name: &str,
     message: &str,
-    options: WorktreePatchCommitOptions,
+    _options: WorktreePatchCommitOptions,
 ) -> Result<WorktreePatchCommitReport> {
     if message.trim().is_empty() {
         return Err(PrikkError::InvalidName(
@@ -148,146 +154,41 @@ pub fn commit_worktree_changes_with_options(
         ));
     }
 
-    let baseline = load_snapshot_baseline(layout, ref_name)?;
-    let mut object_store = FileObjectStore::new(layout.clone());
-    let mut operations = Vec::new();
-    let mut summaries = Vec::new();
-    let mut referenced_blob_count = 0_usize;
-    let mut text_edit_count = 0_usize;
-
-    for change in &status.changes {
-        let path = RepoPath::parse(&change.path)?;
-        let op_seq = next_op_seq(operations.len())?;
-        match change.kind {
-            WorktreeChangeKind::Missing => {
-                let old_bytes = baseline.get(path.as_str()).ok_or_else(|| {
-                    PrikkError::Integrity(format!(
-                        "missing tracked path was not found in baseline: {}",
-                        path.as_str()
-                    ))
-                })?;
-                let old_blob_id = write_blob(&mut object_store, old_bytes)?;
-                referenced_blob_count += 1;
-                operations.push(Operation {
-                    op_seq,
-                    op_id: Some(format!("delete-{}", path.as_str())),
-                    preconditions: Vec::new(),
-                    kind: OperationKind::DeleteFile(DeleteFile {
-                        path: path.as_str().to_string(),
-                        old_blob_id,
-                    }),
-                });
-                summaries.push(WorktreePatchOperationSummary {
-                    path: path.as_str().to_string(),
-                    operation: WorktreePatchOperationKind::DeleteFile,
-                });
-            }
-            WorktreeChangeKind::Modified => {
-                let old_bytes = baseline.get(path.as_str()).ok_or_else(|| {
-                    PrikkError::Integrity(format!(
-                        "modified tracked path was not found in baseline: {}",
-                        path.as_str()
-                    ))
-                })?;
-                let new_bytes = read_regular_worktree_file(layout, &path)?;
-                if options.prefer_text_edits {
-                    if let Some(edit) = full_file_text_edit(&path, old_bytes, &new_bytes) {
-                        operations.push(Operation {
-                            op_seq,
-                            op_id: Some(format!("edit-text-{}", path.as_str())),
-                            preconditions: Vec::new(),
-                            kind: OperationKind::EditText(edit),
-                        });
-                        summaries.push(WorktreePatchOperationSummary {
-                            path: path.as_str().to_string(),
-                            operation: WorktreePatchOperationKind::EditText,
-                        });
-                        text_edit_count += 1;
-                        continue;
-                    }
-                }
-                let old_blob_id = write_blob(&mut object_store, old_bytes)?;
-                let new_blob_id = write_blob(&mut object_store, &new_bytes)?;
-                referenced_blob_count += 2;
-                operations.push(Operation {
-                    op_seq,
-                    op_id: Some(format!("replace-{}", path.as_str())),
-                    preconditions: Vec::new(),
-                    kind: OperationKind::ReplaceBinary(ReplaceBinary {
-                        path: path.as_str().to_string(),
-                        old_blob_id,
-                        new_blob_id,
-                    }),
-                });
-                summaries.push(WorktreePatchOperationSummary {
-                    path: path.as_str().to_string(),
-                    operation: WorktreePatchOperationKind::ReplaceBinary,
-                });
-            }
-            WorktreeChangeKind::Untracked => {
-                let new_bytes = read_regular_worktree_file(layout, &path)?;
-                let blob_id = write_blob(&mut object_store, &new_bytes)?;
-                referenced_blob_count += 1;
-                operations.push(Operation {
-                    op_seq,
-                    op_id: Some(format!("create-{}", path.as_str())),
-                    preconditions: Vec::new(),
-                    kind: OperationKind::CreateFile(CreateFile {
-                        path: path.as_str().to_string(),
-                        blob_id,
-                        mode: 0o100644,
-                    }),
-                });
-                summaries.push(WorktreePatchOperationSummary {
-                    path: path.as_str().to_string(),
-                    operation: WorktreePatchOperationKind::CreateFile,
-                });
-            }
-            WorktreeChangeKind::UnsupportedPath => {
-                return Err(PrikkError::InvalidName(format!(
-                    "unsupported worktree path cannot become a patch operation: {}",
-                    change.path
-                )));
-            }
-        }
+    // As of increment 4.2c, every FDD-03 §9.3 mutation operation (CreateFile,
+    // DeleteNode, EditText, ReplaceBinary) is node-addressed, so authoring any
+    // worktree change requires the node model: path->node_id tracking and node_id
+    // minting (increments 4.4/4.4a), and for EditText span anchoring (FDD-01
+    // §7.2.1). Until then, authoring fails closed on the first change rather than
+    // emit a node-bearing operation with a fabricated node_id, which the node-model
+    // plan forbids. `status.is_clean()` above guarantees at least one change.
+    let change = status.changes.first().ok_or_else(|| {
+        PrikkError::Integrity("worktree change set unexpectedly empty".to_string())
+    })?;
+    match change.kind {
+        WorktreeChangeKind::Missing => Err(PrikkError::Integrity(format!(
+            "worktree delete authoring is pending the node model \
+             (increment 4.4 path->node_id tracking): {}",
+            change.path
+        ))),
+        WorktreeChangeKind::Modified => Err(PrikkError::Integrity(format!(
+            "worktree modified-file authoring is pending the node model \
+             (increment 4.4 path->node_id tracking; ReplaceBinary binary-only blob \
+             check; EditText needs FDD-01 §7.2.1): {}",
+            change.path
+        ))),
+        WorktreeChangeKind::Untracked => Err(PrikkError::Integrity(format!(
+            "worktree create authoring is pending the node model \
+             (increment 4.4a node_id minting): {}",
+            change.path
+        ))),
+        WorktreeChangeKind::UnsupportedPath => Err(PrikkError::InvalidName(format!(
+            "unsupported worktree path cannot become a patch operation: {}",
+            change.path
+        ))),
     }
-
-    let payload = PatchPayload {
-        operations,
-        parent_patch_ids: Vec::new(),
-        intent: None,
-        preconditions: Vec::new(),
-    };
-    let payload_bytes = payload.to_canonical_bytes()?;
-    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload_bytes);
-    envelope.add_signature(dev_author_signature(message))?;
-    let patch_id = envelope.object_id();
-    let wal_sequence = ActiveSession::new(layout.clone())
-        .append_patch(&envelope)?
-        .wal_sequence;
-
-    Ok(WorktreePatchCommitReport {
-        ref_name: ref_name.to_string(),
-        patch_id,
-        wal_sequence,
-        operation_count: payload.operations.len(),
-        referenced_blob_count,
-        text_edit_count,
-        changes: summaries,
-    })
 }
 
-fn full_file_text_edit(path: &RepoPath, old_bytes: &[u8], new_bytes: &[u8]) -> Option<EditText> {
-    let new_text = std::str::from_utf8(new_bytes).ok()?;
-    std::str::from_utf8(old_bytes).ok()?;
-    Some(EditText {
-        path: path.as_str().to_string(),
-        anchor_id: "full-file".to_string(),
-        old_span_hash: text_span_hash(old_bytes),
-        replacement: new_text.to_string(),
-    })
-}
-
+#[allow(dead_code)] // node-model authoring substrate; re-enters production at increment 4.4
 fn load_snapshot_baseline(
     layout: &RepositoryLayout,
     ref_name: &str,
@@ -306,8 +207,8 @@ fn load_snapshot_baseline(
             actual: envelope.object_type.to_string(),
         });
     }
-    let blob = BlobPayload::decode_canonical(&envelope.canonical_payload)?;
-    let manifest = SnapshotManifest::decode(&blob.bytes)?;
+    let snapshot_content = crate::blob_access::decode_snapshot_blob(&envelope.canonical_payload)?;
+    let manifest = SnapshotManifest::decode(&snapshot_content)?;
     let mut out = BTreeMap::new();
     for entry in manifest.files {
         out.insert(entry.path.as_str().to_string(), entry.bytes);
@@ -315,27 +216,15 @@ fn load_snapshot_baseline(
     Ok(out)
 }
 
+#[allow(dead_code)] // shared test helper; re-enters production worktree authoring at increment 4.4
 fn write_blob(object_store: &mut FileObjectStore, bytes: &[u8]) -> Result<ObjectId> {
-    let payload = BlobPayload {
-        bytes: bytes.to_vec(),
-    };
+    let payload = BlobPayload::new(BlobKind::Text, bytes.to_vec());
     let canonical_payload = payload.to_canonical_bytes()?;
     let envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, canonical_payload);
     object_store.write_object(&envelope)
 }
 
-fn read_regular_worktree_file(layout: &RepositoryLayout, path: &RepoPath) -> Result<Vec<u8>> {
-    let target = path.join_to_root(layout.root());
-    let metadata = fs::symlink_metadata(&target)?;
-    if metadata.file_type().is_symlink() || !metadata.is_file() {
-        return Err(PrikkError::Integrity(format!(
-            "worktree path is not a regular file: {}",
-            target.display()
-        )));
-    }
-    fs::read(&target).map_err(PrikkError::from)
-}
-
+#[allow(dead_code)] // node-model authoring substrate; re-enters production at increment 4.4
 fn next_op_seq(index: usize) -> Result<u32> {
     let next = index
         .checked_add(1)
@@ -344,6 +233,7 @@ fn next_op_seq(index: usize) -> Result<u32> {
         .map_err(|_| PrikkError::CanonicalEncoding("operation count exceeds u32".to_string()))
 }
 
+#[allow(dead_code)] // node-model authoring substrate; re-enters production at increment 4.4
 fn dev_author_signature(message: &str) -> Signature {
     let mut signature_preimage = Vec::new();
     signature_preimage.extend_from_slice(b"prikk.dev.placeholder-signature.v1");

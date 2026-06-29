@@ -1,19 +1,18 @@
 //! Minimal patch replay planning for supported file-level operations.
 //!
 //! PR-024 keeps a deliberately narrow replay boundary. It can reconstruct an in-memory snapshot
-//! manifest by walking a single-parent block chain and applying `CreateFile`, `DeleteFile`,
-//! `ReplaceBinary`, and full-file exact-span `EditText` operations. Arbitrary text-span discovery,
-//! renames, chmod, symlinks, merge algebra, and conflict handling remain later increments.
+//! manifest by walking a single-parent block chain and applying `CreateFile` and `DeleteNode`
+//! operations. `EditText` and `ReplaceBinary` are reconciled to the FDD-03 §9.3 node-addressed
+//! records but their application is deferred to the node model (increment 4.4; `EditText` also
+//! needs FDD-01 §7.2.1 span anchoring); renames, chmod, symlinks, merge algebra, and conflict
+//! handling remain later increments.
 
 use std::collections::{BTreeMap, HashSet};
 
 pub(crate) mod decode;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{
-    BlobPayload, BlockPayload, CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType,
-    RefStatePayload, text_span_hash,
-};
+use prikk_object::{BlockPayload, ObjectEnvelope, ObjectId, ObjectType, RefStatePayload};
 
 use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
@@ -222,8 +221,8 @@ fn load_snapshot_files(
         .ok_or_else(|| {
             PrikkError::Integrity(format!("missing snapshot Blob {snapshot_blob_ref}"))
         })?;
-    let blob = BlobPayload::decode_canonical(&envelope.canonical_payload)?;
-    let manifest = SnapshotManifest::decode(&blob.bytes)?;
+    let snapshot_content = crate::blob_access::decode_snapshot_blob(&envelope.canonical_payload)?;
+    let manifest = SnapshotManifest::decode(&snapshot_content)?;
     let mut files = BTreeMap::new();
     for entry in manifest.files {
         files.insert(entry.path.as_str().to_string(), entry.bytes);
@@ -249,7 +248,12 @@ fn apply_supported_operation(
     operation: SupportedPatchOperation,
 ) -> Result<()> {
     match operation {
-        SupportedPatchOperation::CreateFile { path, blob_id } => {
+        SupportedPatchOperation::CreateFile {
+            path,
+            node_id: _,
+            blob_id,
+            mode: _,
+        } => {
             if files.contains_key(&path) {
                 return Err(PrikkError::Integrity(format!(
                     "CreateFile would overwrite existing path {path}"
@@ -259,11 +263,21 @@ fn apply_supported_operation(
             deleted_files.remove(&path);
             files.insert(path, bytes);
         }
-        SupportedPatchOperation::DeleteFile { path, old_blob_id } => {
+        SupportedPatchOperation::DeleteNode {
+            path,
+            node_id: _,
+            old_node_kind,
+            old_blob_id,
+            old_mode: _,
+        } => {
             let old_bytes = files.get(&path).ok_or_else(|| {
-                PrikkError::Integrity(format!("DeleteFile path is absent: {path}"))
+                PrikkError::Integrity(format!("DeleteNode path is absent: {path}"))
             })?;
-            ensure_blob_matches(old_bytes, old_blob_id)?;
+            crate::blob_access::ensure_blob_matches_node_kind(
+                old_bytes,
+                old_blob_id,
+                old_node_kind,
+            )?;
             let repo_path = RepoPath::parse(&path)?;
             let deleted = PatchReplayDeletedFile {
                 path: repo_path,
@@ -273,57 +287,7 @@ fn apply_supported_operation(
             files.remove(&path);
             deleted_files.insert(path, deleted);
         }
-        SupportedPatchOperation::ReplaceBinary {
-            path,
-            old_blob_id,
-            new_blob_id,
-        } => {
-            let old_bytes = files.get(&path).ok_or_else(|| {
-                PrikkError::Integrity(format!("ReplaceBinary path is absent: {path}"))
-            })?;
-            ensure_blob_matches(old_bytes, old_blob_id)?;
-            let new_bytes = read_blob_bytes(object_store, new_blob_id)?;
-            files.insert(path, new_bytes);
-        }
-        SupportedPatchOperation::EditText {
-            path,
-            anchor_id,
-            old_span_hash,
-            replacement,
-        } => {
-            apply_full_file_text_edit(files, path, anchor_id, old_span_hash, replacement)?;
-        }
     }
-    Ok(())
-}
-
-fn apply_full_file_text_edit(
-    files: &mut BTreeMap<String, Vec<u8>>,
-    path: String,
-    anchor_id: String,
-    old_span_hash: [u8; 32],
-    replacement: String,
-) -> Result<()> {
-    if anchor_id != "full-file" {
-        return Err(PrikkError::UnsupportedObjectType(format!(
-            "unsupported EditText anchor {anchor_id}; only full-file is supported"
-        )));
-    }
-    let old_bytes = files
-        .get(&path)
-        .ok_or_else(|| PrikkError::Integrity(format!("EditText path is absent: {path}")))?;
-    if std::str::from_utf8(old_bytes).is_err() {
-        return Err(PrikkError::Integrity(format!(
-            "EditText target is not valid UTF-8 text: {path}"
-        )));
-    }
-    let actual_hash = text_span_hash(old_bytes);
-    if actual_hash != old_span_hash {
-        return Err(PrikkError::Integrity(format!(
-            "EditText old_span_hash mismatch for {path}"
-        )));
-    }
-    files.insert(path, replacement.into_bytes());
     Ok(())
 }
 
@@ -331,19 +295,5 @@ fn read_blob_bytes(object_store: &FileObjectStore, blob_id: ObjectId) -> Result<
     let envelope = object_store
         .read_typed(blob_id, ObjectType::Blob)?
         .ok_or_else(|| PrikkError::Integrity(format!("missing Blob {blob_id}")))?;
-    let blob = BlobPayload::decode_canonical(&envelope.canonical_payload)?;
-    Ok(blob.bytes)
-}
-
-fn ensure_blob_matches(bytes: &[u8], expected: ObjectId) -> Result<()> {
-    let payload = BlobPayload {
-        bytes: bytes.to_vec(),
-    };
-    let id = ObjectId::from_canonical_payload(ObjectType::Blob, 1, &payload.to_canonical_bytes()?);
-    if id == expected {
-        return Ok(());
-    }
-    Err(PrikkError::Integrity(format!(
-        "operation old_blob_id mismatch: expected {expected}, got {id}"
-    )))
+    crate::blob_access::decode_file_content_blob(&envelope.canonical_payload)
 }
