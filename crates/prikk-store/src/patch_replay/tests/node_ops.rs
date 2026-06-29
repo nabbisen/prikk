@@ -1,9 +1,11 @@
 //! Store decode coverage for the FDD-03 §9.3 operation records: node_id
 //! validation (all-zero rejection through `try_from_bytes`), field types, the
 //! DeleteNode discriminator (text/binary file, symlink, and rejection of illegal
-//! field combinations), the §9.2 operation-kind oneof, and the validate-then-
-//! unsupported handling of the node-addressed EditText/ReplaceBinary records —
-//! exercised on the read path, not just the write-side encoder validators.
+//! field combinations), the §9.2 operation-kind oneof, and the decode→apply
+//! boundary for the node-addressed kinds (each well-formed kind decodes into its
+//! typed variant; application of the not-yet-wired kinds is gated as
+//! `UnsupportedObjectType` by `ensure_apply_supported`, erratum P1) — exercised on
+//! the read path, not just the write-side encoder validators.
 #![allow(clippy::expect_used)]
 
 use prikk_error::PrikkError;
@@ -13,7 +15,9 @@ use prikk_object::{
     ReplaceBinary, text_span_hash,
 };
 
-use crate::patch_replay::decode::{SupportedPatchOperation, decode_supported_patch_operations};
+use crate::patch_replay::decode::{
+    DecodedDeletePreimage, DecodedOperationKind, decode_patch_operations, ensure_apply_supported,
+};
 
 /// Wrap one operation in a single-op patch payload and return canonical bytes.
 fn patch_bytes(kind: OperationKind) -> Vec<u8> {
@@ -59,10 +63,10 @@ fn decode_create_file_round_trips_node_bearing_fields() {
         blob_id: ObjectId::from_bytes([0x11; 32]),
         mode: 0o100_644,
     }));
-    let ops = decode_supported_patch_operations(&bytes).expect("decodes");
+    let ops = decode_patch_operations(&bytes).expect("decodes");
     assert_eq!(ops.len(), 1);
-    match ops.first().expect("one operation") {
-        SupportedPatchOperation::CreateFile {
+    match &ops.first().expect("one operation").kind {
+        DecodedOperationKind::CreateFile {
             path,
             node_id,
             blob_id,
@@ -89,12 +93,15 @@ fn decode_delete_node_text_and_binary_file_kinds() {
                 old_mode: 0o100_644,
             },
         }));
-        let ops = decode_supported_patch_operations(&bytes).expect("decodes");
-        match ops.first().expect("one operation") {
-            SupportedPatchOperation::DeleteNode {
-                old_node_kind,
-                old_blob_id,
-                old_mode,
+        let ops = decode_patch_operations(&bytes).expect("decodes");
+        match &ops.first().expect("one operation").kind {
+            DecodedOperationKind::DeleteNode {
+                preimage:
+                    DecodedDeletePreimage::File {
+                        old_node_kind,
+                        old_blob_id,
+                        old_mode,
+                    },
                 ..
             } => {
                 assert_eq!(*old_node_kind, kind);
@@ -127,7 +134,7 @@ fn decode_rejects_all_zero_node_id_in_create_file() {
     tlv(&mut record, 3, 0x12, &[0x11; 32]); // blob_id object_id
     tlv(&mut record, 4, 0x03, &0o100_644_u32.to_be_bytes()); // mode
     let bytes = patch_with_raw_create_file(&record);
-    assert!(decode_supported_patch_operations(&bytes).is_err());
+    assert!(decode_patch_operations(&bytes).is_err());
 }
 
 #[test]
@@ -144,11 +151,11 @@ fn decode_rejects_all_zero_node_id_in_delete_node() {
     tlv(&mut record, 4, 0x12, &[0x11; 32]);
     tlv(&mut record, 6, 0x03, &0o100_644_u32.to_be_bytes());
     let bytes = patch_with_raw_delete_node(&record);
-    assert!(decode_supported_patch_operations(&bytes).is_err());
+    assert!(decode_patch_operations(&bytes).is_err());
 }
 
 #[test]
-fn decode_rejects_symlink_delete_node_as_unsupported() {
+fn decode_symlink_delete_node_then_apply_unsupported() {
     let bytes = patch_bytes(OperationKind::DeleteNode(DeleteNode {
         path: "link".to_string(),
         node_id: NodeId::from_bytes([0x44; 32]),
@@ -157,7 +164,21 @@ fn decode_rejects_symlink_delete_node_as_unsupported() {
             old_target: "t.txt".to_string(),
         },
     }));
-    assert!(decode_supported_patch_operations(&bytes).is_err());
+    let ops = decode_patch_operations(&bytes).expect("decodes");
+    match &ops.first().expect("one operation").kind {
+        DecodedOperationKind::DeleteNode {
+            path,
+            node_id,
+            preimage: DecodedDeletePreimage::Symlink { old_target },
+        } => {
+            assert_eq!(path, "link");
+            assert_eq!(node_id.as_bytes(), &[0x44; 32]);
+            assert_eq!(old_target, "t.txt");
+        }
+        other => panic!("expected symlink DeleteNode, got {other:?}"),
+    }
+    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
+    assert!(matches!(err, PrikkError::UnsupportedObjectType(_)));
 }
 
 #[test]
@@ -176,7 +197,7 @@ fn decode_rejects_file_kind_carrying_old_target() {
     tlv(&mut record, 5, 0x10, b"target"); // old_target (illegal for file)
     tlv(&mut record, 6, 0x03, &0o100_644_u32.to_be_bytes()); // old_mode
     let bytes = patch_with_raw_delete_node(&record);
-    assert!(decode_supported_patch_operations(&bytes).is_err());
+    assert!(decode_patch_operations(&bytes).is_err());
 }
 
 #[test]
@@ -193,7 +214,7 @@ fn decode_rejects_file_kind_missing_old_blob_id() {
     );
     tlv(&mut record, 6, 0x03, &0o100_644_u32.to_be_bytes());
     let bytes = patch_with_raw_delete_node(&record);
-    assert!(decode_supported_patch_operations(&bytes).is_err());
+    assert!(decode_patch_operations(&bytes).is_err());
 }
 
 #[test]
@@ -211,7 +232,7 @@ fn decode_rejects_symlink_kind_carrying_blob_and_mode() {
     tlv(&mut record, 4, 0x12, &[0x11; 32]); // old_blob_id (illegal for symlink)
     tlv(&mut record, 6, 0x03, &0o100_644_u32.to_be_bytes()); // old_mode (illegal)
     let bytes = patch_with_raw_delete_node(&record);
-    assert!(decode_supported_patch_operations(&bytes).is_err());
+    assert!(decode_patch_operations(&bytes).is_err());
 }
 
 /// Compose patch bytes carrying one operation whose tag-12 edit_text record is
@@ -248,7 +269,8 @@ fn decode_valid_edit_text_is_validated_then_unsupported() {
     // error. Asserting the class guards the "validate first, then unsupported"
     // ordering against a decoder that rejected every EditText immediately.
     let bytes = patch_with_raw_edit_text(&valid_edit_text_record());
-    let err = decode_supported_patch_operations(&bytes).expect_err("deferred");
+    let ops = decode_patch_operations(&bytes).expect("decodes");
+    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
     assert!(
         matches!(err, PrikkError::UnsupportedObjectType(_)),
         "valid EditText should defer as unsupported, got {err:?}"
@@ -270,7 +292,28 @@ fn decode_edit_text_via_object_encoder_is_unsupported() {
         presentation_hint_column: None,
         old_span_text: b"old".to_vec(),
     }));
-    let err = decode_supported_patch_operations(&bytes).expect_err("deferred");
+    let ops = decode_patch_operations(&bytes).expect("decodes");
+    match &ops.first().expect("one operation").kind {
+        DecodedOperationKind::EditText {
+            node_id,
+            span_id,
+            old_span_hash,
+            left_anchor_hash,
+            right_anchor_hash,
+            replacement_text,
+            old_span_text,
+        } => {
+            assert_eq!(node_id.as_bytes(), &[0x22; 32]);
+            assert_eq!(span_id, &[0x10; 32]);
+            assert_eq!(old_span_hash, &text_span_hash(b"old"));
+            assert_eq!(left_anchor_hash, &[0x11; 32]);
+            assert_eq!(right_anchor_hash, &[0x12; 32]);
+            assert_eq!(replacement_text.as_slice(), &b"new"[..]);
+            assert_eq!(old_span_text.as_slice(), &b"old"[..]);
+        }
+        other => panic!("expected EditText, got {other:?}"),
+    }
+    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
     assert!(
         matches!(err, PrikkError::UnsupportedObjectType(_)),
         "{err:?}"
@@ -288,7 +331,7 @@ fn decode_rejects_edit_text_hash_binding_violation() {
     tlv(&mut record, 6, 0x11, b"new");
     tlv(&mut record, 9, 0x11, b"old");
     let bytes = patch_with_raw_edit_text(&record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -304,7 +347,7 @@ fn decode_rejects_edit_text_non_utf8_old_span_text() {
     tlv(&mut record, 6, 0x11, b"new");
     tlv(&mut record, 9, 0x11, bad);
     let bytes = patch_with_raw_edit_text(&record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -322,7 +365,7 @@ fn decode_rejects_edit_text_non_utf8_replacement_text() {
     tlv(&mut record, 6, 0x11, bad); // replacement_text not UTF-8
     tlv(&mut record, 9, 0x11, b"old");
     let bytes = patch_with_raw_edit_text(&record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -337,7 +380,7 @@ fn decode_rejects_edit_text_all_zero_node_id() {
     tlv(&mut record, 6, 0x11, b"new");
     tlv(&mut record, 9, 0x11, b"old");
     let bytes = patch_with_raw_edit_text(&record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -357,14 +400,14 @@ fn patch_with_two_kind_records(tag_a: u16, tag_b: u16) -> Vec<u8> {
 #[test]
 fn decode_rejects_operation_with_create_and_delete_kinds() {
     let bytes = patch_with_two_kind_records(10, 11);
-    let err = decode_supported_patch_operations(&bytes).expect_err("oneof");
+    let err = decode_patch_operations(&bytes).expect_err("oneof");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
 #[test]
 fn decode_rejects_operation_with_create_and_replace_kinds() {
     let bytes = patch_with_two_kind_records(10, 16);
-    let err = decode_supported_patch_operations(&bytes).expect_err("oneof");
+    let err = decode_patch_operations(&bytes).expect_err("oneof");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -372,7 +415,7 @@ fn decode_rejects_operation_with_create_and_replace_kinds() {
 fn decode_rejects_operation_with_create_and_edit_text_kinds() {
     // Must be rejected as a malformed oneof, NOT merely as an unsupported EditText.
     let bytes = patch_with_two_kind_records(10, 12);
-    let err = decode_supported_patch_operations(&bytes).expect_err("oneof");
+    let err = decode_patch_operations(&bytes).expect_err("oneof");
     assert!(
         matches!(err, PrikkError::MalformedData(_)),
         "create+edittext must be a oneof violation, got {err:?}"
@@ -403,7 +446,8 @@ fn decode_valid_replace_binary_is_validated_then_unsupported() {
     // record decodes to UnsupportedObjectType, not a replayable op or a malformed
     // error.
     let bytes = patch_with_raw_replace_binary(&valid_replace_binary_record());
-    let err = decode_supported_patch_operations(&bytes).expect_err("deferred");
+    let ops = decode_patch_operations(&bytes).expect("decodes");
+    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
     assert!(
         matches!(err, PrikkError::UnsupportedObjectType(_)),
         "valid ReplaceBinary should defer as unsupported, got {err:?}"
@@ -418,7 +462,20 @@ fn decode_replace_binary_via_object_encoder_is_unsupported() {
         old_blob_id: ObjectId::from_bytes([0x11; 32]),
         new_blob_id: ObjectId::from_bytes([0x33; 32]),
     }));
-    let err = decode_supported_patch_operations(&bytes).expect_err("deferred");
+    let ops = decode_patch_operations(&bytes).expect("decodes");
+    match &ops.first().expect("one operation").kind {
+        DecodedOperationKind::ReplaceBinary {
+            node_id,
+            old_blob_id,
+            new_blob_id,
+        } => {
+            assert_eq!(node_id.as_bytes(), &[0x22; 32]);
+            assert_eq!(old_blob_id, &ObjectId::from_bytes([0x11; 32]));
+            assert_eq!(new_blob_id, &ObjectId::from_bytes([0x33; 32]));
+        }
+        other => panic!("expected ReplaceBinary, got {other:?}"),
+    }
+    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
     assert!(
         matches!(err, PrikkError::UnsupportedObjectType(_)),
         "{err:?}"
@@ -432,7 +489,7 @@ fn decode_rejects_replace_binary_all_zero_node_id() {
     tlv(&mut record, 2, 0x12, &[0x11; 32]);
     tlv(&mut record, 3, 0x12, &[0x33; 32]);
     let bytes = patch_with_raw_replace_binary(&record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -444,7 +501,7 @@ fn decode_rejects_replace_binary_blob_id_wrong_wire() {
     tlv(&mut record, 2, 0x11, &[0x11; 32]); // old_blob_id as bytes, not object_id
     tlv(&mut record, 3, 0x12, &[0x33; 32]);
     let bytes = patch_with_raw_replace_binary(&record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -467,7 +524,8 @@ fn decode_valid_rename_path_is_validated_then_unsupported() {
     tlv(&mut record, 2, 0x13, b"a.txt"); // old_path repo_path
     tlv(&mut record, 3, 0x13, b"b.txt"); // new_path repo_path
     let bytes = patch_with_raw_op(13, &record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("deferred");
+    let ops = decode_patch_operations(&bytes).expect("decodes");
+    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
     assert!(
         matches!(err, PrikkError::UnsupportedObjectType(_)),
         "{err:?}"
@@ -481,7 +539,7 @@ fn decode_rejects_rename_path_all_zero_node_id() {
     tlv(&mut record, 2, 0x13, b"a.txt");
     tlv(&mut record, 3, 0x13, b"b.txt");
     let bytes = patch_with_raw_op(13, &record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -492,7 +550,20 @@ fn decode_rename_path_via_object_encoder_is_unsupported() {
         old_path: "a.txt".to_string(),
         new_path: "b.txt".to_string(),
     }));
-    let err = decode_supported_patch_operations(&bytes).expect_err("deferred");
+    let ops = decode_patch_operations(&bytes).expect("decodes");
+    match &ops.first().expect("one operation").kind {
+        DecodedOperationKind::RenamePath {
+            node_id,
+            old_path,
+            new_path,
+        } => {
+            assert_eq!(node_id.as_bytes(), &[0x22; 32]);
+            assert_eq!(old_path, "a.txt");
+            assert_eq!(new_path, "b.txt");
+        }
+        other => panic!("expected RenamePath, got {other:?}"),
+    }
+    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
     assert!(
         matches!(err, PrikkError::UnsupportedObjectType(_)),
         "{err:?}"
@@ -508,7 +579,8 @@ fn decode_valid_change_perm_is_validated_then_unsupported() {
     tlv(&mut record, 2, 0x03, &0o100_644_u32.to_be_bytes());
     tlv(&mut record, 3, 0x03, &0o100_755_u32.to_be_bytes());
     let bytes = patch_with_raw_op(14, &record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("deferred");
+    let ops = decode_patch_operations(&bytes).expect("decodes");
+    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
     assert!(
         matches!(err, PrikkError::UnsupportedObjectType(_)),
         "{err:?}"
@@ -522,7 +594,7 @@ fn decode_rejects_change_perm_all_zero_node_id() {
     tlv(&mut record, 2, 0x03, &0o100_644_u32.to_be_bytes());
     tlv(&mut record, 3, 0x03, &0o100_755_u32.to_be_bytes());
     let bytes = patch_with_raw_op(14, &record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -533,7 +605,20 @@ fn decode_change_perm_via_object_encoder_is_unsupported() {
         old_mode: 0o100_644,
         new_mode: 0o100_755,
     }));
-    let err = decode_supported_patch_operations(&bytes).expect_err("deferred");
+    let ops = decode_patch_operations(&bytes).expect("decodes");
+    match &ops.first().expect("one operation").kind {
+        DecodedOperationKind::ChangePerm {
+            node_id,
+            old_mode,
+            new_mode,
+        } => {
+            assert_eq!(node_id.as_bytes(), &[0x22; 32]);
+            assert_eq!(*old_mode, 0o100_644);
+            assert_eq!(*new_mode, 0o100_755);
+        }
+        other => panic!("expected ChangePerm, got {other:?}"),
+    }
+    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
     assert!(
         matches!(err, PrikkError::UnsupportedObjectType(_)),
         "{err:?}"
@@ -549,7 +634,8 @@ fn decode_valid_create_symlink_is_validated_then_unsupported() {
     tlv(&mut record, 2, 0x11, &[0x22; 32]); // node_id
     tlv(&mut record, 3, 0x10, b"target.txt"); // target utf8_string
     let bytes = patch_with_raw_op(15, &record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("deferred");
+    let ops = decode_patch_operations(&bytes).expect("decodes");
+    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
     assert!(
         matches!(err, PrikkError::UnsupportedObjectType(_)),
         "{err:?}"
@@ -563,7 +649,7 @@ fn decode_rejects_create_symlink_all_zero_node_id() {
     tlv(&mut record, 2, 0x11, &[0x00; 32]);
     tlv(&mut record, 3, 0x10, b"target.txt");
     let bytes = patch_with_raw_op(15, &record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -575,7 +661,7 @@ fn decode_rejects_create_symlink_target_wrong_wire() {
     tlv(&mut record, 2, 0x11, &[0x22; 32]);
     tlv(&mut record, 3, 0x11, b"target.txt"); // wrong wire
     let bytes = patch_with_raw_op(15, &record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -586,7 +672,20 @@ fn decode_create_symlink_via_object_encoder_is_unsupported() {
         node_id: NodeId::from_bytes([0x22; 32]),
         target: "target.txt".to_string(),
     }));
-    let err = decode_supported_patch_operations(&bytes).expect_err("deferred");
+    let ops = decode_patch_operations(&bytes).expect("decodes");
+    match &ops.first().expect("one operation").kind {
+        DecodedOperationKind::CreateSymlink {
+            path,
+            node_id,
+            target,
+        } => {
+            assert_eq!(path, "link");
+            assert_eq!(node_id.as_bytes(), &[0x22; 32]);
+            assert_eq!(target, "target.txt");
+        }
+        other => panic!("expected CreateSymlink, got {other:?}"),
+    }
+    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
     assert!(
         matches!(err, PrikkError::UnsupportedObjectType(_)),
         "{err:?}"
@@ -601,7 +700,7 @@ fn decode_rejects_replace_binary_missing_node_id() {
     tlv(&mut record, 2, 0x12, &[0x11; 32]);
     tlv(&mut record, 3, 0x12, &[0x33; 32]);
     let bytes = patch_with_raw_replace_binary(&record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -611,7 +710,7 @@ fn decode_rejects_replace_binary_missing_old_blob_id() {
     tlv(&mut record, 1, 0x11, &[0x22; 32]);
     tlv(&mut record, 3, 0x12, &[0x33; 32]);
     let bytes = patch_with_raw_replace_binary(&record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -621,7 +720,7 @@ fn decode_rejects_replace_binary_missing_new_blob_id() {
     tlv(&mut record, 1, 0x11, &[0x22; 32]);
     tlv(&mut record, 2, 0x12, &[0x11; 32]);
     let bytes = patch_with_raw_replace_binary(&record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -632,7 +731,7 @@ fn decode_rejects_replace_binary_new_blob_id_wrong_wire() {
     tlv(&mut record, 2, 0x12, &[0x11; 32]);
     tlv(&mut record, 3, 0x11, &[0x33; 32]); // new_blob_id as bytes, not object_id
     let bytes = patch_with_raw_replace_binary(&record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -641,7 +740,7 @@ fn decode_rejects_replace_binary_unknown_tag() {
     let mut record = valid_replace_binary_record();
     tlv(&mut record, 7, 0x03, &1_u32.to_be_bytes()); // unknown tag in ReplaceBinary
     let bytes = patch_with_raw_replace_binary(&record);
-    let err = decode_supported_patch_operations(&bytes).expect_err("malformed");
+    let err = decode_patch_operations(&bytes).expect_err("malformed");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -651,7 +750,7 @@ fn decode_rejects_operation_with_create_and_rename_kinds() {
     // before dispatch, so the second kind is a oneof violation, not a RenamePath
     // unsupported result).
     let bytes = patch_with_two_kind_records(10, 13);
-    let err = decode_supported_patch_operations(&bytes).expect_err("oneof");
+    let err = decode_patch_operations(&bytes).expect_err("oneof");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -684,28 +783,28 @@ fn patch_with_operation_seqs(seqs: &[(u32, u8)]) -> Vec<u8> {
 fn decode_accepts_contiguous_one_based_op_seq() {
     // Physical order 1,2,3 with op_seq 1,2,3 is the single valid encoding.
     let bytes = patch_with_operation_seqs(&[(1, 1), (2, 2), (3, 3)]);
-    let ops = decode_supported_patch_operations(&bytes).expect("valid op_seq accepts");
+    let ops = decode_patch_operations(&bytes).expect("valid op_seq accepts");
     assert_eq!(ops.len(), 3);
 }
 
 #[test]
 fn decode_rejects_op_seq_not_starting_at_one() {
     let bytes = patch_with_operation_seqs(&[(2, 1), (3, 2)]);
-    let err = decode_supported_patch_operations(&bytes).expect_err("first op_seq != 1");
+    let err = decode_patch_operations(&bytes).expect_err("first op_seq != 1");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
 #[test]
 fn decode_rejects_op_seq_gap() {
     let bytes = patch_with_operation_seqs(&[(1, 1), (3, 2)]);
-    let err = decode_supported_patch_operations(&bytes).expect_err("op_seq gap");
+    let err = decode_patch_operations(&bytes).expect_err("op_seq gap");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
 #[test]
 fn decode_rejects_op_seq_duplicate() {
     let bytes = patch_with_operation_seqs(&[(1, 1), (1, 2)]);
-    let err = decode_supported_patch_operations(&bytes).expect_err("duplicate op_seq");
+    let err = decode_patch_operations(&bytes).expect_err("duplicate op_seq");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }
 
@@ -713,6 +812,6 @@ fn decode_rejects_op_seq_duplicate() {
 fn decode_rejects_op_seq_physical_order_mismatch() {
     // Physical order carries op_seq 2 then 1; ascending order would be 1 then 2.
     let bytes = patch_with_operation_seqs(&[(2, 1), (1, 2)]);
-    let err = decode_supported_patch_operations(&bytes).expect_err("order mismatch");
+    let err = decode_patch_operations(&bytes).expect_err("order mismatch");
     assert!(matches!(err, PrikkError::MalformedData(_)), "{err:?}");
 }

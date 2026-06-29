@@ -1,12 +1,35 @@
-//! Canonical patch-operation decoder used by supported replay.
+//! Canonical patch-operation decoder: decodes every FDD-03 §9.3 operation kind
+//! into a typed [`DecodedPatchOperation`]. Decoding is structural only; whether an
+//! operation can be applied/replayed is a separate decision gated by
+//! [`ensure_apply_supported`] (review erratum P1).
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{NodeId, NodeKind, ObjectId, TEXT_SPAN_HASH_BYTES, WireType, text_span_hash};
 
 use crate::path::RepoPath;
 
+/// One decoded operation: the validated `op_seq` envelope plus the typed body.
+///
+/// FDD-03 §9.2.1 already validated `op_seq == physical position + 1` during decode,
+/// but the value is retained here (review erratum P2) for diagnostics, inverse
+/// planning, and validator messages, so promoting the body into typed variants does
+/// not discard the operation envelope.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum SupportedPatchOperation {
+pub(crate) struct DecodedPatchOperation {
+    pub(crate) op_seq: u32,
+    pub(crate) kind: DecodedOperationKind,
+}
+
+/// The decoded body of every FDD-03 §9.3 operation kind.
+///
+/// Decoding into a variant is a *structural* fact, not an *applicability* fact:
+/// review erratum P1 requires that "decoded successfully" never be read as
+/// "supported by replay/apply". The apply-supported subset is the single gate
+/// [`ensure_apply_supported`]; the not-yet-wired kinds carry their decoded fields
+/// for the node-model application increment (4.4) and are `dead_code`-allowed until
+/// then.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum DecodedOperationKind {
     /// Create a file from a persisted Blob.
     CreateFile {
         /// Repository-relative path.
@@ -18,26 +41,110 @@ pub(crate) enum SupportedPatchOperation {
         /// Mode bits.
         mode: u32,
     },
-    /// Delete a file node after verifying the old Blob precondition. Symlink-kind
-    /// deletions are unsupported by replay (CreateSymlink is likewise unsupported).
+    /// Delete a node, carrying its discriminated deletion preimage (§9.3).
     DeleteNode {
         /// Repository-relative path.
         path: String,
         /// Node identity.
         node_id: NodeId,
-        /// Previous node kind (text or binary file).
-        old_node_kind: NodeKind,
-        /// Expected old Blob object ID.
+        /// Discriminated old-state preimage (file or symlink).
+        preimage: DecodedDeletePreimage,
+    },
+    /// Span-anchored text edit (node-addressed; apply/inverse is FDD-01 §7.2.1, 4.4).
+    #[allow(dead_code)] // fields consumed by node-model application (increment 4.4)
+    EditText {
+        node_id: NodeId,
+        span_id: [u8; TEXT_SPAN_HASH_BYTES],
+        old_span_hash: [u8; TEXT_SPAN_HASH_BYTES],
+        left_anchor_hash: [u8; TEXT_SPAN_HASH_BYTES],
+        right_anchor_hash: [u8; TEXT_SPAN_HASH_BYTES],
+        replacement_text: Vec<u8>,
+        old_span_text: Vec<u8>,
+    },
+    /// Replace a binary node's blob (node-addressed; apply is 4.4).
+    #[allow(dead_code)] // fields consumed by node-model application (increment 4.4)
+    ReplaceBinary {
+        node_id: NodeId,
         old_blob_id: ObjectId,
-        /// Previous mode bits.
+        new_blob_id: ObjectId,
+    },
+    /// Rename a node (node-addressed; apply is 4.4).
+    #[allow(dead_code)] // fields consumed by node-model application (increment 4.4)
+    RenamePath {
+        node_id: NodeId,
+        old_path: String,
+        new_path: String,
+    },
+    /// Change a node's mode (node-addressed; apply is 4.4).
+    #[allow(dead_code)] // fields consumed by node-model application (increment 4.4)
+    ChangePerm {
+        node_id: NodeId,
         old_mode: u32,
+        new_mode: u32,
+    },
+    /// Create a symlink node (apply is 4.4; static target validation FDD-04 §5.4a).
+    #[allow(dead_code)] // fields consumed by node-model application (increment 4.4)
+    CreateSymlink {
+        path: String,
+        node_id: NodeId,
+        target: String,
     },
 }
 
-/// Decode the supported patch-operation subset from canonical patch payload bytes.
-pub(crate) fn decode_supported_patch_operations(
-    bytes: &[u8],
-) -> Result<Vec<SupportedPatchOperation>> {
+/// Discriminated `DeleteNode` deletion preimage (§9.3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum DecodedDeletePreimage {
+    /// Text/binary file: old blob + old mode.
+    File {
+        old_node_kind: NodeKind,
+        old_blob_id: ObjectId,
+        old_mode: u32,
+    },
+    /// Symlink: old target (apply/inverse is 4.4).
+    #[allow(dead_code)] // old_target consumed by node-model application (increment 4.4)
+    Symlink { old_target: String },
+}
+
+/// Apply-time support gate (review erratum P1). Decoding a kind says nothing about
+/// whether replay/apply can execute it; this is the *single* source of truth for the
+/// apply-supported subset. Returns `Ok(())` only for the kinds whose application is
+/// wired today (`CreateFile` and file-`DeleteNode`); every node-addressed kind whose
+/// application is deferred to the node model (increment 4.4) returns
+/// `UnsupportedObjectType`. Per review erratum P4, Phase 4 cannot be marked
+/// implementation-reconciled while any kind still returns unsupported here.
+pub(crate) fn ensure_apply_supported(operation: &DecodedPatchOperation) -> Result<()> {
+    match &operation.kind {
+        DecodedOperationKind::CreateFile { .. }
+        | DecodedOperationKind::DeleteNode {
+            preimage: DecodedDeletePreimage::File { .. },
+            ..
+        } => Ok(()),
+        DecodedOperationKind::DeleteNode {
+            preimage: DecodedDeletePreimage::Symlink { .. },
+            ..
+        } => Err(unsupported_operation("DeleteNode(symlink)")),
+        DecodedOperationKind::EditText { .. } => Err(unsupported_operation(
+            "EditText (span-anchored apply pending FDD-01 §7.2.1 + node model)",
+        )),
+        DecodedOperationKind::ReplaceBinary { .. } => Err(unsupported_operation(
+            "ReplaceBinary (node-addressed apply pending node model, increment 4.4)",
+        )),
+        DecodedOperationKind::RenamePath { .. } => Err(unsupported_operation(
+            "RenamePath (node-addressed apply pending node model, increment 4.4)",
+        )),
+        DecodedOperationKind::ChangePerm { .. } => Err(unsupported_operation(
+            "ChangePerm (node-addressed apply pending node model, increment 4.4)",
+        )),
+        DecodedOperationKind::CreateSymlink { .. } => Err(unsupported_operation(
+            "CreateSymlink (apply pending node model, increment 4.4)",
+        )),
+    }
+}
+
+/// Decode every FDD-03 §9.3 operation kind from canonical patch payload bytes into
+/// typed [`DecodedPatchOperation`]s. Decoding validates structure/identity only;
+/// applicability is gated separately by [`ensure_apply_supported`] (erratum P1).
+pub(crate) fn decode_patch_operations(bytes: &[u8]) -> Result<Vec<DecodedPatchOperation>> {
     let mut cursor = TlvCursor::new(bytes);
     let mut operations = Vec::new();
     while let Some(field) = cursor.next_field()? {
@@ -68,7 +175,7 @@ pub(crate) fn decode_supported_patch_operations(
     Ok(operations)
 }
 
-fn decode_operation(bytes: &[u8], index: usize) -> Result<SupportedPatchOperation> {
+fn decode_operation(bytes: &[u8], index: usize) -> Result<DecodedPatchOperation> {
     let mut cursor = TlvCursor::new(bytes);
     let mut op_seq = None;
     // FDD-03 §9.2: an Operation record carries exactly one operation-kind field
@@ -114,7 +221,7 @@ fn decode_operation(bytes: &[u8], index: usize) -> Result<SupportedPatchOperatio
     }
     let (kind_tag, value) =
         kind.ok_or_else(|| PrikkError::MalformedData("Operation missing kind".to_string()))?;
-    match kind_tag {
+    let kind = match kind_tag {
         10 => decode_create_file(value),
         11 => decode_delete_node(value),
         12 => decode_edit_text(value),
@@ -123,7 +230,8 @@ fn decode_operation(bytes: &[u8], index: usize) -> Result<SupportedPatchOperatio
         15 => decode_create_symlink(value),
         16 => decode_replace_binary(value),
         _ => unreachable!("kind tag is constrained to 10..=16 above"),
-    }
+    }?;
+    Ok(DecodedPatchOperation { op_seq, kind })
 }
 
 fn unsupported_operation(name: &str) -> PrikkError {
@@ -132,7 +240,7 @@ fn unsupported_operation(name: &str) -> PrikkError {
     ))
 }
 
-fn decode_create_file(bytes: &[u8]) -> Result<SupportedPatchOperation> {
+fn decode_create_file(bytes: &[u8]) -> Result<DecodedOperationKind> {
     let mut cursor = TlvCursor::new(bytes);
     let mut path = None;
     let mut node_id = None;
@@ -160,7 +268,7 @@ fn decode_create_file(bytes: &[u8]) -> Result<SupportedPatchOperation> {
         .ok_or_else(|| PrikkError::MalformedData("CreateFile missing blob_id".to_string()))?;
     let mode =
         mode.ok_or_else(|| PrikkError::MalformedData("CreateFile missing mode".to_string()))?;
-    Ok(SupportedPatchOperation::CreateFile {
+    Ok(DecodedOperationKind::CreateFile {
         path,
         node_id,
         blob_id,
@@ -168,7 +276,7 @@ fn decode_create_file(bytes: &[u8]) -> Result<SupportedPatchOperation> {
     })
 }
 
-fn decode_delete_node(bytes: &[u8]) -> Result<SupportedPatchOperation> {
+fn decode_delete_node(bytes: &[u8]) -> Result<DecodedOperationKind> {
     let mut cursor = TlvCursor::new(bytes);
     let mut path = None;
     let mut node_id = None;
@@ -213,12 +321,14 @@ fn decode_delete_node(bytes: &[u8]) -> Result<SupportedPatchOperation> {
             let old_mode = old_mode.ok_or_else(|| {
                 PrikkError::MalformedData("DeleteNode file kind missing old_mode".to_string())
             })?;
-            Ok(SupportedPatchOperation::DeleteNode {
+            Ok(DecodedOperationKind::DeleteNode {
                 path,
                 node_id,
-                old_node_kind,
-                old_blob_id,
-                old_mode,
+                preimage: DecodedDeletePreimage::File {
+                    old_node_kind,
+                    old_blob_id,
+                    old_mode,
+                },
             })
         }
         NodeKind::Symlink => {
@@ -227,17 +337,19 @@ fn decode_delete_node(bytes: &[u8]) -> Result<SupportedPatchOperation> {
                     "DeleteNode symlink kind must not carry old_blob_id/old_mode".to_string(),
                 ));
             }
-            if old_target.is_none() {
-                return Err(PrikkError::MalformedData(
-                    "DeleteNode symlink kind missing old_target".to_string(),
-                ));
-            }
-            Err(unsupported_operation("DeleteNode(symlink)"))
+            let old_target = old_target.ok_or_else(|| {
+                PrikkError::MalformedData("DeleteNode symlink kind missing old_target".to_string())
+            })?;
+            Ok(DecodedOperationKind::DeleteNode {
+                path,
+                node_id,
+                preimage: DecodedDeletePreimage::Symlink { old_target },
+            })
         }
     }
 }
 
-fn decode_edit_text(bytes: &[u8]) -> Result<SupportedPatchOperation> {
+fn decode_edit_text(bytes: &[u8]) -> Result<DecodedOperationKind> {
     // Reconcile the FDD-03 §9.3 EditText record on read (node-addressed, span-
     // anchored), then report unsupported: span-anchored application/inverse is
     // FDD-01 §7.2.1 algebra and requires node-model tracking, both later
@@ -270,13 +382,14 @@ fn decode_edit_text(bytes: &[u8]) -> Result<SupportedPatchOperation> {
             }
         }
     }
-    let _node_id =
+    let node_id =
         node_id.ok_or_else(|| PrikkError::MalformedData("EditText missing node_id".to_string()))?;
-    span_id.ok_or_else(|| PrikkError::MalformedData("EditText missing span_id".to_string()))?;
-    left_anchor_hash.ok_or_else(|| {
+    let span_id =
+        span_id.ok_or_else(|| PrikkError::MalformedData("EditText missing span_id".to_string()))?;
+    let left_anchor_hash = left_anchor_hash.ok_or_else(|| {
         PrikkError::MalformedData("EditText missing left_anchor_hash".to_string())
     })?;
-    right_anchor_hash.ok_or_else(|| {
+    let right_anchor_hash = right_anchor_hash.ok_or_else(|| {
         PrikkError::MalformedData("EditText missing right_anchor_hash".to_string())
     })?;
     let old_span_hash = old_span_hash
@@ -303,12 +416,18 @@ fn decode_edit_text(bytes: &[u8]) -> Result<SupportedPatchOperation> {
             "EditText replacement_text is not well-formed UTF-8".to_string(),
         ));
     }
-    Err(unsupported_operation(
-        "EditText (span-anchored apply pending FDD-01 §7.2.1 + node model)",
-    ))
+    Ok(DecodedOperationKind::EditText {
+        node_id,
+        span_id,
+        old_span_hash,
+        left_anchor_hash,
+        right_anchor_hash,
+        replacement_text,
+        old_span_text,
+    })
 }
 
-fn decode_rename_path(bytes: &[u8]) -> Result<SupportedPatchOperation> {
+fn decode_rename_path(bytes: &[u8]) -> Result<DecodedOperationKind> {
     // FDD-03 §9.3 RenamePath (node-addressed): node_id bytes, old_path repo_path,
     // new_path repo_path. Validate the record on read, then report unsupported
     // (application deferred to the node model, increment 4.4).
@@ -328,19 +447,22 @@ fn decode_rename_path(bytes: &[u8]) -> Result<SupportedPatchOperation> {
             }
         }
     }
-    node_id.ok_or_else(|| PrikkError::MalformedData("RenamePath missing node_id".to_string()))?;
+    let node_id = node_id
+        .ok_or_else(|| PrikkError::MalformedData("RenamePath missing node_id".to_string()))?;
     let old_path = old_path
         .ok_or_else(|| PrikkError::MalformedData("RenamePath missing old_path".to_string()))?;
     let new_path = new_path
         .ok_or_else(|| PrikkError::MalformedData("RenamePath missing new_path".to_string()))?;
     RepoPath::parse(&old_path)?;
     RepoPath::parse(&new_path)?;
-    Err(unsupported_operation(
-        "RenamePath (node-addressed apply pending node model, increment 4.4)",
-    ))
+    Ok(DecodedOperationKind::RenamePath {
+        node_id,
+        old_path,
+        new_path,
+    })
 }
 
-fn decode_change_perm(bytes: &[u8]) -> Result<SupportedPatchOperation> {
+fn decode_change_perm(bytes: &[u8]) -> Result<DecodedOperationKind> {
     // FDD-03 §9.3 ChangePerm (node-addressed): node_id bytes, old_mode u32,
     // new_mode u32. Validate the record on read, then report unsupported.
     let mut cursor = TlvCursor::new(bytes);
@@ -359,15 +481,20 @@ fn decode_change_perm(bytes: &[u8]) -> Result<SupportedPatchOperation> {
             }
         }
     }
-    node_id.ok_or_else(|| PrikkError::MalformedData("ChangePerm missing node_id".to_string()))?;
-    old_mode.ok_or_else(|| PrikkError::MalformedData("ChangePerm missing old_mode".to_string()))?;
-    new_mode.ok_or_else(|| PrikkError::MalformedData("ChangePerm missing new_mode".to_string()))?;
-    Err(unsupported_operation(
-        "ChangePerm (node-addressed apply pending node model, increment 4.4)",
-    ))
+    let node_id = node_id
+        .ok_or_else(|| PrikkError::MalformedData("ChangePerm missing node_id".to_string()))?;
+    let old_mode = old_mode
+        .ok_or_else(|| PrikkError::MalformedData("ChangePerm missing old_mode".to_string()))?;
+    let new_mode = new_mode
+        .ok_or_else(|| PrikkError::MalformedData("ChangePerm missing new_mode".to_string()))?;
+    Ok(DecodedOperationKind::ChangePerm {
+        node_id,
+        old_mode,
+        new_mode,
+    })
 }
 
-fn decode_create_symlink(bytes: &[u8]) -> Result<SupportedPatchOperation> {
+fn decode_create_symlink(bytes: &[u8]) -> Result<DecodedOperationKind> {
     // FDD-03 §9.3 CreateSymlink: path repo_path (tag 1), node_id bytes (tag 2),
     // target utf8_string (tag 3). Validate the record on read, then report
     // unsupported. Static symlink-target escape validation (FDD-04 §5.4a / §13.1)
@@ -390,16 +517,19 @@ fn decode_create_symlink(bytes: &[u8]) -> Result<SupportedPatchOperation> {
     }
     let path =
         path.ok_or_else(|| PrikkError::MalformedData("CreateSymlink missing path".to_string()))?;
-    node_id
+    let node_id = node_id
         .ok_or_else(|| PrikkError::MalformedData("CreateSymlink missing node_id".to_string()))?;
-    target.ok_or_else(|| PrikkError::MalformedData("CreateSymlink missing target".to_string()))?;
+    let target = target
+        .ok_or_else(|| PrikkError::MalformedData("CreateSymlink missing target".to_string()))?;
     RepoPath::parse(&path)?;
-    Err(unsupported_operation(
-        "CreateSymlink (apply pending node model, increment 4.4)",
-    ))
+    Ok(DecodedOperationKind::CreateSymlink {
+        path,
+        node_id,
+        target,
+    })
 }
 
-fn decode_replace_binary(bytes: &[u8]) -> Result<SupportedPatchOperation> {
+fn decode_replace_binary(bytes: &[u8]) -> Result<DecodedOperationKind> {
     // Reconcile the FDD-03 §9.3 ReplaceBinary record on read (node-addressed:
     // node_id + old_blob_id + new_blob_id, both object_id), validate the node_id and
     // blob-id presence/typing, then report unsupported. Like EditText, application is
@@ -423,17 +553,19 @@ fn decode_replace_binary(bytes: &[u8]) -> Result<SupportedPatchOperation> {
             }
         }
     }
-    node_id
+    let node_id = node_id
         .ok_or_else(|| PrikkError::MalformedData("ReplaceBinary missing node_id".to_string()))?;
-    old_blob_id.ok_or_else(|| {
+    let old_blob_id = old_blob_id.ok_or_else(|| {
         PrikkError::MalformedData("ReplaceBinary missing old_blob_id".to_string())
     })?;
-    new_blob_id.ok_or_else(|| {
+    let new_blob_id = new_blob_id.ok_or_else(|| {
         PrikkError::MalformedData("ReplaceBinary missing new_blob_id".to_string())
     })?;
-    Err(unsupported_operation(
-        "ReplaceBinary (node-addressed apply pending node model, increment 4.4)",
-    ))
+    Ok(DecodedOperationKind::ReplaceBinary {
+        node_id,
+        old_blob_id,
+        new_blob_id,
+    })
 }
 
 struct TlvCursor<'a> {

@@ -1,5 +1,229 @@
 # Changelog
 
+# Changelog
+
+## 0.1.2 — DC-09 Phase 4.4 (step 2b.2R-2: create_node nonzero guard)
+
+Pre-threading substrate hardening from the 2b.2R review (P2): `NodeLifecycleState::create_node`
+now rejects the reserved all-zero `node_id` at the central node-introduction boundary,
+matching `seed_live_node` / `seed_tombstone`, instead of relying on decode/generator
+correctness. Validation-only; both anchors unchanged. Test: `create_node_rejects_all_zero_node_id`
+(restoration-equivalent re-create with a nonzero id continues to clear the tombstone).
+
+## 0.1.2 — DC-09 Phase 4.4 (step 2b.2R: live/tombstone overlap closure)
+
+Closes a substrate P1 found in the steps 3–4 review: `NodeLifecycleState` could hold a node
+as both live and tombstoned after delete → restoration-equivalent re-create, which violated
+the cache's no-overlap invariant and would make replay-and-compare reject a correct post-
+restore cache. Model/validation correction only; both anchors unchanged.
+
+- `create_node` now clears any tombstone for the node on a restoration-equivalent
+  reintroduction, so live and tombstone sets stay disjoint (no-op for a fresh node_id).
+- `NodeLifecycleState::validate_internal_consistency` now rejects any node_id present in both
+  the live and tombstone sets.
+- `ReplayDerivedLifecycleState::from_replay` now returns `Result` and validates internal
+  consistency, so the compared rung cannot certify against a malformed reference state.
+- Tests: substrate `create -> delete -> restore` leaves the node live with no overlap and
+  passes consistency; a post-restore baseline cache (node live, no tombstone) compares equal
+  to the replayed state.
+
+## 0.1.2 — DC-09 Phase 4.4 (step 2b.2-3/4: replay-derived + compared rungs)
+
+Adds the top trust rungs and the decisive right-provenance/false-tombstone guarantee. Still a
+private, unwired slice — no apply/seal/verify path consumes a cache. Additive; both anchors
+unchanged.
+
+- **`ReplayDerivedLifecycleState`** — an authoritative replay-derived `NodeLifecycleState`
+  bound to a baseline. Must be produced only by authoritative replay over the walked chain;
+  the real producer arrives with threading, so this slice constructs it via `from_replay`.
+- **`ComparedLifecycleCache`** — a validated cache **proven equal** to authoritative replay
+  for the same baseline. `from_validated_and_replay` checks the baseline matches, rebuilds a
+  `NodeLifecycleState` from the validated cache, and requires it to equal the replayed state.
+  This is the only cache-derived rung that may participate in restoration-equivalence /
+  `node_id` reuse decisions once wired — and only because it equals replay.
+- **Decisive guarantee:** a cache with correct provenance but false live/tombstone contents
+  is rejected — the rebuilt state will not equal the replayed state (test:
+  `compared_rejects_false_tombstone`).
+- **P2-2 closed:** `ValidatedLifecycleCache::from_decoded_for_baseline` binds a cache to the
+  caller's intended baseline, so a cache valid for one checkpoint cannot be accepted where a
+  different baseline was meant.
+- `NodeLifecycleState` now derives `PartialEq`/`Eq` for the replay comparison.
+- Carry-forwards still open: P2-1 (real store resolver must distinguish a missing/unreadable
+  block from genesis — applies when the real resolver lands in threading) and P2-3 (structured
+  error taxonomy before recovery/doctor branches on classes).
+
+## 0.1.2 — DC-09 Phase 4.4 (step 2b.2-2: walked-chain provenance)
+
+Makes lifecycle-cache provenance **operational**: the `replay_window_hash` is recomputed
+over the actually walked single-parent block chain, never over cache-supplied data. Still a
+private, unwired slice — no apply/seal/verify identity decision uses a cache. Additive; both
+anchors unchanged.
+
+- **`BlockParentResolver`** — a `block_id -> Vec<ObjectId>` seam (parents in seal order;
+  empty at genesis), mirroring `BlobKindResolver`. Keeps the walk testable without a store
+  handle; the real `Block`-reading resolver arrives with threading.
+- **`DecodedLifecycleCache::verify_window_against_chain`** — walks `baseline_block_id` back
+  to `lineage_horizon_id` over single-parent links and recomputes the window hash from the
+  walked chain. Fails closed on a merge (multi-parent) block, a cycle, reaching genesis
+  before the claimed horizon, a horizon that is not repository genesis (v1 adequate-horizon
+  rule), or a hash mismatch.
+- **`ValidatedLifecycleCache::from_decoded`** now also runs provenance verification (it takes
+  both a blob and a block-parent resolver), so the `Validated` rung means structural +
+  operational-provenance + blob-kind verified — design-v3's definition — and cannot exist
+  with merely syntactic provenance.
+- Tests: matching walked chain accepted; window-hash mismatch, merge block, non-genesis
+  horizon, cycle, and genesis-before-horizon each rejected.
+
+## 0.1.2 — DC-09 Phase 4.4 (step 2b.2-1: blob-kind verification + Validated rung)
+
+Opens 4.4-2b.2 proper with the first blob-kind verification step and the first trust rung.
+Still a private, unwired codec/import slice — no apply/seal/verify identity decision uses a
+cache. Additive; both anchors unchanged.
+
+- **`BlobKindResolver`** — a small `blob_id -> Option<BlobKind>` trait. `Ok(None)` means the
+  blob is absent/unreadable and fails closed. Keeps verification testable without a store
+  handle; a real store resolver arrives with the threading slice.
+- **`ValidatedLifecycleCache`** — the first trust rung: a `DecodedLifecycleCache` whose every
+  file entry's `NodeKind` has been checked against the referenced blob's `BlobKind`, reusing
+  the canonical `NodeKind::from_file_blob_kind` rule. `from_decoded` **re-runs structural
+  validation itself** (the input is not trusted to have come from `decode`, since fields are
+  `pub(crate)`), then verifies blob kinds; a missing blob, a kind disagreement, a `SNAPSHOT`
+  blob, or a resolver error fails closed. It is documented and structured as **not authority**
+  for `node_id` reuse or restoration-equivalence — there is no method that yields such a
+  decision; those wait for the replay-derived / replay-compared rungs.
+- Tests: structural-invalid input rejected even when blob kinds resolve; Text and Binary
+  matches accepted; Text↔Binary disagreement rejected; `SNAPSHOT` blob rejected; missing blob
+  rejected; tombstone blob-kind mismatch rejected; resolver error propagated fail-closed.
+- Review follow-ups: added explicit tombstone kind/content production-encode negatives (N1);
+  verified `read_enum_u16` guards the wire type exactly once — the apparent double was two
+  distinct call sites (node_kind tag 3, parent_policy tag 4), nothing to remove (N2).
+
+## 0.1.2 — DC-09 Phase 4.4 (step 2b.2: lifecycle cache codec hardening)
+
+Corrective patch opening 4.4-2b.2, closing the 4.4-2b.1 review errata. Validation-only;
+no new data, no wiring into replay; both anchors unchanged.
+
+- **P1 — production `encode()` validates before writing.** `encode()` now runs the same
+  structural/cross-set `validate()` as `decode()` before serializing, so an internal
+  caller cannot persist a cache the importer would later reject. `validate()` is now
+  **structurally equivalent** to the decode path: beyond schema/policy/sorting/uniqueness
+  and `seen_ids == live ∪ tombstoned`, it rejects the reserved all-zero `node_id` in live,
+  tombstone, and `seen_ids` sets and rejects any kind/content discriminator mismatch,
+  reusing the substrate's `ensure_node_id_nonzero` and `validate_kind_content_shape`
+  (promoted to `pub(crate)`) rather than a parallel rule. The raw serializer is private and
+  reachable in production only through the validated `encode`; a `#[cfg(test)]`
+  `encode_unchecked` is used to craft malformed fixtures for decode negatives. Production
+  encode is proven to reject unsorted live entries, a `seen_ids` mismatch, merge policy,
+  all-zero ids (live/tombstone/seen), and file↔symlink kind/content mismatches.
+- **P2-1 — non-canonical TLV tag order rejected.** Decode now requires nondecreasing field
+  tags at both the top level and inside each node record (repeated tag 10/11 entries still
+  allowed in-region), so a persisted cache has one canonical byte form. Tests cover a
+  header field and a node-record field presented out of order.
+- **P2-2 (error taxonomy)** remains a message-class mapping for now, per the review — to be
+  promoted to a structured class before any recovery/doctor path depends on the outcomes.
+
+## 0.1.2 — DC-09 Phase 4.4 (step 2b.1: lifecycle cache codec)
+
+Adds the persisted lifecycle-cache wire format and its decoder/importer
+(`lifecycle_cache`), a derived, rebuildable accelerator for `NodeLifecycleState`. Per
+design v3 §0 the decoded value is **not validation authority**: it cannot seed a
+`node_id`-reuse decision. Additive and identity-neutral; not wired into replay; both
+anchors unchanged.
+
+- `DecodedLifecycleCache::{encode, decode}` over `PRIKK-NODE-LIFECYCLE-CACHE-v1\0` magic
+  plus canonical `FieldRecord` TLV. Wrong/short magic is rejected before TLV decode;
+  repeated live/tombstone entries use `record_list_item` (`0x21`) and an entry sent as a
+  plain `record` (`0x20`) is rejected.
+- Fail-closed structural + cross-set validation: unknown top-level/nested tags, duplicate
+  singleton fields, file/symlink discriminator (files require `blob_id`+`normalized_mode`
+  and forbid a target; symlinks require a target and forbid `blob_id`/field 5 even when
+  zero), live entries strictly sorted by canonical `repo_path` with unique path and id,
+  tombstones strictly sorted by raw `node_id`, `seen_ids` a multiple of 32 / strictly
+  ascending / nonzero, no id both live and tombstoned, and `seen_ids == live ∪ tombstoned`.
+- `compute_window_hash` fixes the exact `replay_window_hash` preimage
+  (`PRIKK-LIFECYCLE-CACHE-WINDOW-v1 || u64be(count) || raw32(block_id)…`): deterministic,
+  count-bearing, order-sensitive, domain-separated.
+- Blob-kind verification, provenance-vs-baseline staleness, replay reconstruction, and
+  replay-and-compare are deferred to the next slice; no `ValidatedLifecycleCache` /
+  `ReplayDerivedLifecycleState` / `ComparedLifecycleCache` ladder is exposed yet, so no
+  type here can be mistaken for replay-derived authority.
+
+## 0.1.2 — DC-09 Phase 4.4 (step 2a: baseline seeding substrate)
+
+Adds the baseline-seeding API to `NodeLifecycleState` and closes the substrate-level
+4.4-2 errata, so a baseline cache cannot inject node state an operation could not.
+Additive and identity-neutral; both anchors unchanged.
+
+- `seed_live_node` / `seed_tombstone` seed the live clean tree and the non-live
+  lifecycle history (`seen_ids` + `latest_tombstone_by_id`) needed for
+  restoration-equivalence across a snapshot boundary. Both reject the reserved
+  all-zero `node_id` (erratum P1-3), validate the kind/content discriminator through a
+  shared `validate_kind_content_shape` (erratum P2-2), and reject duplicate live ids,
+  duplicate live paths, and tombstones for currently-live nodes.
+- `validate_internal_consistency` now also requires every live and every tombstoned
+  `node_id` to be recorded as seen (erratum P1-4, whole-state check).
+- `rename_node` gains the same path-index lockstep guard as `delete_node` (erratum
+  P2-1), failing closed rather than silently healing a desynchronised index.
+- Tests raised to 24: cross-boundary restoration-equivalence accept and non-equivalent
+  reject (the identity-resurrection case), all-zero seed rejection, duplicate id/path
+  rejection, tombstone-for-live rejection, and seed kind/content rejection.
+- Deferred to the next slice (cache format + threading): cache provenance/staleness
+  binding (P1-1), the materialization-bytes vs lifecycle-identity payload split (P1-2),
+  the symlink `normalized_mode == 0` parse check, and threading `NodeLifecycleState`
+  through replay/inverse/rollback.
+
+## 0.1.2 — DC-09 Phase 4.4 (step 1: node lifecycle substrate)
+
+Introduces the node-aware replay substrate. Additive and identity-neutral: a new
+isolated module with no changes to any object/payload/encode path; both identity
+anchors are unchanged.
+
+- Added `prikk-store::node_lifecycle`: a derived, rebuildable `NodeLifecycleState`
+  (`live_by_id` / `path_to_id` / `latest_tombstone_by_id` / `seen_ids`) that is
+  explicitly **not a root of trust** (FDD-02 §12). It centralises the node rules so
+  replay/inverse/rollback cannot diverge on them: per-`CleanTree` live-node
+  uniqueness, rejection of currently-live `node_id` reuse, restoration-equivalence of
+  a non-live reintroduced `node_id` to its latest deletion preimage (kind, content
+  payload, mode, path — non-liveness necessary but not sufficient, DC-09a §4), and
+  `node_id` preservation across rename.
+- Review errata: `create_node` fails closed on an inconsistent kind/content
+  discriminator (symlink-as-file or file-as-symlink); the path index is keyed by the
+  canonical `RepoPath`; `delete_node` enforces `live_by_id`/`path_to_id` lockstep; and
+  a `validate_internal_consistency()` helper checks the live-node bijection (for
+  assertions and the 4.6 deep-verify validator).
+- 17 unit tests covering uniqueness, live-reuse rejection, restoration-equivalence
+  (file accept plus blob/mode/path/kind-mismatch rejects; symlink target match and
+  mismatch), kind/content discriminator rejection, rename id-preservation and
+  occupied-target rejection, non-live delete/rename rejection, and the consistency
+  helper.
+- The module is `dead_code`-allowed at declaration: it is threaded into the replay
+  pipeline in the next 4.4 step (which first settles how the clean-tree baseline
+  carries node identity).
+
+## 0.1.2 — DC-09 Phase 4.3 (store decode-model promotion)
+
+Promotes the store patch decoder from a two-variant, path-keyed supported subset
+into a typed node-addressed stream over all seven FDD-03 §9.3 operation kinds.
+Identity-neutral: the empty-PATCH anchor and populated framing vector are unchanged.
+Applies design-review errata P1 (decode success must not imply apply support) and P2
+(retain validated `op_seq`).
+
+- Replaced `SupportedPatchOperation` with `DecodedPatchOperation { op_seq, kind }` and a
+  seven-variant `DecodedOperationKind` (plus a discriminated `DecodedDeletePreimage`),
+  and renamed `decode_supported_patch_operations` -> `decode_patch_operations`. Every
+  well-formed §9.3 kind now decodes into its typed variant; symlink `DeleteNode` and the
+  four other node-addressed kinds are no longer rejected at decode time.
+- Added `ensure_apply_supported` as the single apply-support gate (erratum P1): decode
+  is structural, applicability is a separate decision. Audited all callers — `patch_replay`
+  apply and `patch_inverse` derivation gate before matching; `rollback_verify` now gates
+  each decoded operation explicitly rather than relying on decode success to prove
+  replayability.
+- Retained validated `op_seq` in the decoded wrapper (erratum P2).
+- Migrated decode tests: malformed/oneof/all-zero-`node_id`/wrong-wire negatives remain
+  decode errors; each of the seven well-formed kinds asserts its typed decoded variant
+  **and full decoded field values** (review erratum E1, so 4.4 application can depend on
+  them), and the not-yet-wired kinds assert `UnsupportedObjectType` at the apply gate.
+
 ## 0.1.1 Housekeeping
 
 Repository structure and developer-ergonomics pass. No identity-byte or behavior

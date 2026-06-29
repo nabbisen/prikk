@@ -15,7 +15,10 @@ use prikk_object::{
 
 use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
-use crate::patch_replay::decode::{SupportedPatchOperation, decode_supported_patch_operations};
+use crate::patch_replay::decode::{
+    DecodedDeletePreimage, DecodedOperationKind, DecodedPatchOperation, decode_patch_operations,
+    ensure_apply_supported,
+};
 
 mod read;
 
@@ -110,7 +113,7 @@ pub fn prepare_patch_inverse_plan(
         }
         for patch_id in block.patch_ids {
             let patch = read_patch(&object_store, patch_id)?;
-            let operations = decode_supported_patch_operations(&patch.canonical_payload)?;
+            let operations = decode_patch_operations(&patch.canonical_payload)?;
             for operation in operations {
                 let inverse = derive_inverse_operation(&object_store, &mut files, operation)?;
                 inverse_operations.push(inverse);
@@ -149,10 +152,14 @@ pub fn prepare_patch_inverse_plan(
 fn derive_inverse_operation(
     object_store: &FileObjectStore,
     files: &mut BTreeMap<String, Vec<u8>>,
-    operation: SupportedPatchOperation,
+    operation: DecodedPatchOperation,
 ) -> Result<Operation> {
-    match operation {
-        SupportedPatchOperation::CreateFile {
+    // Erratum P1: inverse derivation is an application; gate the apply-supported
+    // subset before matching. Inverse of the node-addressed kinds is FDD-01 §7.2
+    // and lands with the node model (increment 4.4).
+    ensure_apply_supported(&operation)?;
+    match operation.kind {
+        DecodedOperationKind::CreateFile {
             path,
             node_id,
             blob_id,
@@ -180,12 +187,15 @@ fn derive_inverse_operation(
                 }),
             })
         }
-        SupportedPatchOperation::DeleteNode {
+        DecodedOperationKind::DeleteNode {
             path,
             node_id,
-            old_node_kind,
-            old_blob_id,
-            old_mode,
+            preimage:
+                DecodedDeletePreimage::File {
+                    old_node_kind,
+                    old_blob_id,
+                    old_mode,
+                },
         } => {
             let old_bytes = files.get(&path).ok_or_else(|| {
                 PrikkError::Integrity(format!("DeleteNode path is absent: {path}"))
@@ -208,6 +218,9 @@ fn derive_inverse_operation(
                 }),
             })
         }
+        _ => unreachable!(
+            "ensure_apply_supported admits only CreateFile and file-DeleteNode for inverse"
+        ),
     }
 }
 

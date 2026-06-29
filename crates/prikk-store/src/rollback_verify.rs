@@ -11,7 +11,7 @@ use prikk_object::{CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType};
 
 use crate::layout::RepositoryLayout;
 use crate::patch_inverse::prepare_patch_inverse_plan;
-use crate::patch_replay::decode::decode_supported_patch_operations;
+use crate::patch_replay::decode::{decode_patch_operations, ensure_apply_supported};
 use crate::rollback_draft::is_rollback_draft_envelope;
 use crate::wal::{Wal, WalRecord};
 
@@ -67,7 +67,13 @@ pub fn verify_active_rollback_draft(
             "active rollback draft payload does not match the current inverse plan".to_string(),
         ));
     }
-    let decoded = decode_supported_patch_operations(&record.envelope.canonical_payload)?;
+    let decoded = decode_patch_operations(&record.envelope.canonical_payload)?;
+    // Erratum P1: decoding all §9.3 kinds does not prove the draft is replayable. A
+    // rollback draft must consist only of apply-supported operations; gate explicitly
+    // rather than relying on decode success.
+    for operation in &decoded {
+        ensure_apply_supported(operation)?;
+    }
     if decoded.len() != inverse.inverse_operation_count {
         return Err(PrikkError::Integrity(format!(
             "rollback draft decoded {} operations but inverse plan has {}",
@@ -119,7 +125,11 @@ pub(crate) fn verify_rollback_patch_envelope(
             envelope.object_type
         )));
     }
-    let decoded = decode_supported_patch_operations(&envelope.canonical_payload)?;
+    let decoded = decode_patch_operations(&envelope.canonical_payload)?;
+    // Erratum P1: require apply-support, not merely decodability.
+    for operation in &decoded {
+        ensure_apply_supported(operation)?;
+    }
     if decoded.is_empty() {
         return Err(PrikkError::Integrity(format!(
             "{context} has no supported inverse operations"

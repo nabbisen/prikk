@@ -22,8 +22,16 @@ mod file_codec;
 mod fsutil;
 mod history;
 mod layout;
+// Lifecycle cache codec/importer (DC-09 Phase 4.4-2b.1). Not wired into replay yet;
+// `dead_code` allowed until the reconstruct/compare + threading slice.
+#[allow(dead_code)]
+mod lifecycle_cache;
 mod lock;
 mod memory_store;
+// Node-aware replay substrate (DC-09 Phase 4.4). Threaded into replay/inverse/
+// rollback in the following increment; `dead_code` allowed until that wiring lands.
+#[allow(dead_code)]
+mod node_lifecycle;
 mod object_store;
 mod patch_checkout;
 mod patch_inverse;

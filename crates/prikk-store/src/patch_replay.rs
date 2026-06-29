@@ -20,7 +20,10 @@ use crate::path::RepoPath;
 use crate::refs::RefStore;
 use crate::snapshot::{SnapshotEntry, SnapshotManifest};
 
-use decode::{SupportedPatchOperation, decode_supported_patch_operations};
+use decode::{
+    DecodedDeletePreimage, DecodedOperationKind, DecodedPatchOperation, decode_patch_operations,
+    ensure_apply_supported,
+};
 
 /// Read-only result of replaying supported patch operations to an in-memory snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,14 +126,9 @@ pub(crate) fn replay_supported_patch_chain(
         }
         for patch_id in block.patch_ids {
             let patch = read_patch(&object_store, patch_id)?;
-            let operations = decode_supported_patch_operations(&patch.canonical_payload)?;
+            let operations = decode_patch_operations(&patch.canonical_payload)?;
             for operation in operations {
-                apply_supported_operation(
-                    &object_store,
-                    &mut files,
-                    &mut deleted_files,
-                    operation,
-                )?;
+                apply_decoded_operation(&object_store, &mut files, &mut deleted_files, operation)?;
                 applied_operation_count += 1;
             }
             patch_count += 1;
@@ -241,14 +239,18 @@ fn files_to_manifest(files: BTreeMap<String, Vec<u8>>) -> Result<SnapshotManifes
     Ok(SnapshotManifest { files: entries })
 }
 
-fn apply_supported_operation(
+fn apply_decoded_operation(
     object_store: &FileObjectStore,
     files: &mut BTreeMap<String, Vec<u8>>,
     deleted_files: &mut BTreeMap<String, PatchReplayDeletedFile>,
-    operation: SupportedPatchOperation,
+    operation: DecodedPatchOperation,
 ) -> Result<()> {
-    match operation {
-        SupportedPatchOperation::CreateFile {
+    // Erratum P1: decode success does not imply applicability. The apply-supported
+    // subset is gated here as the single source of truth; the match below only needs
+    // to handle the kinds the gate admits.
+    ensure_apply_supported(&operation)?;
+    match operation.kind {
+        DecodedOperationKind::CreateFile {
             path,
             node_id: _,
             blob_id,
@@ -263,12 +265,15 @@ fn apply_supported_operation(
             deleted_files.remove(&path);
             files.insert(path, bytes);
         }
-        SupportedPatchOperation::DeleteNode {
+        DecodedOperationKind::DeleteNode {
             path,
             node_id: _,
-            old_node_kind,
-            old_blob_id,
-            old_mode: _,
+            preimage:
+                DecodedDeletePreimage::File {
+                    old_node_kind,
+                    old_blob_id,
+                    old_mode: _,
+                },
         } => {
             let old_bytes = files.get(&path).ok_or_else(|| {
                 PrikkError::Integrity(format!("DeleteNode path is absent: {path}"))
@@ -287,6 +292,9 @@ fn apply_supported_operation(
             files.remove(&path);
             deleted_files.insert(path, deleted);
         }
+        _ => unreachable!(
+            "ensure_apply_supported admits only CreateFile and file-DeleteNode for replay"
+        ),
     }
     Ok(())
 }

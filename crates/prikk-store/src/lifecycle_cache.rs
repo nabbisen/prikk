@@ -1,0 +1,775 @@
+//! Lifecycle cache codec and importer (DC-09 Phase 4.4-2b.1).
+//!
+//! A persisted, **non-identity-bearing, rebuildable** accelerator for
+//! `NodeLifecycleState` (FDD-02 §12; design v3). This module only decodes and
+//! *structurally* validates a cache into a [`DecodedLifecycleCache`]; per design v3 §0
+//! that type is **not validation authority** — it cannot seed an accept/reject `node_id`
+//! reuse decision. Blob-kind verification (against a resolver), provenance-vs-baseline
+//! staleness, and replay reconstruction/compare are later slices; until then there is no
+//! type here that an identity decision can consume.
+//!
+//! Wire format: ascii magic `PRIKK-NODE-LIFECYCLE-CACHE-v1\0` followed by canonical
+//! `FieldRecord` TLV (design v3 wire table). Deterministic, versioned, and validated
+//! fail-closed: any structural or cross-set violation is rejected.
+
+use prikk_error::{PrikkError, Result};
+use prikk_object::{BlobKind, CanonicalWriter, NodeId, NodeKind, ObjectId, WireType};
+
+use crate::byte_cursor::ByteCursor;
+use crate::node_lifecycle::{LiveNode, NodeContent, NodeLifecycleState, Tombstone};
+
+const LIFECYCLE_CACHE_MAGIC: &[u8] = b"PRIKK-NODE-LIFECYCLE-CACHE-v1\0";
+const WINDOW_HASH_DOMAIN: &[u8] = b"PRIKK-LIFECYCLE-CACHE-WINDOW-v1";
+const CACHE_SCHEMA_VERSION: u32 = 1;
+
+/// Parent-policy of the derivation window (design v3 §3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ParentPolicy {
+    /// Single-parent authoritative lineage segment (the only v1 policy).
+    SingleParent,
+    /// Reserved for DC-13 merge-aware baselines; rejected (fail closed) in v1.
+    Dc13MergeAware,
+}
+
+impl ParentPolicy {
+    const fn code(self) -> u16 {
+        match self {
+            Self::SingleParent => 1,
+            Self::Dc13MergeAware => 2,
+        }
+    }
+
+    fn from_code(code: u16) -> Result<Self> {
+        match code {
+            1 => Ok(Self::SingleParent),
+            2 => Ok(Self::Dc13MergeAware),
+            other => Err(malformed(format!("unknown parent_policy code {other}"))),
+        }
+    }
+}
+
+/// Compute the exact `replay_window_hash` preimage (design v3 §P1-3):
+/// `SHA-256(domain || u64be(count) || raw32(block_id_0) || … || raw32(block_id_n))`,
+/// with `block_id_0 == lineage_horizon_id` and `block_id_n == baseline_block_id`. The
+/// caller is responsible for supplying the *actual* walked single-parent chain.
+pub(crate) fn compute_window_hash(ordered_block_ids: &[ObjectId]) -> [u8; 32] {
+    let mut preimage =
+        Vec::with_capacity(WINDOW_HASH_DOMAIN.len() + 8 + ordered_block_ids.len() * 32);
+    preimage.extend_from_slice(WINDOW_HASH_DOMAIN);
+    preimage.extend_from_slice(&(ordered_block_ids.len() as u64).to_be_bytes());
+    for block_id in ordered_block_ids {
+        preimage.extend_from_slice(block_id.as_bytes());
+    }
+    prikk_hash::sha256(&preimage)
+}
+
+/// A decoded, structurally + cross-set validated lifecycle cache. **Not** authority for
+/// identity decisions (design v3 §0).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DecodedLifecycleCache {
+    pub(crate) schema_version: u32,
+    pub(crate) baseline_block_id: ObjectId,
+    pub(crate) lineage_horizon_id: ObjectId,
+    pub(crate) parent_policy: ParentPolicy,
+    pub(crate) replay_window_hash: [u8; 32],
+    pub(crate) snapshot_blob_id: Option<ObjectId>,
+    pub(crate) live_entries: Vec<(NodeId, LiveNode)>,
+    pub(crate) tombstones: Vec<(NodeId, Tombstone)>,
+    pub(crate) seen_ids: Vec<NodeId>,
+}
+
+impl DecodedLifecycleCache {
+    /// Encode to the persisted wire form (magic || canonical TLV) **after** fail-closed
+    /// validation. Production callers use this: it refuses to persist a cache the importer
+    /// would later reject (erratum P1).
+    pub(crate) fn encode(&self) -> Result<Vec<u8>> {
+        self.validate()?;
+        self.serialize()
+    }
+
+    /// Raw serializer with no validation. Private; reached only through [`Self::encode`]
+    /// in production (which validates first) and through the test-only fixture path.
+    fn serialize(&self) -> Result<Vec<u8>> {
+        let mut writer = CanonicalWriter::new();
+        writer.field_u32(1, self.schema_version)?;
+        writer.field_object_id(2, &self.baseline_block_id)?;
+        writer.field_object_id(3, &self.lineage_horizon_id)?;
+        writer.field_enum_u16(4, self.parent_policy.code())?;
+        writer.field_bytes(5, &self.replay_window_hash)?;
+        if let Some(snapshot) = &self.snapshot_blob_id {
+            writer.field_object_id(6, snapshot)?;
+        }
+        for (node_id, node) in &self.live_entries {
+            let record = encode_node_record(node_id, &node.path, node.kind, &node.content)?;
+            writer.field_raw(10, WireType::RecordListItem, &record)?;
+        }
+        for (node_id, tombstone) in &self.tombstones {
+            let record =
+                encode_node_record(node_id, &tombstone.path, tombstone.kind, &tombstone.content)?;
+            writer.field_raw(11, WireType::RecordListItem, &record)?;
+        }
+        let mut seen_bytes = Vec::with_capacity(self.seen_ids.len() * 32);
+        for id in &self.seen_ids {
+            seen_bytes.extend_from_slice(id.as_bytes());
+        }
+        writer.field_bytes(12, &seen_bytes)?;
+
+        let mut out = LIFECYCLE_CACHE_MAGIC.to_vec();
+        out.extend_from_slice(&writer.finish());
+        Ok(out)
+    }
+
+    /// Test-only: serialize without validation, to craft malformed fixtures for decode
+    /// negatives. Never reachable in production.
+    #[cfg(test)]
+    fn encode_unchecked(&self) -> Result<Vec<u8>> {
+        self.serialize()
+    }
+
+    /// Decode and fully validate a persisted cache. Fail-closed on any structural or
+    /// cross-set violation. Does **not** perform blob-kind verification (later slice).
+    pub(crate) fn decode(bytes: &[u8]) -> Result<Self> {
+        let Some(body) = bytes.strip_prefix(LIFECYCLE_CACHE_MAGIC) else {
+            return Err(malformed(
+                "missing or wrong lifecycle-cache magic".to_string(),
+            ));
+        };
+
+        let mut cursor = ByteCursor::new(body);
+        let mut schema_version: Option<u32> = None;
+        let mut baseline_block_id: Option<ObjectId> = None;
+        let mut lineage_horizon_id: Option<ObjectId> = None;
+        let mut parent_policy: Option<ParentPolicy> = None;
+        let mut replay_window_hash: Option<[u8; 32]> = None;
+        let mut snapshot_blob_id: Option<ObjectId> = None;
+        let mut seen_raw: Option<Vec<u8>> = None;
+        let mut live_entries: Vec<(NodeId, LiveNode)> = Vec::new();
+        let mut tombstones: Vec<(NodeId, Tombstone)> = Vec::new();
+
+        let mut last_tag: Option<u16> = None;
+        while let Some(field) = next_field(&mut cursor)? {
+            ensure_nondecreasing_tag(&mut last_tag, field.tag)?;
+            match field.tag {
+                1 => set_once(&mut schema_version, read_u32(&field)?, "schema_version")?,
+                2 => set_once(&mut baseline_block_id, read_object_id(&field)?, "baseline")?,
+                3 => set_once(&mut lineage_horizon_id, read_object_id(&field)?, "horizon")?,
+                4 => set_once(
+                    &mut parent_policy,
+                    ParentPolicy::from_code(read_enum_u16(&field)?)?,
+                    "parent_policy",
+                )?,
+                5 => set_once(&mut replay_window_hash, read_hash32(&field)?, "window_hash")?,
+                6 => set_once(&mut snapshot_blob_id, read_object_id(&field)?, "snapshot")?,
+                10 => {
+                    require_wire(&field, WireType::RecordListItem)?;
+                    live_entries.push(decode_live_entry(field.value)?);
+                }
+                11 => {
+                    require_wire(&field, WireType::RecordListItem)?;
+                    tombstones.push(decode_tombstone(field.value)?);
+                }
+                12 => {
+                    require_wire(&field, WireType::Bytes)?;
+                    set_once(&mut seen_raw, field.value.to_vec(), "seen_ids")?;
+                }
+                other => return Err(malformed(format!("unknown lifecycle-cache tag {other}"))),
+            }
+        }
+
+        let cache = Self {
+            schema_version: schema_version
+                .ok_or_else(|| malformed("missing schema_version".to_string()))?,
+            baseline_block_id: baseline_block_id
+                .ok_or_else(|| malformed("missing baseline_block_id".to_string()))?,
+            lineage_horizon_id: lineage_horizon_id
+                .ok_or_else(|| malformed("missing lineage_horizon_id".to_string()))?,
+            parent_policy: parent_policy
+                .ok_or_else(|| malformed("missing parent_policy".to_string()))?,
+            replay_window_hash: replay_window_hash
+                .ok_or_else(|| malformed("missing replay_window_hash".to_string()))?,
+            snapshot_blob_id,
+            live_entries,
+            tombstones,
+            seen_ids: decode_seen_ids(
+                &seen_raw.ok_or_else(|| malformed("missing seen_ids".to_string()))?,
+            )?,
+        };
+        cache.validate()?;
+        Ok(cache)
+    }
+
+    /// Structural + cross-set validation (design v3 §P1-2/§P1-6). Provenance staleness
+    /// (window-hash vs the real chain) and blob-kind verification are caller/later-slice
+    /// concerns and are deliberately not done here.
+    fn validate(&self) -> Result<()> {
+        if self.schema_version != CACHE_SCHEMA_VERSION {
+            return Err(stale_provenance(format!(
+                "unsupported lifecycle-cache schema_version {}",
+                self.schema_version
+            )));
+        }
+        if self.parent_policy != ParentPolicy::SingleParent {
+            return Err(stale_provenance(
+                "lifecycle cache parent_policy is not single_parent (merge deferred to DC-13)"
+                    .to_string(),
+            ));
+        }
+
+        // live_entries: sorted by canonical repo_path, unique path and unique node_id.
+        let mut prev_path: Option<&str> = None;
+        let mut live_ids = std::collections::BTreeSet::new();
+        for (node_id, node) in &self.live_entries {
+            validate_node_record_shape(*node_id, node.kind, &node.content)?;
+            let path = node.path.as_str();
+            if let Some(previous) = prev_path {
+                if path <= previous {
+                    return Err(malformed(
+                        "live_entries not strictly sorted by repo_path".to_string(),
+                    ));
+                }
+            }
+            prev_path = Some(path);
+            if !live_ids.insert(*node_id) {
+                return Err(malformed("duplicate live node_id".to_string()));
+            }
+        }
+
+        // tombstones: sorted by raw node_id, unique node_id.
+        let mut prev_tomb: Option<NodeId> = None;
+        let mut tomb_ids = std::collections::BTreeSet::new();
+        for (node_id, tombstone) in &self.tombstones {
+            validate_node_record_shape(*node_id, tombstone.kind, &tombstone.content)?;
+            if let Some(previous) = prev_tomb {
+                if node_id.as_bytes() <= previous.as_bytes() {
+                    return Err(malformed(
+                        "tombstones not strictly sorted by node_id".to_string(),
+                    ));
+                }
+            }
+            prev_tomb = Some(*node_id);
+            if !tomb_ids.insert(*node_id) {
+                return Err(malformed("duplicate tombstone node_id".to_string()));
+            }
+        }
+
+        // No id both live and tombstoned.
+        if live_ids.intersection(&tomb_ids).next().is_some() {
+            return Err(malformed(
+                "node_id appears in both live and tombstone sets".to_string(),
+            ));
+        }
+
+        // seen_ids strictly ascending + equals exactly live ∪ tombstoned.
+        let mut prev_seen: Option<NodeId> = None;
+        let mut seen_set = std::collections::BTreeSet::new();
+        for id in &self.seen_ids {
+            crate::node_lifecycle::ensure_node_id_nonzero(*id)?;
+            if let Some(previous) = prev_seen {
+                if id.as_bytes() <= previous.as_bytes() {
+                    return Err(malformed("seen_ids not strictly ascending".to_string()));
+                }
+            }
+            prev_seen = Some(*id);
+            seen_set.insert(*id);
+        }
+        let union: std::collections::BTreeSet<NodeId> =
+            live_ids.union(&tomb_ids).copied().collect();
+        if seen_set != union {
+            return Err(malformed(
+                "seen_ids must equal exactly live ∪ tombstoned".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Operational provenance (4.4-2b.2 step 2): recompute `replay_window_hash` over the
+    /// **actually walked** single-parent block chain from `baseline_block_id` back to
+    /// `lineage_horizon_id`, never over cache-supplied block ids. Fails closed on a merge
+    /// (multi-parent) block, a cycle, reaching genesis before the claimed horizon, a horizon
+    /// that is not repository genesis (v1 adequate-horizon rule), or a hash mismatch.
+    fn verify_window_against_chain(&self, resolver: &impl BlockParentResolver) -> Result<()> {
+        let horizon = self.lineage_horizon_id;
+        let baseline = self.baseline_block_id;
+
+        // Walk baseline -> horizon, collecting baseline-first (reversed for the preimage).
+        let mut chain = vec![baseline];
+        let mut visited = std::collections::BTreeSet::new();
+        visited.insert(*baseline.as_bytes());
+        let mut current = baseline;
+        while current != horizon {
+            let parents = resolver.parent_block_ids(&current)?;
+            let parent = match parents.as_slice() {
+                [single] => *single,
+                [] => {
+                    return Err(stale_provenance(
+                        "reached genesis before the claimed lineage horizon".to_string(),
+                    ));
+                }
+                _ => {
+                    return Err(stale_provenance(
+                        "merge block in v1 single-parent lineage window".to_string(),
+                    ));
+                }
+            };
+            if !visited.insert(*parent.as_bytes()) {
+                return Err(stale_provenance("cycle in block lineage".to_string()));
+            }
+            chain.push(parent);
+            current = parent;
+        }
+
+        // v1 adequate-horizon rule: the horizon must be repository genesis (no parent block).
+        if !resolver.parent_block_ids(&horizon)?.is_empty() {
+            return Err(stale_provenance(
+                "lineage horizon is not repository genesis (v1 requires a genesis horizon)"
+                    .to_string(),
+            ));
+        }
+
+        chain.reverse(); // now [horizon, .., baseline] == [block_id_0 .. block_id_n]
+        if compute_window_hash(&chain) != self.replay_window_hash {
+            return Err(stale_provenance(
+                "replay_window_hash does not match the walked single-parent chain".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+// --- field-level codec helpers ---
+
+struct Field<'a> {
+    tag: u16,
+    wire: u8,
+    value: &'a [u8],
+}
+
+fn next_field<'a>(cursor: &mut ByteCursor<'a>) -> Result<Option<Field<'a>>> {
+    if cursor.is_finished() {
+        return Ok(None);
+    }
+    let tag = cursor.read_u16()?;
+    let wire = cursor.read_array::<1>()?[0];
+    let len = usize::try_from(cursor.read_u64()?)
+        .map_err(|_| malformed("field length exceeds usize".to_string()))?;
+    let value = cursor.read_exact(len)?;
+    Ok(Some(Field { tag, wire, value }))
+}
+
+/// Reject a node record whose `node_id` is the reserved all-zero value or whose
+/// `kind`/`content` disagree — the same rule the substrate enforces at every seeding
+/// boundary, so a production-encoded cache is structurally equivalent to a decoded one.
+fn validate_node_record_shape(
+    node_id: NodeId,
+    kind: NodeKind,
+    content: &NodeContent,
+) -> Result<()> {
+    crate::node_lifecycle::ensure_node_id_nonzero(node_id)?;
+    crate::node_lifecycle::validate_kind_content_shape(kind, content)?;
+    Ok(())
+}
+
+fn ensure_nondecreasing_tag(last: &mut Option<u16>, tag: u16) -> Result<()> {
+    if let Some(prev) = *last {
+        if tag < prev {
+            return Err(malformed(format!(
+                "non-canonical TLV tag order: {tag} after {prev}"
+            )));
+        }
+    }
+    *last = Some(tag);
+    Ok(())
+}
+
+fn require_wire(field: &Field<'_>, expected: WireType) -> Result<()> {
+    if field.wire == expected as u8 {
+        Ok(())
+    } else {
+        Err(malformed(format!(
+            "tag {} has wire type 0x{:02x}, expected 0x{:02x}",
+            field.tag, field.wire, expected as u8
+        )))
+    }
+}
+
+fn set_once<T>(slot: &mut Option<T>, value: T, name: &str) -> Result<()> {
+    if slot.is_some() {
+        return Err(malformed(format!("duplicate singleton field {name}")));
+    }
+    *slot = Some(value);
+    Ok(())
+}
+
+fn read_u32(field: &Field<'_>) -> Result<u32> {
+    require_wire(field, WireType::U32)?;
+    let array: [u8; 4] = field
+        .value
+        .try_into()
+        .map_err(|_| malformed("u32 field wrong length".to_string()))?;
+    Ok(u32::from_be_bytes(array))
+}
+
+fn read_enum_u16(field: &Field<'_>) -> Result<u16> {
+    require_wire(field, WireType::EnumU16)?;
+    let array: [u8; 2] = field
+        .value
+        .try_into()
+        .map_err(|_| malformed("enum_u16 field wrong length".to_string()))?;
+    Ok(u16::from_be_bytes(array))
+}
+
+fn read_object_id(field: &Field<'_>) -> Result<ObjectId> {
+    require_wire(field, WireType::ObjectId)?;
+    let array: [u8; 32] = field
+        .value
+        .try_into()
+        .map_err(|_| malformed("object_id field wrong length".to_string()))?;
+    Ok(ObjectId::from_bytes(array))
+}
+
+fn read_hash32(field: &Field<'_>) -> Result<[u8; 32]> {
+    require_wire(field, WireType::Bytes)?;
+    field
+        .value
+        .try_into()
+        .map_err(|_| malformed("expected 32-byte hash".to_string()))
+}
+
+fn read_node_id_bytes(field: &Field<'_>) -> Result<NodeId> {
+    require_wire(field, WireType::Bytes)?;
+    let array: [u8; 32] = field
+        .value
+        .try_into()
+        .map_err(|_| malformed("node_id field wrong length".to_string()))?;
+    NodeId::try_from_bytes(array)
+}
+
+fn read_repo_path(field: &Field<'_>) -> Result<crate::path::RepoPath> {
+    require_wire(field, WireType::RepoPath)?;
+    let text = core::str::from_utf8(field.value)
+        .map_err(|_| malformed("repo_path is not UTF-8".to_string()))?;
+    crate::path::RepoPath::parse(text)
+}
+
+fn read_symlink_target(field: &Field<'_>) -> Result<String> {
+    require_wire(field, WireType::String)?;
+    let text = core::str::from_utf8(field.value)
+        .map_err(|_| malformed("symlink target is not UTF-8".to_string()))?;
+    Ok(text.to_string())
+}
+
+/// Shared node-record body decode (file/symlink discriminator). Used for both live and
+/// tombstone records — the wire shape is identical (path, node_id, kind, content).
+fn decode_node_record(
+    bytes: &[u8],
+) -> Result<(NodeId, crate::path::RepoPath, NodeKind, NodeContent)> {
+    let mut cursor = ByteCursor::new(bytes);
+    let mut path: Option<crate::path::RepoPath> = None;
+    let mut node_id: Option<NodeId> = None;
+    let mut node_kind: Option<NodeKind> = None;
+    let mut blob_id: Option<ObjectId> = None;
+    let mut mode: Option<u32> = None;
+    let mut target: Option<String> = None;
+
+    let mut last_tag: Option<u16> = None;
+    while let Some(field) = next_field(&mut cursor)? {
+        ensure_nondecreasing_tag(&mut last_tag, field.tag)?;
+        match field.tag {
+            1 => set_once(&mut path, read_repo_path(&field)?, "path")?,
+            2 => set_once(&mut node_id, read_node_id_bytes(&field)?, "node_id")?,
+            3 => set_once(
+                &mut node_kind,
+                NodeKind::from_code(read_enum_u16(&field)?)?,
+                "node_kind",
+            )?,
+            4 => set_once(&mut blob_id, read_object_id(&field)?, "blob_id")?,
+            5 => set_once(&mut mode, read_u32(&field)?, "normalized_mode")?,
+            6 => set_once(&mut target, read_symlink_target(&field)?, "symlink_target")?,
+            other => return Err(malformed(format!("unknown node-record tag {other}"))),
+        }
+    }
+
+    let path = path.ok_or_else(|| malformed("node record missing path".to_string()))?;
+    let node_id = node_id.ok_or_else(|| malformed("node record missing node_id".to_string()))?;
+    let node_kind =
+        node_kind.ok_or_else(|| malformed("node record missing node_kind".to_string()))?;
+
+    let content = match node_kind {
+        NodeKind::TextFile | NodeKind::BinaryFile => {
+            if target.is_some() {
+                return Err(malformed(
+                    "file node record must not carry a symlink target".to_string(),
+                ));
+            }
+            let blob_id =
+                blob_id.ok_or_else(|| malformed("file node record missing blob_id".to_string()))?;
+            let mode = mode
+                .ok_or_else(|| malformed("file node record missing normalized_mode".to_string()))?;
+            NodeContent::File { blob_id, mode }
+        }
+        NodeKind::Symlink => {
+            // Design v3 §P1-4: symlink entries forbid field 5 (and blob_id) entirely.
+            if blob_id.is_some() || mode.is_some() {
+                return Err(malformed(
+                    "symlink node record must not carry blob_id or normalized_mode".to_string(),
+                ));
+            }
+            let target = target
+                .ok_or_else(|| malformed("symlink node record missing target".to_string()))?;
+            NodeContent::Symlink { target }
+        }
+    };
+    Ok((node_id, path, node_kind, content))
+}
+
+fn decode_live_entry(bytes: &[u8]) -> Result<(NodeId, LiveNode)> {
+    let (node_id, path, kind, content) = decode_node_record(bytes)?;
+    Ok((
+        node_id,
+        LiveNode {
+            path,
+            kind,
+            content,
+        },
+    ))
+}
+
+fn decode_tombstone(bytes: &[u8]) -> Result<(NodeId, Tombstone)> {
+    let (node_id, path, kind, content) = decode_node_record(bytes)?;
+    Ok((
+        node_id,
+        Tombstone {
+            kind,
+            content,
+            path,
+        },
+    ))
+}
+
+fn decode_seen_ids(raw: &[u8]) -> Result<Vec<NodeId>> {
+    if raw.len() % 32 != 0 {
+        return Err(malformed(
+            "seen_ids length is not a multiple of 32".to_string(),
+        ));
+    }
+    let mut ids = Vec::with_capacity(raw.len() / 32);
+    for chunk in raw.chunks_exact(32) {
+        let array: [u8; 32] = chunk
+            .try_into()
+            .map_err(|_| malformed("seen_id chunk wrong length".to_string()))?;
+        ids.push(NodeId::try_from_bytes(array)?);
+    }
+    Ok(ids)
+}
+
+fn encode_node_record(
+    node_id: &NodeId,
+    path: &crate::path::RepoPath,
+    kind: NodeKind,
+    content: &NodeContent,
+) -> Result<Vec<u8>> {
+    let mut writer = CanonicalWriter::new();
+    writer.field_repo_path(1, path.as_str())?;
+    writer.field_bytes(2, node_id.as_bytes())?;
+    writer.field_enum_u16(3, kind.code())?;
+    match content {
+        NodeContent::File { blob_id, mode } => {
+            writer.field_object_id(4, blob_id)?;
+            writer.field_u32(5, *mode)?;
+        }
+        NodeContent::Symlink { target } => {
+            writer.field_string(6, target)?;
+        }
+    }
+    Ok(writer.finish())
+}
+
+fn malformed(detail: String) -> PrikkError {
+    PrikkError::MalformedData(format!("lifecycle cache: {detail}"))
+}
+
+fn stale_provenance(detail: String) -> PrikkError {
+    PrikkError::Integrity(format!("lifecycle cache stale provenance: {detail}"))
+}
+
+/// Resolves a referenced blob's kind for file-entry verification. `Ok(None)` means the
+/// blob is absent/unreadable, which makes the cache unusable (fail-closed). A real store
+/// resolver is wired in the threading slice; this trait keeps verification testable and
+/// keeps the codec module free of a store handle.
+pub(crate) trait BlobKindResolver {
+    fn blob_kind(&self, blob_id: &ObjectId) -> Result<Option<BlobKind>>;
+}
+
+/// Resolves a block's parent block ids, in seal order, for operational provenance
+/// verification. Empty at genesis. v1 lifecycle windows require a single-parent chain;
+/// more than one parent fails closed. A real store-backed resolver (reading `Block`
+/// objects) is wired in the threading slice; this trait keeps the walk testable.
+pub(crate) trait BlockParentResolver {
+    fn parent_block_ids(&self, block_id: &ObjectId) -> Result<Vec<ObjectId>>;
+}
+
+/// First trust rung (4.4-2b.2 steps 1–2): a decoded cache that has passed structural
+/// validation, **operational provenance** (its `replay_window_hash` recomputed over the
+/// actually walked single-parent chain), and file-entry blob-kind verification. Still
+/// **NOT** authority for a `node_id` reuse or restoration-equivalence decision — those
+/// require replay-derived or replay-compared state (later rungs). There is deliberately no
+/// method here that yields such a decision.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ValidatedLifecycleCache {
+    decoded: DecodedLifecycleCache,
+}
+
+impl ValidatedLifecycleCache {
+    /// Build the rung: structural re-validation (the input is not trusted to have come from
+    /// `decode`, since `pub(crate)` fields allow direct construction), then operational
+    /// provenance against the walked single-parent chain, then blob-kind verification. Any
+    /// step fails closed.
+    pub(crate) fn from_decoded(
+        decoded: DecodedLifecycleCache,
+        blob_resolver: &impl BlobKindResolver,
+        parent_resolver: &impl BlockParentResolver,
+    ) -> Result<Self> {
+        decoded.validate()?;
+        decoded.verify_window_against_chain(parent_resolver)?;
+        for (_, node) in &decoded.live_entries {
+            verify_file_blob_kind(node.kind, &node.content, blob_resolver)?;
+        }
+        for (_, tombstone) in &decoded.tombstones {
+            verify_file_blob_kind(tombstone.kind, &tombstone.content, blob_resolver)?;
+        }
+        Ok(Self { decoded })
+    }
+
+    /// P2-2: bind the cache to the caller's intended baseline. A cache valid for some other
+    /// checkpoint must not be accepted where `expected_baseline_block_id` was meant.
+    pub(crate) fn from_decoded_for_baseline(
+        decoded: DecodedLifecycleCache,
+        expected_baseline_block_id: ObjectId,
+        blob_resolver: &impl BlobKindResolver,
+        parent_resolver: &impl BlockParentResolver,
+    ) -> Result<Self> {
+        if decoded.baseline_block_id != expected_baseline_block_id {
+            return Err(stale_provenance(
+                "cache baseline does not match the caller's intended baseline".to_string(),
+            ));
+        }
+        Self::from_decoded(decoded, blob_resolver, parent_resolver)
+    }
+
+    /// Borrow the decoded cache for non-authority uses (e.g. checkout/status hints). Not
+    /// usable for identity decisions.
+    pub(crate) fn decoded(&self) -> &DecodedLifecycleCache {
+        &self.decoded
+    }
+
+    /// Rebuild a `NodeLifecycleState` from the (already validated) cache, for comparison
+    /// against authoritative replay. This is **not** authority by itself.
+    fn to_node_lifecycle_state(&self) -> Result<NodeLifecycleState> {
+        let mut state = NodeLifecycleState::new();
+        for (node_id, node) in &self.decoded.live_entries {
+            state.seed_live_node(*node_id, node.clone())?;
+        }
+        for (node_id, tombstone) in &self.decoded.tombstones {
+            state.seed_tombstone(*node_id, tombstone.clone())?;
+        }
+        Ok(state)
+    }
+}
+
+/// Authoritative replay-derived lifecycle state for a specific baseline (rung 3). It must be
+/// produced **only** by authoritative replay over the actual walked single-parent chain; the
+/// real producer is the threading slice. This type is the reference truth a cache is compared
+/// against.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReplayDerivedLifecycleState {
+    baseline_block_id: ObjectId,
+    state: NodeLifecycleState,
+}
+
+impl ReplayDerivedLifecycleState {
+    /// Wrap an authoritative replay-derived state, rejecting an internally inconsistent state
+    /// (e.g. a node both live and tombstoned) so the compared rung cannot certify against a
+    /// malformed reference.
+    pub(crate) fn from_replay(
+        baseline_block_id: ObjectId,
+        state: NodeLifecycleState,
+    ) -> Result<Self> {
+        state.validate_internal_consistency()?;
+        Ok(Self {
+            baseline_block_id,
+            state,
+        })
+    }
+}
+
+/// A validated cache **proven equal** to authoritative replay for the same baseline (rung 4).
+/// This is the only cache-derived rung that may participate in restoration-equivalence /
+/// `node_id` reuse decisions once wired — and even then only because it equals replay. The
+/// decisive guarantee: a cache with correct provenance but false live/tombstone contents is
+/// rejected here, because the rebuilt state will not equal the replayed state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ComparedLifecycleCache {
+    validated: ValidatedLifecycleCache,
+}
+
+impl ComparedLifecycleCache {
+    /// Compare a validated cache to authoritative replay for the **same** baseline. Fails
+    /// closed on a baseline mismatch or any disagreement between the cache contents and the
+    /// replayed state (the right-provenance/false-tombstone case).
+    pub(crate) fn from_validated_and_replay(
+        validated: ValidatedLifecycleCache,
+        replay: &ReplayDerivedLifecycleState,
+    ) -> Result<Self> {
+        if validated.decoded.baseline_block_id != replay.baseline_block_id {
+            return Err(PrikkError::Integrity(
+                "lifecycle cache conflicts with replay: baseline mismatch".to_string(),
+            ));
+        }
+        let cache_state = validated.to_node_lifecycle_state()?;
+        if cache_state != replay.state {
+            return Err(PrikkError::Integrity(
+                "lifecycle cache conflicts with replay: contents disagree with authoritative \
+                 replay"
+                    .to_string(),
+            ));
+        }
+        Ok(Self { validated })
+    }
+
+    /// The compared (replay-equal) cache, usable for non-identity acceleration; identity-
+    /// decision wiring arrives in a later slice.
+    pub(crate) fn validated(&self) -> &ValidatedLifecycleCache {
+        &self.validated
+    }
+}
+
+/// Verify one file entry's referenced blob kind matches its `NodeKind` (symlink entries
+/// carry no blob and pass). Reuses the canonical `NodeKind::from_file_blob_kind` rule.
+fn verify_file_blob_kind(
+    kind: NodeKind,
+    content: &NodeContent,
+    resolver: &impl BlobKindResolver,
+) -> Result<()> {
+    let NodeContent::File { blob_id, .. } = content else {
+        return Ok(());
+    };
+    match resolver.blob_kind(blob_id)? {
+        None => Err(PrikkError::Integrity(format!(
+            "lifecycle cache: blob required for kind verification is missing: {blob_id}"
+        ))),
+        Some(blob_kind) => {
+            let implied = NodeKind::from_file_blob_kind(blob_kind)?;
+            if implied == kind {
+                Ok(())
+            } else {
+                Err(PrikkError::Integrity(format!(
+                    "lifecycle cache: file node kind {kind:?} disagrees with referenced \
+                     blob kind (implies {implied:?})"
+                )))
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;
