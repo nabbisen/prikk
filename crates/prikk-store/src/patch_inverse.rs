@@ -250,3 +250,6 @@ fn summarize_operations(operations: &[Operation]) -> Vec<PatchInverseOperationSu
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests;

@@ -11,7 +11,7 @@ use crate::{
     commit_worktree_changes, commit_worktree_changes_with_options, materialize_snapshot_checkout,
 };
 
-use super::helpers::{
+use crate::test_support::{
     maintainer_signature, signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
 };
 
@@ -20,6 +20,7 @@ use super::helpers::{
             pending the node model. §9.3 ReplaceBinary/EditText are node-addressed. \
             Restoration tracker: DC-09 Phase 4 increment 4.4 (path->node_id \
             tracking; ReplaceBinary binary-only blob check; EditText FDD-01 §7.2.1)."]
+#[allow(clippy::indexing_slicing)]
 fn worktree_patch_commit_records_modified_file() {
     let root = unique_temp_dir("worktree-patch-modified");
     let layout = RepositoryLayout::init(root.clone());
@@ -54,6 +55,7 @@ fn worktree_patch_commit_records_modified_file() {
             the node model. §9.3 EditText is node-addressed and span-anchored. \
             Restoration tracker: DC-09 Phase 4 increment 4.4 (path->node_id \
             tracking) + FDD-01 §7.2.1 (span anchoring). Re-enable there."]
+#[allow(clippy::indexing_slicing)]
 fn worktree_patch_commit_can_emit_full_file_text_edit() {
     let root = unique_temp_dir("worktree-patch-text-edit");
     let layout = RepositoryLayout::init(root.clone());
@@ -94,6 +96,7 @@ fn worktree_patch_commit_can_emit_full_file_text_edit() {
             pending the node model. §9.3 ReplaceBinary is node-addressed. \
             Restoration tracker: DC-09 Phase 4 increment 4.4 (path->node_id \
             tracking + binary-only blob check)."]
+#[allow(clippy::indexing_slicing)]
 fn worktree_patch_text_mode_falls_back_for_binary_modified_file() {
     let root = unique_temp_dir("worktree-patch-text-binary-fallback");
     let layout = RepositoryLayout::init(root.clone());
@@ -101,7 +104,7 @@ fn worktree_patch_text_mode_falls_back_for_binary_modified_file() {
     if let Ok(layout) = layout {
         assert!(publish_snapshot_block(&layout, "data.bin", &[0xff, 0x00]).is_ok());
         assert!(materialize_snapshot_checkout(&layout, "heads/main").is_ok());
-        assert!(std::fs::write(root.join("data.bin"), &[0xfe, 0x01]).is_ok());
+        assert!(std::fs::write(root.join("data.bin"), [0xfe, 0x01]).is_ok());
         let report = commit_worktree_changes_with_options(
             &layout,
             "heads/main",
@@ -127,6 +130,7 @@ fn worktree_patch_text_mode_falls_back_for_binary_modified_file() {
             pending the node model. Restoration tracker: DC-09 Phase 4 increment \
             4.4 (path->node_id tracking) + 4.4a (node_id minting). Re-enable this \
             test there; not releaseable until then."]
+#[allow(clippy::indexing_slicing)]
 fn worktree_patch_commit_records_untracked_file() {
     let root = unique_temp_dir("worktree-patch-untracked");
     let layout = RepositoryLayout::init(root.clone());

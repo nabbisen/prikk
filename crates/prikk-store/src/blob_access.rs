@@ -98,3 +98,6 @@ pub(crate) fn ensure_blob_matches_node_kind(
         "DeleteNode old_blob_id/old_node_kind mismatch: expected {expected}, got {id}"
     )))
 }
+
+#[cfg(test)]
+mod tests;

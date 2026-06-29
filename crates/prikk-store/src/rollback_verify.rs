@@ -154,3 +154,6 @@ fn verify_rollback_marker(record: &WalRecord) -> Result<()> {
         record.seq
     )))
 }
+
+#[cfg(test)]
+mod tests;

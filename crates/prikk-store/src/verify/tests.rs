@@ -6,7 +6,7 @@ use prikk_object::{
 
 use crate::{FileObjectStore, ObjectWriter, RepositoryLayout, Wal, verify_repository};
 
-use super::helpers::{
+use crate::test_support::{
     dummy_signature, maintainer_signature, sample_object_id, signed_patch_envelope, unique_temp_dir,
 };
 

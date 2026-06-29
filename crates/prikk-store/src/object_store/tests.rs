@@ -4,7 +4,7 @@ use prikk_object::{ObjectEnvelope, ObjectType};
 
 use crate::{FileObjectStore, MemoryObjectStore, ObjectReader, ObjectWriter, RepositoryLayout};
 
-use super::helpers::{dummy_signature, unique_temp_dir};
+use crate::test_support::{dummy_signature, unique_temp_dir};
 
 #[test]
 fn memory_store_roundtrips_object() {

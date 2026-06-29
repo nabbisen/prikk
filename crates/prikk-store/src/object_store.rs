@@ -119,3 +119,6 @@ impl ObjectWriter for FileObjectStore {
         Ok(id)
     }
 }
+
+#[cfg(test)]
+mod tests;

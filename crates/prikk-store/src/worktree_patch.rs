@@ -246,3 +246,6 @@ fn dev_author_signature(message: &str) -> Signature {
         signer_role: SignerRole::Author,
     }
 }
+
+#[cfg(test)]
+mod tests;

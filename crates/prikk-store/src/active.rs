@@ -39,3 +39,6 @@ impl ActiveSession {
         Ok(ActiveCommitResult { wal_sequence })
     }
 }
+
+#[cfg(test)]
+mod tests;

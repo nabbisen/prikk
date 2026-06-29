@@ -284,3 +284,6 @@ fn issue_for_verification_error(error: PrikkError) -> DoctorIssue {
          failing path before attempting repair",
     )
 }
+
+#[cfg(test)]
+mod tests;

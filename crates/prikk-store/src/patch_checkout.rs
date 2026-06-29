@@ -248,3 +248,6 @@ fn apply_deletions(deletable: &[DeletableFile]) -> Result<usize> {
     }
     Ok(removed)
 }
+
+#[cfg(test)]
+mod tests;

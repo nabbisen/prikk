@@ -169,3 +169,6 @@ fn read_block(object_store: &FileObjectStore, block_id: ObjectId) -> Result<Bloc
     }
     BlockPayload::decode_canonical(&envelope.canonical_payload)
 }
+
+#[cfg(test)]
+mod tests;

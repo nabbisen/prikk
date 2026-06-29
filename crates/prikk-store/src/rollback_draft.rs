@@ -156,3 +156,6 @@ fn rollback_author_signature(
         signer_role: SignerRole::Author,
     }
 }
+
+#[cfg(test)]
+mod tests;

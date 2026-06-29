@@ -41,7 +41,7 @@ mod worktree_patch;
 mod worktree_status;
 
 #[cfg(test)]
-mod tests;
+mod test_support;
 
 pub use active::{ActiveCommitResult, ActiveSession};
 pub use checkout::{

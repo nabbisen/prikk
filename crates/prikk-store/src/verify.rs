@@ -361,3 +361,6 @@ fn is_temporary_path(path: &Path) -> bool {
         .map(|value| value.contains(".tmp."))
         .unwrap_or(false)
 }
+
+#[cfg(test)]
+mod tests;

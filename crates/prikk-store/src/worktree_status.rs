@@ -254,3 +254,6 @@ fn pathbuf_to_slash_string(path: &Path) -> Result<String> {
     }
     Ok(components.join("/"))
 }
+
+#[cfg(test)]
+mod tests;

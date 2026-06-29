@@ -311,3 +311,6 @@ pub(crate) fn require_signed_type(
     }
     envelope.validate()
 }
+
+#[cfg(test)]
+mod tests;

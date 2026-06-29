@@ -1,4 +1,4 @@
-//! Patch replay planning tests.
+//! Patch checkout materialization tests.
 
 use prikk_object::{
     BlobKind, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile, DeleteNode,
@@ -8,41 +8,131 @@ use prikk_object::{
 
 use crate::{
     FileObjectStore, ObjectWriter, RefPublication, RefStore, RepoPath, RepositoryLayout,
-    SnapshotEntry, SnapshotManifest, prepare_patch_replay_plan,
+    SnapshotEntry, SnapshotManifest, materialize_patch_checkout,
+    materialize_patch_checkout_with_deletions, plan_patch_checkout_deletions,
 };
 
-use super::helpers::{
+use crate::test_support::{
     dummy_signature, maintainer_signature, signed_ref_state_envelope, signed_ref_update_envelope,
     unique_temp_dir,
 };
 
 #[test]
-fn patch_replay_applies_create_delete_and_replace() {
-    let root = unique_temp_dir("patch-replay");
+fn patch_materialization_writes_replayed_files() {
+    let root = unique_temp_dir("patch-materialize");
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let result = publish_snapshot_then_patch_block(&layout);
-        assert!(result.is_ok());
-        let plan = prepare_patch_replay_plan(&layout, "heads/main");
-        assert!(plan.is_ok());
-        if let Ok(plan) = plan {
-            assert_eq!(plan.block_count, 2);
-            assert_eq!(plan.patch_count, 1);
-            assert_eq!(plan.applied_operation_count, 2);
-            assert_eq!(plan.file_count, 2);
-            assert!(plan.paths.contains(&"README.md".to_string()));
-            assert!(plan.paths.contains(&"extra.txt".to_string()));
-            assert!(!plan.paths.contains(&"old.txt".to_string()));
+        assert!(publish_snapshot_then_patch_block(&layout).is_ok());
+        let report = materialize_patch_checkout(&layout, "heads/main");
+        assert!(report.is_ok());
+        if let Ok(report) = report {
+            assert_eq!(report.block_count, 2);
+            assert_eq!(report.patch_count, 1);
+            assert_eq!(report.applied_operation_count, 2);
+            assert_eq!(report.planned_files, 2);
+            assert_eq!(report.written_files, 2);
+            assert_eq!(report.unchanged_files, 0);
+        }
+        assert!(std::fs::read(root.join("README.md")).is_ok_and(|x| x == b"hello\n".to_vec()));
+        assert!(std::fs::read(root.join("extra.txt")).is_ok_and(|x| x == b"extra\n".to_vec()));
+        assert!(!root.join("old.txt").exists());
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn patch_materialization_is_idempotent_for_same_bytes() {
+    let root = unique_temp_dir("patch-materialize-idempotent");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        assert!(publish_snapshot_then_patch_block(&layout).is_ok());
+        assert!(materialize_patch_checkout(&layout, "heads/main").is_ok());
+        let second = materialize_patch_checkout(&layout, "heads/main");
+        assert!(second.is_ok());
+        if let Ok(second) = second {
+            assert_eq!(second.written_files, 0);
+            assert_eq!(second.unchanged_files, 2);
         }
     }
     let _ = std::fs::remove_dir_all(root);
 }
 
-/// Publish a snapshot root followed by a supported file-operation patch block.
-pub(crate) fn publish_snapshot_then_patch_block(
-    layout: &RepositoryLayout,
-) -> prikk_error::Result<()> {
+#[test]
+fn patch_materialization_refuses_conflicting_existing_file() {
+    let root = unique_temp_dir("patch-materialize-conflict");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        assert!(publish_snapshot_then_patch_block(&layout).is_ok());
+        assert!(std::fs::write(root.join("README.md"), b"local\n").is_ok());
+        let report = materialize_patch_checkout(&layout, "heads/main");
+        assert!(report.is_err());
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn patch_deletion_plan_reports_safe_removed_files() {
+    let root = unique_temp_dir("patch-delete-plan");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        assert!(publish_snapshot_then_patch_block(&layout).is_ok());
+        assert!(std::fs::write(root.join("old.txt"), b"old\n").is_ok());
+        let plan = plan_patch_checkout_deletions(&layout, "heads/main");
+        assert!(plan.is_ok());
+        if let Ok(plan) = plan {
+            assert_eq!(plan.planned_deletions, 1);
+            assert_eq!(plan.deletable_files, 1);
+            assert_eq!(plan.already_absent_files, 0);
+            assert!(plan.conflicts.is_empty());
+            assert_eq!(plan.deletable_paths, vec!["old.txt".to_string()]);
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn patch_materialization_with_deletions_removes_matching_old_file() {
+    let root = unique_temp_dir("patch-materialize-delete");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        assert!(publish_snapshot_then_patch_block(&layout).is_ok());
+        assert!(std::fs::write(root.join("old.txt"), b"old\n").is_ok());
+        let report = materialize_patch_checkout_with_deletions(&layout, "heads/main");
+        assert!(report.is_ok());
+        if let Ok(report) = report {
+            assert_eq!(report.deleted_files, 1);
+            assert_eq!(report.already_absent_deleted_files, 0);
+            assert_eq!(report.deletion_conflicts, 0);
+        }
+        assert!(std::fs::read(root.join("README.md")).is_ok_and(|x| x == b"hello\n".to_vec()));
+        assert!(std::fs::read(root.join("extra.txt")).is_ok_and(|x| x == b"extra\n".to_vec()));
+        assert!(!root.join("old.txt").exists());
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn patch_materialization_with_deletions_refuses_modified_removed_file() {
+    let root = unique_temp_dir("patch-materialize-delete-conflict");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        assert!(publish_snapshot_then_patch_block(&layout).is_ok());
+        assert!(std::fs::write(root.join("old.txt"), b"local edit\n").is_ok());
+        let report = materialize_patch_checkout_with_deletions(&layout, "heads/main");
+        assert!(report.is_err());
+        assert!(!root.join("README.md").exists());
+        assert!(std::fs::read(root.join("old.txt")).is_ok_and(|x| x == b"local edit\n".to_vec()));
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+fn publish_snapshot_then_patch_block(layout: &RepositoryLayout) -> prikk_error::Result<()> {
     let mut object_store = FileObjectStore::new(layout.clone());
     let old_blob = write_blob(&mut object_store, b"old\n")?;
     let extra_blob = write_blob(&mut object_store, b"extra\n")?;
@@ -73,10 +163,6 @@ pub(crate) fn publish_snapshot_then_patch_block(
     );
     let root_block_id = object_store.write_object(&root_block)?;
 
-    // ReplaceBinary is reconciled to the FDD-03 §9.3 node-addressed record but its
-    // replay is deferred to the node model (increment 4.4); this harness exercises
-    // the still-supported DeleteNode + CreateFile replay. README.md is carried
-    // through from the snapshot baseline unchanged.
     let patch_payload = PatchPayload {
         operations: vec![
             Operation {

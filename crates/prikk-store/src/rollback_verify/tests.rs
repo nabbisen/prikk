@@ -6,8 +6,8 @@ use crate::{
     RepositoryLayout, Wal, append_rollback_draft, verify_active_rollback_draft, verify_repository,
 };
 
-use super::helpers::{signed_patch_envelope, unique_temp_dir};
-use super::patch_replay::publish_snapshot_then_patch_block;
+use crate::test_support::publish_snapshot_then_patch_block;
+use crate::test_support::{signed_patch_envelope, unique_temp_dir};
 
 #[test]
 fn rollback_draft_verify_matches_current_inverse_plan() {

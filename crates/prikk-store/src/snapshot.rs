@@ -142,3 +142,6 @@ fn read_exact(bytes: &[u8], len: usize) -> Result<(&[u8], &[u8])> {
     };
     Ok((value, rest))
 }
+
+#[cfg(test)]
+mod tests;

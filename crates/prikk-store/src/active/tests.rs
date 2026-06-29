@@ -2,7 +2,7 @@
 
 use crate::{ActiveLock, ActiveSession, RepositoryLayout, Wal};
 
-use super::helpers::{signed_patch_envelope, unique_temp_dir};
+use crate::test_support::{signed_patch_envelope, unique_temp_dir};
 
 #[test]
 fn active_lock_rejects_second_writer() {

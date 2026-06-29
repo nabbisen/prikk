@@ -2,8 +2,8 @@
 
 use crate::{RepositoryLayout, RollbackPreviewChangeKind, prepare_rollback_preview};
 
-use super::helpers::unique_temp_dir;
-use super::patch_replay::publish_snapshot_then_patch_block;
+use crate::test_support::publish_snapshot_then_patch_block;
+use crate::test_support::unique_temp_dir;
 
 #[test]
 fn rollback_preview_reports_file_level_changes_to_snapshot_baseline() {

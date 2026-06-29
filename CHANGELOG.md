@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.1.1 Housekeeping
+
+Repository structure and developer-ergonomics pass. No identity-byte or behavior
+changes; the empty-PATCH anchor and populated framing vector are unchanged.
+
+- Relocated `prikk-store` unit tests from the central `src/tests/` directory to the
+  project-standard co-located layout: `src/<module>/tests.rs` (and
+  `src/patch_replay/tests/` for the three patch-decode test modules). Shared fixtures
+  and cross-module harnesses moved to a single `src/test_support.rs`.
+- Added `rfcs/proposed/` with a node-model plan RFC capturing the deferred
+  application work (4.3–4.6) and the tracked carry-forward items (symlink target
+  validator, duplicate scalar-field rejection, preconditions).
+- Aligned the workspace `Cargo.toml` version (`0.1.0` -> `0.1.1`) with the active
+  CHANGELOG line.
+- Made the worktree-patch test module pass the CI clippy gate
+  (`cargo clippy --workspace --all-targets -- -D warnings`): targeted
+  `#[allow(clippy::indexing_slicing)]` on the four DEV-ONLY authoring-checkpoint tests
+  (deliberate `Vec` indexing in assertions) and removed a needless borrow on a
+  byte-slice literal.
+
 ## 0.1.0 DC-09 Phase 4.2
 
 Operation-record identity reconciliation to FDD-03 §9.3 (code reconciliation effort,

@@ -224,3 +224,6 @@ fn materialization_status(block: &BlockPayload) -> CheckoutMaterialization {
     }
     CheckoutMaterialization::RequiresPatchEngine
 }
+
+#[cfg(test)]
+mod tests;

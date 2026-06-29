@@ -7,7 +7,7 @@ use crate::{
     verify_repository,
 };
 
-use super::helpers::{
+use crate::test_support::{
     sample_object_id, signed_empty_block_envelope, signed_ref_state_envelope,
     signed_ref_update_envelope, unique_temp_dir,
 };

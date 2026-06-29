@@ -182,3 +182,6 @@ fn compare_maps(
     changes.sort_by(|left, right| left.path.cmp(&right.path));
     changes
 }
+
+#[cfg(test)]
+mod tests;

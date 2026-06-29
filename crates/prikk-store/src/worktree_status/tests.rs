@@ -11,7 +11,7 @@ use crate::{
     worktree_status,
 };
 
-use super::helpers::{
+use crate::test_support::{
     maintainer_signature, signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
 };
 

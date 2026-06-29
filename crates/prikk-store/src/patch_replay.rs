@@ -297,3 +297,6 @@ fn read_blob_bytes(object_store: &FileObjectStore, blob_id: ObjectId) -> Result<
         .ok_or_else(|| PrikkError::Integrity(format!("missing Blob {blob_id}")))?;
     crate::blob_access::decode_file_content_blob(&envelope.canonical_payload)
 }
+
+#[cfg(test)]
+mod tests;

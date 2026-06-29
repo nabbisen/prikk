@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "prikk"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "prikk-hash",
  "prikk-object",
@@ -13,15 +13,15 @@ dependencies = [
 
 [[package]]
 name = "prikk-error"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "prikk-hash"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "prikk-object"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "prikk-error",
  "prikk-hash",
@@ -29,7 +29,7 @@ dependencies = [
 
 [[package]]
 name = "prikk-store"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "prikk-error",
  "prikk-hash",

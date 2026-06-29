@@ -2,7 +2,7 @@
 
 use crate::{RepositoryLayout, Wal};
 
-use super::helpers::{signed_patch_envelope, unique_temp_dir};
+use crate::test_support::{signed_patch_envelope, unique_temp_dir};
 
 #[test]
 fn wal_roundtrips_signed_patch_envelope() {

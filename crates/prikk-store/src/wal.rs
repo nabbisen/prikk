@@ -284,3 +284,6 @@ fn record_checksum(seq: u64, body_len: u64, body: &[u8]) -> [u8; 32] {
     preimage.extend_from_slice(body);
     sha256(&preimage)
 }
+
+#[cfg(test)]
+mod tests;

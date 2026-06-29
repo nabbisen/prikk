@@ -11,7 +11,7 @@ use crate::{
     SnapshotEntry, SnapshotManifest, prepare_patch_inverse_plan,
 };
 
-use super::helpers::{
+use crate::test_support::{
     dummy_signature, maintainer_signature, signed_ref_state_envelope, signed_ref_update_envelope,
     unique_temp_dir,
 };
