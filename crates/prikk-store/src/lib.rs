@@ -3,7 +3,7 @@
 
 //! Storage crate for Prikk repositories.
 //!
-//! PR-030 contains persistent layout, object storage, WAL durability, deeper read-only
+//! This crate provides persistent layout, object storage, WAL durability, deeper read-only
 //! repository verification, initial ref-state/ref-log publication primitives, a narrow
 //! active-session append API, opt-in safe doctor repairs, conservative snapshot materialization,
 //! read-only worktree status, minimal worktree-to-patch draft generation, supported patch replay
@@ -14,6 +14,7 @@
 //! Full patch algebra, plugin execution, and remote sync remain separate increments.
 
 mod active;
+mod author_signing;
 mod blob_access;
 mod byte_cursor;
 mod checkout;
@@ -28,6 +29,9 @@ mod layout;
 mod lifecycle_cache;
 mod lock;
 mod memory_store;
+// Production node-id minting (DC-09 Phase 4.4a-1), consumed by node-addressed worktree authoring
+// (4.4a-2) for fresh-node creation.
+mod node_id_gen;
 // Node-aware replay substrate (DC-09 Phase 4.4). Threaded into replay/inverse/
 // rollback in the following increment; `dead_code` allowed until that wiring lands.
 #[allow(dead_code)]
@@ -42,6 +46,7 @@ mod rollback_draft;
 mod rollback_preview;
 mod rollback_verify;
 mod snapshot;
+mod text_span;
 mod verify;
 mod wal;
 mod worktree;
@@ -52,6 +57,7 @@ mod worktree_status;
 mod test_support;
 
 pub use active::{ActiveCommitResult, ActiveSession};
+pub use author_signing::{AuthorSigner, Ed25519AuthorSigner, author_signature};
 pub use checkout::{
     CheckoutMaterialization, CheckoutPlan, DEFAULT_CHECKOUT_REF, SnapshotCheckoutPlan,
     prepare_checkout_plan, prepare_snapshot_checkout_plan,
@@ -90,7 +96,7 @@ pub use wal::{Wal, WalRecord, WalRepair, WalReplay};
 pub use worktree::{SnapshotMaterializationReport, materialize_snapshot_checkout};
 pub use worktree_patch::{
     WorktreePatchCommitOptions, WorktreePatchCommitReport, WorktreePatchOperationKind,
-    WorktreePatchOperationSummary, commit_worktree_changes, commit_worktree_changes_with_options,
+    WorktreePatchOperationSummary, commit_worktree_changes_signed,
 };
 pub use worktree_status::{
     WorktreeChange, WorktreeChangeKind, WorktreeStatusReport, worktree_status,

@@ -1,6 +1,6 @@
 //! Verification helpers for rollback draft patches.
 //!
-//! PR-030 keeps rollback publication non-mutating, but makes rollback drafts easier to audit before
+//! This module keeps rollback publication non-mutating, but makes rollback drafts easier to audit before
 //! seal. The active WAL verifier can now classify rollback draft records by their dedicated
 //! development signature marker and validate that their Patch payload remains in the supported
 //! replay subset. The stronger `verify_active_rollback_draft` API additionally compares the WAL

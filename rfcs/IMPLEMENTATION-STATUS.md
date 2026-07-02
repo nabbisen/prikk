@@ -1,6 +1,26 @@
 # Prikk Implementation Status
 
-Version: 0.1.0 PR-030
+Version: 0.2.0 (DC-09 Phase 4.4b — node-addressed worktree authoring + genesis)
+
+> Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
+> the current-state lists are retained as historical record (PR-014 through PR-030).
+
+## Current State (DC-09 Phase 4.4a)
+
+- Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** `heads/main`
+  baseline reconstructed from authoritative replay — or, on a fresh repository, a **genesis** first commit
+  against an empty baseline (4.4b: all files authored as `CreateFile`) — worktree changes author
+  node-addressed §9.3 operations (`CreateFile`, `DeleteNode`, `EditText`, `ReplaceBinary`, `ChangePerm`)
+  with CSPRNG-minted node ids in canonical order, normalized file modes, and shared text-span identity.
+  Existing-node kind is authoritative; rename inference, symlink authoring, and text↔binary transitions are
+  out of scope. Genesis is selected only when the target ref has never been published (pointer absent and
+  ref log empty and active WAL empty); a missing pointer with log history, or a non-empty active WAL, fails
+  closed and points at seal/doctor rather than re-authoring.
+- Role-bound Ed25519 AUTHOR signing (R1) for authored worktree patches through an injected `AuthorSigner`
+  (`Ed25519AuthorSigner`, key material via `PRIKK_AUTHOR_KEY_ID` / `PRIKK_AUTHOR_SEED`). The broken
+  `commit --allow-empty` scaffold was removed (R1R). The `rollback-draft` path uses an internal AUTHOR-role
+  **marker** (`dev-placeholder-rollback-author`), scoped as a non-publishable development scaffold (R1R2);
+  it is not publication-grade signing.
 
 ## Implemented
 
@@ -21,7 +41,7 @@ Version: 0.1.0 PR-030
 - Read-only repository verification for persisted object files, sealed block references, sealed rollback Patch classification, ref pointers, ref logs, and active WAL records.
 - Doctor diagnostics that convert verification outcomes into actionable issue codes.
 - ActiveSession append API that holds `active.lock` while writing the active WAL.
-- Empty-commit scaffold for manually exercising the commit/WAL path.
+- Node-addressed worktree patch authoring (`prikk commit`) with role-bound Ed25519 AUTHOR signing; see Current State above.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, publishes `heads/main`, and clears the WAL after publication.
 - Canonical decoding for RefState, RefUpdate, and Block payloads used by verification.
 - Read-only sealed-history inspection from the current RefState chain, including rollback block classification.
@@ -31,11 +51,13 @@ Version: 0.1.0 PR-030
 - Explicit deletion planning and opt-in deletion for files removed by supported patch replay.
 - Content-anchored `EditText` validation scaffold with fixed 32-byte span hashes, anchor ID validation, conservative full-file exact-span replay, and opt-in worktree generation for full-file UTF-8 edits.
 - Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append and verification, and sealed rollback block classification for the supported patch-operation subset.
-- Minimal CLI for `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Minimal CLI for `init`, `commit [--from-worktree] [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
 
+- Genesis first-commit onto non-default refs (default `heads/main` genesis is supported).
 - General destructive worktree pruning and full patch-based checkout semantics.
+- Publication-grade MAINTAINER signing, trust store, key management/rotation, and signature policy.
 - Policy-aware audit/attestation publication from seal.
 - Full patch algebra: arbitrary text-span replay, rollback ref publication, commutation, confluence, and conflict witnesses.
 - Conflict witnesses and merge state.
@@ -51,6 +73,13 @@ Version: 0.1.0 PR-030
 - Missing-object repair, checksum-mismatch repair, object quarantine, GC, and malformed-log repair remain deferred.
 
 ## Gate Discipline
+
+DC-09 Phase 4.4a–4.4b stays within the approved boundary: worktree authoring is node-addressed and signed
+with role-bound Ed25519 AUTHOR signatures against a published baseline, or a genesis first commit against an
+empty baseline on the default `heads/main` (4.4b). It does not add publication-grade MAINTAINER signing,
+trust-store/policy enforcement, rename inference, symlink authoring, commutation, conflict resolution, audit
+plugin execution, or remote sync. The `rollback-draft` AUTHOR-role marker remains an internal,
+non-publishable scaffold (R1R2).
 
 PR-030 stays within the approved foundation boundary by classifying rollback-marked Patches after normal seal. It does not publish rollback-specific refs, authorize rollback, modify the worktree, discover arbitrary spans, minimize text diffs, commute patches, resolve conflicts, or implement audit plugin execution, policy enforcement, or remote sync.
 

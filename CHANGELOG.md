@@ -1,5 +1,286 @@
 # Changelog
 
+## 0.2.0 — 2026-07-02
+
+DC-09 Phase 4.4: node-addressed worktree authoring, genesis first-commit, and role-bound Ed25519
+`AUTHOR` signing.
+
+**Release scope.** Node-addressed `prikk commit` patches are role-bound Ed25519 `AUTHOR`-signed. This
+release does **not** include trust-store enforcement, key management, `MAINTAINER`/publication signing,
+or publication-grade `rollback-draft` signing; symlink authoring is fail-closed; and whole-file reads are
+subject to the current large-file limits. The repository format is not yet stable.
+
+`prikk commit` consumes node-addressed worktree authoring (R1/R1R) and supports **genesis / first-commit**
+on a fresh repository (4.4b): a never-published ref authors an empty baseline (all `CreateFile`), and seal
+publishes a Root block, so `init → commit → seal` works end to end. The earlier layers (4.4-2c-*) remain
+internal replay/cache plumbing. Identity anchors unchanged (empty-PATCH `510ab866…5157`, populated
+`24031b48…c854`).
+
+- **Release-prep — runtime PR-030-era string cleanup.** `prikk --version` now derives from
+  `CARGO_PKG_VERSION` (was the stale `0.1.0-pr030` literal; now prints the crate version, e.g.
+  `prikk 0.2.0`); the `checkout`
+  mode-flag error and the `status` diagnostic line no longer reference PR-030; stale `PR-030`-prefixed
+  module docs (CLI, store, rollback) reworded to describe current scope. No behavior change beyond the
+  version string; PATCH-framing anchors unchanged.
+
+- **4.4b P2-1 — CLI end-to-end genesis harness.** Adds `crates/prikk-cli/tests/genesis_end_to_end.rs`, a
+  permanent integration test that drives the compiled `prikk` binary through `init → commit → seal → log →
+  verify` on a fresh repository (asserts a two-operation genesis commit, a Root block at `update-seq: 1`,
+  and clean verify). Guards the release-facing first-commit flow at the CLI boundary. Test-only; no behavior
+  change; PATCH-framing anchors unchanged.
+
+- **4.4b — genesis / first-commit authoring.** Enables `init → commit → seal` on a fresh repository.
+  Worktree authoring now resolves its baseline through `resolve_worktree_baseline`: when the target ref is
+  **published** it authors against replay-derived node lifecycle state (unchanged); when the ref has
+  **never** been published it authors against an empty `NodeLifecycleState::new()` baseline, so every
+  worktree file becomes a fresh node-addressed `CreateFile` (canonical order, CSPRNG-minted ids, normalized
+  modes, real role-bound Ed25519 AUTHOR signature) — a baseline-selection change only, reusing the entire
+  existing signed authoring path (review E3). Seal already publishes the first block as `BlockKind::Root`
+  (empty parents, `update_seq = 1`, `previous_ref_state_id = None`); no seal change was needed. Genesis is
+  selected **only** when the ref pointer is absent **and** the ref log is readable and empty; a missing
+  pointer with any ref-log history — or an unreadable/partial log — is treated as corruption, fails closed,
+  and points at `doctor` (never silently re-genesis; design §4, review E2). Genesis additionally requires an
+  **empty active WAL** — no records **and** no trailing partial bytes (review E1 + 4.4bR P1b): a second
+  `commit` before the first `seal` fails closed ("active WAL already contains patches on an unpublished ref;
+  run `prikk seal`…"), and a trailing partial WAL tail fails closed pointing at `doctor --repair-wal-tail`,
+  rather than authoring a duplicate or ambiguous genesis patch. Empty worktree, worktree symlinks/non-regular
+  files, and invalid/non-UTF-8 paths remain fail-closed (genesis synthesizes no zero-operation patch).
+  Genesis is **enforced** to the default `heads/main` ref (review Q2 + 4.4bR P1a): a first commit onto any
+  other unpublished ref fails closed pending branch-creation design. The Root block inherits the existing
+  `scaffold_state_root` pending the real state-Merkle design (review Q3). The active-WAL guard and the WAL
+  append are held in **one critical section under the active-session lock** (4.4bR2): the whole
+  `commit_worktree_changes_signed` path acquires `ActiveLock` before the guard and holds it through append,
+  so concurrent commits cannot both pass the guard and append (the loser fails via lock conflict or the
+  post-lock "seal first" guard). Seven new store tests (all-`CreateFile` genesis + real signature;
+  empty-worktree, second-pre-seal-commit, missing-pointer-with-log, non-default-ref, and trailing-partial-WAL
+  fail-closed; concurrent-genesis serializes to one WAL record); prikk-store 288→295. Identity-neutral to
+  existing objects; PATCH-framing anchors unchanged.
+
+- **4.4a-1 — production `NodeIdGenerator` (CSPRNG node-id minting).** Adds the fail-closed minting
+  primitive that future worktree authoring will use to assign fresh node identities. A `NodeId` is an
+  opaque 256-bit value drawn from the OS CSPRNG — never derived from path, content, operation
+  position, timestamp, counter, or baseline state — because it must survive rename/edit/chmod/binary
+  replacement and is part of the text `span_id` preimage. The entropy source and the trusted minter
+  are deliberately separate (E1): a `NodeIdEntropySource` produces *candidate bytes* (production:
+  `OsEntropySource` over `getrandom`), and `NodeIdGenerator` is the only minting authority — it
+  constructs an id only through the canonical checked constructor `NodeId::try_from_bytes` (rejecting
+  the reserved all-zero value) and rejects any candidate already in the baseline's complete known-id
+  set via `NodeLifecycleState::contains_seen_node_id` (E2, over `seen_ids`). Retry is bounded (E3):
+  on an all-zero or colliding draw it redraws exactly once, then fails closed with a structured
+  `NodeIdMintError` (E4: `EntropyUnavailable` / `ZeroNodeIdDraw` / `NodeIdCollision`) — no weak/seeded
+  fallback, no placeholder, no unbounded loop. **Dependency-map change:** `getrandom` is added to
+  `prikk-store` only; `prikk-object` stays pure (no entropy/IO). Covered by seven generator tests
+  (E5: deterministic nonzero emission; entropy failure; zero rejected-then-redrawn; repeated zero
+  fails closed; baseline collision rejected-then-redrawn; repeated collision fails closed; minted id
+  nonzero). Also folds in the 2c-4 carry-#1 `splice_text` invalid-range tests (E6: `start > end` and
+  `end > text.len()` reject). Unwired: no command path or worktree authoring consumes the generator
+  yet, and the four DEV-only worktree-authoring tests remain ignored pending the 4.4a-2 design pass.
+  Identity-neutral; PATCH-framing anchors unchanged.
+
+- **4.4a-2a — node-addressed worktree authoring (content operations).** Re-enables
+  `commit_worktree_changes[_with_options]` to author node-addressed §9.3 content operations
+  (`CreateFile`, `DeleteNode`, `EditText`, `ReplaceBinary`) against a baseline reconstructed from
+  authoritative replay, replacing the prior fail-closed stub. Baseline policy is **Option A**: the
+  baseline node lifecycle state comes only from `replay_derived_state` over the ref's node-addressed
+  lineage (`resolve_node_lineage_bounds`); the snapshot manifest is never an identity authority, and a
+  snapshot-only baseline (empty node state with a `snapshot_blob_ref`) **fails closed** (review E3).
+  Existing paths resolve to their persisted `node_id` via the replay-derived `NodeLifecycleState`;
+  existing-node `NodeKind` is **authoritative** — a `TextFile` modification authors a whole-file
+  `EditText`, a `BinaryFile` modification authors kind-preserving `ReplaceBinary`, and a text↔binary
+  transition fails closed (`UnsupportedKindTransition`, review E4). Fresh nodes are minted through the
+  production `NodeIdGenerator` in **canonical create order** (candidates sorted by `RepoPath` bytes
+  before minting, each inserted into a working `NodeLifecycleState` immediately so same-session draws
+  cannot alias), making path→`node_id` assignment independent of filesystem traversal order (review
+  E1). Operations are emitted in a **canonical order** (kind rank `DeleteNode` < `CreateFile` <
+  `ChangePerm` < `ReplaceBinary` < `EditText`, then `RepoPath` bytes, then `node_id` bytes) before
+  `op_seq` assignment, so patch identity does not depend on traversal/map iteration. All `EditText`
+  span identity (anchors, `span_id`, splice, derived text blob id) is computed through the shared
+  `prikk-store::text_span` module — no authoring-local span logic — so authoring and replay agree
+  byte-for-byte (covered by an authoring↔replay symmetry test). Created files record a **normalized**
+  canonical mode (4.4a-2aR): any executable bit set → `0o100755`, otherwise `0o100644`; symlink mode
+  `0`; non-Unix defaults to `0o100644` (read/write/setuid/sticky bits and platform attributes are
+  ignored). **Deferred to 4.4a-2b:** `ChangePerm` / mode-change detection for *existing* nodes (this
+  increment preserves a modified file's baseline mode and emits no `ChangePerm`); the normalization
+  rule it will reuse is the one ratified and landed here. Rename inference (moves author as
+  delete+create) and symlink authoring (fails closed) also remain out of scope. The four previously
+  DEV-only worktree-authoring tests are migrated to node-addressed `CreateFile` baselines and
+  re-enabled (no `#[ignore]` remain), alongside witnesses for E1/E3/E4, deterministic patch identity,
+  deletion, canonical mixed-operation `op_seq` ordering, created-file mode normalization (regular and
+  executable), structured error classes, and authoring↔replay symmetry. The 4.4a-1 carry to remove
+  `node_id_gen`'s module `#[allow(dead_code)]` is discharged now that the production path consumes the
+  generator. Identity-neutral to existing objects; PATCH-framing anchors unchanged.
+
+- **4.4a-2b — `ChangePerm` authoring (existing-node mode-change detection).** Completes node-addressed
+  worktree authoring of the §9.3 mutation set by detecting permission changes on existing regular file
+  nodes and emitting `ChangePerm`. Detection reuses the single `normalize_file_mode` rule landed in
+  4.4a-2aR (no second normalization implementation): the worktree file's normalized canonical mode is
+  compared against the replay-derived baseline node mode, and a difference emits exactly one
+  `ChangePerm` with `old_mode` = baseline mode and `new_mode` = normalized worktree mode. Mode
+  detection is independent of content, so a mode-only change authors a lone `ChangePerm`, while a
+  content+mode change authors `ChangePerm` plus the content op; the existing canonical operation sort
+  places `ChangePerm` before any `ReplaceBinary`/`EditText` (full kind order `DeleteNode` <
+  `CreateFile` < `ChangePerm` < `ReplaceBinary` < `EditText`). Scope stays narrow (no rename
+  inference, symlink authoring, or text↔binary transition): symlink nodes never reach mode detection
+  (they live in the symlink baseline view and already fail closed), and symlink mode remains
+  normatively `0`. New witnesses: mode-only → single `ChangePerm` with correct old/new modes;
+  content+mode → `ChangePerm` before `EditText`; the mixed-operation ordering test extended to all
+  five kinds (`[Delete, Create, ChangePerm, ReplaceBinary, EditText]`). Stale rustdoc/comments flagged
+  in review (snapshot-baseline wording, "rule not yet ratified", `node_id_gen` "unwired") are
+  cleaned. Identity-neutral to existing objects; PATCH-framing anchors unchanged.
+
+- **4.4a release-prep (pass 1) — authoring path-handling hardening + threat-model delta.** Worktree
+  enumeration now converts OS→repo paths **strictly**: a non-UTF-8 OS path fails closed at the
+  conversion boundary (`to_str().ok_or(...)`) instead of being lossily replaced before
+  `RepoPath::parse`, so identity-bearing paths never derive from lossy bytes (review N2). Added a
+  binary content+mode witness (`ChangePerm` before `ReplaceBinary`, review N1) and a non-UTF-8
+  path-rejection test. A threat-model delta for the `worktree → authoring → object-store blobs → WAL
+  patch` data flow was produced against FDD-04 v1.3 (no new trust boundary or asset class; existing
+  controls cover it; residuals flagged: author signing is a dev placeholder pending real AUTHOR-role
+  signing, and symlink boundary-1 wiring when symlink authoring lands). Identity-neutral; PATCH-framing
+  anchors unchanged.
+
+- **4.4a R1 — role-bound Ed25519 AUTHOR patch signing.** Closes the release-prep-1 R1 residual: authored
+  patches are no longer signed with a development placeholder. Signing goes through an injected
+  `AuthorSigner` boundary (`author_signing.rs`): the authoring engine builds the role-bound preimage via
+  `Signature::signed_bytes(Ed25519, Patch, <unsigned patch object id>, Author, <caller key id>)` and the
+  provider returns the detached signature bytes. The production provider `Ed25519AuthorSigner` produces a
+  real Ed25519 signature through `prikk-crypto`; the sole worktree-authoring production entry
+  `commit_worktree_changes_signed` requires an injected signer, and tests use an explicit deterministic
+  Ed25519 signer. (Scope: this covers the node-addressed worktree/commit AUTHOR path. The seal/publication
+  MAINTAINER signing path is a separate role handled in a later phase and is not part of this claim.) A
+  verification test proves the authored signature verifies against the signer's public key and fails if
+  the object id, signer role, or key id changes (the algorithm negative is vacuous in v1 — `Ed25519` is
+  the only `SignatureAlgorithm` — but the algorithm is bound in the preimage). Trust stores, key
+  persistence/rotation, and signature policy remain out of scope (later phases). Identity-neutral to
+  existing objects; PATCH-framing anchors unchanged.
+
+- **4.4a R1R — remove the broken `commit --allow-empty` scaffold.** The `--allow-empty` empty-commit path
+  built a **zero-operation** patch, which canonical encoding rejects ("patch operations must contain at
+  least one operation") *before* signing — so it never produced a valid patch, and it was the last
+  remaining AUTHOR placeholder-signature production path (`dev_author_signature` in `prikk-cli`). Because a
+  zero-operation patch is not representable and cannot be signed, the scaffold could not be converted to
+  real signing; it is removed instead (`empty_patch_envelope`, the `--allow-empty` flag, the `CommitMode`
+  enum, and the placeholder helper are deleted). `prikk commit` now always authors a node-addressed patch
+  from the worktree (`--from-worktree` accepted as a no-op for compatibility) with a real role-bound
+  Ed25519 AUTHOR signature. This removes the AUTHOR placeholder from the `commit` path. (An AUTHOR-role
+  marker remains on the rollback-draft path and is scoped in R1R2 below; the seal MAINTAINER placeholder is
+  unaffected and remains a later-phase item.) Identity-neutral; PATCH-framing anchors unchanged.
+
+- **4.4a R1R2 — rollback-draft AUTHOR signing scoped as internal (non-publishable).** Review R1R found a
+  second AUTHOR-role placeholder: `rollback_draft.rs` signs the inverse Patch with
+  `dev-placeholder-rollback-author` (a `SignerRole::Author` sha256 marker, not a real Ed25519 signature),
+  on the `prikk rollback-draft --append-inverse` production path. Converting it to real AUTHOR signing is
+  **design-blocked**: that key is a *load-bearing marker* — `rollback_verify` (`is_rollback_draft_envelope`,
+  `verify_rollback_marker`) uses it to distinguish rollback-draft patches from ordinary authored patches in
+  the active WAL. Signing with a real key would erase the marker and break rollback verification, and every
+  clean replacement (a payload/precondition marker, an intent field — which the design mandates be
+  advisory-only — or a WAL-record kind) is an identity-bearing/FDD-level decision, not a signature swap. So
+  for this cut the rollback-draft path is **explicitly scoped as an internal development scaffold that is
+  not publication-grade authoring**, per the review's accepted fallback. The accurate release-scope claim is
+  therefore narrowed: node-addressed **worktree `commit`** patches are role-bound Ed25519 AUTHOR-signed;
+  rollback-draft patches are an internal scaffold and are excluded from the publishable-authoring surface, as
+  are MAINTAINER publication signing and trust-store enforcement. A proper fix (separate the rollback-draft
+  marker from the author signature, then sign with the real key) is deferred to a design pass in the later
+  crypto/policy phase. No code identity change; PATCH-framing anchors unchanged.
+
+- **4.4-2c-4 — shared `text_span` module + public §5.1 golden vectors.** Promotes the
+  identity-bearing §5.1 text-span primitives out of the replay module into a single shared
+  `prikk-store::text_span` module — `TEXT_ANCHOR_WINDOW`, `anchor_hash`/`left_anchor`/`right_anchor`,
+  `compute_span_id`, `occurrences`, `locate_text_span`, `text_blob_id`, the `TextSpanResolutionFailure`
+  taxonomy, and a new **bounds-checked** `splice_text` (E1) — so authoritative replay and (later)
+  worktree authoring compute the full `text → anchor-filtered localization → splice → BlobPayload(Text,
+  new_text) id` chain through one implementation and cannot drift. Replay's `apply_edit_text` now calls
+  the shared module; no §5.1 primitive remains in `replay.rs`. Lands public golden conformance vectors
+  (`text_span/vectors.rs`, FDD-01 §5.1 naming) pinning literal anchor hashes, span ids, localized
+  ranges, resulting text, and derived blob ids across boundary clamps, empty/zero-length insertion,
+  overlapping occurrences, duplicate-raw/different-anchor and duplicate-anchor-filtered cases, plus
+  `AnchorMismatch`/`NoMatchingSpanId` negatives. Pure move: existing replay EditText tests pass
+  unchanged against the shared module; PATCH-framing anchors unchanged.
+- **4.4-2c-3 — payload-retaining single-read lineage walk (E4).** The shared lineage walk now
+  carries an associated `Block` type, so each lineage block is read **once** and the walk returns
+  what it read: `ReaderLineage::Block = BlockPayload` (replay applies patches from the retained
+  payload, no second `read_block`), `ResolverLineage::Block = Vec<ObjectId>` (provenance maps to ids
+  for the window hash). This removes the prior ids-then-re-read double read, closing the file-backed
+  concurrent-mutation hazard before any command-path consumer. The single shared walk rule
+  (single-parent, cycle, terminus = horizon, apply order) and all acceptance/rejection behavior are
+  unchanged. Witnessed by a counting-reader test (one read per lineage block) and a guard that
+  panics on any second block read. Identity-neutral; anchors unchanged.
+- **4.4-2c-2eR2 — baseline-mismatch classification (review erratum).** `certified_compared_cache`
+  now binds the caller's intended baseline explicitly up front and returns
+  `CacheCertificationError::BaselineMismatch` directly, symmetric with `HorizonMismatch`, instead of
+  letting a caller/cache baseline mismatch fall through the validator as `CacheRejected`. Test
+  updated to assert `BaselineMismatch`. Identity bytes unchanged.
+- **4.4-2c-2eR — certification errata (review carry).** Folds review errata E1–E3 on the 2c-2e
+  producers. E1: cache certification now returns a structured `CacheCertificationError`
+  (`BaselineMismatch` / `HorizonMismatch` / `CacheRejected` / `ReplayUnavailable` / `ContentMismatch`)
+  instead of flat integrity strings, so a future consumer can branch a droppable cache fault from
+  authoritative-history unavailability; a `From<CacheCertificationError> for PrikkError` keeps the
+  flattened boundary. E2: `certified_compared_cache` now binds the caller's intended
+  `lineage_horizon_id` explicitly (fails closed up front) just as it binds the baseline. E3:
+  documents that the compare certifies only the live/tombstone lifecycle state — `snapshot_blob_id`
+  is **not** certified and must not back materialization acceleration without its own validation.
+  Identity bytes unchanged; producers remain `pub(crate)` and unwired. E4 (double block-read
+  stability before mutable file-backed command use) is carried as an explicit pre-command-path gate.
+- **4.4-2c-2e — replay-derived state exposure + compared-cache wiring + unified lineage walk.**
+  Adds the sanctioned producers `replay_derived_state` (rung 3: authoritative replay wrapped through
+  `ReplayDerivedLifecycleState::from_replay`, which validates internal consistency before exposure)
+  and `certified_compared_cache` (rung 4: validate → replay → full compare; the only cache-derived
+  rung permitted to accelerate identity decisions, and only because it is proven equal to replay —
+  never a root of trust). Unifies cache provenance and authoritative replay on a single lineage
+  definition: both now walk via the shared `walk_single_parent_chain` over a `LineageBlockReader`
+  seam (reader-backed for replay, parent-resolver-backed for provenance), so the two cannot drift on
+  which blocks are in the window or in what order. Provenance's "genesis-before-horizon" and
+  "horizon-not-genesis" failures now collapse to the single `HorizonNotInLineage` terminus rule
+  (behavior identical — both still fail closed; only the message changed). Also folds review
+  carry-forward C3 (symmetric saturating `right_anchor` arithmetic). Producers are `pub(crate)` and
+  unwired by design.
+
+- **4.4-2c-2d — EditText state effect (forward).** Replay now applies `EditText` exactly:
+  materializes the node's current text (lazily, via a new blob-content resolver; cached per pass),
+  localizes the span with the FDD-01 §5.1 64-byte anchor-filtered rule, splices in
+  `replacement_text`, derives the new `BlobPayload(Text, new_text)` content id, and records it
+  (`NodeLifecycleState::set_text_blob`), preserving `node_id`, path, and mode. Adds the structured
+  `TextSpanResolutionFailed { node_id, span_id, reason }` class. **All** lifecycle-affecting
+  operations now have exact effects — no operation maps to `UnsupportedLifecycleEffect`. The 64-byte
+  anchor window is recorded in the FDD-01 §5.1 clarification note. Folds in the E1 carry-forward
+  (`ReplaceBinary` old-side blob negatives).
+- **4.4-2c-2c — ReplaceBinary state effect.** Replay now applies `ReplaceBinary` exactly: both
+  `old_blob_id` and `new_blob_id` are resolved and required to be `BlobKind::Binary` (missing →
+  fail-closed, non-binary → inconsistent), the live node must be a `BinaryFile` currently
+  referencing `old_blob_id`, and its blob is swapped to `new_blob_id` with mode preserved (new
+  `NodeLifecycleState::replace_file_blob`). Only `EditText` now remains fail-closed
+  (`UnsupportedLifecycleEffect`).
+- **4.4-2c-2bR — DeleteNode/RenamePath persisted old-state assertions.** Exact replay now verifies
+  a `DeleteNode` record's full preimage (path, kind, blob/mode or symlink target) and a `RenamePath`
+  record's `old_path` against the replayed live node before mutating — via new
+  `NodeLifecycleState::delete_node_checked` / `rename_node_checked`. A record whose old-state
+  assertion disagrees with replayed reality is rejected (`InconsistentLifecycleEffect`) rather than
+  silently tombstoning/renaming from live state. Closes review P1-1/P1-2.
+- **4.4-2c-2b — lifecycle state-effect interpreter (Create/CreateSymlink/Delete/Rename/ChangePerm).**
+  Replay now applies exact existence/path/kind/mode effects into a `NodeLifecycleState`:
+  `CreateFile` (node kind resolved from its blob via the real store-backed resolver — the explicit
+  boundary where authoritative store access enters the trust ladder, E1), `CreateSymlink`,
+  `DeleteNode` (tombstone recorded from the live node, so it carries post-mutation content/mode per
+  O1), `RenamePath` (preserves `node_id`), and `ChangePerm` (new `NodeLifecycleState::change_file_mode`,
+  exact mode, old-mode cross-checked). `EditText` and `ReplaceBinary` still fail closed
+  (`UnsupportedLifecycleEffect`); node-lifecycle apply failures map to the new
+  `InconsistentLifecycleEffect` class. The reconstructed state is still **not** exposed as
+  `ReplayDerivedLifecycleState` and consumed by no caller (that is 2c-2e). Adds a malformed/wrong-type
+  patch negative (E2).
+- **4.4-2c-2a — authoritative lifecycle replay: lineage walker + dispatch skeleton.** Walks the
+  v1 single-parent block lineage from a baseline back to a genesis horizon over the real object
+  store, failing closed on missing/unreadable blocks, merge windows, cycles, and a genesis that is
+  not the claimed horizon. Dispatches each block's patch operations; per the O1 ruling no state
+  effect is implemented yet, so every operation fails closed (`UnsupportedLifecycleEffect`) and no
+  `ReplayDerivedLifecycleState` is produced. Lands the structured replay error taxonomy (P2-3)
+  ahead of any caller branching on it.
+- **4.4-2c-1 — store-backed lifecycle resolvers.** Real implementations of the lifecycle-cache
+  `BlockParentResolver` and `BlobKindResolver` over the object store (generic over
+  `ObjectReader`). Closes P2-1: a missing or unreadable block is an error, never genesis — only
+  a decoded `Block` with zero parents is genesis. A missing blob returns the fail-closed
+  `Ok(None)` sentinel; a present-but-wrong-type object is an error. No replay, no cache use, no
+  identity decision in this increment.
+
 ## 0.1.3 — Documentation / release hygiene
 
 Documentation-only release. No source code change; identity anchors unchanged

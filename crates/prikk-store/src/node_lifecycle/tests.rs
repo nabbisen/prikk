@@ -421,3 +421,185 @@ fn create_node_rejects_all_zero_node_id() {
         .expect_err("all-zero node_id");
     assert!(format!("{err:?}").contains("zero"));
 }
+
+#[test]
+fn change_file_mode_updates_mode_exactly() {
+    let mut state = NodeLifecycleState::new();
+    state
+        .create_node(nid(1), file_node("a.txt", 7, 0o100_644))
+        .expect("create");
+    state
+        .change_file_mode(nid(1), 0o100_644, 0o100_755)
+        .expect("chmod");
+    match &state.live_node(&nid(1)).expect("live").content {
+        NodeContent::File { mode, .. } => assert_eq!(*mode, 0o100_755),
+        other => panic!("expected file content, got {other:?}"),
+    }
+}
+
+#[test]
+fn change_file_mode_rejects_old_mode_mismatch() {
+    let mut state = NodeLifecycleState::new();
+    state
+        .create_node(nid(1), file_node("a.txt", 7, 0o100_644))
+        .expect("create");
+    assert!(
+        state
+            .change_file_mode(nid(1), 0o100_600, 0o100_755)
+            .is_err()
+    );
+}
+
+#[test]
+fn change_file_mode_rejects_symlink() {
+    let mut state = NodeLifecycleState::new();
+    state
+        .create_node(nid(2), symlink_node("link", "target"))
+        .expect("create symlink");
+    assert!(state.change_file_mode(nid(2), 0, 0o100_755).is_err());
+}
+
+#[test]
+fn change_file_mode_rejects_dead_node() {
+    let mut state = NodeLifecycleState::new();
+    assert!(
+        state
+            .change_file_mode(nid(9), 0o100_644, 0o100_755)
+            .is_err()
+    );
+}
+
+#[test]
+fn delete_node_checked_rejects_preimage_mismatch() {
+    let mut state = NodeLifecycleState::new();
+    state
+        .create_node(nid(1), file_node("a.txt", 7, 0o100_644))
+        .expect("create");
+    // Expected node claims a different mode than the live node.
+    let wrong = file_node("a.txt", 7, 0o100_600);
+    assert!(state.delete_node_checked(nid(1), &wrong).is_err());
+    // The node must remain live after a rejected delete.
+    assert!(state.live_node(&nid(1)).is_some());
+}
+
+#[test]
+fn delete_node_checked_accepts_exact_preimage() {
+    let mut state = NodeLifecycleState::new();
+    let node = file_node("a.txt", 7, 0o100_644);
+    state.create_node(nid(1), node.clone()).expect("create");
+    let deleted = state.delete_node_checked(nid(1), &node).expect("delete");
+    assert_eq!(deleted, node);
+    assert!(state.live_node(&nid(1)).is_none());
+}
+
+#[test]
+fn rename_node_checked_rejects_old_path_mismatch() {
+    let mut state = NodeLifecycleState::new();
+    state
+        .create_node(nid(1), file_node("a.txt", 7, 0o100_644))
+        .expect("create");
+    assert!(
+        state
+            .rename_node_checked(nid(1), &path("wrong.txt"), path("b.txt"))
+            .is_err()
+    );
+    // Path index unchanged after rejection.
+    assert_eq!(state.node_id_at(&path("a.txt")), Some(nid(1)));
+}
+
+#[test]
+fn rename_node_checked_accepts_correct_old_path() {
+    let mut state = NodeLifecycleState::new();
+    state
+        .create_node(nid(1), file_node("a.txt", 7, 0o100_644))
+        .expect("create");
+    state
+        .rename_node_checked(nid(1), &path("a.txt"), path("b.txt"))
+        .expect("rename");
+    assert_eq!(state.node_id_at(&path("b.txt")), Some(nid(1)));
+    assert_eq!(state.node_id_at(&path("a.txt")), None);
+}
+
+fn binary_file_node(p: &str, blob: u8, mode: u32) -> LiveNode {
+    LiveNode {
+        path: path(p),
+        kind: NodeKind::BinaryFile,
+        content: NodeContent::File {
+            blob_id: oid(blob),
+            mode,
+        },
+    }
+}
+
+#[test]
+fn replace_file_blob_updates_blob_preserving_mode() {
+    let mut state = NodeLifecycleState::new();
+    state
+        .create_node(nid(1), binary_file_node("a.bin", 7, 0o100_644))
+        .expect("create");
+    state
+        .replace_file_blob(nid(1), oid(7), oid(8))
+        .expect("replace");
+    match &state.live_node(&nid(1)).expect("live").content {
+        NodeContent::File { blob_id, mode } => {
+            assert_eq!(*blob_id, oid(8));
+            assert_eq!(*mode, 0o100_644);
+        }
+        other => panic!("expected file, got {other:?}"),
+    }
+}
+
+#[test]
+fn replace_file_blob_rejects_old_blob_mismatch() {
+    let mut state = NodeLifecycleState::new();
+    state
+        .create_node(nid(1), binary_file_node("a.bin", 7, 0o100_644))
+        .expect("create");
+    assert!(state.replace_file_blob(nid(1), oid(99), oid(8)).is_err());
+}
+
+#[test]
+fn replace_file_blob_rejects_text_file_node() {
+    let mut state = NodeLifecycleState::new();
+    state
+        .create_node(nid(1), file_node("a.txt", 7, 0o100_644))
+        .expect("create");
+    assert!(state.replace_file_blob(nid(1), oid(7), oid(8)).is_err());
+}
+
+#[test]
+fn replace_file_blob_rejects_dead_node() {
+    let mut state = NodeLifecycleState::new();
+    assert!(state.replace_file_blob(nid(9), oid(7), oid(8)).is_err());
+}
+
+#[test]
+fn set_text_blob_updates_text_node_blob() {
+    let mut state = NodeLifecycleState::new();
+    state
+        .create_node(nid(1), file_node("a.txt", 7, 0o100_644))
+        .expect("create");
+    state.set_text_blob(nid(1), oid(8)).expect("set");
+    match &state.live_node(&nid(1)).expect("live").content {
+        NodeContent::File { blob_id, mode } => {
+            assert_eq!(*blob_id, oid(8));
+            assert_eq!(*mode, 0o100_644);
+        }
+        other => panic!("expected file, got {other:?}"),
+    }
+}
+
+#[test]
+fn set_text_blob_rejects_binary_node() {
+    let mut state = NodeLifecycleState::new();
+    state
+        .create_node(nid(1), binary_file_node("a.bin", 7, 0o100_644))
+        .expect("create");
+    assert!(state.set_text_blob(nid(1), oid(8)).is_err());
+}
+
+#[test]
+fn set_text_blob_rejects_dead_node() {
+    let mut state = NodeLifecycleState::new();
+    assert!(state.set_text_blob(nid(9), oid(8)).is_err());
+}

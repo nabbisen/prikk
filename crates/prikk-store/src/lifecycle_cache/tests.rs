@@ -653,7 +653,7 @@ fn provenance_rejects_merge_block() {
     let chain = parents(&[(0xb0, &[0xa0, 0xc0]), (0xa0, &[]), (0xc0, &[])]);
     let err = ValidatedLifecycleCache::from_decoded(decoded_valid(), &full_resolver(), &chain)
         .expect_err("merge");
-    assert!(format!("{err:?}").contains("merge block"));
+    assert!(format!("{err:?}").contains("single-parent lineage"));
 }
 
 #[test]
@@ -662,7 +662,7 @@ fn provenance_rejects_horizon_not_genesis() {
     let chain = parents(&[(0xb0, &[0xa0]), (0xa0, &[0x90]), (0x90, &[])]);
     let err = ValidatedLifecycleCache::from_decoded(decoded_valid(), &full_resolver(), &chain)
         .expect_err("not genesis");
-    assert!(format!("{err:?}").contains("not repository genesis"));
+    assert!(format!("{err:?}").contains("claimed horizon"));
 }
 
 #[test]
@@ -679,7 +679,7 @@ fn provenance_rejects_genesis_before_horizon() {
     let chain = parents(&[(0xb0, &[])]);
     let err = ValidatedLifecycleCache::from_decoded(decoded_valid(), &full_resolver(), &chain)
         .expect_err("early genesis");
-    assert!(format!("{err:?}").contains("before the claimed lineage horizon"));
+    assert!(format!("{err:?}").contains("claimed horizon"));
 }
 
 // ---- 4.4-2b.2 step 3/4: replay-derived + compared rungs ----
@@ -758,7 +758,11 @@ fn compared_rejects_false_tombstone() {
     );
     let err = ComparedLifecycleCache::from_validated_and_replay(validated(), &replay)
         .expect_err("false tombstone");
-    assert!(format!("{err:?}").contains("disagree with authoritative replay"));
+    assert!(matches!(
+        err,
+        super::CacheCertificationError::ContentMismatch
+    ));
+    assert!(format!("{err}").contains("disagree with authoritative replay"));
 }
 
 #[test]
@@ -770,7 +774,11 @@ fn compared_rejects_baseline_mismatch() {
     );
     let err = ComparedLifecycleCache::from_validated_and_replay(validated(), &replay)
         .expect_err("baseline mismatch");
-    assert!(format!("{err:?}").contains("baseline mismatch"));
+    assert!(matches!(
+        err,
+        super::CacheCertificationError::BaselineMismatch { .. }
+    ));
+    assert!(format!("{err}").contains("baseline mismatch"));
 }
 
 #[test]

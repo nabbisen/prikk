@@ -1,51 +1,51 @@
-# Worktree Patch Drafts
+# Worktree Patch Authoring
 
-> **Status (DC-09 §9.3 reconciliation).** The behavior described below is the
-> PR-025 target. After the §9.3 operation-record reconciliation, every mutation
-> operation is node-addressed, so `commit --from-worktree` currently **fails closed**
-> for all change kinds pending the node model (path->node_id tracking and node-id
-> minting, increments 4.4/4.4a). Full-file `EditText` has been retired in favor of the
-> §9.3 node-addressed, span-anchored `EditText` record (application deferred). The
-> commands here are not functional in this snapshot.
-
-
-PR-025 supports two worktree patch draft modes.
-
-The default mode keeps the PR-019 coarse file-level behavior:
+`prikk commit` authors the current worktree into a node-addressed patch and appends it to the active
+WAL. The patch carries a real role-bound Ed25519 `AUTHOR` signature.
 
 ```sh
-prikk commit --from-worktree -m "record changes"
+# Key material is supplied via the environment (a minimal key-input mechanism, not a trust store):
+export PRIKK_AUTHOR_KEY_ID="dev-author"
+export PRIKK_AUTHOR_SEED="<64 hex chars>"
+
+prikk commit -m "record changes"
+# --text-edits prefers full-file text edits for modified UTF-8 tracked files:
+prikk commit --text-edits -m "record text changes"
 ```
 
-The opt-in text mode prefers conservative full-file UTF-8 text edits for modified tracked files:
+`--from-worktree` is still accepted for backward compatibility but is now the only behavior, so it can
+be omitted.
 
-```sh
-prikk commit --from-worktree --text-edits -m "record text changes"
-```
+## Baseline
 
-Both commands compare the current worktree against the snapshot manifest referenced by `heads/main`
-or by the ref selected with `--ref`.
+Authoring compares the worktree against a baseline node lifecycle state:
 
-Default operation generation:
+- **Published ref:** the baseline is reconstructed from authoritative node-addressed replay of the
+  `heads/main` (or `--ref`) lineage — never from a snapshot manifest.
+- **Genesis (fresh repository):** when the target ref has never been published, the first commit
+  authors against an empty baseline, so every worktree file becomes a `CreateFile`. The following
+  `seal` publishes the first block as a Root block. Genesis is scoped to the default `heads/main`.
 
-- missing tracked file -> `DeleteFile`
-- modified tracked file -> `ReplaceBinary`
-- untracked regular file -> `CreateFile`
+## Operation mapping
 
-Opt-in `--text-edits` generation:
+Existing-node kind is authoritative:
 
-- missing tracked file -> `DeleteFile`
-- untracked regular file -> `CreateFile`
-- modified tracked UTF-8 file -> full-file `EditText` with `anchor_id = "full-file"`
-- modified tracked binary or invalid UTF-8 file -> `ReplaceBinary`
+- new file → `CreateFile` (fresh CSPRNG-minted `node_id`, normalized mode)
+- removed tracked file → `DeleteNode`
+- modified text file → `EditText` (full-file span; requires `--text-edits`) or a file-level replacement by default
+- modified binary file → `ReplaceBinary`
+- permission-only change → `ChangePerm`
 
-This is intentionally not a minimized text diff. It records the whole file replacement behind the
-content-anchor contract introduced in PR-023 and replayed in PR-024.
+Path handling is strict: non-UTF-8 worktree paths fail closed, and traversal/reserved-name/collision
+rules apply as elsewhere.
 
-Deferred work:
+## Out of scope (this stage)
 
-- arbitrary span discovery
-- minimized text diff generation
-- rename detection
-- inverse and commutation
-- conflict witnesses and merge algebra
+- symlink authoring (fails closed on all symlinks)
+- text↔binary kind transitions (fail closed)
+- rename detection (a move is a `DeleteNode` + `CreateFile`)
+- arbitrary-span text diffs, commutation, conflict witnesses
+
+Signature scope: worktree commits are role-bound Ed25519 `AUTHOR`-signed. This does not imply
+trust-store enforcement, key management, `MAINTAINER`/publication signing, or publication-grade
+signing for the internal `rollback-draft` scaffold.

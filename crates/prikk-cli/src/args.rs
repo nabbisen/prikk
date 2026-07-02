@@ -6,23 +6,12 @@ use prikk_store::{DEFAULT_CHECKOUT_REF, DEFAULT_HISTORY_LIMIT};
 
 /// Parsed commit command arguments.
 pub(crate) struct CommitArgs {
-    /// Commit mode.
-    pub(crate) mode: CommitMode,
     /// Commit message.
     pub(crate) message: String,
     /// Baseline ref for worktree commits.
     pub(crate) ref_name: String,
     /// Whether to prefer conservative full-file text edit generation.
     pub(crate) text_edits: bool,
-}
-
-/// Commit command mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CommitMode {
-    /// Append the existing placeholder empty patch.
-    AllowEmpty,
-    /// Generate a minimal patch from snapshot-baseline worktree changes.
-    FromWorktree,
 }
 
 /// Parsed log command arguments.
@@ -200,7 +189,7 @@ pub(crate) fn parse_checkout_args(args: Vec<String>) -> std::result::Result<Chec
     }
     let Some(mode) = mode else {
         return Err(concat!(
-            "PR-030 supports `prikk checkout --plan-only`, `--snapshot-plan`, ",
+            "checkout requires one mode flag: `--plan-only`, `--snapshot-plan`, ",
             "`--snapshot-materialize`, `--patch-plan`, `--patch-materialize`, ",
             "`--patch-delete-plan`, or `--patch-materialize-delete`",
         )
@@ -434,17 +423,17 @@ pub(crate) fn parse_doctor_args(args: Vec<String>) -> std::result::Result<Doctor
     })
 }
 
-/// Parse commit scaffold arguments.
+/// Parse commit arguments. Commit always authors a node-addressed patch from the worktree against the
+/// baseline ref; `--from-worktree` is accepted for backward compatibility but is the only behavior.
 pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<CommitArgs, String> {
-    let mut mode = None;
     let mut message = None;
     let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
     let mut text_edits = false;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
-            "--allow-empty" => set_commit_mode(&mut mode, CommitMode::AllowEmpty)?,
-            "--from-worktree" => set_commit_mode(&mut mode, CommitMode::FromWorktree)?,
+            // Accepted for compatibility; worktree authoring is the only commit behavior.
+            "--from-worktree" => {}
             "--text-edits" => text_edits = true,
             "--ref" => {
                 let Some(value) = iter.next() else {
@@ -464,24 +453,17 @@ pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<Commit
             other => return Err(format!("unknown commit argument: {other}")),
         }
     }
-    let Some(mode) = mode else {
-        return Err(concat!(
-            "PR-030 supports `prikk commit --allow-empty -m <message>` or ",
-            "`--from-worktree [--text-edits] -m <message>`",
-        )
-        .to_string());
-    };
     let Some(message) = message else {
-        return Err("commit requires -m <message>".to_string());
+        return Err(
+            "commit requires -m <message> (usage: prikk commit [--from-worktree] [--text-edits] \
+             [--ref <name>] -m <message>)"
+                .to_string(),
+        );
     };
     if message.trim().is_empty() {
         return Err("commit message must not be empty".to_string());
     }
-    if text_edits && mode != CommitMode::FromWorktree {
-        return Err("commit --text-edits requires --from-worktree".to_string());
-    }
     Ok(CommitArgs {
-        mode,
         message,
         ref_name,
         text_edits,
@@ -509,17 +491,6 @@ fn set_checkout_mode(
 ) -> std::result::Result<(), String> {
     if mode.is_some() {
         return Err("checkout accepts only one mode flag".to_string());
-    }
-    *mode = Some(next);
-    Ok(())
-}
-
-fn set_commit_mode(
-    mode: &mut Option<CommitMode>,
-    next: CommitMode,
-) -> std::result::Result<(), String> {
-    if mode.is_some() {
-        return Err("commit accepts only one mode flag".to_string());
     }
     *mode = Some(next);
     Ok(())

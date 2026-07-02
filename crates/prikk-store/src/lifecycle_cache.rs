@@ -12,11 +12,14 @@
 //! `FieldRecord` TLV (design v3 wire table). Deterministic, versioned, and validated
 //! fail-closed: any structural or cross-set violation is rejected.
 
+use std::fmt;
+
 use prikk_error::{PrikkError, Result};
 use prikk_object::{BlobKind, CanonicalWriter, NodeId, NodeKind, ObjectId, WireType};
 
 use crate::byte_cursor::ByteCursor;
 use crate::node_lifecycle::{LiveNode, NodeContent, NodeLifecycleState, Tombstone};
+use crate::object_store::ObjectReader;
 
 const LIFECYCLE_CACHE_MAGIC: &[u8] = b"PRIKK-NODE-LIFECYCLE-CACHE-v1\0";
 const WINDOW_HASH_DOMAIN: &[u8] = b"PRIKK-LIFECYCLE-CACHE-WINDOW-v1";
@@ -72,6 +75,9 @@ pub(crate) struct DecodedLifecycleCache {
     pub(crate) lineage_horizon_id: ObjectId,
     pub(crate) parent_policy: ParentPolicy,
     pub(crate) replay_window_hash: [u8; 32],
+    /// Optional materialization hint. **Not** certified by `ComparedLifecycleCache` (E3): the
+    /// compare proves only the live/tombstone lifecycle state. Must not back materialization
+    /// acceleration without its own validation against the authoritative state/root.
     pub(crate) snapshot_blob_id: Option<ObjectId>,
     pub(crate) live_entries: Vec<(NodeId, LiveNode)>,
     pub(crate) tombstones: Vec<(NodeId, Tombstone)>,
@@ -284,55 +290,53 @@ impl DecodedLifecycleCache {
 
     /// Operational provenance (4.4-2b.2 step 2): recompute `replay_window_hash` over the
     /// **actually walked** single-parent block chain from `baseline_block_id` back to
-    /// `lineage_horizon_id`, never over cache-supplied block ids. Fails closed on a merge
-    /// (multi-parent) block, a cycle, reaching genesis before the claimed horizon, a horizon
-    /// that is not repository genesis (v1 adequate-horizon rule), or a hash mismatch.
+    /// `lineage_horizon_id`, never over cache-supplied block ids. The walk is the shared
+    /// [`replay::walk_single_parent_chain`] — the same lineage definition authoritative replay
+    /// uses — so provenance and replay cannot drift. Fails closed on a merge (multi-parent) block,
+    /// a cycle, a genesis that is not the claimed horizon, or a hash mismatch.
     fn verify_window_against_chain(&self, resolver: &impl BlockParentResolver) -> Result<()> {
-        let horizon = self.lineage_horizon_id;
-        let baseline = self.baseline_block_id;
+        let walked = replay::walk_single_parent_chain(
+            &ResolverLineage(resolver),
+            self.baseline_block_id,
+            self.lineage_horizon_id,
+        )
+        .map_err(|e| stale_provenance(e.to_string()))?;
 
-        // Walk baseline -> horizon, collecting baseline-first (reversed for the preimage).
-        let mut chain = vec![baseline];
-        let mut visited = std::collections::BTreeSet::new();
-        visited.insert(*baseline.as_bytes());
-        let mut current = baseline;
-        while current != horizon {
-            let parents = resolver.parent_block_ids(&current)?;
-            let parent = match parents.as_slice() {
-                [single] => *single,
-                [] => {
-                    return Err(stale_provenance(
-                        "reached genesis before the claimed lineage horizon".to_string(),
-                    ));
-                }
-                _ => {
-                    return Err(stale_provenance(
-                        "merge block in v1 single-parent lineage window".to_string(),
-                    ));
-                }
-            };
-            if !visited.insert(*parent.as_bytes()) {
-                return Err(stale_provenance("cycle in block lineage".to_string()));
-            }
-            chain.push(parent);
-            current = parent;
-        }
-
-        // v1 adequate-horizon rule: the horizon must be repository genesis (no parent block).
-        if !resolver.parent_block_ids(&horizon)?.is_empty() {
-            return Err(stale_provenance(
-                "lineage horizon is not repository genesis (v1 requires a genesis horizon)"
-                    .to_string(),
-            ));
-        }
-
-        chain.reverse(); // now [horizon, .., baseline] == [block_id_0 .. block_id_n]
+        // `walked` is apply order (horizon/genesis first … baseline last). Provenance needs only
+        // the ids == [block_id_0 .. n] for the window-hash preimage.
+        let chain: Vec<ObjectId> = walked.into_iter().map(|(id, _parents)| id).collect();
         if compute_window_hash(&chain) != self.replay_window_hash {
             return Err(stale_provenance(
                 "replay_window_hash does not match the walked single-parent chain".to_string(),
             ));
         }
         Ok(())
+    }
+}
+
+/// Parent-resolver-backed lineage source, so cache provenance walks the lineage through the same
+/// [`replay::walk_single_parent_chain`] as authoritative replay. Its `Block` is just the parent id
+/// list (provenance needs no payload). A resolver error (missing, non-Block, decode failure) is
+/// surfaced as a fail-closed unreadable-block walk error.
+struct ResolverLineage<'a, P: BlockParentResolver>(&'a P);
+
+impl<P: BlockParentResolver> replay::LineageBlockReader for ResolverLineage<'_, P> {
+    type Block = Vec<ObjectId>;
+
+    fn read_lineage_block(
+        &self,
+        block_id: ObjectId,
+    ) -> std::result::Result<Vec<ObjectId>, replay::LifecycleReplayError> {
+        self.0.parent_block_ids(&block_id).map_err(|e| {
+            replay::LifecycleReplayError::UnreadableBlockInLineage {
+                block_id,
+                detail: e.to_string(),
+            }
+        })
+    }
+
+    fn parents_of(block: &Vec<ObjectId>) -> &[ObjectId] {
+        block
     }
 }
 
@@ -600,6 +604,13 @@ pub(crate) trait BlobKindResolver {
     fn blob_kind(&self, blob_id: &ObjectId) -> Result<Option<BlobKind>>;
 }
 
+/// Resolves a blob's kind and full content bytes, for `EditText` text materialization (2c-2d).
+/// Returns `None` only when the blob is absent (fail-closed sentinel); a present non-Blob object
+/// is an error.
+pub(crate) trait BlobContentResolver {
+    fn blob_content(&self, blob_id: &ObjectId) -> Result<Option<(BlobKind, Vec<u8>)>>;
+}
+
 /// Resolves a block's parent block ids, in seal order, for operational provenance
 /// verification. Empty at genesis. v1 lifecycle windows require a single-parent chain;
 /// more than one parent fails closed. A real store-backed resolver (reading `Block`
@@ -607,6 +618,15 @@ pub(crate) trait BlobKindResolver {
 pub(crate) trait BlockParentResolver {
     fn parent_block_ids(&self, block_id: &ObjectId) -> Result<Vec<ObjectId>>;
 }
+
+/// Real store-backed implementations of the resolver traits (4.4-2c-1).
+mod store_resolvers;
+
+/// Explicit boundary (E1): authoritative store access enters the lifecycle trust ladder here.
+pub(crate) use store_resolvers::StoreBackedResolver;
+
+/// Authoritative lifecycle replay: lineage walker + dispatch skeleton (4.4-2c-2a).
+mod replay;
 
 /// First trust rung (4.4-2b.2 steps 1–2): a decoded cache that has passed structural
 /// validation, **operational provenance** (its `replay_window_hash` recomputed over the
@@ -700,6 +720,12 @@ impl ReplayDerivedLifecycleState {
             state,
         })
     }
+
+    /// Borrow the authoritative replay-derived lifecycle state (the only sanctioned baseline for
+    /// node-addressed worktree authoring, 4.4a-2).
+    pub(crate) fn state(&self) -> &NodeLifecycleState {
+        &self.state
+    }
 }
 
 /// A validated cache **proven equal** to authoritative replay for the same baseline (rung 4).
@@ -707,40 +733,173 @@ impl ReplayDerivedLifecycleState {
 /// `node_id` reuse decisions once wired — and even then only because it equals replay. The
 /// decisive guarantee: a cache with correct provenance but false live/tombstone contents is
 /// rejected here, because the rebuilt state will not equal the replayed state.
+///
+/// **Scope of the certification (E3).** The compare proves equality of the lifecycle *state*
+/// rebuilt from `live_entries` and `tombstones` only. It does **not** certify any cache-adjacent
+/// materialization hint such as `snapshot_blob_id`. Accelerated consumers (checkout/status) may
+/// rely only on the certified lifecycle entries; `snapshot_blob_id` must not back materialization
+/// acceleration unless and until it gains its own validation path against the authoritative
+/// state/root. A narrowed accessor exposing only the certified entries should land with the first
+/// consumer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ComparedLifecycleCache {
     validated: ValidatedLifecycleCache,
 }
 
+/// Why a cache failed to certify against authoritative replay (E1). The classes are distinct so a
+/// future caller can branch on the cause: a **cache** fault (`BaselineMismatch`, `HorizonMismatch`,
+/// `CacheRejected`, `ContentMismatch`) is a reason to drop the cache and fall back to authoritative
+/// replay, whereas `ReplayUnavailable` means authoritative history itself could not be
+/// reconstructed and must be surfaced as an integrity fault — never silently bypassed by trusting
+/// the cache.
+#[derive(Debug)]
+pub(crate) enum CacheCertificationError {
+    /// The cache's declared baseline is not the caller's intended baseline.
+    BaselineMismatch { expected: ObjectId, found: ObjectId },
+    /// The cache's declared lineage horizon is not the caller's intended horizon.
+    HorizonMismatch { expected: ObjectId, found: ObjectId },
+    /// Structural, provenance, or blob-kind validation rejected the cache.
+    CacheRejected(PrikkError),
+    /// Authoritative replay for the baseline could not be produced (integrity fault, not a mere
+    /// cache miss).
+    ReplayUnavailable(PrikkError),
+    /// The cache validated and replay succeeded, but the rebuilt cache state is not equal to
+    /// authoritative replay (correct provenance, false live/tombstone contents).
+    ContentMismatch,
+}
+
+impl fmt::Display for CacheCertificationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::BaselineMismatch { expected, found } => write!(
+                f,
+                "lifecycle cache certification failed: baseline mismatch \
+                 (caller expected {expected}, cache declares {found})"
+            ),
+            Self::HorizonMismatch { expected, found } => write!(
+                f,
+                "lifecycle cache certification failed: horizon mismatch \
+                 (caller expected {expected}, cache declares {found})"
+            ),
+            Self::CacheRejected(e) => write!(
+                f,
+                "lifecycle cache certification failed: cache rejected by validation: {e}"
+            ),
+            Self::ReplayUnavailable(e) => write!(
+                f,
+                "lifecycle cache certification failed: authoritative replay unavailable: {e}"
+            ),
+            Self::ContentMismatch => write!(
+                f,
+                "lifecycle cache certification failed: cache contents disagree with \
+                 authoritative replay"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for CacheCertificationError {}
+
+impl From<CacheCertificationError> for PrikkError {
+    /// At the `PrikkError` boundary every certification failure is an integrity fault. Callers that
+    /// need to *branch* (drop-cache-and-replay vs. surface-unavailability) must consume the
+    /// structured [`CacheCertificationError`] directly rather than this flattened form.
+    fn from(e: CacheCertificationError) -> Self {
+        PrikkError::Integrity(e.to_string())
+    }
+}
+
 impl ComparedLifecycleCache {
-    /// Compare a validated cache to authoritative replay for the **same** baseline. Fails
-    /// closed on a baseline mismatch or any disagreement between the cache contents and the
-    /// replayed state (the right-provenance/false-tombstone case).
+    /// Compare a validated cache to authoritative replay for the **same** baseline. Fails closed
+    /// with a structured [`CacheCertificationError`] on a baseline mismatch or any disagreement
+    /// between the cache contents and the replayed state (the right-provenance/false-tombstone
+    /// case).
     pub(crate) fn from_validated_and_replay(
         validated: ValidatedLifecycleCache,
         replay: &ReplayDerivedLifecycleState,
-    ) -> Result<Self> {
+    ) -> std::result::Result<Self, CacheCertificationError> {
         if validated.decoded.baseline_block_id != replay.baseline_block_id {
-            return Err(PrikkError::Integrity(
-                "lifecycle cache conflicts with replay: baseline mismatch".to_string(),
-            ));
+            return Err(CacheCertificationError::BaselineMismatch {
+                expected: replay.baseline_block_id,
+                found: validated.decoded.baseline_block_id,
+            });
         }
-        let cache_state = validated.to_node_lifecycle_state()?;
+        let cache_state = validated
+            .to_node_lifecycle_state()
+            .map_err(CacheCertificationError::CacheRejected)?;
         if cache_state != replay.state {
-            return Err(PrikkError::Integrity(
-                "lifecycle cache conflicts with replay: contents disagree with authoritative \
-                 replay"
-                    .to_string(),
-            ));
+            return Err(CacheCertificationError::ContentMismatch);
         }
         Ok(Self { validated })
     }
 
-    /// The compared (replay-equal) cache, usable for non-identity acceleration; identity-
-    /// decision wiring arrives in a later slice.
+    /// The compared (replay-equal) cache. Only the certified lifecycle entries are authoritative
+    /// for acceleration; see the type-level note on `snapshot_blob_id` (E3). Identity-decision
+    /// wiring arrives in a later slice.
     pub(crate) fn validated(&self) -> &ValidatedLifecycleCache {
         &self.validated
     }
+}
+
+/// Rung-3 producer: authoritative replay-derived lifecycle state for `baseline_block_id`, with
+/// `lineage_horizon_id` the claimed genesis. Runs the authoritative single-parent replay and wraps
+/// it through `ReplayDerivedLifecycleState::from_replay`, which validates internal consistency
+/// before the state can be used as the reference truth. This is the only sanctioned way to obtain
+/// a `ReplayDerivedLifecycleState`.
+pub(crate) fn replay_derived_state(
+    reader: &impl ObjectReader,
+    baseline_block_id: ObjectId,
+    lineage_horizon_id: ObjectId,
+) -> Result<ReplayDerivedLifecycleState> {
+    let state = replay::replay_lineage(reader, baseline_block_id, lineage_horizon_id)?;
+    ReplayDerivedLifecycleState::from_replay(baseline_block_id, state)
+}
+
+/// Rung-4 producer: certify a decoded cache against authoritative replay, yielding the **only**
+/// cache-derived rung permitted to accelerate identity (reuse / restoration-equivalence)
+/// decisions. The caller's intended baseline **and** horizon are both bound explicitly up front
+/// (E2); the cache is then validated (structure, provenance over the shared lineage walk,
+/// blob-kind), authoritatively replayed for the same baseline, and compared in full. Any failure
+/// returns a structured [`CacheCertificationError`] so callers can distinguish a droppable cache
+/// fault from authoritative-history unavailability. The cache is an accelerator proven equal to
+/// replay — never a root of trust. On any failure, callers fall back to [`replay_derived_state`].
+pub(crate) fn certified_compared_cache<R: ObjectReader>(
+    reader: &R,
+    decoded: DecodedLifecycleCache,
+    expected_baseline_block_id: ObjectId,
+    expected_lineage_horizon_id: ObjectId,
+) -> std::result::Result<ComparedLifecycleCache, CacheCertificationError> {
+    // Bind the caller's intended baseline and horizon explicitly and symmetrically, before any
+    // validation or replay. Both would otherwise fail closed implicitly (baseline through the
+    // validator, horizon through the shared genesis walk), but the producer API exposes the
+    // dedicated mismatch class for each rather than collapsing baseline into `CacheRejected`.
+    if decoded.baseline_block_id != expected_baseline_block_id {
+        return Err(CacheCertificationError::BaselineMismatch {
+            expected: expected_baseline_block_id,
+            found: decoded.baseline_block_id,
+        });
+    }
+    if decoded.lineage_horizon_id != expected_lineage_horizon_id {
+        return Err(CacheCertificationError::HorizonMismatch {
+            expected: expected_lineage_horizon_id,
+            found: decoded.lineage_horizon_id,
+        });
+    }
+    let resolver = StoreBackedResolver::new(reader);
+    let validated = ValidatedLifecycleCache::from_decoded_for_baseline(
+        decoded,
+        expected_baseline_block_id,
+        &resolver,
+        &resolver,
+    )
+    .map_err(CacheCertificationError::CacheRejected)?;
+    let replay = replay_derived_state(
+        reader,
+        expected_baseline_block_id,
+        expected_lineage_horizon_id,
+    )
+    .map_err(CacheCertificationError::ReplayUnavailable)?;
+    ComparedLifecycleCache::from_validated_and_replay(validated, &replay)
 }
 
 /// Verify one file entry's referenced blob kind matches its `NodeKind` (symlink entries

@@ -14,6 +14,7 @@ pub(crate) mod decode;
 use prikk_error::{PrikkError, Result};
 use prikk_object::{BlockPayload, ObjectEnvelope, ObjectId, ObjectType, RefStatePayload};
 
+use crate::checkout::DEFAULT_CHECKOUT_REF;
 use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
 use crate::path::RepoPath;
@@ -145,6 +146,84 @@ pub(crate) fn replay_supported_patch_chain(
         deleted_files: deleted_files.into_values().collect(),
         baseline_manifest: files_to_manifest(baseline_files)?,
     })
+}
+
+/// Resolve the node-addressed lineage bounds for a ref: the current target block (baseline) and the
+/// lineage genesis (horizon). Worktree authoring (4.4a-2) supplies these to `replay_derived_state`
+/// so the baseline node lifecycle state is reconstructed from authoritative node-addressed history,
+/// never from a snapshot manifest. Fails closed on a multi-parent lineage (v1 single-parent only).
+pub(crate) fn resolve_node_lineage_bounds(
+    layout: &RepositoryLayout,
+    ref_name: &str,
+) -> Result<(ObjectId, ObjectId)> {
+    let object_store = FileObjectStore::new(layout.clone());
+    let baseline = current_target_block(layout, &object_store, ref_name)?;
+    let chain = single_parent_chain(&object_store, baseline)?;
+    let horizon = *chain
+        .first()
+        .ok_or_else(|| PrikkError::Integrity(format!("ref {ref_name} lineage is empty")))?;
+    Ok((baseline, horizon))
+}
+
+/// Baseline context for worktree authoring: either a published node-addressed lineage, or a genesis
+/// (first-commit) context with no baseline at all.
+pub(crate) enum WorktreeBaseline {
+    /// The ref is published; author against replay-derived node lifecycle state.
+    Published {
+        /// Current target block (baseline).
+        baseline_block: ObjectId,
+        /// Lineage genesis (horizon).
+        horizon: ObjectId,
+    },
+    /// The ref has never been published; author against an empty baseline (all `CreateFile`).
+    Genesis,
+}
+
+/// Decide whether worktree authoring runs against a published lineage or a genesis (first-commit)
+/// context (DC-09 4.4b). Genesis is selected **only** when the target ref has never been published:
+/// the ref pointer is absent **and** the ref log is readable and empty. A missing pointer with any
+/// ref-log history, or an unreadable/partial ref log, is treated as corruption — not genesis — and
+/// fails closed pointing at `doctor` (design §4, review E2). The active-WAL guard (review E1) is the
+/// authoring caller's responsibility and is enforced there.
+pub(crate) fn resolve_worktree_baseline(
+    layout: &RepositoryLayout,
+    ref_name: &str,
+) -> Result<WorktreeBaseline> {
+    let ref_store = RefStore::new(layout.clone());
+    if ref_store.read_current_ref_state_id(ref_name)?.is_some() {
+        let (baseline_block, horizon) = resolve_node_lineage_bounds(layout, ref_name)?;
+        return Ok(WorktreeBaseline::Published {
+            baseline_block,
+            horizon,
+        });
+    }
+    // Pointer absent: genesis only if the log is readable and empty; otherwise corruption.
+    // Genesis is scoped to the default ref this increment (review Q2); a non-default unpublished ref
+    // is not a genesis case — branch creation / non-default first-commit is a separate design.
+    if ref_name != DEFAULT_CHECKOUT_REF {
+        return Err(PrikkError::InvalidName(format!(
+            "first commit is supported only for {DEFAULT_CHECKOUT_REF}; ref {ref_name} is not \
+             published and branch creation is not implemented yet"
+        )));
+    }
+    let log = ref_store.replay_log(ref_name).map_err(|err| {
+        PrikkError::Integrity(format!(
+            "ref {ref_name} log is unreadable; run `prikk doctor` before committing ({err})"
+        ))
+    })?;
+    if log.trailing_partial_bytes != 0 {
+        return Err(PrikkError::Integrity(format!(
+            "ref {ref_name} pointer is missing and its log has trailing partial bytes; \
+             run `prikk doctor` (this is not a genesis repository)"
+        )));
+    }
+    if !log.records.is_empty() {
+        return Err(PrikkError::Integrity(format!(
+            "ref {ref_name} pointer is missing but ref-log history exists; \
+             run `prikk doctor --repair-main-ref` (this is not a genesis repository)"
+        )));
+    }
+    Ok(WorktreeBaseline::Genesis)
 }
 
 fn current_target_block(

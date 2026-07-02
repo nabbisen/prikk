@@ -1,6 +1,6 @@
 [package]
-name        = "prikk-object"
-description = "Prikk object identity, canonical encoding, and object payload types."
+name        = "prikk-crypto"
+description = "Prikk cryptographic primitives (v1 Ed25519 signing and verification)."
 readme      = "README.md"
 version.workspace       = true
 edition.workspace       = true
@@ -11,7 +11,9 @@ repository.workspace    = true
 
 [dependencies]
 prikk-error                 = { workspace = true }
-prikk-hash                  = { workspace = true }
+
+ed25519-dalek               = { workspace = true }
+getrandom                   = { workspace = true }
 
 [lints]
 workspace = true

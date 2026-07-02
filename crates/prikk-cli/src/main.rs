@@ -2,8 +2,8 @@
 
 //! Prikk command-line entry point.
 //!
-//! PR-030 exposes minimal repository layout commands, active WAL status, empty and
-//! snapshot-baseline worktree commit scaffolds, opt-in full-file text edit generation,
+//! The CLI exposes minimal repository layout commands, active WAL status, node-addressed worktree
+//! commit authoring, opt-in full-file text edit generation,
 //! read-only inverse planning, rollback preview, rollback draft append/verification, sealed rollback classification,
 //! supported patch replay planning/materialization, explicit patch deletion planning, a local
 //! no-audit seal scaffold, read-only history inspection, checkout planning, conservative snapshot
@@ -14,17 +14,14 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 mod args;
-mod commit;
 mod output;
 mod seal;
 
 use args::{
-    CheckoutMode, CommitMode, current_dir, optional_path_or_current, parse_checkout_args,
-    parse_commit_args, parse_doctor_args, parse_inverse_plan_args, parse_log_args,
-    parse_rollback_draft_args, parse_rollback_draft_verify_args, parse_rollback_preview_args,
-    parse_worktree_status_args,
+    CheckoutMode, current_dir, optional_path_or_current, parse_checkout_args, parse_commit_args,
+    parse_doctor_args, parse_inverse_plan_args, parse_log_args, parse_rollback_draft_args,
+    parse_rollback_draft_verify_args, parse_rollback_preview_args, parse_worktree_status_args,
 };
-use commit::empty_patch_envelope;
 use output::{
     print_checkout_plan, print_doctor_report, print_help, print_history, print_patch_deletion_plan,
     print_patch_inverse_plan, print_patch_materialization_report, print_patch_replay_plan,
@@ -33,8 +30,8 @@ use output::{
     print_worktree_status,
 };
 use prikk_store::{
-    ActiveSession, DoctorRepairOptions, RefStore, RepositoryLayout, Wal,
-    WorktreePatchCommitOptions, append_rollback_draft, commit_worktree_changes_with_options,
+    DoctorRepairOptions, Ed25519AuthorSigner, RefStore, RepositoryLayout, Wal,
+    WorktreePatchCommitOptions, append_rollback_draft, commit_worktree_changes_signed,
     doctor_repository, load_ref_history, materialize_patch_checkout,
     materialize_patch_checkout_with_deletions, materialize_snapshot_checkout,
     plan_patch_checkout_deletions, prepare_checkout_plan, prepare_patch_inverse_plan,
@@ -42,7 +39,7 @@ use prikk_store::{
     repair_repository, verify_active_rollback_draft, verify_repository, worktree_status,
 };
 
-const VERSION: &str = "0.1.0-pr030";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> ExitCode {
     match run() {
@@ -99,42 +96,24 @@ fn run_commit(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_commit_args(args)?;
     let root = current_dir()?;
     let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
-    match args.mode {
-        CommitMode::AllowEmpty => {
-            let envelope = empty_patch_envelope(&args.message)?;
-            let patch_id = envelope.object_id();
-            let session = ActiveSession::new(layout);
-            let result = session
-                .append_patch(&envelope)
-                .map_err(|err| err.to_string())?;
-            println!("recorded empty patch in active WAL");
-            println!("patch id: {patch_id}");
-            println!("WAL sequence: {}", result.wal_sequence);
-        }
-        CommitMode::FromWorktree => {
-            let options = if args.text_edits {
-                WorktreePatchCommitOptions::prefer_text_edits()
-            } else {
-                WorktreePatchCommitOptions::file_level()
-            };
-            let report = commit_worktree_changes_with_options(
-                &layout,
-                &args.ref_name,
-                &args.message,
-                options,
-            )
+    let options = if args.text_edits {
+        WorktreePatchCommitOptions::prefer_text_edits()
+    } else {
+        WorktreePatchCommitOptions::file_level()
+    };
+    let signer = author_signer_from_env()?;
+    let report =
+        commit_worktree_changes_signed(&layout, &args.ref_name, &args.message, options, &signer)
             .map_err(|err| err.to_string())?;
-            println!("recorded worktree patch in active WAL");
-            println!("baseline ref: {}", report.ref_name);
-            println!("patch id: {}", report.patch_id);
-            println!("WAL sequence: {}", report.wal_sequence);
-            println!("operations: {}", report.operation_count);
-            println!("referenced blobs: {}", report.referenced_blob_count);
-            println!("text edits: {}", report.text_edit_count);
-            for change in &report.changes {
-                println!("  {} {}", change.operation.as_str(), change.path);
-            }
-        }
+    println!("recorded worktree patch in active WAL");
+    println!("baseline ref: {}", report.ref_name);
+    println!("patch id: {}", report.patch_id);
+    println!("WAL sequence: {}", report.wal_sequence);
+    println!("operations: {}", report.operation_count);
+    println!("referenced blobs: {}", report.referenced_blob_count);
+    println!("text edits: {}", report.text_edit_count);
+    for change in &report.changes {
+        println!("  {} {}", change.operation.as_str(), change.path);
     }
     println!(
         "note: arbitrary-span text diffs, patch algebra, rename detection, audit plugins, and \
@@ -175,7 +154,7 @@ fn run_status() -> std::result::Result<(), String> {
     }
     println!(
         "status: arbitrary-span text diffs, plugins, and sync not \
-         implemented in PR-030"
+         yet implemented"
     );
     Ok(())
 }
@@ -330,5 +309,60 @@ fn run_doctor(args: Vec<String>) -> std::result::Result<(), String> {
         } else {
             Err("doctor found repository health errors".to_string())
         }
+    }
+}
+
+/// Build the AUTHOR signer from caller-supplied key material in the environment, failing closed if
+/// none is configured. This is deliberately minimal key *input* — no trust store, key file, rotation,
+/// or persistence (those are later phases). Real authoring requires:
+///   - `PRIKK_AUTHOR_KEY_ID`: non-empty key identifier recorded in the signature;
+///   - `PRIKK_AUTHOR_SEED`: 64 hex characters (a 32-byte Ed25519 secret seed).
+fn author_signer_from_env() -> Result<Ed25519AuthorSigner, String> {
+    let key_id = std::env::var("PRIKK_AUTHOR_KEY_ID").map_err(|_| {
+        "author signing is required: set PRIKK_AUTHOR_KEY_ID (no signing key configured)"
+            .to_string()
+    })?;
+    if key_id.trim().is_empty() {
+        return Err("PRIKK_AUTHOR_KEY_ID must not be empty".to_string());
+    }
+    let seed_hex = std::env::var("PRIKK_AUTHOR_SEED").map_err(|_| {
+        "author signing is required: set PRIKK_AUTHOR_SEED (64 hex chars; no signing key configured)"
+            .to_string()
+    })?;
+    let seed = decode_seed_hex(&seed_hex)?;
+    Ok(Ed25519AuthorSigner::from_seed(key_id, &seed))
+}
+
+/// Decode exactly 64 hex characters into a 32-byte Ed25519 secret seed.
+fn decode_seed_hex(hex: &str) -> Result<[u8; 32], String> {
+    let hex = hex.trim();
+    if hex.len() != 64 {
+        return Err(format!(
+            "PRIKK_AUTHOR_SEED must be 64 hex characters, got {}",
+            hex.len()
+        ));
+    }
+    let mut seed = [0_u8; 32];
+    for (slot, pair) in seed.iter_mut().zip(hex.as_bytes().chunks_exact(2)) {
+        let hi = pair
+            .first()
+            .copied()
+            .ok_or_else(|| "PRIKK_AUTHOR_SEED truncated".to_string())?;
+        let lo = pair
+            .get(1)
+            .copied()
+            .ok_or_else(|| "PRIKK_AUTHOR_SEED truncated".to_string())?;
+        *slot = (hex_nibble(hi)? << 4) | hex_nibble(lo)?;
+    }
+    Ok(seed)
+}
+
+/// Convert one ASCII hex character to its 4-bit value.
+fn hex_nibble(c: u8) -> Result<u8, String> {
+    match c {
+        b'0'..=b'9' => Ok(c - b'0'),
+        b'a'..=b'f' => Ok(c - b'a' + 10),
+        b'A'..=b'F' => Ok(c - b'A' + 10),
+        _ => Err("PRIKK_AUTHOR_SEED contains a non-hex character".to_string()),
     }
 }

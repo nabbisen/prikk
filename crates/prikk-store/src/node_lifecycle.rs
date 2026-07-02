@@ -180,14 +180,163 @@ impl NodeLifecycleState {
         Ok(())
     }
 
+    /// Delete a node, first verifying the persisted `DeleteNode` record's old-state assertion
+    /// (path, kind, content/preimage) against the replayed live node (2c-2bR, P1-1). Exact replay
+    /// must reject a record whose preimage disagrees with reality rather than tombstone from live
+    /// state regardless. `expected` is the live node the record claims to delete.
+    pub(crate) fn delete_node_checked(
+        &mut self,
+        node_id: NodeId,
+        expected: &LiveNode,
+    ) -> Result<LiveNode> {
+        let live = self.live_by_id.get(&node_id).ok_or_else(|| {
+            PrikkError::Integrity("DeleteNode target node_id is not live".to_string())
+        })?;
+        if live != expected {
+            return Err(PrikkError::Integrity(
+                "DeleteNode preimage (path/kind/content) does not match the replayed live node"
+                    .to_string(),
+            ));
+        }
+        self.delete_node(node_id)
+    }
+
+    /// Rename a node, first verifying the persisted `RenamePath` record's `old_path` against the
+    /// replayed live node's current path (2c-2bR, P1-2), then renaming to `new_path`.
+    pub(crate) fn rename_node_checked(
+        &mut self,
+        node_id: NodeId,
+        expected_old_path: &RepoPath,
+        new_path: RepoPath,
+    ) -> Result<()> {
+        let live = self.live_by_id.get(&node_id).ok_or_else(|| {
+            PrikkError::Integrity("RenamePath target node_id is not live".to_string())
+        })?;
+        if live.path != *expected_old_path {
+            return Err(PrikkError::Integrity(format!(
+                "RenamePath old_path {} does not match the live path {}",
+                expected_old_path.as_str(),
+                live.path.as_str()
+            )));
+        }
+        self.rename_node(node_id, new_path)
+    }
+
     /// The live node for an identity, if any.
     pub(crate) fn live_node(&self, node_id: &NodeId) -> Option<&LiveNode> {
         self.live_by_id.get(node_id)
     }
 
-    /// The `node_id` currently live at a path, if any.
+    /// True if `node_id` is in the complete known-id set (live, tombstoned, or otherwise seen in
+    /// this baseline). Fresh node-id minting rejects any candidate for which this holds, so a
+    /// random draw can never alias an existing node identity (4.4a-1, erratum E2).
+    pub(crate) fn contains_seen_node_id(&self, node_id: &NodeId) -> bool {
+        self.seen_ids.contains(node_id)
+    }
+
+    /// Iterate the live clean-tree nodes as `(node_id, node)`. Used by worktree authoring to build
+    /// the baseline `path → (node_id, kind, content)` view (4.4a-2).
+    pub(crate) fn live_nodes(&self) -> impl Iterator<Item = (&NodeId, &LiveNode)> {
+        self.live_by_id.iter()
+    }
+
+    /// Apply a `ChangePerm` to a live file node, preserving its `node_id` and path. The mode is
+    /// recorded exactly (O1: the lifecycle index must carry post-mutation mode, since a later
+    /// deletion's tombstone — and §10.2 `EntryHash` — bind it). Fails closed if the node is not
+    /// live, is a symlink (whose mode is normatively zero), or if the stated `old_mode` does not
+    /// match the replayed mode.
+    pub(crate) fn change_file_mode(
+        &mut self,
+        node_id: NodeId,
+        old_mode: u32,
+        new_mode: u32,
+    ) -> Result<()> {
+        let node = self.live_by_id.get_mut(&node_id).ok_or_else(|| {
+            PrikkError::Integrity("ChangePerm target node_id is not live".to_string())
+        })?;
+        match &mut node.content {
+            NodeContent::File { mode, .. } => {
+                if *mode != old_mode {
+                    return Err(PrikkError::Integrity(format!(
+                        "ChangePerm old_mode {old_mode:#o} does not match the live mode {:#o}",
+                        *mode
+                    )));
+                }
+                *mode = new_mode;
+                Ok(())
+            }
+            NodeContent::Symlink { .. } => Err(PrikkError::Integrity(
+                "ChangePerm cannot apply to a symlink node (mode is normatively zero)".to_string(),
+            )),
+        }
+    }
+
+    /// Apply a `ReplaceBinary` to a live binary-file node (2c-2c). Requires the node to be live,
+    /// a `BinaryFile`, and to currently reference `old_blob_id`; replaces its blob with
+    /// `new_blob_id` exactly, preserving mode. Text files are out of scope (that is `EditText`).
+    pub(crate) fn replace_file_blob(
+        &mut self,
+        node_id: NodeId,
+        old_blob_id: ObjectId,
+        new_blob_id: ObjectId,
+    ) -> Result<()> {
+        let node = self.live_by_id.get_mut(&node_id).ok_or_else(|| {
+            PrikkError::Integrity("ReplaceBinary target node_id is not live".to_string())
+        })?;
+        if node.kind != NodeKind::BinaryFile {
+            return Err(PrikkError::Integrity(
+                "ReplaceBinary target is not a binary-file node".to_string(),
+            ));
+        }
+        match &mut node.content {
+            NodeContent::File { blob_id, .. } => {
+                if *blob_id != old_blob_id {
+                    return Err(PrikkError::Integrity(
+                        "ReplaceBinary old_blob_id does not match the live blob".to_string(),
+                    ));
+                }
+                *blob_id = new_blob_id;
+                Ok(())
+            }
+            NodeContent::Symlink { .. } => Err(PrikkError::Integrity(
+                "ReplaceBinary cannot apply to a symlink node".to_string(),
+            )),
+        }
+    }
+
+    /// Set a live text-file node's content blob id (2c-2d). `EditText` replay derives a new
+    /// full-text `BlobPayload(Text, …)` id and records it here, preserving `node_id`, path, and
+    /// mode. The new bytes themselves live in the replay-local materialized-text cache, not the
+    /// index. Fails closed if the node is absent or not a `TextFile`.
+    pub(crate) fn set_text_blob(&mut self, node_id: NodeId, new_blob_id: ObjectId) -> Result<()> {
+        let node = self.live_by_id.get_mut(&node_id).ok_or_else(|| {
+            PrikkError::Integrity("EditText target node_id is not live".to_string())
+        })?;
+        if node.kind != NodeKind::TextFile {
+            return Err(PrikkError::Integrity(
+                "EditText target is not a text-file node".to_string(),
+            ));
+        }
+        match &mut node.content {
+            NodeContent::File { blob_id, .. } => {
+                *blob_id = new_blob_id;
+                Ok(())
+            }
+            NodeContent::Symlink { .. } => Err(PrikkError::Integrity(
+                "EditText cannot apply to a symlink node".to_string(),
+            )),
+        }
+    }
+
+    /// The `node_id` currently live at a path, if any. (Production consumer is 4.4a-2 worktree
+    /// authoring, which resolves an existing path to its node id here.)
     pub(crate) fn node_id_at(&self, path: &RepoPath) -> Option<NodeId> {
         self.path_to_id.get(path).copied()
+    }
+
+    /// The latest deletion preimage retained for an identity, if the node is tombstoned.
+    pub(crate) fn latest_tombstone(&self, node_id: &NodeId) -> Option<&Tombstone> {
+        self.latest_tombstone_by_id.get(node_id)
     }
 
     /// Number of live nodes in the reconstructed clean tree.

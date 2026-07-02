@@ -8,7 +8,7 @@
 - [Snapshot Materialization](snapshot-materialization.md)
 - [Worktree Status](worktree-status.md)
 
-- [Worktree Patch Drafts](worktree-patch.md)
+- [Worktree Patch Authoring](worktree-patch.md)
 - [Supported Patch Replay](patch-replay.md)
 - [Supported Patch Materialization](patch-materialization.md)
 - [Supported Patch Deletions](patch-deletions.md)

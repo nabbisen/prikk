@@ -437,7 +437,6 @@ pub(crate) fn print_help(version: &str) {
     println!();
     println!("Usage:");
     println!("  prikk init [path]                         Create a .prikk repository layout");
-    println!("  prikk commit --allow-empty -m <message>   Append an empty patch to the active WAL");
     println!("  prikk commit --from-worktree [--text-edits] -m <message> Append worktree changes");
     println!("  prikk status                              Check repository and active WAL status");
     println!("  prikk seal --allow-no-audit              Seal active WAL into heads/main");

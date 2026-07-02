@@ -2,10 +2,27 @@
 
 ![Status](https://img.shields.io/badge/status-early--implementation-orange)
 [![license](https://img.shields.io/crates/l/prikk.svg)](LICENSE)
-[![matten docs.rs](https://img.shields.io/docsrs/prikk?label=prikk%20docs)](https://docs.rs/prikk)
-[![matten crates.io](https://img.shields.io/crates/v/prikk.svg?label=prikk)](https://crates.io/crates/prikk)
+[![crates.io](https://img.shields.io/crates/v/prikk.svg?label=prikk)](https://crates.io/crates/prikk)
+[![docs.rs](https://img.shields.io/docsrs/prikk?version=latest)](https://docs.rs/prikk)
+[![Dependency Status](https://deps.rs/crate/prikk/latest/status.svg)](https://deps.rs/crate/prikk)
 
-**A next-generation, design-first VCS built around block-oriented patch theory.**
+[![crates.io](https://img.shields.io/crates/v/prikk-crypto.svg?label=crypto)](https://crates.io/crates/prikk-crypto)
+[![docs.rs](https://img.shields.io/docsrs/prikk-crypto?version=latest)](https://docs.rs/prikk-crypto)
+[![Dependency Status](https://deps.rs/crate/prikk-crypto/latest/status.svg)](https://deps.rs/crate/prikk-crypto)
+[![crates.io](https://img.shields.io/crates/v/prikk-error.svg?label=error)](https://crates.io/crates/prikk-error)
+[![docs.rs](https://img.shields.io/docsrs/prikk-error?version=latest)](https://docs.rs/prikk-error)
+[![Dependency Status](https://deps.rs/crate/prikk-error/latest/status.svg)](https://deps.rs/crate/prikk-error)
+[![crates.io](https://img.shields.io/crates/v/prikk-hash.svg?label=hash)](https://crates.io/crates/prikk-hash)
+[![docs.rs](https://img.shields.io/docsrs/prikk-hash?version=latest)](https://docs.rs/prikk-hash)
+[![Dependency Status](https://deps.rs/crate/prikk-hash/latest/status.svg)](https://deps.rs/crate/prikk-hash)
+[![crates.io](https://img.shields.io/crates/v/prikk-object.svg?label=object)](https://crates.io/crates/prikk-object)
+[![docs.rs](https://img.shields.io/docsrs/prikk-object?version=latest)](https://docs.rs/prikk-object)
+[![Dependency Status](https://deps.rs/crate/prikk-object/latest/status.svg)](https://deps.rs/crate/prikk-object)
+[![crates.io](https://img.shields.io/crates/v/prikk-store.svg?label=store)](https://crates.io/crates/prikk-store)
+[![docs.rs](https://img.shields.io/docsrs/prikk-store?version=latest)](https://docs.rs/prikk-store)
+[![Dependency Status](https://deps.rs/crate/prikk-store/latest/status.svg)](https://deps.rs/crate/prikk-store)
+
+**A next-generation VCS built around block-oriented patch theory.**
 
 ## Overview
 
@@ -26,21 +43,14 @@ cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo run -p prikk -- init ./sample-repo
-(cd ./sample-repo && ../target/debug/prikk commit --allow-empty -m "initial scaffold")
+# Author and publish a first commit (genesis) on a fresh repository:
+export PRIKK_AUTHOR_KEY_ID="dev-author"
+export PRIKK_AUTHOR_SEED="00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+echo "hello prikk" > ./sample-repo/readme.txt
+(cd ./sample-repo && ../target/debug/prikk commit -m "genesis")
 (cd ./sample-repo && ../target/debug/prikk seal --allow-no-audit)
 cargo run -p prikk -- log ./sample-repo
-cargo run -p prikk -- checkout --plan-only ./sample-repo
-cargo run -p prikk -- checkout --patch-plan ./sample-repo
-cargo run -p prikk -- checkout --patch-materialize ./sample-repo
-cargo run -p prikk -- checkout --patch-delete-plan ./sample-repo
-cargo run -p prikk -- inverse-plan ./sample-repo
-cargo run -p prikk -- rollback-preview ./sample-repo
-cargo run -p prikk -- rollback-draft --append-inverse ./sample-repo -m "draft rollback"
-cargo run -p prikk -- rollback-draft-verify ./sample-repo
-# After sealing that rollback draft, `log` and `verify` classify the sealed rollback block.
 cargo run -p prikk -- worktree-status ./sample-repo
-# After editing a UTF-8 tracked file inside ./sample-repo:
-# (cd ./sample-repo && ../target/debug/prikk commit --from-worktree --text-edits -m "edit text")
 cargo run -p prikk -- verify ./sample-repo
 cargo run -p prikk -- doctor ./sample-repo
 # If doctor reports only incomplete trailing WAL bytes:
@@ -49,9 +59,14 @@ cargo run -p prikk -- doctor ./sample-repo
 # cargo run -p prikk -- doctor ./sample-repo --repair-main-ref
 ```
 
+`prikk commit` authors node-addressed worktree patches signed with a real role-bound Ed25519 AUTHOR
+signature; key material is supplied via `PRIKK_AUTHOR_KEY_ID` / `PRIKK_AUTHOR_SEED` (a minimal key-input
+mechanism, not a trust store). On a fresh repository the first commit is a **genesis** commit (all files
+authored as `CreateFile`); the first `seal` publishes a Root block on `heads/main`.
+
 ## Design Notes
 
-Current implementation drop: **0.1.0 PR-030**.
+Current implementation drop: **0.2.0** (DC-09 Phase 4.4b — node-addressed worktree authoring + genesis).
 
 Implemented:
 
@@ -65,19 +80,23 @@ Implemented:
 - Read-only sealed-history inspection from the current RefState chain, including rollback block labels.
 - Snapshot-manifest validation, path-safety checks, opt-in snapshot materialization, and read-only worktree status.
 - Initial RefState publication primitives with flat hashed ref pointer paths.
-- Narrow empty-commit and snapshot-baseline worktree commit scaffolds. As of the DC-09 §9.3 operation-record reconciliation, worktree patch authoring (`commit --from-worktree`) is fail-closed pending the node model: every §9.3 mutation operation is node-addressed and needs node-id tracking/minting (not yet implemented).
+- Node-addressed worktree patch authoring (`prikk commit`): against a published `heads/main` baseline reconstructed from authoritative replay — or, on a fresh repository, a **genesis** first commit against an empty baseline (all files authored as `CreateFile`) — worktree changes are authored as node-addressed §9.3 operations (`CreateFile`, `DeleteNode`, `EditText`, `ReplaceBinary`, `ChangePerm`) with CSPRNG-minted node identities in canonical order, normalized file modes, and shared text-span identity. Existing-node kind is authoritative; rename inference, symlink authoring, and text↔binary transitions are out of scope.
+- **Role-bound Ed25519 AUTHOR signing** for authored worktree patches (R1): signing goes through an injected `AuthorSigner`; the production `Ed25519AuthorSigner` produces a real Ed25519 signature over the role-bound preimage (`Ed25519, Patch, unsigned-patch-id, Author, key_id`). Key material is supplied via `PRIKK_AUTHOR_KEY_ID` / `PRIKK_AUTHOR_SEED` (a minimal key-input mechanism, not a trust store).
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
-- Supported patch replay planning and materialization for `CreateFile` and `DeleteNode`. `EditText` and `ReplaceBinary` are reconciled to their FDD-03 §9.3 node-addressed records but their application is deferred to the node model; `RenamePath`/`ChangePerm`/`CreateSymlink` records are reconciled and read-validated, application deferred.
+- Supported patch replay planning/materialization for `CreateFile`/`DeleteNode`, with full-file `EditText` and node-addressed record reconciliation for the remaining §9.3 kinds.
 - Explicit deletion planning and opt-in deletion of patch-removed files whose bytes still match the old blob.
-- Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append, active rollback draft verification, and sealed rollback block classification for the supported patch-operation subset.
-- Content-anchored `EditText` scaffold with fixed 32-byte span hashes, anchor-id validation, conservative full-file exact-span replay for `anchor_id = "full-file"`, and opt-in worktree generation for modified UTF-8 files.
-- Minimal CLI commands: `init`, `commit --allow-empty -m`, `commit --from-worktree [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Read-only inverse planning, non-mutating rollback preview, rollback-draft append/verification, and sealed rollback block classification for the supported subset.
+
+Signing scope (interim): node-addressed `prikk commit` patches are role-bound Ed25519 AUTHOR-signed. This does **not** yet imply trust-store enforcement, key management, MAINTAINER publication signing, or publication-grade signing for the internal `rollback-draft` scaffold (whose AUTHOR-role marker is a development scaffold, not a real signature). Do not treat authored history as publication-grade beyond worktree `commit`.
+
+Minimal CLI commands: `init`, `commit [--from-worktree] [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 Not implemented yet:
 
 - Rename detection, arbitrary text-span discovery/generation, rollback refs, rollback authorization, commutation, full patch algebra, and general destructive checkout pruning.
-- Policy-aware audit/attestation publication through seal.
-- Plugin/audit execution.
+- Genesis first-commit onto non-default refs (this drop supports genesis on the default `heads/main` only).
+- Publication-grade MAINTAINER signing, trust store, key management/rotation, and signature policy.
+- Policy-aware audit/attestation publication through seal; plugin/audit execution.
 - Remote sync.
 
 ## More Detail

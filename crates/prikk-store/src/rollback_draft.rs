@@ -1,10 +1,19 @@
 //! Mutating rollback draft append for the supported patch subset.
 //!
-//! PR-030 deliberately keeps rollback publication and worktree mutation out of scope. This module
+//! This module deliberately keeps rollback publication and worktree mutation out of scope. It
 //! validates the same supported inverse plan used by rollback preview, requires an empty active
 //! WAL, signs the unsigned inverse Patch with a dedicated rollback draft marker key, and
 //! appends that Patch envelope to the active WAL under the active-session lock. The existing seal
 //! path is still responsible for publishing refs later.
+//!
+//! Scope (DC-09 4.4a R1R2): the rollback-draft marker key (`SignerRole::Author` +
+//! [`DEV_ROLLBACK_AUTHOR_KEY_ID`]) is an **internal development scaffold, not a publication-grade
+//! AUTHOR signature**. It doubles as the marker that [`crate::rollback_verify`] uses to identify
+//! rollback-draft patches in the active WAL, so it cannot simply be replaced with a real Ed25519
+//! signature without erasing that marker. Rollback-draft patches are therefore excluded from the
+//! publishable-authoring surface. Replacing this marker with a real role-bound AUTHOR signature —
+//! while preserving rollback-draft identification by some means other than a fake signature — is an
+//! identity-bearing design decision deferred to the later crypto/policy phase.
 
 use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;
