@@ -210,6 +210,48 @@ fn patch_operations_field_uses_record_list_item() {
     );
 }
 
+/// DC-10: a minimal RollbackDraft patch purpose vector is identity-bearing and
+/// frozen independently from the normal PATCH-framing anchors.
+#[test]
+#[allow(clippy::expect_used)]
+fn rollback_draft_patch_purpose_vector_is_stable() {
+    use crate::CanonicalEncode;
+    let patch = crate::PatchPayload {
+        operations: vec![crate::Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: crate::OperationKind::CreateFile(crate::CreateFile {
+                path: "rollback.txt".to_string(),
+                node_id: crate::NodeId::from_bytes([0x44; 32]),
+                blob_id: ObjectId::from_bytes([0x55; 32]),
+                mode: 0o100_644,
+            }),
+        }],
+        parent_patch_ids: Vec::new(),
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: crate::PatchPurpose::RollbackDraft,
+    };
+    let payload = patch.to_canonical_bytes().expect("rollback draft encodes");
+    let got = top_level_tag_types(&payload);
+    assert_eq!(
+        got,
+        vec![(1, 0x21), (5, 0x05)],
+        "PatchPurpose::RollbackDraft must be PatchPayload tag 5 enum_u16"
+    );
+    assert_eq!(
+        crate::PatchPurpose::decode_from_patch_payload(&payload),
+        Ok(crate::PatchPurpose::RollbackDraft)
+    );
+    let id = ObjectId::from_canonical_payload(ObjectType::Patch, 1, &payload);
+    assert_eq!(
+        id.to_hex(),
+        "44d8106c9f29462f8ef3cb327dd9a951fc8f7e98ea2176222f004044777c7b76",
+        "RollbackDraft PatchPurpose vector drifted"
+    );
+}
+
 /// FDD-03 §9.3 CreateFile nested-record field tags AND value types, pinned at the
 /// byte level: repo_path, node_id bytes, blob_id object_id, mode u32. Round-trip
 /// tests cannot catch a wrong-but-self-consistent layout; this fixes the wire.

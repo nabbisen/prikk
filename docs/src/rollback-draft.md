@@ -1,6 +1,6 @@
 # Rollback Draft
 
-PR-028 adds an explicit mutating rollback-draft command for the supported patch-operation subset.
+`prikk rollback-draft` appends an explicit rollback-draft Patch for the supported patch-operation subset.
 
 The command is:
 
@@ -9,7 +9,9 @@ prikk rollback-draft --append-inverse [path] [--ref REF] -m "rollback message"
 ```
 
 The command performs the same supported inverse validation used by `inverse-plan` and
-`rollback-preview`, then appends a signed inverse Patch envelope to the active WAL.
+`rollback-preview`, marks the inverse Patch payload as `PatchPurpose::RollbackDraft`, signs it with a
+real role-bound Ed25519 AUTHOR signature, then appends the Patch envelope to the active WAL. Key material
+uses the same environment variables as `prikk commit`: `PRIKK_AUTHOR_KEY_ID` and `PRIKK_AUTHOR_SEED`.
 
 Safety rules:
 
@@ -22,7 +24,7 @@ Safety rules:
 
 What it mutates:
 
-- appends one signed inverse Patch envelope to `.prikk/active/default/queue.wal`.
+- appends one AUTHOR-signed rollback-draft Patch envelope to `.prikk/active/default/queue.wal`.
 
 What it does not mutate:
 
@@ -43,7 +45,8 @@ After reviewing and verifying the draft, the existing local seal scaffold can pu
 prikk seal --allow-no-audit
 ```
 
-PR-030 keeps that seal path unchanged, but `prikk log` and `prikk verify` now classify the sealed Block as a rollback Block when it contains rollback-marked Patch objects.
+The seal path is unchanged, but `prikk log` and `prikk verify` classify the sealed Block as a rollback
+Block when it contains Patch objects with `PatchPurpose::RollbackDraft`.
 
 Supported inverse operation subset:
 

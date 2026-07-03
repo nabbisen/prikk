@@ -3,7 +3,7 @@
 use prikk_object::{
     BlobKind, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile, DeleteNode,
     DeleteNodePreimage, MerkleRoot, NodeId, NodeKind, ObjectEnvelope, ObjectType, Operation,
-    OperationKind, PatchPayload,
+    OperationKind, PatchPayload, PatchPurpose,
 };
 
 use crate::{
@@ -194,6 +194,7 @@ fn publish_snapshot_then_patch_block(layout: &RepositoryLayout) -> prikk_error::
         parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
     };
     let mut patch =
         ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch_payload.to_canonical_bytes()?);

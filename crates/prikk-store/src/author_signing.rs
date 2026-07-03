@@ -4,9 +4,8 @@
 //! [`prikk_object::Signature::signed_bytes`] over the unsigned patch object id and delegates the
 //! actual signing to an injected [`AuthorSigner`]. The production implementation
 //! ([`Ed25519AuthorSigner`]) produces a real Ed25519 signature through `prikk-crypto`; tests inject a
-//! deterministic Ed25519 signer. There is no placeholder signer on the node-addressed worktree
-//! authoring path. (This module covers worktree AUTHOR signing only; the `rollback-draft` scaffold
-//! uses a separate internal marker that is not publication-grade authoring — see `rollback_draft`.)
+//! deterministic Ed25519 signer. There is no placeholder signer on the production Patch AUTHOR
+//! signing paths; rollback drafts use this same boundary after marking their payload purpose.
 //!
 //! Out of scope here (later phases): trust stores, key persistence, rotation, and signature policy.
 

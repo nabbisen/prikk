@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
     CanonicalEncode, CreateFile, DeleteNode, DeleteNodePreimage, ObjectEnvelope, ObjectId,
-    ObjectType, Operation, OperationKind, PatchPayload,
+    ObjectType, Operation, OperationKind, PatchPayload, PatchPurpose,
 };
 
 use crate::layout::RepositoryLayout;
@@ -131,6 +131,7 @@ pub fn prepare_patch_inverse_plan(
         parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
     };
     let inverse_payload_bytes = inverse_payload.to_canonical_bytes()?;
     let inverse_patch_id_hint =

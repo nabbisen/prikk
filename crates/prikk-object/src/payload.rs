@@ -19,8 +19,8 @@ pub use common::{Intent, MerkleRoot, OperationCondition, OperationConditionEntry
 pub use node::{NODE_ID_BYTES, NodeId, NodeKind};
 pub use patch::{
     ChangePerm, CreateFile, CreateSymlink, DeleteNode, DeleteNodePreimage, EditText, Operation,
-    OperationKind, PatchPayload, RenamePath, ReplaceBinary, TEXT_SPAN_HASH_BYTES, text_span_hash,
-    validate_text_anchor_id,
+    OperationKind, PatchPayload, PatchPurpose, RenamePath, ReplaceBinary, TEXT_SPAN_HASH_BYTES,
+    text_span_hash, validate_text_anchor_id,
 };
 pub use refs::{RefKind, RefStatePayload, RefUpdatePayload};
 pub use tag::TagPayload;

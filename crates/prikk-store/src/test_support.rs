@@ -2,8 +2,8 @@
 
 use prikk_object::{
     BlockKind, BlockPayload, CanonicalEncode, CreateFile, MerkleRoot, NodeId, ObjectEnvelope,
-    ObjectId, ObjectType, Operation, OperationKind, PatchPayload, RefKind, RefStatePayload,
-    RefUpdatePayload, Signature, SignatureAlgorithm, SignerRole,
+    ObjectId, ObjectType, Operation, OperationKind, PatchPayload, PatchPurpose, RefKind,
+    RefStatePayload, RefUpdatePayload, Signature, SignatureAlgorithm, SignerRole,
 };
 
 use crate::{
@@ -28,6 +28,7 @@ pub(crate) fn signed_patch_envelope() -> ObjectEnvelope {
         parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
@@ -54,12 +55,13 @@ pub(crate) fn rollback_patch_envelope() -> ObjectEnvelope {
         parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
+        purpose: PatchPurpose::RollbackDraft,
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
     let bytes = payload_bytes.unwrap_or_default();
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, bytes);
-    assert!(envelope.add_signature(rollback_signature()).is_ok());
+    assert!(envelope.add_signature(dummy_signature()).is_ok());
     envelope
 }
 
@@ -139,7 +141,7 @@ pub(crate) fn dummy_signature() -> Signature {
     }
 }
 
-pub(crate) fn rollback_signature() -> Signature {
+pub(crate) fn legacy_rollback_marker_signature() -> Signature {
     Signature {
         algorithm: SignatureAlgorithm::Ed25519,
         key_id: "dev-placeholder-rollback-author".to_string(),
@@ -244,6 +246,7 @@ pub(crate) fn publish_snapshot_then_patch_block(
         parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
     };
     let mut patch =
         ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch_payload.to_canonical_bytes()?);

@@ -4,7 +4,9 @@
 //! [`ensure_apply_supported`] (review erratum P1).
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{NodeId, NodeKind, ObjectId, TEXT_SPAN_HASH_BYTES, WireType, text_span_hash};
+use prikk_object::{
+    NodeId, NodeKind, ObjectId, PatchPurpose, TEXT_SPAN_HASH_BYTES, WireType, text_span_hash,
+};
 
 use crate::path::RepoPath;
 
@@ -145,6 +147,9 @@ pub(crate) fn ensure_apply_supported(operation: &DecodedPatchOperation) -> Resul
 /// typed [`DecodedPatchOperation`]s. Decoding validates structure/identity only;
 /// applicability is gated separately by [`ensure_apply_supported`] (erratum P1).
 pub(crate) fn decode_patch_operations(bytes: &[u8]) -> Result<Vec<DecodedPatchOperation>> {
+    PatchPurpose::decode_from_patch_payload(bytes).map_err(|err| {
+        PrikkError::MalformedData(format!("invalid PatchPurpose canonical form: {err}"))
+    })?;
     let mut cursor = TlvCursor::new(bytes);
     let mut operations = Vec::new();
     while let Some(field) = cursor.next_field()? {
@@ -160,6 +165,10 @@ pub(crate) fn decode_patch_operations(bytes: &[u8]) -> Result<Vec<DecodedPatchOp
                 operations.push(decode_operation(field.value, index)?);
             }
             2..=4 => {}
+            5 => {
+                field.require_wire(WireType::EnumU16)?;
+                let _ = field.read_u16()?;
+            }
             other => {
                 return Err(PrikkError::MalformedData(format!(
                     "unknown Patch field tag: {other}"
@@ -661,6 +670,11 @@ impl<'a> TlvField<'a> {
     fn read_u32(&self) -> Result<u32> {
         self.require_wire(WireType::U32)?;
         Ok(u32::from_be_bytes(self.read_array::<4>()?))
+    }
+
+    fn read_u16(&self) -> Result<u16> {
+        self.require_wire(WireType::EnumU16)?;
+        Ok(u16::from_be_bytes(self.read_array::<2>()?))
     }
 
     /// Read an `object_id` (0x12) field. §9.3 references use the `object_id` value

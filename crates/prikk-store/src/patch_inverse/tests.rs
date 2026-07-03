@@ -3,7 +3,7 @@
 use prikk_object::{
     BlobKind, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile, DeleteNode,
     DeleteNodePreimage, MerkleRoot, NodeId, NodeKind, ObjectEnvelope, ObjectType, Operation,
-    OperationKind, PatchPayload,
+    OperationKind, PatchPayload, PatchPurpose,
 };
 
 use crate::{
@@ -117,6 +117,7 @@ fn publish_snapshot_then_patch_block(layout: &RepositoryLayout) -> prikk_error::
         parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
     };
     let patch_id = write_patch(&mut object_store, patch_payload)?;
     publish_root_then_patch_ref(layout, root_block_id, patch_id)
@@ -253,6 +254,7 @@ fn publish_binary_file_delete_block(layout: &RepositoryLayout) -> prikk_error::R
         parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
     };
     let patch_id = write_patch(&mut object_store, patch_payload)?;
     publish_root_then_patch_ref(layout, root_block_id, patch_id)

@@ -256,6 +256,7 @@ pub(crate) fn print_rollback_draft_report(layout: &RepositoryLayout, report: &Ro
     println!("ref: {}", report.ref_name);
     println!("target block: {}", report.target_block_id);
     println!("inverse patch: {}", report.inverse_patch_id);
+    println!("author key: {}", report.author_key_id);
     println!("WAL sequence: {}", report.wal_sequence);
     println!("blocks inspected: {}", report.block_count);
     println!("patches inspected: {}", report.patch_count);
@@ -290,6 +291,7 @@ pub(crate) fn print_rollback_draft_verification(
     println!("ref: {}", report.ref_name);
     println!("target block: {}", report.target_block_id);
     println!("draft patch: {}", report.draft_patch_id);
+    println!("author key: {}", report.author_key_id);
     println!("WAL sequence: {}", report.wal_sequence);
     println!("blocks inspected: {}", report.block_count);
     println!("patches inspected: {}", report.patch_count);

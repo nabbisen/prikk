@@ -5,7 +5,7 @@ use prikk_error::{PrikkError, Result};
 use crate::canonical::{is_contiguous_op_seq, is_strictly_sorted};
 use crate::payload::common::{Intent, OperationCondition, OperationConditionEntry};
 use crate::payload::node::{NodeId, NodeKind};
-use crate::{CanonicalEncode, CanonicalWriter, ObjectId};
+use crate::{CanonicalEncode, CanonicalWriter, ObjectId, WireType};
 
 /// Number of bytes in a content-anchored text span hash.
 pub const TEXT_SPAN_HASH_BYTES: usize = 32;
@@ -47,6 +47,8 @@ pub struct PatchPayload {
     pub intent: Option<Intent>,
     /// Patch-level preconditions, sorted by key.
     pub preconditions: Vec<OperationConditionEntry>,
+    /// Identity-bearing patch purpose. `Normal` is canonical by omission.
+    pub purpose: PatchPurpose,
 }
 
 impl PatchPayload {
@@ -86,7 +88,178 @@ impl CanonicalEncode for PatchPayload {
             writer.field_enum_u16(3, intent.code())?;
         }
         writer.repeated_record(4, &self.preconditions)?;
+        if self.purpose != PatchPurpose::Normal {
+            writer.field_enum_u16(5, self.purpose.code())?;
+        }
         Ok(())
+    }
+}
+
+/// Identity-bearing patch purpose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(u16)]
+pub enum PatchPurpose {
+    /// Ordinary Patch. This is the default when tag 5 is absent and must not be encoded explicitly.
+    Normal = 1,
+    /// Rollback draft Patch. This survives WAL-to-object persistence for classification.
+    RollbackDraft = 2,
+}
+
+impl PatchPurpose {
+    /// Stable numeric code.
+    #[must_use]
+    pub const fn code(self) -> u16 {
+        self as u16
+    }
+
+    /// Parse a stable code from a present tag-5 purpose field.
+    pub fn from_present_code(code: u16) -> Result<Self> {
+        match code {
+            1 => Err(PrikkError::CanonicalEncoding(
+                "PatchPurpose::Normal must be omitted, not encoded explicitly".to_string(),
+            )),
+            2 => Ok(Self::RollbackDraft),
+            other => Err(PrikkError::CanonicalEncoding(format!(
+                "unknown patch purpose code: {other}"
+            ))),
+        }
+    }
+
+    /// Decode only the top-level `PatchPayload` purpose field, validating tag order and rejecting
+    /// an explicitly encoded `Normal` default. Absence means `Normal`.
+    pub fn decode_from_patch_payload(bytes: &[u8]) -> Result<Self> {
+        let mut cursor = PatchPayloadFieldCursor::new(bytes);
+        let mut purpose = Self::Normal;
+        let mut seen_purpose = false;
+        while let Some(field) = cursor.next_field()? {
+            match field.tag {
+                1..=4 => {}
+                5 => {
+                    if seen_purpose {
+                        return Err(PrikkError::CanonicalEncoding(
+                            "duplicate PatchPurpose field".to_string(),
+                        ));
+                    }
+                    seen_purpose = true;
+                    field.require_wire(WireType::EnumU16)?;
+                    purpose = Self::from_present_code(field.read_u16()?)?;
+                }
+                other => {
+                    return Err(PrikkError::CanonicalEncoding(format!(
+                        "unknown PatchPayload field tag: {other}"
+                    )));
+                }
+            }
+        }
+        Ok(purpose)
+    }
+}
+
+struct PatchPayloadFieldCursor<'a> {
+    bytes: &'a [u8],
+    pos: usize,
+    last_tag: Option<u16>,
+}
+
+impl<'a> PatchPayloadFieldCursor<'a> {
+    const fn new(bytes: &'a [u8]) -> Self {
+        Self {
+            bytes,
+            pos: 0,
+            last_tag: None,
+        }
+    }
+
+    fn next_field(&mut self) -> Result<Option<PatchPayloadField<'a>>> {
+        if self.pos == self.bytes.len() {
+            return Ok(None);
+        }
+        let tag = u16::from_be_bytes(self.read_array::<2>()?);
+        if tag == 0 {
+            return Err(PrikkError::CanonicalEncoding(
+                "field tag 0 is reserved".to_string(),
+            ));
+        }
+        if let Some(last) = self.last_tag {
+            if tag < last {
+                return Err(PrikkError::CanonicalEncoding(format!(
+                    "field tag order violation: {tag} after {last}"
+                )));
+            }
+        }
+        self.last_tag = Some(tag);
+        let wire_type = self.read_u8()?;
+        let len = usize::try_from(u64::from_be_bytes(self.read_array::<8>()?)).map_err(|_| {
+            PrikkError::CanonicalEncoding("canonical field length does not fit usize".to_string())
+        })?;
+        let value = self.read_exact(len)?;
+        Ok(Some(PatchPayloadField {
+            tag,
+            wire_type,
+            value,
+        }))
+    }
+
+    fn read_u8(&mut self) -> Result<u8> {
+        let bytes = self.read_exact(1)?;
+        let Some(byte) = bytes.first() else {
+            return Err(PrikkError::CanonicalEncoding(
+                "unexpected empty byte".to_string(),
+            ));
+        };
+        Ok(*byte)
+    }
+
+    fn read_array<const N: usize>(&mut self) -> Result<[u8; N]> {
+        let bytes = self.read_exact(N)?;
+        let mut out = [0_u8; N];
+        out.copy_from_slice(bytes);
+        Ok(out)
+    }
+
+    fn read_exact(&mut self, len: usize) -> Result<&'a [u8]> {
+        let end = self
+            .pos
+            .checked_add(len)
+            .ok_or_else(|| PrikkError::CanonicalEncoding("canonical range overflow".to_string()))?;
+        let Some(slice) = self.bytes.get(self.pos..end) else {
+            return Err(PrikkError::CanonicalEncoding(
+                "unexpected end of canonical payload".to_string(),
+            ));
+        };
+        self.pos = end;
+        Ok(slice)
+    }
+}
+
+struct PatchPayloadField<'a> {
+    tag: u16,
+    wire_type: u8,
+    value: &'a [u8],
+}
+
+impl PatchPayloadField<'_> {
+    fn require_wire(&self, expected: WireType) -> Result<()> {
+        if self.wire_type == expected as u8 {
+            return Ok(());
+        }
+        Err(PrikkError::CanonicalEncoding(format!(
+            "field {} has wrong wire type: expected {}, got {}",
+            self.tag, expected as u8, self.wire_type
+        )))
+    }
+
+    fn read_u16(&self) -> Result<u16> {
+        if self.value.len() != 2 {
+            return Err(PrikkError::CanonicalEncoding(format!(
+                "field {} expected 2 bytes, got {}",
+                self.tag,
+                self.value.len()
+            )));
+        }
+        let mut out = [0_u8; 2];
+        out.copy_from_slice(self.value);
+        Ok(u16::from_be_bytes(out))
     }
 }
 

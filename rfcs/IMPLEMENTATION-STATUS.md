@@ -1,11 +1,11 @@
 # Prikk Implementation Status
 
-Version: 0.2.0 (DC-09 Phase 4.4b — node-addressed worktree authoring + genesis)
+Version: 0.3.0 (DC-10 — rollback-draft identity and AUTHOR signing)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (DC-09 Phase 4.4a)
+## Current State (DC-10)
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** `heads/main`
   baseline reconstructed from authoritative replay — or, on a fresh repository, a **genesis** first commit
@@ -16,11 +16,12 @@ Version: 0.2.0 (DC-09 Phase 4.4b — node-addressed worktree authoring + genesis
   out of scope. Genesis is selected only when the target ref has never been published (pointer absent and
   ref log empty and active WAL empty); a missing pointer with log history, or a non-empty active WAL, fails
   closed and points at seal/doctor rather than re-authoring.
-- Role-bound Ed25519 AUTHOR signing (R1) for authored worktree patches through an injected `AuthorSigner`
-  (`Ed25519AuthorSigner`, key material via `PRIKK_AUTHOR_KEY_ID` / `PRIKK_AUTHOR_SEED`). The broken
-  `commit --allow-empty` scaffold was removed (R1R). The `rollback-draft` path uses an internal AUTHOR-role
-  **marker** (`dev-placeholder-rollback-author`), scoped as a non-publishable development scaffold (R1R2);
-  it is not publication-grade signing.
+- Role-bound Ed25519 AUTHOR signing for production Patch authoring paths through an injected
+  `AuthorSigner` (`Ed25519AuthorSigner`, key material via `PRIKK_AUTHOR_KEY_ID` /
+  `PRIKK_AUTHOR_SEED`). The broken `commit --allow-empty` scaffold was removed (R1R). DC-10 removes the
+  rollback-draft fake AUTHOR marker: rollback identity is now `PatchPurpose::RollbackDraft`, and
+  rollback-draft Patches carry real AUTHOR signatures. MAINTAINER publication signing remains a later
+  phase.
 
 ## Implemented
 
@@ -50,7 +51,7 @@ Version: 0.2.0 (DC-09 Phase 4.4b — node-addressed worktree authoring + genesis
 - Read-only worktree status against snapshot-backed baselines.
 - Explicit deletion planning and opt-in deletion for files removed by supported patch replay.
 - Content-anchored `EditText` validation scaffold with fixed 32-byte span hashes, anchor ID validation, conservative full-file exact-span replay, and opt-in worktree generation for full-file UTF-8 edits.
-- Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append and verification, and sealed rollback block classification for the supported patch-operation subset.
+- Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append and verification, and sealed rollback block classification for the supported patch-operation subset. Rollback drafts are identified by `PatchPurpose::RollbackDraft` and AUTHOR-signed with real Ed25519 key material.
 - Minimal CLI for `init`, `commit [--from-worktree] [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
@@ -74,12 +75,12 @@ Version: 0.2.0 (DC-09 Phase 4.4b — node-addressed worktree authoring + genesis
 
 ## Gate Discipline
 
-DC-09 Phase 4.4a–4.4b stays within the approved boundary: worktree authoring is node-addressed and signed
-with role-bound Ed25519 AUTHOR signatures against a published baseline, or a genesis first commit against an
-empty baseline on the default `heads/main` (4.4b). It does not add publication-grade MAINTAINER signing,
-trust-store/policy enforcement, rename inference, symlink authoring, commutation, conflict resolution, audit
-plugin execution, or remote sync. The `rollback-draft` AUTHOR-role marker remains an internal,
-non-publishable scaffold (R1R2).
+DC-10 stays within the approved boundary: production Patch AUTHOR signatures from `commit` and
+`rollback-draft --append-inverse` are real role-bound Ed25519 signatures, and rollback-draft identity is
+carried by `PatchPurpose::RollbackDraft` rather than by a reserved AUTHOR key id. It does not add
+publication-grade MAINTAINER signing, trust-store/policy enforcement, rollback authorization, rollback
+refs, rename inference, symlink authoring, commutation, conflict resolution, audit plugin execution, or
+remote sync.
 
 PR-030 stays within the approved foundation boundary by classifying rollback-marked Patches after normal seal. It does not publish rollback-specific refs, authorize rollback, modify the worktree, discover arbitrary spans, minimize text diffs, commute patches, resolve conflicts, or implement audit plugin execution, policy enforcement, or remote sync.
 

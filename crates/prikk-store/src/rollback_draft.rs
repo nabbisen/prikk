@@ -2,41 +2,29 @@
 //!
 //! This module deliberately keeps rollback publication and worktree mutation out of scope. It
 //! validates the same supported inverse plan used by rollback preview, requires an empty active
-//! WAL, signs the unsigned inverse Patch with a dedicated rollback draft marker key, and
-//! appends that Patch envelope to the active WAL under the active-session lock. The existing seal
-//! path is still responsible for publishing refs later.
-//!
-//! Scope (DC-09 4.4a R1R2): the rollback-draft marker key (`SignerRole::Author` +
-//! [`DEV_ROLLBACK_AUTHOR_KEY_ID`]) is an **internal development scaffold, not a publication-grade
-//! AUTHOR signature**. It doubles as the marker that [`crate::rollback_verify`] uses to identify
-//! rollback-draft patches in the active WAL, so it cannot simply be replaced with a real Ed25519
-//! signature without erasing that marker. Rollback-draft patches are therefore excluded from the
-//! publishable-authoring surface. Replacing this marker with a real role-bound AUTHOR signature —
-//! while preserving rollback-draft identification by some means other than a fake signature — is an
-//! identity-bearing design decision deferred to the later crypto/policy phase.
+//! WAL, marks the inverse Patch payload with `PatchPurpose::RollbackDraft`, signs it with a real
+//! role-bound Ed25519 AUTHOR signer, and appends that Patch envelope to the active WAL under the
+//! active-session lock. The existing seal path is still responsible for publishing refs later.
 
 use prikk_error::{PrikkError, Result};
-use prikk_hash::sha256;
-use prikk_object::{
-    CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, Signature, SignatureAlgorithm,
-    SignerRole,
-};
+use prikk_object::{CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, PatchPurpose};
 
+use crate::author_signing::{AuthorSigner, author_signature};
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
 use crate::patch_inverse::{PatchInverseOperationSummary, prepare_patch_inverse_plan};
 use crate::rollback_preview::{RollbackPreviewChange, prepare_rollback_preview};
 use crate::wal::Wal;
 
-pub(crate) const DEV_ROLLBACK_AUTHOR_KEY_ID: &str = "dev-placeholder-rollback-author";
-
-/// Return true when a Patch envelope carries the current rollback-draft author marker.
-pub(crate) fn is_rollback_draft_envelope(envelope: &ObjectEnvelope) -> bool {
-    envelope.object_type == ObjectType::Patch
-        && envelope.signatures.iter().any(|signature| {
-            signature.signer_role == SignerRole::Author
-                && signature.key_id == DEV_ROLLBACK_AUTHOR_KEY_ID
-        })
+/// Return true when a Patch envelope carries the rollback-draft payload purpose.
+pub(crate) fn is_rollback_draft_envelope(envelope: &ObjectEnvelope) -> Result<bool> {
+    if envelope.object_type != ObjectType::Patch {
+        return Ok(false);
+    }
+    Ok(
+        PatchPurpose::decode_from_patch_payload(&envelope.canonical_payload)?
+            == PatchPurpose::RollbackDraft,
+    )
 }
 
 /// Result of appending a supported inverse Patch draft to the active WAL.
@@ -48,6 +36,8 @@ pub struct RollbackDraftReport {
     pub target_block_id: ObjectId,
     /// Signed inverse Patch ID appended to the active WAL.
     pub inverse_patch_id: ObjectId,
+    /// Real AUTHOR key id recorded in the rollback draft signature.
+    pub author_key_id: String,
     /// WAL sequence assigned to the signed inverse Patch envelope.
     pub wal_sequence: u64,
     /// Number of blocks inspected while deriving the inverse Patch.
@@ -79,6 +69,7 @@ pub fn append_rollback_draft(
     layout: &RepositoryLayout,
     ref_name: &str,
     message: &str,
+    signer: &impl AuthorSigner,
 ) -> Result<RollbackDraftReport> {
     if message.trim().is_empty() {
         return Err(PrikkError::InvalidName(
@@ -86,7 +77,7 @@ pub fn append_rollback_draft(
         ));
     }
 
-    let inverse = prepare_patch_inverse_plan(layout, ref_name)?;
+    let mut inverse = prepare_patch_inverse_plan(layout, ref_name)?;
     if inverse.inverse_operation_count == 0 {
         return Err(PrikkError::InvalidName(
             "rollback draft has no supported inverse operations to append".to_string(),
@@ -100,10 +91,10 @@ pub fn append_rollback_draft(
         )));
     }
 
+    inverse.inverse_payload.purpose = PatchPurpose::RollbackDraft;
     let canonical_payload = inverse.inverse_payload.to_canonical_bytes()?;
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, canonical_payload);
-    let signature =
-        rollback_author_signature(&envelope, ref_name, inverse.target_block_id, message);
+    let signature = author_signature(signer, envelope.object_id())?;
     envelope.add_signature(signature)?;
     let inverse_patch_id = envelope.object_id();
 
@@ -127,6 +118,7 @@ pub fn append_rollback_draft(
         ref_name: ref_name.to_string(),
         target_block_id: inverse.target_block_id,
         inverse_patch_id,
+        author_key_id: signer.key_id().to_string(),
         wal_sequence,
         block_count: inverse.block_count,
         patch_count: inverse.patch_count,
@@ -138,32 +130,6 @@ pub fn append_rollback_draft(
         operations: inverse.operations,
         preview_changes: preview.changes,
     })
-}
-
-fn rollback_author_signature(
-    envelope: &ObjectEnvelope,
-    ref_name: &str,
-    target_block_id: ObjectId,
-    message: &str,
-) -> Signature {
-    let mut signature_preimage = Signature::signed_bytes(
-        SignatureAlgorithm::Ed25519,
-        ObjectType::Patch,
-        envelope.object_id(),
-        SignerRole::Author,
-        DEV_ROLLBACK_AUTHOR_KEY_ID,
-    );
-    signature_preimage.extend_from_slice(b"prikk.dev.rollback-draft-signature.v1");
-    signature_preimage.extend_from_slice(ref_name.as_bytes());
-    signature_preimage.extend_from_slice(target_block_id.as_bytes());
-    signature_preimage.extend_from_slice(message.as_bytes());
-    Signature {
-        algorithm: SignatureAlgorithm::Ed25519,
-        key_id: DEV_ROLLBACK_AUTHOR_KEY_ID.to_string(),
-        signature_bytes: sha256(&signature_preimage).to_vec(),
-        created_at: 0,
-        signer_role: SignerRole::Author,
-    }
 }
 
 #[cfg(test)]

@@ -11,8 +11,8 @@
 use prikk_error::PrikkError;
 use prikk_object::{
     CanonicalEncode, ChangePerm, CreateFile, CreateSymlink, DeleteNode, DeleteNodePreimage,
-    EditText, NodeId, NodeKind, ObjectId, Operation, OperationKind, PatchPayload, RenamePath,
-    ReplaceBinary, text_span_hash,
+    EditText, NodeId, NodeKind, ObjectId, Operation, OperationKind, PatchPayload, PatchPurpose,
+    RenamePath, ReplaceBinary, text_span_hash,
 };
 
 use crate::patch_replay::decode::{
@@ -31,6 +31,7 @@ fn patch_bytes(kind: OperationKind) -> Vec<u8> {
         parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
     };
     patch.to_canonical_bytes().expect("patch encodes")
 }

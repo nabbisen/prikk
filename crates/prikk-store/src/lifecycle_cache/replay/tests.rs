@@ -90,6 +90,7 @@ impl MockReader {
             parent_patch_ids: Vec::new(),
             intent: None,
             preconditions: Vec::new(),
+            purpose: prikk_object::PatchPurpose::Normal,
         };
         self.insert(
             id,

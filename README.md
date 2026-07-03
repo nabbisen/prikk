@@ -66,7 +66,7 @@ authored as `CreateFile`); the first `seal` publishes a Root block on `heads/mai
 
 ## Design Notes
 
-Current implementation drop: **0.2.0** (DC-09 Phase 4.4b — node-addressed worktree authoring + genesis).
+Current implementation drop: **0.3.0** (DC-10 — rollback-draft identity and AUTHOR signing).
 
 Implemented:
 
@@ -81,13 +81,13 @@ Implemented:
 - Snapshot-manifest validation, path-safety checks, opt-in snapshot materialization, and read-only worktree status.
 - Initial RefState publication primitives with flat hashed ref pointer paths.
 - Node-addressed worktree patch authoring (`prikk commit`): against a published `heads/main` baseline reconstructed from authoritative replay — or, on a fresh repository, a **genesis** first commit against an empty baseline (all files authored as `CreateFile`) — worktree changes are authored as node-addressed §9.3 operations (`CreateFile`, `DeleteNode`, `EditText`, `ReplaceBinary`, `ChangePerm`) with CSPRNG-minted node identities in canonical order, normalized file modes, and shared text-span identity. Existing-node kind is authoritative; rename inference, symlink authoring, and text↔binary transitions are out of scope.
-- **Role-bound Ed25519 AUTHOR signing** for authored worktree patches (R1): signing goes through an injected `AuthorSigner`; the production `Ed25519AuthorSigner` produces a real Ed25519 signature over the role-bound preimage (`Ed25519, Patch, unsigned-patch-id, Author, key_id`). Key material is supplied via `PRIKK_AUTHOR_KEY_ID` / `PRIKK_AUTHOR_SEED` (a minimal key-input mechanism, not a trust store).
+- **Role-bound Ed25519 AUTHOR signing** for production Patch authoring paths: worktree commits and rollback drafts sign through an injected `AuthorSigner`; the production `Ed25519AuthorSigner` produces a real Ed25519 signature over the role-bound preimage (`Ed25519, Patch, unsigned-patch-id, Author, key_id`). Key material is supplied via `PRIKK_AUTHOR_KEY_ID` / `PRIKK_AUTHOR_SEED` (a minimal key-input mechanism, not a trust store).
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
 - Supported patch replay planning/materialization for `CreateFile`/`DeleteNode`, with full-file `EditText` and node-addressed record reconciliation for the remaining §9.3 kinds.
 - Explicit deletion planning and opt-in deletion of patch-removed files whose bytes still match the old blob.
-- Read-only inverse planning, non-mutating rollback preview, rollback-draft append/verification, and sealed rollback block classification for the supported subset.
+- Read-only inverse planning, non-mutating rollback preview, rollback-draft append/verification, and sealed rollback block classification for the supported subset. Rollback-draft identity is recorded as `PatchPurpose::RollbackDraft`, not as a reserved AUTHOR key id.
 
-Signing scope (interim): node-addressed `prikk commit` patches are role-bound Ed25519 AUTHOR-signed. This does **not** yet imply trust-store enforcement, key management, MAINTAINER publication signing, or publication-grade signing for the internal `rollback-draft` scaffold (whose AUTHOR-role marker is a development scaffold, not a real signature). Do not treat authored history as publication-grade beyond worktree `commit`.
+Signing scope (interim): AUTHOR-role Patch signatures produced by production commands are real role-bound Ed25519 signatures. This does **not** yet imply trust-store enforcement, key management, MAINTAINER publication signing, or publication-grade repository trust.
 
 Minimal CLI commands: `init`, `commit [--from-worktree] [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 

@@ -24,3 +24,4 @@ target
 /.prikk/
 *.tmp
 *.log
+/.git-exclude/

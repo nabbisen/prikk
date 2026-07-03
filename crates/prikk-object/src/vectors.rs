@@ -157,6 +157,7 @@ pub(crate) fn patch_operations_populated_payload() -> Vec<u8> {
         parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
+        purpose: crate::PatchPurpose::Normal,
     };
     patch.to_canonical_bytes().expect("patch encodes")
 }

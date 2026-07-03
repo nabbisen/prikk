@@ -7,6 +7,7 @@
 
 use prikk_object::{
     CanonicalEncode, CreateFile, NodeId, ObjectId, Operation, OperationKind, PatchPayload,
+    PatchPurpose,
 };
 
 use crate::patch_replay::decode::decode_patch_operations;
@@ -27,6 +28,7 @@ fn valid_patch_payload_bytes() -> Vec<u8> {
         parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
     };
     patch.to_canonical_bytes().expect("patch encodes")
 }

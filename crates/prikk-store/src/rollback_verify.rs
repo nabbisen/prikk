@@ -1,13 +1,15 @@
 //! Verification helpers for rollback draft patches.
 //!
 //! This module keeps rollback publication non-mutating, but makes rollback drafts easier to audit before
-//! seal. The active WAL verifier can now classify rollback draft records by their dedicated
-//! development signature marker and validate that their Patch payload remains in the supported
-//! replay subset. The stronger `verify_active_rollback_draft` API additionally compares the WAL
+//! seal. The active WAL verifier classifies rollback draft records by `PatchPurpose::RollbackDraft`
+//! and validates that their Patch payload remains in the supported replay subset. The stronger
+//! `verify_active_rollback_draft` API additionally compares the WAL
 //! payload with the inverse Patch that would be derived from the currently published ref.
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType};
+use prikk_object::{
+    CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, PatchPurpose, SignerRole,
+};
 
 use crate::layout::RepositoryLayout;
 use crate::patch_inverse::prepare_patch_inverse_plan;
@@ -24,6 +26,8 @@ pub struct RollbackDraftVerification {
     pub wal_sequence: u64,
     /// Signed rollback draft Patch ID currently present in the active WAL.
     pub draft_patch_id: ObjectId,
+    /// Real AUTHOR key id recorded in the rollback draft signature.
+    pub author_key_id: String,
     /// Published block that was used as the rollback target.
     pub target_block_id: ObjectId,
     /// Number of blocks inspected while deriving the expected inverse.
@@ -60,7 +64,8 @@ pub fn verify_active_rollback_draft(
     };
     verify_rollback_marker(record)?;
 
-    let inverse = prepare_patch_inverse_plan(layout, ref_name)?;
+    let mut inverse = prepare_patch_inverse_plan(layout, ref_name)?;
+    inverse.inverse_payload.purpose = PatchPurpose::RollbackDraft;
     let expected_payload = inverse.inverse_payload.to_canonical_bytes()?;
     if record.envelope.canonical_payload != expected_payload {
         return Err(PrikkError::Integrity(
@@ -86,6 +91,7 @@ pub fn verify_active_rollback_draft(
         ref_name: ref_name.to_string(),
         wal_sequence: record.seq,
         draft_patch_id: record.envelope.object_id(),
+        author_key_id: rollback_author_key_id(&record.envelope)?,
         target_block_id: inverse.target_block_id,
         block_count: inverse.block_count,
         patch_count: inverse.patch_count,
@@ -116,7 +122,7 @@ pub(crate) fn verify_rollback_patch_envelope(
     envelope: &ObjectEnvelope,
     context: &str,
 ) -> Result<bool> {
-    if !is_rollback_draft_envelope(envelope) {
+    if !is_rollback_draft_envelope(envelope)? {
         return Ok(false);
     }
     if envelope.object_type != ObjectType::Patch {
@@ -156,13 +162,26 @@ fn verify_rollback_marker(record: &WalRecord) -> Result<()> {
             record.seq, record.envelope.object_type
         )));
     }
-    if is_rollback_draft_envelope(&record.envelope) {
+    if is_rollback_draft_envelope(&record.envelope)? {
         return Ok(());
     }
     Err(PrikkError::InvalidSignature(format!(
         "active WAL record {} is not signed as a rollback draft",
         record.seq
     )))
+}
+
+fn rollback_author_key_id(envelope: &ObjectEnvelope) -> Result<String> {
+    envelope
+        .signatures
+        .iter()
+        .find(|signature| signature.signer_role == SignerRole::Author)
+        .map(|signature| signature.key_id.clone())
+        .ok_or_else(|| {
+            PrikkError::InvalidSignature(
+                "rollback draft Patch must carry an AUTHOR signature".to_string(),
+            )
+        })
 }
 
 #[cfg(test)]

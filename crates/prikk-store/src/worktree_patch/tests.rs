@@ -9,7 +9,7 @@
 use prikk_object::{
     BlobKind, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile, MerkleRoot,
     NodeId, ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind, PatchPayload,
-    SignatureAlgorithm, SignerRole,
+    PatchPurpose, SignatureAlgorithm, SignerRole,
 };
 
 use crate::node_id_gen::{NodeIdGenerator, SequenceEntropySource};
@@ -79,6 +79,7 @@ fn publish_node_baseline(layout: &RepositoryLayout, files: &[(&str, &[u8], BlobK
         parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
     };
     let mut patch_env =
         ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch.to_canonical_bytes().unwrap());

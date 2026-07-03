@@ -1,14 +1,15 @@
 # Sealed Rollback History
 
-PR-030 adds read-only classification for rollback Patch objects after they are sealed into a normal Block by the existing seal path.
+Prikk provides read-only classification for rollback Patch objects after they are sealed into a normal
+Block by the existing seal path.
 
-Rollback drafts remain ordinary Patch payloads until sealed. The only marker currently used by the development scaffold is the dedicated author key ID:
+Rollback identity lives in the Patch payload as `PatchPurpose::RollbackDraft`; it is not encoded in an
+AUTHOR key id. When a sealed Block references such a Patch, Prikk verifies that the Patch payload decodes
+under the supported replay subset and then classifies the Block as a rollback Block for history and
+verification output.
 
-```text
-dev-placeholder-rollback-author
-```
-
-When a sealed Block references a Patch envelope carrying that marker, Prikk verifies that the Patch payload decodes under the supported replay subset and then classifies the Block as a rollback Block for history and verification output.
+Pre-DC-10 rollback drafts that used the old development key-id marker are pre-stability artifacts. Current
+classification does not recognize that marker in production logic.
 
 ## CLI
 

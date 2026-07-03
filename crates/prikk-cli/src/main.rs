@@ -234,7 +234,8 @@ fn run_rollback_preview(args: Vec<String>) -> std::result::Result<(), String> {
 fn run_rollback_draft(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_rollback_draft_args(args)?;
     let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
-    let report = append_rollback_draft(&layout, &args.ref_name, &args.message)
+    let signer = author_signer_from_env()?;
+    let report = append_rollback_draft(&layout, &args.ref_name, &args.message, &signer)
         .map_err(|err| err.to_string())?;
     print_rollback_draft_report(&layout, &report);
     Ok(())

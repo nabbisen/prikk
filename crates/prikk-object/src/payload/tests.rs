@@ -2,8 +2,8 @@
 
 use super::{
     AttestationPayload, AttestationStatus, BlobKind, BlobPayload, BlockKind, BlockPayload,
-    EditText, MerkleRoot, Operation, OperationKind, PatchPayload, PluginResultEntry, RefKind,
-    RefStatePayload, RefUpdatePayload, text_span_hash, validate_text_anchor_id,
+    EditText, MerkleRoot, Operation, OperationKind, PatchPayload, PatchPurpose, PluginResultEntry,
+    RefKind, RefStatePayload, RefUpdatePayload, text_span_hash, validate_text_anchor_id,
 };
 use crate::{CanonicalEncode, ObjectId, ObjectType};
 
@@ -63,6 +63,7 @@ fn patch_operations_must_be_contiguous() {
         parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
     };
     assert!(patch.to_canonical_bytes().is_err());
 }
@@ -308,8 +309,53 @@ fn patch_payload_rejects_empty_operations() {
         parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
     };
     // §9.1: operations is required with at least one operation.
     assert!(patch.validate().is_err());
     assert!(patch.to_canonical_bytes().is_err());
+}
+
+#[test]
+fn patch_purpose_absent_decodes_as_normal() {
+    let patch = PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::EditText(EditText {
+                node_id: crate::NodeId::from_bytes([0x22; 32]),
+                span_id: [0x10; 32],
+                old_span_hash: text_span_hash(b"old"),
+                left_anchor_hash: [0x11; 32],
+                right_anchor_hash: [0x12; 32],
+                replacement_text: b"hello".to_vec(),
+                presentation_hint_line: None,
+                presentation_hint_column: None,
+                old_span_text: b"old".to_vec(),
+            }),
+        }],
+        parent_patch_ids: Vec::new(),
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+    };
+    let bytes = patch.to_canonical_bytes();
+    assert!(bytes.is_ok());
+    if let Ok(bytes) = bytes {
+        assert_eq!(
+            PatchPurpose::decode_from_patch_payload(&bytes),
+            Ok(PatchPurpose::Normal)
+        );
+    }
+}
+
+#[test]
+fn patch_purpose_explicit_normal_is_rejected() {
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(&5_u16.to_be_bytes());
+    bytes.push(crate::WireType::EnumU16 as u8);
+    bytes.extend_from_slice(&2_u64.to_be_bytes());
+    bytes.extend_from_slice(&PatchPurpose::Normal.code().to_be_bytes());
+    assert!(PatchPurpose::decode_from_patch_payload(&bytes).is_err());
 }

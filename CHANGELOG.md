@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.0 — 2026-07-02
+
+DC-10: rollback-draft identity and AUTHOR signing.
+
+**Release scope.** AUTHOR-role Patch signatures produced by production commands are real role-bound
+Ed25519 signatures. Rollback drafts are identified by `PatchPurpose::RollbackDraft`, not by a reserved
+AUTHOR key id, and `prikk rollback-draft --append-inverse` signs the draft Patch through the same
+injected AUTHOR signer boundary used by worktree commits. This release still does **not** include
+publication-grade MAINTAINER signing, trust-store enforcement, key management/rotation, rollback
+authorization policy, or stable repository-format guarantees.
+
+- **Rollback-draft purpose marker.** Adds an optional canonical Patch payload `purpose` field. The
+  absent field decodes as normal Patch purpose, explicit default encoding is rejected, and
+  `RollbackDraft` is pinned by a deterministic hard vector.
+- **Real rollback-draft AUTHOR signatures.** `rollback-draft --append-inverse` now requires AUTHOR key
+  material, marks the inverse payload as `PatchPurpose::RollbackDraft`, and signs the unsigned Patch
+  object id with a real role-bound Ed25519 AUTHOR signature.
+- **Purpose-based verification and history classification.** Active rollback-draft verification and
+  sealed rollback history classification now inspect payload purpose, fail closed on malformed purpose
+  encoding, and report the real AUTHOR key id instead of recognizing the old development marker.
+- **Documentation and design records.** Adds DC-10 design and handoff updates, and updates rollback draft,
+  sealed history, README, roadmap, and implementation-status documentation to describe the new release
+  scope.
+
 ## 0.2.0 — 2026-07-02
 
 DC-09 Phase 4.4: node-addressed worktree authoring, genesis first-commit, and role-bound Ed25519
