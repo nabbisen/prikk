@@ -5,7 +5,10 @@ use prikk_object::{ObjectType, PatchPurpose, Signature, SignatureAlgorithm, Sign
 
 use crate::{Ed25519AuthorSigner, RepositoryLayout, Wal, append_rollback_draft};
 
-use crate::test_support::publish_snapshot_then_patch_block;
+use crate::test_support::{
+    publish_snapshot_then_patch_block, publish_text_create_then_edit_block,
+    publish_text_edit_then_unsupported_change_perm_block,
+};
 use crate::test_support::{signed_patch_envelope, unique_temp_dir};
 
 fn test_signer() -> Ed25519AuthorSigner {
@@ -79,6 +82,45 @@ fn rollback_draft_appends_inverse_patch_to_empty_active_wal() {
 }
 
 #[test]
+fn rollback_draft_appends_arbitrary_span_text_inverse() {
+    let root = unique_temp_dir("rollback-draft-edit-text");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let result = publish_text_create_then_edit_block(&layout, b"alpha beta\n", b"alpha BETA\n");
+        assert!(result.is_ok());
+        let signer = test_signer();
+        let report = append_rollback_draft(&layout, "heads/main", "rollback text", &signer);
+        assert!(report.is_ok());
+        if let Ok(report) = report {
+            assert_eq!(report.inverse_operation_count, 2);
+            assert_eq!(
+                report
+                    .operations
+                    .first()
+                    .map(|operation| operation.kind.as_str()),
+                Some("edit-text")
+            );
+            let wal = Wal::new(layout.default_queue_wal_path());
+            let replay = wal.replay();
+            assert!(replay.is_ok());
+            if let Ok(replay) = replay {
+                assert_eq!(replay.records.len(), 1);
+                let record = replay.records.first();
+                assert!(record.is_some());
+                if let Some(record) = record {
+                    assert_eq!(
+                        PatchPurpose::decode_from_patch_payload(&record.envelope.canonical_payload),
+                        Ok(PatchPurpose::RollbackDraft)
+                    );
+                }
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn rollback_draft_refuses_non_empty_active_wal() {
     let root = unique_temp_dir("rollback-draft-non-empty-wal");
     let layout = RepositoryLayout::init(root.clone());
@@ -92,6 +134,21 @@ fn rollback_draft_refuses_non_empty_active_wal() {
         let signer = test_signer();
         let report =
             append_rollback_draft(&layout, "heads/main", "rollback with pending work", &signer);
+        assert!(report.is_err());
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn rollback_draft_fails_closed_on_supported_text_plus_unsupported_operation() {
+    let root = unique_temp_dir("rollback-draft-edit-text-unsupported");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let result = publish_text_edit_then_unsupported_change_perm_block(&layout);
+        assert!(result.is_ok());
+        let signer = test_signer();
+        let report = append_rollback_draft(&layout, "heads/main", "rollback unsupported", &signer);
         assert!(report.is_err());
     }
     let _ = std::fs::remove_dir_all(root);

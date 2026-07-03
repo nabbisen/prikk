@@ -82,6 +82,9 @@ impl RefStore {
         validate_publication(publication)?;
         let ref_state_id = publication.ref_state.object_id();
         let ref_lock = RefLock::acquire(self.layout.ref_lock_path(&publication.ref_name))?;
+        if publication.expected_previous_ref_state_id.is_none() {
+            self.ensure_unborn_ref_creation_allowed(&publication.ref_name)?;
+        }
         let mut object_store = FileObjectStore::new(self.layout.clone());
         object_store.write_object(&publication.ref_state)?;
         self.ensure_current_matches(
@@ -222,6 +225,24 @@ impl RefStore {
             return Err(PrikkError::LockConflict(format!(
                 "ref CAS mismatch for {ref_name}: expected {:?}, got {:?}",
                 expected, current
+            )));
+        }
+        Ok(())
+    }
+
+    fn ensure_unborn_ref_creation_allowed(&self, ref_name: &str) -> Result<()> {
+        self.ensure_current_matches(ref_name, None)?;
+        let log = self.replay_log(ref_name)?;
+        if log.trailing_partial_bytes != 0 {
+            return Err(PrikkError::Integrity(format!(
+                "ref {ref_name} pointer is missing and its log has trailing partial bytes; \
+                 run doctor before creating a root publication"
+            )));
+        }
+        if !log.records.is_empty() {
+            return Err(PrikkError::Integrity(format!(
+                "ref {ref_name} pointer is missing but ref-log history exists; \
+                 run doctor before creating a root publication"
             )));
         }
         Ok(())

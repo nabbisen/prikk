@@ -1,11 +1,11 @@
 # Prikk Implementation Status
 
-Version: 0.6.0 candidate (DC-13 — non-default ref genesis)
+Version: 0.7.0 candidate (DC-14 — arbitrary-span text direct inverse and rollback exposure)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (DC-13)
+## Current State (0.7.0 candidate)
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** local
   branch baseline reconstructed from authoritative replay — or, on a valid unborn `heads/*` ref, a
@@ -20,7 +20,10 @@ Version: 0.6.0 candidate (DC-13 — non-default ref genesis)
   closed and points at seal/doctor rather than re-authoring.
 - Active-WAL ref ownership metadata (`.prikk/active/default/ref-name`) is written before the first WAL
   record and removed after successful seal. Non-empty active WALs with missing, malformed, or mismatched
-  ref metadata fail closed, preventing cross-ref publication. v0.6.0 remains single-commit-per-active-WAL.
+  ref metadata fail closed, preventing cross-ref publication. Seal refuses unborn Root publication when
+  the ref pointer is missing but ref-log history or a partial ref log exists, and retrying a seal after
+  the current WAL has already become the published tip drains the active WAL/ref metadata instead of
+  appending a duplicate ref update. The active-WAL model remains single-commit-per-active-WAL.
 - Role-bound Ed25519 AUTHOR signing for production Patch authoring paths through an injected
   `AuthorSigner` (`Ed25519AuthorSigner`, key material via `PRIKK_AUTHOR_KEY_ID` /
   `PRIKK_AUTHOR_SEED`). The broken `commit --allow-empty` scaffold was removed (R1R). DC-10 removes the
@@ -33,9 +36,13 @@ Version: 0.6.0 candidate (DC-13 — non-default ref genesis)
   Block/RefState/RefUpdate envelopes with real MAINTAINER signatures, and writes the real MAINTAINER
   key id into RefUpdate payload identity. Verification reports publication-trust failures separately
   from structural corruption.
-- Supported patch replay/materialization applies deterministic arbitrary-span `EditText` through the
-  shared localization and splice primitives. Direct inverse/rollback for arbitrary-span text edits is
-  still deferred until round-trip vectors land.
+- Supported patch replay/materialization and direct inverse planning apply deterministic arbitrary-span
+  `EditText` through shared localization, splice, and direct-inverse primitives. Rollback preview,
+  rollback draft append, and rollback draft verification expose that supported text-edit inverse path
+  without adding rollback refs, rollback authorization, or worktree rollback mutation. Rollback-draft
+  AUTHOR verification remains structural at this layer: it rejects missing, legacy marker, wrong-role,
+  wrong-algorithm, and malformed Ed25519 records, including signatures whose byte payload is not 64
+  bytes, without claiming AUTHOR trust-store enforcement.
 
 ## Implemented
 
@@ -68,7 +75,7 @@ Version: 0.6.0 candidate (DC-13 — non-default ref genesis)
 - Explicit deletion planning and opt-in deletion for files removed by supported patch replay.
 - Content-anchored `EditText` validation with fixed 32-byte span hashes, deterministic arbitrary-span
   authoring, and arbitrary-span replay/materialization for supported text edits.
-- Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append and verification, and sealed rollback block classification for the supported patch-operation subset. Rollback drafts are identified by `PatchPurpose::RollbackDraft` and AUTHOR-signed with real Ed25519 key material.
+- Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append and verification, and sealed rollback block classification for the supported patch-operation subset, including deterministic direct inverse for arbitrary-span `EditText`. Rollback drafts are identified by `PatchPurpose::RollbackDraft` and AUTHOR-signed with real Ed25519 key material.
 - Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
@@ -78,12 +85,27 @@ Version: 0.6.0 candidate (DC-13 — non-default ref genesis)
   tag or remote ref creation, rollback refs, multi-commit queued active sessions, and per-ref active WALs.
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy beyond the DC-11 local trust store.
 - Policy-aware audit/attestation publication from seal.
-- Full patch algebra: arbitrary-span inverse/rollback, rollback ref publication, commutation, confluence,
-  and conflict witnesses.
+- Full patch algebra: rollback ref publication, commutation, confluence, and conflict witnesses.
 - Conflict witnesses and merge state.
 - WASM plugin host.
 - Audit publication policy.
 - Remote sync.
+
+## Active Implementation Candidate
+
+DC-14 is implemented as a v0.7.0 candidate after design re-review v1. The implementation keeps the
+existing `EditText` wire shape, derives inverse text edits by recomputing anchors and `span_id` against
+post-forward text, re-localizes the inverse to the exact intended range, and exposes the result through
+existing inverse-plan, rollback-preview, rollback-draft append, and rollback-draft verify flows. It
+explicitly preserves the DC-10 rollback-draft marker replacement: rollback-draft identity is
+`PatchPurpose::RollbackDraft`, and rollback-draft envelopes carry real role-bound AUTHOR signatures.
+It does not add rollback refs, rollback authorization, AUTHOR trust-store enforcement, worktree
+rollback mutation, commutation, confluence, conflict witnesses, or semantic merge.
+
+Deep-review repairs for this candidate also harden seal publication around missing ref pointers with
+existing log evidence, make already-published WAL retry cleanup idempotent, and tighten rollback-draft
+AUTHOR signature structure checks to the Ed25519 64-byte boundary without expanding into AUTHOR trust
+policy.
 
 ## Conservative Repairs Added Through PR-014
 

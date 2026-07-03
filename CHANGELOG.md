@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.7.0 — 2026-07-03
+
+DC-14: arbitrary-span text direct inverse and rollback exposure.
+
+**Implementation candidate scope.** Supported arbitrary-span `EditText` operations now have
+deterministic direct inverses. Inverse planning, rollback preview, rollback draft append, and rollback
+draft verification can handle supported text edits by recomputing inverse anchors, duplicate index, and
+`span_id` against post-forward text. This candidate still does **not** add rollback refs, rollback
+authorization, AUTHOR trust-store enforcement, worktree rollback mutation, commutation, confluence, or
+conflict witnesses.
+
+- **Direct `EditText` inverse.** The shared text-span layer derives inverse records by localizing the
+  forward span, applying the forward splice, selecting the exact replacement range in post-forward
+  text, swapping old/replacement text, recomputing identity bytes, re-localizing the inverse to the
+  exact intended range, and proving byte-exact recovery.
+- **Rollback surfaces.** Existing `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`,
+  and `rollback-draft-verify` surfaces now accept supported arbitrary-span text edits while preserving
+  fail-closed behavior for unsupported operations.
+- **Rollback draft verification.** Verification compares canonical `PatchPayload` bytes, rejects
+  normal-purpose drafts with byte-identical operations, rejects stale inverse identity bytes and
+  generated presentation hints, rejects legacy marker-key rollback authority, and structurally requires
+  rollback AUTHOR signatures to be Ed25519 records with 64-byte signature payloads. This remains a
+  structural check, not AUTHOR trust-store or rollback-authorization enforcement.
+- **Deep-review durability repairs.** Seal now refuses to create a Root publication when the target ref
+  pointer is missing but ref-log history or a partial ref log exists. Retrying after a crash that
+  published the current active WAL but did not drain active metadata now recognizes the already-published
+  tip and drains the WAL/ref metadata without appending a duplicate ref update.
+- **Pinned vectors.** Added replacement, insertion, deletion, repeated text, CRLF, UTF-8 widening,
+  multi-hunk enclosing span, and same-node multi-edit reverse-order vectors.
+
 ## 0.6.0 — 2026-07-03
 
 DC-13: non-default ref genesis.

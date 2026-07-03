@@ -24,7 +24,6 @@ Unsupported operations still fail the plan clearly:
 - `RenamePath`
 - `ChangePerm`
 - `CreateSymlink`
-- direct inverse/rollback for arbitrary-span text edits
 - merge/conflict algebra
 
 This command does not write the worktree. It only proves that the current sealed history can be

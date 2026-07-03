@@ -1,7 +1,7 @@
 //! Shared test fixtures and cross-module test harnesses.
 
 use prikk_object::{
-    BlockKind, BlockPayload, CanonicalEncode, CreateFile, EditText, MerkleRoot, NodeId,
+    BlockKind, BlockPayload, CanonicalEncode, ChangePerm, CreateFile, EditText, MerkleRoot, NodeId,
     ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind, PatchPayload, PatchPurpose,
     RefKind, RefStatePayload, RefUpdatePayload, Signature, SignatureAlgorithm, SignerRole,
 };
@@ -34,7 +34,7 @@ pub(crate) fn signed_patch_envelope() -> ObjectEnvelope {
     assert!(payload_bytes.is_ok());
     let bytes = payload_bytes.unwrap_or_default();
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, bytes);
-    assert!(envelope.add_signature(dummy_signature()).is_ok());
+    assert!(envelope.add_signature(rollback_author_signature()).is_ok());
     envelope
 }
 
@@ -61,7 +61,7 @@ pub(crate) fn rollback_patch_envelope() -> ObjectEnvelope {
     assert!(payload_bytes.is_ok());
     let bytes = payload_bytes.unwrap_or_default();
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, bytes);
-    assert!(envelope.add_signature(dummy_signature()).is_ok());
+    assert!(envelope.add_signature(rollback_author_signature()).is_ok());
     envelope
 }
 
@@ -136,6 +136,16 @@ pub(crate) fn dummy_signature() -> Signature {
         algorithm: SignatureAlgorithm::Ed25519,
         key_id: "author-key".to_string(),
         signature_bytes: vec![1, 2, 3, 4],
+        created_at: 7,
+        signer_role: SignerRole::Author,
+    }
+}
+
+pub(crate) fn rollback_author_signature() -> Signature {
+    Signature {
+        algorithm: SignatureAlgorithm::Ed25519,
+        key_id: "rollback-author-key".to_string(),
+        signature_bytes: vec![7; 64],
         created_at: 7,
         signer_role: SignerRole::Author,
     }
@@ -326,6 +336,83 @@ pub(crate) fn publish_text_create_then_edit_block(
                     presentation_hint_line: None,
                     presentation_hint_column: None,
                     old_span_text: span.old_span_text,
+                }),
+            },
+        ],
+        parent_patch_ids: Vec::new(),
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+    };
+    let mut patch =
+        ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch_payload.to_canonical_bytes()?);
+    patch.add_signature(dummy_signature())?;
+    let patch_id = object_store.write_object(&patch)?;
+    let block = signed_block(BlockKind::Root, Vec::new(), vec![patch_id], None);
+    let block_id = object_store.write_object(&block)?;
+
+    let ref_store = RefStore::new(layout.clone());
+    let ref_state = signed_ref_state_envelope("heads/main", None, block_id, 1);
+    let ref_state_id = ref_state.object_id();
+    let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, block_id, 1);
+    ref_store.publish(&RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_state,
+        ref_update,
+    })?;
+    Ok(())
+}
+
+pub(crate) fn publish_text_edit_then_unsupported_change_perm_block(
+    layout: &RepositoryLayout,
+) -> prikk_error::Result<()> {
+    let mut object_store = FileObjectStore::new(layout.clone());
+    let node_id = NodeId::from_bytes([0x82; 32]);
+    let old = b"alpha beta\n";
+    let new = b"alpha BETA\n";
+    let old_blob = write_blob(&mut object_store, old)?;
+    let span = crate::text_span::plan_authored_text_span(old, new, node_id)
+        .map_err(|err| prikk_error::PrikkError::Integrity(err.to_string()))?
+        .ok_or_else(|| prikk_error::PrikkError::Integrity("test edit is unchanged".to_string()))?;
+
+    let patch_payload = PatchPayload {
+        operations: vec![
+            Operation {
+                op_seq: 1,
+                op_id: None,
+                preconditions: Vec::new(),
+                kind: OperationKind::CreateFile(CreateFile {
+                    path: "README.md".to_string(),
+                    node_id,
+                    blob_id: old_blob,
+                    mode: 0o100644,
+                }),
+            },
+            Operation {
+                op_seq: 2,
+                op_id: None,
+                preconditions: Vec::new(),
+                kind: OperationKind::EditText(EditText {
+                    node_id,
+                    span_id: span.span_id,
+                    old_span_hash: span.old_span_hash,
+                    left_anchor_hash: span.left_anchor_hash,
+                    right_anchor_hash: span.right_anchor_hash,
+                    replacement_text: span.replacement_text,
+                    presentation_hint_line: None,
+                    presentation_hint_column: None,
+                    old_span_text: span.old_span_text,
+                }),
+            },
+            Operation {
+                op_seq: 3,
+                op_id: None,
+                preconditions: Vec::new(),
+                kind: OperationKind::ChangePerm(ChangePerm {
+                    node_id,
+                    old_mode: 0o100644,
+                    new_mode: 0o100755,
                 }),
             },
         ],

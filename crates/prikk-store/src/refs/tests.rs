@@ -98,6 +98,84 @@ fn ref_store_rejects_cas_mismatch() {
 }
 
 #[test]
+fn ref_store_rejects_unborn_publication_when_log_has_history() {
+    let root = unique_temp_dir("ref-unborn-log-history");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let mut object_store = FileObjectStore::new(layout.clone());
+        let block = signed_empty_block_envelope();
+        let target = block.object_id();
+        assert!(object_store.write_object(&block).is_ok());
+        let store = RefStore::new(layout.clone());
+        let ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
+        let ref_state_id = ref_state.object_id();
+        let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, target, 1);
+        let first = RefPublication {
+            ref_name: "heads/main".to_string(),
+            expected_previous_ref_state_id: None,
+            ref_state,
+            ref_update,
+        };
+        assert!(store.publish(&first).is_ok());
+        assert!(std::fs::remove_file(layout.ref_pointer_path("heads/main")).is_ok());
+
+        let second_ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
+        let second_ref_state_id = second_ref_state.object_id();
+        let second_ref_update =
+            signed_ref_update_envelope("heads/main", None, second_ref_state_id, target, 1);
+        let second = RefPublication {
+            ref_name: "heads/main".to_string(),
+            expected_previous_ref_state_id: None,
+            ref_state: second_ref_state,
+            ref_update: second_ref_update,
+        };
+        assert!(store.publish(&second).is_err());
+        assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(None));
+        let log = store.replay_log("heads/main");
+        assert!(log.is_ok());
+        if let Ok(log) = log {
+            assert_eq!(log.records.len(), 1);
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn ref_store_rejects_unborn_publication_when_log_has_trailing_partial() {
+    let root = unique_temp_dir("ref-unborn-log-partial");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let mut object_store = FileObjectStore::new(layout.clone());
+        let block = signed_empty_block_envelope();
+        let target = block.object_id();
+        assert!(object_store.write_object(&block).is_ok());
+        assert!(std::fs::write(layout.ref_log_path("heads/main"), b"partial").is_ok());
+
+        let store = RefStore::new(layout.clone());
+        let ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
+        let ref_state_id = ref_state.object_id();
+        let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, target, 1);
+        let publication = RefPublication {
+            ref_name: "heads/main".to_string(),
+            expected_previous_ref_state_id: None,
+            ref_state,
+            ref_update,
+        };
+        assert!(store.publish(&publication).is_err());
+        assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(None));
+        let log = store.replay_log("heads/main");
+        assert!(log.is_ok());
+        if let Ok(log) = log {
+            assert_eq!(log.records.len(), 0);
+            assert_ne!(log.trailing_partial_bytes, 0);
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn verify_repository_detects_missing_ref_state_object() {
     let root = unique_temp_dir("ref-missing-state");
     let layout = RepositoryLayout::init(root.clone());

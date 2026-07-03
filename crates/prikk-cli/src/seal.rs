@@ -110,6 +110,19 @@ fn seal_active_no_audit(
     let mut object_store = FileObjectStore::new(layout.clone());
     let ref_store = RefStore::new(layout.clone());
     let current = current_ref_state(&object_store, &ref_store, &ref_name)?;
+    let wal_patch_ids = collect_wal_patch_ids(&replay.records)?;
+    if let Some(current) = current.as_ref() {
+        if current_tip_matches_wal_patches(&object_store, current, &wal_patch_ids)? {
+            wal.truncate_empty().map_err(|err| err.to_string())?;
+            remove_active_ref_metadata(&layout).map_err(|err| err.to_string())?;
+            return Ok(SealCommandResult {
+                ref_name,
+                patch_count: wal_patch_ids.len(),
+                block_id: current.target_block_id,
+                ref_state_id: current.ref_state_id,
+            });
+        }
+    }
     verify_signer_trusted(&layout, signer).map_err(|err| err.to_string())?;
     let patch_ids = persist_wal_patches(&mut object_store, &replay.records)?;
     let parent_block_ids = current
@@ -213,6 +226,41 @@ fn persist_wal_patches(
     Ok(patch_ids)
 }
 
+fn collect_wal_patch_ids(
+    records: &[prikk_store::WalRecord],
+) -> std::result::Result<Vec<prikk_object::ObjectId>, String> {
+    let mut patch_ids = Vec::with_capacity(records.len());
+    for record in records {
+        if record.envelope.object_type != ObjectType::Patch {
+            return Err(format!(
+                "active WAL record {} is {}, expected patch",
+                record.seq, record.envelope.object_type
+            ));
+        }
+        patch_ids.push(record.envelope.object_id());
+    }
+    Ok(patch_ids)
+}
+
+fn current_tip_matches_wal_patches(
+    object_store: &FileObjectStore,
+    current: &CurrentRefState,
+    wal_patch_ids: &[prikk_object::ObjectId],
+) -> std::result::Result<bool, String> {
+    let envelope = object_store
+        .read_typed(current.target_block_id, ObjectType::Block)
+        .map_err(|err| err.to_string())?
+        .ok_or_else(|| {
+            format!(
+                "current ref targets missing block {}",
+                current.target_block_id
+            )
+        })?;
+    let block = BlockPayload::decode_canonical(&envelope.canonical_payload)
+        .map_err(|err| err.to_string())?;
+    Ok(block.patch_ids == wal_patch_ids)
+}
+
 fn current_ref_state(
     object_store: &FileObjectStore,
     ref_store: &RefStore,
@@ -222,6 +270,21 @@ fn current_ref_state(
         .read_current_ref_state_id(ref_name)
         .map_err(|err| err.to_string())?
     else {
+        let log = ref_store
+            .replay_log(ref_name)
+            .map_err(|err| err.to_string())?;
+        if log.trailing_partial_bytes != 0 {
+            return Err(format!(
+                "ref {ref_name} pointer is missing and its log has trailing partial bytes; \
+                 run `prikk doctor` before seal"
+            ));
+        }
+        if !log.records.is_empty() {
+            return Err(format!(
+                "ref {ref_name} pointer is missing but ref-log history exists; \
+                 run `prikk doctor` before seal"
+            ));
+        }
         return Ok(None);
     };
     let envelope = object_store

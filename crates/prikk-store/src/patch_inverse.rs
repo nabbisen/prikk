@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    CanonicalEncode, CreateFile, DeleteNode, DeleteNodePreimage, ObjectEnvelope, ObjectId,
-    ObjectType, Operation, OperationKind, PatchPayload, PatchPurpose,
+    CanonicalEncode, CreateFile, DeleteNode, DeleteNodePreimage, NodeId, NodeKind, ObjectEnvelope,
+    ObjectId, ObjectType, Operation, OperationKind, PatchPayload, PatchPurpose,
 };
 
 use crate::layout::RepositoryLayout;
@@ -18,6 +18,7 @@ use crate::object_store::FileObjectStore;
 use crate::patch_replay::decode::{
     DecodedDeletePreimage, DecodedOperationKind, DecodedPatchOperation, decode_patch_operations,
 };
+use crate::text_span;
 
 mod read;
 
@@ -98,6 +99,7 @@ pub fn prepare_patch_inverse_plan(
     let target_block_id = current_target_block(layout, &object_store, ref_name)?;
     let block_ids = single_parent_chain(&object_store, target_block_id)?;
     let mut files = BTreeMap::new();
+    let mut live_nodes = BTreeMap::new();
     let mut inverse_operations = Vec::new();
     let mut patch_count = 0_usize;
     let mut original_operation_count = 0_usize;
@@ -106,6 +108,7 @@ pub fn prepare_patch_inverse_plan(
         let block = read_block(&object_store, *block_id)?;
         if let Some(snapshot_blob_ref) = block.snapshot_blob_ref {
             files = load_snapshot_files(&object_store, snapshot_blob_ref)?;
+            live_nodes.clear();
             inverse_operations.clear();
             patch_count = 0;
             original_operation_count = 0;
@@ -114,7 +117,12 @@ pub fn prepare_patch_inverse_plan(
             let patch = read_patch(&object_store, patch_id)?;
             let operations = decode_patch_operations(&patch.canonical_payload)?;
             for operation in operations {
-                let inverse = derive_inverse_operation(&object_store, &mut files, operation)?;
+                let inverse = derive_inverse_operation(
+                    &object_store,
+                    &mut files,
+                    &mut live_nodes,
+                    operation,
+                )?;
                 inverse_operations.push(inverse);
                 original_operation_count += 1;
             }
@@ -149,9 +157,16 @@ pub fn prepare_patch_inverse_plan(
     })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct InverseLiveNode {
+    path: String,
+    kind: NodeKind,
+}
+
 fn derive_inverse_operation(
     object_store: &FileObjectStore,
     files: &mut BTreeMap<String, Vec<u8>>,
+    live_nodes: &mut BTreeMap<NodeId, InverseLiveNode>,
     operation: DecodedPatchOperation,
 ) -> Result<Operation> {
     match operation.kind {
@@ -166,8 +181,20 @@ fn derive_inverse_operation(
                     "CreateFile would overwrite existing path {path}"
                 )));
             }
+            if live_nodes.contains_key(&node_id) {
+                return Err(PrikkError::Integrity(
+                    "CreateFile would introduce an already-live node_id".to_string(),
+                ));
+            }
             let (old_node_kind, bytes) = read_blob_bytes_with_kind(object_store, blob_id)?;
             files.insert(path.clone(), bytes);
+            live_nodes.insert(
+                node_id,
+                InverseLiveNode {
+                    path: path.clone(),
+                    kind: old_node_kind,
+                },
+            );
             Ok(Operation {
                 op_seq: 0,
                 op_id: Some(format!("inverse-delete-{path}")),
@@ -202,6 +229,19 @@ fn derive_inverse_operation(
                 old_node_kind,
             )?;
             files.remove(&path);
+            if let Some(live) = live_nodes.remove(&node_id) {
+                if live.path != path {
+                    return Err(PrikkError::Integrity(format!(
+                        "DeleteNode path {path} does not match live node path {}",
+                        live.path
+                    )));
+                }
+                if live.kind != old_node_kind {
+                    return Err(PrikkError::Integrity(
+                        "DeleteNode old_node_kind does not match live node kind".to_string(),
+                    ));
+                }
+            }
             Ok(Operation {
                 op_seq: 0,
                 op_id: Some(format!("inverse-create-{path}")),
@@ -214,10 +254,47 @@ fn derive_inverse_operation(
                 }),
             })
         }
-        DecodedOperationKind::EditText { .. } => Err(PrikkError::UnsupportedObjectType(
-            "inverse planning for arbitrary-span EditText is deferred until direct-inverse vectors land"
-                .to_string(),
-        )),
+        DecodedOperationKind::EditText {
+            node_id,
+            span_id,
+            old_span_hash,
+            left_anchor_hash,
+            right_anchor_hash,
+            replacement_text,
+            old_span_text,
+        } => {
+            let live = live_nodes.get(&node_id).ok_or_else(|| {
+                PrikkError::Integrity("EditText inverse target node is not live".to_string())
+            })?;
+            if live.kind != NodeKind::TextFile {
+                return Err(PrikkError::Integrity(
+                    "EditText inverse target node is not TextFile".to_string(),
+                ));
+            }
+            let pre_text = files.get(&live.path).ok_or_else(|| {
+                PrikkError::Integrity(format!(
+                    "EditText inverse target path {} is absent",
+                    live.path
+                ))
+            })?;
+            let (inverse, post_text) = text_span::derive_inverse_edit_text(
+                pre_text,
+                node_id,
+                &span_id,
+                &old_span_hash,
+                &left_anchor_hash,
+                &right_anchor_hash,
+                &replacement_text,
+                &old_span_text,
+            )?;
+            files.insert(live.path.clone(), post_text);
+            Ok(Operation {
+                op_seq: 0,
+                op_id: Some(format!("inverse-edit-text-{}", live.path)),
+                preconditions: Vec::new(),
+                kind: OperationKind::EditText(inverse),
+            })
+        }
         DecodedOperationKind::DeleteNode {
             preimage: DecodedDeletePreimage::Symlink { .. },
             ..
@@ -256,8 +333,16 @@ fn summarize_operations(operations: &[Operation]) -> Vec<PatchInverseOperationSu
                 OperationKind::DeleteNode(value) => {
                     (PatchInverseOperationKind::DeleteFile, value.path.clone())
                 }
+                OperationKind::EditText(_) => (
+                    PatchInverseOperationKind::EditText,
+                    operation
+                        .op_id
+                        .as_deref()
+                        .and_then(|value| value.strip_prefix("inverse-edit-text-"))
+                        .unwrap_or("<unknown>")
+                        .to_string(),
+                ),
                 OperationKind::ReplaceBinary(_)
-                | OperationKind::EditText(_)
                 | OperationKind::RenamePath(_)
                 | OperationKind::ChangePerm(_)
                 | OperationKind::CreateSymlink(_) => {

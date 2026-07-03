@@ -73,7 +73,8 @@ local branch ref can be started with `commit --ref heads/<branch>` and published
 
 ## Design Notes
 
-Current implementation drop: **0.6.0 candidate** (DC-13 — non-default ref genesis).
+Current implementation drop: **0.7.0 candidate** (DC-14 — arbitrary-span text direct inverse and
+rollback exposure).
 
 Implemented:
 
@@ -93,7 +94,7 @@ Implemented:
 - Active-WAL ref ownership metadata prevents sealing queued patches to a different ref than the one they were authored for. Non-empty active WALs with missing, malformed, or mismatched ref metadata fail closed.
 - Supported patch replay planning/materialization for `CreateFile`/`DeleteNode` and deterministic arbitrary-span `EditText`, with node-addressed record reconciliation for the remaining §9.3 kinds.
 - Explicit deletion planning and opt-in deletion of patch-removed files whose bytes still match the old blob.
-- Read-only inverse planning, non-mutating rollback preview, rollback-draft append/verification, and sealed rollback block classification for the supported subset. Rollback-draft identity is recorded as `PatchPurpose::RollbackDraft`, not as a reserved AUTHOR key id.
+- Read-only inverse planning, non-mutating rollback preview, rollback-draft append/verification, and sealed rollback block classification for the supported subset, including deterministic direct inverse for supported arbitrary-span `EditText`. Rollback-draft identity is recorded as `PatchPurpose::RollbackDraft`, not as a reserved AUTHOR key id.
 - Minimal local publication trust: `prikk trust maintainer add` records one trusted MAINTAINER public key, and `verify` checks Block/RefState/RefUpdate MAINTAINER signatures against that policy.
 
 Signing scope (interim): AUTHOR-role Patch signatures and MAINTAINER publication signatures produced by production commands are real role-bound Ed25519 signatures. Publication trust is local and minimal (`required = 1`); this does **not** yet imply key rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, or publication-grade audit policy.
@@ -102,7 +103,7 @@ Minimal CLI commands: `init`, `trust maintainer add`, `commit [--from-worktree] 
 
 Not implemented yet:
 
-- Rename detection, multi-operation text diff minimization, arbitrary-span text inverse/rollback, rollback refs, rollback authorization, commutation, full patch algebra, and general destructive checkout pruning.
+- Rename detection, multi-operation text diff minimization, rollback refs, rollback authorization, commutation, full patch algebra, and general destructive checkout pruning.
 - Branch switching, branch copy/fork from an existing tip, merge-base semantics, branch deletion/rename,
   tag or remote ref creation, rollback refs, multi-commit queued active sessions, and per-ref active WALs.
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy.

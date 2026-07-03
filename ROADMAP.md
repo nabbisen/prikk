@@ -5,11 +5,16 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-13 - non-default ref genesis (v0.6.0 candidate).** First-commit genesis on explicit non-default
-  branch refs is implemented with branch-ref validation, active-WAL ref ownership, and `seal --ref`
-  publication rules. The design record is `rfcs/proposed/DC-13-NONDEFAULT-REF-GENESIS.md`.
+- **DC-14 - arbitrary-span text direct inverse and rollback exposure (v0.7.0 implementation
+  candidate).** The existing inverse/rollback surfaces support arbitrary-span `EditText` by
+  recomputing direct inverse identity against the post-forward text. The design record is
+  `rfcs/proposed/DC-14-ARBITRARY-SPAN-TEXT-INVERSE-ROLLBACK.md`.
 
 ## Last Released Increment
+
+- **DC-13 - non-default ref genesis (released as 0.6.0).** First-commit genesis on explicit
+  non-default branch refs is implemented with branch-ref validation, active-WAL ref ownership, and
+  `seal --ref` publication rules.
 
 - **DC-12 - arbitrary-span text edits (released as 0.5.0).** Worktree text edits are authored and
   replayed as deterministic arbitrary spans while keeping inverse/rollback, commutation, confluence,
@@ -26,10 +31,9 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Next Increments
 
-1. **Direct inverse/rollback for arbitrary-span text edits**, gated by round-trip vectors.
-2. **M2+ patch algebra after arbitrary spans**: commutation, confluence, conflict witnesses, and merge
+1. **M2+ patch algebra after arbitrary spans**: commutation, confluence, conflict witnesses, and merge
    evidence.
-3. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
+2. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
    rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
    their dedicated plans and FDDs.
 

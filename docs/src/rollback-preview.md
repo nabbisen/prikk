@@ -24,12 +24,12 @@ Supported operation subset:
 
 - `CreateFile`
 - `DeleteFile`
+- deterministic arbitrary-span `EditText`
 
 Deferred:
 
 - mutating rollback commands
 - rollback ref publication policy
 - authorization and audit policy for rollback
-- arbitrary-span text inverse/rollback
 - commutation, confluence, and conflict witnesses
 - plugin execution and remote sync

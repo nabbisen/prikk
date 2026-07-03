@@ -6,9 +6,11 @@
 //! `verify_active_rollback_draft` API additionally compares the WAL
 //! payload with the inverse Patch that would be derived from the currently published ref.
 
+use prikk_crypto::ED25519_SIGNATURE_LEN;
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, PatchPurpose, SignerRole,
+    CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, PatchPurpose, Signature,
+    SignatureAlgorithm, SignerRole,
 };
 
 use crate::layout::RepositoryLayout;
@@ -16,6 +18,8 @@ use crate::patch_inverse::prepare_patch_inverse_plan;
 use crate::patch_replay::decode::{decode_patch_operations, ensure_apply_supported};
 use crate::rollback_draft::is_rollback_draft_envelope;
 use crate::wal::{Wal, WalRecord};
+
+const LEGACY_ROLLBACK_MARKER_KEY_ID: &str = "dev-placeholder-rollback-author";
 
 /// Verification result for one active rollback draft.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,7 +66,7 @@ pub fn verify_active_rollback_draft(
             "rollback-draft-verify requires exactly one active WAL record".to_string(),
         ));
     };
-    verify_rollback_marker(record)?;
+    verify_active_rollback_record(record)?;
 
     let mut inverse = prepare_patch_inverse_plan(layout, ref_name)?;
     inverse.inverse_payload.purpose = PatchPurpose::RollbackDraft;
@@ -141,6 +145,7 @@ pub(crate) fn verify_rollback_patch_envelope(
             "{context} has no supported inverse operations"
         )));
     }
+    require_rollback_author_signature(envelope, context)?;
     Ok(true)
 }
 
@@ -155,32 +160,71 @@ fn single_wal_record(records: &[WalRecord]) -> Result<Option<&WalRecord>> {
     }
 }
 
-fn verify_rollback_marker(record: &WalRecord) -> Result<()> {
+fn verify_active_rollback_record(record: &WalRecord) -> Result<()> {
     if record.envelope.object_type != ObjectType::Patch {
         return Err(PrikkError::Integrity(format!(
             "rollback draft WAL record {} contains {}, expected patch",
             record.seq, record.envelope.object_type
         )));
     }
-    if is_rollback_draft_envelope(&record.envelope)? {
-        return Ok(());
+    if !is_rollback_draft_envelope(&record.envelope)? {
+        return Err(PrikkError::InvalidSignature(format!(
+            "active WAL record {} is not a rollback draft PatchPurpose",
+            record.seq
+        )));
     }
-    Err(PrikkError::InvalidSignature(format!(
-        "active WAL record {} is not signed as a rollback draft",
-        record.seq
-    )))
+    require_rollback_author_signature(
+        &record.envelope,
+        &format!("active WAL record {}", record.seq),
+    )?;
+    Ok(())
 }
 
 fn rollback_author_key_id(envelope: &ObjectEnvelope) -> Result<String> {
+    Ok(
+        require_rollback_author_signature(envelope, "rollback draft Patch")?
+            .key_id
+            .clone(),
+    )
+}
+
+fn require_rollback_author_signature<'a>(
+    envelope: &'a ObjectEnvelope,
+    context: &str,
+) -> Result<&'a Signature> {
     envelope
         .signatures
         .iter()
         .find(|signature| signature.signer_role == SignerRole::Author)
-        .map(|signature| signature.key_id.clone())
         .ok_or_else(|| {
             PrikkError::InvalidSignature(
                 "rollback draft Patch must carry an AUTHOR signature".to_string(),
             )
+        })
+        .and_then(|signature| {
+            if signature.algorithm != SignatureAlgorithm::Ed25519 {
+                return Err(PrikkError::InvalidSignature(format!(
+                    "{context} rollback draft AUTHOR signature must use Ed25519"
+                )));
+            }
+            if signature.key_id == LEGACY_ROLLBACK_MARKER_KEY_ID {
+                return Err(PrikkError::InvalidSignature(format!(
+                    "{context} uses legacy rollback marker key id"
+                )));
+            }
+            if signature.signature_bytes.len() != ED25519_SIGNATURE_LEN {
+                return Err(PrikkError::InvalidSignature(format!(
+                    "{context} rollback draft AUTHOR signature must be {ED25519_SIGNATURE_LEN} bytes"
+                )));
+            }
+            let _preimage = Signature::signed_bytes(
+                signature.algorithm,
+                ObjectType::Patch,
+                envelope.object_id(),
+                SignerRole::Author,
+                &signature.key_id,
+            );
+            Ok(signature)
         })
 }
 
