@@ -3,16 +3,18 @@
 use std::io::Write;
 
 use prikk_object::{
-    BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType,
+    BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType, RefKind,
+    RefStatePayload, RefUpdatePayload,
 };
 
 use crate::{
-    DoctorRepairOptions, DoctorSeverity, FileObjectStore, ObjectWriter, RepositoryLayout, Wal,
-    doctor_repository, repair_repository,
+    DoctorRepairOptions, DoctorSeverity, Ed25519MaintainerSigner, FileObjectStore,
+    MaintainerSigner, ObjectWriter, RepositoryLayout, Wal, add_trusted_maintainer,
+    doctor_repository, maintainer_signature as real_maintainer_signature, repair_repository,
 };
 
 use crate::test_support::{
-    maintainer_signature, sample_object_id, signed_empty_block_envelope, signed_patch_envelope,
+    maintainer_signature as legacy_maintainer_signature, sample_object_id, signed_patch_envelope,
     unique_temp_dir,
 };
 
@@ -72,7 +74,7 @@ fn doctor_reports_verification_error() {
         assert!(payload_bytes.is_ok());
         if let Ok(payload_bytes) = payload_bytes {
             let mut block = ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes);
-            assert!(block.add_signature(maintainer_signature()).is_ok());
+            assert!(block.add_signature(legacy_maintainer_signature()).is_ok());
             assert!(store.write_object(&block).is_ok());
             let report = doctor_repository(&layout);
             assert!(!report.is_healthy());
@@ -142,20 +144,57 @@ fn doctor_repair_reconstructs_missing_main_ref_pointer() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
+        let maintainer_seed = [0x44_u8; 32];
+        let maintainer = Ed25519MaintainerSigner::from_seed("doctor-maintainer", &maintainer_seed);
+        let public_key = maintainer
+            .public_key_bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        assert!(add_trusted_maintainer(&layout, "doctor-maintainer", &public_key).is_ok());
         let mut object_store = FileObjectStore::new(layout.clone());
-        let block = signed_empty_block_envelope();
+        let block_payload = BlockPayload {
+            parent_block_ids: Vec::new(),
+            kind: BlockKind::Root,
+            patch_ids: Vec::new(),
+            state_merkle_root: MerkleRoot([0_u8; 32]),
+            snapshot_blob_ref: None,
+        };
+        let block = signed_publication_envelope(
+            ObjectType::Block,
+            block_payload.to_canonical_bytes().unwrap_or_default(),
+            &maintainer,
+        );
         let target = block.object_id();
         assert!(object_store.write_object(&block).is_ok());
         let store = crate::RefStore::new(layout.clone());
-        let ref_state =
-            crate::test_support::signed_ref_state_envelope("heads/main", None, target, 1);
+        let ref_state_payload = RefStatePayload {
+            ref_name: "heads/main".to_string(),
+            kind: RefKind::Branch,
+            target_object_id: target,
+            update_seq: 1,
+            previous_ref_state_id: None,
+            required_attestation_ids: Vec::new(),
+        };
+        let ref_state = signed_publication_envelope(
+            ObjectType::RefState,
+            ref_state_payload.to_canonical_bytes().unwrap_or_default(),
+            &maintainer,
+        );
         let ref_state_id = ref_state.object_id();
-        let ref_update = crate::test_support::signed_ref_update_envelope(
-            "heads/main",
-            None,
-            ref_state_id,
-            target,
-            1,
+        let ref_update_payload = RefUpdatePayload {
+            ref_name: "heads/main".to_string(),
+            old_ref_state_id: None,
+            new_ref_state_id: ref_state_id,
+            new_target_object_id: target,
+            update_seq: 1,
+            created_at: 0,
+            author_key_id: "doctor-maintainer".to_string(),
+        };
+        let ref_update = signed_publication_envelope(
+            ObjectType::RefUpdate,
+            ref_update_payload.to_canonical_bytes().unwrap_or_default(),
+            &maintainer,
         );
         let publication = crate::RefPublication {
             ref_name: "heads/main".to_string(),
@@ -186,4 +225,19 @@ fn doctor_repair_reconstructs_missing_main_ref_pointer() {
         );
     }
     let _ = std::fs::remove_dir_all(root);
+}
+
+fn signed_publication_envelope(
+    object_type: ObjectType,
+    canonical_payload: Vec<u8>,
+    signer: &impl MaintainerSigner,
+) -> ObjectEnvelope {
+    let mut envelope = ObjectEnvelope::unsigned(object_type, 1, canonical_payload);
+    let object_id = envelope.object_id();
+    let signature = real_maintainer_signature(signer, object_type, object_id);
+    assert!(signature.is_ok());
+    if let Ok(signature) = signature {
+        assert!(envelope.add_signature(signature).is_ok());
+    }
+    envelope
 }

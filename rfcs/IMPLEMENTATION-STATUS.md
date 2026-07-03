@@ -1,11 +1,11 @@
 # Prikk Implementation Status
 
-Version: 0.3.0 (DC-10 — rollback-draft identity and AUTHOR signing)
+Version: 0.4.0 (DC-11 — publication signing and minimal trust store)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (DC-10)
+## Current State (DC-11)
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** `heads/main`
   baseline reconstructed from authoritative replay — or, on a fresh repository, a **genesis** first commit
@@ -20,8 +20,14 @@ Version: 0.3.0 (DC-10 — rollback-draft identity and AUTHOR signing)
   `AuthorSigner` (`Ed25519AuthorSigner`, key material via `PRIKK_AUTHOR_KEY_ID` /
   `PRIKK_AUTHOR_SEED`). The broken `commit --allow-empty` scaffold was removed (R1R). DC-10 removes the
   rollback-draft fake AUTHOR marker: rollback identity is now `PatchPurpose::RollbackDraft`, and
-  rollback-draft Patches carry real AUTHOR signatures. MAINTAINER publication signing remains a later
-  phase.
+  rollback-draft Patches carry real AUTHOR signatures.
+- Role-bound Ed25519 MAINTAINER signing for production publication objects through an injected
+  `MaintainerSigner` (`Ed25519MaintainerSigner`, key material via `PRIKK_MAINTAINER_KEY_ID` /
+  `PRIKK_MAINTAINER_SEED`). `seal` validates the signer against the local
+  `.prikk/trust/keys/maintainer/` and `.prikk/trust/policy.toml` policy before publication, signs
+  Block/RefState/RefUpdate envelopes with real MAINTAINER signatures, and writes the real MAINTAINER
+  key id into RefUpdate payload identity. Verification reports publication-trust failures separately
+  from structural corruption.
 
 ## Implemented
 
@@ -39,11 +45,11 @@ Version: 0.3.0 (DC-10 — rollback-draft identity and AUTHOR signing)
 - RefState object publication primitive.
 - Flat hashed ref pointer paths under `refs/by-id/`.
 - Inline signed RefUpdate log append/replay.
-- Read-only repository verification for persisted object files, sealed block references, sealed rollback Patch classification, ref pointers, ref logs, and active WAL records.
+- Read-only repository verification for persisted object files, sealed block references, sealed rollback Patch classification, ref pointers, ref logs, active WAL records, and publication-trust checks.
 - Doctor diagnostics that convert verification outcomes into actionable issue codes.
 - ActiveSession append API that holds `active.lock` while writing the active WAL.
 - Node-addressed worktree patch authoring (`prikk commit`) with role-bound Ed25519 AUTHOR signing; see Current State above.
-- Local no-audit seal scaffold that persists WAL patches, creates a Block, publishes `heads/main`, and clears the WAL after publication.
+- Local no-audit seal scaffold that persists WAL patches, creates a Block, publishes `heads/main`, signs publication objects with a trusted MAINTAINER key, and clears the WAL after publication.
 - Canonical decoding for RefState, RefUpdate, and Block payloads used by verification.
 - Read-only sealed-history inspection from the current RefState chain, including rollback block classification.
 - Read-only checkout planning that validates current RefState, Block, parent Block, Patch, and optional snapshot Blob references.
@@ -52,13 +58,13 @@ Version: 0.3.0 (DC-10 — rollback-draft identity and AUTHOR signing)
 - Explicit deletion planning and opt-in deletion for files removed by supported patch replay.
 - Content-anchored `EditText` validation scaffold with fixed 32-byte span hashes, anchor ID validation, conservative full-file exact-span replay, and opt-in worktree generation for full-file UTF-8 edits.
 - Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append and verification, and sealed rollback block classification for the supported patch-operation subset. Rollback drafts are identified by `PatchPurpose::RollbackDraft` and AUTHOR-signed with real Ed25519 key material.
-- Minimal CLI for `init`, `commit [--from-worktree] [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
 
 - Genesis first-commit onto non-default refs (default `heads/main` genesis is supported).
 - General destructive worktree pruning and full patch-based checkout semantics.
-- Publication-grade MAINTAINER signing, trust store, key management/rotation, and signature policy.
+- Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy beyond the DC-11 local trust store.
 - Policy-aware audit/attestation publication from seal.
 - Full patch algebra: arbitrary text-span replay, rollback ref publication, commutation, confluence, and conflict witnesses.
 - Conflict witnesses and merge state.
@@ -74,6 +80,13 @@ Version: 0.3.0 (DC-10 — rollback-draft identity and AUTHOR signing)
 - Missing-object repair, checksum-mismatch repair, object quarantine, GC, and malformed-log repair remain deferred.
 
 ## Gate Discipline
+
+DC-11 stays within the approved boundary: production publication objects (Block, RefState, RefUpdate)
+carry real role-bound Ed25519 MAINTAINER signatures verified against a repository-local trust policy.
+It does not add key rotation/revocation/expiration, thresholds above one, hardware signing, remote trust
+distribution, audit plugin execution, rollback authorization, AUTHOR signature verification in
+repository-wide `verify`, or repository-format stability. Pre-DC-11 placeholder-sealed histories are
+reported as publication-trust failures, not structural corruption.
 
 DC-10 stays within the approved boundary: production Patch AUTHOR signatures from `commit` and
 `rollback-draft --append-inverse` are real role-bound Ed25519 signatures, and rollback-draft identity is

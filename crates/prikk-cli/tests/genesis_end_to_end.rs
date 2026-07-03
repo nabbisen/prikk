@@ -9,6 +9,8 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use prikk_store::{Ed25519MaintainerSigner, MaintainerSigner};
+
 fn prikk(repo: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_prikk"));
     cmd.current_dir(repo);
@@ -37,6 +39,10 @@ fn unique_repo(tag: &str) -> PathBuf {
     ));
     std::fs::create_dir_all(&dir).unwrap();
     dir
+}
+
+fn public_key_hex(bytes: &[u8; 32]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 #[test]
@@ -68,8 +74,33 @@ fn genesis_init_commit_seal_log_verify() {
         "expected two CreateFile operations; stdout: {commit_stdout}"
     );
 
+    let maintainer_seed = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000";
+    let maintainer_signer = Ed25519MaintainerSigner::from_seed(
+        "e2e-maintainer",
+        &[
+            0x11, 0x11, 0x22, 0x22, 0x33, 0x33, 0x44, 0x44, 0x55, 0x55, 0x66, 0x66, 0x77, 0x77,
+            0x88, 0x88, 0x99, 0x99, 0xaa, 0xaa, 0xbb, 0xbb, 0xcc, 0xcc, 0xdd, 0xdd, 0xee, 0xee,
+            0xff, 0xff, 0x00, 0x00,
+        ],
+    );
+    let out = prikk(&repo)
+        .args([
+            "trust",
+            "maintainer",
+            "add",
+            "--key-id",
+            "e2e-maintainer",
+            "--public-key",
+            &public_key_hex(&maintainer_signer.public_key_bytes()),
+        ])
+        .output()
+        .unwrap();
+    ok(&out, "trust maintainer add");
+
     // seal publishes the first (Root) block and advances heads/main.
     let out = prikk(&repo)
+        .env("PRIKK_MAINTAINER_KEY_ID", "e2e-maintainer")
+        .env("PRIKK_MAINTAINER_SEED", maintainer_seed)
         .args(["seal", "--allow-no-audit"])
         .output()
         .unwrap();

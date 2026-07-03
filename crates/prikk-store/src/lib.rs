@@ -28,6 +28,7 @@ mod layout;
 #[allow(dead_code)]
 mod lifecycle_cache;
 mod lock;
+mod maintainer_signing;
 mod memory_store;
 // Production node-id minting (DC-09 Phase 4.4a-1), consumed by node-addressed worktree authoring
 // (4.4a-2) for fresh-node creation.
@@ -47,6 +48,7 @@ mod rollback_preview;
 mod rollback_verify;
 mod snapshot;
 mod text_span;
+mod trust;
 mod verify;
 mod wal;
 mod worktree;
@@ -69,6 +71,7 @@ pub use doctor::{
 pub use history::{DEFAULT_HISTORY_LIMIT, HistoryEntry, RefHistory, load_ref_history};
 pub use layout::RepositoryLayout;
 pub use lock::{ActiveLock, RefLock};
+pub use maintainer_signing::{Ed25519MaintainerSigner, MaintainerSigner, maintainer_signature};
 pub use memory_store::MemoryObjectStore;
 pub use object_store::{FileObjectStore, ObjectReader, ObjectWriter};
 pub use patch_checkout::{
@@ -91,6 +94,10 @@ pub use rollback_preview::{
 };
 pub use rollback_verify::{RollbackDraftVerification, verify_active_rollback_draft};
 pub use snapshot::{SnapshotEntry, SnapshotManifest};
+pub use trust::{
+    MaintainerTrustPolicy, PublicationTrustIssue, add_trusted_maintainer,
+    load_maintainer_trust_policy, verify_signer_trusted, verify_trusted_publication_envelope,
+};
 pub use verify::{ObjectVerification, RepositoryVerification, verify_repository};
 pub use wal::{Wal, WalRecord, WalRepair, WalReplay};
 pub use worktree::{SnapshotMaterializationReport, materialize_snapshot_checkout};

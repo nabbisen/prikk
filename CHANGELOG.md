@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.0 — 2026-07-03
+
+DC-11: publication signing and minimal trust store.
+
+**Release scope.** Production publication objects (`Block`, `RefState`, and inline `RefUpdate`) now
+carry real role-bound Ed25519 MAINTAINER signatures verified against a repository-local trust policy.
+This is still not full PKI: no key rotation, revocation, expiration, thresholds above one, remote trust,
+hardware signing, audit-plugin policy, or repository-format stability guarantee. Pre-DC-11 histories
+sealed with `dev-placeholder-maintainer` are treated as pre-publication-trust artifacts and report
+publication-trust failures under v0.4.0 verification.
+
+- **Minimal trust store.** `init` creates `.prikk/trust/keys/maintainer/`; `prikk trust maintainer add`
+  writes the single-key `required = 1` trust policy through the production path with strict validation.
+- **Real MAINTAINER signing.** `seal --allow-no-audit` requires `PRIKK_MAINTAINER_KEY_ID` and
+  `PRIKK_MAINTAINER_SEED`, verifies the signer key id and seed-derived public key against local trust
+  before publication, and signs Block, RefState, and RefUpdate with role-bound Ed25519 signatures.
+- **Publication trust verification.** `verify` checks trusted MAINTAINER signatures for reached Blocks,
+  RefStates, and inline RefUpdates, reporting publication-trust failures separately from structural
+  corruption. `doctor` diagnoses trust failures but does not auto-trust keys or repair signatures.
+- **Compatibility.** `RefUpdatePayload.author_key_id` now records the real MAINTAINER key id, so new
+  RefUpdate identities differ from placeholder-era output. Existing PATCH anchors are unchanged.
+
 ## 0.3.0 — 2026-07-02
 
 DC-10: rollback-draft identity and AUTHOR signing.

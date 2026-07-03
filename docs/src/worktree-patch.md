@@ -47,5 +47,5 @@ rules apply as elsewhere.
 - arbitrary-span text diffs, commutation, conflict witnesses
 
 Signature scope: worktree commits are role-bound Ed25519 `AUTHOR`-signed. This does not imply
-trust-store enforcement, key management, `MAINTAINER`/publication signing, or publication-grade
-signing for the internal `rollback-draft` scaffold.
+trust-store enforcement, key management, `MAINTAINER`/publication signing, rollback authorization, or
+publication-grade repository trust.

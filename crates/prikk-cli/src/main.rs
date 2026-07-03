@@ -7,7 +7,8 @@
 //! read-only inverse planning, rollback preview, rollback draft append/verification, sealed rollback classification,
 //! supported patch replay planning/materialization, explicit patch deletion planning, a local
 //! no-audit seal scaffold, read-only history inspection, checkout planning, conservative snapshot
-//! materialization, read-only worktree status, repository verification, and doctor diagnostics.
+//! materialization, read-only worktree status, minimal publication trust setup, repository
+//! verification, and doctor diagnostics.
 //! Arbitrary-span text diffs, full patch algebra, audit plugins, and sync remain later increments.
 
 use std::path::PathBuf;
@@ -30,13 +31,14 @@ use output::{
     print_worktree_status,
 };
 use prikk_store::{
-    DoctorRepairOptions, Ed25519AuthorSigner, RefStore, RepositoryLayout, Wal,
-    WorktreePatchCommitOptions, append_rollback_draft, commit_worktree_changes_signed,
-    doctor_repository, load_ref_history, materialize_patch_checkout,
-    materialize_patch_checkout_with_deletions, materialize_snapshot_checkout,
-    plan_patch_checkout_deletions, prepare_checkout_plan, prepare_patch_inverse_plan,
-    prepare_patch_replay_plan, prepare_rollback_preview, prepare_snapshot_checkout_plan,
-    repair_repository, verify_active_rollback_draft, verify_repository, worktree_status,
+    DoctorRepairOptions, Ed25519AuthorSigner, Ed25519MaintainerSigner, RefStore, RepositoryLayout,
+    Wal, WorktreePatchCommitOptions, add_trusted_maintainer, append_rollback_draft,
+    commit_worktree_changes_signed, doctor_repository, load_ref_history,
+    materialize_patch_checkout, materialize_patch_checkout_with_deletions,
+    materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan,
+    prepare_patch_inverse_plan, prepare_patch_replay_plan, prepare_rollback_preview,
+    prepare_snapshot_checkout_plan, repair_repository, verify_active_rollback_draft,
+    verify_repository, worktree_status,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -65,6 +67,7 @@ fn run() -> std::result::Result<(), String> {
         Some("init") => run_init(args.next()),
         Some("commit") => run_commit(args.collect()),
         Some("seal") => run_seal(args.collect()),
+        Some("trust") => run_trust(args.collect()),
         Some("status") => run_status(),
         Some("log") => run_log(args.collect()),
         Some("checkout") => run_checkout(args.collect()),
@@ -124,13 +127,55 @@ fn run_commit(args: Vec<String>) -> std::result::Result<(), String> {
 
 fn run_seal(args: Vec<String>) -> std::result::Result<(), String> {
     let root = current_dir()?;
-    let result = seal::run_seal(root, args)?;
+    let signer = maintainer_signer_from_env()?;
+    let result = seal::run_seal(root, args, &signer)?;
     println!("sealed active WAL into block");
     println!("patches: {}", result.patch_count);
     println!("block id: {}", result.block_id);
     println!("heads/main RefState: {}", result.ref_state_id);
     println!("note: audit plugins and patch-based worktree materialization remain later PRs");
     Ok(())
+}
+
+fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {
+    let mut args = args.into_iter();
+    match (args.next().as_deref(), args.next().as_deref()) {
+        (Some("maintainer"), Some("add")) => {
+            let mut key_id = None;
+            let mut public_key = None;
+            while let Some(arg) = args.next() {
+                match arg.as_str() {
+                    "--key-id" => {
+                        key_id = Some(
+                            args.next()
+                                .ok_or_else(|| "--key-id requires a value".to_string())?,
+                        );
+                    }
+                    "--public-key" => {
+                        public_key = Some(
+                            args.next()
+                                .ok_or_else(|| "--public-key requires a value".to_string())?,
+                        );
+                    }
+                    other => return Err(format!("unknown trust maintainer add argument: {other}")),
+                }
+            }
+            let key_id =
+                key_id.ok_or_else(|| "trust maintainer add requires --key-id".to_string())?;
+            let public_key = public_key
+                .ok_or_else(|| "trust maintainer add requires --public-key".to_string())?;
+            let root = current_dir()?;
+            let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
+            let policy = add_trusted_maintainer(&layout, &key_id, &public_key)
+                .map_err(|err| err.to_string())?;
+            println!("trusted maintainer key: {}", policy.key_id);
+            println!("policy: required=1");
+            Ok(())
+        }
+        _ => Err(
+            "usage: prikk trust maintainer add --key-id <key-id> --public-key <64-hex>".to_string(),
+        ),
+    }
 }
 
 fn run_status() -> std::result::Result<(), String> {
@@ -267,7 +312,11 @@ fn run_verify(path: Option<String>) -> std::result::Result<(), String> {
     let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
     let report = verify_repository(&layout).map_err(|err| err.to_string())?;
     print_verify_report(&layout, &report);
-    Ok(())
+    if report.has_publication_trust_issues() {
+        Err("repository has publication-trust issues".to_string())
+    } else {
+        Ok(())
+    }
 }
 
 fn run_doctor(args: Vec<String>) -> std::result::Result<(), String> {
@@ -330,16 +379,34 @@ fn author_signer_from_env() -> Result<Ed25519AuthorSigner, String> {
         "author signing is required: set PRIKK_AUTHOR_SEED (64 hex chars; no signing key configured)"
             .to_string()
     })?;
-    let seed = decode_seed_hex(&seed_hex)?;
+    let seed = decode_seed_hex(&seed_hex, "PRIKK_AUTHOR_SEED")?;
     Ok(Ed25519AuthorSigner::from_seed(key_id, &seed))
 }
 
+/// Build the MAINTAINER signer from caller-supplied key material in the environment, failing closed
+/// if none is configured.
+fn maintainer_signer_from_env() -> Result<Ed25519MaintainerSigner, String> {
+    let key_id = std::env::var("PRIKK_MAINTAINER_KEY_ID").map_err(|_| {
+        "maintainer signing is required: set PRIKK_MAINTAINER_KEY_ID (no signing key configured)"
+            .to_string()
+    })?;
+    if key_id.trim().is_empty() {
+        return Err("PRIKK_MAINTAINER_KEY_ID must not be empty".to_string());
+    }
+    let seed_hex = std::env::var("PRIKK_MAINTAINER_SEED").map_err(|_| {
+        "maintainer signing is required: set PRIKK_MAINTAINER_SEED (64 hex chars; no signing key configured)"
+            .to_string()
+    })?;
+    let seed = decode_seed_hex(&seed_hex, "PRIKK_MAINTAINER_SEED")?;
+    Ok(Ed25519MaintainerSigner::from_seed(key_id, &seed))
+}
+
 /// Decode exactly 64 hex characters into a 32-byte Ed25519 secret seed.
-fn decode_seed_hex(hex: &str) -> Result<[u8; 32], String> {
+fn decode_seed_hex(hex: &str, env_name: &str) -> Result<[u8; 32], String> {
     let hex = hex.trim();
     if hex.len() != 64 {
         return Err(format!(
-            "PRIKK_AUTHOR_SEED must be 64 hex characters, got {}",
+            "{env_name} must be 64 hex characters, got {}",
             hex.len()
         ));
     }
@@ -348,22 +415,22 @@ fn decode_seed_hex(hex: &str) -> Result<[u8; 32], String> {
         let hi = pair
             .first()
             .copied()
-            .ok_or_else(|| "PRIKK_AUTHOR_SEED truncated".to_string())?;
+            .ok_or_else(|| format!("{env_name} truncated"))?;
         let lo = pair
             .get(1)
             .copied()
-            .ok_or_else(|| "PRIKK_AUTHOR_SEED truncated".to_string())?;
-        *slot = (hex_nibble(hi)? << 4) | hex_nibble(lo)?;
+            .ok_or_else(|| format!("{env_name} truncated"))?;
+        *slot = (hex_nibble(hi, env_name)? << 4) | hex_nibble(lo, env_name)?;
     }
     Ok(seed)
 }
 
 /// Convert one ASCII hex character to its 4-bit value.
-fn hex_nibble(c: u8) -> Result<u8, String> {
+fn hex_nibble(c: u8, env_name: &str) -> Result<u8, String> {
     match c {
         b'0'..=b'9' => Ok(c - b'0'),
         b'a'..=b'f' => Ok(c - b'a' + 10),
         b'A'..=b'F' => Ok(c - b'A' + 10),
-        _ => Err("PRIKK_AUTHOR_SEED contains a non-hex character".to_string()),
+        _ => Err(format!("{env_name} contains a non-hex character")),
     }
 }

@@ -9,13 +9,17 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{BlockPayload, ObjectId, ObjectType};
+use prikk_object::{BlockPayload, ObjectEnvelope, ObjectId, ObjectType};
 
 use crate::file_codec::decode_envelope_file;
 use crate::layout::{RepositoryLayout, persisted_object_types};
 use crate::object_store::FileObjectStore;
-use crate::refs::verify_refs;
+use crate::refs::{decode_log_file_bytes, verify_refs};
 use crate::rollback_verify::{verify_rollback_draft_wal_records, verify_rollback_patch_envelope};
+use crate::trust::{
+    MaintainerTrustPolicy, PublicationTrustIssue, load_maintainer_trust_policy,
+    verify_trusted_publication_envelope,
+};
 use crate::wal::Wal;
 
 /// Verification summary for a single persisted object.
@@ -52,6 +56,10 @@ pub struct RepositoryVerification {
     pub checked_ref_log_records: usize,
     /// Number of active WAL records classified and decoded as rollback drafts.
     pub checked_rollback_draft_records: usize,
+    /// Number of publication envelopes checked against repository-local trust.
+    pub checked_publication_trust_records: usize,
+    /// Publication-trust issues found while structural verification succeeded.
+    pub publication_trust_issues: Vec<PublicationTrustIssue>,
     /// Number of trailing bytes in the active WAL that look like an incomplete final record.
     pub trailing_partial_wal_bytes: usize,
 }
@@ -62,13 +70,21 @@ impl RepositoryVerification {
     pub const fn has_trailing_partial_wal(&self) -> bool {
         self.trailing_partial_wal_bytes != 0
     }
+
+    /// Return true when all structurally verified publication objects also passed trust checks.
+    #[must_use]
+    pub fn has_publication_trust_issues(&self) -> bool {
+        !self.publication_trust_issues.is_empty()
+    }
 }
 
 /// Verify a repository layout without modifying it.
 pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerification> {
     let object_store = FileObjectStore::new(layout.clone());
-    let object_summary = verify_objects(layout, &object_store)?;
+    let mut trust_verifier = PublicationTrustVerifier::new(layout);
+    let object_summary = verify_objects(layout, &object_store, &mut trust_verifier)?;
     let ref_verification = verify_refs(layout)?;
+    verify_ref_update_publication_trust(layout, &mut trust_verifier)?;
     let wal = Wal::new(layout.default_queue_wal_path());
     let replay = wal.replay()?;
     let persisted_wal_patches = verify_wal_persistence(&object_store, &replay.records)?;
@@ -83,8 +99,56 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
         checked_refs: ref_verification.pointer_count,
         checked_ref_log_records: ref_verification.log_record_count,
         checked_rollback_draft_records,
+        checked_publication_trust_records: trust_verifier.checked_records,
+        publication_trust_issues: trust_verifier.issues,
         trailing_partial_wal_bytes: replay.trailing_partial_bytes,
     })
+}
+
+struct PublicationTrustVerifier<'a> {
+    layout: &'a RepositoryLayout,
+    policy: Option<MaintainerTrustPolicy>,
+    policy_issue_added: bool,
+    checked_records: usize,
+    issues: Vec<PublicationTrustIssue>,
+}
+
+impl<'a> PublicationTrustVerifier<'a> {
+    const fn new(layout: &'a RepositoryLayout) -> Self {
+        Self {
+            layout,
+            policy: None,
+            policy_issue_added: false,
+            checked_records: 0,
+            issues: Vec::new(),
+        }
+    }
+
+    fn verify(&mut self, envelope: &ObjectEnvelope) -> Result<()> {
+        self.checked_records = self
+            .checked_records
+            .checked_add(1)
+            .ok_or_else(|| PrikkError::Integrity("publication trust count overflow".to_string()))?;
+        if self.policy.is_none() && !self.policy_issue_added {
+            match load_maintainer_trust_policy(self.layout) {
+                Ok(policy) => self.policy = Some(policy),
+                Err(err) => {
+                    self.policy_issue_added = true;
+                    self.issues.push(PublicationTrustIssue::new(
+                        "PRIKK-TRUST-POLICY-INVALID",
+                        format!("publication trust policy is invalid: {err}"),
+                    ));
+                    return Ok(());
+                }
+            }
+        }
+        if let Some(policy) = &self.policy {
+            if let Err(issue) = verify_trusted_publication_envelope(policy, envelope) {
+                self.issues.push(issue);
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,10 +197,11 @@ impl ObjectSummary {
 fn verify_objects(
     layout: &RepositoryLayout,
     object_store: &FileObjectStore,
+    trust_verifier: &mut PublicationTrustVerifier<'_>,
 ) -> Result<ObjectSummary> {
     let mut summary = ObjectSummary::empty();
     for object_type in persisted_object_types() {
-        let type_summary = verify_object_type(layout, object_store, object_type)?;
+        let type_summary = verify_object_type(layout, object_store, object_type, trust_verifier)?;
         summary.add(type_summary)?;
     }
     Ok(summary)
@@ -146,6 +211,7 @@ fn verify_object_type(
     layout: &RepositoryLayout,
     object_store: &FileObjectStore,
     object_type: ObjectType,
+    trust_verifier: &mut PublicationTrustVerifier<'_>,
 ) -> Result<ObjectSummary> {
     let dir = layout.object_type_dir(object_type);
     if !dir.exists() {
@@ -164,7 +230,13 @@ fn verify_object_type(
                 prefix_path.display()
             )));
         }
-        let prefix_summary = verify_prefix_dir(layout, object_store, object_type, &prefix_path)?;
+        let prefix_summary = verify_prefix_dir(
+            layout,
+            object_store,
+            object_type,
+            &prefix_path,
+            trust_verifier,
+        )?;
         summary.add(prefix_summary)?;
     }
     Ok(summary)
@@ -175,6 +247,7 @@ fn verify_prefix_dir(
     object_store: &FileObjectStore,
     object_type: ObjectType,
     prefix_path: &Path,
+    trust_verifier: &mut PublicationTrustVerifier<'_>,
 ) -> Result<ObjectSummary> {
     let mut summary = ObjectSummary::empty();
     for file_entry in fs::read_dir(prefix_path)? {
@@ -189,7 +262,7 @@ fn verify_prefix_dir(
         if is_temporary_path(&path) {
             continue;
         }
-        let object = verify_object_file(layout, object_store, object_type, &path)?;
+        let object = verify_object_file(layout, object_store, object_type, &path, trust_verifier)?;
         summary.object_count = summary.object_count.checked_add(1).ok_or_else(|| {
             PrikkError::Integrity("object verification count overflow".to_string())
         })?;
@@ -219,6 +292,7 @@ fn verify_object_file(
     object_store: &FileObjectStore,
     object_type: ObjectType,
     path: &Path,
+    trust_verifier: &mut PublicationTrustVerifier<'_>,
 ) -> Result<ObjectVerification> {
     let object_id = object_id_from_path(path)?;
     let expected_path = layout.object_path(object_type, object_id);
@@ -248,6 +322,9 @@ fn verify_object_file(
             computed
         )));
     }
+    if matches!(object_type, ObjectType::Block | ObjectType::RefState) {
+        trust_verifier.verify(&envelope)?;
+    }
     let rollback_patch_count = if object_type == ObjectType::Block {
         verify_block_payload(object_store, object_id, &envelope.canonical_payload)?
     } else {
@@ -259,6 +336,32 @@ fn verify_object_file(
         path: path.to_path_buf(),
         rollback_patch_count,
     })
+}
+
+fn verify_ref_update_publication_trust(
+    layout: &RepositoryLayout,
+    trust_verifier: &mut PublicationTrustVerifier<'_>,
+) -> Result<()> {
+    let dir = layout.refs_dir().join("logs");
+    if !dir.exists() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() || is_temporary_path(&path) {
+            continue;
+        }
+        let bytes = fs::read(&path)?;
+        let replay = decode_log_file_bytes(&bytes)?;
+        if replay.trailing_partial_bytes != 0 {
+            continue;
+        }
+        for record in &replay.records {
+            trust_verifier.verify(&record.envelope)?;
+        }
+    }
+    Ok(())
 }
 
 fn verify_block_payload(

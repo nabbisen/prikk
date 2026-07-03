@@ -9,14 +9,14 @@ use std::path::PathBuf;
 use prikk_hash::sha256;
 use prikk_object::{
     BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType, RefKind,
-    RefStatePayload, RefUpdatePayload, Signature, SignatureAlgorithm, SignerRole,
+    RefStatePayload, RefUpdatePayload,
 };
 use prikk_store::{
-    ActiveLock, FileObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout, Wal,
+    ActiveLock, FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication, RefStore,
+    RepositoryLayout, Wal, maintainer_signature, verify_signer_trusted,
 };
 
 const DEFAULT_BRANCH_REF: &str = "heads/main";
-const DEV_MAINTAINER_KEY_ID: &str = "dev-placeholder-maintainer";
 
 /// Result of sealing the current active WAL.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,10 +33,11 @@ pub struct SealCommandResult {
 pub fn run_seal(
     root: PathBuf,
     args: Vec<String>,
+    signer: &impl MaintainerSigner,
 ) -> std::result::Result<SealCommandResult, String> {
     parse_seal_args(args)?;
     let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
-    seal_active_no_audit(layout, DEFAULT_BRANCH_REF)
+    seal_active_no_audit(layout, DEFAULT_BRANCH_REF, signer)
 }
 
 fn parse_seal_args(args: Vec<String>) -> std::result::Result<(), String> {
@@ -56,6 +57,7 @@ fn parse_seal_args(args: Vec<String>) -> std::result::Result<(), String> {
 fn seal_active_no_audit(
     layout: RepositoryLayout,
     ref_name: &str,
+    signer: &impl MaintainerSigner,
 ) -> std::result::Result<SealCommandResult, String> {
     let _active_lock =
         ActiveLock::acquire(layout.default_active_lock_path()).map_err(|err| err.to_string())?;
@@ -74,6 +76,7 @@ fn seal_active_no_audit(
     let mut object_store = FileObjectStore::new(layout.clone());
     let ref_store = RefStore::new(layout.clone());
     let current = current_ref_state(&object_store, &ref_store, ref_name)?;
+    verify_signer_trusted(&layout, signer).map_err(|err| err.to_string())?;
     let patch_ids = persist_wal_patches(&mut object_store, &replay.records)?;
     let parent_block_ids = current
         .as_ref()
@@ -95,9 +98,7 @@ fn seal_active_no_audit(
         block_payload
             .to_canonical_bytes()
             .map_err(|err| err.to_string())?,
-        SignerRole::Maintainer,
-        DEV_MAINTAINER_KEY_ID,
-        b"prikk.dev.block-signature.v1",
+        signer,
     )?;
     let block_id = object_store
         .write_object(&block_envelope)
@@ -120,9 +121,7 @@ fn seal_active_no_audit(
         ref_state_payload
             .to_canonical_bytes()
             .map_err(|err| err.to_string())?,
-        SignerRole::Maintainer,
-        DEV_MAINTAINER_KEY_ID,
-        b"prikk.dev.ref-state-signature.v1",
+        signer,
     )?;
     let ref_state_id = ref_state_envelope.object_id();
     let ref_update_payload = RefUpdatePayload {
@@ -132,16 +131,14 @@ fn seal_active_no_audit(
         new_target_object_id: block_id,
         update_seq,
         created_at: 0,
-        author_key_id: DEV_MAINTAINER_KEY_ID.to_string(),
+        author_key_id: signer.key_id().to_string(),
     };
     let ref_update_envelope = signed_envelope(
         ObjectType::RefUpdate,
         ref_update_payload
             .to_canonical_bytes()
             .map_err(|err| err.to_string())?,
-        SignerRole::Maintainer,
-        DEV_MAINTAINER_KEY_ID,
-        b"prikk.dev.ref-update-signature.v1",
+        signer,
     )?;
     let publication = RefPublication {
         ref_name: ref_name.to_string(),
@@ -234,28 +231,14 @@ fn scaffold_state_root(patch_ids: &[prikk_object::ObjectId]) -> MerkleRoot {
 fn signed_envelope(
     object_type: ObjectType,
     canonical_payload: Vec<u8>,
-    role: SignerRole,
-    key_id: &str,
-    dev_salt: &[u8],
+    signer: &impl MaintainerSigner,
 ) -> std::result::Result<ObjectEnvelope, String> {
     let mut envelope = ObjectEnvelope::unsigned(object_type, 1, canonical_payload);
     let object_id = envelope.object_id();
-    let mut signature_preimage = Signature::signed_bytes(
-        SignatureAlgorithm::Ed25519,
-        object_type,
-        object_id,
-        role,
-        key_id,
-    );
-    signature_preimage.extend_from_slice(dev_salt);
     envelope
-        .add_signature(Signature {
-            algorithm: SignatureAlgorithm::Ed25519,
-            key_id: key_id.to_string(),
-            signature_bytes: sha256(&signature_preimage).to_vec(),
-            created_at: 0,
-            signer_role: role,
-        })
+        .add_signature(
+            maintainer_signature(signer, object_type, object_id).map_err(|err| err.to_string())?,
+        )
         .map_err(|err| err.to_string())?;
     Ok(envelope)
 }

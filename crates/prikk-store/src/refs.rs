@@ -17,6 +17,7 @@ use crate::layout::RepositoryLayout;
 use crate::lock::RefLock;
 use crate::object_store::{FileObjectStore, ObjectReader, ObjectWriter};
 
+pub(crate) use log::decode_log_file_bytes;
 pub use log::{RefLogRecord, RefLogReplay};
 pub(crate) use verify::verify_refs;
 

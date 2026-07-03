@@ -46,6 +46,11 @@ cargo run -p prikk -- init ./sample-repo
 # Author and publish a first commit (genesis) on a fresh repository:
 export PRIKK_AUTHOR_KEY_ID="dev-author"
 export PRIKK_AUTHOR_SEED="00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+export PRIKK_MAINTAINER_KEY_ID="dev-maintainer"
+export PRIKK_MAINTAINER_SEED="111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
+(cd ./sample-repo && ../target/debug/prikk trust maintainer add \
+  --key-id "$PRIKK_MAINTAINER_KEY_ID" \
+  --public-key "a00899dfd3357aee69729405913f9324dfc033cec04a2215239eda64ae6d9d91")
 echo "hello prikk" > ./sample-repo/readme.txt
 (cd ./sample-repo && ../target/debug/prikk commit -m "genesis")
 (cd ./sample-repo && ../target/debug/prikk seal --allow-no-audit)
@@ -66,7 +71,7 @@ authored as `CreateFile`); the first `seal` publishes a Root block on `heads/mai
 
 ## Design Notes
 
-Current implementation drop: **0.3.0** (DC-10 — rollback-draft identity and AUTHOR signing).
+Current implementation drop: **0.4.0** (DC-11 — publication signing and minimal trust store).
 
 Implemented:
 
@@ -75,27 +80,28 @@ Implemented:
 - Object envelopes with signatures outside identity.
 - Persistent `.prikk/` layout and object store.
 - Active-session WAL append/replay for signed patch envelopes.
-- Read-only repository verification for objects, block references, sealed rollback Patch classification, ref pointers, ref logs, and active WAL.
+- Read-only repository verification for objects, block references, sealed rollback Patch classification, ref pointers, ref logs, active WAL, and publication trust.
 - `doctor` diagnostics layered on top of verification, with opt-in safe WAL tail and missing-ref-pointer repair.
 - Read-only sealed-history inspection from the current RefState chain, including rollback block labels.
 - Snapshot-manifest validation, path-safety checks, opt-in snapshot materialization, and read-only worktree status.
 - Initial RefState publication primitives with flat hashed ref pointer paths.
 - Node-addressed worktree patch authoring (`prikk commit`): against a published `heads/main` baseline reconstructed from authoritative replay — or, on a fresh repository, a **genesis** first commit against an empty baseline (all files authored as `CreateFile`) — worktree changes are authored as node-addressed §9.3 operations (`CreateFile`, `DeleteNode`, `EditText`, `ReplaceBinary`, `ChangePerm`) with CSPRNG-minted node identities in canonical order, normalized file modes, and shared text-span identity. Existing-node kind is authoritative; rename inference, symlink authoring, and text↔binary transitions are out of scope.
 - **Role-bound Ed25519 AUTHOR signing** for production Patch authoring paths: worktree commits and rollback drafts sign through an injected `AuthorSigner`; the production `Ed25519AuthorSigner` produces a real Ed25519 signature over the role-bound preimage (`Ed25519, Patch, unsigned-patch-id, Author, key_id`). Key material is supplied via `PRIKK_AUTHOR_KEY_ID` / `PRIKK_AUTHOR_SEED` (a minimal key-input mechanism, not a trust store).
-- Local no-audit seal scaffold that persists WAL patches, creates a Block, and advances `heads/main`.
+- Local no-audit seal scaffold that persists WAL patches, creates a Block, signs publication objects with a trusted MAINTAINER key, and advances `heads/main`.
 - Supported patch replay planning/materialization for `CreateFile`/`DeleteNode`, with full-file `EditText` and node-addressed record reconciliation for the remaining §9.3 kinds.
 - Explicit deletion planning and opt-in deletion of patch-removed files whose bytes still match the old blob.
 - Read-only inverse planning, non-mutating rollback preview, rollback-draft append/verification, and sealed rollback block classification for the supported subset. Rollback-draft identity is recorded as `PatchPurpose::RollbackDraft`, not as a reserved AUTHOR key id.
+- Minimal local publication trust: `prikk trust maintainer add` records one trusted MAINTAINER public key, and `verify` checks Block/RefState/RefUpdate MAINTAINER signatures against that policy.
 
-Signing scope (interim): AUTHOR-role Patch signatures produced by production commands are real role-bound Ed25519 signatures. This does **not** yet imply trust-store enforcement, key management, MAINTAINER publication signing, or publication-grade repository trust.
+Signing scope (interim): AUTHOR-role Patch signatures and MAINTAINER publication signatures produced by production commands are real role-bound Ed25519 signatures. Publication trust is local and minimal (`required = 1`); this does **not** yet imply key rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, or publication-grade audit policy.
 
-Minimal CLI commands: `init`, `commit [--from-worktree] [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+Minimal CLI commands: `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 Not implemented yet:
 
 - Rename detection, arbitrary text-span discovery/generation, rollback refs, rollback authorization, commutation, full patch algebra, and general destructive checkout pruning.
 - Genesis first-commit onto non-default refs (this drop supports genesis on the default `heads/main` only).
-- Publication-grade MAINTAINER signing, trust store, key management/rotation, and signature policy.
+- Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy.
 - Policy-aware audit/attestation publication through seal; plugin/audit execution.
 - Remote sync.
 

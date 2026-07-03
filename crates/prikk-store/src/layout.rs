@@ -133,6 +133,9 @@ impl RepositoryLayout {
         dirs.push(self.refs_dir().join("logs"));
         dirs.push(self.refs_dir().join("locks"));
         dirs.push(self.refs_dir().join("tmp"));
+        dirs.push(self.trust_dir());
+        dirs.push(self.trust_keys_dir());
+        dirs.push(self.maintainer_trust_keys_dir());
         dirs.push(self.cache_dir());
         dirs.push(self.quarantine_dir());
         dirs
@@ -185,6 +188,46 @@ impl RepositoryLayout {
         self.refs_dir()
             .join("tmp")
             .join(format!("{}.tmp", ref_name_storage_key(ref_name)))
+    }
+
+    /// Return the publication trust-store directory.
+    #[must_use]
+    pub fn trust_dir(&self) -> PathBuf {
+        self.prikk_dir.join("trust")
+    }
+
+    /// Return the trust-store key directory.
+    #[must_use]
+    pub fn trust_keys_dir(&self) -> PathBuf {
+        self.trust_dir().join("keys")
+    }
+
+    /// Return the trusted MAINTAINER public-key directory.
+    #[must_use]
+    pub fn maintainer_trust_keys_dir(&self) -> PathBuf {
+        self.trust_keys_dir().join("maintainer")
+    }
+
+    /// Return the trusted MAINTAINER public-key path for a storage-safe key id.
+    pub fn maintainer_trust_key_path(&self, key_id: &str) -> Result<PathBuf> {
+        if key_id.is_empty()
+            || !key_id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        {
+            return Err(PrikkError::InvalidName(
+                "maintainer key id is not storage-safe".to_string(),
+            ));
+        }
+        Ok(self
+            .maintainer_trust_keys_dir()
+            .join(format!("{key_id}.pub")))
+    }
+
+    /// Return the trust policy path.
+    #[must_use]
+    pub fn trust_policy_path(&self) -> PathBuf {
+        self.trust_dir().join("policy.toml")
     }
 }
 

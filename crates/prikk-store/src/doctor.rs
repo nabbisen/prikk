@@ -200,6 +200,14 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                      final WAL bytes",
                 ));
             }
+            for issue in &verification.publication_trust_issues {
+                issues.push(DoctorIssue::error(
+                    issue.code,
+                    issue.message.clone(),
+                    "configure trusted MAINTAINER keys and re-run verification; doctor will not \
+                     auto-trust keys or repair signatures",
+                ));
+            }
             add_missing_main_ref_issue(layout, &mut issues);
             DoctorReport {
                 verification: Some(verification),

@@ -425,6 +425,17 @@ pub(crate) fn print_verify_report(
         report.checked_rollback_draft_records
     );
     println!(
+        "checked publication trust records: {}",
+        report.checked_publication_trust_records
+    );
+    println!(
+        "publication trust issues: {}",
+        report.publication_trust_issues.len()
+    );
+    for issue in &report.publication_trust_issues {
+        println!("publication-trust [{}]: {}", issue.code, issue.message);
+    }
+    println!(
         "trailing partial WAL bytes: {}",
         report.trailing_partial_wal_bytes
     );
@@ -439,6 +450,7 @@ pub(crate) fn print_help(version: &str) {
     println!();
     println!("Usage:");
     println!("  prikk init [path]                         Create a .prikk repository layout");
+    println!("  prikk trust maintainer add --key-id ID --public-key HEX  Trust one MAINTAINER key");
     println!("  prikk commit --from-worktree [--text-edits] -m <message> Append worktree changes");
     println!("  prikk status                              Check repository and active WAL status");
     println!("  prikk seal --allow-no-audit              Seal active WAL into heads/main");
@@ -475,7 +487,7 @@ pub(crate) fn print_help(version: &str) {
         "  prikk worktree-status [path] [--ref REF]  Report changes against snapshot baseline"
     );
     println!(
-        "  prikk verify [path]                       Verify objects, rollback blocks, and WAL records"
+        "  prikk verify [path]                       Verify objects, WAL, refs, and publication trust"
     );
     println!("  prikk doctor [path]                       Run health diagnostics");
     println!("  prikk doctor [path] --repair-wal-tail     Truncate incomplete trailing WAL bytes");

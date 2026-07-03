@@ -5,25 +5,22 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-10 — rollback-draft identity and AUTHOR signing (v0.3.0).** The current design-first increment
-  separates rollback-draft identity from the fake AUTHOR-signature marker and makes rollback drafts use
-  real role-bound Ed25519 AUTHOR signing. The design record is
-  `rfcs/proposed/DC-10-ROLLBACK-DRAFT-SIGNING.md`.
+- **DC-11 — publication signing and minimal trust store (v0.4.0).** Publication objects now carry real
+  role-bound Ed25519 MAINTAINER signatures verified against a minimal repository-local trust policy.
+  The design record is `rfcs/proposed/DC-11-MAINTAINER-TRUST-STORE.md`.
 
 ## Last Released Increment
 
-- **DC-09 Phase 4.4b — genesis / first-commit authoring (released as 0.2.0).** `prikk commit` supports a genesis first commit
-  on a fresh repository (empty baseline → all `CreateFile`), and the first `seal` publishes a Root block, so
-  `init → commit → seal` works end to end on the default `heads/main`. Built on 4.4a node-addressed
-  authoring signed with role-bound Ed25519 AUTHOR signatures (R1); the `rollback-draft` AUTHOR-role marker
-  remains an internal, non-publishable development scaffold (R1R2).
+- **DC-10 — rollback-draft identity and AUTHOR signing (released as 0.3.0).** Rollback-draft identity is
+  `PatchPurpose::RollbackDraft`, not a reserved AUTHOR key id, and rollback drafts carry real role-bound
+  Ed25519 AUTHOR signatures. This closed the broad claim for AUTHOR-role Patch signatures produced by
+  production commands.
 
 ## Next Increments
 
 1. **Genesis onto non-default refs** (with branch-creation / ref-lifecycle design).
-2. **Publication-grade signing / trust (later phase).** MAINTAINER publication signing, trust store, key
-   management/rotation, and signature policy.
-3. Conflict/inverse evidence, arbitrary-span text-edit support, audit/plugin, and sync remain gated by
+2. **Arbitrary-span text edits and M2+ patch algebra** after the publication-trust boundary is settled.
+3. Conflict/inverse evidence, rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
    their dedicated plans and FDDs.
 
 Final feature scope remains governed by the FDDs and RFCs.
