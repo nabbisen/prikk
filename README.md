@@ -71,7 +71,7 @@ authored as `CreateFile`); the first `seal` publishes a Root block on `heads/mai
 
 ## Design Notes
 
-Current implementation drop: **0.4.0** (DC-11 — publication signing and minimal trust store).
+Current implementation drop: **0.5.0** (DC-12 — arbitrary-span text edits).
 
 Implemented:
 
@@ -88,7 +88,7 @@ Implemented:
 - Node-addressed worktree patch authoring (`prikk commit`): against a published `heads/main` baseline reconstructed from authoritative replay — or, on a fresh repository, a **genesis** first commit against an empty baseline (all files authored as `CreateFile`) — worktree changes are authored as node-addressed §9.3 operations (`CreateFile`, `DeleteNode`, `EditText`, `ReplaceBinary`, `ChangePerm`) with CSPRNG-minted node identities in canonical order, normalized file modes, and shared text-span identity. Existing-node kind is authoritative; rename inference, symlink authoring, and text↔binary transitions are out of scope.
 - **Role-bound Ed25519 AUTHOR signing** for production Patch authoring paths: worktree commits and rollback drafts sign through an injected `AuthorSigner`; the production `Ed25519AuthorSigner` produces a real Ed25519 signature over the role-bound preimage (`Ed25519, Patch, unsigned-patch-id, Author, key_id`). Key material is supplied via `PRIKK_AUTHOR_KEY_ID` / `PRIKK_AUTHOR_SEED` (a minimal key-input mechanism, not a trust store).
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, signs publication objects with a trusted MAINTAINER key, and advances `heads/main`.
-- Supported patch replay planning/materialization for `CreateFile`/`DeleteNode`, with full-file `EditText` and node-addressed record reconciliation for the remaining §9.3 kinds.
+- Supported patch replay planning/materialization for `CreateFile`/`DeleteNode` and deterministic arbitrary-span `EditText`, with node-addressed record reconciliation for the remaining §9.3 kinds.
 - Explicit deletion planning and opt-in deletion of patch-removed files whose bytes still match the old blob.
 - Read-only inverse planning, non-mutating rollback preview, rollback-draft append/verification, and sealed rollback block classification for the supported subset. Rollback-draft identity is recorded as `PatchPurpose::RollbackDraft`, not as a reserved AUTHOR key id.
 - Minimal local publication trust: `prikk trust maintainer add` records one trusted MAINTAINER public key, and `verify` checks Block/RefState/RefUpdate MAINTAINER signatures against that policy.
@@ -99,7 +99,7 @@ Minimal CLI commands: `init`, `trust maintainer add`, `commit [--from-worktree] 
 
 Not implemented yet:
 
-- Rename detection, arbitrary text-span discovery/generation, rollback refs, rollback authorization, commutation, full patch algebra, and general destructive checkout pruning.
+- Rename detection, multi-operation text diff minimization, arbitrary-span text inverse/rollback, rollback refs, rollback authorization, commutation, full patch algebra, and general destructive checkout pruning.
 - Genesis first-commit onto non-default refs (this drop supports genesis on the default `heads/main` only).
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy.
 - Policy-aware audit/attestation publication through seal; plugin/audit execution.

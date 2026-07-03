@@ -20,7 +20,7 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::{
     BlobKind, BlobPayload, CanonicalEncode, ChangePerm, CreateFile, DeleteNode, DeleteNodePreimage,
     EditText, NodeId, NodeKind, ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind,
-    PatchPayload, PatchPurpose, ReplaceBinary, text_span_hash,
+    PatchPayload, PatchPurpose, ReplaceBinary,
 };
 
 use crate::author_signing::AuthorSigner;
@@ -488,7 +488,7 @@ fn classify_new(bytes: &[u8]) -> (BlobKind, NodeKind) {
     }
 }
 
-/// Plan a whole-file `EditText` for a modified existing `TextFile`, with all span identity computed
+/// Plan an arbitrary-span `EditText` for a modified existing `TextFile`, with all span identity computed
 /// through the shared `text_span` module (no authoring-local span logic).
 fn plan_edit_text(
     object_store: &FileObjectStore,
@@ -497,23 +497,24 @@ fn plan_edit_text(
     path: &str,
 ) -> std::result::Result<PlannedOp, AuthorError> {
     let old_text = read_file_blob_bytes(object_store, base.blob_id)?;
-    let old_len = old_text.len();
-    let left = text_span::left_anchor(&old_text, 0);
-    let right = text_span::right_anchor(&old_text, old_len);
-    let old_span_hash = text_span_hash(&old_text);
-    // Whole-file span is the unique occurrence at (0, old_len); dup_index = 0.
-    let span_id = text_span::compute_span_id(base.node_id, &old_span_hash, &left, &right, 0);
+    let span = text_span::plan_authored_text_span(&old_text, new_bytes, base.node_id)
+        .map_err(|err| AuthorError::Store(PrikkError::Integrity(format!("EditText: {err}"))))?
+        .ok_or_else(|| {
+            AuthorError::Store(PrikkError::Integrity(
+                "EditText requested for unchanged text".to_string(),
+            ))
+        })?;
     Ok(PlannedOp {
         kind: OperationKind::EditText(EditText {
             node_id: base.node_id,
-            span_id,
-            old_span_hash,
-            left_anchor_hash: left,
-            right_anchor_hash: right,
-            replacement_text: new_bytes.to_vec(),
+            span_id: span.span_id,
+            old_span_hash: span.old_span_hash,
+            left_anchor_hash: span.left_anchor_hash,
+            right_anchor_hash: span.right_anchor_hash,
+            replacement_text: span.replacement_text,
             presentation_hint_line: None,
             presentation_hint_column: None,
-            old_span_text: old_text,
+            old_span_text: span.old_span_text,
         }),
         path: path.to_string(),
         node_id: base.node_id,

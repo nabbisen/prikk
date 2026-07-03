@@ -13,8 +13,8 @@ use crate::{
 };
 
 use crate::test_support::{
-    dummy_signature, maintainer_signature, signed_ref_state_envelope, signed_ref_update_envelope,
-    unique_temp_dir,
+    dummy_signature, maintainer_signature, publish_text_create_then_edit_block,
+    signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
 };
 
 #[test]
@@ -37,6 +37,30 @@ fn patch_materialization_writes_replayed_files() {
         assert!(std::fs::read(root.join("README.md")).is_ok_and(|x| x == b"hello\n".to_vec()));
         assert!(std::fs::read(root.join("extra.txt")).is_ok_and(|x| x == b"extra\n".to_vec()));
         assert!(!root.join("old.txt").exists());
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn patch_materialization_writes_arbitrary_span_edit_text_result() {
+    let root = unique_temp_dir("patch-materialize-edit-text");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        assert!(
+            publish_text_create_then_edit_block(&layout, b"hello world\n", b"hello prikk\n")
+                .is_ok()
+        );
+        let report = materialize_patch_checkout(&layout, "heads/main");
+        assert!(report.is_ok());
+        if let Ok(report) = report {
+            assert_eq!(report.applied_operation_count, 2);
+            assert_eq!(report.planned_files, 1);
+            assert_eq!(report.written_files, 1);
+        }
+        assert!(
+            std::fs::read(root.join("README.md")).is_ok_and(|x| x == b"hello prikk\n".to_vec())
+        );
     }
     let _ = std::fs::remove_dir_all(root);
 }

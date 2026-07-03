@@ -1,50 +1,40 @@
 # Content-Anchored Text Edits
 
-> **Status (DC-09 §9.3 reconciliation).** The behavior described below is the
-> PR-025 target. After the §9.3 operation-record reconciliation, every mutation
-> operation is node-addressed, so `commit --from-worktree` currently **fails closed**
-> for all change kinds pending the node model (path->node_id tracking and node-id
-> minting, increments 4.4/4.4a). Full-file `EditText` has been retired in favor of the
-> §9.3 node-addressed, span-anchored `EditText` record (application deferred). The
-> commands here are not functional in this snapshot.
+DC-12 supports deterministic arbitrary-span `EditText` generation and replay for existing text-file
+nodes. A modified text file is represented as one enclosing span selected by byte LCP/LCS and widened
+to UTF-8 character boundaries. The record remains the FDD-03 node-addressed, span-anchored `EditText`
+shape; no offsets or new identity fields are added.
 
-
-PR-024 introduced conservative replay for one narrow `EditText` form. PR-025 adds opt-in worktree
-generation for the same shape.
-
-The supported replay/generation shape is a full-file exact-span replacement:
-
-- `anchor_id` must be `full-file`.
-- The current full file bytes must be valid UTF-8 during replay.
-- `text_span_hash(current_file_bytes)` must equal the recorded `old_span_hash` during replay.
-- The whole file is replaced by the UTF-8 `replacement` string.
-
-Generate this form from worktree changes with:
+Author text edits from worktree changes with:
 
 ```sh
 prikk commit --from-worktree --text-edits -m "record text changes"
 ```
 
-Generation remains conservative:
+`--text-edits` is retained for compatibility. Existing-node kind is authoritative, so text-file
+modifications author `EditText` and binary-file modifications author `ReplaceBinary`.
+
+Generation and replay remain conservative:
 
 - Only modified tracked files are candidates.
 - Both baseline and current bytes must be valid UTF-8.
-- Binary or invalid UTF-8 modifications fall back to `ReplaceBinary`.
-- The default `commit --from-worktree` mode still emits `ReplaceBinary` for modified tracked files.
+- Text edits use a single deterministic enclosing span; multi-operation diff minimization is deferred.
+- Byte-level differences that split a multibyte character are widened to the enclosing UTF-8 character.
+- Binary or invalid UTF-8 modifications fail closed for text nodes; they do not become `ReplaceBinary`.
+- Replay localizes by `old_span_text`, left/right anchor hashes, and `span_id`, then splices exactly.
 
 This deliberately avoids byte offsets and line offsets. Presentation offsets may be derived later,
 but they are not part of patch identity or replay preconditions.
 
 Current validation rules:
 
-- `anchor_id` must be non-empty ASCII without whitespace or control characters.
 - `old_span_hash` is exactly 32 bytes.
-- The span hash is computed by `text_span_hash(bytes)`.
+- `old_span_hash` must equal `text_span_hash(old_span_text)`.
+- `old_span_text` and `replacement_text` must be well-formed UTF-8.
+- The target `node_id` must name a live `TextFile` during replay.
 
 Deferred work:
 
-- arbitrary anchor discovery from real files
-- minimized text diff generation
-- arbitrary-span replay
-- inverse generation
+- multi-operation text diff minimization
+- direct inverse and rollback extension for arbitrary spans
 - commutation and conflict witnesses

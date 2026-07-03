@@ -52,8 +52,6 @@ Supported inverse operation subset:
 
 - `CreateFile` -> `DeleteFile`
 - `DeleteFile` -> `CreateFile`
-- `ReplaceBinary` -> swapped `ReplaceBinary`
-- full-file `EditText` -> full-file inverse `EditText`
 
 Deferred:
 

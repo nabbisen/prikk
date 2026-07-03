@@ -17,7 +17,6 @@ use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
 use crate::patch_replay::decode::{
     DecodedDeletePreimage, DecodedOperationKind, DecodedPatchOperation, decode_patch_operations,
-    ensure_apply_supported,
 };
 
 mod read;
@@ -73,7 +72,7 @@ pub enum PatchInverseOperationKind {
     DeleteFile,
     /// Inverse operation replaces a binary blob.
     ReplaceBinary,
-    /// Inverse operation performs a full-file text edit.
+    /// Inverse operation performs a text edit.
     EditText,
 }
 
@@ -155,10 +154,6 @@ fn derive_inverse_operation(
     files: &mut BTreeMap<String, Vec<u8>>,
     operation: DecodedPatchOperation,
 ) -> Result<Operation> {
-    // Erratum P1: inverse derivation is an application; gate the apply-supported
-    // subset before matching. Inverse of the node-addressed kinds is FDD-01 §7.2
-    // and lands with the node model (increment 4.4).
-    ensure_apply_supported(&operation)?;
     match operation.kind {
         DecodedOperationKind::CreateFile {
             path,
@@ -219,9 +214,22 @@ fn derive_inverse_operation(
                 }),
             })
         }
-        _ => unreachable!(
-            "ensure_apply_supported admits only CreateFile and file-DeleteNode for inverse"
-        ),
+        DecodedOperationKind::EditText { .. } => Err(PrikkError::UnsupportedObjectType(
+            "inverse planning for arbitrary-span EditText is deferred until direct-inverse vectors land"
+                .to_string(),
+        )),
+        DecodedOperationKind::DeleteNode {
+            preimage: DecodedDeletePreimage::Symlink { .. },
+            ..
+        } => Err(PrikkError::UnsupportedObjectType(
+            "inverse planning for symlink DeleteNode is deferred".to_string(),
+        )),
+        DecodedOperationKind::ReplaceBinary { .. }
+        | DecodedOperationKind::RenamePath { .. }
+        | DecodedOperationKind::ChangePerm { .. }
+        | DecodedOperationKind::CreateSymlink { .. } => Err(PrikkError::UnsupportedObjectType(
+            "inverse planning for this node-addressed operation is deferred".to_string(),
+        )),
     }
 }
 

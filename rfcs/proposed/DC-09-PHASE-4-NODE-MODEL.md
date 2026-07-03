@@ -82,7 +82,7 @@ Golden replay/inverse/rollback vectors plus a mandatory deep-verify negative sui
   symlink preimage; implement once for both sites. Blocker before symlink application,
   sync ingest, or any symlink release claim. (Record identity is already reconciled;
   this is the semantic validator.)
-- **Duplicate scalar-field rejection** (DC-12 / validator suite). Repeated scalar tags
+- **Duplicate scalar-field rejection** (later validator-suite increment). Repeated scalar tags
   that currently overwrite an `Option` in decoders should be rejected. Distinct from
   the closed §9.2.1 `op_seq` duplicate check.
 - **`Operation.preconditions` / `PatchPayload.preconditions`** migration to

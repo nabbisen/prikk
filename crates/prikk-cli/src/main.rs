@@ -3,13 +3,13 @@
 //! Prikk command-line entry point.
 //!
 //! The CLI exposes minimal repository layout commands, active WAL status, node-addressed worktree
-//! commit authoring, opt-in full-file text edit generation,
+//! commit authoring, deterministic arbitrary-span text edit generation,
 //! read-only inverse planning, rollback preview, rollback draft append/verification, sealed rollback classification,
 //! supported patch replay planning/materialization, explicit patch deletion planning, a local
 //! no-audit seal scaffold, read-only history inspection, checkout planning, conservative snapshot
 //! materialization, read-only worktree status, minimal publication trust setup, repository
 //! verification, and doctor diagnostics.
-//! Arbitrary-span text diffs, full patch algebra, audit plugins, and sync remain later increments.
+//! Multi-operation text diff minimization, full patch algebra, audit plugins, and sync remain later increments.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -119,8 +119,8 @@ fn run_commit(args: Vec<String>) -> std::result::Result<(), String> {
         println!("  {} {}", change.operation.as_str(), change.path);
     }
     println!(
-        "note: arbitrary-span text diffs, patch algebra, rename detection, audit plugins, and \
-         sync remain later PRs"
+        "note: multi-operation text diff minimization, patch algebra, rename detection, audit \
+         plugins, and sync remain later increments"
     );
     Ok(())
 }
@@ -198,7 +198,7 @@ fn run_status() -> std::result::Result<(), String> {
         None => println!("heads/main RefState: <not published>"),
     }
     println!(
-        "status: arbitrary-span text diffs, plugins, and sync not \
+        "status: multi-operation text diff minimization, plugins, and sync not \
          yet implemented"
     );
     Ok(())

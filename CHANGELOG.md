@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.5.0 — 2026-07-03
+
+DC-12: arbitrary-span text edits.
+
+**Release scope.** Worktree text edits are authored and replayed as deterministic, content-anchored
+arbitrary spans through the shared text-span identity primitives. This release still does **not** claim
+commutation, confluence, conflict witnesses, multi-operation diff minimization, semantic merge,
+rollback authorization, rollback refs, worktree rollback mutation, or arbitrary-span inverse/rollback.
+
+- **Arbitrary-span authoring.** Modified existing `TextFile` nodes now author one deterministic
+  enclosing `EditText` span instead of a whole-file span. Span selection uses byte LCP/LCS, widens to
+  UTF-8 character boundaries, and derives anchors, `old_span_hash`, `dup_index`, and `span_id` through
+  the shared `text_span` module.
+- **Arbitrary-span replay/materialization.** Patch replay and patch materialization apply supported
+  `EditText` records by resolving the live `node_id`, validating text preconditions, localizing with
+  `locate_text_span`, and splicing with `splice_text`.
+- **Pinned vectors.** Added DC-12 byte-level vectors for replacement, insertion, deletion, sub-character
+  UTF-8 widening (`é` -> `è` and CJK), CRLF preservation, and multi-hunk enclosing spans.
+- **Deferred inverse/rollback.** Inverse planning now fails closed on arbitrary-span `EditText` until
+  the direct-inverse round-trip vector set lands.
+
 ## 0.4.0 — 2026-07-03
 
 DC-11: publication signing and minimal trust store.

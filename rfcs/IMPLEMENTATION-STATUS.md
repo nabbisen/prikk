@@ -1,21 +1,23 @@
 # Prikk Implementation Status
 
-Version: 0.4.0 (DC-11 — publication signing and minimal trust store)
+Version: 0.5.0 (DC-12 — arbitrary-span text edits)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (DC-11)
+## Current State (DC-12)
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** `heads/main`
   baseline reconstructed from authoritative replay — or, on a fresh repository, a **genesis** first commit
   against an empty baseline (4.4b: all files authored as `CreateFile`) — worktree changes author
   node-addressed §9.3 operations (`CreateFile`, `DeleteNode`, `EditText`, `ReplaceBinary`, `ChangePerm`)
   with CSPRNG-minted node ids in canonical order, normalized file modes, and shared text-span identity.
-  Existing-node kind is authoritative; rename inference, symlink authoring, and text↔binary transitions are
-  out of scope. Genesis is selected only when the target ref has never been published (pointer absent and
-  ref log empty and active WAL empty); a missing pointer with log history, or a non-empty active WAL, fails
-  closed and points at seal/doctor rather than re-authoring.
+  Modified text-file nodes author deterministic arbitrary-span `EditText` records selected by byte
+  LCP/LCS widened to UTF-8 character boundaries. Existing-node kind is authoritative; rename inference,
+  symlink authoring, and text↔binary transitions are out of scope. Genesis is selected only when the
+  target ref has never been published (pointer absent and ref log empty and active WAL empty); a missing
+  pointer with log history, or a non-empty active WAL, fails closed and points at seal/doctor rather than
+  re-authoring.
 - Role-bound Ed25519 AUTHOR signing for production Patch authoring paths through an injected
   `AuthorSigner` (`Ed25519AuthorSigner`, key material via `PRIKK_AUTHOR_KEY_ID` /
   `PRIKK_AUTHOR_SEED`). The broken `commit --allow-empty` scaffold was removed (R1R). DC-10 removes the
@@ -28,6 +30,9 @@ Version: 0.4.0 (DC-11 — publication signing and minimal trust store)
   Block/RefState/RefUpdate envelopes with real MAINTAINER signatures, and writes the real MAINTAINER
   key id into RefUpdate payload identity. Verification reports publication-trust failures separately
   from structural corruption.
+- Supported patch replay/materialization applies deterministic arbitrary-span `EditText` through the
+  shared localization and splice primitives. Direct inverse/rollback for arbitrary-span text edits is
+  still deferred until round-trip vectors land.
 
 ## Implemented
 
@@ -56,7 +61,8 @@ Version: 0.4.0 (DC-11 — publication signing and minimal trust store)
 - Snapshot-manifest validation and conservative repository path-safety checks for snapshot materialization and status.
 - Read-only worktree status against snapshot-backed baselines.
 - Explicit deletion planning and opt-in deletion for files removed by supported patch replay.
-- Content-anchored `EditText` validation scaffold with fixed 32-byte span hashes, anchor ID validation, conservative full-file exact-span replay, and opt-in worktree generation for full-file UTF-8 edits.
+- Content-anchored `EditText` validation with fixed 32-byte span hashes, deterministic arbitrary-span
+  authoring, and arbitrary-span replay/materialization for supported text edits.
 - Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append and verification, and sealed rollback block classification for the supported patch-operation subset. Rollback drafts are identified by `PatchPurpose::RollbackDraft` and AUTHOR-signed with real Ed25519 key material.
 - Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
@@ -66,7 +72,8 @@ Version: 0.4.0 (DC-11 — publication signing and minimal trust store)
 - General destructive worktree pruning and full patch-based checkout semantics.
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy beyond the DC-11 local trust store.
 - Policy-aware audit/attestation publication from seal.
-- Full patch algebra: arbitrary text-span replay, rollback ref publication, commutation, confluence, and conflict witnesses.
+- Full patch algebra: arbitrary-span inverse/rollback, rollback ref publication, commutation, confluence,
+  and conflict witnesses.
 - Conflict witnesses and merge state.
 - WASM plugin host.
 - Audit publication policy.
@@ -87,6 +94,12 @@ It does not add key rotation/revocation/expiration, thresholds above one, hardwa
 distribution, audit plugin execution, rollback authorization, AUTHOR signature verification in
 repository-wide `verify`, or repository-format stability. Pre-DC-11 placeholder-sealed histories are
 reported as publication-trust failures, not structural corruption.
+
+DC-12 stays within the approved boundary: worktree text edits are authored and replayed as
+deterministic content-anchored arbitrary spans through shared identity primitives. It does not add
+multi-operation diff minimization, direct inverse/rollback for arbitrary spans, rollback refs,
+rollback authorization, worktree rollback mutation, commutation, confluence, conflict witnesses, or
+semantic merge.
 
 DC-10 stays within the approved boundary: production Patch AUTHOR signatures from `commit` and
 `rollback-draft --append-inverse` are real role-bound Ed25519 signatures, and rollback-draft identity is

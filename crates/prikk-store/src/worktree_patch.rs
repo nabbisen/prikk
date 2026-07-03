@@ -30,7 +30,7 @@ pub struct WorktreePatchCommitReport {
     pub operation_count: usize,
     /// Number of Blob object references written or reused for operation payloads.
     pub referenced_blob_count: usize,
-    /// Number of whole-file `EditText` operations emitted (text-file modifications).
+    /// Number of `EditText` operations emitted (text-file modifications).
     pub text_edit_count: usize,
     /// Operation summaries in emitted order.
     pub changes: Vec<WorktreePatchOperationSummary>,
@@ -54,7 +54,7 @@ pub enum WorktreePatchOperationKind {
     DeleteFile,
     /// A modified tracked file will be represented as `ReplaceBinary`.
     ReplaceBinary,
-    /// A modified UTF-8 text file is represented as a whole-file `EditText`.
+    /// A modified UTF-8 text file is represented as an arbitrary-span `EditText`.
     EditText,
     /// A regular file whose normalized mode changed is represented as `ChangePerm`.
     ChangePerm,

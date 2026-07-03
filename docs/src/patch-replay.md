@@ -1,6 +1,7 @@
 # Supported Patch Replay Planning
 
-PR-026 keeps read-only patch replay for the current conservative operation subset.
+Read-only patch replay handles the current conservative operation subset, including DC-12
+arbitrary-span text edits.
 
 The command is:
 
@@ -11,19 +12,19 @@ prikk checkout --patch-plan [path] [--ref REF]
 It walks the single-parent block chain from oldest to newest, loads any snapshot Blob attached to a
 block, and applies supported Patch operations in block patch order.
 
-Supported operations in PR-026:
+Supported operations:
 
 - `CreateFile`
 - `DeleteFile`
-- `ReplaceBinary`
-- `EditText` for full-file exact-span replacements only (`anchor_id = "full-file"`)
+- `EditText` for deterministic content-anchored arbitrary spans
 
 Unsupported operations still fail the plan clearly:
 
-- arbitrary `EditText` anchors
+- `ReplaceBinary`
 - `RenamePath`
 - `ChangePerm`
 - `CreateSymlink`
+- direct inverse/rollback for arbitrary-span text edits
 - merge/conflict algebra
 
 This command does not write the worktree. It only proves that the current sealed history can be

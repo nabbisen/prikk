@@ -13,7 +13,7 @@ use prikk_object::{NodeId, text_span_hash};
 
 use super::{
     TextSpanResolutionFailure, compute_span_id, left_anchor, locate_text_span, occurrences,
-    right_anchor, splice_text, text_blob_id,
+    plan_authored_text_span, right_anchor, splice_text, text_blob_id,
 };
 
 fn nid(b: u8) -> NodeId {
@@ -91,6 +91,166 @@ fn check_vector(
     assert_eq!(new_text, exp_new_text, "resulting text bytes");
     let blob = text_blob_id(&new_text).expect("blob id");
     assert_eq!(blob.to_hex(), exp_blob, "resulting text blob id");
+}
+
+#[allow(clippy::too_many_arguments)]
+fn check_plan_vector(
+    old: &[u8],
+    new: &[u8],
+    node_byte: u8,
+    exp_old_range: (usize, usize),
+    exp_new_range: (usize, usize),
+    exp_old_span_hex: &str,
+    exp_replacement_hex: &str,
+    exp_left: &str,
+    exp_right: &str,
+    exp_old_span_hash: &str,
+    exp_dup: u32,
+    exp_span_id: &str,
+    exp_blob: &str,
+) {
+    let node = nid(node_byte);
+    let plan = plan_authored_text_span(old, new, node)
+        .expect("selection succeeds")
+        .expect("changed text yields a span");
+    assert_eq!((plan.old_start, plan.old_end), exp_old_range, "old range");
+    assert_eq!((plan.new_start, plan.new_end), exp_new_range, "new range");
+    assert_eq!(hex(&plan.old_span_text), exp_old_span_hex, "old span bytes");
+    assert_eq!(
+        hex(&plan.replacement_text),
+        exp_replacement_hex,
+        "replacement bytes"
+    );
+    assert_eq!(hex(&plan.left_anchor_hash), exp_left, "left anchor");
+    assert_eq!(hex(&plan.right_anchor_hash), exp_right, "right anchor");
+    assert_eq!(hex(&plan.old_span_hash), exp_old_span_hash, "old span hash");
+    assert_eq!(plan.dup_index, exp_dup, "duplicate index");
+    assert_eq!(hex(&plan.span_id), exp_span_id, "span id");
+
+    let (start, end) = locate_text_span(
+        old,
+        &plan.old_span_text,
+        &plan.left_anchor_hash,
+        &plan.right_anchor_hash,
+        &plan.span_id,
+        node,
+        &plan.old_span_hash,
+    )
+    .expect("selection localizes");
+    assert_eq!((start, end), exp_old_range, "localized range");
+    let spliced = splice_text(old, start, end, &plan.replacement_text).expect("splice");
+    assert_eq!(spliced, new, "spliced bytes");
+    assert_eq!(
+        text_blob_id(&spliced).expect("blob id").to_hex(),
+        exp_blob,
+        "resulting text blob id"
+    );
+}
+
+#[test]
+fn dc12_span_selection_replacement_middle_pins_bytes() {
+    check_plan_vector(
+        b"hello world\n",
+        b"hello prikk\n",
+        0x50,
+        (6, 11),
+        (6, 11),
+        "776f726c64",
+        "7072696b6b",
+        "62136ffd5ad9a2e057700bdc6d652bb27f57cb10c23c37cf762c11c42f0ff0e9",
+        "17658e9fdfdf301aca924208fed9df375387409959fbecfe211893611771d7b8",
+        "486ea46224d1bb4fb680f34f7c9ad96a8f24ec88be73ea8e5a6c65260e9cb8a7",
+        0,
+        "7e703780eb2aff226a71f0b54c166625029214d6d8e2f3e94148c6cdab40c84a",
+        "1b05e8e870004a5852990d93a5610d80e56507b129e6bc90a82bd050c8a4f878",
+    );
+}
+
+#[test]
+fn dc12_span_selection_insertion_and_deletion_pin_empty_sides() {
+    check_plan_vector(
+        b"abc",
+        b"aXYbc",
+        0x51,
+        (1, 1),
+        (1, 3),
+        "",
+        "5859",
+        "fed24d8f3610cfc6192abe666a9fb6ef2e9a5d7f97ab9d5631371a982097d49a",
+        "e9a3d04a23647053c5bb7fc2ad48982b6cacef1079d96347a5223ab1b1a35728",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        0,
+        "012e9d1fc386a0c8d70e82ac1f77588c5a7594d4d3a61069fc2bdc27e9793e71",
+        "0c476748d3996e6ba30485cbb253fc9546107f0c4caefcff2c46e08a2e543614",
+    );
+    check_plan_vector(
+        b"aXYbc",
+        b"abc",
+        0x52,
+        (1, 3),
+        (1, 1),
+        "5859",
+        "",
+        "fed24d8f3610cfc6192abe666a9fb6ef2e9a5d7f97ab9d5631371a982097d49a",
+        "e9a3d04a23647053c5bb7fc2ad48982b6cacef1079d96347a5223ab1b1a35728",
+        "c07a3de039fbc0914689549f041eae295d621de7f7f647fd863f6d2f8db2080e",
+        0,
+        "41397960139c49e5e44d2c475a1be444d8cd9d73444943d59627c3ef8fb9a7b2",
+        "5b20e6b32faaac39492a52d9ae441b8b020f994af260a9093dbae92c698ff1f0",
+    );
+}
+
+#[test]
+fn dc12_span_selection_widens_subcharacter_edits() {
+    check_plan_vector(
+        "é\n".as_bytes(),
+        "è\n".as_bytes(),
+        0x53,
+        (0, 2),
+        (0, 2),
+        "c3a9",
+        "c3a8",
+        "26a405baea8556d018906cea0e268b6f7d78044689f09830bcdc652f211d6ace",
+        "17658e9fdfdf301aca924208fed9df375387409959fbecfe211893611771d7b8",
+        "4a99557e4033c3539de2eb65472017cad5f9557f7a0625a09f1c3f6e2ba69c4c",
+        0,
+        "e9dceed0dbdf37366262ee350530a68c6adc7e672846d63a102aee2f8dd00ecf",
+        "9a1a64b30545e1d1bcccb3c51046b8147b17d3c30fa7f40751737954b717d90e",
+    );
+    check_plan_vector(
+        "漢字\n".as_bytes(),
+        "漢文\n".as_bytes(),
+        0x54,
+        (3, 6),
+        (3, 6),
+        "e5ad97",
+        "e69687",
+        "64d670547a91b8b8d8e4426b82bd75f4eb9bf6775b28818ca0a09d1ebd061e7c",
+        "17658e9fdfdf301aca924208fed9df375387409959fbecfe211893611771d7b8",
+        "c55038b272b109b8bfdb6b59dd1b1048ffa58361caa3d16f56ee881f34ce34f0",
+        0,
+        "5a3c5d31561b7e4871befb439b6b7c0daea9e15e9d04c5b0c912fbe8a88c5340",
+        "46dc575d0a66126bf87bdaede2e6a811782641189f9dcea83e27772185ca509c",
+    );
+}
+
+#[test]
+fn dc12_span_selection_crlf_and_multihunk_enclosing_span() {
+    check_plan_vector(
+        b"a\r\nb\r\nc\r\n",
+        b"A\r\nb\r\nC\r\n",
+        0x55,
+        (0, 7),
+        (0, 7),
+        "610d0a620d0a63",
+        "410d0a620d0a43",
+        "26a405baea8556d018906cea0e268b6f7d78044689f09830bcdc652f211d6ace",
+        "e731ca539eb51029bda032f6e243c682256092fb02beb28a2eacba2a27994597",
+        "d37a6c0b581046eec04a3d815bcd9fadbce89bd21784279deff41836a766d570",
+        0,
+        "94e8ae0078df0191fd4f81cb497958c68317a1a9cabfc44898b9eb92edfd3028",
+        "bafa20d059386e336f6e812afe698233fa8fe9b1a5608f8d9919c3100d682a26",
+    );
 }
 
 #[test]

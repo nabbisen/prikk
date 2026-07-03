@@ -2,8 +2,8 @@
 //! validation (all-zero rejection through `try_from_bytes`), field types, the
 //! DeleteNode discriminator (text/binary file, symlink, and rejection of illegal
 //! field combinations), the §9.2 operation-kind oneof, and the decode→apply
-//! boundary for the node-addressed kinds (each well-formed kind decodes into its
-//! typed variant; application of the not-yet-wired kinds is gated as
+//! boundary for node-addressed kinds (each well-formed kind decodes into its
+//! typed variant; application of still-deferred kinds is gated as
 //! `UnsupportedObjectType` by `ensure_apply_supported`, erratum P1) — exercised on
 //! the read path, not just the write-side encoder validators.
 #![allow(clippy::expect_used)]
@@ -248,8 +248,7 @@ fn patch_with_raw_edit_text(edit_text_record: &[u8]) -> Vec<u8> {
     patch
 }
 
-/// A valid §9.3 EditText record body (tags 1-6, 9; no hints), for the
-/// decode-validates-then-unsupported witness.
+/// A valid §9.3 EditText record body (tags 1-6, 9; no hints).
 fn valid_edit_text_record() -> Vec<u8> {
     let mut record = Vec::new();
     tlv(&mut record, 1, 0x11, &[0x22; 32]); // node_id
@@ -263,25 +262,19 @@ fn valid_edit_text_record() -> Vec<u8> {
 }
 
 #[test]
-fn decode_valid_edit_text_is_validated_then_unsupported() {
-    // A well-formed §9.3 EditText is reconciled and validated on read, but span-
-    // anchored apply is deferred (FDD-01 §7.2.1 + node model), so decode reports
-    // it UnsupportedObjectType rather than a replayable operation or a malformed
-    // error. Asserting the class guards the "validate first, then unsupported"
-    // ordering against a decoder that rejected every EditText immediately.
+fn decode_valid_edit_text_is_apply_supported() {
+    // A well-formed §9.3 EditText is reconciled, validated, and admitted by the
+    // DC-12 apply-supported gate. Runtime replay may still fail closed on missing
+    // node identity, stale anchors, or text preconditions.
     let bytes = patch_with_raw_edit_text(&valid_edit_text_record());
     let ops = decode_patch_operations(&bytes).expect("decodes");
-    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
-    assert!(
-        matches!(err, PrikkError::UnsupportedObjectType(_)),
-        "valid EditText should defer as unsupported, got {err:?}"
-    );
+    ensure_apply_supported(ops.first().expect("one operation")).expect("supported");
 }
 
 #[test]
-fn decode_edit_text_via_object_encoder_is_unsupported() {
-    // Same, but encoded through the real object writer (proves the §9.3 encoder
-    // and the decoder agree on the wire shape end to end).
+fn decode_edit_text_via_object_encoder_is_supported() {
+    // Encoded through the real object writer: proves the §9.3 encoder and the
+    // decoder agree on the wire shape end to end.
     let bytes = patch_bytes(OperationKind::EditText(EditText {
         node_id: NodeId::from_bytes([0x22; 32]),
         span_id: [0x10; 32],
@@ -314,11 +307,7 @@ fn decode_edit_text_via_object_encoder_is_unsupported() {
         }
         other => panic!("expected EditText, got {other:?}"),
     }
-    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
-    assert!(
-        matches!(err, PrikkError::UnsupportedObjectType(_)),
-        "{err:?}"
-    );
+    ensure_apply_supported(ops.first().expect("one operation")).expect("supported");
 }
 
 #[test]

@@ -24,14 +24,12 @@ Supported operation subset:
 
 - `CreateFile`
 - `DeleteFile`
-- `ReplaceBinary`
-- full-file `EditText` where `anchor_id = "full-file"`
 
 Deferred:
 
 - mutating rollback commands
 - rollback ref publication policy
 - authorization and audit policy for rollback
-- arbitrary-span text rollback
+- arbitrary-span text inverse/rollback
 - commutation, confluence, and conflict witnesses
 - plugin execution and remote sync

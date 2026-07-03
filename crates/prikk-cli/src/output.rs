@@ -82,9 +82,8 @@ pub(crate) fn print_patch_replay_plan(layout: &RepositoryLayout, plan: &PatchRep
         println!("  file: {path}");
     }
     println!(
-        "note: this replays CreateFile/DeleteNode/ReplaceBinary only; EditText \
-         span-anchored apply, renames, conflicts, and full patch algebra remain \
-         later PRs"
+        "note: this replays CreateFile/DeleteNode/EditText; ReplaceBinary, renames, \
+         conflicts, and full patch algebra remain later increments"
     );
 }
 
@@ -342,8 +341,8 @@ pub(crate) fn print_worktree_status(layout: &RepositoryLayout, report: &Worktree
         }
     }
     println!(
-        "note: use `prikk commit --from-worktree -m <message>` for coarse file-level \
-         operations, or add `--text-edits` for conservative full-file UTF-8 edits"
+        "note: use `prikk commit -m <message>` to author node-addressed worktree changes; \
+         text nodes use deterministic arbitrary-span EditText"
     );
 }
 

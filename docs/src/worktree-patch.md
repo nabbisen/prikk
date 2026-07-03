@@ -9,7 +9,7 @@ export PRIKK_AUTHOR_KEY_ID="dev-author"
 export PRIKK_AUTHOR_SEED="<64 hex chars>"
 
 prikk commit -m "record changes"
-# --text-edits prefers full-file text edits for modified UTF-8 tracked files:
+# --text-edits is accepted for compatibility; text nodes author EditText either way:
 prikk commit --text-edits -m "record text changes"
 ```
 
@@ -32,7 +32,7 @@ Existing-node kind is authoritative:
 
 - new file → `CreateFile` (fresh CSPRNG-minted `node_id`, normalized mode)
 - removed tracked file → `DeleteNode`
-- modified text file → `EditText` (full-file span; requires `--text-edits`) or a file-level replacement by default
+- modified text file → deterministic arbitrary-span `EditText`
 - modified binary file → `ReplaceBinary`
 - permission-only change → `ChangePerm`
 
@@ -44,7 +44,7 @@ rules apply as elsewhere.
 - symlink authoring (fails closed on all symlinks)
 - text↔binary kind transitions (fail closed)
 - rename detection (a move is a `DeleteNode` + `CreateFile`)
-- arbitrary-span text diffs, commutation, conflict witnesses
+- multi-operation text diff minimization, commutation, conflict witnesses
 
 Signature scope: worktree commits are role-bound Ed25519 `AUTHOR`-signed. This does not imply
 trust-store enforcement, key management, `MAINTAINER`/publication signing, rollback authorization, or

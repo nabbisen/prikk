@@ -10,7 +10,7 @@ pub(crate) struct CommitArgs {
     pub(crate) message: String,
     /// Baseline ref for worktree commits.
     pub(crate) ref_name: String,
-    /// Whether to prefer conservative full-file text edit generation.
+    /// Compatibility flag retained for text edit generation.
     pub(crate) text_edits: bool,
 }
 

@@ -184,7 +184,7 @@ fn binary_baseline_modified_file_authors_replace_binary() {
 }
 
 #[test]
-fn text_baseline_modified_file_authors_whole_file_edit_text() {
+fn text_baseline_modified_file_authors_edit_text() {
     let root = unique_temp_dir("wt-modified-text");
     let layout = RepositoryLayout::init(root.clone()).unwrap();
     publish_node_baseline(&layout, &[("README.md", b"hello\n", BlobKind::Text)]);
@@ -425,8 +425,8 @@ fn missing_baseline_file_authors_delete_node() {
 }
 
 #[test]
-fn authored_edit_text_locates_and_splices_through_shared_text_span() {
-    // Authoring↔replay symmetry: the authored whole-file EditText, localized and spliced through the
+fn authored_edit_text_locates_and_splices_arbitrary_span_through_shared_text_span() {
+    // Authoring↔replay symmetry: the authored arbitrary-span EditText, localized and spliced through the
     // same `text_span` primitives replay uses, reproduces the new bytes and the same text blob id.
     let root = unique_temp_dir("wt-edit-symmetry");
     let layout = RepositoryLayout::init(root.clone()).unwrap();
@@ -476,6 +476,8 @@ fn authored_edit_text_locates_and_splices_through_shared_text_span() {
         })
         .expect("authored patch must carry an EditText op");
     let (node_id, span_id, old_span_hash, left, right, replacement, op_old_text) = edit;
+    assert_eq!(op_old_text, b"world");
+    assert_eq!(replacement, b"prikk");
 
     // Replay-side localization over the baseline text, using the shared module.
     let (start, end) = crate::text_span::locate_text_span(
@@ -494,6 +496,48 @@ fn authored_edit_text_locates_and_splices_through_shared_text_span() {
         crate::text_span::text_blob_id(&spliced).unwrap(),
         crate::text_span::text_blob_id(new_text).unwrap()
     );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn authored_edit_text_widens_subcharacter_utf8_span() {
+    let root = unique_temp_dir("wt-edit-subchar");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    let old_text = "é\n".as_bytes();
+    let new_text = "è\n".as_bytes();
+    publish_node_baseline(&layout, &[("README.md", old_text, BlobKind::Text)]);
+    std::fs::write(root.join("README.md"), new_text).unwrap();
+
+    let mut generator = deterministic_generator();
+    let report = commit_worktree_changes_with_generator(
+        &layout,
+        "heads/main",
+        "edit",
+        WorktreePatchCommitOptions::file_level(),
+        &mut generator,
+        &test_signer(),
+    )
+    .unwrap();
+    assert_eq!(report.text_edit_count, 1);
+
+    let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
+    let ops = crate::patch_replay::decode::decode_patch_operations(
+        &replay.records[0].envelope.canonical_payload,
+    )
+    .unwrap();
+    let edit = ops
+        .iter()
+        .find_map(|op| match &op.kind {
+            crate::patch_replay::decode::DecodedOperationKind::EditText {
+                old_span_text,
+                replacement_text,
+                ..
+            } => Some((old_span_text.clone(), replacement_text.clone())),
+            _ => None,
+        })
+        .expect("authored patch must carry an EditText op");
+    assert_eq!(edit.0, "é".as_bytes());
+    assert_eq!(edit.1, "è".as_bytes());
     let _ = std::fs::remove_dir_all(root);
 }
 

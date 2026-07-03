@@ -110,8 +110,8 @@ pub(crate) enum DecodedDeletePreimage {
 /// Apply-time support gate (review erratum P1). Decoding a kind says nothing about
 /// whether replay/apply can execute it; this is the *single* source of truth for the
 /// apply-supported subset. Returns `Ok(())` only for the kinds whose application is
-/// wired today (`CreateFile` and file-`DeleteNode`); every node-addressed kind whose
-/// application is deferred to the node model (increment 4.4) returns
+/// wired today (`CreateFile`, file-`DeleteNode`, and `EditText`); node-addressed kinds whose
+/// application is still deferred return
 /// `UnsupportedObjectType`. Per review erratum P4, Phase 4 cannot be marked
 /// implementation-reconciled while any kind still returns unsupported here.
 pub(crate) fn ensure_apply_supported(operation: &DecodedPatchOperation) -> Result<()> {
@@ -120,14 +120,12 @@ pub(crate) fn ensure_apply_supported(operation: &DecodedPatchOperation) -> Resul
         | DecodedOperationKind::DeleteNode {
             preimage: DecodedDeletePreimage::File { .. },
             ..
-        } => Ok(()),
+        }
+        | DecodedOperationKind::EditText { .. } => Ok(()),
         DecodedOperationKind::DeleteNode {
             preimage: DecodedDeletePreimage::Symlink { .. },
             ..
         } => Err(unsupported_operation("DeleteNode(symlink)")),
-        DecodedOperationKind::EditText { .. } => Err(unsupported_operation(
-            "EditText (span-anchored apply pending FDD-01 §7.2.1 + node model)",
-        )),
         DecodedOperationKind::ReplaceBinary { .. } => Err(unsupported_operation(
             "ReplaceBinary (node-addressed apply pending node model, increment 4.4)",
         )),
