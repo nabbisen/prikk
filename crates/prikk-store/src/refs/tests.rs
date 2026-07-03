@@ -2,6 +2,7 @@
 
 use prikk_object::ObjectType;
 
+use super::log;
 use crate::{
     FileObjectStore, ObjectWriter, RefLock, RefPublication, RefStore, RepositoryLayout,
     verify_repository,
@@ -164,6 +165,54 @@ fn ref_store_reconstructs_missing_pointer_from_log() {
             Ok(Some(ref_state_id))
         );
         assert!(verify_repository(&layout).is_ok());
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn ref_log_ahead_of_pointer_is_recoverable() {
+    let root = unique_temp_dir("ref-log-ahead");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let mut object_store = FileObjectStore::new(layout.clone());
+        let block = signed_empty_block_envelope();
+        let target = block.object_id();
+        assert!(object_store.write_object(&block).is_ok());
+        let ref_state = signed_ref_state_envelope("heads/topic", None, target, 1);
+        let ref_state_id = ref_state.object_id();
+        assert!(object_store.write_object(&ref_state).is_ok());
+        let ref_update = signed_ref_update_envelope("heads/topic", None, ref_state_id, target, 1);
+        assert!(log::append_log_record(&layout, "heads/topic", &ref_update).is_ok());
+
+        let store = RefStore::new(layout.clone());
+        assert_eq!(store.read_current_ref_state_id("heads/topic"), Ok(None));
+        let candidate = store.recoverable_missing_ref("heads/topic");
+        assert!(candidate.is_ok());
+        if let Ok(Some(candidate)) = candidate {
+            assert_eq!(candidate.ref_state_id, ref_state_id);
+            assert_eq!(candidate.target_object_id, target);
+            assert_eq!(candidate.update_seq, 1);
+        } else {
+            panic!("expected heads/topic to be recoverable from log");
+        }
+
+        let report = verify_repository(&layout);
+        assert!(report.is_ok());
+        if let Ok(report) = report {
+            assert_eq!(report.checked_refs, 0);
+            assert_eq!(report.checked_ref_log_records, 1);
+        }
+
+        let repair = store.reconstruct_missing_ref_from_log("heads/topic");
+        assert!(repair.is_ok());
+        if let Ok(repair) = repair {
+            assert!(repair.wrote_pointer);
+        }
+        assert_eq!(
+            store.read_current_ref_state_id("heads/topic"),
+            Ok(Some(ref_state_id))
+        );
     }
     let _ = std::fs::remove_dir_all(root);
 }

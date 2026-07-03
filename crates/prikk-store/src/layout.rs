@@ -100,6 +100,12 @@ impl RepositoryLayout {
         self.default_active_dir().join("active.lock")
     }
 
+    /// Return the default active-session ref-name metadata path.
+    #[must_use]
+    pub fn default_active_ref_name_path(&self) -> PathBuf {
+        self.default_active_dir().join("ref-name")
+    }
+
     /// Return the ref root directory.
     #[must_use]
     pub fn refs_dir(&self) -> PathBuf {

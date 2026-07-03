@@ -450,9 +450,11 @@ pub(crate) fn print_help(version: &str) {
     println!("Usage:");
     println!("  prikk init [path]                         Create a .prikk repository layout");
     println!("  prikk trust maintainer add --key-id ID --public-key HEX  Trust one MAINTAINER key");
-    println!("  prikk commit --from-worktree [--text-edits] -m <message> Append worktree changes");
+    println!(
+        "  prikk commit --from-worktree [--text-edits] [--ref REF] -m <message> Append worktree changes"
+    );
     println!("  prikk status                              Check repository and active WAL status");
-    println!("  prikk seal --allow-no-audit              Seal active WAL into heads/main");
+    println!("  prikk seal --allow-no-audit [--ref REF] Seal active WAL into a branch ref");
     println!(
         "  prikk log [path] [--limit N] [--ref REF]  Show sealed ref history including rollback blocks"
     );

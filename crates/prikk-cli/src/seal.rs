@@ -12,8 +12,9 @@ use prikk_object::{
     RefStatePayload, RefUpdatePayload,
 };
 use prikk_store::{
-    ActiveLock, FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication, RefStore,
-    RepositoryLayout, Wal, maintainer_signature, verify_signer_trusted,
+    ActiveLock, ActiveRefMetadata, FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication,
+    RefStore, RepositoryLayout, Wal, maintainer_signature, read_active_ref_metadata,
+    remove_active_ref_metadata, validate_local_branch_ref, verify_signer_trusted,
 };
 
 const DEFAULT_BRANCH_REF: &str = "heads/main";
@@ -21,6 +22,8 @@ const DEFAULT_BRANCH_REF: &str = "heads/main";
 /// Result of sealing the current active WAL.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SealCommandResult {
+    /// Ref advanced by seal.
+    pub ref_name: String,
     /// Number of patch records sealed.
     pub patch_count: usize,
     /// New block ID.
@@ -35,23 +38,31 @@ pub fn run_seal(
     args: Vec<String>,
     signer: &impl MaintainerSigner,
 ) -> std::result::Result<SealCommandResult, String> {
-    parse_seal_args(args)?;
+    let ref_name = parse_seal_args(args)?;
     let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
-    seal_active_no_audit(layout, DEFAULT_BRANCH_REF, signer)
+    seal_active_no_audit(layout, &ref_name, signer)
 }
 
-fn parse_seal_args(args: Vec<String>) -> std::result::Result<(), String> {
+fn parse_seal_args(args: Vec<String>) -> std::result::Result<String, String> {
     let mut allow_no_audit = false;
-    for arg in args {
+    let mut ref_name = DEFAULT_BRANCH_REF.to_string();
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--allow-no-audit" => allow_no_audit = true,
+            "--ref" => {
+                let Some(value) = iter.next() else {
+                    return Err("seal --ref requires a value".to_string());
+                };
+                ref_name = value;
+            }
             other => return Err(format!("unknown seal argument: {other}")),
         }
     }
     if !allow_no_audit {
         return Err("seal scaffold requires --allow-no-audit".to_string());
     }
-    Ok(())
+    validate_local_branch_ref(&ref_name).map_err(|err| err.to_string())
 }
 
 fn seal_active_no_audit(
@@ -59,6 +70,7 @@ fn seal_active_no_audit(
     ref_name: &str,
     signer: &impl MaintainerSigner,
 ) -> std::result::Result<SealCommandResult, String> {
+    let ref_name = validate_local_branch_ref(ref_name).map_err(|err| err.to_string())?;
     let _active_lock =
         ActiveLock::acquire(layout.default_active_lock_path()).map_err(|err| err.to_string())?;
     let wal = Wal::new(layout.default_queue_wal_path());
@@ -70,12 +82,34 @@ fn seal_active_no_audit(
         ));
     }
     if replay.records.is_empty() {
+        match read_active_ref_metadata(&layout).map_err(|err| err.to_string())? {
+            ActiveRefMetadata::Missing => {}
+            ActiveRefMetadata::Valid(_) | ActiveRefMetadata::Invalid(_) => {
+                remove_active_ref_metadata(&layout).map_err(|err| err.to_string())?;
+            }
+        }
         return Err("active WAL has no patch records to seal".to_string());
+    }
+    match read_active_ref_metadata(&layout).map_err(|err| err.to_string())? {
+        ActiveRefMetadata::Valid(actual) if actual == ref_name => {}
+        ActiveRefMetadata::Valid(actual) => {
+            return Err(format!(
+                "active WAL is owned by {actual}; requested seal ref is {ref_name}"
+            ));
+        }
+        ActiveRefMetadata::Missing => {
+            return Err("active WAL has records but active ref metadata is missing".to_string());
+        }
+        ActiveRefMetadata::Invalid(reason) => {
+            return Err(format!(
+                "active WAL has records but active ref metadata is malformed: {reason}"
+            ));
+        }
     }
 
     let mut object_store = FileObjectStore::new(layout.clone());
     let ref_store = RefStore::new(layout.clone());
-    let current = current_ref_state(&object_store, &ref_store, ref_name)?;
+    let current = current_ref_state(&object_store, &ref_store, &ref_name)?;
     verify_signer_trusted(&layout, signer).map_err(|err| err.to_string())?;
     let patch_ids = persist_wal_patches(&mut object_store, &replay.records)?;
     let parent_block_ids = current
@@ -141,7 +175,7 @@ fn seal_active_no_audit(
         signer,
     )?;
     let publication = RefPublication {
-        ref_name: ref_name.to_string(),
+        ref_name: ref_name.clone(),
         expected_previous_ref_state_id: previous_ref_state_id,
         ref_state: ref_state_envelope,
         ref_update: ref_update_envelope,
@@ -150,7 +184,9 @@ fn seal_active_no_audit(
         .publish(&publication)
         .map_err(|err| err.to_string())?;
     wal.truncate_empty().map_err(|err| err.to_string())?;
+    remove_active_ref_metadata(&layout).map_err(|err| err.to_string())?;
     Ok(SealCommandResult {
+        ref_name,
         patch_count: patch_ids.len(),
         block_id,
         ref_state_id: published_ref_state_id,

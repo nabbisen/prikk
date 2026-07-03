@@ -88,13 +88,17 @@ impl RefStore {
             &publication.ref_name,
             publication.expected_previous_ref_state_id,
         )?;
+        log::append_log_record(&self.layout, &publication.ref_name, &publication.ref_update)?;
+        self.ensure_current_matches(
+            &publication.ref_name,
+            publication.expected_previous_ref_state_id,
+        )?;
         self.write_ref_pointer_candidate(&publication.ref_name, ref_state_id)?;
         self.ensure_current_matches(
             &publication.ref_name,
             publication.expected_previous_ref_state_id,
         )?;
         self.promote_ref_pointer_candidate(&publication.ref_name)?;
-        log::append_log_record(&self.layout, &publication.ref_name, &publication.ref_update)?;
         drop(ref_lock);
         Ok(ref_state_id)
     }
@@ -311,6 +315,53 @@ pub(crate) fn require_signed_type(
         )));
     }
     envelope.validate()
+}
+
+/// Validate a local branch ref name and return its canonical identity string.
+pub fn validate_local_branch_ref(ref_name: &str) -> Result<String> {
+    if ref_name.is_empty() {
+        return Err(PrikkError::InvalidName(
+            "ref name must not be empty".to_string(),
+        ));
+    }
+    if ref_name.starts_with("tags/")
+        || ref_name.starts_with("remotes/")
+        || ref_name.starts_with("rollback/")
+    {
+        return Err(PrikkError::InvalidName(format!(
+            "ref namespace is reserved: {ref_name}"
+        )));
+    }
+    if !ref_name.starts_with("heads/") {
+        return Err(PrikkError::InvalidName(format!(
+            "ref {ref_name} is not a local branch ref; expected heads/<name>"
+        )));
+    }
+    let branch = &ref_name["heads/".len()..];
+    if branch.is_empty() {
+        return Err(PrikkError::InvalidName(
+            "branch ref must include a name after heads/".to_string(),
+        ));
+    }
+    if ref_name.chars().any(|ch| ch == '\0' || ch.is_control()) {
+        return Err(PrikkError::InvalidName(format!(
+            "ref {ref_name} contains a forbidden control character"
+        )));
+    }
+    if branch.starts_with('/') || branch.ends_with('/') || branch.contains("//") {
+        return Err(PrikkError::InvalidName(format!(
+            "branch ref {ref_name} contains an empty path component"
+        )));
+    }
+    if branch
+        .split('/')
+        .any(|component| component == "." || component == "..")
+    {
+        return Err(PrikkError::InvalidName(format!(
+            "branch ref {ref_name} contains a traversal component"
+        )));
+    }
+    Ok(ref_name.to_string())
 }
 
 #[cfg(test)]

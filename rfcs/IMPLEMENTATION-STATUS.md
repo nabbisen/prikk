@@ -1,23 +1,26 @@
 # Prikk Implementation Status
 
-Version: 0.5.0 (DC-12 — arbitrary-span text edits)
+Version: 0.6.0 candidate (DC-13 — non-default ref genesis)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (DC-12)
+## Current State (DC-13)
 
-- Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** `heads/main`
-  baseline reconstructed from authoritative replay — or, on a fresh repository, a **genesis** first commit
-  against an empty baseline (4.4b: all files authored as `CreateFile`) — worktree changes author
+- Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** local
+  branch baseline reconstructed from authoritative replay — or, on a valid unborn `heads/*` ref, a
+  **genesis** first commit against an empty baseline (all files authored as `CreateFile`) — worktree changes author
   node-addressed §9.3 operations (`CreateFile`, `DeleteNode`, `EditText`, `ReplaceBinary`, `ChangePerm`)
   with CSPRNG-minted node ids in canonical order, normalized file modes, and shared text-span identity.
   Modified text-file nodes author deterministic arbitrary-span `EditText` records selected by byte
   LCP/LCS widened to UTF-8 character boundaries. Existing-node kind is authoritative; rename inference,
-  symlink authoring, and text↔binary transitions are out of scope. Genesis is selected only when the
-  target ref has never been published (pointer absent and ref log empty and active WAL empty); a missing
-  pointer with log history, or a non-empty active WAL, fails closed and points at seal/doctor rather than
-  re-authoring.
+  symlink authoring, branch copy/fork, branch switching, and text↔binary transitions are out of scope.
+  Genesis is selected only when the target ref has never been published (pointer absent, ref log absent
+  or empty, and active WAL empty); a missing pointer with log history, or a non-empty active WAL, fails
+  closed and points at seal/doctor rather than re-authoring.
+- Active-WAL ref ownership metadata (`.prikk/active/default/ref-name`) is written before the first WAL
+  record and removed after successful seal. Non-empty active WALs with missing, malformed, or mismatched
+  ref metadata fail closed, preventing cross-ref publication. v0.6.0 remains single-commit-per-active-WAL.
 - Role-bound Ed25519 AUTHOR signing for production Patch authoring paths through an injected
   `AuthorSigner` (`Ed25519AuthorSigner`, key material via `PRIKK_AUTHOR_KEY_ID` /
   `PRIKK_AUTHOR_SEED`). The broken `commit --allow-empty` scaffold was removed (R1R). DC-10 removes the
@@ -54,7 +57,9 @@ Version: 0.5.0 (DC-12 — arbitrary-span text edits)
 - Doctor diagnostics that convert verification outcomes into actionable issue codes.
 - ActiveSession append API that holds `active.lock` while writing the active WAL.
 - Node-addressed worktree patch authoring (`prikk commit`) with role-bound Ed25519 AUTHOR signing; see Current State above.
-- Local no-audit seal scaffold that persists WAL patches, creates a Block, publishes `heads/main`, signs publication objects with a trusted MAINTAINER key, and clears the WAL after publication.
+- Local no-audit seal scaffold that persists WAL patches, creates a Block, publishes `heads/main` or an
+  explicit `--ref heads/<branch>`, signs publication objects with a trusted MAINTAINER key, and clears
+  the WAL plus active ref metadata after publication.
 - Canonical decoding for RefState, RefUpdate, and Block payloads used by verification.
 - Read-only sealed-history inspection from the current RefState chain, including rollback block classification.
 - Read-only checkout planning that validates current RefState, Block, parent Block, Patch, and optional snapshot Blob references.
@@ -64,12 +69,13 @@ Version: 0.5.0 (DC-12 — arbitrary-span text edits)
 - Content-anchored `EditText` validation with fixed 32-byte span hashes, deterministic arbitrary-span
   authoring, and arbitrary-span replay/materialization for supported text edits.
 - Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append and verification, and sealed rollback block classification for the supported patch-operation subset. Rollback drafts are identified by `PatchPurpose::RollbackDraft` and AUTHOR-signed with real Ed25519 key material.
-- Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
 
-- Genesis first-commit onto non-default refs (default `heads/main` genesis is supported).
 - General destructive worktree pruning and full patch-based checkout semantics.
+- Branch switching, branch copy/fork from an existing tip, merge-base semantics, branch deletion/rename,
+  tag or remote ref creation, rollback refs, multi-commit queued active sessions, and per-ref active WALs.
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy beyond the DC-11 local trust store.
 - Policy-aware audit/attestation publication from seal.
 - Full patch algebra: arbitrary-span inverse/rollback, rollback ref publication, commutation, confluence,
@@ -100,6 +106,12 @@ deterministic content-anchored arbitrary spans through shared identity primitive
 multi-operation diff minimization, direct inverse/rollback for arbitrary spans, rollback refs,
 rollback authorization, worktree rollback mutation, commutation, confluence, conflict witnesses, or
 semantic merge.
+
+DC-13 stays within the approved boundary: explicit `heads/*` unborn refs can be created as independent
+Root histories through `commit --ref` and `seal --ref`, with active-WAL ref ownership metadata and
+branch-ref validation. It does not add branch switching, branch copy/fork from existing tips, merge-base
+semantics, branch deletion/rename, tag/remote refs, rollback refs, multi-commit queued active sessions,
+or per-ref active WALs.
 
 DC-10 stays within the approved boundary: production Patch AUTHOR signatures from `commit` and
 `rollback-draft --append-inverse` are real role-bound Ed25519 signatures, and rollback-draft identity is

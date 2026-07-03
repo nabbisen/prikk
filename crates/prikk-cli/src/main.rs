@@ -3,7 +3,7 @@
 //! Prikk command-line entry point.
 //!
 //! The CLI exposes minimal repository layout commands, active WAL status, node-addressed worktree
-//! commit authoring, deterministic arbitrary-span text edit generation,
+//! commit authoring, explicit non-default branch genesis, deterministic arbitrary-span text edit generation,
 //! read-only inverse planning, rollback preview, rollback draft append/verification, sealed rollback classification,
 //! supported patch replay planning/materialization, explicit patch deletion planning, a local
 //! no-audit seal scaffold, read-only history inspection, checkout planning, conservative snapshot
@@ -132,7 +132,7 @@ fn run_seal(args: Vec<String>) -> std::result::Result<(), String> {
     println!("sealed active WAL into block");
     println!("patches: {}", result.patch_count);
     println!("block id: {}", result.block_id);
-    println!("heads/main RefState: {}", result.ref_state_id);
+    println!("{} RefState: {}", result.ref_name, result.ref_state_id);
     println!("note: audit plugins and patch-based worktree materialization remain later PRs");
     Ok(())
 }

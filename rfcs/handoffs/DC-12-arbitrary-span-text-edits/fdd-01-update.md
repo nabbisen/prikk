@@ -1,6 +1,6 @@
 # DC-12 FDD-01 Update - Arbitrary-Span Text Edit Apply/Inverse
 
-Status: Accepted; implemented for v0.5.0 candidate, with inverse/rollback split
+Status: Implemented for v0.5.0, with inverse/rollback split
 Related RFC: `../../proposed/DC-12-ARBITRARY-SPAN-TEXT-EDITS.md`
 Target FDD: FDD-01 Patch Algebra
 

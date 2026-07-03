@@ -23,6 +23,7 @@ use prikk_object::{
     PatchPayload, PatchPurpose, ReplaceBinary,
 };
 
+use crate::active::{prepare_empty_active_ref_for_append, require_active_ref_for_non_empty_wal};
 use crate::author_signing::AuthorSigner;
 use crate::layout::RepositoryLayout;
 use crate::lifecycle_cache::replay_derived_state;
@@ -37,6 +38,10 @@ use crate::wal::Wal;
 use crate::worktree_patch::{
     WorktreePatchCommitOptions, WorktreePatchCommitReport, WorktreePatchOperationKind,
     WorktreePatchOperationSummary, next_op_seq,
+};
+use crate::{
+    ActiveRefMetadata, read_active_ref_metadata, remove_active_ref_metadata,
+    validate_local_branch_ref,
 };
 
 /// Canonical mode recorded for a created regular file with no executable bit, and the default on
@@ -189,6 +194,7 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     generator: &mut NodeIdGenerator<S>,
     signer: &A,
 ) -> std::result::Result<WorktreePatchCommitReport, AuthorError> {
+    let canonical_ref = validate_local_branch_ref(ref_name).map_err(AuthorError::Store)?;
     // 4.4bR2: hold the active-session lock across the entire critical section — the active-WAL
     // emptiness/genesis guard, patch authoring, and the final WAL append — so guard and append are
     // one atomic step. `ActiveLock::acquire` is fail-fast (exclusive create), so a concurrent commit
@@ -197,6 +203,30 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     // raw WAL under this held lock (not `ActiveSession::append_patch`, which would re-acquire).
     let _active_lock =
         ActiveLock::acquire(layout.default_active_lock_path()).map_err(AuthorError::Store)?;
+
+    let wal = Wal::new(layout.default_queue_wal_path());
+    let active_replay = wal.replay().map_err(AuthorError::Store)?;
+    if active_replay.trailing_partial_bytes != 0 {
+        return Err(AuthorError::Store(PrikkError::InvalidName(format!(
+            "active WAL has {} trailing partial bytes; run `prikk doctor --repair-wal-tail` \
+             before committing",
+            active_replay.trailing_partial_bytes
+        ))));
+    }
+    if active_replay.records.is_empty() {
+        match read_active_ref_metadata(layout).map_err(AuthorError::Store)? {
+            ActiveRefMetadata::Missing => {}
+            ActiveRefMetadata::Valid(_) | ActiveRefMetadata::Invalid(_) => {
+                remove_active_ref_metadata(layout).map_err(AuthorError::Store)?;
+            }
+        }
+    } else {
+        require_active_ref_for_non_empty_wal(layout, &canonical_ref).map_err(AuthorError::Store)?;
+        return Err(AuthorError::Store(PrikkError::LockConflict(format!(
+            "active WAL already contains patches for {canonical_ref}; run `prikk seal --ref \
+             {canonical_ref}` before committing again"
+        ))));
+    }
 
     let object_store = FileObjectStore::new(layout.clone());
 
@@ -210,31 +240,7 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
         } => replay_derived_state(&object_store, *baseline_block, *horizon)?
             .state()
             .clone(),
-        WorktreeBaseline::Genesis => {
-            // E1 (review): genesis requires an empty active WAL — no records AND no trailing partial
-            // bytes. A trailing partial tail must be truncated by doctor first, otherwise appending
-            // after it produces an ambiguous WAL that may still replay as empty/partial. If records are
-            // already staged, the repo is mid-genesis (awaiting seal). Either way, fail closed rather
-            // than author a duplicate or ambiguous genesis patch.
-            let replay = Wal::new(layout.default_queue_wal_path())
-                .replay()
-                .map_err(AuthorError::Store)?;
-            if replay.trailing_partial_bytes != 0 {
-                return Err(AuthorError::Store(PrikkError::InvalidName(
-                    "active WAL has trailing partial bytes on an unpublished ref; \
-                     run `prikk doctor --repair-wal-tail` before committing"
-                        .to_string(),
-                )));
-            }
-            if !replay.records.is_empty() {
-                return Err(AuthorError::Store(PrikkError::InvalidName(
-                    "active WAL already contains patches on an unpublished ref; \
-                     run `prikk seal` before committing again"
-                        .to_string(),
-                )));
-            }
-            NodeLifecycleState::new()
-        }
+        WorktreeBaseline::Genesis => NodeLifecycleState::new(),
     };
 
     // Baseline file view: path -> (node_id, kind, blob_id, mode). Symlink nodes are tracked so a
@@ -446,11 +452,11 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
         crate::author_signing::author_signature(signer, patch_id).map_err(AuthorError::Store)?;
     patch.add_signature(signature).map_err(AuthorError::Store)?;
 
-    let wal = Wal::new(layout.default_queue_wal_path());
+    prepare_empty_active_ref_for_append(layout, &canonical_ref).map_err(AuthorError::Store)?;
     let wal_sequence = wal.append_patch(&patch).map_err(AuthorError::Store)?;
 
     Ok(WorktreePatchCommitReport {
-        ref_name: ref_name.to_string(),
+        ref_name: canonical_ref,
         patch_id,
         wal_sequence,
         operation_count,

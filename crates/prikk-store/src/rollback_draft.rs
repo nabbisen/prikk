@@ -9,12 +9,17 @@
 use prikk_error::{PrikkError, Result};
 use prikk_object::{CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, PatchPurpose};
 
+use crate::active::prepare_empty_active_ref_for_append;
 use crate::author_signing::{AuthorSigner, author_signature};
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
 use crate::patch_inverse::{PatchInverseOperationSummary, prepare_patch_inverse_plan};
 use crate::rollback_preview::{RollbackPreviewChange, prepare_rollback_preview};
 use crate::wal::Wal;
+use crate::{
+    ActiveRefMetadata, read_active_ref_metadata, remove_active_ref_metadata,
+    validate_local_branch_ref,
+};
 
 /// Return true when a Patch envelope carries the rollback-draft payload purpose.
 pub(crate) fn is_rollback_draft_envelope(envelope: &ObjectEnvelope) -> Result<bool> {
@@ -71,19 +76,20 @@ pub fn append_rollback_draft(
     message: &str,
     signer: &impl AuthorSigner,
 ) -> Result<RollbackDraftReport> {
+    let canonical_ref = validate_local_branch_ref(ref_name)?;
     if message.trim().is_empty() {
         return Err(PrikkError::InvalidName(
             "rollback draft message must not be empty".to_string(),
         ));
     }
 
-    let mut inverse = prepare_patch_inverse_plan(layout, ref_name)?;
+    let mut inverse = prepare_patch_inverse_plan(layout, &canonical_ref)?;
     if inverse.inverse_operation_count == 0 {
         return Err(PrikkError::InvalidName(
             "rollback draft has no supported inverse operations to append".to_string(),
         ));
     }
-    let preview = prepare_rollback_preview(layout, ref_name)?;
+    let preview = prepare_rollback_preview(layout, &canonical_ref)?;
     if preview.target_block_id != inverse.target_block_id {
         return Err(PrikkError::Integrity(format!(
             "rollback preview target {} does not match inverse target {}",
@@ -112,10 +118,17 @@ pub fn append_rollback_draft(
             "rollback-draft requires an empty active WAL".to_string(),
         ));
     }
+    match read_active_ref_metadata(layout)? {
+        ActiveRefMetadata::Missing => {}
+        ActiveRefMetadata::Valid(_) | ActiveRefMetadata::Invalid(_) => {
+            remove_active_ref_metadata(layout)?;
+        }
+    }
+    prepare_empty_active_ref_for_append(layout, &canonical_ref)?;
     let wal_sequence = wal.append_patch(&envelope)?;
 
     Ok(RollbackDraftReport {
-        ref_name: ref_name.to_string(),
+        ref_name: canonical_ref,
         target_block_id: inverse.target_block_id,
         inverse_patch_id,
         author_key_id: signer.key_id().to_string(),

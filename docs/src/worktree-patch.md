@@ -11,6 +11,8 @@ export PRIKK_AUTHOR_SEED="<64 hex chars>"
 prikk commit -m "record changes"
 # --text-edits is accepted for compatibility; text nodes author EditText either way:
 prikk commit --text-edits -m "record text changes"
+# Explicit unborn local branch genesis:
+prikk commit --ref heads/topic -m "start topic"
 ```
 
 `--from-worktree` is still accepted for backward compatibility but is now the only behavior, so it can
@@ -22,9 +24,16 @@ Authoring compares the worktree against a baseline node lifecycle state:
 
 - **Published ref:** the baseline is reconstructed from authoritative node-addressed replay of the
   `heads/main` (or `--ref`) lineage — never from a snapshot manifest.
-- **Genesis (fresh repository):** when the target ref has never been published, the first commit
+- **Genesis (fresh local branch):** when a valid `heads/*` target ref has never been published, the first commit
   authors against an empty baseline, so every worktree file becomes a `CreateFile`. The following
-  `seal` publishes the first block as a Root block. Genesis is scoped to the default `heads/main`.
+  `seal --ref heads/<branch>` publishes the first block as a Root block.
+
+`commit --ref heads/topic` on an unborn ref creates an independent Root history from the current
+worktree. It does not copy/fork `heads/main`, switch the checkout branch, or create a merge base.
+
+The active WAL is single-commit for this stage. A second commit before seal fails closed, and the active
+WAL records the target ref so `seal --ref heads/main` cannot publish a patch authored for
+`heads/topic`.
 
 ## Operation mapping
 
@@ -44,6 +53,8 @@ rules apply as elsewhere.
 - symlink authoring (fails closed on all symlinks)
 - text↔binary kind transitions (fail closed)
 - rename detection (a move is a `DeleteNode` + `CreateFile`)
+- branch switching or branch copy/fork from an existing tip
+- multi-commit queued active sessions or per-ref active WALs
 - multi-operation text diff minimization, commutation, conflict witnesses
 
 Signature scope: worktree commits are role-bound Ed25519 `AUTHOR`-signed. This does not imply

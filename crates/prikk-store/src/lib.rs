@@ -8,7 +8,8 @@
 //! active-session append API, opt-in safe doctor repairs, conservative snapshot materialization,
 //! read-only worktree status, minimal worktree-to-patch draft generation, supported patch replay
 //! planning and materialization, explicit opt-in deletion of patch-removed files, deterministic
-//! arbitrary-span text edit replay and generation from worktree changes, and
+//! arbitrary-span text edit replay and generation from worktree changes, explicit unborn local branch
+//! genesis through active-WAL ref ownership, and
 //! read-only inverse planning for the supported patch subset, non-mutating rollback preview,
 //! conservative rollback draft append to an empty active WAL, rollback draft verification, and sealed rollback block classification.
 //! Full patch algebra, plugin execution, and remote sync remain separate increments.
@@ -58,7 +59,10 @@ mod worktree_status;
 #[cfg(test)]
 mod test_support;
 
-pub use active::{ActiveCommitResult, ActiveSession};
+pub use active::{
+    ActiveCommitResult, ActiveRefMetadata, ActiveSession, read_active_ref_metadata,
+    remove_active_ref_metadata, write_active_ref_metadata,
+};
 pub use author_signing::{AuthorSigner, Ed25519AuthorSigner, author_signature};
 pub use checkout::{
     CheckoutMaterialization, CheckoutPlan, DEFAULT_CHECKOUT_REF, SnapshotCheckoutPlan,
@@ -87,6 +91,7 @@ pub use patch_replay::{PatchReplayPlan, prepare_patch_replay_plan};
 pub use path::{RepoPath, validate_no_path_collisions, validate_repo_path};
 pub use refs::{
     RefLogRecord, RefLogReplay, RefPublication, RefRecoveryCandidate, RefRecoveryRepair, RefStore,
+    validate_local_branch_ref,
 };
 pub use rollback_draft::{RollbackDraftReport, append_rollback_draft};
 pub use rollback_preview::{

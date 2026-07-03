@@ -17,13 +17,13 @@ use prikk_object::{
     RefStatePayload, text_span_hash,
 };
 
-use crate::checkout::DEFAULT_CHECKOUT_REF;
 use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
 use crate::path::RepoPath;
 use crate::refs::RefStore;
 use crate::snapshot::{SnapshotEntry, SnapshotManifest};
 use crate::text_span;
+use crate::validate_local_branch_ref;
 
 use decode::{
     DecodedDeletePreimage, DecodedOperationKind, DecodedPatchOperation, decode_patch_operations,
@@ -201,37 +201,35 @@ pub(crate) fn resolve_worktree_baseline(
     layout: &RepositoryLayout,
     ref_name: &str,
 ) -> Result<WorktreeBaseline> {
+    let canonical_ref = validate_local_branch_ref(ref_name)?;
     let ref_store = RefStore::new(layout.clone());
-    if ref_store.read_current_ref_state_id(ref_name)?.is_some() {
-        let (baseline_block, horizon) = resolve_node_lineage_bounds(layout, ref_name)?;
+    if ref_store
+        .read_current_ref_state_id(&canonical_ref)?
+        .is_some()
+    {
+        let (baseline_block, horizon) = resolve_node_lineage_bounds(layout, &canonical_ref)?;
         return Ok(WorktreeBaseline::Published {
             baseline_block,
             horizon,
         });
     }
     // Pointer absent: genesis only if the log is readable and empty; otherwise corruption.
-    // Genesis is scoped to the default ref this increment (review Q2); a non-default unpublished ref
-    // is not a genesis case — branch creation / non-default first-commit is a separate design.
-    if ref_name != DEFAULT_CHECKOUT_REF {
-        return Err(PrikkError::InvalidName(format!(
-            "first commit is supported only for {DEFAULT_CHECKOUT_REF}; ref {ref_name} is not \
-             published and branch creation is not implemented yet"
-        )));
-    }
-    let log = ref_store.replay_log(ref_name).map_err(|err| {
+    // An absent log is decoded as an empty log by `RefStore::replay_log`; unreadable, malformed, or
+    // partial logs remain corruption, not genesis.
+    let log = ref_store.replay_log(&canonical_ref).map_err(|err| {
         PrikkError::Integrity(format!(
-            "ref {ref_name} log is unreadable; run `prikk doctor` before committing ({err})"
+            "ref {canonical_ref} log is unreadable; run `prikk doctor` before committing ({err})"
         ))
     })?;
     if log.trailing_partial_bytes != 0 {
         return Err(PrikkError::Integrity(format!(
-            "ref {ref_name} pointer is missing and its log has trailing partial bytes; \
+            "ref {canonical_ref} pointer is missing and its log has trailing partial bytes; \
              run `prikk doctor` (this is not a genesis repository)"
         )));
     }
     if !log.records.is_empty() {
         return Err(PrikkError::Integrity(format!(
-            "ref {ref_name} pointer is missing but ref-log history exists; \
+            "ref {canonical_ref} pointer is missing but ref-log history exists; \
              run `prikk doctor --repair-main-ref` (this is not a genesis repository)"
         )));
     }

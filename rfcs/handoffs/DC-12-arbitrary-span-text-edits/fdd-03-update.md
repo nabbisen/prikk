@@ -1,6 +1,6 @@
 # DC-12 FDD-03 Update - EditText Record Semantics
 
-Status: Accepted; implemented for v0.5.0 candidate
+Status: Implemented for v0.5.0
 Related RFC: `../../proposed/DC-12-ARBITRARY-SPAN-TEXT-EDITS.md`
 Target FDD: FDD-03 Object Schema and Canonical Identity
 

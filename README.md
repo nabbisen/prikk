@@ -67,11 +67,13 @@ cargo run -p prikk -- doctor ./sample-repo
 `prikk commit` authors node-addressed worktree patches signed with a real role-bound Ed25519 AUTHOR
 signature; key material is supplied via `PRIKK_AUTHOR_KEY_ID` / `PRIKK_AUTHOR_SEED` (a minimal key-input
 mechanism, not a trust store). On a fresh repository the first commit is a **genesis** commit (all files
-authored as `CreateFile`); the first `seal` publishes a Root block on `heads/main`.
+authored as `CreateFile`); the first `seal` publishes a Root block on `heads/main`. An explicit unborn
+local branch ref can be started with `commit --ref heads/<branch>` and published with
+`seal --ref heads/<branch>` as an independent Root history.
 
 ## Design Notes
 
-Current implementation drop: **0.5.0** (DC-12 — arbitrary-span text edits).
+Current implementation drop: **0.6.0 candidate** (DC-13 — non-default ref genesis).
 
 Implemented:
 
@@ -85,9 +87,10 @@ Implemented:
 - Read-only sealed-history inspection from the current RefState chain, including rollback block labels.
 - Snapshot-manifest validation, path-safety checks, opt-in snapshot materialization, and read-only worktree status.
 - Initial RefState publication primitives with flat hashed ref pointer paths.
-- Node-addressed worktree patch authoring (`prikk commit`): against a published `heads/main` baseline reconstructed from authoritative replay — or, on a fresh repository, a **genesis** first commit against an empty baseline (all files authored as `CreateFile`) — worktree changes are authored as node-addressed §9.3 operations (`CreateFile`, `DeleteNode`, `EditText`, `ReplaceBinary`, `ChangePerm`) with CSPRNG-minted node identities in canonical order, normalized file modes, and shared text-span identity. Existing-node kind is authoritative; rename inference, symlink authoring, and text↔binary transitions are out of scope.
+- Node-addressed worktree patch authoring (`prikk commit`): against a published local branch baseline reconstructed from authoritative replay — or, on an unborn `heads/*` ref, a **genesis** first commit against an empty baseline (all files authored as `CreateFile`) — worktree changes are authored as node-addressed §9.3 operations (`CreateFile`, `DeleteNode`, `EditText`, `ReplaceBinary`, `ChangePerm`) with CSPRNG-minted node identities in canonical order, normalized file modes, and shared text-span identity. Existing-node kind is authoritative; rename inference, symlink authoring, branch copy/fork, branch switching, and text↔binary transitions are out of scope.
 - **Role-bound Ed25519 AUTHOR signing** for production Patch authoring paths: worktree commits and rollback drafts sign through an injected `AuthorSigner`; the production `Ed25519AuthorSigner` produces a real Ed25519 signature over the role-bound preimage (`Ed25519, Patch, unsigned-patch-id, Author, key_id`). Key material is supplied via `PRIKK_AUTHOR_KEY_ID` / `PRIKK_AUTHOR_SEED` (a minimal key-input mechanism, not a trust store).
-- Local no-audit seal scaffold that persists WAL patches, creates a Block, signs publication objects with a trusted MAINTAINER key, and advances `heads/main`.
+- Local no-audit seal scaffold that persists WAL patches, creates a Block, signs publication objects with a trusted MAINTAINER key, and advances `heads/main` or an explicit `--ref heads/<branch>`.
+- Active-WAL ref ownership metadata prevents sealing queued patches to a different ref than the one they were authored for. Non-empty active WALs with missing, malformed, or mismatched ref metadata fail closed.
 - Supported patch replay planning/materialization for `CreateFile`/`DeleteNode` and deterministic arbitrary-span `EditText`, with node-addressed record reconciliation for the remaining §9.3 kinds.
 - Explicit deletion planning and opt-in deletion of patch-removed files whose bytes still match the old blob.
 - Read-only inverse planning, non-mutating rollback preview, rollback-draft append/verification, and sealed rollback block classification for the supported subset. Rollback-draft identity is recorded as `PatchPurpose::RollbackDraft`, not as a reserved AUTHOR key id.
@@ -95,12 +98,13 @@ Implemented:
 
 Signing scope (interim): AUTHOR-role Patch signatures and MAINTAINER publication signatures produced by production commands are real role-bound Ed25519 signatures. Publication trust is local and minimal (`required = 1`); this does **not** yet imply key rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, or publication-grade audit policy.
 
-Minimal CLI commands: `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] -m`, `seal --allow-no-audit`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+Minimal CLI commands: `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 Not implemented yet:
 
 - Rename detection, multi-operation text diff minimization, arbitrary-span text inverse/rollback, rollback refs, rollback authorization, commutation, full patch algebra, and general destructive checkout pruning.
-- Genesis first-commit onto non-default refs (this drop supports genesis on the default `heads/main` only).
+- Branch switching, branch copy/fork from an existing tip, merge-base semantics, branch deletion/rename,
+  tag or remote ref creation, rollback refs, multi-commit queued active sessions, and per-ref active WALs.
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy.
 - Policy-aware audit/attestation publication through seal; plugin/audit execution.
 - Remote sync.

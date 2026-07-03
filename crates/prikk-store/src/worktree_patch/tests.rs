@@ -19,8 +19,9 @@ use crate::test_support::{
 };
 use crate::worktree_patch::commit_worktree_changes_with_generator;
 use crate::{
-    Ed25519AuthorSigner, FileObjectStore, ObjectWriter, RefPublication, RefStore, RepoPath,
-    RepositoryLayout, Wal, WorktreePatchCommitOptions, WorktreePatchOperationKind,
+    ActiveRefMetadata, Ed25519AuthorSigner, FileObjectStore, ObjectWriter, RefPublication,
+    RefStore, RepoPath, RepositoryLayout, Wal, WorktreePatchCommitOptions,
+    WorktreePatchOperationKind, read_active_ref_metadata,
 };
 
 /// Deterministic Ed25519 AUTHOR signer for reproducible authoring (real signing, fixed seed).
@@ -1029,6 +1030,10 @@ fn genesis_commit_authors_all_create_file() {
     // Real AUTHOR signature on the genesis patch (same signer path as published authoring).
     let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
     assert_eq!(replay.records.len(), 1);
+    assert_eq!(
+        read_active_ref_metadata(&layout).unwrap(),
+        ActiveRefMetadata::Valid("heads/main".to_string())
+    );
     let env = &replay.records[0].envelope;
     assert_eq!(env.object_id(), report.patch_id);
     let sig = env.signatures.first().expect("genesis patch is signed");
@@ -1125,16 +1130,16 @@ fn genesis_missing_pointer_with_log_fails_closed() {
     let _ = std::fs::remove_dir_all(root);
 }
 
-/// 4.4bR P1a: genesis is default-ref-only. A first commit onto a non-default unpublished ref fails
-/// closed rather than authoring a second genesis semantics before branch creation is designed.
+/// DC-13: a first commit onto an explicit unborn non-default branch ref authors an independent Root
+/// history from the current worktree and records active-WAL ref ownership.
 #[test]
-fn genesis_on_non_default_ref_fails_closed() {
+fn genesis_on_non_default_ref_authors_create_file() {
     let root = unique_temp_dir("wt-genesis-nondefault");
     let layout = RepositoryLayout::init(root.clone()).unwrap();
     std::fs::write(root.join("a.txt"), b"one\n").unwrap();
 
     let mut generator = deterministic_generator();
-    let err = commit_worktree_changes_with_generator(
+    let report = commit_worktree_changes_with_generator(
         &layout,
         "heads/feature",
         "genesis-nondefault",
@@ -1142,9 +1147,141 @@ fn genesis_on_non_default_ref_fails_closed() {
         &mut generator,
         &test_signer(),
     )
+    .unwrap();
+    assert_eq!(report.ref_name, "heads/feature");
+    assert_eq!(report.operation_count, 1);
+    assert_eq!(
+        report.changes[0].operation,
+        WorktreePatchOperationKind::CreateFile
+    );
+    assert_eq!(
+        read_active_ref_metadata(&layout).unwrap(),
+        ActiveRefMetadata::Valid("heads/feature".to_string())
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn invalid_branch_ref_fails_before_active_mutation() {
+    let root = unique_temp_dir("wt-genesis-invalid-ref");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    std::fs::write(root.join("a.txt"), b"one\n").unwrap();
+
+    let mut generator = deterministic_generator();
+    let err = commit_worktree_changes_with_generator(
+        &layout,
+        "tags/v1",
+        "invalid-ref",
+        WorktreePatchCommitOptions::file_level(),
+        &mut generator,
+        &test_signer(),
+    )
     .unwrap_err();
     assert!(
-        err.to_string().contains("only for heads/main"),
+        err.to_string().contains("reserved"),
+        "unexpected error: {err}"
+    );
+    let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
+    assert!(replay.records.is_empty());
+    assert_eq!(
+        read_active_ref_metadata(&layout).unwrap(),
+        ActiveRefMetadata::Missing
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn empty_wal_malformed_active_ref_metadata_is_cleaned_before_commit() {
+    let root = unique_temp_dir("wt-genesis-clean-stale-ref");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    std::fs::write(layout.default_active_ref_name_path(), b"heads//bad").unwrap();
+    std::fs::write(root.join("a.txt"), b"one\n").unwrap();
+
+    let mut generator = deterministic_generator();
+    let report = commit_worktree_changes_with_generator(
+        &layout,
+        "heads/topic",
+        "genesis-topic",
+        WorktreePatchCommitOptions::file_level(),
+        &mut generator,
+        &test_signer(),
+    )
+    .unwrap();
+    assert_eq!(report.ref_name, "heads/topic");
+    assert_eq!(
+        read_active_ref_metadata(&layout).unwrap(),
+        ActiveRefMetadata::Valid("heads/topic".to_string())
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn non_empty_wal_missing_active_ref_metadata_fails_closed() {
+    let root = unique_temp_dir("wt-active-ref-missing");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    std::fs::write(root.join("a.txt"), b"one\n").unwrap();
+
+    let mut generator = deterministic_generator();
+    commit_worktree_changes_with_generator(
+        &layout,
+        "heads/topic",
+        "genesis-topic",
+        WorktreePatchCommitOptions::file_level(),
+        &mut generator,
+        &test_signer(),
+    )
+    .unwrap();
+    std::fs::remove_file(layout.default_active_ref_name_path()).unwrap();
+    std::fs::write(root.join("b.txt"), b"two\n").unwrap();
+
+    let mut generator2 = deterministic_generator();
+    let err = commit_worktree_changes_with_generator(
+        &layout,
+        "heads/topic",
+        "again",
+        WorktreePatchCommitOptions::file_level(),
+        &mut generator2,
+        &test_signer(),
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().contains("metadata is missing"),
+        "unexpected error: {err}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn non_empty_wal_malformed_active_ref_metadata_fails_closed() {
+    let root = unique_temp_dir("wt-active-ref-malformed");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    std::fs::write(root.join("a.txt"), b"one\n").unwrap();
+
+    let mut generator = deterministic_generator();
+    commit_worktree_changes_with_generator(
+        &layout,
+        "heads/topic",
+        "genesis-topic",
+        WorktreePatchCommitOptions::file_level(),
+        &mut generator,
+        &test_signer(),
+    )
+    .unwrap();
+    std::fs::write(layout.default_active_ref_name_path(), b"heads//bad").unwrap();
+    std::fs::write(root.join("b.txt"), b"two\n").unwrap();
+
+    let mut generator2 = deterministic_generator();
+    let err = commit_worktree_changes_with_generator(
+        &layout,
+        "heads/topic",
+        "again",
+        WorktreePatchCommitOptions::file_level(),
+        &mut generator2,
+        &test_signer(),
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().contains("metadata is malformed"),
         "unexpected error: {err}"
     );
     let _ = std::fs::remove_dir_all(root);

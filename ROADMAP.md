@@ -5,12 +5,15 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-12 - arbitrary-span text edits (v0.5.0 candidate).** Worktree text edits are authored and
-  replayed as deterministic arbitrary spans while keeping inverse/rollback, commutation, confluence,
-  and conflict witnesses deferred. The design record is
-  `rfcs/proposed/DC-12-ARBITRARY-SPAN-TEXT-EDITS.md`.
+- **DC-13 - non-default ref genesis (v0.6.0 candidate).** First-commit genesis on explicit non-default
+  branch refs is implemented with branch-ref validation, active-WAL ref ownership, and `seal --ref`
+  publication rules. The design record is `rfcs/proposed/DC-13-NONDEFAULT-REF-GENESIS.md`.
 
 ## Last Released Increment
+
+- **DC-12 - arbitrary-span text edits (released as 0.5.0).** Worktree text edits are authored and
+  replayed as deterministic arbitrary spans while keeping inverse/rollback, commutation, confluence,
+  and conflict witnesses deferred.
 
 - **DC-11 - publication signing and minimal trust store (released as 0.4.0).** Publication objects carry
   real role-bound Ed25519 MAINTAINER signatures verified against a minimal repository-local trust
@@ -23,11 +26,11 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Next Increments
 
-1. **Genesis onto non-default refs** (with branch-creation / ref-lifecycle design).
-2. **Direct inverse/rollback for arbitrary-span text edits**, gated by round-trip vectors.
-3. **M2+ patch algebra after arbitrary spans**: commutation, confluence, conflict witnesses, and merge
+1. **Direct inverse/rollback for arbitrary-span text edits**, gated by round-trip vectors.
+2. **M2+ patch algebra after arbitrary spans**: commutation, confluence, conflict witnesses, and merge
    evidence.
-4. Conflict/inverse evidence, rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
+3. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
+   rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
    their dedicated plans and FDDs.
 
 Final feature scope remains governed by the FDDs and RFCs.

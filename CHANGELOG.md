@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.6.0 — 2026-07-03
+
+DC-13: non-default ref genesis.
+
+**Release scope.** `prikk commit --ref heads/<branch>` can explicitly create an unborn local branch as
+an independent Root history from the current worktree, and `prikk seal --ref heads/<branch>` publishes
+that branch through the existing signed `RefState` / `RefUpdate` path. This release still does **not**
+claim branch switching, branch copy/fork from an existing tip, merge-base semantics, branch deletion or
+rename, tag or remote ref creation, rollback refs, multi-commit queued active sessions, or per-ref
+active WALs.
+
+- **Explicit unborn branch genesis.** A valid unpublished `heads/*` ref with no pointer and an absent or
+  empty ref log authors against an empty baseline, so all worktree files become `CreateFile` records.
+  Pointer absence plus non-empty, malformed, unreadable, or partial ref-log history remains
+  recovery/corruption, not genesis.
+- **Active-WAL ref ownership.** The active WAL now records `.prikk/active/default/ref-name` before the
+  first WAL append. Non-empty WALs with missing, malformed, or mismatched ref metadata fail closed;
+  empty WAL metadata debris is cleaned under the active lock. Seal holds the active lock through
+  metadata validation, publication, WAL drain, and metadata removal.
+- **`seal --ref`.** Seal can publish the queued active WAL to an explicit local branch ref and reports
+  the actual advanced ref. A WAL authored for `heads/topic` cannot be sealed to `heads/main`.
+- **Publication ordering.** Ref publication now journals the signed `RefUpdate` before pointer
+  promotion under the ref lock, preserving recovery evidence for created refs.
+- **Upgrade note.** Repositories upgraded with a pre-DC-13 non-empty active WAL that lacks ref metadata
+  fail closed. Seal or clear active sessions before upgrading, or inspect the active WAL and metadata
+  before retrying.
+
 ## 0.5.0 — 2026-07-03
 
 DC-12: arbitrary-span text edits.
