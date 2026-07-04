@@ -29,7 +29,7 @@ pub fn maintainer_signature(
         object_id,
         SignerRole::Maintainer,
         signer.key_id(),
-    );
+    )?;
     let signature_bytes = signer.sign(&preimage)?;
     Ok(Signature {
         algorithm: SignatureAlgorithm::Ed25519,
@@ -48,12 +48,13 @@ pub struct Ed25519MaintainerSigner {
 
 impl Ed25519MaintainerSigner {
     /// Construct a deterministic signer from a 32-byte Ed25519 secret seed.
-    #[must_use]
-    pub fn from_seed(key_id: impl Into<String>, seed: &[u8; 32]) -> Self {
-        Self {
-            key_id: key_id.into(),
+    pub fn from_seed(key_id: impl Into<String>, seed: &[u8; 32]) -> Result<Self> {
+        let key_id = key_id.into();
+        Signature::validate_key_id(&key_id)?;
+        Ok(Self {
+            key_id,
             key_pair: Ed25519KeyPair::from_seed(seed),
-        }
+        })
     }
 }
 

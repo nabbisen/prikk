@@ -8,7 +8,7 @@ use prikk_error::{PrikkError, Result};
 
 use crate::layout::RepositoryLayout;
 use crate::refs::{RefRecoveryRepair, RefStore};
-use crate::verify::{RepositoryVerification, verify_repository};
+use crate::verify::{ActiveWalMetadataStatus, RepositoryVerification, verify_repository};
 use crate::wal::{Wal, WalRepair};
 
 /// Severity assigned to a doctor diagnostic issue.
@@ -208,6 +208,7 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                      auto-trust keys or repair signatures",
                 ));
             }
+            add_active_wal_metadata_issues(&verification, &mut issues);
             add_missing_main_ref_issue(layout, &mut issues);
             DoctorReport {
                 verification: Some(verification),
@@ -281,6 +282,42 @@ fn add_missing_main_ref_issue(layout: &RepositoryLayout, issues: &mut Vec<Doctor
             format!("heads/main ref recovery analysis failed: {error}"),
             "preserve the repository and inspect refs/logs before attempting ref repair",
         )),
+    }
+}
+
+fn add_active_wal_metadata_issues(
+    verification: &RepositoryVerification,
+    issues: &mut Vec<DoctorIssue>,
+) {
+    match &verification.active_wal_metadata_status {
+        ActiveWalMetadataStatus::MissingForNonEmptyWal => issues.push(DoctorIssue::error(
+            "PRIKK-DOCTOR-ACTIVE-REF-METADATA-MISSING",
+            "active WAL has records but active ref metadata is missing",
+            "preserve the repository and inspect the active WAL before sealing or appending",
+        )),
+        ActiveWalMetadataStatus::InvalidForNonEmptyWal { reason } => {
+            issues.push(DoctorIssue::error(
+                "PRIKK-DOCTOR-ACTIVE-REF-METADATA-MALFORMED",
+                format!("active WAL has records but active ref metadata is malformed: {reason}"),
+                "preserve the repository and inspect the active WAL before sealing or appending",
+            ));
+        }
+        ActiveWalMetadataStatus::ValidForEmptyWal { ref_name } => issues.push(
+            DoctorIssue::warning(
+                "PRIKK-DOCTOR-ACTIVE-REF-METADATA-DEBRIS",
+                format!("active WAL is empty but stale ref metadata remains for {ref_name}"),
+                "no repair is required; the next guarded active-WAL append will replace stale metadata",
+            ),
+        ),
+        ActiveWalMetadataStatus::InvalidForEmptyWal { reason } => issues.push(
+            DoctorIssue::warning(
+                "PRIKK-DOCTOR-ACTIVE-REF-METADATA-MALFORMED-DEBRIS",
+                format!("active WAL is empty but malformed ref metadata remains: {reason}"),
+                "no repair is required; the next guarded active-WAL append will replace stale metadata",
+            ),
+        ),
+        ActiveWalMetadataStatus::MissingForEmptyWal
+        | ActiveWalMetadataStatus::ValidForNonEmptyWal { .. } => {}
     }
 }
 

@@ -176,6 +176,38 @@ fn ref_store_rejects_unborn_publication_when_log_has_trailing_partial() {
 }
 
 #[test]
+fn ref_store_rejects_non_local_branch_publication() {
+    let root = unique_temp_dir("ref-non-local-branch");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let mut object_store = FileObjectStore::new(layout.clone());
+        let block = signed_empty_block_envelope();
+        let target = block.object_id();
+        assert!(object_store.write_object(&block).is_ok());
+        let store = RefStore::new(layout.clone());
+        let ref_state = signed_ref_state_envelope("tags/v1", None, target, 1);
+        let ref_state_id = ref_state.object_id();
+        let ref_update = signed_ref_update_envelope("tags/v1", None, ref_state_id, target, 1);
+        let publication = RefPublication {
+            ref_name: "tags/v1".to_string(),
+            expected_previous_ref_state_id: None,
+            ref_state,
+            ref_update,
+        };
+
+        assert!(store.publish(&publication).is_err());
+        assert!(
+            !layout
+                .object_path(ObjectType::RefState, ref_state_id)
+                .exists()
+        );
+        assert_eq!(store.read_current_ref_state_id("tags/v1"), Ok(None));
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn verify_repository_detects_missing_ref_state_object() {
     let root = unique_temp_dir("ref-missing-state");
     let layout = RepositoryLayout::init(root.clone());

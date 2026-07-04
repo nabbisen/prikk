@@ -1,13 +1,39 @@
 # Changelog
 
+## 0.8.0 — 2026-07-04
+
+DC-15: active-session integrity and verification hardening.
+
+**Release scope.** Repository health checks now report active-WAL ref metadata integrity explicitly,
+rollback-draft append re-checks the target ref tip before writing, the ref publication primitive rejects
+non-local branch refs at its own boundary, and signature key-id validation is shared by AUTHOR,
+MAINTAINER, and trust-policy paths. This release still does **not** add rollback refs, rollback
+authorization, AUTHOR trust-store enforcement, branch switching, multi-commit active sessions,
+commutation, confluence, conflict witnesses, semantic merge, or new object schemas.
+
+- **Active-WAL metadata diagnostics.** `verify` records whether active ref metadata is valid, missing,
+  malformed, or stale relative to the active WAL. Non-empty WALs with missing or malformed metadata are
+  active-session integrity issues; empty-WAL metadata debris is reported as a warning/local-debris
+  condition.
+- **Doctor diagnostics.** `doctor` surfaces non-empty-WAL metadata faults as error-severity issues and
+  empty-WAL metadata debris as warning-severity issues without adding automatic metadata repair.
+- **Rollback-draft freshness.** `rollback-draft --append-inverse` snapshots the published target tip
+  before lock-free inverse planning, then re-reads the tip under the active lock and refuses to append if
+  the ref changed during planning.
+- **Ref publication boundary.** `RefStore::publish` now validates `heads/*` local branch refs directly,
+  preventing lower-level publication of tags, remotes, rollback refs, or malformed branch names.
+- **Shared signature input validation.** `Signature::signed_bytes` is fallible and validates key ids
+  through the same ASCII/length policy used by AUTHOR signing, MAINTAINER signing, and maintainer trust
+  policy loading.
+
 ## 0.7.0 — 2026-07-03
 
 DC-14: arbitrary-span text direct inverse and rollback exposure.
 
-**Implementation candidate scope.** Supported arbitrary-span `EditText` operations now have
+**Release scope.** Supported arbitrary-span `EditText` operations now have
 deterministic direct inverses. Inverse planning, rollback preview, rollback draft append, and rollback
 draft verification can handle supported text edits by recomputing inverse anchors, duplicate index, and
-`span_id` against post-forward text. This candidate still does **not** add rollback refs, rollback
+`span_id` against post-forward text. This release still does **not** add rollback refs, rollback
 authorization, AUTHOR trust-store enforcement, worktree rollback mutation, commutation, confluence, or
 conflict witnesses.
 

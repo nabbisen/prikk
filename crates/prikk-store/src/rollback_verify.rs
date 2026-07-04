@@ -223,7 +223,7 @@ fn require_rollback_author_signature<'a>(
                 envelope.object_id(),
                 SignerRole::Author,
                 &signature.key_id,
-            );
+            )?;
             Ok(signature)
         })
 }

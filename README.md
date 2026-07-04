@@ -73,8 +73,10 @@ local branch ref can be started with `commit --ref heads/<branch>` and published
 
 ## Design Notes
 
-Current implementation drop: **0.7.0 candidate** (DC-14 — arbitrary-span text direct inverse and
-rollback exposure).
+Current released implementation: **0.8.0** (DC-15 — active-session integrity and verification
+hardening). This release makes active-WAL metadata health explicit in `verify` / `doctor`, re-checks
+rollback-draft target freshness before append, validates local branch refs at the publication boundary,
+and shares signature key-id validation across AUTHOR, MAINTAINER, and trust-policy paths.
 
 Implemented:
 

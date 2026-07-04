@@ -67,6 +67,7 @@ fn maintainer_signer() -> Ed25519MaintainerSigner {
             0xff, 0xff, 0x00, 0x00,
         ],
     )
+    .unwrap()
 }
 
 fn add_trusted_maintainer(repo: &Path) {

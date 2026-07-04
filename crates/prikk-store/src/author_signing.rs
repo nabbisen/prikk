@@ -36,7 +36,7 @@ pub fn author_signature(signer: &impl AuthorSigner, object_id: ObjectId) -> Resu
         object_id,
         SignerRole::Author,
         signer.key_id(),
-    );
+    )?;
     let signature_bytes = signer.sign(&preimage)?;
     let signature = Signature {
         algorithm: SignatureAlgorithm::Ed25519,
@@ -58,20 +58,17 @@ pub struct Ed25519AuthorSigner {
 
 impl Ed25519AuthorSigner {
     /// Construct from a non-empty key id and an Ed25519 keypair.
-    #[must_use]
-    pub fn new(key_id: impl Into<String>, keypair: Ed25519KeyPair) -> Self {
-        Self {
-            key_id: key_id.into(),
-            keypair,
-        }
+    pub fn new(key_id: impl Into<String>, keypair: Ed25519KeyPair) -> Result<Self> {
+        let key_id = key_id.into();
+        Signature::validate_key_id(&key_id)?;
+        Ok(Self { key_id, keypair })
     }
 
     /// Construct from a non-empty key id and a 32-byte secret seed (caller-provided key material).
-    #[must_use]
     pub fn from_seed(
         key_id: impl Into<String>,
         seed: &[u8; prikk_crypto::ED25519_KEY_LEN],
-    ) -> Self {
+    ) -> Result<Self> {
         Self::new(key_id, Ed25519KeyPair::from_seed(seed))
     }
 

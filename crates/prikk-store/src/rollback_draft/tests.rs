@@ -1,18 +1,73 @@
 //! Rollback draft append tests.
 
+use std::cell::Cell;
+
 use prikk_crypto::verify_ed25519;
 use prikk_object::{ObjectType, PatchPurpose, Signature, SignatureAlgorithm, SignerRole};
 
-use crate::{Ed25519AuthorSigner, RepositoryLayout, Wal, append_rollback_draft};
+use crate::{
+    AuthorSigner, Ed25519AuthorSigner, FileObjectStore, ObjectWriter, RefPublication, RefStore,
+    RepositoryLayout, Wal, append_rollback_draft,
+};
 
 use crate::test_support::{
     publish_snapshot_then_patch_block, publish_text_create_then_edit_block,
     publish_text_edit_then_unsupported_change_perm_block,
 };
-use crate::test_support::{signed_patch_envelope, unique_temp_dir};
+use crate::test_support::{
+    signed_empty_block_envelope, signed_patch_envelope, signed_ref_state_envelope,
+    signed_ref_update_envelope, unique_temp_dir,
+};
 
 fn test_signer() -> Ed25519AuthorSigner {
-    Ed25519AuthorSigner::from_seed("rollback-author-key", &[9_u8; 32])
+    Ed25519AuthorSigner::from_seed("rollback-author-key", &[9_u8; 32]).unwrap()
+}
+
+struct AdvancingSigner {
+    inner: Ed25519AuthorSigner,
+    layout: RepositoryLayout,
+    advanced: Cell<bool>,
+}
+
+impl AdvancingSigner {
+    fn new(layout: RepositoryLayout) -> Self {
+        Self {
+            inner: test_signer(),
+            layout,
+            advanced: Cell::new(false),
+        }
+    }
+}
+
+impl AuthorSigner for AdvancingSigner {
+    fn key_id(&self) -> &str {
+        self.inner.key_id()
+    }
+
+    fn sign(&self, preimage: &[u8]) -> prikk_error::Result<Vec<u8>> {
+        if !self.advanced.replace(true) {
+            advance_main_ref(&self.layout)?;
+        }
+        self.inner.sign(preimage)
+    }
+}
+
+fn advance_main_ref(layout: &RepositoryLayout) -> prikk_error::Result<()> {
+    let mut object_store = FileObjectStore::new(layout.clone());
+    let block = signed_empty_block_envelope();
+    let target = object_store.write_object(&block)?;
+    let store = RefStore::new(layout.clone());
+    let previous = store.read_current_ref_state_id("heads/main")?;
+    let ref_state = signed_ref_state_envelope("heads/main", previous, target, 3);
+    let ref_state_id = ref_state.object_id();
+    let ref_update = signed_ref_update_envelope("heads/main", previous, ref_state_id, target, 3);
+    store.publish(&RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: previous,
+        ref_state,
+        ref_update,
+    })?;
+    Ok(())
 }
 
 #[test]
@@ -64,7 +119,8 @@ fn rollback_draft_appends_inverse_patch_to_empty_active_wal() {
                             first.envelope.object_id(),
                             SignerRole::Author,
                             &signature.key_id,
-                        );
+                        )
+                        .unwrap();
                         assert!(
                             verify_ed25519(
                                 &signer.public_key_bytes(),
@@ -115,6 +171,29 @@ fn rollback_draft_appends_arbitrary_span_text_inverse() {
                     );
                 }
             }
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn rollback_draft_rejects_ref_change_between_planning_and_append() {
+    let root = unique_temp_dir("rollback-draft-stale-tip");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let result = publish_snapshot_then_patch_block(&layout);
+        assert!(result.is_ok());
+        let signer = AdvancingSigner::new(layout.clone());
+        let report = append_rollback_draft(&layout, "heads/main", "rollback stale tip", &signer);
+        assert!(report.is_err());
+        if let Err(error) = report {
+            assert!(error.to_string().contains("target ref changed"));
+        }
+        let replay = Wal::new(layout.default_queue_wal_path()).replay();
+        assert!(replay.is_ok());
+        if let Ok(replay) = replay {
+            assert_eq!(replay.records.len(), 0);
         }
     }
     let _ = std::fs::remove_dir_all(root);

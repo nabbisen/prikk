@@ -26,7 +26,7 @@ use crate::{
 
 /// Deterministic Ed25519 AUTHOR signer for reproducible authoring (real signing, fixed seed).
 fn test_signer() -> Ed25519AuthorSigner {
-    Ed25519AuthorSigner::from_seed("test-author-key", &[7_u8; 32])
+    Ed25519AuthorSigner::from_seed("test-author-key", &[7_u8; 32]).unwrap()
 }
 
 /// Distinct nonzero scripted entropy candidates, disjoint from the baseline node ids ([1;32], …).
@@ -941,7 +941,8 @@ fn authored_patch_carries_verifiable_author_signature() {
         report.patch_id,
         SignerRole::Author,
         &sig.key_id,
-    );
+    )
+    .unwrap();
     prikk_crypto::verify_ed25519(&public_key, &good, &sig.signature_bytes)
         .expect("the authored AUTHOR signature must verify against the signer's public key");
 
@@ -953,7 +954,8 @@ fn authored_patch_carries_verifiable_author_signature() {
         other_id,
         SignerRole::Author,
         &sig.key_id,
-    );
+    )
+    .unwrap();
     assert!(prikk_crypto::verify_ed25519(&public_key, &bad_id, &sig.signature_bytes).is_err());
 
     let bad_role = prikk_object::Signature::signed_bytes(
@@ -962,7 +964,8 @@ fn authored_patch_carries_verifiable_author_signature() {
         report.patch_id,
         SignerRole::Maintainer,
         &sig.key_id,
-    );
+    )
+    .unwrap();
     assert!(prikk_crypto::verify_ed25519(&public_key, &bad_role, &sig.signature_bytes).is_err());
 
     let bad_key = prikk_object::Signature::signed_bytes(
@@ -971,7 +974,8 @@ fn authored_patch_carries_verifiable_author_signature() {
         report.patch_id,
         SignerRole::Author,
         "someone-else",
-    );
+    )
+    .unwrap();
     assert!(prikk_crypto::verify_ed25519(&public_key, &bad_key, &sig.signature_bytes).is_err());
     let _ = std::fs::remove_dir_all(root);
 }

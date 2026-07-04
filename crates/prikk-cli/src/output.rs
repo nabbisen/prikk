@@ -1,10 +1,10 @@
 //! CLI output helpers.
 
 use prikk_store::{
-    CheckoutMaterialization, CheckoutPlan, DoctorSeverity, PatchDeletionPlan, PatchInversePlan,
-    PatchMaterializationReport, PatchReplayPlan, RefHistory, RepositoryLayout, RollbackDraftReport,
-    RollbackDraftVerification, RollbackPreviewPlan, SnapshotCheckoutPlan,
-    SnapshotMaterializationReport, WorktreeChangeKind, WorktreeStatusReport,
+    ActiveWalMetadataStatus, CheckoutMaterialization, CheckoutPlan, DoctorSeverity,
+    PatchDeletionPlan, PatchInversePlan, PatchMaterializationReport, PatchReplayPlan, RefHistory,
+    RepositoryLayout, RollbackDraftReport, RollbackDraftVerification, RollbackPreviewPlan,
+    SnapshotCheckoutPlan, SnapshotMaterializationReport, WorktreeChangeKind, WorktreeStatusReport,
 };
 
 /// Print a checkout plan.
@@ -440,6 +440,34 @@ pub(crate) fn print_verify_report(
     );
     if report.has_trailing_partial_wal() {
         println!("warning: active WAL contains an incomplete trailing record");
+    }
+    print_active_wal_metadata_status(&report.active_wal_metadata_status);
+}
+
+fn print_active_wal_metadata_status(status: &ActiveWalMetadataStatus) {
+    match status {
+        ActiveWalMetadataStatus::MissingForEmptyWal => {
+            println!("active WAL metadata: absent for empty WAL");
+        }
+        ActiveWalMetadataStatus::ValidForEmptyWal { ref_name } => {
+            println!("active WAL metadata: stale local metadata for empty WAL ({ref_name})");
+            println!("warning: active WAL ref metadata exists but the active WAL is empty");
+        }
+        ActiveWalMetadataStatus::InvalidForEmptyWal { reason } => {
+            println!("active WAL metadata: malformed local metadata for empty WAL ({reason})");
+            println!("warning: active WAL ref metadata exists but the active WAL is empty");
+        }
+        ActiveWalMetadataStatus::ValidForNonEmptyWal { ref_name } => {
+            println!("active WAL metadata: valid for {ref_name}");
+        }
+        ActiveWalMetadataStatus::MissingForNonEmptyWal => {
+            println!("active WAL metadata: missing for non-empty WAL");
+            println!("error: active WAL contains records but has no ref metadata");
+        }
+        ActiveWalMetadataStatus::InvalidForNonEmptyWal { reason } => {
+            println!("active WAL metadata: malformed for non-empty WAL ({reason})");
+            println!("error: active WAL contains records but has malformed ref metadata");
+        }
     }
 }
 

@@ -103,7 +103,9 @@ pub use trust::{
     MaintainerTrustPolicy, PublicationTrustIssue, add_trusted_maintainer,
     load_maintainer_trust_policy, verify_signer_trusted, verify_trusted_publication_envelope,
 };
-pub use verify::{ObjectVerification, RepositoryVerification, verify_repository};
+pub use verify::{
+    ActiveWalMetadataStatus, ObjectVerification, RepositoryVerification, verify_repository,
+};
 pub use wal::{Wal, WalRecord, WalRepair, WalReplay};
 pub use worktree::{SnapshotMaterializationReport, materialize_snapshot_checkout};
 pub use worktree_patch::{

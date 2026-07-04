@@ -7,6 +7,9 @@ use crate::{CanonicalEncode, CanonicalWriter, ObjectId, ObjectType};
 /// Signature domain string.
 pub const SIGNATURE_DOMAIN: &[u8] = b"prikk.sig.v1";
 
+/// Maximum byte length for a role-bound signature key id.
+pub const SIGNATURE_KEY_ID_MAX_LEN: usize = 128;
+
 /// Supported signature algorithms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u16)]
@@ -84,33 +87,57 @@ pub struct Signature {
 }
 
 impl Signature {
+    /// Validate a key id used in role-bound signature preimages.
+    pub fn validate_key_id(key_id: &str) -> Result<()> {
+        if key_id.is_empty() {
+            return Err(PrikkError::InvalidSignature(
+                "signature key_id must not be empty".to_string(),
+            ));
+        }
+        if key_id.len() > SIGNATURE_KEY_ID_MAX_LEN {
+            return Err(PrikkError::InvalidSignature(format!(
+                "signature key_id must be at most {SIGNATURE_KEY_ID_MAX_LEN} bytes"
+            )));
+        }
+        if !key_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        {
+            return Err(PrikkError::InvalidSignature(
+                "signature key_id must contain only ASCII letters, digits, '-' or '_'".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Build the bytes to sign for an object ID and role.
-    #[must_use]
     pub fn signed_bytes(
         algorithm: SignatureAlgorithm,
         object_type: ObjectType,
         object_id: ObjectId,
         signer_role: SignerRole,
         key_id: &str,
-    ) -> Vec<u8> {
+    ) -> Result<Vec<u8>> {
+        Self::validate_key_id(key_id)?;
+        let key_id_len = u16::try_from(key_id.len()).map_err(|_| {
+            PrikkError::InvalidSignature(
+                "signature key_id is too long for the signature preimage length field".to_string(),
+            )
+        })?;
         let mut out = Vec::with_capacity(SIGNATURE_DOMAIN.len() + 2 + 32 + 2 + 2 + key_id.len());
         out.extend_from_slice(SIGNATURE_DOMAIN);
         out.extend_from_slice(&algorithm.code().to_be_bytes());
         out.extend_from_slice(&object_type.code().to_be_bytes());
         out.extend_from_slice(object_id.as_bytes());
         out.extend_from_slice(&signer_role.code().to_be_bytes());
-        out.extend_from_slice(&(key_id.len() as u16).to_be_bytes());
+        out.extend_from_slice(&key_id_len.to_be_bytes());
         out.extend_from_slice(key_id.as_bytes());
-        out
+        Ok(out)
     }
 
     /// Validate local structural constraints.
     pub fn validate(&self) -> Result<()> {
-        if self.key_id.is_empty() {
-            return Err(PrikkError::InvalidSignature(
-                "signature key_id must not be empty".to_string(),
-            ));
-        }
+        Self::validate_key_id(&self.key_id)?;
         if self.signature_bytes.is_empty() {
             return Err(PrikkError::InvalidSignature(
                 "signature bytes must not be empty".to_string(),

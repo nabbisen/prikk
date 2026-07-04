@@ -51,7 +51,7 @@ fn signer_trust_binding_rejects_seed_public_key_mismatch() {
         let signing_seed = [8_u8; 32];
         let public_key = public_key_hex(&trusted_seed);
         assert!(add_trusted_maintainer(&layout, "maintainer", &public_key).is_ok());
-        let signer = Ed25519MaintainerSigner::from_seed("maintainer", &signing_seed);
+        let signer = Ed25519MaintainerSigner::from_seed("maintainer", &signing_seed).unwrap();
         assert!(verify_signer_trusted(&layout, &signer).is_err());
     }
     let _ = std::fs::remove_dir_all(root);

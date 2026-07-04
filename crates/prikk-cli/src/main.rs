@@ -312,7 +312,9 @@ fn run_verify(path: Option<String>) -> std::result::Result<(), String> {
     let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
     let report = verify_repository(&layout).map_err(|err| err.to_string())?;
     print_verify_report(&layout, &report);
-    if report.has_publication_trust_issues() {
+    if report.has_active_wal_metadata_integrity_issue() {
+        Err("repository has active-WAL metadata integrity issues".to_string())
+    } else if report.has_publication_trust_issues() {
         Err("repository has publication-trust issues".to_string())
     } else {
         Ok(())
@@ -380,7 +382,7 @@ fn author_signer_from_env() -> Result<Ed25519AuthorSigner, String> {
             .to_string()
     })?;
     let seed = decode_seed_hex(&seed_hex, "PRIKK_AUTHOR_SEED")?;
-    Ok(Ed25519AuthorSigner::from_seed(key_id, &seed))
+    Ed25519AuthorSigner::from_seed(key_id, &seed).map_err(|err| err.to_string())
 }
 
 /// Build the MAINTAINER signer from caller-supplied key material in the environment, failing closed
@@ -398,7 +400,7 @@ fn maintainer_signer_from_env() -> Result<Ed25519MaintainerSigner, String> {
             .to_string()
     })?;
     let seed = decode_seed_hex(&seed_hex, "PRIKK_MAINTAINER_SEED")?;
-    Ok(Ed25519MaintainerSigner::from_seed(key_id, &seed))
+    Ed25519MaintainerSigner::from_seed(key_id, &seed).map_err(|err| err.to_string())
 }
 
 /// Decode exactly 64 hex characters into a 32-byte Ed25519 secret seed.

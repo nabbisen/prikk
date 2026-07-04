@@ -1,11 +1,11 @@
 # Prikk Implementation Status
 
-Version: 0.7.0 candidate (DC-14 — arbitrary-span text direct inverse and rollback exposure)
+Version: 0.8.0 released (DC-15 — active-session integrity and verification hardening)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (0.7.0 candidate)
+## Current State (0.8.0 released)
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** local
   branch baseline reconstructed from authoritative replay — or, on a valid unborn `heads/*` ref, a
@@ -20,10 +20,12 @@ Version: 0.7.0 candidate (DC-14 — arbitrary-span text direct inverse and rollb
   closed and points at seal/doctor rather than re-authoring.
 - Active-WAL ref ownership metadata (`.prikk/active/default/ref-name`) is written before the first WAL
   record and removed after successful seal. Non-empty active WALs with missing, malformed, or mismatched
-  ref metadata fail closed, preventing cross-ref publication. Seal refuses unborn Root publication when
-  the ref pointer is missing but ref-log history or a partial ref log exists, and retrying a seal after
-  the current WAL has already become the published tip drains the active WAL/ref metadata instead of
-  appending a duplicate ref update. The active-WAL model remains single-commit-per-active-WAL.
+  ref metadata fail closed, preventing cross-ref publication; `verify` and `doctor` now surface missing
+  or malformed metadata on a non-empty WAL as active-session integrity errors, while empty-WAL metadata
+  debris is warning/local-debris state. Seal refuses unborn Root publication when the ref pointer is
+  missing but ref-log history or a partial ref log exists, and retrying a seal after the current WAL has
+  already become the published tip drains the active WAL/ref metadata instead of appending a duplicate
+  ref update. The active-WAL model remains single-commit-per-active-WAL.
 - Role-bound Ed25519 AUTHOR signing for production Patch authoring paths through an injected
   `AuthorSigner` (`Ed25519AuthorSigner`, key material via `PRIKK_AUTHOR_KEY_ID` /
   `PRIKK_AUTHOR_SEED`). The broken `commit --allow-empty` scaffold was removed (R1R). DC-10 removes the
@@ -34,15 +36,19 @@ Version: 0.7.0 candidate (DC-14 — arbitrary-span text direct inverse and rollb
   `PRIKK_MAINTAINER_SEED`). `seal` validates the signer against the local
   `.prikk/trust/keys/maintainer/` and `.prikk/trust/policy.toml` policy before publication, signs
   Block/RefState/RefUpdate envelopes with real MAINTAINER signatures, and writes the real MAINTAINER
-  key id into RefUpdate payload identity. Verification reports publication-trust failures separately
-  from structural corruption.
+  key id into RefUpdate payload identity. AUTHOR, MAINTAINER, and trust-policy key ids share one
+  role-bound signature key-id validator, and signature preimage construction is fallible on the shared
+  sign/verify path. Verification reports publication-trust failures separately from structural
+  corruption.
 - Supported patch replay/materialization and direct inverse planning apply deterministic arbitrary-span
   `EditText` through shared localization, splice, and direct-inverse primitives. Rollback preview,
   rollback draft append, and rollback draft verification expose that supported text-edit inverse path
   without adding rollback refs, rollback authorization, or worktree rollback mutation. Rollback-draft
-  AUTHOR verification remains structural at this layer: it rejects missing, legacy marker, wrong-role,
-  wrong-algorithm, and malformed Ed25519 records, including signatures whose byte payload is not 64
-  bytes, without claiming AUTHOR trust-store enforcement.
+  append snapshots the published target tip before lock-free inverse planning and re-reads it under the
+  active lock before appending, rejecting stale plans if the ref changed during derivation.
+  Rollback-draft AUTHOR verification remains structural at this layer: it rejects missing, legacy
+  marker, wrong-role, wrong-algorithm, and malformed Ed25519 records, including signatures whose byte
+  payload is not 64 bytes, without claiming AUTHOR trust-store enforcement.
 
 ## Implemented
 
@@ -60,8 +66,11 @@ Version: 0.7.0 candidate (DC-14 — arbitrary-span text direct inverse and rollb
 - RefState object publication primitive.
 - Flat hashed ref pointer paths under `refs/by-id/`.
 - Inline signed RefUpdate log append/replay.
-- Read-only repository verification for persisted object files, sealed block references, sealed rollback Patch classification, ref pointers, ref logs, active WAL records, and publication-trust checks.
-- Doctor diagnostics that convert verification outcomes into actionable issue codes.
+- Read-only repository verification for persisted object files, sealed block references, sealed
+  rollback Patch classification, ref pointers, ref logs, active WAL records, active-WAL metadata health,
+  and publication-trust checks.
+- Doctor diagnostics that convert verification outcomes, publication-trust failures, and active-WAL
+  metadata health into actionable issue codes.
 - ActiveSession append API that holds `active.lock` while writing the active WAL.
 - Node-addressed worktree patch authoring (`prikk commit`) with role-bound Ed25519 AUTHOR signing; see Current State above.
 - Local no-audit seal scaffold that persists WAL patches, creates a Block, publishes `heads/main` or an
@@ -91,22 +100,6 @@ Version: 0.7.0 candidate (DC-14 — arbitrary-span text direct inverse and rollb
 - Audit publication policy.
 - Remote sync.
 
-## Active Implementation Candidate
-
-DC-14 is implemented as a v0.7.0 candidate after design re-review v1. The implementation keeps the
-existing `EditText` wire shape, derives inverse text edits by recomputing anchors and `span_id` against
-post-forward text, re-localizes the inverse to the exact intended range, and exposes the result through
-existing inverse-plan, rollback-preview, rollback-draft append, and rollback-draft verify flows. It
-explicitly preserves the DC-10 rollback-draft marker replacement: rollback-draft identity is
-`PatchPurpose::RollbackDraft`, and rollback-draft envelopes carry real role-bound AUTHOR signatures.
-It does not add rollback refs, rollback authorization, AUTHOR trust-store enforcement, worktree
-rollback mutation, commutation, confluence, conflict witnesses, or semantic merge.
-
-Deep-review repairs for this candidate also harden seal publication around missing ref pointers with
-existing log evidence, make already-published WAL retry cleanup idempotent, and tighten rollback-draft
-AUTHOR signature structure checks to the Ed25519 64-byte boundary without expanding into AUTHOR trust
-policy.
-
 ## Conservative Repairs Added Through PR-014
 
 - `prikk doctor --repair-wal-tail` truncates only incomplete trailing active-WAL bytes after verification confirms that all preceding records are valid.
@@ -115,6 +108,13 @@ policy.
 - Missing-object repair, checksum-mismatch repair, object quarantine, GC, and malformed-log repair remain deferred.
 
 ## Gate Discipline
+
+DC-15 stays within the approved hardening boundary: repository verification and doctor report
+active-WAL metadata health, rollback-draft append re-checks the target ref tip under the active lock,
+ref publication validates local branch refs at its lower-level boundary, and signature key-id/preimage
+validation is shared across AUTHOR, MAINTAINER, and trust-policy paths. It does not add rollback refs,
+rollback authorization, AUTHOR trust-store enforcement, branch switching, multi-commit active sessions,
+commutation, confluence, conflict witnesses, semantic merge, or new object schema.
 
 DC-11 stays within the approved boundary: production publication objects (Block, RefState, RefUpdate)
 carry real role-bound Ed25519 MAINTAINER signatures verified against a repository-local trust policy.

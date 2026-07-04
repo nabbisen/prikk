@@ -5,12 +5,20 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-14 - arbitrary-span text direct inverse and rollback exposure (v0.7.0 implementation
-  candidate).** The existing inverse/rollback surfaces support arbitrary-span `EditText` by
-  recomputing direct inverse identity against the post-forward text. The design record is
-  `rfcs/proposed/DC-14-ARBITRARY-SPAN-TEXT-INVERSE-ROLLBACK.md`.
+- **M2+ patch algebra after foundation hardening.** Next design work should tackle commutation,
+  confluence, conflict witnesses, and merge evidence while keeping rollback refs, authorization, branch
+  switching, key lifecycle, and sync behind their dedicated plans.
 
 ## Last Released Increment
+
+- **DC-15 - active-session integrity and verification hardening (released as 0.8.0).** `verify` and
+  `doctor` report active-WAL metadata integrity explicitly, rollback-draft append re-checks target tip
+  freshness under the active lock, ref publication validates `heads/*` at the lower-level boundary, and
+  signature key-id validation is shared across AUTHOR, MAINTAINER, and trust-policy paths.
+
+- **DC-14 - arbitrary-span text direct inverse and rollback exposure (released as 0.7.0).** The existing
+  inverse/rollback surfaces support arbitrary-span `EditText` by recomputing direct inverse identity
+  against the post-forward text.
 
 - **DC-13 - non-default ref genesis (released as 0.6.0).** First-commit genesis on explicit
   non-default branch refs is implemented with branch-ref validation, active-WAL ref ownership, and
@@ -31,8 +39,7 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Next Increments
 
-1. **M2+ patch algebra after arbitrary spans**: commutation, confluence, conflict witnesses, and merge
-   evidence.
+1. **M2+ patch algebra**: commutation, confluence, conflict witnesses, and merge evidence.
 2. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
    rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
    their dedicated plans and FDDs.

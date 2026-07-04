@@ -19,7 +19,7 @@ use crate::test_support::{publish_snapshot_then_patch_block, publish_text_create
 use crate::{RefPublication, RefStore};
 
 fn test_signer() -> Ed25519AuthorSigner {
-    Ed25519AuthorSigner::from_seed("rollback-author-key", &[9_u8; 32])
+    Ed25519AuthorSigner::from_seed("rollback-author-key", &[9_u8; 32]).unwrap()
 }
 
 #[test]

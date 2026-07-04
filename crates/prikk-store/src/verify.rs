@@ -11,6 +11,7 @@ use std::str::FromStr;
 use prikk_error::{PrikkError, Result};
 use prikk_object::{BlockPayload, ObjectEnvelope, ObjectId, ObjectType};
 
+use crate::active::{ActiveRefMetadata, read_active_ref_metadata};
 use crate::file_codec::decode_envelope_file;
 use crate::layout::{RepositoryLayout, persisted_object_types};
 use crate::object_store::FileObjectStore;
@@ -62,6 +63,8 @@ pub struct RepositoryVerification {
     pub publication_trust_issues: Vec<PublicationTrustIssue>,
     /// Number of trailing bytes in the active WAL that look like an incomplete final record.
     pub trailing_partial_wal_bytes: usize,
+    /// Active-WAL ref metadata status relative to the replayed WAL.
+    pub active_wal_metadata_status: ActiveWalMetadataStatus,
 }
 
 impl RepositoryVerification {
@@ -76,6 +79,67 @@ impl RepositoryVerification {
     pub fn has_publication_trust_issues(&self) -> bool {
         !self.publication_trust_issues.is_empty()
     }
+
+    /// Return true when a non-empty active WAL lacks valid ownership metadata.
+    #[must_use]
+    pub const fn has_active_wal_metadata_integrity_issue(&self) -> bool {
+        self.active_wal_metadata_status.has_integrity_issue()
+    }
+
+    /// Return true when an empty active WAL has stale local metadata debris.
+    #[must_use]
+    pub const fn has_active_wal_metadata_warning(&self) -> bool {
+        self.active_wal_metadata_status.has_local_debris_warning()
+    }
+}
+
+/// Active-WAL ref metadata status derived during repository verification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ActiveWalMetadataStatus {
+    /// Empty active WAL and no metadata.
+    MissingForEmptyWal,
+    /// Empty active WAL with stale but valid local metadata.
+    ValidForEmptyWal {
+        /// Ref recorded in the stale metadata.
+        ref_name: String,
+    },
+    /// Empty active WAL with malformed local metadata.
+    InvalidForEmptyWal {
+        /// Parse or validation failure.
+        reason: String,
+    },
+    /// Non-empty active WAL with valid ownership metadata.
+    ValidForNonEmptyWal {
+        /// Ref recorded in the active metadata.
+        ref_name: String,
+    },
+    /// Non-empty active WAL missing required ownership metadata.
+    MissingForNonEmptyWal,
+    /// Non-empty active WAL with malformed ownership metadata.
+    InvalidForNonEmptyWal {
+        /// Parse or validation failure.
+        reason: String,
+    },
+}
+
+impl ActiveWalMetadataStatus {
+    /// Return true when the status represents a repository-integrity issue.
+    #[must_use]
+    pub const fn has_integrity_issue(&self) -> bool {
+        matches!(
+            self,
+            Self::MissingForNonEmptyWal | Self::InvalidForNonEmptyWal { .. }
+        )
+    }
+
+    /// Return true when the status represents local debris on an otherwise empty active WAL.
+    #[must_use]
+    pub const fn has_local_debris_warning(&self) -> bool {
+        matches!(
+            self,
+            Self::ValidForEmptyWal { .. } | Self::InvalidForEmptyWal { .. }
+        )
+    }
 }
 
 /// Verify a repository layout without modifying it.
@@ -89,6 +153,8 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
     let replay = wal.replay()?;
     let persisted_wal_patches = verify_wal_persistence(&object_store, &replay.records)?;
     let checked_rollback_draft_records = verify_rollback_draft_wal_records(&replay.records)?;
+    let active_wal_metadata_status =
+        classify_active_wal_metadata(layout, replay.records.is_empty())?;
     Ok(RepositoryVerification {
         checked_objects: object_summary.object_count,
         checked_wal_records: replay.records.len(),
@@ -102,7 +168,30 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
         checked_publication_trust_records: trust_verifier.checked_records,
         publication_trust_issues: trust_verifier.issues,
         trailing_partial_wal_bytes: replay.trailing_partial_bytes,
+        active_wal_metadata_status,
     })
+}
+
+fn classify_active_wal_metadata(
+    layout: &RepositoryLayout,
+    wal_is_empty: bool,
+) -> Result<ActiveWalMetadataStatus> {
+    match (wal_is_empty, read_active_ref_metadata(layout)?) {
+        (true, ActiveRefMetadata::Missing) => Ok(ActiveWalMetadataStatus::MissingForEmptyWal),
+        (true, ActiveRefMetadata::Valid(ref_name)) => {
+            Ok(ActiveWalMetadataStatus::ValidForEmptyWal { ref_name })
+        }
+        (true, ActiveRefMetadata::Invalid(reason)) => {
+            Ok(ActiveWalMetadataStatus::InvalidForEmptyWal { reason })
+        }
+        (false, ActiveRefMetadata::Missing) => Ok(ActiveWalMetadataStatus::MissingForNonEmptyWal),
+        (false, ActiveRefMetadata::Valid(ref_name)) => {
+            Ok(ActiveWalMetadataStatus::ValidForNonEmptyWal { ref_name })
+        }
+        (false, ActiveRefMetadata::Invalid(reason)) => {
+            Ok(ActiveWalMetadataStatus::InvalidForNonEmptyWal { reason })
+        }
+    }
 }
 
 struct PublicationTrustVerifier<'a> {

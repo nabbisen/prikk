@@ -11,6 +11,7 @@ use crate::{
     DoctorRepairOptions, DoctorSeverity, Ed25519MaintainerSigner, FileObjectStore,
     MaintainerSigner, ObjectWriter, RepositoryLayout, Wal, add_trusted_maintainer,
     doctor_repository, maintainer_signature as real_maintainer_signature, repair_repository,
+    write_active_ref_metadata,
 };
 
 use crate::test_support::{
@@ -92,6 +93,7 @@ fn doctor_repair_truncates_only_trailing_partial_wal() {
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
         let wal = Wal::new(layout.default_queue_wal_path());
+        assert!(write_active_ref_metadata(&layout, "heads/main").is_ok());
         assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
         let mut file = std::fs::OpenOptions::new()
             .append(true)
@@ -139,13 +141,57 @@ fn doctor_repair_truncates_only_trailing_partial_wal() {
 }
 
 #[test]
+fn doctor_reports_non_empty_active_wal_missing_metadata_as_error() {
+    let root = unique_temp_dir("doctor-active-metadata-missing");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let wal = Wal::new(layout.default_queue_wal_path());
+        assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
+
+        let report = doctor_repository(&layout);
+        assert!(!report.is_healthy());
+        assert_eq!(report.count_by_severity(DoctorSeverity::Error), 1);
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| { issue.code == "PRIKK-DOCTOR-ACTIVE-REF-METADATA-MISSING" })
+        );
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn doctor_reports_empty_active_metadata_debris_as_warning() {
+    let root = unique_temp_dir("doctor-active-metadata-debris");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        assert!(std::fs::write(layout.default_active_ref_name_path(), b"tags/v1").is_ok());
+
+        let report = doctor_repository(&layout);
+        assert!(report.is_healthy());
+        assert_eq!(report.count_by_severity(DoctorSeverity::Warning), 1);
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| { issue.code == "PRIKK-DOCTOR-ACTIVE-REF-METADATA-MALFORMED-DEBRIS" })
+        );
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn doctor_repair_reconstructs_missing_main_ref_pointer() {
     let root = unique_temp_dir("doctor-repair-main-ref");
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
         let maintainer_seed = [0x44_u8; 32];
-        let maintainer = Ed25519MaintainerSigner::from_seed("doctor-maintainer", &maintainer_seed);
+        let maintainer =
+            Ed25519MaintainerSigner::from_seed("doctor-maintainer", &maintainer_seed).unwrap();
         let public_key = maintainer
             .public_key_bytes()
             .iter()

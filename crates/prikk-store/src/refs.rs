@@ -310,11 +310,7 @@ fn verified_ref_state_payload(
 }
 
 pub(crate) fn validate_publication(publication: &RefPublication) -> Result<()> {
-    if publication.ref_name.is_empty() {
-        return Err(PrikkError::InvalidName(
-            "ref name must not be empty".to_string(),
-        ));
-    }
+    validate_local_branch_ref(&publication.ref_name)?;
     require_signed_type(&publication.ref_state, ObjectType::RefState)?;
     require_signed_type(&publication.ref_update, ObjectType::RefUpdate)?;
     Ok(())

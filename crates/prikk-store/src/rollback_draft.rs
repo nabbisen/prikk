@@ -7,13 +7,17 @@
 //! active-session lock. The existing seal path is still responsible for publishing refs later.
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, PatchPurpose};
+use prikk_object::{
+    CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, PatchPurpose, RefStatePayload,
+};
 
 use crate::active::prepare_empty_active_ref_for_append;
 use crate::author_signing::{AuthorSigner, author_signature};
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
+use crate::object_store::FileObjectStore;
 use crate::patch_inverse::{PatchInverseOperationSummary, prepare_patch_inverse_plan};
+use crate::refs::RefStore;
 use crate::rollback_preview::{RollbackPreviewChange, prepare_rollback_preview};
 use crate::wal::Wal;
 use crate::{
@@ -65,6 +69,12 @@ pub struct RollbackDraftReport {
     pub preview_changes: Vec<RollbackPreviewChange>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RollbackTargetTip {
+    ref_state_id: ObjectId,
+    target_block_id: ObjectId,
+}
+
 /// Append a signed inverse Patch draft to an empty active WAL.
 ///
 /// This function is intentionally conservative: it refuses an empty message, unpublished refs,
@@ -83,11 +93,18 @@ pub fn append_rollback_draft(
         ));
     }
 
+    let planned_tip = read_target_tip(layout, &canonical_ref)?;
     let mut inverse = prepare_patch_inverse_plan(layout, &canonical_ref)?;
     if inverse.inverse_operation_count == 0 {
         return Err(PrikkError::InvalidName(
             "rollback draft has no supported inverse operations to append".to_string(),
         ));
+    }
+    if inverse.target_block_id != planned_tip.target_block_id {
+        return Err(PrikkError::Integrity(format!(
+            "rollback inverse target {} does not match current ref target {}",
+            inverse.target_block_id, planned_tip.target_block_id
+        )));
     }
     let preview = prepare_rollback_preview(layout, &canonical_ref)?;
     if preview.target_block_id != inverse.target_block_id {
@@ -118,6 +135,12 @@ pub fn append_rollback_draft(
             "rollback-draft requires an empty active WAL".to_string(),
         ));
     }
+    let current_tip = read_target_tip(layout, &canonical_ref)?;
+    if current_tip != planned_tip {
+        return Err(PrikkError::LockConflict(
+            "rollback-draft target ref changed during planning; retry rollback-draft".to_string(),
+        ));
+    }
     match read_active_ref_metadata(layout)? {
         ActiveRefMetadata::Missing => {}
         ActiveRefMetadata::Valid(_) | ActiveRefMetadata::Invalid(_) => {
@@ -142,6 +165,32 @@ pub fn append_rollback_draft(
         would_replace_files: preview.would_replace_files,
         operations: inverse.operations,
         preview_changes: preview.changes,
+    })
+}
+
+fn read_target_tip(layout: &RepositoryLayout, ref_name: &str) -> Result<RollbackTargetTip> {
+    let ref_store = RefStore::new(layout.clone());
+    let ref_state_id = ref_store
+        .read_current_ref_state_id(ref_name)?
+        .ok_or_else(|| PrikkError::InvalidName(format!("ref {ref_name} is not published")))?;
+    let object_store = FileObjectStore::new(layout.clone());
+    let envelope = object_store
+        .read_typed(ref_state_id, ObjectType::RefState)?
+        .ok_or_else(|| {
+            PrikkError::Integrity(format!(
+                "published ref {ref_name} points to missing RefState"
+            ))
+        })?;
+    let payload = RefStatePayload::decode_canonical(&envelope.canonical_payload)?;
+    if payload.ref_name != ref_name {
+        return Err(PrikkError::Integrity(format!(
+            "published RefState name mismatch: expected {ref_name}, got {}",
+            payload.ref_name
+        )));
+    }
+    Ok(RollbackTargetTip {
+        ref_state_id,
+        target_block_id: payload.target_object_id,
     })
 }
 

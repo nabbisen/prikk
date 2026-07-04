@@ -49,7 +49,7 @@ pub fn add_trusted_maintainer(
     key_id: &str,
     public_key_hex: &str,
 ) -> Result<MaintainerTrustPolicy> {
-    validate_key_id(key_id)?;
+    Signature::validate_key_id(key_id)?;
     let public_key = decode_public_key_hex(public_key_hex)?;
     fs::create_dir_all(layout.maintainer_trust_keys_dir())?;
     let key_path = layout.maintainer_trust_key_path(key_id)?;
@@ -75,7 +75,7 @@ pub fn load_maintainer_trust_policy(layout: &RepositoryLayout) -> Result<Maintai
         ))
     })?;
     let key_id = parse_policy_key_id(&policy_text)?;
-    validate_key_id(&key_id)?;
+    Signature::validate_key_id(&key_id)?;
     let key_path = layout.maintainer_trust_key_path(&key_id)?;
     let public_key_text = fs::read_to_string(&key_path).map_err(|err| {
         PrikkError::Integrity(format!(
@@ -158,7 +158,7 @@ fn verify_trusted_signature(
         object_id,
         SignerRole::Maintainer,
         &signature.key_id,
-    );
+    )?;
     verify_ed25519(&policy.public_key, &preimage, &signature.signature_bytes)
 }
 
@@ -208,30 +208,8 @@ fn parse_policy_key_id(policy_text: &str) -> Result<String> {
             "trust policy keys line must contain exactly one key".to_string(),
         ));
     };
-    validate_key_id(key_id)?;
+    Signature::validate_key_id(key_id)?;
     Ok(key_id.to_string())
-}
-
-fn validate_key_id(key_id: &str) -> Result<()> {
-    if key_id.is_empty() {
-        return Err(PrikkError::InvalidName(
-            "maintainer key id must not be empty".to_string(),
-        ));
-    }
-    if key_id.len() > 128 {
-        return Err(PrikkError::InvalidName(
-            "maintainer key id must be at most 128 bytes".to_string(),
-        ));
-    }
-    if !key_id
-        .bytes()
-        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
-    {
-        return Err(PrikkError::InvalidName(
-            "maintainer key id must contain only ASCII letters, digits, '-' or '_'".to_string(),
-        ));
-    }
-    Ok(())
 }
 
 fn decode_public_key_hex(hex: &str) -> Result<[u8; ED25519_KEY_LEN]> {
