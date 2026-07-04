@@ -1,7 +1,7 @@
 # DC-11 FDD-02 Update — Minimal Trust Store Layout
 
 Status: Reviewed DC-11 update  
-Related RFC: `../../proposed/DC-11-MAINTAINER-TRUST-STORE.md`  
+Related RFC: `../../done/DC-11-MAINTAINER-TRUST-STORE.md`
 Target FDD: FDD-02 Storage Transaction Model
 
 ## Purpose

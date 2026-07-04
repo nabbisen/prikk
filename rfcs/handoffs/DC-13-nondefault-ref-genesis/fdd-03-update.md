@@ -1,7 +1,7 @@
 # DC-13 FDD-03 Update - Branch Ref Identity Clarification
 
 Status: Implemented for v0.6.0
-Related RFC: `../../proposed/DC-13-NONDEFAULT-REF-GENESIS.md`
+Related RFC: `../../done/DC-13-NONDEFAULT-REF-GENESIS.md`
 Target FDD: FDD-03 Object Schema and Canonical Identity
 
 ## Purpose

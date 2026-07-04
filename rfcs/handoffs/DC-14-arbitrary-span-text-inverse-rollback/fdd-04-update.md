@@ -1,7 +1,7 @@
 # DC-14 FDD-04 Update - Rollback Draft Text Inverse Security Notes
 
 Status: Accepted for v0.7.0 implementation after design re-review v1
-Related RFC: `../../proposed/DC-14-ARBITRARY-SPAN-TEXT-INVERSE-ROLLBACK.md`
+Related RFC: `../../done/DC-14-ARBITRARY-SPAN-TEXT-INVERSE-ROLLBACK.md`
 Target FDD: FDD-04 Threat Model
 
 ## Purpose

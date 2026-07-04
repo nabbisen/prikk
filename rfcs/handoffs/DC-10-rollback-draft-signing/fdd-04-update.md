@@ -1,7 +1,7 @@
 # DC-10 FDD-04 Update — Rollback Draft Signing Threat Model
 
 Status: Reviewed DC-10 update  
-Related RFC: `../../proposed/DC-10-ROLLBACK-DRAFT-SIGNING.md`  
+Related RFC: `../../done/DC-10-ROLLBACK-DRAFT-SIGNING.md`
 Target FDD: FDD-04 Threat Model
 
 ## Purpose

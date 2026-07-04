@@ -1,10 +1,14 @@
-# RFC (proposed) — DC-09 Phase 4 Node Model and Operation Application
+# RFC (archive) — DC-09 Phase 4 Node Model and Operation Application
 
-**Status.** Proposed
+**Status.** Superseded / partially implemented historical umbrella — shipped slices are captured by
+DC-10 through DC-15 and follow-up DCs; any remaining active scope requires a new DC.
 **Tracks.** Completion of the FDD-03 §9.3 operation surface: node-addressed
 operation *application* (replay, inverse, rollback, checkout) and worktree authoring.
 **Touches.** `prikk-store` patch replay/inverse/rollback/checkout, worktree patch
 authoring, a new node-lifecycle model; `prikk-object` node id minting.
+
+**Archive note.** DC-09 is preserved as historical context, not as a live implementation backlog.
+Carry-forward items from this umbrella are tracked in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Context
 

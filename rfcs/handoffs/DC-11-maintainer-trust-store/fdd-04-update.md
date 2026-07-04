@@ -1,7 +1,7 @@
 # DC-11 FDD-04 Update — Publication Trust Threat Model
 
 Status: Reviewed DC-11 update  
-Related RFC: `../../proposed/DC-11-MAINTAINER-TRUST-STORE.md`  
+Related RFC: `../../done/DC-11-MAINTAINER-TRUST-STORE.md`
 Target FDD: FDD-04 Threat Model
 
 ## Purpose

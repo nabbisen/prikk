@@ -53,6 +53,8 @@ Version: 0.8.0 released (DC-15 — active-session integrity and verification har
 ## Implemented
 
 - Rust workspace scaffold.
+- RFC lifecycle policy is now tracked as RFC-000 in `rfcs/done/`, with `rfcs/README.md` pointing to it
+  as the directory authority.
 - Shared error taxonomy.
 - First-party SHA-256 implementation for early object identity tests.
 - Deterministic canonical TLV encoder seed.
@@ -99,6 +101,9 @@ Version: 0.8.0 released (DC-15 — active-session integrity and verification har
 - WASM plugin host.
 - Audit publication policy.
 - Remote sync.
+- DC-09 carry-forward items that still need dedicated future DCs: symlink static target validation,
+  duplicate scalar-field rejection, and `Operation.preconditions` / `PatchPayload.preconditions`
+  migration to the FDD-03 §9.2.2 discriminator model.
 
 ## Conservative Repairs Added Through PR-014
 

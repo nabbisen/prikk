@@ -1,6 +1,6 @@
-# RFC (proposed) — DC-11 Publication Signing and Minimal Trust Store
+# RFC (done) — DC-11 Publication Signing and Minimal Trust Store
 
-**Status.** Reviewed; implementation landed for v0.4.0.
+**Status.** Implemented (v0.4.0)
 **Target release.** v0.4.0.
 **Tracks.** Replacing the local seal MAINTAINER placeholder with real role-bound Ed25519
 MAINTAINER signatures, and adding the minimal trust-store/policy surface needed for publication

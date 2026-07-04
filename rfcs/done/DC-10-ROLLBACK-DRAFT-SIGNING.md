@@ -1,6 +1,6 @@
-# RFC (proposed) — DC-10 Rollback Draft Identity and AUTHOR Signing
+# RFC (done) — DC-10 Rollback Draft Identity and AUTHOR Signing
 
-**Status.** Reviewed; implementation landed for v0.3.0.
+**Status.** Implemented (v0.3.0)
 **Target release.** v0.3.0.
 **Tracks.** Removing the rollback-draft fake AUTHOR-signature marker so every AUTHOR-signature-bearing
 Patch produced by production commands is signed with real role-bound Ed25519 key material.

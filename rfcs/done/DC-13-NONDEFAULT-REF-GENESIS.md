@@ -1,6 +1,6 @@
-# RFC (proposed) - DC-13 Non-Default Ref Genesis
+# RFC (done) - DC-13 Non-Default Ref Genesis
 
-**Status.** Implemented; released as v0.6.0.
+**Status.** Implemented (v0.6.0)
 **Target release.** v0.6.0.
 **Tracks.** Allowing first-commit genesis on explicitly selected non-default branch refs while keeping
 branch lifecycle, ref recovery, and publication trust fail-closed.

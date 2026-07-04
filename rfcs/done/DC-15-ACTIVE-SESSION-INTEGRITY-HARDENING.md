@@ -1,6 +1,6 @@
-# RFC (proposed) - DC-15 Active-Session Integrity and Verification Hardening
+# RFC (done) - DC-15 Active-Session Integrity and Verification Hardening
 
-**Status.** Revised for design re-review after architect review v1.
+**Status.** Implemented (v0.8.0)
 **Target release.** v0.8.0.
 **Tracks.** Closing accepted non-blocking hardening backlog before broad M2+ patch algebra.
 **Touches.** Active-WAL metadata verification/doctor diagnostics, rollback draft append freshness,

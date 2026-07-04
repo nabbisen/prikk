@@ -1,6 +1,6 @@
-# RFC (proposed) - DC-12 Arbitrary-Span Text Edits
+# RFC (done) - DC-12 Arbitrary-Span Text Edits
 
-**Status.** Implemented; released as v0.5.0.
+**Status.** Implemented (v0.5.0)
 **Target release.** v0.5.0.
 **Tracks.** Replacing whole-file `EditText` generation/replay with deterministic arbitrary-span
 text-span generation and application, as the next M2 bridge before full patch algebra.

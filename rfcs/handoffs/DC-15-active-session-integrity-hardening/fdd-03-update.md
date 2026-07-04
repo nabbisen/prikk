@@ -1,7 +1,7 @@
 # DC-15 FDD-03 Update - Ref Publication and Signature Preimage Boundaries
 
 Status: Revised for v0.8.0 design re-review after architect review v1
-Related RFC: `../../proposed/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md`
+Related RFC: `../../done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md`
 Target FDD: FDD-03 Object Schema and Canonical Identity
 
 ## Purpose

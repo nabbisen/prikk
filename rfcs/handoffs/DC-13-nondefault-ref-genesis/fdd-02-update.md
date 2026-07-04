@@ -1,7 +1,7 @@
 # DC-13 FDD-02 Update - Active Ref Ownership and Unborn Branch Publication
 
 Status: Implemented for v0.6.0
-Related RFC: `../../proposed/DC-13-NONDEFAULT-REF-GENESIS.md`
+Related RFC: `../../done/DC-13-NONDEFAULT-REF-GENESIS.md`
 Target FDD: FDD-02 Storage Transaction Model
 
 ## Purpose

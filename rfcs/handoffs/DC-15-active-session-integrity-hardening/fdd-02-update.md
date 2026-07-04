@@ -1,7 +1,7 @@
 # DC-15 FDD-02 Update - Active-Session Integrity Diagnostics
 
 Status: Revised for v0.8.0 design re-review after architect review v1
-Related RFC: `../../proposed/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md`
+Related RFC: `../../done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md`
 Target FDD: FDD-02 Storage Transaction Model
 
 ## Purpose

@@ -1,6 +1,6 @@
-# RFC (proposed) - DC-14 Arbitrary-Span Text Direct Inverse and Rollback Exposure
+# RFC (done) - DC-14 Arbitrary-Span Text Direct Inverse and Rollback Exposure
 
-**Status.** Accepted for implementation after design re-review v1, with implementation errata below.
+**Status.** Implemented (v0.7.0)
 **Target release.** v0.7.0.
 **Tracks.** Extending inverse planning, rollback preview, rollback draft append, and rollback draft
 verification to deterministic arbitrary-span `EditText` records.

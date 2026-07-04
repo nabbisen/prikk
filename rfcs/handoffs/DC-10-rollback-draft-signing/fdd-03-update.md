@@ -1,7 +1,7 @@
 # DC-10 FDD-03 Update — PatchPurpose
 
 Status: Reviewed DC-10 update  
-Related RFC: `../../proposed/DC-10-ROLLBACK-DRAFT-SIGNING.md`  
+Related RFC: `../../done/DC-10-ROLLBACK-DRAFT-SIGNING.md`
 Target FDD: FDD-03 Object Schema and Canonical Identity
 
 ## Purpose
