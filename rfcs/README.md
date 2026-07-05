@@ -46,6 +46,7 @@ These records currently live under `done/`.
 | DC-16 | [Patch Algebra Foundation](./done/DC-16-PATCH-ALGEBRA-FOUNDATION.md) |
 | DC-17 | [Patch Algebra Evidence Contract](./done/DC-17-PATCH-ALGEBRA-EVIDENCE-CONTRACT.md) |
 | DC-18 | [Patch Algebra Commutation and Confluence Contract](./done/DC-18-PATCH-ALGEBRA-COMMUTATION-CONFLUENCE.md) |
+| DC-19 | [Replay/Lifecycle Crate Boundary and Extraction Plan](./done/DC-19-REPLAY-LIFECYCLE-CRATE-BOUNDARY.md) |
 | PR-001 | [Implementation Handoff](./done/PR-001-IMPLEMENTATION-HANDOFF.md) |
 | PR-002 | [CI Fix Handoff](./done/PR-002-CI-FIX-HANDOFF.md) |
 | PR-003 | [Persistent Store Handoff](./done/PR-003-PERSISTENT-STORE-HANDOFF.md) |
@@ -90,7 +91,7 @@ These records currently live under `archive/`.
 
 ## Handoffs
 
-Companion handoff directories currently exist for DC-10 through DC-18:
+Companion handoff directories currently exist for DC-10 through DC-19:
 
 - [DC-10 rollback draft signing](./handoffs/DC-10-rollback-draft-signing/)
 - [DC-11 maintainer trust store](./handoffs/DC-11-maintainer-trust-store/)
@@ -101,3 +102,4 @@ Companion handoff directories currently exist for DC-10 through DC-18:
 - [DC-16 patch algebra foundation](./handoffs/DC-16-patch-algebra-foundation/)
 - [DC-17 patch algebra evidence contract](./handoffs/DC-17-patch-algebra-evidence-contract/)
 - [DC-18 patch algebra commutation confluence](./handoffs/DC-18-patch-algebra-commutation-confluence/)
+- [DC-19 replay lifecycle crate boundary](./handoffs/DC-19-replay-lifecycle-crate-boundary/)

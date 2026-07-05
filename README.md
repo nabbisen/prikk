@@ -76,14 +76,13 @@ local branch ref can be started with `commit --ref heads/<branch>` and published
 
 ## Design Notes
 
-Current released implementation: **0.11.0** (DC-18 — patch algebra commutation and confluence
-contract). This release keeps patch algebra internal and library-only, with no public/CLI caller, while
-adding replay-backed pair commutation and flat two-sequence confluence for the supported internal
-subset. Required sealed evidence failures, including candidate replacement blob evidence, surface
-separately from ordinary `Unknown` algebra cases and are not hidden by earlier sequence-level
-`Unknown`; optional unsealed-candidate evidence remains fail-closed. It does not add CLI behavior,
-merge execution, persisted proof or conflict-witness objects, object schema changes, public confluence
-APIs, rollback refs, rollback authorization, multi-parent publication, semantic merge, or user-facing
+Current released implementation: **0.12.0** (DC-19 — replay/lifecycle crate boundary). This release
+adds `prikk-replay` as a workspace-internal semantic crate, moves the node lifecycle substrate and
+direct tests below `prikk-store`, and keeps `prikk-store` as the repository integration crate through
+compatibility wrappers. `RepoPath` moves with lifecycle state as the minimal lexical path leaf. It does
+not add CLI behavior, object schema changes, text-span extraction, patch-algebra extraction, worktree
+extraction, merge execution, public confluence APIs, persisted proof or conflict-witness objects,
+rollback refs, rollback authorization, multi-parent publication, semantic merge, or user-facing
 conflict resolution.
 
 Implemented:
@@ -109,6 +108,10 @@ Implemented:
 - Internal patch-algebra foundation for pair classification (`Independent`, `OrderedDependency`,
   `Conflict`, `Unknown`) plus replay-backed pair commutation and flat two-sequence confluence for the
   supported subset. This is not a public merge/conflict API.
+- Workspace-internal `prikk-replay` crate for replay/lifecycle semantics. It owns the node lifecycle
+  substrate and lexical repository path type needed by lifecycle state, while repository layout,
+  object storage, refs, WAL, active sessions, lifecycle-cache persistence, verification, doctor,
+  worktree integration, and store-backed resolver construction remain in `prikk-store`.
 
 Signing scope (interim): AUTHOR-role Patch signatures and MAINTAINER publication signatures produced by production commands are real role-bound Ed25519 signatures. Publication trust is local and minimal (`required = 1`); this does **not** yet imply key rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, or publication-grade audit policy.
 

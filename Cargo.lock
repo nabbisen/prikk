@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "prikk"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "prikk-hash",
  "prikk-object",
@@ -173,7 +173,7 @@ dependencies = [
 
 [[package]]
 name = "prikk-crypto"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "ed25519-dalek",
  "getrandom",
@@ -182,29 +182,39 @@ dependencies = [
 
 [[package]]
 name = "prikk-error"
-version = "0.11.0"
+version = "0.12.0"
 
 [[package]]
 name = "prikk-hash"
-version = "0.11.0"
+version = "0.12.0"
 
 [[package]]
 name = "prikk-object"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "prikk-error",
  "prikk-hash",
 ]
 
 [[package]]
+name = "prikk-replay"
+version = "0.12.0"
+dependencies = [
+ "prikk-error",
+ "prikk-hash",
+ "prikk-object",
+]
+
+[[package]]
 name = "prikk-store"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "getrandom",
  "prikk-crypto",
  "prikk-error",
  "prikk-hash",
  "prikk-object",
+ "prikk-replay",
 ]
 
 [[package]]

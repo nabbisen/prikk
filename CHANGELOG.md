@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.12.0 — 2026-07-05
+
+DC-19: replay/lifecycle crate boundary.
+
+**Release scope.** This release introduces `prikk-replay` as a workspace-internal semantic
+replay/lifecycle crate and moves the node lifecycle substrate plus its direct tests out of
+`prikk-store`. `RepoPath` moves with the lifecycle substrate as the minimal lexical path leaf required
+by `NodeLifecycleState`, while `prikk-store` keeps compatibility wrappers and continues to own
+repository layout, refs, WAL, active sessions, lifecycle-cache persistence, verification, doctor,
+object storage, and store-backed resolver construction. This release still does **not** add CLI
+behavior, object schema changes, text-span extraction, patch-algebra extraction, worktree extraction,
+merge execution, public confluence APIs, persisted proof/conflict-witness objects, rollback refs,
+rollback authorization, branch switching, key lifecycle, or sync behavior.
+
+- **Workspace-internal replay crate.** Adds `crates/prikk-replay` with `publish = false`, documented as
+  internal/experimental during DC-19. Its dependency tree is limited to `prikk-error`, `prikk-hash`,
+  and `prikk-object`, with no `prikk-store` dependency.
+- **Lifecycle substrate extraction.** Moves `NodeLifecycleState`, `LiveNode`, `NodeContent`,
+  `Tombstone`, lifecycle validation helpers, and direct lifecycle tests into `prikk-replay`, preserving
+  existing behavior and structured lifecycle errors.
+- **Path leaf extraction.** Moves repository-relative lexical `RepoPath` validation into
+  `prikk-replay` because lifecycle state stores paths. Filesystem layout, materialization policy, and
+  worktree ownership remain in `prikk-store`.
+- **Store compatibility bridge.** Keeps `crates/prikk-store/src/node_lifecycle.rs` and
+  `crates/prikk-store/src/path.rs` as compatibility import modules so existing internal call sites and
+  the public `prikk_store::RepoPath` surface continue through the new crate boundary.
+- **Test and file-layout cleanup.** Moves the direct lifecycle tests into `prikk-replay` and splits
+  them into focused test submodules under the project line-count and test-placement guidelines.
+
 ## 0.11.0 — 2026-07-05
 
 DC-18: patch algebra commutation and confluence contract.

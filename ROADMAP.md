@@ -5,12 +5,17 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **Post-DC-18 crate-boundary design.** Next design work should define the replay/lifecycle extraction
-  boundary below `prikk-store` before Prikk exposes a broader M2+ production merge/conflict surface.
-  Patch algebra remains internal while rollback refs, authorization, branch switching, key lifecycle,
-  and sync stay behind their dedicated plans.
+- **Post-DC-19 boundary stabilization.** Next design work should build on the new `prikk-replay`
+  boundary without moving patch algebra, text-span, worktree integration, repository storage, refs/WAL,
+  lifecycle-cache persistence, or resolver construction prematurely.
 
 ## Last Released Increment
+
+- **DC-19 - replay/lifecycle crate boundary (released as 0.12.0).** `prikk-replay` now owns the
+  workspace-internal lifecycle substrate and lexical repository path type needed by lifecycle state,
+  while `prikk-store` remains the repository integration crate through compatibility wrappers. No CLI,
+  schema, merge, public confluence, patch-algebra extraction, text-span extraction, worktree
+  extraction, or storage/cache/ref/WAL ownership changes were included.
 
 - **DC-18 - patch algebra commutation and confluence contract (released as 0.11.0).** Internal
   commutation now requires classifier independence plus replay-both-orders proof, and flat

@@ -1,11 +1,11 @@
 # Prikk Implementation Status
 
-Version: 0.11.0 released (DC-18 — patch algebra commutation and confluence contract)
+Version: 0.12.0 released (DC-19 — replay/lifecycle crate boundary)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (0.11.0 released)
+## Current State (0.12.0 released)
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** local
   branch baseline reconstructed from authoritative replay — or, on a valid unborn `heads/*` ref, a
@@ -61,6 +61,14 @@ Version: 0.11.0 released (DC-18 — patch algebra commutation and confluence con
   hidden by earlier sequence-level `Unknown`; explicitly optional unsealed-candidate evidence remains
   fail-closed. This is library/test-only: no CLI, merge execution, persisted witness/proof object,
   object schema change, public conflict UX, public confluence API, or production merge surface is added.
+- `prikk-replay` is introduced as a workspace-internal semantic replay/lifecycle crate. It owns the
+  node lifecycle substrate (`NodeLifecycleState`, `LiveNode`, `NodeContent`, `Tombstone`, lifecycle
+  validation helpers, and direct lifecycle tests) plus the lexical repository-relative `RepoPath` leaf
+  required by lifecycle state. `prikk-store` depends downward on `prikk-replay` and keeps compatibility
+  import modules for existing call sites and the public `prikk_store::RepoPath` surface. Repository
+  layout, object storage, refs, WAL, active sessions, lifecycle-cache persistence and trust rules,
+  verification, doctor, worktree integration, and store-backed resolver construction remain in
+  `prikk-store`.
 
 ## Implemented
 
@@ -102,6 +110,8 @@ Version: 0.11.0 released (DC-18 — patch algebra commutation and confluence con
 - Internal patch-algebra commutation and flat two-sequence confluence analysis for the DC-16/DC-18
   supported subset, with replay-backed pair proofs and scoped evidence-error precedence; see Current
   State above.
+- Workspace-internal `prikk-replay` crate for replay/lifecycle semantics, with no dependency on
+  `prikk-store`; see Current State above.
 - Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
@@ -128,6 +138,13 @@ Version: 0.11.0 released (DC-18 — patch algebra commutation and confluence con
 - Missing-object repair, checksum-mismatch repair, object quarantine, GC, and malformed-log repair remain deferred.
 
 ## Gate Discipline
+
+DC-19 stays within the approved crate-boundary first slice: `prikk-replay` owns the moved lifecycle
+substrate and the minimal `RepoPath` leaf, while `prikk-store` continues to own repository IO, refs,
+WAL, active sessions, lifecycle-cache persistence, verification, doctor, object storage, worktree
+integration, and resolver construction. It does not move `text_span`, `patch_algebra`, lineage
+traversal, refs/WAL, active sessions, cache persistence, verify/doctor, CLI behavior, object schema, or
+merge/confluence public surfaces.
 
 DC-18 stays within the approved commutation/confluence contract boundary: internal pair commutation
 requires classifier independence plus replay-both-orders proof, and flat two-sequence confluence checks

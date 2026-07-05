@@ -6,11 +6,12 @@ members = [
     "crates/prikk-error",
     "crates/prikk-hash",
     "crates/prikk-object",
+    "crates/prikk-replay",
     "crates/prikk-store",
 ]
 
 [workspace.package]
-version         = "0.11.0"
+version         = "0.12.0"
 edition         = "2024"
 rust-version    = "1.85"
 license             = "Apache-2.0"
@@ -24,6 +25,7 @@ prikk-crypto                = { version = "0", path = "crates/prikk-crypto" }
 prikk-error                 = { version = "0", path = "crates/prikk-error" }
 prikk-hash                  = { version = "0", path = "crates/prikk-hash" }
 prikk-object                = { version = "0", path = "crates/prikk-object" }
+prikk-replay                = { version = "0", path = "crates/prikk-replay" }
 prikk-store                 = { version = "0", path = "crates/prikk-store" }
 
 ed25519-dalek               = "2"

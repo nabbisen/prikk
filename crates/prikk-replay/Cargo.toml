@@ -1,6 +1,6 @@
 [package]
-name        = "prikk-store"
-description = "Prikk storage crate scaffold."
+name        = "prikk-replay"
+description = "Workspace-internal replay and lifecycle semantics for Prikk."
 readme      = "README.md"
 version.workspace       = true
 edition.workspace       = true
@@ -8,15 +8,12 @@ rust-version.workspace  = true
 license.workspace       = true
 authors.workspace       = true
 repository.workspace    = true
+publish = false
 
 [dependencies]
-prikk-crypto                = { workspace = true }
 prikk-error                 = { workspace = true }
 prikk-hash                  = { workspace = true }
 prikk-object                = { workspace = true }
-prikk-replay                = { workspace = true }
-
-getrandom                   = { workspace = true }
 
 [lints]
 workspace = true
