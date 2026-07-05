@@ -28,7 +28,11 @@ No proposed RFCs are currently tracked.
 
 ## Accepted
 
-No accepted RFCs are currently tracked.
+These records currently live under `accepted/`.
+
+| ID | Title |
+|---|---|
+| DC-22 | [Public Merge Evidence UX Boundary](./accepted/DC-22-PUBLIC-MERGE-EVIDENCE-UX.md) |
 
 ## Done
 
@@ -93,7 +97,7 @@ These records currently live under `archive/`.
 
 ## Handoffs
 
-Companion handoff directories currently exist for DC-10 through DC-21:
+Companion handoff directories currently exist for DC-10 through DC-22:
 
 - [DC-10 rollback draft signing](./handoffs/DC-10-rollback-draft-signing/)
 - [DC-11 maintainer trust store](./handoffs/DC-11-maintainer-trust-store/)
@@ -107,3 +111,4 @@ Companion handoff directories currently exist for DC-10 through DC-21:
 - [DC-19 replay lifecycle crate boundary](./handoffs/DC-19-replay-lifecycle-crate-boundary/)
 - [DC-20 replay boundary stabilization](./handoffs/DC-20-replay-boundary-stabilization/)
 - [DC-21 merge conflict evidence contract](./handoffs/DC-21-merge-conflict-evidence-contract/)
+- [DC-22 public merge evidence UX](./handoffs/DC-22-public-merge-evidence-ux/)

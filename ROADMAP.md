@@ -5,7 +5,11 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-No unreleased increment is active. The next increment should start design-first from a proposed RFC/DC.
+- **DC-22 - public merge evidence UX boundary (accepted for 0.15.0).** The current design
+  exposes DC-21 merge/conflict evidence through a read-only public UX with explicit baseline and
+  candidate targets. It must not infer merge bases, execute merges, publish merge commits, write refs
+  or WAL, materialize worktree conflicts, persist proof/witness objects, change schema, extract patch
+  algebra, or stabilize `prikk-replay` as an external API.
 
 ## Last Released Increment
 
