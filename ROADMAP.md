@@ -5,19 +5,22 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-21 - merge conflict evidence contract (0.14.0 release candidate).** The current candidate adds
-  an internal, read-only evidence report vocabulary and adapters over existing pair commutation and
-  flat confluence analysis. It keeps reports non-mutating and privacy-preserving, with explicit
-  `EvidenceFailure`, `InvalidCandidate`, `Unsupported`, `Deferred`, `Conflict`, `OrderedDependency`,
-  `NotConfluent`, and `Confluent` outcomes. It still does not add merge execution, CLI merge,
-  persisted proof/witness objects, schema changes, worktree conflict materialization, patch-algebra
-  extraction, or public `prikk-replay` API stabilization.
+No unreleased increment is active. The next increment should start design-first from a proposed RFC/DC.
 
 ## Last Released Increment
 
-- **DC-20 - replay boundary stabilization (released as 0.13.0).** `prikk-replay` remains
-  workspace-internal and `publish = false`, `prikk-store` remains the repository integration crate, and
-  filesystem root joining stays store-owned while `RepoPath` remains lexical in `prikk-replay`. No CLI,
+- **DC-21 - merge conflict evidence contract (released as 0.14.0).** Internal, read-only evidence
+  report vocabulary and adapters now sit over existing pair commutation and flat confluence analysis.
+  Reports are non-mutating and privacy-preserving, with explicit `EvidenceFailure`,
+  `InvalidCandidate`, `Unsupported`, `Deferred`, `Conflict`, `OrderedDependency`, `NotConfluent`, and
+  `Confluent` outcomes. No merge execution, CLI merge, persisted proof/witness objects, schema
+  changes, worktree conflict materialization, patch-algebra extraction, or public `prikk-replay` API
+  stabilization was added.
+
+- **DC-20 - replay boundary stabilization (released as 0.13.0).** `prikk-replay` remains internally
+  scoped and non-stable as an external Rust API, `prikk-store` remains the repository integration
+  crate, and filesystem root joining stays store-owned while `RepoPath` remains lexical in
+  `prikk-replay`. No CLI,
   schema, repository-layout, public API, patch-algebra extraction, text-span extraction, resolver,
   cache-persistence, worktree, merge, confluence, or conflict surface was added.
 

@@ -1,6 +1,6 @@
-# RFC (accepted) - DC-21 Merge Conflict Evidence Contract
+# RFC (done) - DC-21 Merge Conflict Evidence Contract
 
-**Status.** Accepted for implementation.
+**Status.** Released in v0.14.0.
 **Target release.** v0.14.0.
 **Tracks.** First reviewable/user-facing evidence contract for M2+ merge/conflict analysis after DC-16
 through DC-18 patch algebra and DC-20 replay-boundary stabilization.

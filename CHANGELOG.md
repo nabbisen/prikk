@@ -1,11 +1,11 @@
 # Changelog
 
-## 0.14.0 — 2026-07-05 (release candidate)
+## 0.14.0 — 2026-07-05
 
 DC-21: merge conflict evidence contract.
 
-**Release scope.** This release candidate adds an internal, read-only merge/conflict evidence report
-contract over the existing patch-algebra commutation and flat confluence analyzers. It introduces
+**Release scope.** This release adds an internal, read-only merge/conflict evidence report contract
+over the existing patch-algebra commutation and flat confluence analyzers. It introduces
 reviewable outcome categories, release-stable diagnostic reason codes for tests/future display, required
 baseline identity, sequence summaries, evidence-scope mapping, and privacy-preserving report entries.
 Reason codes are diagnostic vocabulary, not persisted object schema.
@@ -22,6 +22,9 @@ Reason codes are diagnostic vocabulary, not persisted object schema.
 - **Flatness diagnostic scope.** Current flatness violations use `SequenceInternalDependencyDeferred`
   as the release-stable diagnostic reason; a separate `flatness_required` reason code remains deferred
   until a later DC introduces a broader flatness-reporting surface.
+- **Replay crate publication note.** `prikk-replay` remains internally scoped and non-stable as an
+  external Rust API, but its manifest no longer disables crate publication so workspace release
+  packaging can publish it consistently with the rest of the crates.
 
 Still deferred: merge execution, `prikk merge`, branch merge, multi-parent Blocks, persisted
 proof/witness objects, schema changes, worktree conflict materialization, public conflict UX,
@@ -33,7 +36,9 @@ DC-20: replay boundary stabilization.
 
 **Release scope.** This release stabilizes the post-DC-19 `prikk-replay` boundary without adding CLI
 behavior, object schema changes, repository layout changes, or new public APIs. `prikk-replay` remains
-workspace-internal and `publish = false`; `prikk-store` remains the repository integration crate.
+internally scoped; at the time of 0.13.0 it was publication-disabled in the manifest, and 0.14.0 later
+removed that packaging block without stabilizing its external API. `prikk-store` remains the repository
+integration crate.
 
 - **Boundary documentation.** Updates `prikk-replay` docs to use version-neutral
   replay-boundary-stabilization wording and keeps public Rust items explicitly non-stable for external
@@ -64,9 +69,10 @@ behavior, object schema changes, text-span extraction, patch-algebra extraction,
 merge execution, public confluence APIs, persisted proof/conflict-witness objects, rollback refs,
 rollback authorization, branch switching, key lifecycle, or sync behavior.
 
-- **Workspace-internal replay crate.** Adds `crates/prikk-replay` with `publish = false`, documented as
-  internal/experimental during DC-19. Its dependency tree is limited to `prikk-error`, `prikk-hash`,
-  and `prikk-object`, with no `prikk-store` dependency.
+- **Workspace-internal replay crate.** Adds `crates/prikk-replay` as an internal/experimental crate
+  during DC-19. It was initially publication-disabled in the manifest; 0.14.0 later removed that
+  packaging block without stabilizing its external API. Its dependency tree is limited to
+  `prikk-error`, `prikk-hash`, and `prikk-object`, with no `prikk-store` dependency.
 - **Lifecycle substrate extraction.** Moves `NodeLifecycleState`, `LiveNode`, `NodeContent`,
   `Tombstone`, lifecycle validation helpers, and direct lifecycle tests into `prikk-replay`, preserving
   existing behavior and structured lifecycle errors.

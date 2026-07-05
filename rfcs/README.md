@@ -28,11 +28,7 @@ No proposed RFCs are currently tracked.
 
 ## Accepted
 
-These records currently live under `accepted/`.
-
-| ID | Title |
-|---|---|
-| DC-21 | [Merge Conflict Evidence Contract](./accepted/DC-21-MERGE-CONFLICT-EVIDENCE-CONTRACT.md) |
+No accepted RFCs are currently tracked.
 
 ## Done
 
@@ -52,6 +48,7 @@ These records currently live under `done/`.
 | DC-18 | [Patch Algebra Commutation and Confluence Contract](./done/DC-18-PATCH-ALGEBRA-COMMUTATION-CONFLUENCE.md) |
 | DC-19 | [Replay/Lifecycle Crate Boundary and Extraction Plan](./done/DC-19-REPLAY-LIFECYCLE-CRATE-BOUNDARY.md) |
 | DC-20 | [Replay Boundary Stabilization](./done/DC-20-REPLAY-BOUNDARY-STABILIZATION.md) |
+| DC-21 | [Merge Conflict Evidence Contract](./done/DC-21-MERGE-CONFLICT-EVIDENCE-CONTRACT.md) |
 | PR-001 | [Implementation Handoff](./done/PR-001-IMPLEMENTATION-HANDOFF.md) |
 | PR-002 | [CI Fix Handoff](./done/PR-002-CI-FIX-HANDOFF.md) |
 | PR-003 | [Persistent Store Handoff](./done/PR-003-PERSISTENT-STORE-HANDOFF.md) |

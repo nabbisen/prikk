@@ -76,9 +76,9 @@ local branch ref can be started with `commit --ref heads/<branch>` and published
 
 ## Design Notes
 
-Current release candidate: **0.14.0** (DC-21 — merge conflict evidence contract). The latest released
-implementation is **0.13.0** (DC-20 — replay boundary stabilization). This candidate adds an internal,
-read-only merge/conflict evidence report vocabulary over the existing patch-algebra analyzers, with
+Current released implementation: **0.14.0** (DC-21 — merge conflict evidence contract). This release
+adds an internal, read-only merge/conflict evidence report vocabulary over the existing patch-algebra
+analyzers, with
 explicit `EvidenceFailure`, `InvalidCandidate`, `Unsupported`, `Deferred`, `Conflict`,
 `OrderedDependency`, `NotConfluent`, and `Confluent` outcomes. It does not add CLI merge behavior,
 merge execution, branch publication, multi-parent Blocks, persisted proof/witness objects, schema
@@ -108,13 +108,14 @@ Implemented:
 - Internal patch-algebra foundation for pair classification (`Independent`, `OrderedDependency`,
   `Conflict`, `Unknown`) plus replay-backed pair commutation and flat two-sequence confluence for the
   supported subset. This is not a public merge/conflict API.
-- Workspace-internal `prikk-replay` crate for replay/lifecycle semantics. It owns the node lifecycle
-  substrate and lexical repository path type needed by lifecycle state, while repository layout,
-  object storage, refs, WAL, active sessions, lifecycle-cache persistence, verification, doctor,
-  worktree integration, and store-backed resolver construction remain in `prikk-store`.
-- Replay-boundary stabilization keeps `prikk-replay` workspace-internal, documents its public Rust
-  items as non-stable externally, keeps `prikk-store` compatibility wrappers import/reexport-oriented,
-  and keeps filesystem root joining in `prikk-store`.
+- Internally scoped `prikk-replay` crate for replay/lifecycle semantics. It owns the node lifecycle
+  substrate and lexical repository path type needed by lifecycle state, while repository layout, object
+  storage, refs, WAL, active sessions, lifecycle-cache persistence, verification, doctor, worktree
+  integration, and store-backed resolver construction remain in `prikk-store`.
+- Replay-boundary stabilization keeps `prikk-replay` internally scoped and non-stable as an external
+  Rust API, keeps `prikk-store` compatibility wrappers import/reexport-oriented, and keeps filesystem
+  root joining in `prikk-store`. The crate is publishable for workspace release packaging, but that
+  does not make its public items stable API.
 
 Signing scope (interim): AUTHOR-role Patch signatures and MAINTAINER publication signatures produced by production commands are real role-bound Ed25519 signatures. Publication trust is local and minimal (`required = 1`); this does **not** yet imply key rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, or publication-grade audit policy.
 

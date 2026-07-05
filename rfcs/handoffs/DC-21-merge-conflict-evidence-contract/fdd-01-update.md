@@ -1,7 +1,7 @@
 # DC-21 FDD-01 Update - Merge Conflict Evidence Contract
 
-Status: Companion for accepted DC-21; v1 re-review implementation errata folded in
-Related RFC: `../../accepted/DC-21-MERGE-CONFLICT-EVIDENCE-CONTRACT.md`
+Status: Companion for released DC-21; v1 re-review implementation errata folded in
+Related RFC: `../../done/DC-21-MERGE-CONFLICT-EVIDENCE-CONTRACT.md`
 Target FDD: FDD-01 Patch Algebra
 
 ## Purpose
