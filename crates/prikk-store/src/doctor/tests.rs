@@ -191,7 +191,10 @@ fn doctor_repair_reconstructs_missing_main_ref_pointer() {
     if let Ok(layout) = layout {
         let maintainer_seed = [0x44_u8; 32];
         let maintainer =
-            Ed25519MaintainerSigner::from_seed("doctor-maintainer", &maintainer_seed).unwrap();
+            match Ed25519MaintainerSigner::from_seed("doctor-maintainer", &maintainer_seed) {
+                Ok(signer) => signer,
+                Err(error) => panic!("test maintainer signer should be constructible: {error}"),
+            };
         let public_key = maintainer
             .public_key_bytes()
             .iter()

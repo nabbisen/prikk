@@ -20,7 +20,10 @@ use crate::test_support::{
 };
 
 fn test_signer() -> Ed25519AuthorSigner {
-    Ed25519AuthorSigner::from_seed("rollback-author-key", &[9_u8; 32]).unwrap()
+    match Ed25519AuthorSigner::from_seed("rollback-author-key", &[9_u8; 32]) {
+        Ok(signer) => signer,
+        Err(error) => panic!("test author signer should be constructible: {error}"),
+    }
 }
 
 struct AdvancingSigner {
@@ -113,14 +116,16 @@ fn rollback_draft_appends_inverse_patch_to_empty_active_wal() {
                     if let Some(signature) = signature {
                         assert_eq!(signature.algorithm, SignatureAlgorithm::Ed25519);
                         assert_eq!(signature.key_id, "rollback-author-key");
-                        let preimage = Signature::signed_bytes(
+                        let preimage = match Signature::signed_bytes(
                             SignatureAlgorithm::Ed25519,
                             ObjectType::Patch,
                             first.envelope.object_id(),
                             SignerRole::Author,
                             &signature.key_id,
-                        )
-                        .unwrap();
+                        ) {
+                            Ok(preimage) => preimage,
+                            Err(error) => panic!("test signature preimage should build: {error}"),
+                        };
                         assert!(
                             verify_ed25519(
                                 &signer.public_key_bytes(),

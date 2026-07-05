@@ -1,11 +1,11 @@
 # Prikk Implementation Status
 
-Version: 0.8.0 released (DC-15 — active-session integrity and verification hardening)
+Version: 0.9.0 released (DC-16 — patch algebra foundation)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (0.8.0 released)
+## Current State (0.9.0 released)
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** local
   branch baseline reconstructed from authoritative replay — or, on a valid unborn `heads/*` ref, a
@@ -49,6 +49,12 @@ Version: 0.8.0 released (DC-15 — active-session integrity and verification har
   Rollback-draft AUTHOR verification remains structural at this layer: it rejects missing, legacy
   marker, wrong-role, wrong-algorithm, and malformed Ed25519 records, including signatures whose byte
   payload is not 64 bytes, without claiming AUTHOR trust-store enforcement.
+- Internal patch-algebra pair classification is present for the DC-16 foundation subset. It models
+  `Independent`, `OrderedDependency`, `Conflict`, and `Unknown`, structured path effects including
+  `required_free`, baseline preimage validation for the supported operation subset, evidence-backed
+  create-before-content-mutation ordering, and oracle-backed vectors. This is library/test-only: no CLI,
+  merge execution, persisted witness object, object schema change, public conflict UX, or production
+  confluence check is added.
 
 ## Implemented
 
@@ -96,8 +102,8 @@ Version: 0.8.0 released (DC-15 — active-session integrity and verification har
   tag or remote ref creation, rollback refs, multi-commit queued active sessions, and per-ref active WALs.
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy beyond the DC-11 local trust store.
 - Policy-aware audit/attestation publication from seal.
-- Full patch algebra: rollback ref publication, commutation, confluence, and conflict witnesses.
-- Conflict witnesses and merge state.
+- Production patch algebra: rollback ref publication, commutation, confluence, public conflict
+  witnesses, and merge state.
 - WASM plugin host.
 - Audit publication policy.
 - Remote sync.
@@ -113,6 +119,12 @@ Version: 0.8.0 released (DC-15 — active-session integrity and verification har
 - Missing-object repair, checksum-mismatch repair, object quarantine, GC, and malformed-log repair remain deferred.
 
 ## Gate Discipline
+
+DC-16 stays within the approved foundation boundary: it adds internal pair classification, structured
+path effects, baseline preimage validation, and test-level both-order replay oracles. It does not add
+CLI behavior, merge execution, persisted conflict-witness objects, object schema changes, production
+confluence checks, rollback refs, rollback authorization, semantic merge, or user-facing conflict
+resolution.
 
 DC-15 stays within the approved hardening boundary: repository verification and doctor report
 active-WAL metadata health, rollback-draft append re-checks the target ref tip under the active lock,

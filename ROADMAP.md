@@ -5,11 +5,16 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **M2+ patch algebra after foundation hardening.** Next design work should tackle commutation,
-  confluence, conflict witnesses, and merge evidence while keeping rollback refs, authorization, branch
-  switching, key lifecycle, and sync behind their dedicated plans.
+- **M2+ patch algebra after DC-16 foundation.** Next design work should tackle production
+  commutation/confluence, public conflict/merge evidence, and resolver contracts while keeping rollback
+  refs, authorization, branch switching, key lifecycle, and sync behind their dedicated plans.
 
 ## Last Released Increment
+
+- **DC-16 - patch algebra foundation (released as 0.9.0).** Internal pair classification now covers
+  `Independent`, `OrderedDependency`, `Conflict`, and `Unknown`, with baseline preimage validation,
+  structured path effects, fail-closed insufficient-evidence handling, and oracle-backed vectors. No CLI,
+  schema, merge execution, persisted witness, or production confluence surface was added.
 
 - **DC-15 - active-session integrity and verification hardening (released as 0.8.0).** `verify` and
   `doctor` report active-WAL metadata integrity explicitly, rollback-draft append re-checks target tip

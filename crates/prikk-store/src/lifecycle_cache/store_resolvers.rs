@@ -9,9 +9,13 @@
 //! This increment wires no replay and makes no identity decision.
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{BlobKind, BlobPayload, BlockPayload, ObjectId, ObjectType};
+#[cfg(test)]
+use prikk_object::BlockPayload;
+use prikk_object::{BlobKind, BlobPayload, ObjectId, ObjectType};
 
-use super::{BlobContentResolver, BlobKindResolver, BlockParentResolver};
+#[cfg(test)]
+use super::BlockParentResolver;
+use super::{BlobContentResolver, BlobKindResolver};
 use crate::object_store::ObjectReader;
 /// Lifecycle resolver backed by any object reader (file or memory store).
 pub(crate) struct StoreBackedResolver<'a, R: ObjectReader> {
@@ -24,6 +28,7 @@ impl<'a, R: ObjectReader> StoreBackedResolver<'a, R> {
     }
 }
 
+#[cfg(test)]
 impl<R: ObjectReader> BlockParentResolver for StoreBackedResolver<'_, R> {
     fn parent_block_ids(&self, block_id: &ObjectId) -> Result<Vec<ObjectId>> {
         let Some(envelope) = self.reader.read_object(*block_id)? else {

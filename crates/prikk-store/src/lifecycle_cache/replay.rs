@@ -9,10 +9,7 @@
 //! closed. As of 2c-2d **all** lifecycle-affecting operations have exact effects: `CreateFile`,
 //! `CreateSymlink`, `DeleteNode`, `RenamePath`, `ChangePerm`, `ReplaceBinary`, and `EditText` (the
 //! last derives a new full-text `BlobPayload(Text, …)` content id by materializing the edited
-//! text). No operation maps to `UnsupportedLifecycleEffect` any longer. The reconstructed state is
-//! **not** yet wrapped as `ReplayDerivedLifecycleState` and is consumed by no caller — 2c-2e
-//! exposes it and wires `ComparedLifecycleCache`. The structured error taxonomy (carry-forward
-//! P2-3) lives here, ahead of any caller branching on it.
+//! text).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -37,11 +34,7 @@ type TextCache = BTreeMap<NodeId, Vec<u8>>;
 
 /// Structured lifecycle-replay error taxonomy (carry-forward P2-3).
 ///
-/// These are the classes a replay / compare / fallback caller branches on. They land here, with
-/// the lineage walker, ahead of any exposure of replay-derived state, exactly as required. A few
-/// classes (`MissingBlobForLifecycleEffect`, `LifecycleCompareMismatch`) are not yet produced by
-/// this skeleton; they belong to the state-effect (2c-2b/2c-2c) and compare (2c-2e) increments and
-/// are defined now so the taxonomy is stable before any caller branches on it.
+/// These are the classes a replay / fallback caller branches on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LifecycleReplayError {
     /// A block referenced by the lineage walk is absent. Never treated as genesis (P2-1).
@@ -57,9 +50,6 @@ pub(crate) enum LifecycleReplayError {
     LineageCycle { block_id: ObjectId },
     /// The walk reached genesis, but genesis is not the claimed horizon (v1 adequate-horizon).
     HorizonNotInLineage { horizon_id: ObjectId },
-    /// A decoded operation has no implemented lifecycle state effect yet — replay fails closed
-    /// rather than producing an approximate state (O1).
-    UnsupportedLifecycleEffect { operation: &'static str },
     /// A decoded operation could not be applied to the replayed state: the target node is not
     /// live, a path is occupied, restoration-equivalence failed, or a stated old-state field
     /// (mode/path) disagrees with the replayed reality. Distinct from a decode failure.
@@ -76,8 +66,6 @@ pub(crate) enum LifecycleReplayError {
         span_id: [u8; 32],
         reason: TextSpanResolutionFailure,
     },
-    /// A cache disagreed with authoritative replay. (2c-2e.)
-    LifecycleCompareMismatch { detail: String },
 }
 
 impl fmt::Display for LifecycleReplayError {
@@ -109,11 +97,6 @@ impl fmt::Display for LifecycleReplayError {
                 "lifecycle replay: walk reached genesis without crossing the claimed horizon \
                  {horizon_id}"
             ),
-            Self::UnsupportedLifecycleEffect { operation } => write!(
-                f,
-                "lifecycle replay: operation {operation} has no implemented state effect; \
-                 replay fails closed (O1)"
-            ),
             Self::InconsistentLifecycleEffect { detail } => write!(
                 f,
                 "lifecycle replay: operation could not be applied to the replayed state ({detail})"
@@ -144,12 +127,6 @@ impl fmt::Display for LifecycleReplayError {
                     write!(f, "{byte:02x}")?;
                 }
                 write!(f, ") could not be localized: {reason}")
-            }
-            Self::LifecycleCompareMismatch { detail } => {
-                write!(
-                    f,
-                    "lifecycle replay: cache disagrees with authoritative replay ({detail})"
-                )
             }
         }
     }

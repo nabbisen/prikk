@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.9.0 — 2026-07-05
+
+DC-16: patch algebra foundation.
+
+**Release scope.** This release adds an internal, library/test-only pair-classification foundation for
+future patch algebra work. It defines and tests `Independent`, `OrderedDependency`, `Conflict`, and
+`Unknown` pair classes, structured path effects including `required_free`, internal diagnostic witness
+kinds, baseline preimage validation, and both-order replay oracles for every independent fixture. This
+release still does **not** add a CLI surface, merge execution, persisted conflict-witness objects,
+Patch/Block/RefState/RefUpdate schema changes, production confluence checks, rollback refs, rollback
+authorization, semantic merge, or user-facing conflict resolution.
+
+- **Internal pair classifier.** Adds the private `patch_algebra` module in `prikk-store` with
+  crate-internal classifier types and fail-closed handling for unsupported/deferred cases. Rename,
+  symlink, malformed, and insufficient-evidence cases classify as `Unknown` or `Conflict`, never
+  silently skipped or treated as independent.
+- **Baseline preimage validation.** `Independent` now requires each operation's own baseline preimage to
+  be proven. The classifier checks baseline path occupancy for `CreateFile.required_free`, live
+  path/kind/blob/mode for file deletion and mutation preimages, and text-span localization when text
+  resolver evidence is required.
+- **Create/mutate evidence boundary.** Same-node create-before-content-mutation ordering requires
+  blob-kind/content evidence: `CreateFile -> ReplaceBinary` is ordered only when the created blob is
+  proven binary, and `CreateFile -> EditText` is ordered only when the created blob is proven text and
+  the edit localizes against that created content. Missing evidence remains `Unknown`.
+- **Oracle-backed vectors.** Adds 24 patch-algebra vectors covering same-path create/delete
+  dependencies, stale preimages, same-node mode/content interactions, same-node text non-independence,
+  resolver-proven text cases, and operation-identity preservation without `op_seq` renumbering.
+- **Release-gate cleanup.** Removes legacy test-only `unwrap()` usage that blocked
+  `cargo clippy --workspace --all-targets -- -D warnings`.
+
 ## 0.8.0 — 2026-07-04
 
 DC-15: active-session integrity and verification hardening.

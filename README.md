@@ -73,10 +73,12 @@ local branch ref can be started with `commit --ref heads/<branch>` and published
 
 ## Design Notes
 
-Current released implementation: **0.8.0** (DC-15 — active-session integrity and verification
-hardening). This release makes active-WAL metadata health explicit in `verify` / `doctor`, re-checks
-rollback-draft target freshness before append, validates local branch refs at the publication boundary,
-and shares signature key-id validation across AUTHOR, MAINTAINER, and trust-policy paths.
+Current released implementation: **0.9.0** (DC-16 — patch algebra foundation). This release adds an
+internal, library/test-only pair-classification foundation for future patch algebra work. It proves
+baseline preimages before `Independent`, models path effects including `required_free`, keeps
+insufficient-evidence cases fail-closed, and uses both-order replay oracles for independent fixtures.
+It does not add CLI behavior, merge execution, persisted conflict-witness objects, object schema changes,
+or production confluence checks.
 
 Implemented:
 
@@ -98,6 +100,9 @@ Implemented:
 - Explicit deletion planning and opt-in deletion of patch-removed files whose bytes still match the old blob.
 - Read-only inverse planning, non-mutating rollback preview, rollback-draft append/verification, and sealed rollback block classification for the supported subset, including deterministic direct inverse for supported arbitrary-span `EditText`. Rollback-draft identity is recorded as `PatchPurpose::RollbackDraft`, not as a reserved AUTHOR key id.
 - Minimal local publication trust: `prikk trust maintainer add` records one trusted MAINTAINER public key, and `verify` checks Block/RefState/RefUpdate MAINTAINER signatures against that policy.
+- Internal patch-algebra foundation for pair classification (`Independent`, `OrderedDependency`,
+  `Conflict`, `Unknown`) with baseline preimage validation, path-effect modeling, internal diagnostic
+  witnesses, and oracle-backed vectors. This is not a public merge/conflict API.
 
 Signing scope (interim): AUTHOR-role Patch signatures and MAINTAINER publication signatures produced by production commands are real role-bound Ed25519 signatures. Publication trust is local and minimal (`required = 1`); this does **not** yet imply key rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, or publication-grade audit policy.
 
@@ -105,7 +110,9 @@ Minimal CLI commands: `init`, `trust maintainer add`, `commit [--from-worktree] 
 
 Not implemented yet:
 
-- Rename detection, multi-operation text diff minimization, rollback refs, rollback authorization, commutation, full patch algebra, and general destructive checkout pruning.
+- Rename detection, multi-operation text diff minimization, rollback refs, rollback authorization,
+  production commutation/confluence, public conflict witnesses, semantic merge, and general destructive
+  checkout pruning.
 - Branch switching, branch copy/fork from an existing tip, merge-base semantics, branch deletion/rename,
   tag or remote ref creation, rollback refs, multi-commit queued active sessions, and per-ref active WALs.
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy.

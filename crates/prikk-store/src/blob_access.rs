@@ -57,7 +57,7 @@ pub(crate) fn decode_file_content_blob_with_kind(
 /// This is the binary-only enforcement primitive; node-addressed `ReplaceBinary`
 /// application (which calls it on both blob ids) is wired in at the node model
 /// (increment 4.4).
-#[allow(dead_code)] // binary-only primitive; wired into node-addressed ReplaceBinary apply at increment 4.4 (unit-tested now)
+#[cfg(test)]
 pub(crate) fn ensure_blob_kind_is_binary(canonical_payload: &[u8]) -> Result<()> {
     let blob = BlobPayload::decode_canonical(canonical_payload)?;
     if blob.blob_kind == BlobKind::Binary {

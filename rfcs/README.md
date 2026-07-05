@@ -28,7 +28,7 @@ No proposed RFCs are currently tracked.
 
 ## Accepted
 
-No accepted-but-unreleased RFCs are currently tracked.
+No accepted RFCs are currently tracked.
 
 ## Done
 
@@ -43,6 +43,7 @@ These records currently live under `done/`.
 | DC-13 | [Non-Default Ref Genesis](./done/DC-13-NONDEFAULT-REF-GENESIS.md) |
 | DC-14 | [Arbitrary-Span Text Direct Inverse and Rollback Exposure](./done/DC-14-ARBITRARY-SPAN-TEXT-INVERSE-ROLLBACK.md) |
 | DC-15 | [Active-Session Integrity and Verification Hardening](./done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md) |
+| DC-16 | [Patch Algebra Foundation](./done/DC-16-PATCH-ALGEBRA-FOUNDATION.md) |
 | PR-001 | [Implementation Handoff](./done/PR-001-IMPLEMENTATION-HANDOFF.md) |
 | PR-002 | [CI Fix Handoff](./done/PR-002-CI-FIX-HANDOFF.md) |
 | PR-003 | [Persistent Store Handoff](./done/PR-003-PERSISTENT-STORE-HANDOFF.md) |
@@ -87,7 +88,7 @@ These records currently live under `archive/`.
 
 ## Handoffs
 
-Companion handoff directories currently exist for DC-10 through DC-15:
+Companion handoff directories currently exist for DC-10 through DC-16:
 
 - [DC-10 rollback draft signing](./handoffs/DC-10-rollback-draft-signing/)
 - [DC-11 maintainer trust store](./handoffs/DC-11-maintainer-trust-store/)
@@ -95,3 +96,4 @@ Companion handoff directories currently exist for DC-10 through DC-15:
 - [DC-13 non-default ref genesis](./handoffs/DC-13-nondefault-ref-genesis/)
 - [DC-14 arbitrary-span text inverse rollback](./handoffs/DC-14-arbitrary-span-text-inverse-rollback/)
 - [DC-15 active-session integrity hardening](./handoffs/DC-15-active-session-integrity-hardening/)
+- [DC-16 patch algebra foundation](./handoffs/DC-16-patch-algebra-foundation/)

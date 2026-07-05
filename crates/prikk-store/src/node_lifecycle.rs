@@ -330,16 +330,19 @@ impl NodeLifecycleState {
 
     /// The `node_id` currently live at a path, if any. (Production consumer is 4.4a-2 worktree
     /// authoring, which resolves an existing path to its node id here.)
+    #[cfg(test)]
     pub(crate) fn node_id_at(&self, path: &RepoPath) -> Option<NodeId> {
         self.path_to_id.get(path).copied()
     }
 
     /// The latest deletion preimage retained for an identity, if the node is tombstoned.
+    #[cfg(test)]
     pub(crate) fn latest_tombstone(&self, node_id: &NodeId) -> Option<&Tombstone> {
         self.latest_tombstone_by_id.get(node_id)
     }
 
     /// Number of live nodes in the reconstructed clean tree.
+    #[cfg(test)]
     pub(crate) fn live_count(&self) -> usize {
         self.live_by_id.len()
     }
@@ -351,6 +354,7 @@ impl NodeLifecycleState {
     /// kind/content shape, a duplicate live `node_id`, and an occupied path. (The
     /// symlink `normalized_mode == 0` rule is enforced at the cache-parse boundary,
     /// before a `NodeContent::Symlink` — which carries no mode — is constructed.)
+    #[cfg(test)]
     pub(crate) fn seed_live_node(&mut self, node_id: NodeId, node: LiveNode) -> Result<()> {
         ensure_node_id_nonzero(node_id)?;
         validate_kind_content_shape(node.kind, &node.content)?;
@@ -374,6 +378,7 @@ impl NodeLifecycleState {
     /// Seed the latest deletion preimage for a previously-seen, non-live node from a
     /// baseline lifecycle summary (erratum P1, 4.4-2). Records `seen_ids` so the
     /// historical-reintroduction rule applies across the snapshot boundary.
+    #[cfg(test)]
     pub(crate) fn seed_tombstone(&mut self, node_id: NodeId, tombstone: Tombstone) -> Result<()> {
         ensure_node_id_nonzero(node_id)?;
         validate_kind_content_shape(tombstone.kind, &tombstone.content)?;

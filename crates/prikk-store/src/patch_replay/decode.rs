@@ -53,7 +53,6 @@ pub(crate) enum DecodedOperationKind {
         preimage: DecodedDeletePreimage,
     },
     /// Span-anchored text edit (node-addressed; apply/inverse is FDD-01 §7.2.1, 4.4).
-    #[allow(dead_code)] // fields consumed by node-model application (increment 4.4)
     EditText {
         node_id: NodeId,
         span_id: [u8; TEXT_SPAN_HASH_BYTES],
@@ -64,28 +63,24 @@ pub(crate) enum DecodedOperationKind {
         old_span_text: Vec<u8>,
     },
     /// Replace a binary node's blob (node-addressed; apply is 4.4).
-    #[allow(dead_code)] // fields consumed by node-model application (increment 4.4)
     ReplaceBinary {
         node_id: NodeId,
         old_blob_id: ObjectId,
         new_blob_id: ObjectId,
     },
     /// Rename a node (node-addressed; apply is 4.4).
-    #[allow(dead_code)] // fields consumed by node-model application (increment 4.4)
     RenamePath {
         node_id: NodeId,
         old_path: String,
         new_path: String,
     },
     /// Change a node's mode (node-addressed; apply is 4.4).
-    #[allow(dead_code)] // fields consumed by node-model application (increment 4.4)
     ChangePerm {
         node_id: NodeId,
         old_mode: u32,
         new_mode: u32,
     },
     /// Create a symlink node (apply is 4.4; static target validation FDD-04 §5.4a).
-    #[allow(dead_code)] // fields consumed by node-model application (increment 4.4)
     CreateSymlink {
         path: String,
         node_id: NodeId,
@@ -103,7 +98,6 @@ pub(crate) enum DecodedDeletePreimage {
         old_mode: u32,
     },
     /// Symlink: old target (apply/inverse is 4.4).
-    #[allow(dead_code)] // old_target consumed by node-model application (increment 4.4)
     Symlink { old_target: String },
 }
 

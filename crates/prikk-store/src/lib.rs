@@ -9,10 +9,11 @@
 //! read-only worktree status, minimal worktree-to-patch draft generation, supported patch replay
 //! planning and materialization, explicit opt-in deletion of patch-removed files, deterministic
 //! arbitrary-span text edit replay and generation from worktree changes, explicit unborn local branch
-//! genesis through active-WAL ref ownership, and
+//! genesis through active-WAL ref ownership,
 //! read-only inverse planning for the supported patch subset, non-mutating rollback preview,
-//! conservative rollback draft append to an empty active WAL, rollback draft verification, and sealed rollback block classification.
-//! Full patch algebra, plugin execution, and remote sync remain separate increments.
+//! conservative rollback draft append to an empty active WAL, rollback draft verification, sealed
+//! rollback block classification, and an internal patch-algebra foundation. Production confluence,
+//! plugin execution, and remote sync remain separate increments.
 
 mod active;
 mod author_signing;
@@ -24,9 +25,6 @@ mod file_codec;
 mod fsutil;
 mod history;
 mod layout;
-// Lifecycle cache codec/importer (DC-09 Phase 4.4-2b.1). Not wired into replay yet;
-// `dead_code` allowed until the reconstruct/compare + threading slice.
-#[allow(dead_code)]
 mod lifecycle_cache;
 mod lock;
 mod maintainer_signing;
@@ -34,11 +32,12 @@ mod memory_store;
 // Production node-id minting (DC-09 Phase 4.4a-1), consumed by node-addressed worktree authoring
 // (4.4a-2) for fresh-node creation.
 mod node_id_gen;
-// Node-aware replay substrate (DC-09 Phase 4.4). Threaded into replay/inverse/
-// rollback in the following increment; `dead_code` allowed until that wiring lands.
-#[allow(dead_code)]
 mod node_lifecycle;
 mod object_store;
+// Patch algebra foundation (DC-16). Test-compiled until a later increment wires production
+// integration and persisted witnesses.
+#[cfg(test)]
+mod patch_algebra;
 mod patch_checkout;
 mod patch_inverse;
 mod patch_replay;

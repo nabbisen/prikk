@@ -12,20 +12,32 @@
 //! `FieldRecord` TLV (design v3 wire table). Deterministic, versioned, and validated
 //! fail-closed: any structural or cross-set violation is rejected.
 
+#[cfg(test)]
 use std::fmt;
 
-use prikk_error::{PrikkError, Result};
-use prikk_object::{BlobKind, CanonicalWriter, NodeId, NodeKind, ObjectId, WireType};
+#[cfg(test)]
+use prikk_error::PrikkError;
+use prikk_error::Result;
+use prikk_object::{BlobKind, ObjectId};
+#[cfg(test)]
+use prikk_object::{CanonicalWriter, NodeId, NodeKind, WireType};
 
+#[cfg(test)]
 use crate::byte_cursor::ByteCursor;
-use crate::node_lifecycle::{LiveNode, NodeContent, NodeLifecycleState, Tombstone};
+use crate::node_lifecycle::NodeLifecycleState;
+#[cfg(test)]
+use crate::node_lifecycle::{LiveNode, NodeContent, Tombstone};
 use crate::object_store::ObjectReader;
 
+#[cfg(test)]
 const LIFECYCLE_CACHE_MAGIC: &[u8] = b"PRIKK-NODE-LIFECYCLE-CACHE-v1\0";
+#[cfg(test)]
 const WINDOW_HASH_DOMAIN: &[u8] = b"PRIKK-LIFECYCLE-CACHE-WINDOW-v1";
+#[cfg(test)]
 const CACHE_SCHEMA_VERSION: u32 = 1;
 
 /// Parent-policy of the derivation window (design v3 §3).
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ParentPolicy {
     /// Single-parent authoritative lineage segment (the only v1 policy).
@@ -34,6 +46,7 @@ pub(crate) enum ParentPolicy {
     Dc13MergeAware,
 }
 
+#[cfg(test)]
 impl ParentPolicy {
     const fn code(self) -> u16 {
         match self {
@@ -55,6 +68,7 @@ impl ParentPolicy {
 /// `SHA-256(domain || u64be(count) || raw32(block_id_0) || … || raw32(block_id_n))`,
 /// with `block_id_0 == lineage_horizon_id` and `block_id_n == baseline_block_id`. The
 /// caller is responsible for supplying the *actual* walked single-parent chain.
+#[cfg(test)]
 pub(crate) fn compute_window_hash(ordered_block_ids: &[ObjectId]) -> [u8; 32] {
     let mut preimage =
         Vec::with_capacity(WINDOW_HASH_DOMAIN.len() + 8 + ordered_block_ids.len() * 32);
@@ -68,6 +82,7 @@ pub(crate) fn compute_window_hash(ordered_block_ids: &[ObjectId]) -> [u8; 32] {
 
 /// A decoded, structurally + cross-set validated lifecycle cache. **Not** authority for
 /// identity decisions (design v3 §0).
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DecodedLifecycleCache {
     pub(crate) schema_version: u32,
@@ -84,6 +99,7 @@ pub(crate) struct DecodedLifecycleCache {
     pub(crate) seen_ids: Vec<NodeId>,
 }
 
+#[cfg(test)]
 impl DecodedLifecycleCache {
     /// Encode to the persisted wire form (magic || canonical TLV) **after** fail-closed
     /// validation. Production callers use this: it refuses to persist a cache the importer
@@ -318,8 +334,10 @@ impl DecodedLifecycleCache {
 /// [`replay::walk_single_parent_chain`] as authoritative replay. Its `Block` is just the parent id
 /// list (provenance needs no payload). A resolver error (missing, non-Block, decode failure) is
 /// surfaced as a fail-closed unreadable-block walk error.
+#[cfg(test)]
 struct ResolverLineage<'a, P: BlockParentResolver>(&'a P);
 
+#[cfg(test)]
 impl<P: BlockParentResolver> replay::LineageBlockReader for ResolverLineage<'_, P> {
     type Block = Vec<ObjectId>;
 
@@ -342,12 +360,14 @@ impl<P: BlockParentResolver> replay::LineageBlockReader for ResolverLineage<'_, 
 
 // --- field-level codec helpers ---
 
+#[cfg(test)]
 struct Field<'a> {
     tag: u16,
     wire: u8,
     value: &'a [u8],
 }
 
+#[cfg(test)]
 fn next_field<'a>(cursor: &mut ByteCursor<'a>) -> Result<Option<Field<'a>>> {
     if cursor.is_finished() {
         return Ok(None);
@@ -363,6 +383,7 @@ fn next_field<'a>(cursor: &mut ByteCursor<'a>) -> Result<Option<Field<'a>>> {
 /// Reject a node record whose `node_id` is the reserved all-zero value or whose
 /// `kind`/`content` disagree — the same rule the substrate enforces at every seeding
 /// boundary, so a production-encoded cache is structurally equivalent to a decoded one.
+#[cfg(test)]
 fn validate_node_record_shape(
     node_id: NodeId,
     kind: NodeKind,
@@ -373,6 +394,7 @@ fn validate_node_record_shape(
     Ok(())
 }
 
+#[cfg(test)]
 fn ensure_nondecreasing_tag(last: &mut Option<u16>, tag: u16) -> Result<()> {
     if let Some(prev) = *last {
         if tag < prev {
@@ -385,6 +407,7 @@ fn ensure_nondecreasing_tag(last: &mut Option<u16>, tag: u16) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
 fn require_wire(field: &Field<'_>, expected: WireType) -> Result<()> {
     if field.wire == expected as u8 {
         Ok(())
@@ -396,6 +419,7 @@ fn require_wire(field: &Field<'_>, expected: WireType) -> Result<()> {
     }
 }
 
+#[cfg(test)]
 fn set_once<T>(slot: &mut Option<T>, value: T, name: &str) -> Result<()> {
     if slot.is_some() {
         return Err(malformed(format!("duplicate singleton field {name}")));
@@ -404,6 +428,7 @@ fn set_once<T>(slot: &mut Option<T>, value: T, name: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
 fn read_u32(field: &Field<'_>) -> Result<u32> {
     require_wire(field, WireType::U32)?;
     let array: [u8; 4] = field
@@ -413,6 +438,7 @@ fn read_u32(field: &Field<'_>) -> Result<u32> {
     Ok(u32::from_be_bytes(array))
 }
 
+#[cfg(test)]
 fn read_enum_u16(field: &Field<'_>) -> Result<u16> {
     require_wire(field, WireType::EnumU16)?;
     let array: [u8; 2] = field
@@ -422,6 +448,7 @@ fn read_enum_u16(field: &Field<'_>) -> Result<u16> {
     Ok(u16::from_be_bytes(array))
 }
 
+#[cfg(test)]
 fn read_object_id(field: &Field<'_>) -> Result<ObjectId> {
     require_wire(field, WireType::ObjectId)?;
     let array: [u8; 32] = field
@@ -431,6 +458,7 @@ fn read_object_id(field: &Field<'_>) -> Result<ObjectId> {
     Ok(ObjectId::from_bytes(array))
 }
 
+#[cfg(test)]
 fn read_hash32(field: &Field<'_>) -> Result<[u8; 32]> {
     require_wire(field, WireType::Bytes)?;
     field
@@ -439,6 +467,7 @@ fn read_hash32(field: &Field<'_>) -> Result<[u8; 32]> {
         .map_err(|_| malformed("expected 32-byte hash".to_string()))
 }
 
+#[cfg(test)]
 fn read_node_id_bytes(field: &Field<'_>) -> Result<NodeId> {
     require_wire(field, WireType::Bytes)?;
     let array: [u8; 32] = field
@@ -448,6 +477,7 @@ fn read_node_id_bytes(field: &Field<'_>) -> Result<NodeId> {
     NodeId::try_from_bytes(array)
 }
 
+#[cfg(test)]
 fn read_repo_path(field: &Field<'_>) -> Result<crate::path::RepoPath> {
     require_wire(field, WireType::RepoPath)?;
     let text = core::str::from_utf8(field.value)
@@ -455,6 +485,7 @@ fn read_repo_path(field: &Field<'_>) -> Result<crate::path::RepoPath> {
     crate::path::RepoPath::parse(text)
 }
 
+#[cfg(test)]
 fn read_symlink_target(field: &Field<'_>) -> Result<String> {
     require_wire(field, WireType::String)?;
     let text = core::str::from_utf8(field.value)
@@ -464,6 +495,7 @@ fn read_symlink_target(field: &Field<'_>) -> Result<String> {
 
 /// Shared node-record body decode (file/symlink discriminator). Used for both live and
 /// tombstone records — the wire shape is identical (path, node_id, kind, content).
+#[cfg(test)]
 fn decode_node_record(
     bytes: &[u8],
 ) -> Result<(NodeId, crate::path::RepoPath, NodeKind, NodeContent)> {
@@ -526,6 +558,7 @@ fn decode_node_record(
     Ok((node_id, path, node_kind, content))
 }
 
+#[cfg(test)]
 fn decode_live_entry(bytes: &[u8]) -> Result<(NodeId, LiveNode)> {
     let (node_id, path, kind, content) = decode_node_record(bytes)?;
     Ok((
@@ -538,6 +571,7 @@ fn decode_live_entry(bytes: &[u8]) -> Result<(NodeId, LiveNode)> {
     ))
 }
 
+#[cfg(test)]
 fn decode_tombstone(bytes: &[u8]) -> Result<(NodeId, Tombstone)> {
     let (node_id, path, kind, content) = decode_node_record(bytes)?;
     Ok((
@@ -550,6 +584,7 @@ fn decode_tombstone(bytes: &[u8]) -> Result<(NodeId, Tombstone)> {
     ))
 }
 
+#[cfg(test)]
 fn decode_seen_ids(raw: &[u8]) -> Result<Vec<NodeId>> {
     if raw.len() % 32 != 0 {
         return Err(malformed(
@@ -566,6 +601,7 @@ fn decode_seen_ids(raw: &[u8]) -> Result<Vec<NodeId>> {
     Ok(ids)
 }
 
+#[cfg(test)]
 fn encode_node_record(
     node_id: &NodeId,
     path: &crate::path::RepoPath,
@@ -588,10 +624,12 @@ fn encode_node_record(
     Ok(writer.finish())
 }
 
+#[cfg(test)]
 fn malformed(detail: String) -> PrikkError {
     PrikkError::MalformedData(format!("lifecycle cache: {detail}"))
 }
 
+#[cfg(test)]
 fn stale_provenance(detail: String) -> PrikkError {
     PrikkError::Integrity(format!("lifecycle cache stale provenance: {detail}"))
 }
@@ -615,6 +653,7 @@ pub(crate) trait BlobContentResolver {
 /// verification. Empty at genesis. v1 lifecycle windows require a single-parent chain;
 /// more than one parent fails closed. A real store-backed resolver (reading `Block`
 /// objects) is wired in the threading slice; this trait keeps the walk testable.
+#[cfg(test)]
 pub(crate) trait BlockParentResolver {
     fn parent_block_ids(&self, block_id: &ObjectId) -> Result<Vec<ObjectId>>;
 }
@@ -634,11 +673,13 @@ mod replay;
 /// **NOT** authority for a `node_id` reuse or restoration-equivalence decision — those
 /// require replay-derived or replay-compared state (later rungs). There is deliberately no
 /// method here that yields such a decision.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ValidatedLifecycleCache {
     decoded: DecodedLifecycleCache,
 }
 
+#[cfg(test)]
 impl ValidatedLifecycleCache {
     /// Build the rung: structural re-validation (the input is not trusted to have come from
     /// `decode`, since `pub(crate)` fields allow direct construction), then operational
@@ -674,12 +715,6 @@ impl ValidatedLifecycleCache {
             ));
         }
         Self::from_decoded(decoded, blob_resolver, parent_resolver)
-    }
-
-    /// Borrow the decoded cache for non-authority uses (e.g. checkout/status hints). Not
-    /// usable for identity decisions.
-    pub(crate) fn decoded(&self) -> &DecodedLifecycleCache {
-        &self.decoded
     }
 
     /// Rebuild a `NodeLifecycleState` from the (already validated) cache, for comparison
@@ -741,6 +776,7 @@ impl ReplayDerivedLifecycleState {
 /// acceleration unless and until it gains its own validation path against the authoritative
 /// state/root. A narrowed accessor exposing only the certified entries should land with the first
 /// consumer.
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ComparedLifecycleCache {
     validated: ValidatedLifecycleCache,
@@ -752,6 +788,7 @@ pub(crate) struct ComparedLifecycleCache {
 /// replay, whereas `ReplayUnavailable` means authoritative history itself could not be
 /// reconstructed and must be surfaced as an integrity fault — never silently bypassed by trusting
 /// the cache.
+#[cfg(test)]
 #[derive(Debug)]
 pub(crate) enum CacheCertificationError {
     /// The cache's declared baseline is not the caller's intended baseline.
@@ -768,6 +805,7 @@ pub(crate) enum CacheCertificationError {
     ContentMismatch,
 }
 
+#[cfg(test)]
 impl fmt::Display for CacheCertificationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -798,8 +836,10 @@ impl fmt::Display for CacheCertificationError {
     }
 }
 
+#[cfg(test)]
 impl std::error::Error for CacheCertificationError {}
 
+#[cfg(test)]
 impl From<CacheCertificationError> for PrikkError {
     /// At the `PrikkError` boundary every certification failure is an integrity fault. Callers that
     /// need to *branch* (drop-cache-and-replay vs. surface-unavailability) must consume the
@@ -809,6 +849,7 @@ impl From<CacheCertificationError> for PrikkError {
     }
 }
 
+#[cfg(test)]
 impl ComparedLifecycleCache {
     /// Compare a validated cache to authoritative replay for the **same** baseline. Fails closed
     /// with a structured [`CacheCertificationError`] on a baseline mismatch or any disagreement
@@ -831,13 +872,6 @@ impl ComparedLifecycleCache {
             return Err(CacheCertificationError::ContentMismatch);
         }
         Ok(Self { validated })
-    }
-
-    /// The compared (replay-equal) cache. Only the certified lifecycle entries are authoritative
-    /// for acceleration; see the type-level note on `snapshot_blob_id` (E3). Identity-decision
-    /// wiring arrives in a later slice.
-    pub(crate) fn validated(&self) -> &ValidatedLifecycleCache {
-        &self.validated
     }
 }
 
@@ -863,6 +897,7 @@ pub(crate) fn replay_derived_state(
 /// returns a structured [`CacheCertificationError`] so callers can distinguish a droppable cache
 /// fault from authoritative-history unavailability. The cache is an accelerator proven equal to
 /// replay — never a root of trust. On any failure, callers fall back to [`replay_derived_state`].
+#[cfg(test)]
 pub(crate) fn certified_compared_cache<R: ObjectReader>(
     reader: &R,
     decoded: DecodedLifecycleCache,
@@ -904,6 +939,7 @@ pub(crate) fn certified_compared_cache<R: ObjectReader>(
 
 /// Verify one file entry's referenced blob kind matches its `NodeKind` (symlink entries
 /// carry no blob and pass). Reuses the canonical `NodeKind::from_file_blob_kind` rule.
+#[cfg(test)]
 fn verify_file_blob_kind(
     kind: NodeKind,
     content: &NodeContent,
