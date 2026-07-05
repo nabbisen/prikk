@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use prikk_object::{BlobKind, NodeId, NodeKind, ObjectId};
+use prikk_object::{NodeId, NodeKind, ObjectId};
 
 use crate::path::RepoPath;
 
@@ -33,8 +33,6 @@ pub(crate) struct ConflictWitness {
     pub(crate) right_op_seq: u32,
     pub(crate) node_id: Option<NodeId>,
     pub(crate) path: Option<RepoPath>,
-    pub(crate) expected: Option<String>,
-    pub(crate) actual: Option<String>,
     pub(crate) text_span: Option<[u8; 32]>,
 }
 
@@ -61,6 +59,7 @@ pub(crate) enum UnknownReason {
     RenameDeferred,
     SymlinkDeferred,
     FuturePreconditionDeferred,
+    MissingCandidateEvidence,
     UnknownRelation,
 }
 
@@ -71,18 +70,6 @@ pub(crate) struct PathEffects {
     pub(crate) occupied_after: BTreeSet<RepoPath>,
     pub(crate) freed: BTreeSet<RepoPath>,
     pub(crate) newly_occupied: BTreeSet<RepoPath>,
-}
-
-pub(crate) trait BaselineTextResolver {
-    fn text_content(&self, node_id: NodeId, blob_id: ObjectId) -> Option<Vec<u8>>;
-
-    fn blob_kind(&self, _blob_id: ObjectId) -> Option<BlobKind> {
-        None
-    }
-
-    fn blob_content(&self, _blob_id: ObjectId) -> Option<(BlobKind, Vec<u8>)> {
-        None
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -137,12 +124,4 @@ pub(super) enum Action {
         path: RepoPath,
         node_id: NodeId,
     },
-}
-
-pub(super) struct NoBaselineTextResolver;
-
-impl BaselineTextResolver for NoBaselineTextResolver {
-    fn text_content(&self, _node_id: NodeId, _blob_id: ObjectId) -> Option<Vec<u8>> {
-        None
-    }
 }

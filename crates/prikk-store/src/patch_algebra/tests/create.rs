@@ -60,7 +60,7 @@ fn create_then_replace_binary_same_node_is_ordered_when_create_preimage_is_valid
     );
     assert_unknown(
         classify_pair(&baseline, &left, &right),
-        UnknownReason::FuturePreconditionDeferred,
+        UnknownReason::MissingCandidateEvidence,
     );
     let mut ordered_state = baseline.clone();
     let mut ordered_texts = BTreeMap::new();
@@ -108,7 +108,7 @@ fn create_text_then_edit_text_is_ordered_only_with_text_evidence() {
     );
     assert_unknown(
         classify_pair(&baseline, &left, &right),
-        UnknownReason::FuturePreconditionDeferred,
+        UnknownReason::MissingCandidateEvidence,
     );
     let mut ordered_state = baseline.clone();
     let mut ordered_texts = BTreeMap::new();

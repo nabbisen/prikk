@@ -34,8 +34,9 @@ mod memory_store;
 mod node_id_gen;
 mod node_lifecycle;
 mod object_store;
-// Patch algebra foundation (DC-16). Test-compiled until a later increment wires production
-// integration and persisted witnesses.
+// Patch algebra foundation and evidence contract (DC-16/DC-17). Test-compiled until a later
+// increment wires an internal production analysis caller; no CLI or public diagnostic surface is
+// exposed by this increment.
 #[cfg(test)]
 mod patch_algebra;
 mod patch_checkout;

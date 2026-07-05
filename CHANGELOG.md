@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.10.0 — 2026-07-05
+
+DC-17: patch algebra evidence contract.
+
+**Release scope.** This release turns the internal patch-algebra classifier's evidence boundary into an
+explicit store-backed contract. Classification now separates ordinary unsupported algebra from
+repository evidence failures, carries required-vs-optional evidence scope through resolver calls, and
+keeps conflict witnesses as internal diagnostics rather than public schema. This release still does
+**not** add CLI behavior, merge execution, persisted conflict-witness objects, object schema changes,
+production confluence checks, rollback refs, rollback authorization, semantic merge, or user-facing
+conflict resolution.
+
+- **Scoped evidence contract.** Adds internal `EvidenceScope`, evidence state, and evidence-error
+  types so sealed-baseline and sealed-candidate facts fail as integrity errors while explicitly
+  optional unsealed-candidate evidence can remain fail-closed as `Unknown`.
+- **Store-backed resolver boundary.** Adds a read-only resolver that derives baseline text and create
+  blob text from replay/lifecycle state plus validated object-store blob evidence, with no
+  default-empty fallback for sealed baselines.
+- **Classifier result split.** Pair classification now returns an integrity-aware result surface,
+  preserving `Unknown` for unsupported or intentionally deferred algebra while surfacing corrupt,
+  missing, malformed, or unreadable required evidence separately.
+- **Evidence-backed relation coverage.** Pins same-node `CreateFile -> ChangePerm` ordering/conflict
+  behavior and keeps create-before-content-mutation decisions tied to validated blob kind/text
+  evidence.
+- **Internal witness policy.** Removes loose expected/actual witness fields and keeps witness facts
+  deterministic, internal, and test-stable without adding persisted or public diagnostic schema.
+
 ## 0.9.0 — 2026-07-05
 
 DC-16: patch algebra foundation.

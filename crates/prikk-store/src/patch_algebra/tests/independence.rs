@@ -62,9 +62,10 @@ fn different_node_text_edits_are_independent_when_resolver_proves_preimages() {
         PairClass::Independent
     );
     assert_swapped_orders_equal_with_text(&baseline, &text_resolver, &left, &right);
-    assert_unknown(
-        classify_pair(&baseline, &left, &right),
-        UnknownReason::SameNodeTextCommutationDeferred,
+    assert_evidence_error(
+        classify_pair_result(&baseline, &left, &right),
+        EvidenceScope::SealedBaselineRequired,
+        EvidenceFact::BaselineText,
     );
 }
 

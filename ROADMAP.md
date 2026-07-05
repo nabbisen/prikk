@@ -5,11 +5,17 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **M2+ patch algebra after DC-16 foundation.** Next design work should tackle production
-  commutation/confluence, public conflict/merge evidence, and resolver contracts while keeping rollback
-  refs, authorization, branch switching, key lifecycle, and sync behind their dedicated plans.
+- **M2+ patch algebra after DC-17 evidence contract.** Next design work should tackle production
+  commutation/confluence and public conflict/merge evidence while keeping rollback refs, authorization,
+  branch switching, key lifecycle, and sync behind their dedicated plans.
 
 ## Last Released Increment
+
+- **DC-17 - patch algebra evidence contract (released as 0.10.0).** Internal pair classification now
+  uses a scoped evidence contract and store-backed resolver boundary so required sealed evidence
+  failures are distinguishable from ordinary unsupported algebra, while optional unsealed candidate
+  evidence still fails closed as `Unknown`. No CLI, schema, merge execution, persisted witness, or
+  production confluence surface was added.
 
 - **DC-16 - patch algebra foundation (released as 0.9.0).** Internal pair classification now covers
   `Independent`, `OrderedDependency`, `Conflict`, and `Unknown`, with baseline preimage validation,

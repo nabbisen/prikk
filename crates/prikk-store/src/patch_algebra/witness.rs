@@ -114,8 +114,6 @@ fn witness(
         right_op_seq,
         node_id,
         path,
-        expected: None,
-        actual: None,
         text_span,
     }
 }

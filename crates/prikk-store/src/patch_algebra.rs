@@ -7,6 +7,8 @@
 mod classify;
 mod create;
 mod delete;
+mod evidence;
+mod evidence_types;
 mod facts;
 mod preimage;
 mod text_pair;

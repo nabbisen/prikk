@@ -3,6 +3,7 @@
 mod assertions;
 mod create;
 mod deferred;
+mod evidence;
 mod fixtures;
 mod independence;
 mod oracle;

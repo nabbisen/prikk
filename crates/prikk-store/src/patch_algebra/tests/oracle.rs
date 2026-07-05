@@ -69,14 +69,27 @@ pub(super) fn apply_for_oracle_with_evidence(
             blob_id,
             mode,
         } => {
-            let blob_kind = evidence
-                .blob_kind(*blob_id)
-                .ok_or_else(|| PrikkError::Integrity("missing oracle blob kind".to_string()))?;
+            let blob_kind =
+                match evidence.blob_kind(EvidenceScope::UnsealedCandidateOptional, *blob_id) {
+                    Evidence::Known(kind) => kind,
+                    _ => {
+                        return Err(PrikkError::Integrity(
+                            "missing oracle blob kind".to_string(),
+                        ));
+                    }
+                };
             let node_kind = NodeKind::from_file_blob_kind(blob_kind)?;
             if node_kind == NodeKind::TextFile {
-                let (kind, content) = evidence.blob_content(*blob_id).ok_or_else(|| {
-                    PrikkError::Integrity("missing oracle text blob content".to_string())
-                })?;
+                let (kind, content) = match evidence
+                    .blob_content(EvidenceScope::UnsealedCandidateOptional, *blob_id)
+                {
+                    Evidence::Known(content) => content,
+                    _ => {
+                        return Err(PrikkError::Integrity(
+                            "missing oracle text blob content".to_string(),
+                        ));
+                    }
+                };
                 if kind != BlobKind::Text {
                     return Err(PrikkError::Integrity(
                         "oracle text create has non-text content".to_string(),

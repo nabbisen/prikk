@@ -70,3 +70,22 @@ pub(super) fn assert_conflict(class: PairClass, kind: ConflictWitnessKind) {
         other => panic!("expected conflict {kind:?}, got {other:?}"),
     }
 }
+
+pub(super) fn assert_evidence_error(
+    result: Result<PairClass, EvidenceError>,
+    scope: EvidenceScope,
+    fact: EvidenceFact,
+) {
+    match result {
+        Err(EvidenceError::Missing {
+            scope: actual_scope,
+            fact: actual_fact,
+            ..
+        }) => {
+            assert_eq!(actual_scope, scope);
+            assert_eq!(actual_fact, fact);
+        }
+        Err(other) => panic!("expected missing evidence error, got {other:?}"),
+        Ok(class) => panic!("expected evidence error, got {class:?}"),
+    }
+}

@@ -3,20 +3,21 @@ use prikk_object::{BlobKind, NodeId, ObjectId, text_span_hash};
 use crate::node_lifecycle::NodeLifecycleState;
 use crate::text_span;
 
-use super::preimage::invalid_preimage_class;
-use super::types::{
-    Action, BaselineTextResolver, ConflictWitnessKind, NoBaselineTextResolver, OperationFacts,
-    PairClass, RequiredOrder, UnknownReason,
+use super::evidence_types::{
+    ClassificationResult, Evidence, EvidenceError, EvidenceScope, NoPatchAlgebraEvidence,
+    PatchAlgebraEvidence,
 };
+use super::preimage::invalid_preimage_class;
+use super::types::{Action, ConflictWitnessKind, OperationFacts, RequiredOrder, UnknownReason};
 use super::witness::{conflict, conflict_with_span, ordered, unknown_from_facts};
 
-pub(super) fn classify_create_then_mutate<R: BaselineTextResolver>(
+pub(super) fn classify_create_then_mutate<R: PatchAlgebraEvidence>(
     baseline: &NodeLifecycleState,
     evidence: &R,
     left: &OperationFacts,
     right: &OperationFacts,
     node_id: NodeId,
-) -> Option<PairClass> {
+) -> Option<ClassificationResult> {
     if let Some(class) = invalid_create_in_same_node_pair(baseline, left, right) {
         return Some(class);
     }
@@ -31,14 +32,14 @@ pub(super) fn classify_create_then_mutate<R: BaselineTextResolver>(
                 new_mode: _,
                 ..
             },
-        ) if *mode == *old_mode => Some(ordered(
+        ) if *mode == *old_mode => Some(Ok(ordered(
             RequiredOrder::LeftBeforeRight,
             ConflictWitnessKind::LiveStateMismatch,
             left,
             right,
             Some(node_id),
             None,
-        )),
+        ))),
         (
             Action::ChangePerm {
                 old_mode,
@@ -46,14 +47,36 @@ pub(super) fn classify_create_then_mutate<R: BaselineTextResolver>(
                 ..
             },
             Action::CreateFile { mode, .. },
-        ) if *mode == *old_mode => Some(ordered(
+        ) if *mode == *old_mode => Some(Ok(ordered(
             RequiredOrder::RightBeforeLeft,
             ConflictWitnessKind::LiveStateMismatch,
             left,
             right,
             Some(node_id),
             None,
-        )),
+        ))),
+        (
+            Action::CreateFile { mode: _, .. },
+            Action::ChangePerm {
+                old_mode: _,
+                new_mode: _,
+                ..
+            },
+        )
+        | (
+            Action::ChangePerm {
+                old_mode: _,
+                new_mode: _,
+                ..
+            },
+            Action::CreateFile { mode: _, .. },
+        ) => Some(Ok(conflict(
+            ConflictWitnessKind::ModeMismatch,
+            left,
+            right,
+            Some(node_id),
+            None,
+        ))),
         (Action::CreateFile { blob_id, .. }, Action::ReplaceBinary { old_blob_id, .. }) => {
             Some(classify_create_then_replace_binary(
                 evidence,
@@ -98,13 +121,13 @@ pub(super) fn classify_create_then_mutate<R: BaselineTextResolver>(
                 edit,
             ))
         }
-        (Action::CreateFile { .. }, _) | (_, Action::CreateFile { .. }) => Some(conflict(
+        (Action::CreateFile { .. }, _) | (_, Action::CreateFile { .. }) => Some(Ok(conflict(
             ConflictWitnessKind::NodeIdReuse,
             left,
             right,
             Some(node_id),
             None,
-        )),
+        ))),
         _ => None,
     }
 }
@@ -113,14 +136,18 @@ fn invalid_create_in_same_node_pair(
     baseline: &NodeLifecycleState,
     create_candidate: &OperationFacts,
     peer: &OperationFacts,
-) -> Option<PairClass> {
+) -> Option<ClassificationResult> {
     if !matches!(create_candidate.action, Action::CreateFile { .. }) {
         return None;
     }
-    invalid_preimage_class(baseline, &NoBaselineTextResolver, create_candidate, peer)
+    match invalid_preimage_class(baseline, &NoPatchAlgebraEvidence, create_candidate, peer) {
+        Ok(Some(class)) => Some(Ok(class)),
+        Ok(None) => None,
+        Err(err) => Some(Err(err)),
+    }
 }
 
-fn classify_create_then_replace_binary<R: BaselineTextResolver>(
+fn classify_create_then_replace_binary<R: PatchAlgebraEvidence>(
     evidence: &R,
     left: &OperationFacts,
     right: &OperationFacts,
@@ -128,43 +155,47 @@ fn classify_create_then_replace_binary<R: BaselineTextResolver>(
     required_order: RequiredOrder,
     create_blob_id: ObjectId,
     replace_old_blob_id: ObjectId,
-) -> PairClass {
+) -> ClassificationResult {
     if create_blob_id != replace_old_blob_id {
-        return conflict(
+        return Ok(conflict(
             ConflictWitnessKind::BlobMismatch,
             left,
             right,
             Some(node_id),
             None,
-        );
+        ));
     }
-    match evidence.blob_kind(create_blob_id) {
-        Some(BlobKind::Binary) => ordered(
+    match evidence.blob_kind(EvidenceScope::UnsealedCandidateOptional, create_blob_id) {
+        Evidence::Known(BlobKind::Binary) => Ok(ordered(
             required_order,
             ConflictWitnessKind::LiveStateMismatch,
             left,
             right,
             Some(node_id),
             None,
-        ),
-        Some(BlobKind::Text | BlobKind::Snapshot) => conflict(
+        )),
+        Evidence::Known(BlobKind::Text | BlobKind::Snapshot) => Ok(conflict(
             ConflictWitnessKind::KindMismatch,
             left,
             right,
             Some(node_id),
             None,
-        ),
-        None => unknown_from_facts(
-            UnknownReason::FuturePreconditionDeferred,
+        )),
+        Evidence::Missing {
+            scope: EvidenceScope::UnsealedCandidateOptional,
+            ..
+        } => Ok(unknown_from_facts(
+            UnknownReason::MissingCandidateEvidence,
             left,
             right,
             Some(node_id),
             None,
-        ),
+        )),
+        other => Err(evidence_error(other)),
     }
 }
 
-fn classify_create_then_edit_text<R: BaselineTextResolver>(
+fn classify_create_then_edit_text<R: PatchAlgebraEvidence>(
     evidence: &R,
     left: &OperationFacts,
     right: &OperationFacts,
@@ -172,24 +203,32 @@ fn classify_create_then_edit_text<R: BaselineTextResolver>(
     required_order: RequiredOrder,
     create_blob_id: ObjectId,
     edit: &Action,
-) -> PairClass {
-    let Some((kind, content)) = evidence.blob_content(create_blob_id) else {
-        return unknown_from_facts(
-            UnknownReason::FuturePreconditionDeferred,
-            left,
-            right,
-            Some(node_id),
-            None,
-        );
-    };
+) -> ClassificationResult {
+    let (kind, content) =
+        match evidence.blob_content(EvidenceScope::UnsealedCandidateOptional, create_blob_id) {
+            Evidence::Known(content) => content,
+            Evidence::Missing {
+                scope: EvidenceScope::UnsealedCandidateOptional,
+                ..
+            } => {
+                return Ok(unknown_from_facts(
+                    UnknownReason::MissingCandidateEvidence,
+                    left,
+                    right,
+                    Some(node_id),
+                    None,
+                ));
+            }
+            other => return Err(evidence_error(other)),
+        };
     if kind != BlobKind::Text {
-        return conflict(
+        return Ok(conflict(
             ConflictWitnessKind::KindMismatch,
             left,
             right,
             Some(node_id),
             None,
-        );
+        ));
     }
     let Action::EditText {
         span_id,
@@ -203,13 +242,13 @@ fn classify_create_then_edit_text<R: BaselineTextResolver>(
         unreachable!("caller passes only EditText actions");
     };
     if text_span_hash(old_span_text) != *old_span_hash {
-        return conflict_with_span(
+        return Ok(conflict_with_span(
             ConflictWitnessKind::TextAnchorStale,
             left,
             right,
             node_id,
             *span_id,
-        );
+        ));
     }
     match text_span::locate_text_span(
         &content,
@@ -220,20 +259,24 @@ fn classify_create_then_edit_text<R: BaselineTextResolver>(
         node_id,
         old_span_hash,
     ) {
-        Ok(_) => ordered(
+        Ok(_) => Ok(ordered(
             required_order,
             ConflictWitnessKind::LiveStateMismatch,
             left,
             right,
             Some(node_id),
             None,
-        ),
-        Err(_) => conflict_with_span(
+        )),
+        Err(_) => Ok(conflict_with_span(
             ConflictWitnessKind::TextAnchorStale,
             left,
             right,
             node_id,
             *span_id,
-        ),
+        )),
     }
+}
+
+fn evidence_error<T>(evidence: Evidence<T>) -> EvidenceError {
+    evidence.into_error()
 }

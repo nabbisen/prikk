@@ -761,6 +761,11 @@ impl ReplayDerivedLifecycleState {
     pub(crate) fn state(&self) -> &NodeLifecycleState {
         &self.state
     }
+
+    #[cfg(test)]
+    pub(crate) fn baseline_block_id(&self) -> ObjectId {
+        self.baseline_block_id
+    }
 }
 
 /// A validated cache **proven equal** to authoritative replay for the same baseline (rung 4).

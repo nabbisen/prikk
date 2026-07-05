@@ -73,12 +73,12 @@ local branch ref can be started with `commit --ref heads/<branch>` and published
 
 ## Design Notes
 
-Current released implementation: **0.9.0** (DC-16 — patch algebra foundation). This release adds an
-internal, library/test-only pair-classification foundation for future patch algebra work. It proves
-baseline preimages before `Independent`, models path effects including `required_free`, keeps
-insufficient-evidence cases fail-closed, and uses both-order replay oracles for independent fixtures.
-It does not add CLI behavior, merge execution, persisted conflict-witness objects, object schema changes,
-or production confluence checks.
+Current released implementation: **0.10.0** (DC-17 — patch algebra evidence contract). This release
+keeps patch algebra internal and library/test-only while making the classifier's evidence boundary
+explicit: sealed baseline/candidate evidence failures surface separately from ordinary `Unknown`
+algebra cases, optional unsealed-candidate evidence remains fail-closed, and resolver facts come from
+replay/lifecycle state plus validated object-store blobs. It does not add CLI behavior, merge
+execution, persisted conflict-witness objects, object schema changes, or production confluence checks.
 
 Implemented:
 

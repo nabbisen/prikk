@@ -1,11 +1,11 @@
 # Prikk Implementation Status
 
-Version: 0.9.0 released (DC-16 — patch algebra foundation)
+Version: 0.10.0 released (DC-17 — patch algebra evidence contract)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (0.9.0 released)
+## Current State (0.10.0 released)
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** local
   branch baseline reconstructed from authoritative replay — or, on a valid unborn `heads/*` ref, a
@@ -49,12 +49,15 @@ Version: 0.9.0 released (DC-16 — patch algebra foundation)
   Rollback-draft AUTHOR verification remains structural at this layer: it rejects missing, legacy
   marker, wrong-role, wrong-algorithm, and malformed Ed25519 records, including signatures whose byte
   payload is not 64 bytes, without claiming AUTHOR trust-store enforcement.
-- Internal patch-algebra pair classification is present for the DC-16 foundation subset. It models
+- Internal patch-algebra pair classification is present for the DC-16/DC-17 foundation subset. It models
   `Independent`, `OrderedDependency`, `Conflict`, and `Unknown`, structured path effects including
-  `required_free`, baseline preimage validation for the supported operation subset, evidence-backed
-  create-before-content-mutation ordering, and oracle-backed vectors. This is library/test-only: no CLI,
-  merge execution, persisted witness object, object schema change, public conflict UX, or production
-  confluence check is added.
+  `required_free`, baseline preimage validation for the supported operation subset, scoped evidence
+  handling, store-backed resolver facts for lifecycle/text/blob evidence, evidence-backed
+  create-before-content-mutation and create-before-mode-change ordering, and oracle-backed vectors.
+  Required sealed-baseline/candidate evidence failures surface separately from ordinary `Unknown`
+  algebra cases, while explicitly optional unsealed-candidate evidence remains fail-closed. This is
+  library/test-only: no CLI, merge execution, persisted witness object, object schema change, public
+  conflict UX, or production confluence check is added.
 
 ## Implemented
 
@@ -103,7 +106,7 @@ Version: 0.9.0 released (DC-16 — patch algebra foundation)
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy beyond the DC-11 local trust store.
 - Policy-aware audit/attestation publication from seal.
 - Production patch algebra: rollback ref publication, commutation, confluence, public conflict
-  witnesses, and merge state.
+  witnesses, public merge evidence, and merge state.
 - WASM plugin host.
 - Audit publication policy.
 - Remote sync.
@@ -119,6 +122,13 @@ Version: 0.9.0 released (DC-16 — patch algebra foundation)
 - Missing-object repair, checksum-mismatch repair, object quarantine, GC, and malformed-log repair remain deferred.
 
 ## Gate Discipline
+
+DC-17 stays within the approved evidence-contract boundary: internal pair classification distinguishes
+required sealed evidence failures from ordinary unsupported algebra, uses scoped resolver evidence from
+replay/lifecycle state and validated object-store blobs, and keeps conflict witnesses internal. It does
+not add CLI behavior, merge execution, persisted conflict-witness objects, object schema changes,
+production confluence checks, rollback refs, rollback authorization, semantic merge, public merge
+evidence, or user-facing conflict resolution.
 
 DC-16 stays within the approved foundation boundary: it adds internal pair classification, structured
 path effects, baseline preimage validation, and test-level both-order replay oracles. It does not add

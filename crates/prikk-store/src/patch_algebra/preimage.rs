@@ -1,22 +1,20 @@
 use prikk_object::{NodeId, NodeKind, ObjectId};
 
+use super::evidence_types::{EvidenceError, NoPatchAlgebraEvidence, PatchAlgebraEvidence};
 use super::facts::deferred_reason;
 use super::text_preimage::{TextPreimage, validate_text_preimage};
-use super::types::{
-    Action, BaselineTextResolver, ConflictWitnessKind, NoBaselineTextResolver, OperationFacts,
-    PairClass, UnknownReason,
-};
+use super::types::{Action, ConflictWitnessKind, OperationFacts, PairClass, UnknownReason};
 use super::witness::{conflict, unknown_from_facts};
 use crate::node_lifecycle::{NodeContent, NodeLifecycleState};
 use crate::path::RepoPath;
 
-pub(super) fn invalid_preimage_class<R: BaselineTextResolver>(
+pub(super) fn invalid_preimage_class<R: PatchAlgebraEvidence>(
     baseline: &NodeLifecycleState,
     text_resolver: &R,
     subject: &OperationFacts,
     peer: &OperationFacts,
-) -> Option<PairClass> {
-    match validate_preimage(baseline, text_resolver, subject) {
+) -> Result<Option<PairClass>, EvidenceError> {
+    let class = match validate_preimage(baseline, text_resolver, subject)? {
         PreimageStatus::Valid => None,
         PreimageStatus::Conflict {
             kind,
@@ -40,7 +38,8 @@ pub(super) fn invalid_preimage_class<R: BaselineTextResolver>(
             node_id.or(subject.node_id),
             path,
         )),
-    }
+    };
+    Ok(class)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,11 +57,11 @@ pub(super) enum PreimageStatus {
     },
 }
 
-fn validate_preimage<R: BaselineTextResolver>(
+fn validate_preimage<R: PatchAlgebraEvidence>(
     baseline: &NodeLifecycleState,
     text_resolver: &R,
     facts: &OperationFacts,
-) -> PreimageStatus {
+) -> Result<PreimageStatus, EvidenceError> {
     match &facts.action {
         Action::CreateFile {
             path,
@@ -71,20 +70,20 @@ fn validate_preimage<R: BaselineTextResolver>(
             mode: _,
         } => {
             if baseline.node_id_at(path).is_some() {
-                return PreimageStatus::Conflict {
+                return Ok(PreimageStatus::Conflict {
                     kind: ConflictWitnessKind::SamePathCreate,
                     node_id: Some(*node_id),
                     path: Some(path.clone()),
-                };
+                });
             }
             if baseline.contains_seen_node_id(node_id) {
-                return PreimageStatus::Conflict {
+                return Ok(PreimageStatus::Conflict {
                     kind: ConflictWitnessKind::NodeIdReuse,
                     node_id: Some(*node_id),
                     path: Some(path.clone()),
-                };
+                });
             }
-            PreimageStatus::Valid
+            Ok(PreimageStatus::Valid)
         }
         Action::DeleteFile {
             path,
@@ -96,13 +95,13 @@ fn validate_preimage<R: BaselineTextResolver>(
             if baseline_file_matches(baseline, *node_id, *old_node_kind, *old_blob_id, *old_mode)
                 && baseline.node_id_at(path) == Some(*node_id)
             {
-                PreimageStatus::Valid
+                Ok(PreimageStatus::Valid)
             } else {
-                PreimageStatus::Conflict {
+                Ok(PreimageStatus::Conflict {
                     kind: ConflictWitnessKind::LiveStateMismatch,
                     node_id: Some(*node_id),
                     path: Some(path.clone()),
-                }
+                })
             }
         }
         Action::EditText {
@@ -130,35 +129,35 @@ fn validate_preimage<R: BaselineTextResolver>(
             new_blob_id: _,
         } => {
             let Some(live) = baseline.live_node(node_id) else {
-                return PreimageStatus::Conflict {
+                return Ok(PreimageStatus::Conflict {
                     kind: ConflictWitnessKind::LiveStateMismatch,
                     node_id: Some(*node_id),
                     path: None,
-                };
+                });
             };
             match &live.content {
                 NodeContent::File { blob_id, .. }
                     if live.kind == NodeKind::BinaryFile && *blob_id == *old_blob_id =>
                 {
-                    PreimageStatus::Valid
+                    Ok(PreimageStatus::Valid)
                 }
                 NodeContent::File { .. } if live.kind != NodeKind::BinaryFile => {
-                    PreimageStatus::Conflict {
+                    Ok(PreimageStatus::Conflict {
                         kind: ConflictWitnessKind::KindMismatch,
                         node_id: Some(*node_id),
                         path: Some(live.path.clone()),
-                    }
+                    })
                 }
-                NodeContent::File { .. } => PreimageStatus::Conflict {
+                NodeContent::File { .. } => Ok(PreimageStatus::Conflict {
                     kind: ConflictWitnessKind::BlobMismatch,
                     node_id: Some(*node_id),
                     path: Some(live.path.clone()),
-                },
-                NodeContent::Symlink { .. } => PreimageStatus::Conflict {
+                }),
+                NodeContent::Symlink { .. } => Ok(PreimageStatus::Conflict {
                     kind: ConflictWitnessKind::KindMismatch,
                     node_id: Some(*node_id),
                     path: Some(live.path.clone()),
-                },
+                }),
             }
         }
         Action::ChangePerm {
@@ -167,32 +166,32 @@ fn validate_preimage<R: BaselineTextResolver>(
             new_mode: _,
         } => {
             let Some(live) = baseline.live_node(node_id) else {
-                return PreimageStatus::Conflict {
+                return Ok(PreimageStatus::Conflict {
                     kind: ConflictWitnessKind::LiveStateMismatch,
                     node_id: Some(*node_id),
                     path: None,
-                };
+                });
             };
             match &live.content {
-                NodeContent::File { mode, .. } if *mode == *old_mode => PreimageStatus::Valid,
-                NodeContent::File { .. } => PreimageStatus::Conflict {
+                NodeContent::File { mode, .. } if *mode == *old_mode => Ok(PreimageStatus::Valid),
+                NodeContent::File { .. } => Ok(PreimageStatus::Conflict {
                     kind: ConflictWitnessKind::ModeMismatch,
                     node_id: Some(*node_id),
                     path: Some(live.path.clone()),
-                },
-                NodeContent::Symlink { .. } => PreimageStatus::Conflict {
+                }),
+                NodeContent::Symlink { .. } => Ok(PreimageStatus::Conflict {
                     kind: ConflictWitnessKind::KindMismatch,
                     node_id: Some(*node_id),
                     path: Some(live.path.clone()),
-                },
+                }),
             }
         }
         Action::RenamePath { .. } | Action::CreateSymlink { .. } | Action::DeleteSymlink { .. } => {
-            PreimageStatus::Unknown {
+            Ok(PreimageStatus::Unknown {
                 reason: deferred_reason(&facts.action).unwrap_or(UnknownReason::UnknownRelation),
                 node_id: facts.node_id,
                 path: None,
-            }
+            })
         }
     }
 }
@@ -203,7 +202,7 @@ pub(super) fn is_delete_preimage_valid(
 ) -> bool {
     match &facts.action {
         Action::DeleteFile { .. } => {
-            validate_preimage(baseline, &NoBaselineTextResolver, facts) == PreimageStatus::Valid
+            validate_preimage(baseline, &NoPatchAlgebraEvidence, facts) == Ok(PreimageStatus::Valid)
         }
         _ => false,
     }

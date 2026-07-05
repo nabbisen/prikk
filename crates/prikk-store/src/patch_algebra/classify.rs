@@ -2,6 +2,7 @@ use prikk_object::{NodeId, NodeKind};
 
 use super::create::classify_create_then_mutate;
 use super::delete::classify_mutate_then_delete;
+use super::evidence_types::{ClassificationResult, NoPatchAlgebraEvidence, PatchAlgebraEvidence};
 use super::facts::{deferred_reason, operation_facts};
 use super::preimage::{
     baseline_file_matches, invalid_preimage_class, is_create_after_delete_valid,
@@ -9,8 +10,7 @@ use super::preimage::{
 };
 use super::text_pair::classify_mode_and_text_edit;
 use super::types::{
-    Action, BaselineTextResolver, ConflictWitnessKind, NoBaselineTextResolver, OperationFacts,
-    PairClass, RequiredOrder, UnknownReason,
+    Action, ConflictWitnessKind, OperationFacts, PairClass, RequiredOrder, UnknownReason,
 };
 use super::witness::{
     common_node, conflict, conflict_with_span, first_intersection, ordered, unknown,
@@ -23,39 +23,39 @@ pub(crate) fn classify_pair(
     baseline: &NodeLifecycleState,
     left: &DecodedPatchOperation,
     right: &DecodedPatchOperation,
-) -> PairClass {
-    classify_pair_with_text_resolver(baseline, &NoBaselineTextResolver, left, right)
+) -> ClassificationResult {
+    classify_pair_with_text_resolver(baseline, &NoPatchAlgebraEvidence, left, right)
 }
 
-pub(crate) fn classify_pair_with_text_resolver<R: BaselineTextResolver>(
+pub(crate) fn classify_pair_with_text_resolver<R: PatchAlgebraEvidence>(
     baseline: &NodeLifecycleState,
     text_resolver: &R,
     left: &DecodedPatchOperation,
     right: &DecodedPatchOperation,
-) -> PairClass {
+) -> ClassificationResult {
     let left_facts = match operation_facts(left) {
         Ok(facts) => facts,
-        Err(reason) => return unknown(reason, left, right, None, None),
+        Err(reason) => return Ok(unknown(reason, left, right, None, None)),
     };
     let right_facts = match operation_facts(right) {
         Ok(facts) => facts,
-        Err(reason) => return unknown(reason, left, right, None, None),
+        Err(reason) => return Ok(unknown(reason, left, right, None, None)),
     };
 
     if let Some(reason) =
         deferred_reason(&left_facts.action).or(deferred_reason(&right_facts.action))
     {
-        return unknown(
+        return Ok(unknown(
             reason,
             left,
             right,
             common_node(&left_facts, &right_facts),
             None,
-        );
+        ));
     }
 
     if let Some(class) = classify_path_relation(baseline, &left_facts, &right_facts) {
-        return class;
+        return Ok(class);
     }
 
     match (left_facts.node_id, right_facts.node_id) {
@@ -165,34 +165,34 @@ fn classify_path_relation(
     None
 }
 
-fn classify_cross_node<R: BaselineTextResolver>(
+fn classify_cross_node<R: PatchAlgebraEvidence>(
     baseline: &NodeLifecycleState,
     text_resolver: &R,
     left: &OperationFacts,
     right: &OperationFacts,
-) -> PairClass {
-    if let Some(class) = invalid_preimage_class(baseline, text_resolver, left, right) {
-        return class;
+) -> ClassificationResult {
+    if let Some(class) = invalid_preimage_class(baseline, text_resolver, left, right)? {
+        return Ok(class);
     }
-    if let Some(class) = invalid_preimage_class(baseline, text_resolver, right, left) {
-        return class;
+    if let Some(class) = invalid_preimage_class(baseline, text_resolver, right, left)? {
+        return Ok(class);
     }
-    PairClass::Independent
+    Ok(PairClass::Independent)
 }
 
-fn classify_same_node<R: BaselineTextResolver>(
+fn classify_same_node<R: PatchAlgebraEvidence>(
     baseline: &NodeLifecycleState,
     text_resolver: &R,
     left: &OperationFacts,
     right: &OperationFacts,
     node_id: NodeId,
-) -> PairClass {
+) -> ClassificationResult {
     if let Some(class) = classify_create_then_mutate(baseline, text_resolver, left, right, node_id)
     {
         return class;
     }
     if let Some(class) = classify_mutate_then_delete(baseline, left, right, node_id) {
-        return class;
+        return Ok(class);
     }
     match (&left.action, &right.action) {
         (
@@ -203,20 +203,20 @@ fn classify_same_node<R: BaselineTextResolver>(
                 span_id: right_span,
                 ..
             },
-        ) if left_span == right_span => conflict_with_span(
+        ) if left_span == right_span => Ok(conflict_with_span(
             ConflictWitnessKind::TextSpanOverlap,
             left,
             right,
             node_id,
             *left_span,
-        ),
-        (Action::EditText { .. }, Action::EditText { .. }) => unknown_from_facts(
+        )),
+        (Action::EditText { .. }, Action::EditText { .. }) => Ok(unknown_from_facts(
             UnknownReason::SameNodeTextCommutationDeferred,
             left,
             right,
             Some(node_id),
             None,
-        ),
+        )),
         (Action::ChangePerm { old_mode, .. }, Action::ReplaceBinary { old_blob_id, .. })
         | (Action::ReplaceBinary { old_blob_id, .. }, Action::ChangePerm { old_mode, .. }) => {
             if baseline_file_matches(
@@ -226,15 +226,15 @@ fn classify_same_node<R: BaselineTextResolver>(
                 *old_blob_id,
                 *old_mode,
             ) {
-                PairClass::Independent
+                Ok(PairClass::Independent)
             } else {
-                conflict(
+                Ok(conflict(
                     ConflictWitnessKind::LiveStateMismatch,
                     left,
                     right,
                     Some(node_id),
                     None,
-                )
+                ))
             }
         }
         (Action::ChangePerm { old_mode, .. }, edit @ Action::EditText { .. })
@@ -249,12 +249,12 @@ fn classify_same_node<R: BaselineTextResolver>(
                 edit,
             )
         }
-        _ => conflict(
+        _ => Ok(conflict(
             ConflictWitnessKind::UnknownRelation,
             left,
             right,
             Some(node_id),
             None,
-        ),
+        )),
     }
 }

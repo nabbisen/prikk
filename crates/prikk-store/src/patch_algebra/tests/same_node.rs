@@ -22,9 +22,10 @@ fn same_node_mode_and_text_edit_is_independent_only_when_span_matches_baseline()
         }
         other => panic!("expected stale text conflict, got {other:?}"),
     }
-    assert_unknown(
-        classify_pair(&baseline, &left, &right),
-        UnknownReason::SameNodeTextCommutationDeferred,
+    assert_evidence_error(
+        classify_pair_result(&baseline, &left, &right),
+        EvidenceScope::SealedBaselineRequired,
+        EvidenceFact::BaselineText,
     );
 }
 
