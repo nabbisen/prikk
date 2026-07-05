@@ -10,6 +10,11 @@ pub(super) use super::super::evidence_types::{
     Evidence, EvidenceError, EvidenceFact, EvidenceScope, PatchAlgebraEvidence,
 };
 pub(super) use super::super::facts::path_effects;
+pub(super) use super::super::report::{
+    MergeEvidenceItem, MergeEvidenceOperationKind, MergeEvidenceOutcome, MergeEvidenceProofPhase,
+    MergeEvidenceReasonCode, MergeEvidenceScope, MergeEvidenceSide, analyze_merge_evidence,
+    analyze_pair_merge_evidence,
+};
 pub(super) use super::super::types::{
     CommutationResult, ConflictWitnessKind, ConfluenceResult, ConfluenceWitnessKind, PairClass,
     RequiredOrder, UnknownReason,

@@ -76,14 +76,14 @@ local branch ref can be started with `commit --ref heads/<branch>` and published
 
 ## Design Notes
 
-Current release candidate: **0.13.0** (DC-20 — replay boundary stabilization). This candidate
-stabilizes the post-DC-19 `prikk-replay` boundary without adding CLI behavior, object schema changes,
-repository layout changes, or public APIs. `prikk-replay` remains workspace-internal and `publish =
-false`; `prikk-store` remains the repository integration crate. `RepoPath` remains lexical in
-`prikk-replay`, while root joining for worktree/repository materialization stays in `prikk-store`.
-`text_span` extraction, patch-algebra extraction, store-backed resolver movement, lifecycle-cache
-persistence movement, worktree extraction, public `prikk-replay` API stabilization, and public merge,
-confluence, and conflict surfaces remain deferred.
+Current release candidate: **0.14.0** (DC-21 — merge conflict evidence contract). The latest released
+implementation is **0.13.0** (DC-20 — replay boundary stabilization). This candidate adds an internal,
+read-only merge/conflict evidence report vocabulary over the existing patch-algebra analyzers, with
+explicit `EvidenceFailure`, `InvalidCandidate`, `Unsupported`, `Deferred`, `Conflict`,
+`OrderedDependency`, `NotConfluent`, and `Confluent` outcomes. It does not add CLI merge behavior,
+merge execution, branch publication, multi-parent Blocks, persisted proof/witness objects, schema
+changes, worktree conflict materialization, patch-algebra extraction, or public `prikk-replay` API
+stabilization.
 
 Implemented:
 

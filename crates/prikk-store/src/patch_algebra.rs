@@ -13,6 +13,7 @@ mod evidence_types;
 mod facts;
 mod preimage;
 mod replay_oracle;
+mod report;
 mod text_pair;
 mod text_preimage;
 mod types;

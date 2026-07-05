@@ -1,6 +1,7 @@
-# RFC (accepted) - DC-20 Replay Boundary Stabilization
+# RFC (done) - DC-20 Replay Boundary Stabilization
 
-**Status.** Accepted for implementation.
+**Status.** Implemented in 0.13.0.
+**Released.** 2026-07-05.
 **Target release.** v0.13.0.
 **Tracks.** Post-DC-19 stabilization of the workspace-internal `prikk-replay` boundary before broader
 M2+ patch-algebra, merge, conflict-witness, or production confluence surfaces.

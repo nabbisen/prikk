@@ -5,12 +5,21 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-20 - replay boundary stabilization release candidate.** The current candidate stabilizes the
-  new `prikk-replay` boundary without moving patch algebra, text-span, worktree integration,
-  repository storage, refs/WAL, lifecycle-cache persistence, resolver construction, or public
-  merge/conflict surfaces prematurely.
+- **DC-21 - merge conflict evidence contract (0.14.0 release candidate).** The current candidate adds
+  an internal, read-only evidence report vocabulary and adapters over existing pair commutation and
+  flat confluence analysis. It keeps reports non-mutating and privacy-preserving, with explicit
+  `EvidenceFailure`, `InvalidCandidate`, `Unsupported`, `Deferred`, `Conflict`, `OrderedDependency`,
+  `NotConfluent`, and `Confluent` outcomes. It still does not add merge execution, CLI merge,
+  persisted proof/witness objects, schema changes, worktree conflict materialization, patch-algebra
+  extraction, or public `prikk-replay` API stabilization.
 
 ## Last Released Increment
+
+- **DC-20 - replay boundary stabilization (released as 0.13.0).** `prikk-replay` remains
+  workspace-internal and `publish = false`, `prikk-store` remains the repository integration crate, and
+  filesystem root joining stays store-owned while `RepoPath` remains lexical in `prikk-replay`. No CLI,
+  schema, repository-layout, public API, patch-algebra extraction, text-span extraction, resolver,
+  cache-persistence, worktree, merge, confluence, or conflict surface was added.
 
 - **DC-19 - replay/lifecycle crate boundary (released as 0.12.0).** `prikk-replay` now owns the
   workspace-internal lifecycle substrate and lexical repository path type needed by lifecycle state,

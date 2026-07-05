@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.14.0 — 2026-07-05 (release candidate)
+
+DC-21: merge conflict evidence contract.
+
+**Release scope.** This release candidate adds an internal, read-only merge/conflict evidence report
+contract over the existing patch-algebra commutation and flat confluence analyzers. It introduces
+reviewable outcome categories, release-stable diagnostic reason codes for tests/future display, required
+baseline identity, sequence summaries, evidence-scope mapping, and privacy-preserving report entries.
+Reason codes are diagnostic vocabulary, not persisted object schema.
+
+- **Evidence report vocabulary.** Adds internal report types for `Confluent`, `Conflict`,
+  `OrderedDependency`, `Unsupported`, `Deferred`, `NotConfluent`, `EvidenceFailure`, and
+  `InvalidCandidate`.
+- **Analyzer adapters.** Adds read-only adapters from pair commutation and flat two-sequence confluence
+  results into merge evidence reports, preserving required sealed evidence failures and optional
+  unsealed candidate failures as distinct public outcomes.
+- **Privacy and determinism tests.** Adds focused tests for baseline identity, outcome mapping,
+  evidence-scope mapping, deterministic item ordering, narrow `NotConfluent` handling, and report debug
+  output that avoids raw text spans, replacement text, blob bytes, and absolute host paths.
+- **Flatness diagnostic scope.** Current flatness violations use `SequenceInternalDependencyDeferred`
+  as the release-stable diagnostic reason; a separate `flatness_required` reason code remains deferred
+  until a later DC introduces a broader flatness-reporting surface.
+
+Still deferred: merge execution, `prikk merge`, branch merge, multi-parent Blocks, persisted
+proof/witness objects, schema changes, worktree conflict materialization, public conflict UX,
+patch-algebra crate extraction, and public `prikk-replay` API stabilization.
+
 ## 0.13.0 — 2026-07-05
 
 DC-20: replay boundary stabilization.

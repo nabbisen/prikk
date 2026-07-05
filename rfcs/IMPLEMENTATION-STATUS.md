@@ -1,11 +1,11 @@
 # Prikk Implementation Status
 
-Version: 0.13.0 release candidate (DC-20 — replay boundary stabilization)
+Version: 0.13.0 released; 0.14.0 release candidate (DC-21 — merge conflict evidence contract)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (0.13.0 release candidate)
+## Current State (0.13.0 released; 0.14.0 release candidate)
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** local
   branch baseline reconstructed from authoritative replay — or, on a valid unborn `heads/*` ref, a
@@ -61,6 +61,18 @@ Version: 0.13.0 release candidate (DC-20 — replay boundary stabilization)
   hidden by earlier sequence-level `Unknown`; explicitly optional unsealed-candidate evidence remains
   fail-closed. This is library/test-only: no CLI, merge execution, persisted witness/proof object,
   object schema change, public conflict UX, public confluence API, or production merge surface is added.
+- DC-21 is a 0.14.0 release candidate as an internal, read-only merge/conflict evidence report contract
+  over the existing patch-algebra analyzers. The report vocabulary exposes
+  `Confluent`, `Conflict`, `OrderedDependency`, `Unsupported`, `Deferred`, `NotConfluent`,
+  `EvidenceFailure`, and `InvalidCandidate` rather than the internal `Unknown` bucket; every report
+  carries a required `baseline_block_id`, optional replay horizon, sequence summaries, deterministic
+  evidence entries, proof phases, evidence scopes, and release-stable diagnostic reason codes. Reports
+  do not store raw operation payloads, raw text spans, replacement text, blob bytes, absolute host
+  paths, arbitrary object debug dumps, or signer key material. Reason codes are diagnostic vocabulary
+  for tests/future display, not persisted object schema. DC-21 still does not add CLI merge, merge
+  execution, branch publication, multi-parent Blocks, persisted proof/witness objects, schema changes,
+  worktree conflict materialization, patch-algebra crate extraction, or public `prikk-replay` API
+  stabilization.
 - `prikk-replay` is introduced as a workspace-internal semantic replay/lifecycle crate. It owns the
   node lifecycle substrate (`NodeLifecycleState`, `LiveNode`, `NodeContent`, `Tombstone`, lifecycle
   validation helpers, and direct lifecycle tests) plus the lexical repository-relative `RepoPath` leaf
@@ -123,6 +135,7 @@ Version: 0.13.0 release candidate (DC-20 — replay boundary stabilization)
   `prikk-store`; see Current State above.
 - Replay-boundary stabilization for the workspace-internal `prikk-replay` crate; see Current State
   above.
+- Internal read-only merge/conflict evidence reports for the DC-21 vocabulary; see Current State above.
 - Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet

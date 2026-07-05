@@ -1,7 +1,7 @@
 # DC-20 Implementation Checklist - Replay Boundary Stabilization
 
-Status: Companion for accepted DC-20; inherits lifecycle state from the primary RFC
-Related RFC: `../../accepted/DC-20-REPLAY-BOUNDARY-STABILIZATION.md`
+Status: Companion for implemented DC-20; inherits lifecycle state from the primary RFC
+Related RFC: `../../done/DC-20-REPLAY-BOUNDARY-STABILIZATION.md`
 
 ## Purpose
 
