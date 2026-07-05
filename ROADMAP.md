@@ -5,11 +5,20 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **M2+ patch algebra after DC-17 evidence contract.** Next design work should tackle production
-  commutation/confluence and public conflict/merge evidence while keeping rollback refs, authorization,
-  branch switching, key lifecycle, and sync behind their dedicated plans.
+- **Post-DC-18 crate-boundary design.** Next design work should define the replay/lifecycle extraction
+  boundary below `prikk-store` before Prikk exposes a broader M2+ production merge/conflict surface.
+  Patch algebra remains internal while rollback refs, authorization, branch switching, key lifecycle,
+  and sync stay behind their dedicated plans.
 
 ## Last Released Increment
+
+- **DC-18 - patch algebra commutation and confluence contract (released as 0.11.0).** Internal
+  commutation now requires classifier independence plus replay-both-orders proof, and flat
+  two-sequence confluence requires individual replay-validity, commuting cross-pairs, composed replay,
+  and final lifecycle-state equality. Required sealed candidate evidence failures, including
+  replacement blob evidence, remain outer evidence errors and are not hidden by algebraic `Unknown`.
+  No CLI, schema, merge execution, persisted witness/proof, public confluence API, or production merge
+  surface was added.
 
 - **DC-17 - patch algebra evidence contract (released as 0.10.0).** Internal pair classification now
   uses a scoped evidence contract and store-backed resolver boundary so required sealed evidence

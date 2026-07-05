@@ -1,11 +1,11 @@
 # Prikk Implementation Status
 
-Version: 0.10.0 released (DC-17 — patch algebra evidence contract)
+Version: 0.11.0 released (DC-18 — patch algebra commutation and confluence contract)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (0.10.0 released)
+## Current State (0.11.0 released)
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** local
   branch baseline reconstructed from authoritative replay — or, on a valid unborn `heads/*` ref, a
@@ -49,15 +49,18 @@ Version: 0.10.0 released (DC-17 — patch algebra evidence contract)
   Rollback-draft AUTHOR verification remains structural at this layer: it rejects missing, legacy
   marker, wrong-role, wrong-algorithm, and malformed Ed25519 records, including signatures whose byte
   payload is not 64 bytes, without claiming AUTHOR trust-store enforcement.
-- Internal patch-algebra pair classification is present for the DC-16/DC-17 foundation subset. It models
-  `Independent`, `OrderedDependency`, `Conflict`, and `Unknown`, structured path effects including
+- Internal patch algebra is present for the DC-16/DC-18 foundation subset. Pair classification models
+  `Independent`, `OrderedDependency`, `Conflict`, and `Unknown`, with structured path effects including
   `required_free`, baseline preimage validation for the supported operation subset, scoped evidence
   handling, store-backed resolver facts for lifecycle/text/blob evidence, evidence-backed
   create-before-content-mutation and create-before-mode-change ordering, and oracle-backed vectors.
-  Required sealed-baseline/candidate evidence failures surface separately from ordinary `Unknown`
-  algebra cases, while explicitly optional unsealed-candidate evidence remains fail-closed. This is
-  library/test-only: no CLI, merge execution, persisted witness object, object schema change, public
-  conflict UX, or production confluence check is added.
+  Pair commutation now requires classifier independence plus replay-both-orders proof, and flat
+  two-sequence confluence requires individual replay-validity, commuting cross-pairs, composed replay,
+  and final lifecycle-state equality. Required sealed-baseline/candidate evidence failures, including
+  replacement blob evidence, surface separately from ordinary `Unknown` algebra cases and are not
+  hidden by earlier sequence-level `Unknown`; explicitly optional unsealed-candidate evidence remains
+  fail-closed. This is library/test-only: no CLI, merge execution, persisted witness/proof object,
+  object schema change, public conflict UX, public confluence API, or production merge surface is added.
 
 ## Implemented
 
@@ -96,6 +99,9 @@ Version: 0.10.0 released (DC-17 — patch algebra evidence contract)
 - Content-anchored `EditText` validation with fixed 32-byte span hashes, deterministic arbitrary-span
   authoring, and arbitrary-span replay/materialization for supported text edits.
 - Read-only unsigned inverse planning, non-mutating rollback preview, conservative rollback draft append and verification, and sealed rollback block classification for the supported patch-operation subset, including deterministic direct inverse for arbitrary-span `EditText`. Rollback drafts are identified by `PatchPurpose::RollbackDraft` and AUTHOR-signed with real Ed25519 key material.
+- Internal patch-algebra commutation and flat two-sequence confluence analysis for the DC-16/DC-18
+  supported subset, with replay-backed pair proofs and scoped evidence-error precedence; see Current
+  State above.
 - Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
@@ -105,8 +111,8 @@ Version: 0.10.0 released (DC-17 — patch algebra evidence contract)
   tag or remote ref creation, rollback refs, multi-commit queued active sessions, and per-ref active WALs.
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy beyond the DC-11 local trust store.
 - Policy-aware audit/attestation publication from seal.
-- Production patch algebra: rollback ref publication, commutation, confluence, public conflict
-  witnesses, public merge evidence, and merge state.
+- Production patch algebra surfaces: rollback ref publication, public conflict witnesses, public merge
+  evidence, merge state, merge execution, and user-facing conflict resolution.
 - WASM plugin host.
 - Audit publication policy.
 - Remote sync.
@@ -122,6 +128,14 @@ Version: 0.10.0 released (DC-17 — patch algebra evidence contract)
 - Missing-object repair, checksum-mismatch repair, object quarantine, GC, and malformed-log repair remain deferred.
 
 ## Gate Discipline
+
+DC-18 stays within the approved commutation/confluence contract boundary: internal pair commutation
+requires classifier independence plus replay-both-orders proof, and flat two-sequence confluence checks
+individual replay-validity, cross-pair commutation, composed replay, and final lifecycle-state equality.
+Required sealed candidate evidence failures remain outer evidence errors and are not hidden by
+algebraic `Unknown`. It does not add CLI behavior, merge execution, persisted proof/conflict-witness
+objects, object schema changes, public confluence APIs, rollback refs, rollback authorization,
+multi-parent publication, semantic merge, or user-facing conflict resolution.
 
 DC-17 stays within the approved evidence-contract boundary: internal pair classification distinguishes
 required sealed evidence failures from ordinary unsupported algebra, uses scoped resolver evidence from

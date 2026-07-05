@@ -5,12 +5,14 @@
 //! keeps deferred operation families fail-closed as `Unknown` instead of assuming commutation.
 
 mod classify;
+mod commutation;
 mod create;
 mod delete;
 mod evidence;
 mod evidence_types;
 mod facts;
 mod preimage;
+mod replay_oracle;
 mod text_pair;
 mod text_preimage;
 mod types;

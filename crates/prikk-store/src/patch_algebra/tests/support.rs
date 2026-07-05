@@ -2,17 +2,21 @@ pub(super) use super::super::classify::{
     classify_pair as classify_pair_result,
     classify_pair_with_text_resolver as classify_pair_with_text_resolver_result,
 };
+pub(super) use super::super::commutation::{
+    check_confluence as check_confluence_result, commute_pair as commute_pair_result,
+};
 pub(super) use super::super::evidence::StorePatchAlgebraEvidence;
 pub(super) use super::super::evidence_types::{
     Evidence, EvidenceError, EvidenceFact, EvidenceScope, PatchAlgebraEvidence,
 };
 pub(super) use super::super::facts::path_effects;
 pub(super) use super::super::types::{
-    ConflictWitnessKind, PairClass, RequiredOrder, UnknownReason,
+    CommutationResult, ConflictWitnessKind, ConfluenceResult, ConfluenceWitnessKind, PairClass,
+    RequiredOrder, UnknownReason,
 };
 pub(super) use crate::node_lifecycle::NodeLifecycleState;
 pub(super) use crate::patch_replay::decode::DecodedOperationKind;
-pub(super) use prikk_object::{BlobKind, NodeKind, ObjectId};
+pub(super) use prikk_object::{BlobKind, NodeKind, ObjectId, ObjectType};
 pub(super) use std::collections::BTreeMap;
 
 use crate::patch_replay::decode::DecodedPatchOperation;
@@ -24,6 +28,7 @@ pub(super) const MODE_EXECUTABLE: u32 = 0o100755;
 pub(super) struct TestTextResolver {
     pub(super) texts: BTreeMap<NodeId, Vec<u8>>,
     blobs: BTreeMap<ObjectId, (BlobKind, Vec<u8>)>,
+    blob_kind_overrides: BTreeMap<ObjectId, Evidence<BlobKind>>,
 }
 
 impl TestTextResolver {
@@ -31,6 +36,7 @@ impl TestTextResolver {
         Self {
             texts: BTreeMap::new(),
             blobs: BTreeMap::new(),
+            blob_kind_overrides: BTreeMap::new(),
         }
     }
 
@@ -38,11 +44,21 @@ impl TestTextResolver {
         Self {
             texts: entries.into_iter().collect(),
             blobs: BTreeMap::new(),
+            blob_kind_overrides: BTreeMap::new(),
         }
     }
 
     pub(super) fn with_blob(mut self, blob_id: ObjectId, kind: BlobKind, content: Vec<u8>) -> Self {
         self.blobs.insert(blob_id, (kind, content));
+        self
+    }
+
+    pub(super) fn with_blob_kind_evidence(
+        mut self,
+        blob_id: ObjectId,
+        evidence: Evidence<BlobKind>,
+    ) -> Self {
+        self.blob_kind_overrides.insert(blob_id, evidence);
         self
     }
 }
@@ -67,6 +83,9 @@ impl PatchAlgebraEvidence for TestTextResolver {
     }
 
     fn blob_kind(&self, scope: EvidenceScope, blob_id: ObjectId) -> Evidence<BlobKind> {
+        if let Some(evidence) = self.blob_kind_overrides.get(&blob_id) {
+            return evidence.clone();
+        }
         self.blobs
             .get(&blob_id)
             .map(|(kind, _)| Evidence::Known(*kind))

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.11.0 — 2026-07-05
+
+DC-18: patch algebra commutation and confluence contract.
+
+**Release scope.** This release adds an internal, library/test-only commutation and flat confluence
+contract for the DC-16/DC-17 patch-algebra subset. Pair commutation now requires classifier
+independence plus replay-both-orders proof, and two flat candidate sequences can be proven confluent
+only when all cross-pairs commute and composed replay reaches the same authoritative lifecycle state.
+This release still does **not** add CLI behavior, merge execution, persisted proof or conflict-witness
+objects, object schema changes, public confluence APIs, rollback refs, rollback authorization,
+multi-parent publication, semantic merge, or user-facing conflict resolution.
+
+- **Replay-backed commutation.** Adds an internal replay oracle for candidate operation pairs, so
+  `Independent` becomes usable commutation evidence only when both operation orders replay from the
+  common baseline and yield identical lifecycle state without rewriting operation identity.
+- **Flat confluence contract.** Adds internal two-sequence confluence analysis for flat candidate
+  sequences, preserving sequence order, rejecting concrete ordered dependencies/conflicts, and proving
+  final-state equality through composed replay.
+- **Candidate evidence validation.** Validates candidate blob evidence needed by replay, including
+  `CreateFile.blob_id` and `ReplaceBinary.new_blob_id`, with required sealed evidence failures surfaced
+  as `EvidenceError` and optional unsealed candidate gaps remaining fail-closed as `Unknown`.
+- **Evidence precedence hardening.** Confluence scans candidate sequences so sealed-candidate evidence
+  errors are not hidden by earlier algebraic `Unknown` or deferred-operation results.
+- **Module/test split.** Keeps patch-algebra implementation and tests split across focused files under
+  the project line-count discipline.
+
 ## 0.10.0 — 2026-07-05
 
 DC-17: patch algebra evidence contract.

@@ -15,6 +15,7 @@ pub(crate) enum EvidenceFact {
     BlobKind,
     BlobBytes,
     BaselineText,
+    Operation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

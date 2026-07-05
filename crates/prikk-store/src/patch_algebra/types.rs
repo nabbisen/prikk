@@ -20,6 +20,54 @@ pub(crate) enum PairClass {
     },
 }
 
+pub(crate) type CommutationAnalysisResult =
+    std::result::Result<CommutationResult, super::evidence_types::EvidenceError>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CommutationResult {
+    Commutes { proof: CommutationProof },
+    DoesNotCommute { pair_class: PairClass },
+    Unknown { reason: UnknownReason },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CommutationProof {
+    pub(crate) left_op_seq: u32,
+    pub(crate) right_op_seq: u32,
+}
+
+pub(crate) type ConfluenceAnalysisResult =
+    std::result::Result<ConfluenceResult, super::evidence_types::EvidenceError>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ConfluenceResult {
+    Confluent { proof: ConfluenceProof },
+    NotConfluent { witness: ConfluenceWitness },
+    Unknown { reason: UnknownReason },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ConfluenceProof {
+    pub(crate) left_len: usize,
+    pub(crate) right_len: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ConfluenceWitness {
+    pub(crate) kind: ConfluenceWitnessKind,
+    pub(crate) left_index: Option<usize>,
+    pub(crate) right_index: Option<usize>,
+    pub(crate) pair_class: Option<PairClass>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConfluenceWitnessKind {
+    OrderedDependency,
+    Conflict,
+    ReplayFailure,
+    FinalStateInequality,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RequiredOrder {
     LeftBeforeRight,
@@ -60,6 +108,7 @@ pub(crate) enum UnknownReason {
     SymlinkDeferred,
     FuturePreconditionDeferred,
     MissingCandidateEvidence,
+    SequenceInternalDependencyDeferred,
     UnknownRelation,
 }
 

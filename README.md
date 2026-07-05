@@ -39,29 +39,32 @@ Do not use Prikk for real project history yet.
 ## Quick Start
 
 ```sh
+cargo build -p prikk
+export PRIKK="$PWD/target/debug/prikk"
+
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cargo run -p prikk -- init ./sample-repo
+$PRIKK init ./sample-repo
 # Author and publish a first commit (genesis) on a fresh repository:
 export PRIKK_AUTHOR_KEY_ID="dev-author"
 export PRIKK_AUTHOR_SEED="00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 export PRIKK_MAINTAINER_KEY_ID="dev-maintainer"
 export PRIKK_MAINTAINER_SEED="111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
-(cd ./sample-repo && ../target/debug/prikk trust maintainer add \
+(cd ./sample-repo && "$PRIKK" trust maintainer add \
   --key-id "$PRIKK_MAINTAINER_KEY_ID" \
   --public-key "a00899dfd3357aee69729405913f9324dfc033cec04a2215239eda64ae6d9d91")
 echo "hello prikk" > ./sample-repo/readme.txt
-(cd ./sample-repo && ../target/debug/prikk commit -m "genesis")
-(cd ./sample-repo && ../target/debug/prikk seal --allow-no-audit)
-cargo run -p prikk -- log ./sample-repo
-cargo run -p prikk -- worktree-status ./sample-repo
-cargo run -p prikk -- verify ./sample-repo
-cargo run -p prikk -- doctor ./sample-repo
+(cd ./sample-repo && "$PRIKK" commit -m "genesis")
+(cd ./sample-repo && "$PRIKK" seal --allow-no-audit)
+$PRIKK log ./sample-repo
+$PRIKK worktree-status ./sample-repo
+$PRIKK verify ./sample-repo
+$PRIKK doctor ./sample-repo
 # If doctor reports only incomplete trailing WAL bytes:
-# cargo run -p prikk -- doctor ./sample-repo --repair-wal-tail
+# $PRIKK doctor ./sample-repo --repair-wal-tail
 # If doctor reports only a missing heads/main pointer recoverable from the ref log:
-# cargo run -p prikk -- doctor ./sample-repo --repair-main-ref
+# $PRIKK doctor ./sample-repo --repair-main-ref
 ```
 
 `prikk commit` authors node-addressed worktree patches signed with a real role-bound Ed25519 AUTHOR
@@ -73,12 +76,15 @@ local branch ref can be started with `commit --ref heads/<branch>` and published
 
 ## Design Notes
 
-Current released implementation: **0.10.0** (DC-17 — patch algebra evidence contract). This release
-keeps patch algebra internal and library/test-only while making the classifier's evidence boundary
-explicit: sealed baseline/candidate evidence failures surface separately from ordinary `Unknown`
-algebra cases, optional unsealed-candidate evidence remains fail-closed, and resolver facts come from
-replay/lifecycle state plus validated object-store blobs. It does not add CLI behavior, merge
-execution, persisted conflict-witness objects, object schema changes, or production confluence checks.
+Current released implementation: **0.11.0** (DC-18 — patch algebra commutation and confluence
+contract). This release keeps patch algebra internal and library-only, with no public/CLI caller, while
+adding replay-backed pair commutation and flat two-sequence confluence for the supported internal
+subset. Required sealed evidence failures, including candidate replacement blob evidence, surface
+separately from ordinary `Unknown` algebra cases and are not hidden by earlier sequence-level
+`Unknown`; optional unsealed-candidate evidence remains fail-closed. It does not add CLI behavior,
+merge execution, persisted proof or conflict-witness objects, object schema changes, public confluence
+APIs, rollback refs, rollback authorization, multi-parent publication, semantic merge, or user-facing
+conflict resolution.
 
 Implemented:
 
@@ -101,8 +107,8 @@ Implemented:
 - Read-only inverse planning, non-mutating rollback preview, rollback-draft append/verification, and sealed rollback block classification for the supported subset, including deterministic direct inverse for supported arbitrary-span `EditText`. Rollback-draft identity is recorded as `PatchPurpose::RollbackDraft`, not as a reserved AUTHOR key id.
 - Minimal local publication trust: `prikk trust maintainer add` records one trusted MAINTAINER public key, and `verify` checks Block/RefState/RefUpdate MAINTAINER signatures against that policy.
 - Internal patch-algebra foundation for pair classification (`Independent`, `OrderedDependency`,
-  `Conflict`, `Unknown`) with baseline preimage validation, path-effect modeling, internal diagnostic
-  witnesses, and oracle-backed vectors. This is not a public merge/conflict API.
+  `Conflict`, `Unknown`) plus replay-backed pair commutation and flat two-sequence confluence for the
+  supported subset. This is not a public merge/conflict API.
 
 Signing scope (interim): AUTHOR-role Patch signatures and MAINTAINER publication signatures produced by production commands are real role-bound Ed25519 signatures. Publication trust is local and minimal (`required = 1`); this does **not** yet imply key rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, or publication-grade audit policy.
 
@@ -111,8 +117,8 @@ Minimal CLI commands: `init`, `trust maintainer add`, `commit [--from-worktree] 
 Not implemented yet:
 
 - Rename detection, multi-operation text diff minimization, rollback refs, rollback authorization,
-  production commutation/confluence, public conflict witnesses, semantic merge, and general destructive
-  checkout pruning.
+  public conflict witnesses, public merge evidence, semantic merge, merge execution, and general
+  destructive checkout pruning.
 - Branch switching, branch copy/fork from an existing tip, merge-base semantics, branch deletion/rename,
   tag or remote ref creation, rollback refs, multi-commit queued active sessions, and per-ref active WALs.
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy.
