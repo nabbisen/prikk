@@ -13,7 +13,7 @@ use prikk_object::ObjectType;
 use crate::checkout::prepare_snapshot_checkout_plan;
 use crate::layout::RepositoryLayout;
 use crate::object_store::{FileObjectStore, ObjectReader};
-use crate::path::RepoPath;
+use crate::path::{RepoPath, join_repo_path_to_root};
 use crate::snapshot::SnapshotManifest;
 
 /// Read-only worktree status report against a snapshot baseline.
@@ -98,7 +98,7 @@ pub fn worktree_status(layout: &RepositoryLayout, ref_name: &str) -> Result<Work
 
     for entry in &manifest.files {
         let path_text = entry.path.as_str().to_string();
-        let target = entry.path.join_to_root(layout.root());
+        let target = join_repo_path_to_root(&entry.path, layout.root());
         seen_paths.insert(path_text.clone());
         if !target.exists() {
             changes.push(WorktreeChange {

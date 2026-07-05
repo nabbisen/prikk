@@ -2,5 +2,5 @@
 
 Workspace-internal replay and lifecycle semantics for Prikk.
 
-This crate is internal and experimental during DC-19. Public Rust items exist for workspace crate
-integration, primarily `prikk-store`, and do not imply an external stability promise.
+This crate is workspace-internal during replay-boundary stabilization. Public Rust items exist for
+workspace integration, primarily `prikk-store`, and do not imply a stable external API.

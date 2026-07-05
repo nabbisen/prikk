@@ -12,6 +12,7 @@ use prikk_error::{PrikkError, Result};
 use crate::fsutil::sync_directory_best_effort;
 use crate::layout::RepositoryLayout;
 use crate::patch_replay::{PatchReplayDeletedFile, replay_supported_patch_chain};
+use crate::path::join_repo_path_to_root;
 use crate::worktree::materialize_manifest_entries;
 
 /// Result of an opt-in patch replay materialization.
@@ -186,7 +187,7 @@ fn analyze_deletions(root: &Path, deleted: &[PatchReplayDeletedFile]) -> Result<
     let mut already_absent = 0_usize;
     let mut conflicts = Vec::new();
     for deleted_file in deleted {
-        let target = deleted_file.path.join_to_root(root);
+        let target = join_repo_path_to_root(&deleted_file.path, root);
         if !target.starts_with(root) {
             conflicts.push(PatchDeletionConflict {
                 path: deleted_file.path.as_str().to_string(),

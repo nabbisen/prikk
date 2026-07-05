@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.13.0 — 2026-07-05
+
+DC-20: replay boundary stabilization.
+
+**Release scope.** This release stabilizes the post-DC-19 `prikk-replay` boundary without adding CLI
+behavior, object schema changes, repository layout changes, or new public APIs. `prikk-replay` remains
+workspace-internal and `publish = false`; `prikk-store` remains the repository integration crate.
+
+- **Boundary documentation.** Updates `prikk-replay` docs to use version-neutral
+  replay-boundary-stabilization wording and keeps public Rust items explicitly non-stable for external
+  API purposes.
+- **Compatibility-wrapper inventory.** Records `crates/prikk-store/src/node_lifecycle.rs` and
+  `crates/prikk-store/src/path.rs` as retained compatibility surfaces, with semantic ownership in
+  `prikk-replay` and no duplicate lifecycle/path implementation in the wrappers.
+- **Lexical path boundary.** Keeps `RepoPath` lexical in `prikk-replay`; root joining for
+  worktree/repository materialization is owned by `prikk-store`.
+- **Focused tests.** Adds direct replay path tests and a store-owned root-joining test, keeping tests
+  outside implementation files.
+
+Still deferred: `text_span` extraction, patch-algebra extraction, store-backed resolver movement,
+lifecycle-cache persistence movement, worktree extraction, public `prikk-replay` API stabilization,
+and public merge, confluence, and conflict surfaces.
+
 ## 0.12.0 — 2026-07-05
 
 DC-19: replay/lifecycle crate boundary.

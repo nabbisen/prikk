@@ -6,7 +6,6 @@
 //! tested.
 
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
 
 use prikk_error::{PrikkError, Result};
 
@@ -25,16 +24,6 @@ impl RepoPath {
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
-    }
-
-    /// Return a lexical filesystem path below `root`.
-    #[must_use]
-    pub fn join_to_root(&self, root: &Path) -> PathBuf {
-        let mut out = root.to_path_buf();
-        for component in self.0.split('/') {
-            out.push(component);
-        }
-        out
     }
 }
 
@@ -143,3 +132,6 @@ fn is_windows_reserved_name(component: &str) -> bool {
             "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
         )
 }
+
+#[cfg(test)]
+mod tests;

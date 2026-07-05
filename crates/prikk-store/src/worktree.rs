@@ -14,6 +14,7 @@ use crate::checkout::prepare_snapshot_checkout_plan;
 use crate::fsutil::{sync_directory_best_effort, write_file_atomically};
 use crate::layout::RepositoryLayout;
 use crate::object_store::{FileObjectStore, ObjectReader};
+use crate::path::join_repo_path_to_root;
 use crate::snapshot::{SnapshotEntry, SnapshotManifest};
 
 /// Result of an opt-in snapshot worktree materialization.
@@ -118,7 +119,7 @@ enum EntryWriteOutcome {
 }
 
 fn materialize_entry(root: &Path, entry: &SnapshotEntry) -> Result<EntryWriteOutcome> {
-    let target = entry.path.join_to_root(root);
+    let target = join_repo_path_to_root(&entry.path, root);
     ensure_target_is_inside_root(root, &target)?;
     ensure_parent_directory(root, entry.path.as_str())?;
     if target.exists() {

@@ -15,10 +15,10 @@
 //!   same path. Non-liveness is necessary but **not** sufficient (DC-09a §4);
 //! - `node_id` is preserved across `RenamePath`.
 //!
-//! DC-19 extracts this lifecycle substrate into `prikk-replay` as workspace-internal
-//! semantic code. Repository lineage traversal, refs, WAL, object storage, cache
-//! persistence, verification, doctor, and store-backed resolver construction remain
-//! in `prikk-store`.
+//! This lifecycle substrate lives in `prikk-replay` as workspace-internal semantic
+//! code. Repository lineage traversal, refs, WAL, object storage, cache persistence,
+//! verification, doctor, and store-backed resolver construction remain in
+//! `prikk-store`.
 
 mod mutation;
 mod query;

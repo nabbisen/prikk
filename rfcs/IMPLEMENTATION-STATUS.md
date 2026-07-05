@@ -1,11 +1,11 @@
 # Prikk Implementation Status
 
-Version: 0.12.0 released (DC-19 — replay/lifecycle crate boundary)
+Version: 0.13.0 release candidate (DC-20 — replay boundary stabilization)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (0.12.0 released)
+## Current State (0.13.0 release candidate)
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** local
   branch baseline reconstructed from authoritative replay — or, on a valid unborn `heads/*` ref, a
@@ -69,6 +69,15 @@ Version: 0.12.0 released (DC-19 — replay/lifecycle crate boundary)
   layout, object storage, refs, WAL, active sessions, lifecycle-cache persistence and trust rules,
   verification, doctor, worktree integration, and store-backed resolver construction remain in
   `prikk-store`.
+- DC-20 stabilizes the post-DC-19 replay boundary without changing CLI, schema, repository layout,
+  refs/WAL, trust, worktree behavior, lifecycle semantics, or object/replay/text identity. It keeps
+  `prikk-replay` workspace-internal and `publish = false`, uses version-neutral crate documentation,
+  keeps `crates/prikk-store/src/node_lifecycle.rs` as an import-only compatibility surface, keeps
+  `crates/prikk-store/src/path.rs` as the integration compatibility surface, and keeps filesystem root
+  joining in `prikk-store` rather than on `prikk-replay::RepoPath`.
+- DC-20 explicitly keeps these deferred: `text_span` extraction, patch-algebra extraction,
+  store-backed resolver movement, lifecycle-cache persistence movement, worktree extraction, public
+  `prikk-replay` API stabilization, and public merge, confluence, and conflict surfaces.
 
 ## Implemented
 
@@ -112,6 +121,8 @@ Version: 0.12.0 released (DC-19 — replay/lifecycle crate boundary)
   State above.
 - Workspace-internal `prikk-replay` crate for replay/lifecycle semantics, with no dependency on
   `prikk-store`; see Current State above.
+- Replay-boundary stabilization for the workspace-internal `prikk-replay` crate; see Current State
+  above.
 - Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet

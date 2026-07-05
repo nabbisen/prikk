@@ -5,9 +5,10 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **Post-DC-19 boundary stabilization.** Next design work should build on the new `prikk-replay`
-  boundary without moving patch algebra, text-span, worktree integration, repository storage, refs/WAL,
-  lifecycle-cache persistence, or resolver construction prematurely.
+- **DC-20 - replay boundary stabilization release candidate.** The current candidate stabilizes the
+  new `prikk-replay` boundary without moving patch algebra, text-span, worktree integration,
+  repository storage, refs/WAL, lifecycle-cache persistence, resolver construction, or public
+  merge/conflict surfaces prematurely.
 
 ## Last Released Increment
 

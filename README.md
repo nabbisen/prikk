@@ -76,14 +76,14 @@ local branch ref can be started with `commit --ref heads/<branch>` and published
 
 ## Design Notes
 
-Current released implementation: **0.12.0** (DC-19 — replay/lifecycle crate boundary). This release
-adds `prikk-replay` as a workspace-internal semantic crate, moves the node lifecycle substrate and
-direct tests below `prikk-store`, and keeps `prikk-store` as the repository integration crate through
-compatibility wrappers. `RepoPath` moves with lifecycle state as the minimal lexical path leaf. It does
-not add CLI behavior, object schema changes, text-span extraction, patch-algebra extraction, worktree
-extraction, merge execution, public confluence APIs, persisted proof or conflict-witness objects,
-rollback refs, rollback authorization, multi-parent publication, semantic merge, or user-facing
-conflict resolution.
+Current release candidate: **0.13.0** (DC-20 — replay boundary stabilization). This candidate
+stabilizes the post-DC-19 `prikk-replay` boundary without adding CLI behavior, object schema changes,
+repository layout changes, or public APIs. `prikk-replay` remains workspace-internal and `publish =
+false`; `prikk-store` remains the repository integration crate. `RepoPath` remains lexical in
+`prikk-replay`, while root joining for worktree/repository materialization stays in `prikk-store`.
+`text_span` extraction, patch-algebra extraction, store-backed resolver movement, lifecycle-cache
+persistence movement, worktree extraction, public `prikk-replay` API stabilization, and public merge,
+confluence, and conflict surfaces remain deferred.
 
 Implemented:
 
@@ -112,6 +112,9 @@ Implemented:
   substrate and lexical repository path type needed by lifecycle state, while repository layout,
   object storage, refs, WAL, active sessions, lifecycle-cache persistence, verification, doctor,
   worktree integration, and store-backed resolver construction remain in `prikk-store`.
+- Replay-boundary stabilization keeps `prikk-replay` workspace-internal, documents its public Rust
+  items as non-stable externally, keeps `prikk-store` compatibility wrappers import/reexport-oriented,
+  and keeps filesystem root joining in `prikk-store`.
 
 Signing scope (interim): AUTHOR-role Patch signatures and MAINTAINER publication signatures produced by production commands are real role-bound Ed25519 signatures. Publication trust is local and minimal (`required = 1`); this does **not** yet imply key rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, or publication-grade audit policy.
 

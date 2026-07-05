@@ -28,7 +28,11 @@ No proposed RFCs are currently tracked.
 
 ## Accepted
 
-No accepted RFCs are currently tracked.
+These records currently live under `accepted/`.
+
+| ID | Title |
+|---|---|
+| DC-20 | [Replay Boundary Stabilization](./accepted/DC-20-REPLAY-BOUNDARY-STABILIZATION.md) |
 
 ## Done
 
@@ -91,7 +95,7 @@ These records currently live under `archive/`.
 
 ## Handoffs
 
-Companion handoff directories currently exist for DC-10 through DC-19:
+Companion handoff directories currently exist for DC-10 through DC-20:
 
 - [DC-10 rollback draft signing](./handoffs/DC-10-rollback-draft-signing/)
 - [DC-11 maintainer trust store](./handoffs/DC-11-maintainer-trust-store/)
@@ -103,3 +107,4 @@ Companion handoff directories currently exist for DC-10 through DC-19:
 - [DC-17 patch algebra evidence contract](./handoffs/DC-17-patch-algebra-evidence-contract/)
 - [DC-18 patch algebra commutation confluence](./handoffs/DC-18-patch-algebra-commutation-confluence/)
 - [DC-19 replay lifecycle crate boundary](./handoffs/DC-19-replay-lifecycle-crate-boundary/)
+- [DC-20 replay boundary stabilization](./handoffs/DC-20-replay-boundary-stabilization/)
