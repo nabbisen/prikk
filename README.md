@@ -85,6 +85,12 @@ merge execution, branch publication, multi-parent Blocks, persisted proof/witnes
 changes, worktree conflict materialization, patch-algebra extraction, or public `prikk-replay` API
 stabilization.
 
+Current development candidate for **0.15.0** (DC-22) adds `prikk merge-evidence` as a read-only public
+display over the DC-21 report contract. It requires an explicit `--baseline-block`, resolves exactly
+one left and one right target selector from `--*-block` or `--*-ref`, derives sealed candidate
+sequences by walking single-parent ancestry back to the baseline, and reports evidence without writing
+objects, refs, WAL records, merge commits, or worktree files.
+
 Implemented:
 
 - Rust workspace scaffold.
@@ -116,16 +122,19 @@ Implemented:
   Rust API, keeps `prikk-store` compatibility wrappers import/reexport-oriented, and keeps filesystem
   root joining in `prikk-store`. The crate is publishable for workspace release packaging, but that
   does not make its public items stable API.
+- Read-only public merge evidence UX (`prikk merge-evidence`) over sealed object histories, with
+  explicit baseline selection, block/ref target selectors, resolved target identities, DC-21 outcome
+  and reason-code display, and no repository or worktree mutation.
 
 Signing scope (interim): AUTHOR-role Patch signatures and MAINTAINER publication signatures produced by production commands are real role-bound Ed25519 signatures. Publication trust is local and minimal (`required = 1`); this does **not** yet imply key rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, or publication-grade audit policy.
 
-Minimal CLI commands: `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+Minimal CLI commands: `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `merge-evidence --baseline-block`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 Not implemented yet:
 
 - Rename detection, multi-operation text diff minimization, rollback refs, rollback authorization,
-  public conflict witnesses, public merge evidence, semantic merge, merge execution, and general
-  destructive checkout pruning.
+  public conflict witnesses, semantic merge, merge execution, and general destructive checkout
+  pruning.
 - Branch switching, branch copy/fork from an existing tip, merge-base semantics, branch deletion/rename,
   tag or remote ref creation, rollback refs, multi-commit queued active sessions, and per-ref active WALs.
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy.

@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+DC-22: public merge evidence UX boundary.
+
+- Adds `prikk merge-evidence`, a read-only public display over the DC-21 merge/conflict evidence
+  report contract.
+- Requires explicit `--baseline-block` plus exactly one left and one right selector from `--left-block`
+  / `--left-ref` and `--right-block` / `--right-ref`.
+- Resolves ref selectors through current local branch RefState validation and shows both submitted
+  selectors and resolved target Block ids.
+- Derives sealed candidate sequences by walking single-parent target ancestry back to the explicit
+  baseline, failing closed on missing ancestry, multi-parent chains, cycles, or unreadable evidence.
+- Keeps the surface non-mutating: no object writes, ref updates, WAL writes, merge commits, or
+  worktree changes.
+
 ## 0.14.0 — 2026-07-05
 
 DC-21: merge conflict evidence contract.

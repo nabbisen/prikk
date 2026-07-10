@@ -4,7 +4,9 @@ use super::error::evidence_error_report;
 use super::input::{
     first_required_evidence_error, malformed_unsealed_item, sequence_summary, sort_report_items,
 };
-use super::mapping::{pair_class_report, report_item, unknown_report, witness_report};
+#[cfg(test)]
+use super::mapping::pair_class_report;
+use super::mapping::{report_item, unknown_report, witness_report};
 use super::types::{
     MergeEvidenceItem, MergeEvidenceOutcome, MergeEvidenceProofPhase, MergeEvidenceReasonCode,
     MergeEvidenceReport, MergeEvidenceSequence,
@@ -12,11 +14,13 @@ use super::types::{
 use crate::node_lifecycle::NodeLifecycleState;
 use crate::patch_replay::decode::DecodedPatchOperation;
 
-use crate::patch_algebra::commutation::{check_confluence, commute_pair};
+use crate::patch_algebra::commutation::check_confluence;
+#[cfg(test)]
+use crate::patch_algebra::commutation::commute_pair;
 use crate::patch_algebra::evidence_types::{EvidenceScope, PatchAlgebraEvidence};
-use crate::patch_algebra::types::{
-    CommutationAnalysisResult, CommutationResult, ConfluenceAnalysisResult, ConfluenceResult,
-};
+#[cfg(test)]
+use crate::patch_algebra::types::{CommutationAnalysisResult, CommutationResult};
+use crate::patch_algebra::types::{ConfluenceAnalysisResult, ConfluenceResult};
 
 pub(crate) fn analyze_merge_evidence<R: PatchAlgebraEvidence>(
     baseline_block_id: ObjectId,
@@ -62,6 +66,7 @@ pub(crate) fn analyze_merge_evidence<R: PatchAlgebraEvidence>(
     )
 }
 
+#[cfg(test)]
 pub(crate) fn analyze_pair_merge_evidence<R: PatchAlgebraEvidence>(
     baseline_block_id: ObjectId,
     replay_horizon: Option<ObjectId>,
@@ -139,6 +144,7 @@ fn report_from_analysis(
     )
 }
 
+#[cfg(test)]
 fn report_from_commutation(
     baseline_block_id: ObjectId,
     replay_horizon: Option<ObjectId>,

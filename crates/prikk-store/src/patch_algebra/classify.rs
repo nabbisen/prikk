@@ -2,7 +2,9 @@ use prikk_object::{NodeId, NodeKind};
 
 use super::create::classify_create_then_mutate;
 use super::delete::classify_mutate_then_delete;
-use super::evidence_types::{ClassificationResult, NoPatchAlgebraEvidence, PatchAlgebraEvidence};
+#[cfg(test)]
+use super::evidence_types::NoPatchAlgebraEvidence;
+use super::evidence_types::{ClassificationResult, PatchAlgebraEvidence};
 use super::facts::{deferred_reason, operation_facts};
 use super::preimage::{
     baseline_file_matches, invalid_preimage_class, is_create_after_delete_valid,
@@ -19,6 +21,7 @@ use super::witness::{
 use crate::node_lifecycle::NodeLifecycleState;
 use crate::patch_replay::decode::DecodedPatchOperation;
 
+#[cfg(test)]
 pub(crate) fn classify_pair(
     baseline: &NodeLifecycleState,
     left: &DecodedPatchOperation,

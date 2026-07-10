@@ -7,6 +7,7 @@ use crate::path::RepoPath;
 
 use super::types::{Action, OperationFacts, PathEffects, UnknownReason};
 
+#[cfg(test)]
 pub(crate) fn path_effects(
     operation: &DecodedPatchOperation,
 ) -> Result<PathEffects, UnknownReason> {

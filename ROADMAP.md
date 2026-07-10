@@ -5,11 +5,12 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-22 - public merge evidence UX boundary (accepted for 0.15.0).** The current design
-  exposes DC-21 merge/conflict evidence through a read-only public UX with explicit baseline and
-  candidate targets. It must not infer merge bases, execute merges, publish merge commits, write refs
-  or WAL, materialize worktree conflicts, persist proof/witness objects, change schema, extract patch
-  algebra, or stabilize `prikk-replay` as an external API.
+- **DC-22 - public merge evidence UX boundary (implementation candidate for 0.15.0).** The current
+  implementation exposes DC-21 merge/conflict evidence through `prikk merge-evidence`, a read-only
+  public UX with explicit baseline and candidate targets. It does not infer merge bases, execute
+  merges, publish merge commits, write refs or WAL, materialize worktree conflicts, persist
+  proof/witness objects, change schema, extract patch algebra, or stabilize `prikk-replay` as an
+  external API.
 
 ## Last Released Increment
 

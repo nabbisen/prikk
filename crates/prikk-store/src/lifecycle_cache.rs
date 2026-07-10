@@ -762,7 +762,6 @@ impl ReplayDerivedLifecycleState {
         &self.state
     }
 
-    #[cfg(test)]
     pub(crate) fn baseline_block_id(&self) -> ObjectId {
         self.baseline_block_id
     }

@@ -30,8 +30,13 @@ pub(super) fn unknown_report(
         ),
         UnknownReason::RenameDeferred
         | UnknownReason::SymlinkDeferred
-        | UnknownReason::FuturePreconditionDeferred
         | UnknownReason::UnknownRelation => (
+            MergeEvidenceOutcome::Unsupported,
+            MergeEvidenceProofPhase::Classification,
+            MergeEvidenceReasonCode::UnsupportedOperation,
+        ),
+        #[cfg(test)]
+        UnknownReason::FuturePreconditionDeferred => (
             MergeEvidenceOutcome::Unsupported,
             MergeEvidenceProofPhase::Classification,
             MergeEvidenceReasonCode::UnsupportedOperation,
@@ -78,6 +83,7 @@ pub(super) fn witness_report(
     }
 }
 
+#[cfg(test)]
 pub(super) fn pair_class_report(
     pair_class: &PairClass,
     candidate_scope: EvidenceScope,
@@ -214,6 +220,7 @@ fn witness_item(
     }
 }
 
+#[cfg(test)]
 fn conflict_witness_item(
     outcome: MergeEvidenceOutcome,
     reason_code: MergeEvidenceReasonCode,

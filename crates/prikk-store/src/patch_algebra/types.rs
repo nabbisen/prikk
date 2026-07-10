@@ -106,6 +106,7 @@ pub(crate) enum UnknownReason {
     SameNodeTextCommutationDeferred,
     RenameDeferred,
     SymlinkDeferred,
+    #[cfg(test)]
     FuturePreconditionDeferred,
     MissingCandidateEvidence,
     SequenceInternalDependencyDeferred,

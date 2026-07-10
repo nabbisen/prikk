@@ -25,52 +25,32 @@ pub(super) fn classify_create_then_mutate<R: PatchAlgebraEvidence>(
         return Some(class);
     }
     match (&left.action, &right.action) {
-        (
-            Action::CreateFile { mode, .. },
-            Action::ChangePerm {
-                old_mode,
-                new_mode: _,
-                ..
-            },
-        ) if *mode == *old_mode => Some(Ok(ordered(
-            RequiredOrder::LeftBeforeRight,
-            ConflictWitnessKind::LiveStateMismatch,
-            left,
-            right,
-            Some(node_id),
-            None,
-        ))),
-        (
-            Action::ChangePerm {
-                old_mode,
-                new_mode: _,
-                ..
-            },
-            Action::CreateFile { mode, .. },
-        ) if *mode == *old_mode => Some(Ok(ordered(
-            RequiredOrder::RightBeforeLeft,
-            ConflictWitnessKind::LiveStateMismatch,
-            left,
-            right,
-            Some(node_id),
-            None,
-        ))),
-        (
-            Action::CreateFile { mode: _, .. },
-            Action::ChangePerm {
-                old_mode: _,
-                new_mode: _,
-                ..
-            },
-        )
-        | (
-            Action::ChangePerm {
-                old_mode: _,
-                new_mode: _,
-                ..
-            },
-            Action::CreateFile { mode: _, .. },
-        ) => Some(Ok(conflict(
+        (Action::CreateFile { mode, .. }, Action::ChangePerm { old_mode, .. })
+            if *mode == *old_mode =>
+        {
+            Some(Ok(ordered(
+                RequiredOrder::LeftBeforeRight,
+                ConflictWitnessKind::LiveStateMismatch,
+                left,
+                right,
+                Some(node_id),
+                None,
+            )))
+        }
+        (Action::ChangePerm { old_mode, .. }, Action::CreateFile { mode, .. })
+            if *mode == *old_mode =>
+        {
+            Some(Ok(ordered(
+                RequiredOrder::RightBeforeLeft,
+                ConflictWitnessKind::LiveStateMismatch,
+                left,
+                right,
+                Some(node_id),
+                None,
+            )))
+        }
+        (Action::CreateFile { .. }, Action::ChangePerm { .. })
+        | (Action::ChangePerm { .. }, Action::CreateFile { .. }) => Some(Ok(conflict(
             ConflictWitnessKind::ModeMismatch,
             left,
             right,

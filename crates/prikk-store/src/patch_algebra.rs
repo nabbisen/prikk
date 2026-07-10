@@ -19,5 +19,13 @@ mod text_preimage;
 mod types;
 mod witness;
 
+pub(crate) use evidence::StorePatchAlgebraEvidence;
+pub(crate) use evidence_types::EvidenceScope;
+pub(crate) use report::{
+    MergeEvidenceItem, MergeEvidenceOperationKind, MergeEvidenceOutcome, MergeEvidenceProofPhase,
+    MergeEvidenceReasonCode, MergeEvidenceReport, MergeEvidenceScope, MergeEvidenceSide,
+    analyze_merge_evidence,
+};
+
 #[cfg(test)]
 mod tests;

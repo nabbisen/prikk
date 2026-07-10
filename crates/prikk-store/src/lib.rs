@@ -29,15 +29,14 @@ mod lifecycle_cache;
 mod lock;
 mod maintainer_signing;
 mod memory_store;
+mod merge_evidence;
 // Production node-id minting (DC-09 Phase 4.4a-1), consumed by node-addressed worktree authoring
 // (4.4a-2) for fresh-node creation.
 mod node_id_gen;
 mod node_lifecycle;
 mod object_store;
-// Patch algebra foundation and evidence contract (DC-16/DC-17). Test-compiled until a later
-// increment wires an internal production analysis caller; no CLI or public diagnostic surface is
-// exposed by this increment.
-#[cfg(test)]
+// Patch algebra foundation and evidence contract (DC-16/DC-21), now production-compiled through the
+// DC-22 read-only merge-evidence store boundary.
 mod patch_algebra;
 mod patch_checkout;
 mod patch_inverse;
@@ -77,6 +76,10 @@ pub use layout::RepositoryLayout;
 pub use lock::{ActiveLock, RefLock};
 pub use maintainer_signing::{Ed25519MaintainerSigner, MaintainerSigner, maintainer_signature};
 pub use memory_store::MemoryObjectStore;
+pub use merge_evidence::{
+    MergeEvidenceDisplay, MergeEvidenceDisplayItem, MergeEvidenceDisplayOperation,
+    MergeEvidenceDisplaySelector, MergeEvidenceTarget, prepare_merge_evidence,
+};
 pub use object_store::{FileObjectStore, ObjectReader, ObjectWriter};
 pub use patch_checkout::{
     PatchDeletionConflict, PatchDeletionPlan, PatchMaterializationReport,

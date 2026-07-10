@@ -7,6 +7,12 @@ use prikk_store::{
     SnapshotCheckoutPlan, SnapshotMaterializationReport, WorktreeChangeKind, WorktreeStatusReport,
 };
 
+mod help;
+mod merge_evidence;
+
+pub(crate) use help::print_help;
+pub(crate) use merge_evidence::print_merge_evidence;
+
 /// Print a checkout plan.
 pub(crate) fn print_checkout_plan(layout: &RepositoryLayout, plan: &CheckoutPlan) {
     println!("checkout plan repository: {}", layout.prikk_dir().display());
@@ -469,59 +475,4 @@ fn print_active_wal_metadata_status(status: &ActiveWalMetadataStatus) {
             println!("error: active WAL contains records but has malformed ref metadata");
         }
     }
-}
-
-/// Print top-level help.
-pub(crate) fn print_help(version: &str) {
-    println!("prikk {version}");
-    println!();
-    println!("Usage:");
-    println!("  prikk init [path]                         Create a .prikk repository layout");
-    println!("  prikk trust maintainer add --key-id ID --public-key HEX  Trust one MAINTAINER key");
-    println!(
-        "  prikk commit --from-worktree [--text-edits] [--ref REF] -m <message> Append worktree changes"
-    );
-    println!("  prikk status                              Check repository and active WAL status");
-    println!("  prikk seal --allow-no-audit [--ref REF] Seal active WAL into a branch ref");
-    println!(
-        "  prikk log [path] [--limit N] [--ref REF]  Show sealed ref history including rollback blocks"
-    );
-    println!("  prikk checkout --plan-only [path] [--ref REF]      Show a safe checkout plan");
-    println!(
-        "  prikk checkout --snapshot-plan [path] [--ref REF]  Validate snapshot manifest paths"
-    );
-    println!(
-        "  prikk checkout --snapshot-materialize [path] [--ref REF]  Safely write snapshot files"
-    );
-    println!(
-        "  prikk checkout --patch-plan [path] [--ref REF]  Replay supported file-level patches"
-    );
-    println!(
-        "  prikk checkout --patch-materialize [path] [--ref REF]  Safely write patch replay files"
-    );
-    println!(
-        "  prikk checkout --patch-delete-plan [path] [--ref REF]  Plan explicit patch deletions"
-    );
-    println!(
-        "  prikk checkout --patch-materialize-delete [path] [--ref REF]  Write/delete patch files"
-    );
-    println!("  prikk inverse-plan [path] [--ref REF]     Plan an unsigned inverse patch");
-    println!("  prikk rollback-preview [path] [--ref REF] Preview non-mutating rollback");
-    println!(
-        "  prikk rollback-draft --append-inverse [path] [--ref REF] \
-         -m <message> Append inverse Patch"
-    );
-    println!("  prikk rollback-draft-verify [path] [--ref REF] Verify active rollback Patch");
-    println!(
-        "  prikk worktree-status [path] [--ref REF]  Report changes against snapshot baseline"
-    );
-    println!(
-        "  prikk verify [path]                       Verify objects, WAL, refs, and publication trust"
-    );
-    println!("  prikk doctor [path]                       Run health diagnostics");
-    println!("  prikk doctor [path] --repair-wal-tail     Truncate incomplete trailing WAL bytes");
-    println!(
-        "  prikk doctor [path] --repair-main-ref     Reconstruct a missing heads/main pointer"
-    );
-    println!("  prikk --version                           Print version");
 }

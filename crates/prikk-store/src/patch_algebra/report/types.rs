@@ -87,6 +87,7 @@ pub(crate) enum MergeEvidenceProofPhase {
     Classification,
     ReplayBothOrders,
     Flatness,
+    #[cfg(test)]
     ComposedReplay,
     FinalStateComparison,
 }
@@ -100,6 +101,7 @@ pub(crate) enum MergeEvidenceReasonCode {
     SameNodeTextTransformDeferred,
     SequenceInternalDependencyDeferred,
     PairReplayFailed,
+    #[cfg(test)]
     ComposedReplayFailed,
     FinalStateMismatch,
     MissingRequiredEvidence,
