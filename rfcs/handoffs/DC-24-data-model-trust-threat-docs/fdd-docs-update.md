@@ -1,7 +1,7 @@
 # DC-24 FDD Documentation Update - Data Model and Trust/Threat Model References
 
-Status: Companion for accepted DC-24
-Related RFC: `../../accepted/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md`
+Status: Companion for done DC-24
+Related RFC: `../../done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md`
 Target FDDs: FDD-00 Data Model, FDD-04 Trust/Threat Model
 Related recap: `baseline-recap.md`
 

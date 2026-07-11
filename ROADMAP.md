@@ -5,23 +5,22 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-24 - data model and trust/threat documentation (implementation review pending).** The current
-  increment creates reviewed data-model and trust/threat-model references, then exposes them through
-  the mdBook without duplicating RFC/FDD authority or overstating Prikk's current trust posture. The
-  implementation includes inline public caveats, claim-to-source FDD anchor tables, and no-drift
-  checks between mdBook caveats and FDD caveats.
+- **0.16.0 release finalization.** DC-23 and the pre-release documentation work are reviewed and
+  committed for the 0.16.0 candidate, and final RC review is accepted. The remaining release work is
+  maintainer-owned tag/publish and post-push GitHub Pages verification.
 
 ## Release Candidate Increment
 
-- **DC-23 - public merge evidence UX stabilization (prepared for 0.16.0).** The 0.16.0 candidate
+- **DC-23 plus pre-release documentation work (prepared for 0.16.0).** The 0.16.0 candidate
   stabilizes the released `prikk merge-evidence` text UX with clearer selector summaries,
   unambiguous cross-side item display, displayed/total item counts, and report-level output cleanup.
   It also adds the merge-evidence mdBook page, reorganizes the mdBook source tree by function, adds
-  GitHub Pages mdBook publishing configuration, and adds store-level coverage that pins distinct
+  GitHub Pages mdBook publishing configuration, documents the current data model and trust/threat
+  posture through FDD/mdBook reference pages, and adds store-level coverage that pins distinct
   left/right cross-item display summaries. It does not add merge execution, merge-base discovery,
   branch publication, merge commits, persisted evidence objects, display-path filtering,
-  scoped/path-limited merge analysis, JSON output, schema changes, or public `prikk-replay` API
-  stabilization.
+  scoped/path-limited merge analysis, JSON output, schema changes, trust-store enforcement changes, or
+  public `prikk-replay` API stabilization.
 
 ## Last Released Increment
 
@@ -119,11 +118,11 @@ They remain managed in this section until each completion condition is met.
 
 | ID | Owner | Status | Trigger / next action | Completion condition |
 |---|---|---|---|---|
-| TASK-01 docs Phase-2 physical subdirectories | Designer, then architect reviewer | In review | Architect review of `.git-exclude/review-request/prikk-0.16.0-docs-phase2-subdirs-review-v1` | Accepted review and committed docs source-tree move |
-| TASK-02 consolidated data-model + trust/threat-model docs | Architect + maintainer | Implemented; review pending | Review implemented DC-24 docs against `rfcs/accepted/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md` | DC-24 docs are reviewed and committed |
-| TASK-03 docs Pages workflow hardening | Maintainer | Local hardening done; deploy verification pending | After release/docs workflow changes are pushed, run GitHub Actions `workflow_dispatch` | First Pages build/deploy succeeds, or a tracked follow-up records any GitHub-side failure |
-| TASK-04 DC-23 store-unit test carry-forwards | Designer/implementer | Implemented and verified | Commit with the accepted 0.16.0 pre-release hardening bundle | Store-level cross-item test is committed |
-| TASK-05 0.16.0 release finalization | Maintainer | Prepared in working tree; tag/publish pending | After TASK-01 review is accepted and release-finalization changes are committed | `v0.16.0` tag and crate publish are completed by the maintainer |
+| TASK-01 docs Phase-2 physical subdirectories | Designer, then architect reviewer | Done | Reviewed in `.git-exclude/reviewed/prikk-0.16.0-docs-phase2-subdirs-review-v1.md` and committed | Accepted review and committed docs source-tree move |
+| TASK-02 consolidated data-model + trust/threat-model docs | Architect + maintainer | Done | Reviewed in `.git-exclude/reviewed/prikk-dc-24-0.16.0-docs-implementation-review-v1.md`, repaired, and committed | DC-24 docs are reviewed and committed |
+| TASK-03 docs Pages workflow hardening | Maintainer | Local prep done; external deploy verification pending | After release/docs workflow changes are pushed, run GitHub Actions `workflow_dispatch` or observe the release-triggered Pages run | First Pages build/deploy succeeds, or a tracked follow-up records any GitHub-side failure |
+| TASK-04 DC-23 store-unit test carry-forwards | Designer/implementer | Done | Reviewed and committed with the accepted 0.16.0 pre-release hardening bundle | Store-level cross-item test is committed |
+| TASK-05 0.16.0 release finalization | Maintainer | RC accepted; tag/publish pending | Maintainer creates `v0.16.0` tag and publishes crates | `v0.16.0` tag and crate publish are completed by the maintainer |
 
 ## 0.16.1+ Documentation Reference Backlog
 

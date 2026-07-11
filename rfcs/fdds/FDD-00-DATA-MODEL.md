@@ -1,7 +1,7 @@
 # FDD-00 - Current Data Model Reference
 
-Status: Current-state reference created by accepted DC-24
-Scope: Released implementation through 0.16.0 plus accepted DC-24 documentation rules
+Status: Current-state reference created by done DC-24
+Scope: Released implementation through 0.16.0 plus DC-24 documentation rules
 
 ## Numbering and Scope
 
@@ -120,11 +120,11 @@ filesystem validation.
 | Active WAL records exact signed Patch envelopes and detects trailing partial bytes. | `crates/prikk-store/src/wal.rs`; `crates/prikk-store/src/verify.rs`; `rfcs/done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md` |
 | Verification is read-only and bounded to structural, WAL, ref, rollback, and publication-trust checks. | `crates/prikk-store/src/verify.rs`; `crates/prikk-store/src/doctor.rs`; `rfcs/IMPLEMENTATION-STATUS.md` |
 | `prikk-replay` is internally scoped and not a stable external API. | `rfcs/done/DC-19-REPLAY-LIFECYCLE-CRATE-BOUNDARY.md`; `rfcs/done/DC-20-REPLAY-BOUNDARY-STABILIZATION.md`; `rfcs/IMPLEMENTATION-STATUS.md` |
-| Durability and platform claims remain limited by current test evidence. | `rfcs/handoffs/DC-24-data-model-trust-threat-docs/baseline-recap.md`; `rfcs/accepted/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md` |
+| Durability and platform claims remain limited by current test evidence. | `rfcs/handoffs/DC-24-data-model-trust-threat-docs/baseline-recap.md`; `rfcs/done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md` |
 
 ## Provenance
 
-This reference consolidates released records through DC-23 and accepted DC-24. It uses
+This reference consolidates released records through DC-23 and DC-24. It uses
 `rfcs/handoffs/DC-24-data-model-trust-threat-docs/baseline-recap.md` only as a tracked recap of older
 non-VCS baseline inputs; current code, released RFCs, and `rfcs/IMPLEMENTATION-STATUS.md` remain the
 durable authorities.

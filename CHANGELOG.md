@@ -2,7 +2,7 @@
 
 ## 0.16.0 — 2026-07-11
 
-DC-23: public merge evidence UX stabilization.
+DC-23: public merge evidence UX stabilization, plus reviewed pre-release documentation work.
 
 - Stabilizes `prikk merge-evidence` text output so selector summaries, resolved target Blocks,
   operation counts, full-report outcome, reason code, and item counts are easier to scan.
@@ -17,12 +17,16 @@ DC-23: public merge evidence UX stabilization.
   evidence display items.
 - Reorganizes the mdBook navigation and source tree by function, adds the `merge-evidence` command
   page, and adds a GitHub Pages workflow with mdBook metadata and ignored generated output.
+- Adds current-state FDD and mdBook reference entries for Prikk's data model and trust/threat model,
+  with inline public caveats and claim-to-source anchor tables.
+- Keeps the DC-24 documentation scope non-behavioral: no repository format, object schema, trust
+  policy, verification, CLI behavior, or release semantics change is introduced.
 
 Still deferred: `prikk merge`, merge execution, automatic merge-base discovery, branch merge
 semantics, branch publication, merge commits, multi-parent Blocks, active-WAL merge drafts, persisted
 proof/witness/merge-evidence objects, display-path filtering, scoped/path-limited merge analysis,
-worktree conflict materialization, JSON output, schema changes, patch-algebra crate extraction, and
-public `prikk-replay` API stabilization.
+worktree conflict materialization, JSON output, schema changes, trust-store enforcement changes,
+patch-algebra crate extraction, and public `prikk-replay` API stabilization.
 
 ## 0.15.0 — 2026-07-11
 

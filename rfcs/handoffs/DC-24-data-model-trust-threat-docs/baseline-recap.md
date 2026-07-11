@@ -1,7 +1,7 @@
 # DC-24 Baseline Recap - Requirements, NFR, External Design, and v0.2.0 Handoff
 
-Status: Tracked recap for proposed DC-24
-Related RFC: `../../accepted/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md`
+Status: Tracked recap for done DC-24
+Related RFC: `../../done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md`
 
 ## Purpose
 

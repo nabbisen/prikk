@@ -1,7 +1,7 @@
-# RFC (accepted) - DC-24 Data Model and Trust/Threat Documentation
+# RFC (done) - DC-24 Data Model and Trust/Threat Documentation
 
-**Status.** Accepted for implementation after architect design review.
-**Target release.** v0.16.0 candidate, if accepted before release.
+**Status.** Done for the v0.16.0 release candidate after architect design and implementation review.
+**Target release.** v0.16.0.
 **Tracks.** TASK-02 consolidated data-model and trust/threat-model documentation.
 **Touches.** mdBook documentation, RFC/FDD reference structure, data-model wording, trust/threat
 model wording, release and roadmap status.
@@ -258,7 +258,7 @@ and should additionally include:
 
 ## Acceptance Criteria
 
-DC-24 is accepted when reviewers agree that:
+DC-24 was accepted when reviewers agreed that:
 
 - the data model has one current authoritative reference;
 - the trust/threat model has one current authoritative reference;
@@ -266,5 +266,5 @@ DC-24 is accepted when reviewers agree that:
 - no implementation or release note overstates Prikk's maturity;
 - future trust/key-lifecycle work remains clearly deferred.
 
-DC-24 is done when the reviewed docs are committed, the mdBook build passes, and release/status files
-point to the new references.
+DC-24 is done: the reviewed docs are committed, the mdBook build passes, release/status files point to
+the new references, and the RFC lifecycle move is included in 0.16.0 release preparation.

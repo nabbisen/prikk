@@ -28,11 +28,7 @@ No proposed RFCs are currently tracked.
 
 ## Accepted
 
-These records currently live under `accepted/`.
-
-| ID | Title |
-|---|---|
-| DC-24 | [Data Model and Trust/Threat Documentation](./accepted/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md) |
+No accepted RFCs are currently tracked.
 
 ## Done
 
@@ -55,6 +51,7 @@ These records currently live under `done/`.
 | DC-21 | [Merge Conflict Evidence Contract](./done/DC-21-MERGE-CONFLICT-EVIDENCE-CONTRACT.md) |
 | DC-22 | [Public Merge Evidence UX Boundary](./done/DC-22-PUBLIC-MERGE-EVIDENCE-UX.md) |
 | DC-23 | [Public Merge Evidence UX Stabilization](./done/DC-23-MERGE-EVIDENCE-UX-STABILIZATION.md) |
+| DC-24 | [Data Model and Trust/Threat Documentation](./done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md) |
 | PR-001 | [Implementation Handoff](./done/PR-001-IMPLEMENTATION-HANDOFF.md) |
 | PR-002 | [CI Fix Handoff](./done/PR-002-CI-FIX-HANDOFF.md) |
 | PR-003 | [Persistent Store Handoff](./done/PR-003-PERSISTENT-STORE-HANDOFF.md) |

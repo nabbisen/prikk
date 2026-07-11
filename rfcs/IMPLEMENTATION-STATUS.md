@@ -1,6 +1,6 @@
 # Prikk Implementation Status
 
-Version: 0.16.0 candidate (DC-23 plus pre-release documentation work)
+Version: 0.16.0 candidate (DC-23 plus reviewed pre-release documentation work)
 
 Latest released version: 0.15.0 (DC-22 — public merge evidence UX boundary)
 
@@ -9,18 +9,17 @@ Latest released version: 0.15.0 (DC-22 — public merge evidence UX boundary)
 
 ## Current State (0.16.0)
 
-- DC-24 documentation work is implemented in the working tree for 0.16.0 pre-release review. It adds
-  current-state FDD references for the data model and trust/threat model, plus mdBook reference entry
-  points. This is documentation-only: no repository format, object schema, trust policy, verification,
-  CLI behavior, or release semantics change.
+- DC-24 documentation work is reviewed and committed for the 0.16.0 candidate. It adds current-state
+  FDD references for the data model and trust/threat model, plus mdBook reference entry points with
+  inline public caveats and claim-to-source anchor tables. This is documentation-only: no repository
+  format, object schema, trust policy, verification, CLI behavior, or release semantics change.
 
 - DC-23 is prepared for the 0.16.0 candidate after the 0.15.0 release and post-release DC-22 test
-  hardening. It
-  stabilizes the public `prikk merge-evidence` text UX with clearer selector summaries, unambiguous
-  cross-side item display, displayed/total item counts, and report-level output cleanup. It does not
-  add merge execution, merge-base discovery, branch publication, merge commits, persisted evidence
-  objects, display-path filtering, scoped/path-limited merge analysis, JSON output, schema changes, or
-  public `prikk-replay` API stabilization.
+  hardening. It stabilizes the public `prikk merge-evidence` text UX with clearer selector summaries,
+  unambiguous cross-side item display, displayed/total item counts, and report-level output cleanup. It
+  does not add merge execution, merge-base discovery, branch publication, merge commits, persisted
+  evidence objects, display-path filtering, scoped/path-limited merge analysis, JSON output, schema
+  changes, or public `prikk-replay` API stabilization.
 
 - As part of 0.16.0 release preparation, the mdBook navigation and source tree were reorganized by
   function, a `merge-evidence` command page was added, GitHub Pages publishing was configured and

@@ -1,7 +1,7 @@
 # FDD-04 - Current Trust and Threat Model Reference
 
-Status: Current-state reference created by accepted DC-24
-Scope: Released implementation through 0.16.0 plus accepted DC-24 documentation rules
+Status: Current-state reference created by done DC-24
+Scope: Released implementation through 0.16.0 plus DC-24 documentation rules
 
 ## Numbering and Scope
 
@@ -110,10 +110,10 @@ and stable repository-format migration.
 | Verify does not enforce repository-wide AUTHOR trust. | `crates/prikk-store/src/verify.rs`; `crates/prikk-store/src/rollback_verify.rs`; `rfcs/IMPLEMENTATION-STATUS.md` |
 | Rollback-draft verification is structural/semantic for the supported subset only. | `crates/prikk-store/src/rollback_verify.rs`; `rfcs/done/DC-14-ARBITRARY-SPAN-TEXT-INVERSE-ROLLBACK.md`; `rfcs/handoffs/DC-14-arbitrary-span-text-inverse-rollback/fdd-04-update.md` |
 | Active WAL metadata integrity is part of verification and doctor diagnostics. | `crates/prikk-store/src/verify.rs`; `crates/prikk-store/src/doctor.rs`; `rfcs/done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md` |
-| Durability and platform claims remain limited by current test evidence. | `rfcs/handoffs/DC-24-data-model-trust-threat-docs/baseline-recap.md`; `rfcs/accepted/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md` |
+| Durability and platform claims remain limited by current test evidence. | `rfcs/handoffs/DC-24-data-model-trust-threat-docs/baseline-recap.md`; `rfcs/done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md` |
 
 ## Provenance
 
-This reference consolidates released records through DC-23 and accepted DC-24. It supersedes stale
+This reference consolidates released records through DC-23 and DC-24. It supersedes stale
 v0.2.0-era notes that described MAINTAINER signing as deferred; the current released code signs
 publication objects with real MAINTAINER Ed25519 signatures and verifies them against local trust.
