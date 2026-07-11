@@ -5,24 +5,27 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- No active design/implementation increment is selected after the 0.17.0 release candidate prep.
+- No active design/implementation increment is selected after 0.17.0.
 
 ## Release Candidate Increment
 
-- **0.17.0 release candidate - DC-25 merge planning surface.** The candidate adds a read-only
-  `prikk merge-plan` boundary over explicit baseline and left/right targets and removes the temporary
-  0.16.1 FDD-00/FDD-04 compatibility pointers after the DC-26 documentation-home transition window.
-  It remains non-executing and does not add merge-base discovery, merge execution, branch publication,
-  merge commits, persisted plan/evidence objects, schema changes, or public `prikk-replay` API
-  stabilization.
+- No active release candidate is selected after 0.17.0.
 
 ## Last Released Increment
+
+- **DC-25 - merge planning surface (released as 0.17.0).** `prikk merge-plan` exposes a read-only
+  planning classification over the existing explicit-input merge evidence path, preserving evidence
+  outcome/reason while adding `ConfluentSubset` / `Blocked*` status and action text. The release also
+  removes the temporary 0.16.1 FDD-00/FDD-04 compatibility pointers after the DC-26 documentation-home
+  transition window. It does not execute merges, infer merge bases, publish branches, write refs/WAL,
+  create merge commits, persist plan/proof/witness/evidence objects, change schema, or stabilize
+  `prikk-replay` as a public API.
 
 - **DC-26 - documentation home correction (released as 0.16.1).** Current-state architecture/concept
   references now live in the published `docs/src/reference/` book as their authoritative,
   self-contained home. FDD-00/FDD-04 remained as temporary compatibility pointers through 0.16.1 and
-  were removed during 0.17.0 release-candidate prep. This release is documentation-structure only: no
-  code, schema, trust, CLI, or RFC lifecycle policy changes.
+  were removed in 0.17.0. This release is documentation-structure only: no code, schema, trust, CLI,
+  or RFC lifecycle policy changes.
 
 - **DC-23 plus DC-24 documentation work (released as 0.16.0).** `prikk merge-evidence` text output is
   stabilized with clearer selector summaries, unambiguous cross-side item display, displayed/total item

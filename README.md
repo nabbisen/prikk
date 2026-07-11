@@ -41,10 +41,9 @@ Prikk is designed to be:
 
 ## Current Status
 
-Latest released implementation: **0.16.1**.
+Latest released implementation: **0.17.0**.
 
-Current release candidate: **0.17.0**, adding the read-only `prikk merge-plan` surface. Next increment
-candidates are tracked in `ROADMAP.md`.
+No later release candidate is selected yet. Next increment candidates are tracked in `ROADMAP.md`.
 
 This is an early implementation suitable for architecture review, experimentation, and contribution.
 Do not use Prikk as the sole store for important project history yet. The repository format and command
