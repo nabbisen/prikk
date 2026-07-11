@@ -5,12 +5,11 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-22 - public merge evidence UX boundary (implementation candidate for 0.15.0).** The current
-  implementation exposes DC-21 merge/conflict evidence through `prikk merge-evidence`, a read-only
-  public UX with explicit baseline and candidate targets. It does not infer merge bases, execute
-  merges, publish merge commits, write refs or WAL, materialize worktree conflicts, persist
-  proof/witness objects, change schema, extract patch algebra, or stabilize `prikk-replay` as an
-  external API.
+- **DC-22 - public merge evidence UX boundary (0.15.0 release candidate).** The current candidate
+  exposes DC-21 merge/conflict evidence through `prikk merge-evidence`, a read-only public UX with
+  explicit baseline and candidate targets. It does not infer merge bases, execute merges, publish
+  merge commits, write refs or WAL, materialize worktree conflicts, persist proof/witness objects,
+  change schema, extract patch algebra, or stabilize `prikk-replay` as an external API.
 
 ## Last Released Increment
 
@@ -82,8 +81,10 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Next Increments
 
-1. **M2+ patch algebra**: commutation, confluence, conflict witnesses, and merge evidence.
-2. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
+1. Optional DC-22 hardening after release: non-`Confluent` CLI exit-zero coverage and additional
+   fail-closed object tests.
+2. **M2+ patch algebra**: commutation, confluence, conflict witnesses, and merge evidence.
+3. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
    rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
    their dedicated plans and FDDs.
 

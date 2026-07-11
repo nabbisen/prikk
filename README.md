@@ -76,20 +76,15 @@ local branch ref can be started with `commit --ref heads/<branch>` and published
 
 ## Design Notes
 
-Current released implementation: **0.14.0** (DC-21 — merge conflict evidence contract). This release
-adds an internal, read-only merge/conflict evidence report vocabulary over the existing patch-algebra
-analyzers, with
-explicit `EvidenceFailure`, `InvalidCandidate`, `Unsupported`, `Deferred`, `Conflict`,
-`OrderedDependency`, `NotConfluent`, and `Confluent` outcomes. It does not add CLI merge behavior,
-merge execution, branch publication, multi-parent Blocks, persisted proof/witness objects, schema
-changes, worktree conflict materialization, patch-algebra extraction, or public `prikk-replay` API
-stabilization.
-
-Current development candidate for **0.15.0** (DC-22) adds `prikk merge-evidence` as a read-only public
-display over the DC-21 report contract. It requires an explicit `--baseline-block`, resolves exactly
-one left and one right target selector from `--*-block` or `--*-ref`, derives sealed candidate
-sequences by walking single-parent ancestry back to the baseline, and reports evidence without writing
-objects, refs, WAL records, merge commits, or worktree files.
+Current release candidate: **0.15.0** (DC-22 — public merge evidence UX boundary). The latest released
+implementation is **0.14.0** (DC-21 — merge conflict evidence contract). This candidate adds
+`prikk merge-evidence` as a read-only public display over the DC-21 report contract. It requires an
+explicit `--baseline-block`, resolves exactly one left and one right target selector from `--*-block`
+or `--*-ref`, derives sealed candidate sequences by walking single-parent ancestry back to the
+baseline, and reports evidence without writing objects, refs, WAL records, merge commits, or worktree
+files. It does not add CLI merge behavior, merge execution, automatic merge-base discovery, branch
+publication, multi-parent Blocks, persisted proof/witness objects, schema changes, worktree conflict
+materialization, JSON output, patch-algebra extraction, or public `prikk-replay` API stabilization.
 
 Implemented:
 

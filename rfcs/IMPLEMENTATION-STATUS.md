@@ -1,12 +1,11 @@
 # Prikk Implementation Status
 
-Version: 0.14.0 released (DC-21 — merge conflict evidence contract)
-Current development increment: DC-22 implementation candidate for 0.15.0 (public merge evidence UX)
+Version: 0.14.0 released; 0.15.0 release candidate (DC-22 — public merge evidence UX boundary)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (0.14.0 released)
+## Current State (0.14.0 released; 0.15.0 release candidate)
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** local
   branch baseline reconstructed from authoritative replay — or, on a valid unborn `heads/*` ref, a
@@ -74,7 +73,7 @@ Current development increment: DC-22 implementation candidate for 0.15.0 (public
   execution, branch publication, multi-parent Blocks, persisted proof/witness objects, schema changes,
   worktree conflict materialization, patch-algebra crate extraction, or public `prikk-replay` API
   stabilization.
-- DC-22 is implemented as a 0.15.0 candidate public UX boundary: `prikk merge-evidence` requires an
+- DC-22 is a 0.15.0 release candidate as a public UX boundary: `prikk merge-evidence` requires an
   explicit `--baseline-block`, accepts exactly one left and one right target selector from block ids or
   current local branch refs, resolves refs through existing RefState validation, derives sealed
   candidate sequences by walking single-parent target ancestry back to the baseline, and displays

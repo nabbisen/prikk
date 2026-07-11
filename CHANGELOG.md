@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.15.0 — 2026-07-11
 
 DC-22: public merge evidence UX boundary.
 
@@ -14,6 +14,13 @@ DC-22: public merge evidence UX boundary.
   baseline, failing closed on missing ancestry, multi-parent chains, cycles, or unreadable evidence.
 - Keeps the surface non-mutating: no object writes, ref updates, WAL writes, merge commits, or
   worktree changes.
+- Adds CLI regression coverage for stdout/stderr privacy and read-only behavior on both successful and
+  failing command paths.
+
+Still deferred: `prikk merge`, merge execution, automatic merge-base discovery, branch merge
+semantics, branch publication, merge commits, multi-parent Blocks, active-WAL merge drafts, persisted
+proof/witness/merge-evidence objects, worktree conflict materialization, JSON output, schema changes,
+patch-algebra crate extraction, and public `prikk-replay` API stabilization.
 
 ## 0.14.0 — 2026-07-05
 
