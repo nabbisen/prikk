@@ -24,11 +24,7 @@ consistent with its folder.
 
 ## Proposed
 
-These records currently live under `proposed/`.
-
-| ID | Title |
-|---|---|
-| DC-26 | [Documentation Home Correction](./proposed/DC-26-DOCUMENTATION-HOME-CORRECTION.md) |
+No proposed RFCs are currently tracked.
 
 ## Accepted
 
@@ -37,6 +33,7 @@ These records currently live under `accepted/`.
 | ID | Title |
 |---|---|
 | DC-25 | [Merge Planning Surface](./accepted/DC-25-MERGE-PLANNING-SURFACE.md) |
+| DC-26 | [Documentation Home Correction](./accepted/DC-26-DOCUMENTATION-HOME-CORRECTION.md) |
 
 ## Done
 

@@ -1,8 +1,8 @@
-# RFC (draft) - DC-26 Documentation Home Correction
+# RFC (accepted) - DC-26 Documentation Home Correction
 
-**Status.** Proposed — entered `rfcs/proposed/` after maintainer review; awaiting design review.
-**Target release.** 0.16.1 — recommended as the *first* increment after 0.16.0, before the TASK-06..16
-reference series is built on the current pattern.
+**Status.** Accepted for implementation after architect design review.
+**Target release.** 0.16.1 — recommended as the first documentation/reference increment after 0.16.0,
+before the TASK-06..16 reference series is built on the current pattern.
 **Tracks.** Corrects the documentation-home decision made in DC-24.
 **Touches.** Location and authority of current-state reference docs; `docs/src/reference/`; the fate of
 `rfcs/fdds/`; the graduation targets of TASK-06..16.
@@ -29,10 +29,11 @@ replicated.
    repo/branch rename.
 3. **It created the split-brain it meant to avoid.** The Core Caveats block is duplicated across four
    files, and a bespoke "no-drift" check exists solely because the content was split across two homes.
-4. **Category error.** `rfcs/` carries `proposed/ → accepted/ → done/` lifecycle semantics. A
-   current-state reference has no lifecycle state, which is why FDD-00/FDD-04 had to sit in a new `fdds/`
-   folder *outside* that scheme. That awkwardness (design-review note N-1) was the structure signalling
-   it did not belong there.
+4. **Awkward fit with RFC lifecycle.** `rfcs/` carries `proposed/ → accepted/ → done/` lifecycle
+   semantics, while current-state references are not lifecycle RFC records. DC-24 handled this honestly
+   by listing FDD-00/FDD-04 under a distinct "Current FDD References" section, but the structure still
+   signalled that reader-facing current-state references were living beside design-process material
+   rather than in the published reference book.
 
 The root confusion: two different kinds of content wore one label.
 
@@ -41,7 +42,9 @@ The root confusion: two different kinds of content wore one label.
 - **Current-state reference** — *what* the system is today. Audience: users/evaluators. This is
   documentation. Correct home: `docs/src/`.
 
-FDD-00 and FDD-04 as written are the second kind, mislabeled as the first.
+FDD-00 and FDD-04 as written are the second kind. DC-26 moves that content to its reader-facing home
+without claiming DC-24 was dishonest; the correction is about audience proximity, self-contained book
+mechanics, and eliminating avoidable duplication.
 
 ## Proposed Structure
 
@@ -50,25 +53,35 @@ FDD-00 and FDD-04 as written are the second kind, mislabeled as the first.
    caveats, and its claim-to-source anchor table, all rendered in the book.
 2. **Links point from the book *into* `rfcs/`, not the reverse.** A reference page may link to specific
    `done/` RFCs for the *rationale/history* ("why this decision"), but the book never depends on an
-   external file for *what the system is*. Internal book links stay relative and unbreakable; outbound
-   RFC links are supplementary, not load-bearing.
+   external file for *what the system is*. Internal book links stay relative and unbreakable. Outbound
+   RFC links from the published book must use absolute repository URLs, such as
+   `https://github.com/nabbisen/prikk/blob/main/rfcs/...`, so they resolve from GitHub Pages. They are
+   supplementary, not load-bearing, but they must still avoid the DC-24 F-1 broken-link class.
 3. **Caveats live once.** The Core Caveats block exists in one authoritative place per topic (the book
-   reference page). Other surfaces link to it. The four-file duplication and the no-drift check are
-   retired.
+   reference page). Other surfaces link to it rather than copying it. The four-file duplication and the
+   no-drift check are retired.
 4. **`rfcs/fdds/` is reserved for genuine gating FDDs only** — design documents that gate *unbuilt*
    work (e.g. a future plugin ABI or sync protocol). It is **not** a home for current-state references.
    If no gating FDDs exist yet, `rfcs/fdds/` is removed until one is written.
 5. **Provenance and anchor tables move into the reference page** (as an appendix or footer) linking to
    the relevant RFCs/code. They serve evaluator trust and stay with the content they annotate.
+6. **Security-claim changes keep review discipline.** Moving the trust/threat model into `docs/src/`
+   does not make security claims ordinary guide text. Changes that alter trust, threat, verification,
+   signature, key-management, durability, platform-support, or production-readiness claims require
+   architect review or an accepted RFC/DC. The DC-24 grounding discipline travels with the page.
 
 ## Migration (DC-24 output)
 
 - Fold the bodies of `rfcs/fdds/FDD-00-DATA-MODEL.md` and `FDD-04-TRUST-THREAT-MODEL.md` into
   `docs/src/reference/data-model.md` and `docs/src/reference/trust-threat-model.md`, which already carry
   the caveats. The pages become the authority (full content + anchor tables), not stubs.
-- Remove the absolute-GitHub-URL workaround; cross-links to RFCs become supplementary "history" links.
-- Delete `rfcs/fdds/FDD-00`/`FDD-04` (or leave a one-line pointer into the book during a deprecation
-  window). Remove `rfcs/fdds/` if it then holds nothing.
+- Replace load-bearing absolute GitHub links to FDD-00/FDD-04 with self-contained book content. Keep
+  any supplementary book-to-RFC rationale/history links as absolute repository URLs so they resolve
+  from the deployed book.
+- Replace `rfcs/fdds/FDD-00`/`FDD-04` with one-line pointers into the book for the 0.16.1 release, so
+  links shipped in 0.16.0 continue to land on useful pages. Delete those pointer files in 0.17.0 unless
+  a later review extends the deprecation window.
+- Remove `rfcs/fdds/` when it becomes empty. Recreate it only when a genuine gating FDD exists.
 - Update `rfcs/README.md`, `README.md`, and `rfcs/IMPLEMENTATION-STATUS.md` references accordingly.
 - Retire the caveat no-drift gate; keep a single-source caveats block.
 
@@ -91,7 +104,7 @@ them:
 | TASK-15 roles & user classes | mdBook orientation | `docs/src/` orientation page (unchanged) |
 | TASK-16 error taxonomy | mdBook `reference/` | `docs/src/reference/errors.md` (unchanged) |
 
-Net effect: the four tasks that pointed at `rfcs/fdds/FDD-0x` (06, 07, 08, 10, 12) move their authority
+Net effect: the five tasks that pointed at `rfcs/fdds/FDD-0x` (06, 07, 08, 10, 12) move their authority
 into `docs/src/reference/`; the rest were already book-homed and only lose the "thin pointer to an
 external FDD" framing. Rationale/provenance still link back to `done/` RFCs and code.
 
@@ -104,29 +117,26 @@ external FDD" framing. Rationale/provenance still link back to `done/` RFCs and 
 
 ## Timing (recommended)
 
-**Do not reopen 0.16.0.** It is accepted and honest as-is; the current structure is suboptimal, not
-wrong, and reopening a just-accepted release invites scope creep. Ship 0.16.0, then take **DC-26 as an
-early 0.16.1 increment — before TASK-06..16**. The migration is two files today; after the reference
-series lands it is a twelve-file move. Fixing the pattern now is the cheap moment.
+0.16.0 has shipped with the DC-24 structure. That release is honest as-is; the current structure is
+suboptimal, not wrong. DC-26 should be taken as an early 0.16.1 increment — before TASK-06..16. The
+migration is two reference subjects today; after the reference series lands it becomes a larger
+multi-page move. Fixing the pattern now is the cheap moment.
 
-(If the maintainer would rather not ship the interim `rfcs/fdds/` structure at all, the alternative is to
-fold this into 0.16.0 before tag — a small two-file change plus a re-review. Recommended only if the tag
-is not time-sensitive; otherwise prefer the 0.16.1 path.)
+## Resolved Design Review Decisions
 
-## Open questions
-
-1. Delete `rfcs/fdds/FDD-00/04` outright, or leave one-line pointers into the book for a deprecation
-   window (in case external links already reference them)?
-2. Keep claim-to-source anchor tables visible in the reader-facing page, or move them to a collapsed
-   appendix so the main page stays short? (Recommend: visible but at the page foot — evaluator trust
-   depends on them.)
-3. Does `rfcs/fdds/` stay as a reserved (empty) home for future gating FDDs, or get removed until needed?
-   (Recommend: remove until a real gating FDD exists.)
+- FDD-00/FDD-04 are replaced with one-line pointers into the book for one release, then removed in
+  0.17.0 unless explicitly extended.
+- Claim-to-source anchor tables remain visible at the foot of each reference page. Evaluator trust
+  depends on seeing claims tied to code/RFCs.
+- `rfcs/fdds/` is removed when empty and recreated only when a genuine gating FDD exists.
+- Book-to-RFC rationale/history links use absolute repository URLs, not relative links that can break
+  in the deployed book.
+- The trust/threat reference remains security-sensitive: security-claim changes require architect
+  review or accepted RFC/DC coverage.
 
 ## Review / acceptance
 
-This is a structural documentation decision that amends done DC-24. It is now in `rfcs/proposed/` and
-awaits design review, then follows the normal design → implementation → release-note flow. On
-acceptance (move to `rfcs/accepted/`), apply the TASK-06..16 graduation-target edits in
-`.git-exclude/tasks/002-update-management/` and the ROADMAP *0.16.1+ Documentation Reference Backlog*
-"Home" column in the same pass.
+This is a structural documentation decision that amends done DC-24. It follows the normal design →
+implementation → release-note flow. During implementation, apply the TASK-06..16 graduation-target
+edits in `.git-exclude/tasks/002-update-management/` and the ROADMAP *0.16.1+ Documentation Reference
+Backlog* "Home" column in the same pass.

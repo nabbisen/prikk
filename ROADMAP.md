@@ -5,12 +5,11 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-25 - merge planning surface (accepted).** The next design-first increment is a read-only
-  `prikk merge-plan` surface over explicit baseline and left/right targets. It maps existing
-  merge-evidence outcomes into non-executable plan statuses without adding merge execution,
-  merge-base discovery, branch publication, worktree conflict materialization, JSON output, schema
-  changes, or public `prikk-replay` API stabilization. The remaining 0.16.0 post-release check is
-  Docs CI/GitHub Pages verification.
+- **DC-26 - documentation home correction (accepted).** The current documentation-structure increment
+  implements the accepted decision to move current-state architecture/concept references from
+  `rfcs/fdds/` into the published `docs/src/reference/` book as their authoritative, self-contained
+  home. It is documentation-structure only: no code, schema, trust, CLI, or RFC lifecycle policy
+  changes.
 
 ## Release Candidate Increment
 
@@ -101,14 +100,14 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Next Increments
 
-1. **M2+ patch algebra / merge planning**: the substantive next increment should turn from evidence
-   display toward user-facing merge planning or execution design. The documentation-reference series
-   below is incremental 0.16.x work and must not displace this turn toward user value.
-2. **DC-26 documentation home correction (proposed, 0.16.1)**: move current-state architecture/concept
+1. **DC-25 merge planning surface (accepted, 0.17.0 candidate)**: the accepted substantive next
+   implementation increment adds a read-only `prikk merge-plan` boundary over explicit baseline and
+   left/right targets. It remains non-executing and does not add merge-base discovery.
+2. **DC-26 documentation home correction (accepted, 0.16.1)**: move current-state architecture/concept
    references from `rfcs/fdds/` into the published `docs/src/reference/` book as their authoritative,
    self-contained home, keeping `rfcs/` for design-process/gating material. This must land **before**
    the documentation reference series below, so those references are not built on the home the
-   correction retires. See `rfcs/proposed/DC-26-DOCUMENTATION-HOME-CORRECTION.md`.
+   correction retires. See `rfcs/accepted/DC-26-DOCUMENTATION-HOME-CORRECTION.md`.
 3. **Documentation reference series (0.16.1 or later)**: the current-state reference subjects surfaced
    by the DC-24 spec recap — durability/crash-recovery, verify/doctor, patch-algebra concepts, key
    setup, and further layout/safety/policy references. Tracked in the *0.16.1+ Documentation Reference
@@ -145,9 +144,9 @@ durability, no repository-format stability, `verify` is not a global-trust proof
 over-trust risk DC-24 exists to prevent.
 
 **Home pending DC-26.** The *Home* targets in the table below reflect the DC-24 `rfcs/fdds/` pattern,
-which proposed **DC-26** (documentation home correction) retires in favour of authoritative
-`docs/src/reference/` pages. Do not build these references until DC-26 is decided; on DC-26 acceptance,
-update this table's homes to `docs/src/reference/` in the same pass.
+which accepted **DC-26** (documentation home correction) retires in favour of authoritative
+`docs/src/reference/` pages. Do not build these references until DC-26 is implemented; during DC-26
+implementation, update this table's homes to `docs/src/reference/` in the same pass.
 
 | ID | Tier | Owner | Status | Trigger / next action | Completion condition | Durable home |
 |---|---:|---|---|---|---|---|
