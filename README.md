@@ -43,7 +43,8 @@ Prikk is designed to be:
 
 Latest released implementation: **0.16.0**.
 
-No later release candidate is selected yet. Next increment candidates are tracked in `ROADMAP.md`.
+The active release candidate is **0.16.1**, a documentation-only DC-26 release that corrects the
+current-state reference home. Next increment candidates are tracked in `ROADMAP.md`.
 
 This is an early implementation suitable for architecture review, experimentation, and contribution.
 Do not use Prikk as the sole store for important project history yet. The repository format and command

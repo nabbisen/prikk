@@ -1,6 +1,6 @@
 # Prikk Implementation Status
 
-Version: 0.16.0 released (DC-23 plus reviewed documentation work)
+Version: 0.16.1 release candidate (DC-26 documentation home correction)
 
 Latest released version: 0.16.0 (DC-23 — public merge evidence UX stabilization, plus DC-24
 documentation references)
@@ -8,7 +8,14 @@ documentation references)
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (0.16.0)
+## Current State (0.16.1 candidate)
+
+- DC-26 is prepared as a 0.16.1 documentation-only release candidate. It moves the authoritative
+  current-state data-model and trust/threat references into `docs/src/reference/`, replaces
+  `rfcs/fdds/FDD-00-DATA-MODEL.md` and `rfcs/fdds/FDD-04-TRUST-THREAT-MODEL.md` with temporary
+  compatibility pointers for the 0.16.1 window, and updates README/ROADMAP/RFC/status references so
+  current-state references are book-owned. It does not change repository format, object schema, trust
+  policy, verification, CLI behavior, or RFC lifecycle policy.
 
 - DC-24 documentation work shipped in 0.16.0. It adds current-state FDD references for the data model
   and trust/threat model, plus mdBook reference entry points with inline public caveats and

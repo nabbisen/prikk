@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.16.1 — 2026-07-11
+
+DC-26: documentation home correction.
+
+- Moves the authoritative current-state data model reference into
+  `docs/src/reference/data-model.md`, with the full reference body, public caveats, provenance, and
+  visible claim-to-source anchor table rendered in the mdBook.
+- Moves the authoritative current-state trust/threat reference into
+  `docs/src/reference/trust-threat-model.md`, including the security-claim review discipline required
+  for trust, threat, verification, signature, key-management, durability, platform-support, and
+  production-readiness claims.
+- Replaces `rfcs/fdds/FDD-00-DATA-MODEL.md` and
+  `rfcs/fdds/FDD-04-TRUST-THREAT-MODEL.md` with temporary compatibility pointers for 0.16.1. They are
+  scheduled for removal in 0.17.0 unless a later review extends the window.
+- Updates README, ROADMAP, RFC index, and implementation status references so current-state
+  architecture/concept documentation is book-owned, while `rfcs/` remains for design-process and
+  genuine gating FDD material.
+- Updates the documentation-reference backlog homes for TASK-06/07/08/10/12 to the DC-26
+  `docs/src/reference/` model.
+- Keeps the release documentation-only: no repository format, object schema, trust policy,
+  verification, CLI behavior, or RFC lifecycle policy change is introduced.
+
 ## 0.16.0 — 2026-07-11
 
 DC-23: public merge evidence UX stabilization, plus reviewed pre-release documentation work.

@@ -5,15 +5,16 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-26 - documentation home correction (implementation pending review).** The current
-  documentation-structure increment implements the accepted decision to move current-state
-  architecture/concept references from `rfcs/fdds/` into the published `docs/src/reference/` book as
-  their authoritative, self-contained home. It is documentation-structure only: no code, schema, trust,
-  CLI, or RFC lifecycle policy changes.
+- No active design/implementation increment is selected while 0.16.1 is in release-candidate prep.
 
 ## Release Candidate Increment
 
-- No active release candidate is selected after 0.16.0.
+- **DC-26 - documentation home correction (0.16.1 candidate).** The release-candidate increment moves
+  current-state architecture/concept references from `rfcs/fdds/` into the published
+  `docs/src/reference/` book as their authoritative, self-contained home. It leaves temporary
+  compatibility pointers for FDD-00/FDD-04 through 0.16.1 and reserves `rfcs/fdds/` for genuine gating
+  FDDs. It is documentation-structure only: no code, schema, trust, CLI, or RFC lifecycle policy
+  changes.
 
 ## Last Released Increment
 
@@ -103,16 +104,11 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 1. **DC-25 merge planning surface (accepted, 0.17.0 candidate)**: the accepted substantive next
    implementation increment adds a read-only `prikk merge-plan` boundary over explicit baseline and
    left/right targets. It remains non-executing and does not add merge-base discovery.
-2. **DC-26 documentation home correction (accepted, 0.16.1)**: move current-state architecture/concept
-   references from `rfcs/fdds/` into the published `docs/src/reference/` book as their authoritative,
-   self-contained home, keeping `rfcs/` for design-process/gating material. This must land **before**
-   the documentation reference series below, so those references are not built on the home the
-   correction retires. See `rfcs/accepted/DC-26-DOCUMENTATION-HOME-CORRECTION.md`.
-3. **Documentation reference series (0.16.1 or later)**: the current-state reference subjects surfaced
+2. **Documentation reference series (after 0.16.1)**: the current-state reference subjects surfaced
    by the DC-24 spec recap — durability/crash-recovery, verify/doctor, patch-algebra concepts, key
    setup, and further layout/safety/policy references. Tracked in the *0.16.1+ Documentation Reference
    Backlog* section below. Graduation homes follow the DC-26 `docs/src/reference/` authority model.
-4. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
+3. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
    rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
    their dedicated plans and FDDs.
 
