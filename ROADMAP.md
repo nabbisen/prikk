@@ -13,11 +13,11 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 - **DC-23 - public merge evidence UX stabilization (released as 0.16.0).** This release stabilizes the
   released `prikk merge-evidence` text UX with clearer selector summaries, unambiguous cross-side item
   display, displayed/total item counts, and report-level output cleanup. It also adds the
-  merge-evidence mdBook page, GitHub Pages mdBook publishing configuration, and store-level coverage
-  that pins distinct left/right cross-item display summaries. It does not add merge execution,
-  merge-base discovery, branch publication, merge commits, persisted evidence objects,
-  display-path filtering, scoped/path-limited merge analysis, JSON output, schema changes, or public
-  `prikk-replay` API stabilization.
+  merge-evidence mdBook page, reorganizes the mdBook source tree by function, adds GitHub Pages mdBook
+  publishing configuration, and adds store-level coverage that pins distinct left/right cross-item
+  display summaries. It does not add merge execution, merge-base discovery, branch publication, merge
+  commits, persisted evidence objects, display-path filtering, scoped/path-limited merge analysis, JSON
+  output, schema changes, or public `prikk-replay` API stabilization.
 
 - **DC-22 - public merge evidence UX boundary (released as 0.15.0).** `prikk merge-evidence` exposes
   DC-21 merge/conflict evidence through a read-only public UX with explicit baseline and candidate
@@ -93,19 +93,29 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Next Increments
 
-1. **Docs source-tree Phase 2**: physically move `docs/src/` pages into the functional subdirectories
-   already represented by the mdBook navigation. This should preserve rendered navigation and edit no
-   page content.
-2. **Consolidated data-model and trust/threat-model documentation**: design a dedicated documentation
+1. **Consolidated data-model and trust/threat-model documentation**: design a dedicated documentation
    increment so the published book can honestly explain Prikk's object/block model, seal/replay
    lifecycle, signing/trust roots, and current trust limitations without duplicating RFC authority.
-3. **M2+ patch algebra / merge planning**: the next increment should turn from evidence display toward
+2. **M2+ patch algebra / merge planning**: the next increment should turn from evidence display toward
    user-facing merge planning or execution design.
-4. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
+3. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
    rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
    their dedicated plans and FDDs.
 
 Final feature scope remains governed by the FDDs and RFCs.
+
+## 0.16.0 Release Task Management
+
+These tasks are tracked here because `.git-exclude/tasks/` is scratch space and not a durable backlog.
+They remain managed in this section until each completion condition is met.
+
+| ID | Owner | Status | Trigger / next action | Completion condition |
+|---|---|---|---|---|
+| TASK-01 docs Phase-2 physical subdirectories | Designer, then architect reviewer | In review | Architect review of `.git-exclude/review-request/prikk-0.16.0-docs-phase2-subdirs-review-v1` | Accepted review and committed docs source-tree move |
+| TASK-02 consolidated data-model + trust/threat-model docs | Architect + maintainer | Tracked as next increment | Maintainer chooses the post-0.16.0 design theme | Proposed RFC/DC exists in `rfcs/proposed/` and is scheduled |
+| TASK-03 docs Pages workflow hardening | Maintainer | Local hardening done; deploy verification pending | After release/docs workflow changes are pushed, run GitHub Actions `workflow_dispatch` | First Pages build/deploy succeeds, or a tracked follow-up records any GitHub-side failure |
+| TASK-04 DC-23 store-unit test carry-forwards | Designer/implementer | Implemented and verified | Commit with the accepted 0.16.0 pre-release hardening bundle | Store-level cross-item test is committed |
+| TASK-05 0.16.0 release finalization | Maintainer | Prepared in working tree; tag/publish pending | After TASK-01 review is accepted and release-finalization changes are committed | `v0.16.0` tag and crate publish are completed by the maintainer |
 
 ## Historical Note — PR-030
 

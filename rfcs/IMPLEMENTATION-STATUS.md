@@ -16,11 +16,11 @@ Latest released version: 0.16.0 (DC-23 — public merge evidence UX stabilizatio
   objects, display-path filtering, scoped/path-limited merge analysis, JSON output, schema changes, or
   public `prikk-replay` API stabilization.
 
-- As part of 0.16.0 release preparation, the mdBook source navigation was reorganized by function, a
-  `merge-evidence` command page was added, GitHub Pages publishing was configured and hardened with
-  explicit `book.toml` metadata, ignored generated output, verified action tags, and path-scoped deploy
-  triggers. The DC-23 display repair also has store-level coverage that pins distinct left and right
-  operation summaries for cross-side evidence items.
+- As part of 0.16.0 release preparation, the mdBook navigation and source tree were reorganized by
+  function, a `merge-evidence` command page was added, GitHub Pages publishing was configured and
+  hardened with explicit `book.toml` metadata, ignored generated output, verified action tags, and
+  path-scoped deploy triggers. The DC-23 display repair also has store-level coverage that pins
+  distinct left and right operation summaries for cross-side evidence items.
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** local
   branch baseline reconstructed from authoritative replay — or, on a valid unborn `heads/*` ref, a
