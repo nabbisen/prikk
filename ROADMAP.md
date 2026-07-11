@@ -5,18 +5,19 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- No active design/implementation increment is selected while 0.16.1 is in release-candidate prep.
+- No active design/implementation increment is selected after 0.16.1.
 
 ## Release Candidate Increment
 
-- **DC-26 - documentation home correction (0.16.1 candidate).** The release-candidate increment moves
-  current-state architecture/concept references from `rfcs/fdds/` into the published
-  `docs/src/reference/` book as their authoritative, self-contained home. It leaves temporary
-  compatibility pointers for FDD-00/FDD-04 through 0.16.1 and reserves `rfcs/fdds/` for genuine gating
-  FDDs. It is documentation-structure only: no code, schema, trust, CLI, or RFC lifecycle policy
-  changes.
+- No active release candidate is selected after 0.16.1.
 
 ## Last Released Increment
+
+- **DC-26 - documentation home correction (released as 0.16.1).** Current-state architecture/concept
+  references now live in the published `docs/src/reference/` book as their authoritative,
+  self-contained home. FDD-00/FDD-04 remain as temporary compatibility pointers through 0.16.1 and are
+  scheduled for removal in 0.17.0 unless a later review extends the window. This release is
+  documentation-structure only: no code, schema, trust, CLI, or RFC lifecycle policy changes.
 
 - **DC-23 plus DC-24 documentation work (released as 0.16.0).** `prikk merge-evidence` text output is
   stabilized with clearer selector summaries, unambiguous cross-side item display, displayed/total item
@@ -106,7 +107,7 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
    left/right targets. It remains non-executing and does not add merge-base discovery.
 2. **Documentation reference series (after 0.16.1)**: the current-state reference subjects surfaced
    by the DC-24 spec recap — durability/crash-recovery, verify/doctor, patch-algebra concepts, key
-   setup, and further layout/safety/policy references. Tracked in the *0.16.1+ Documentation Reference
+   setup, and further layout/safety/policy references. Tracked in the *Post-0.16.1 Documentation Reference
    Backlog* section below. Graduation homes follow the DC-26 `docs/src/reference/` authority model.
 3. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
    rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
@@ -128,9 +129,9 @@ They remain managed in this section until each completion condition is met.
 | TASK-04 DC-23 store-unit test carry-forwards | Designer/implementer | Done | Reviewed and committed with the accepted 0.16.0 pre-release hardening bundle | Store-level cross-item test is committed |
 | TASK-05 0.16.0 release finalization | Maintainer | Done | Released as tag `0.16.0` and crates published | `0.16.0` tag and crate publish are completed by the maintainer |
 
-## 0.16.1+ Documentation Reference Backlog
+## Post-0.16.1 Documentation Reference Backlog
 
-Documentation-only, current-state reference increments targeted for **0.16.1 or later**, following
+Documentation-only, current-state reference increments targeted for after **0.16.1**, following
 DC-24 (data model + trust/threat). They are grounded through the tracked DC-24 baseline recap
 (`rfcs/handoffs/DC-24-data-model-trust-threat-docs/baseline-recap.md`) and current released code/RFCs;
 local `.git-exclude/specs/` files are not reviewer-facing authority. Each task must carry source
@@ -140,7 +141,7 @@ into DC-24, and every one must preserve the same honest-limits discipline (unit-
 durability, no repository-format stability, `verify` is not a global-trust proof) or it re-creates the
 over-trust risk DC-24 exists to prevent.
 
-**Documentation home.** Accepted **DC-26** retires the DC-24 `rfcs/fdds/` pattern for current-state
+**Documentation home.** Released **DC-26** retires the DC-24 `rfcs/fdds/` pattern for current-state
 references. The durable homes below are authoritative `docs/src/reference/` or `docs/src/guide/` pages;
 `rfcs/fdds/` is reserved for future gating FDDs only.
 

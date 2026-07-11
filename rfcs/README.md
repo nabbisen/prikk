@@ -33,7 +33,6 @@ These records currently live under `accepted/`.
 | ID | Title |
 |---|---|
 | DC-25 | [Merge Planning Surface](./accepted/DC-25-MERGE-PLANNING-SURFACE.md) |
-| DC-26 | [Documentation Home Correction](./accepted/DC-26-DOCUMENTATION-HOME-CORRECTION.md) |
 
 ## Done
 
@@ -57,6 +56,7 @@ These records currently live under `done/`.
 | DC-22 | [Public Merge Evidence UX Boundary](./done/DC-22-PUBLIC-MERGE-EVIDENCE-UX.md) |
 | DC-23 | [Public Merge Evidence UX Stabilization](./done/DC-23-MERGE-EVIDENCE-UX-STABILIZATION.md) |
 | DC-24 | [Data Model and Trust/Threat Documentation](./done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md) |
+| DC-26 | [Documentation Home Correction](./done/DC-26-DOCUMENTATION-HOME-CORRECTION.md) |
 | PR-001 | [Implementation Handoff](./done/PR-001-IMPLEMENTATION-HANDOFF.md) |
 | PR-002 | [CI Fix Handoff](./done/PR-002-CI-FIX-HANDOFF.md) |
 | PR-003 | [Persistent Store Handoff](./done/PR-003-PERSISTENT-STORE-HANDOFF.md) |

@@ -1,8 +1,8 @@
-# RFC (accepted) - DC-26 Documentation Home Correction
+# RFC (done) - DC-26 Documentation Home Correction
 
-**Status.** Accepted for implementation after architect design review.
-**Target release.** 0.16.1 — recommended as the first documentation/reference increment after 0.16.0,
-before the TASK-06..16 reference series is built on the current pattern.
+**Status.** Released in 0.16.1.
+**Released.** 0.16.1 — shipped as the first documentation/reference increment after 0.16.0, before the
+TASK-06..16 reference series was built on the old pattern.
 **Tracks.** Corrects the documentation-home decision made in DC-24.
 **Touches.** Location and authority of current-state reference docs; `docs/src/reference/`; the fate of
 `rfcs/fdds/`; the graduation targets of TASK-06..16.
@@ -138,5 +138,5 @@ multi-page move. Fixing the pattern now is the cheap moment.
 
 This is a structural documentation decision that amends done DC-24. It follows the normal design →
 implementation → release-note flow. During implementation, apply the TASK-06..16 graduation-target
-edits in `.git-exclude/tasks/002-update-management/` and the ROADMAP *0.16.1+ Documentation Reference
-Backlog* "Home" column in the same pass.
+edits in `.git-exclude/tasks/002-update-management/` and the ROADMAP *Post-0.16.1 Documentation
+Reference Backlog* "Home" column in the same pass.
