@@ -5,24 +5,24 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **0.16.0 release finalization.** DC-23 and the pre-release documentation work are reviewed and
-  committed for the 0.16.0 candidate, and final RC review is accepted. The remaining release work is
-  maintainer-owned tag/publish and post-push GitHub Pages verification.
+- **Next increment selection.** 0.16.0 is released. The remaining tracked post-release check is Docs
+  CI/GitHub Pages verification; the next design-first increment should be selected from the candidate
+  list below.
 
 ## Release Candidate Increment
 
-- **DC-23 plus pre-release documentation work (prepared for 0.16.0).** The 0.16.0 candidate
-  stabilizes the released `prikk merge-evidence` text UX with clearer selector summaries,
-  unambiguous cross-side item display, displayed/total item counts, and report-level output cleanup.
-  It also adds the merge-evidence mdBook page, reorganizes the mdBook source tree by function, adds
-  GitHub Pages mdBook publishing configuration, documents the current data model and trust/threat
-  posture through FDD/mdBook reference pages, and adds store-level coverage that pins distinct
-  left/right cross-item display summaries. It does not add merge execution, merge-base discovery,
-  branch publication, merge commits, persisted evidence objects, display-path filtering,
-  scoped/path-limited merge analysis, JSON output, schema changes, trust-store enforcement changes, or
-  public `prikk-replay` API stabilization.
+- No active release candidate is selected after 0.16.0.
 
 ## Last Released Increment
+
+- **DC-23 plus DC-24 documentation work (released as 0.16.0).** `prikk merge-evidence` text output is
+  stabilized with clearer selector summaries, unambiguous cross-side item display, displayed/total item
+  counts, and report-level output cleanup. The release also reorganizes the mdBook source tree, adds
+  the merge-evidence command page, prepares GitHub Pages publication, and adds current-state FDD/mdBook
+  references for Prikk's data model and trust/threat model. It does not add merge execution,
+  merge-base discovery, branch publication, merge commits, persisted evidence objects, display-path
+  filtering, scoped/path-limited merge analysis, JSON output, schema changes, trust-store enforcement
+  changes, or public `prikk-replay` API stabilization.
 
 - **DC-22 - public merge evidence UX boundary (released as 0.15.0).** `prikk merge-evidence` exposes
   DC-21 merge/conflict evidence through a read-only public UX with explicit baseline and candidate
@@ -122,7 +122,7 @@ They remain managed in this section until each completion condition is met.
 | TASK-02 consolidated data-model + trust/threat-model docs | Architect + maintainer | Done | Reviewed in `.git-exclude/reviewed/prikk-dc-24-0.16.0-docs-implementation-review-v1.md`, repaired, and committed | DC-24 docs are reviewed and committed |
 | TASK-03 docs Pages workflow hardening | Maintainer | Local prep done; external deploy verification pending | After release/docs workflow changes are pushed, run GitHub Actions `workflow_dispatch` or observe the release-triggered Pages run | First Pages build/deploy succeeds, or a tracked follow-up records any GitHub-side failure |
 | TASK-04 DC-23 store-unit test carry-forwards | Designer/implementer | Done | Reviewed and committed with the accepted 0.16.0 pre-release hardening bundle | Store-level cross-item test is committed |
-| TASK-05 0.16.0 release finalization | Maintainer | RC accepted; tag/publish pending | Maintainer creates `v0.16.0` tag and publishes crates | `v0.16.0` tag and crate publish are completed by the maintainer |
+| TASK-05 0.16.0 release finalization | Maintainer | Done | Released as tag `0.16.0` and crates published | `0.16.0` tag and crate publish are completed by the maintainer |
 
 ## 0.16.1+ Documentation Reference Backlog
 

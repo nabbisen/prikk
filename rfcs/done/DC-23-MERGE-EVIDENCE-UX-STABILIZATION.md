@@ -1,7 +1,7 @@
 # RFC (done) - DC-23 Public Merge Evidence UX Stabilization
 
-**Status.** Released in v0.16.0.
-**Target release.** v0.16.0.
+**Status.** Released in 0.16.0.
+**Target release.** 0.16.0.
 **Tracks.** Stabilization of the released `prikk merge-evidence` public display boundary after DC-22.
 **Touches.** Text display labels, selector summaries, cross-side item rendering, displayed/total item
 counts, output determinism, read-only evidence tests, and FDD-01 merge/conflict wording.
@@ -211,7 +211,7 @@ tests and display/view-model modules.
 
 The first architect design review accepted the display-stabilization slice and recommended deferring
 the proposed path-focused display filter. DC-23 records that decision: no `--focus-path`,
-`--display-path`, `--show-path`, or equivalent filter is part of v0.16.0.
+`--display-path`, `--show-path`, or equivalent filter is part of 0.16.0.
 
 If a later DC adds display-path filtering, it must define at least:
 
