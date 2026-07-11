@@ -38,6 +38,7 @@ fn block_targets_report_confluent_for_independent_create_sequences() -> Result<(
     assert_eq!(report.reason, Some("proven_confluent"));
     assert_eq!(report.left_operation_count, 1);
     assert_eq!(report.right_operation_count, 1);
+    assert_eq!(report.displayed_item_count(), report.total_item_count());
     assert_eq!(report.left_selector.target_block_id, left);
     assert_eq!(report.right_selector.target_block_id, right);
     let _ = std::fs::remove_dir_all(root);

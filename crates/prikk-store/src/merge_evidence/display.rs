@@ -93,6 +93,16 @@ impl MergeEvidenceDisplay {
             items,
         }
     }
+
+    /// Number of report items displayed by this view.
+    pub fn displayed_item_count(&self) -> usize {
+        self.items.len()
+    }
+
+    /// Number of report items in the full evidence report.
+    pub fn total_item_count(&self) -> usize {
+        self.items.len()
+    }
 }
 
 fn item_from_report(
@@ -101,7 +111,12 @@ fn item_from_report(
 ) -> MergeEvidenceDisplayItem {
     MergeEvidenceDisplayItem {
         side: side_name(item.side),
-        operation: operation_for_item(report, item.side, item.operation_index, item.op_seq),
+        operation: operation_for_item(
+            report,
+            operation_side(item.side),
+            item.operation_index,
+            item.op_seq,
+        ),
         peer_operation: operation_for_item(
             report,
             peer_side(item.side),
@@ -112,6 +127,13 @@ fn item_from_report(
         evidence_scope: item.evidence_scope.map(scope_name),
         proof_phase: proof_phase_name(item.proof_phase),
         reason_code: reason_code_name(item.reason_code),
+    }
+}
+
+fn operation_side(side: MergeEvidenceSide) -> MergeEvidenceSide {
+    match side {
+        MergeEvidenceSide::Cross => MergeEvidenceSide::Left,
+        MergeEvidenceSide::Left | MergeEvidenceSide::Right | MergeEvidenceSide::Report => side,
     }
 }
 

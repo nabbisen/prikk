@@ -7,13 +7,12 @@ Version: 0.15.0 released (DC-22 — public merge evidence UX boundary)
 
 ## Current State (0.15.0 released)
 
-- DC-23 is currently accepted as the next design-first increment after the 0.15.0 release and
-  post-release DC-22 test hardening. It defines stabilization of the public `prikk merge-evidence` text UX
-  with clearer selector summaries, unambiguous cross-side item display, displayed/total item counts,
-  and report-level output cleanup. It is not implemented and does not propose merge execution,
-  merge-base discovery, branch publication, merge commits, persisted evidence objects, display-path
-  filtering, scoped/path-limited merge analysis, JSON output, schema changes, or public
-  `prikk-replay` API stabilization.
+- DC-23 is implemented as the current 0.16.0 candidate after the 0.15.0 release and post-release
+  DC-22 test hardening. It stabilizes the public `prikk merge-evidence` text UX with clearer selector
+  summaries, unambiguous cross-side item display, displayed/total item counts, and report-level output
+  cleanup. It does not add merge execution, merge-base discovery, branch publication, merge commits,
+  persisted evidence objects, display-path filtering, scoped/path-limited merge analysis, JSON output,
+  schema changes, or public `prikk-replay` API stabilization.
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** local
   branch baseline reconstructed from authoritative replay — or, on a valid unborn `heads/*` ref, a
@@ -158,7 +157,7 @@ Version: 0.15.0 released (DC-22 — public merge evidence UX boundary)
 ## Not Implemented Yet
 
 - General destructive worktree pruning and full patch-based checkout semantics.
-- DC-23 public merge-evidence UX stabilization is accepted but not implemented.
+- DC-23 public merge-evidence UX stabilization is implemented as a 0.16.0 candidate.
 - Branch switching, branch copy/fork from an existing tip, merge-base semantics, branch deletion/rename,
   tag or remote ref creation, rollback refs, multi-commit queued active sessions, and per-ref active WALs.
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy beyond the DC-11 local trust store.

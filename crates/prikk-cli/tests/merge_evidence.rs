@@ -37,6 +37,15 @@ fn merge_evidence_ref_targets_are_success_and_read_only() -> TestResult {
         "stdout: {stdout}"
     );
     assert!(
+        stdout.contains("items: 1 displayed of 1"),
+        "stdout: {stdout}"
+    );
+    assert!(stdout.contains("report:"), "stdout: {stdout}");
+    assert!(
+        !stdout.contains("report report"),
+        "stdout contained fake report operation: {stdout}"
+    );
+    assert!(
         stdout.contains("no merge commit, ref update, WAL write, or worktree change"),
         "stdout: {stdout}"
     );
@@ -104,6 +113,23 @@ fn merge_evidence_conflict_outcome_is_command_success() -> TestResult {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("outcome: Conflict"), "stdout: {stdout}");
     assert!(stdout.contains("reason: pair_conflict"), "stdout: {stdout}");
+    assert!(
+        stdout.contains("items: 1 displayed of 1"),
+        "stdout: {stdout}"
+    );
+    assert!(stdout.contains("cross:"), "stdout: {stdout}");
+    assert!(
+        stdout.contains("left[0] op_seq=1 ChangePerm"),
+        "stdout: {stdout}"
+    );
+    assert!(
+        stdout.contains("right[0] op_seq=1 ChangePerm"),
+        "stdout: {stdout}"
+    );
+    assert!(
+        !stdout.contains("<->"),
+        "stdout kept ambiguous cross-item renderer: {stdout}"
+    );
     let _ = std::fs::remove_dir_all(repo);
     Ok(())
 }

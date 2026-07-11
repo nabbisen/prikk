@@ -5,12 +5,12 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-23 - public merge evidence UX stabilization (accepted for 0.16.0).** The current design
-  stabilizes the released `prikk merge-evidence` text UX with clearer selector summaries,
-  unambiguous cross-side item display, and displayed/total item counts. It does not add merge
-  execution, merge-base discovery, branch publication, merge commits, persisted evidence objects,
-  display-path filtering, scoped/path-limited merge analysis, JSON output, schema changes, or public
-  `prikk-replay` API stabilization.
+- **DC-23 - public merge evidence UX stabilization (implementation candidate for 0.16.0).** The
+  current implementation stabilizes the released `prikk merge-evidence` text UX with clearer selector
+  summaries, unambiguous cross-side item display, and displayed/total item counts. It does not add
+  merge execution, merge-base discovery, branch publication, merge commits, persisted evidence
+  objects, display-path filtering, scoped/path-limited merge analysis, JSON output, schema changes, or
+  public `prikk-replay` API stabilization.
 
 ## Last Released Increment
 

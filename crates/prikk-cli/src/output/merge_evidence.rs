@@ -11,30 +11,37 @@ pub(crate) fn print_merge_evidence(report: &MergeEvidenceDisplay) {
         "left target block: {}",
         report.left_selector.target_block_id
     );
+    println!("left operations: {}", report.left_operation_count);
     println!("right selector: {}", report.right_selector.selector);
     println!(
         "right target block: {}",
         report.right_selector.target_block_id
     );
+    println!("right operations: {}", report.right_operation_count);
     println!("outcome: {}", report.outcome);
     match report.reason {
         Some(reason) => println!("reason: {reason}"),
         None => println!("reason: <none>"),
     }
-    println!("left operations: {}", report.left_operation_count);
-    println!("right operations: {}", report.right_operation_count);
-    println!("items: {}", report.items.len());
+    println!(
+        "items: {} displayed of {}",
+        report.displayed_item_count(),
+        report.total_item_count()
+    );
     for item in &report.items {
-        print!("{}", item.side);
-        if item.operation.is_some() {
-            print!(" ");
-            print_operation(item.operation.as_ref());
-        }
-        if item.peer_operation.is_some() {
-            print!(" <-> ");
-            print_operation(item.peer_operation.as_ref());
-        }
         println!();
+        println!("{}:", item.side);
+        match item.side {
+            "cross" => {
+                print_labeled_operation("left", item.operation.as_ref());
+                print_labeled_operation("right", item.peer_operation.as_ref());
+            }
+            "left" | "right" => print_labeled_operation(item.side, item.operation.as_ref()),
+            "report" => {}
+            side => {
+                println!("  {side}");
+            }
+        }
         println!("  outcome: {}", item.outcome);
         println!("  reason: {}", item.reason_code);
         println!("  phase: {}", item.proof_phase);
@@ -47,12 +54,12 @@ pub(crate) fn print_merge_evidence(report: &MergeEvidenceDisplay) {
     );
 }
 
-fn print_operation(operation: Option<&MergeEvidenceDisplayOperation>) {
+fn print_labeled_operation(label: &str, operation: Option<&MergeEvidenceDisplayOperation>) {
     let Some(operation) = operation else {
-        print!("report");
+        println!("  {label}");
         return;
     };
-    print!("[{}]", operation.index);
+    print!("  {label}[{}]", operation.index);
     if let Some(op_seq) = operation.op_seq {
         print!(" op_seq={op_seq}");
     }
@@ -62,4 +69,5 @@ fn print_operation(operation: Option<&MergeEvidenceDisplayOperation>) {
     if let Some(path) = &operation.path {
         print!(" {path}");
     }
+    println!();
 }
