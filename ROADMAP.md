@@ -5,22 +5,25 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-24 - data model and trust/threat documentation (accepted).** The current accepted design
+- **DC-24 - data model and trust/threat documentation (implementation review pending).** The current
   increment creates reviewed data-model and trust/threat-model references, then exposes them through
   the mdBook without duplicating RFC/FDD authority or overstating Prikk's current trust posture. The
-  accepted design requires inline public caveats, claim-to-source FDD anchor tables, and no-drift
+  implementation includes inline public caveats, claim-to-source FDD anchor tables, and no-drift
   checks between mdBook caveats and FDD caveats.
 
-## Last Released Increment
+## Release Candidate Increment
 
-- **DC-23 - public merge evidence UX stabilization (released as 0.16.0).** This release stabilizes the
-  released `prikk merge-evidence` text UX with clearer selector summaries, unambiguous cross-side item
-  display, displayed/total item counts, and report-level output cleanup. It also adds the
-  merge-evidence mdBook page, reorganizes the mdBook source tree by function, adds GitHub Pages mdBook
-  publishing configuration, and adds store-level coverage that pins distinct left/right cross-item
-  display summaries. It does not add merge execution, merge-base discovery, branch publication, merge
-  commits, persisted evidence objects, display-path filtering, scoped/path-limited merge analysis, JSON
-  output, schema changes, or public `prikk-replay` API stabilization.
+- **DC-23 - public merge evidence UX stabilization (prepared for 0.16.0).** The 0.16.0 candidate
+  stabilizes the released `prikk merge-evidence` text UX with clearer selector summaries,
+  unambiguous cross-side item display, displayed/total item counts, and report-level output cleanup.
+  It also adds the merge-evidence mdBook page, reorganizes the mdBook source tree by function, adds
+  GitHub Pages mdBook publishing configuration, and adds store-level coverage that pins distinct
+  left/right cross-item display summaries. It does not add merge execution, merge-base discovery,
+  branch publication, merge commits, persisted evidence objects, display-path filtering,
+  scoped/path-limited merge analysis, JSON output, schema changes, or public `prikk-replay` API
+  stabilization.
+
+## Last Released Increment
 
 - **DC-22 - public merge evidence UX boundary (released as 0.15.0).** `prikk merge-evidence` exposes
   DC-21 merge/conflict evidence through a read-only public UX with explicit baseline and candidate
@@ -96,9 +99,14 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Next Increments
 
-1. **M2+ patch algebra / merge planning**: the next increment should turn from evidence display toward
-   user-facing merge planning or execution design.
-2. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
+1. **M2+ patch algebra / merge planning**: the substantive next increment should turn from evidence
+   display toward user-facing merge planning or execution design. The documentation-reference series
+   below is incremental 0.16.x work and must not displace this turn toward user value.
+2. **Documentation reference series (0.16.1 or later)**: the current-state reference subjects surfaced
+   by the DC-24 spec recap — durability/crash-recovery, verify/doctor, patch-algebra concepts, key
+   setup, and further layout/safety/policy references. Tracked in the *0.16.1+ Documentation Reference
+   Backlog* section below.
+3. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
    rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
    their dedicated plans and FDDs.
 
@@ -112,10 +120,40 @@ They remain managed in this section until each completion condition is met.
 | ID | Owner | Status | Trigger / next action | Completion condition |
 |---|---|---|---|---|
 | TASK-01 docs Phase-2 physical subdirectories | Designer, then architect reviewer | In review | Architect review of `.git-exclude/review-request/prikk-0.16.0-docs-phase2-subdirs-review-v1` | Accepted review and committed docs source-tree move |
-| TASK-02 consolidated data-model + trust/threat-model docs | Architect + maintainer | Accepted as DC-24 | Implement `rfcs/accepted/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md` | DC-24 docs are implemented, reviewed, and committed |
+| TASK-02 consolidated data-model + trust/threat-model docs | Architect + maintainer | Implemented; review pending | Review implemented DC-24 docs against `rfcs/accepted/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md` | DC-24 docs are reviewed and committed |
 | TASK-03 docs Pages workflow hardening | Maintainer | Local hardening done; deploy verification pending | After release/docs workflow changes are pushed, run GitHub Actions `workflow_dispatch` | First Pages build/deploy succeeds, or a tracked follow-up records any GitHub-side failure |
 | TASK-04 DC-23 store-unit test carry-forwards | Designer/implementer | Implemented and verified | Commit with the accepted 0.16.0 pre-release hardening bundle | Store-level cross-item test is committed |
 | TASK-05 0.16.0 release finalization | Maintainer | Prepared in working tree; tag/publish pending | After TASK-01 review is accepted and release-finalization changes are committed | `v0.16.0` tag and crate publish are completed by the maintainer |
+
+## 0.16.1+ Documentation Reference Backlog
+
+Documentation-only, current-state reference increments targeted for **0.16.1 or later**, following
+DC-24 (data model + trust/threat). They are grounded through the tracked DC-24 baseline recap
+(`rfcs/handoffs/DC-24-data-model-trust-threat-docs/baseline-recap.md`) and current released code/RFCs;
+local `.git-exclude/specs/` files are not reviewer-facing authority. Each task must carry source
+anchors and mandatory honest-limits caveats when it graduates. Sequencing: Tier 1 first; TASK-06 and
+TASK-08 are the largest gaps; TASK-09 rides close behind the DC-24 threat model. These must not creep
+into DC-24, and every one must preserve the same honest-limits discipline (unit-test-evidenced
+durability, no repository-format stability, `verify` is not a global-trust proof) or it re-creates the
+over-trust risk DC-24 exists to prevent.
+
+| ID | Tier | Owner | Status | Trigger / next action | Completion condition | Durable home |
+|---|---:|---|---|---|---|---|
+| TASK-06 durability & crash-recovery reference | 1 | Architect + maintainer | Open | After DC-24 docs are reviewed/committed, draft the storage transaction/durability reference. | Reviewed FDD-02 durability material and mdBook entry are committed. | `rfcs/fdds/FDD-02-STORAGE-TRANSACTION-MODEL.md` + `docs/src/reference/durability-recovery.md` |
+| TASK-07 verify & doctor reference | 1 | Architect + maintainer | Open | Coordinate with TASK-06 or start when verify/doctor scope needs public release wording. | Reviewed integrity/recovery docs define what `verify` and `doctor` do and do not prove. | FDD-02 section or `docs/src/reference/integrity-recovery.md` |
+| TASK-08 patch algebra & merge-evidence concepts | 1 | Architect + maintainer | Open | Next Tier-1 concept candidate after DC-24; draft current-state FDD-01 and mdBook concept page. | Reviewed FDD-01/current concept page explains commutation, evidence outcomes, and non-goals. | `rfcs/fdds/FDD-01-PATCH-ALGEBRA.md` + `docs/src/reference/patch-algebra.md` |
+| TASK-09 key management & signing setup | 1 | Designer/maintainer | Open | After DC-24 trust model lands, write the operator setup guide for current env-var key input and maintainer trust. | Reviewed operator guide is committed and links DC-24/FDD-04 without promising key lifecycle features. | `docs/src/guide/security-setup.md` |
+| TASK-10 repository layout & authority model | 2 | Architect + maintainer | Open | Start when FDD-00 needs more layout detail or when format/authority claims expand. | Current directories and authority-vs-cache rules are reviewed and committed. | Extend `rfcs/fdds/FDD-00-DATA-MODEL.md` or add `docs/src/reference/repository-layout.md` |
+| TASK-11 path & worktree safety rules | 2 | Architect + maintainer | Open | Start before expanding checkout/worktree docs or when path rejection UX needs public explanation. | Reviewed path/worktree safety reference is committed with current gaps marked. | `docs/src/reference/path-safety.md` |
+| TASK-12 concurrency & locking model | 2 | Architect + maintainer | Open | Coordinate with TASK-06, especially stale `active.lock` and CAS behavior. | Reviewed locking/concurrency docs are committed and describe manual stale-lock limits. | FDD-02 section or `docs/src/reference/concurrency-locking.md` |
+| TASK-13 release, versioning & compatibility policy | 2 | Maintainer | Open | Start before the next release/docs pass that makes compatibility or repository-format claims. | Reviewed release/compatibility policy is committed and linked from README/CHANGELOG as needed. | `docs/src/reference/release-compatibility.md` or contributing policy page |
+| TASK-14 consolidated non-goals / deferred features | 3 | Maintainer/architect | Open | Start when deferred-feature lists begin drifting across README, ROADMAP, mdBook, and release notes. | Reviewed non-goals page is committed and links ROADMAP as the planning authority. | `docs/src/reference/non-goals.md` |
+| TASK-15 roles & user-classes orientation | 3 | Designer | Open | Start when the docs need a clearer audience map after the Reference section settles. | Reviewed orientation page or index update is committed. | `docs/src/index.md` or `docs/src/guide/audience.md` |
+| TASK-16 error taxonomy & diagnostics | 3 | Implementer/architect | Open | Start with TASK-07 or when diagnostics need user-facing interpretation. | Reviewed diagnostics reference is committed and grounded in `crates/prikk-error`. | `docs/src/reference/errors.md` |
+
+Scratch detail lives in `.git-exclude/tasks/002-update-management/TASK-06..16-*.md` until each
+graduates; update the **Status**, **Trigger / next action**, **Completion condition**, and **Durable
+home** here as they land. This section is the durable record, not the scratch files.
 
 ## Historical Note — PR-030
 

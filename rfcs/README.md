@@ -116,3 +116,11 @@ Companion handoff directories currently exist for DC-10 through DC-24:
 - [DC-22 public merge evidence UX](./handoffs/DC-22-public-merge-evidence-ux/)
 - [DC-23 merge evidence UX stabilization](./handoffs/DC-23-merge-evidence-ux-stabilization/)
 - [DC-24 data model and trust/threat docs](./handoffs/DC-24-data-model-trust-threat-docs/)
+
+## Current FDD References
+
+These current-state references consolidate implementation facts for public documentation. They are not
+RFC lifecycle records.
+
+- [FDD-00 data model](./fdds/FDD-00-DATA-MODEL.md)
+- [FDD-04 trust and threat model](./fdds/FDD-04-TRUST-THREAT-MODEL.md)

@@ -41,7 +41,9 @@ Prikk is designed to be:
 
 ## Current Status
 
-Current released implementation: **0.16.0**.
+Latest released implementation: **0.15.0**.
+
+Current release candidate work targets **0.16.0**.
 
 This is an early implementation suitable for architecture review, experimentation, and contribution.
 Do not use Prikk as the sole store for important project history yet. The repository format and command
@@ -180,4 +182,6 @@ The roadmap, RFCs, and mdBook docs are the best entry points for design details:
 
 - [ROADMAP.md](./ROADMAP.md)
 - [rfcs/README.md](./rfcs/README.md)
+- [Current data model](./rfcs/fdds/FDD-00-DATA-MODEL.md)
+- [Current trust and threat model](./rfcs/fdds/FDD-04-TRUST-THREAT-MODEL.md)
 - [docs/src](./docs/src)

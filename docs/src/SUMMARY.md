@@ -21,6 +21,11 @@
   - [Sealed Rollback History](guide/rollback/sealed-rollback-history.md)
 - [Merge Evidence](guide/merge-evidence.md)
 
+# Reference
+
+- [Data Model](reference/data-model.md)
+- [Trust and Threat Model](reference/trust-threat-model.md)
+
 # Contributing
 
 - [Development](contributing/development.md)

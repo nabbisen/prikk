@@ -1,7 +1,7 @@
 # RFC (accepted) - DC-24 Data Model and Trust/Threat Documentation
 
 **Status.** Accepted for implementation after architect design review.
-**Target release.** v0.17.0 or later.
+**Target release.** v0.16.0 candidate, if accepted before release.
 **Tracks.** TASK-02 consolidated data-model and trust/threat-model documentation.
 **Touches.** mdBook documentation, RFC/FDD reference structure, data-model wording, trust/threat
 model wording, release and roadmap status.

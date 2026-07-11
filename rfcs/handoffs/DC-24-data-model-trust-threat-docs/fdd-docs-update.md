@@ -71,7 +71,7 @@ It must state the current limitations plainly:
 - no multi-maintainer threshold beyond the current minimal policy;
 - no remote trust distribution;
 - no sync/hosted-forge trust model;
-- no stable repository-format migration guarantee.
+- no stable repository-format migration guarantee;
 - no crash-matrix/fuzz proof for durability and recovery claims yet;
 - no fully verified cross-platform filesystem behavior yet.
 
@@ -131,7 +131,7 @@ Reviewers should reject the implementation if:
 - `verify` is described as stronger than the implementation supports;
 - AUTHOR signatures are described as repository-wide trusted identities;
 - deferred key lifecycle or remote trust features are described as implemented;
-- RFC/FDD content is copied into multiple diverging pages instead of linked and summarized.
+- RFC/FDD content is copied into multiple diverging pages instead of linked and summarized;
 - the mdBook caveats drift from the FDD caveats;
 - a security-sensitive or data-model claim lacks a claim-to-source anchor.
 
