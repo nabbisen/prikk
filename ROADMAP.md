@@ -5,12 +5,12 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-23 - public merge evidence UX stabilization (implementation candidate for 0.16.0).** The
-  current implementation stabilizes the released `prikk merge-evidence` text UX with clearer selector
-  summaries, unambiguous cross-side item display, and displayed/total item counts. It does not add
-  merge execution, merge-base discovery, branch publication, merge commits, persisted evidence
-  objects, display-path filtering, scoped/path-limited merge analysis, JSON output, schema changes, or
-  public `prikk-replay` API stabilization.
+- **DC-23 - public merge evidence UX stabilization (0.16.0 release candidate).** The current release
+  candidate stabilizes the released `prikk merge-evidence` text UX with clearer selector summaries,
+  unambiguous cross-side item display, and displayed/total item counts. It does not add merge
+  execution, merge-base discovery, branch publication, merge commits, persisted evidence objects,
+  display-path filtering, scoped/path-limited merge analysis, JSON output, schema changes, or public
+  `prikk-replay` API stabilization.
 
 ## Last Released Increment
 
@@ -88,8 +88,9 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Next Increments
 
-1. Implement DC-23 public merge evidence UX stabilization.
-2. **M2+ patch algebra**: commutation, confluence, conflict witnesses, and merge evidence.
+1. Review and, if accepted, release the 0.16.0 DC-23 candidate.
+2. **M2+ patch algebra / merge planning**: the next increment should turn from evidence display toward
+   user-facing merge planning or execution design.
 3. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
    rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
    their dedicated plans and FDDs.

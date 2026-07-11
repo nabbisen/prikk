@@ -1,18 +1,20 @@
 # Prikk Implementation Status
 
-Version: 0.15.0 released (DC-22 — public merge evidence UX boundary)
+Version: 0.16.0 release candidate (DC-23 — public merge evidence UX stabilization)
+
+Latest released version: 0.15.0 (DC-22 — public merge evidence UX boundary)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (0.15.0 released)
+## Current State (0.16.0 release candidate)
 
-- DC-23 is implemented as the current 0.16.0 candidate after the 0.15.0 release and post-release
-  DC-22 test hardening. It stabilizes the public `prikk merge-evidence` text UX with clearer selector
-  summaries, unambiguous cross-side item display, displayed/total item counts, and report-level output
-  cleanup. It does not add merge execution, merge-base discovery, branch publication, merge commits,
-  persisted evidence objects, display-path filtering, scoped/path-limited merge analysis, JSON output,
-  schema changes, or public `prikk-replay` API stabilization.
+- DC-23 is implemented as the current 0.16.0 release candidate after the 0.15.0 release and
+  post-release DC-22 test hardening. It stabilizes the public `prikk merge-evidence` text UX with
+  clearer selector summaries, unambiguous cross-side item display, displayed/total item counts, and
+  report-level output cleanup. It does not add merge execution, merge-base discovery, branch
+  publication, merge commits, persisted evidence objects, display-path filtering, scoped/path-limited
+  merge analysis, JSON output, schema changes, or public `prikk-replay` API stabilization.
 
 - Node-addressed worktree patch authoring wired into `prikk commit`: against a **published** local
   branch baseline reconstructed from authoritative replay — or, on a valid unborn `heads/*` ref, a
@@ -152,12 +154,12 @@ Version: 0.15.0 released (DC-22 — public merge evidence UX boundary)
 - Replay-boundary stabilization for the internally scoped `prikk-replay` crate; see Current State
   above.
 - Internal read-only merge/conflict evidence reports for the DC-21 vocabulary; see Current State above.
-- Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `merge-evidence --baseline-block`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet
 
 - General destructive worktree pruning and full patch-based checkout semantics.
-- DC-23 public merge-evidence UX stabilization is implemented as a 0.16.0 candidate.
+- DC-23 public merge-evidence UX stabilization is implemented as a 0.16.0 release candidate.
 - Branch switching, branch copy/fork from an existing tip, merge-base semantics, branch deletion/rename,
   tag or remote ref creation, rollback refs, multi-commit queued active sessions, and per-ref active WALs.
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy beyond the DC-11 local trust store.

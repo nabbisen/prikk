@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.16.0 — 2026-07-11 (release candidate)
+
+DC-23: public merge evidence UX stabilization.
+
+- Stabilizes `prikk merge-evidence` text output so selector summaries, resolved target Blocks,
+  operation counts, full-report outcome, reason code, and item counts are easier to scan.
+- Renders cross-side evidence items as explicit `cross:` blocks with separate `left[...]` and
+  `right[...]` operation lines, replacing the ambiguous one-line `<->` form.
+- Renders report-level items as `report:` without a fake operation label such as `report report`.
+- Shows item counts as `items: N displayed of N`. DC-23 does not add display filtering, so the two
+  counts are equal in this release candidate.
+- Preserves DC-22 command shape, selector semantics, exit-status behavior, read-only behavior, and
+  privacy/redaction rules.
+
+Still deferred: `prikk merge`, merge execution, automatic merge-base discovery, branch merge
+semantics, branch publication, merge commits, multi-parent Blocks, active-WAL merge drafts, persisted
+proof/witness/merge-evidence objects, display-path filtering, scoped/path-limited merge analysis,
+worktree conflict materialization, JSON output, schema changes, patch-algebra crate extraction, and
+public `prikk-replay` API stabilization.
+
 ## 0.15.0 — 2026-07-11
 
 DC-22: public merge evidence UX boundary.
