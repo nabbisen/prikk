@@ -5,9 +5,12 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **Next increment to be selected after 0.15.0 release.** Candidate themes include optional DC-22
-  hardening for non-`Confluent` CLI exit-status coverage and additional fail-closed object tests, plus
-  the next design-first patch-algebra or branch-workflow slice.
+- **DC-23 - public merge evidence UX stabilization (accepted for 0.16.0).** The current design
+  stabilizes the released `prikk merge-evidence` text UX with clearer selector summaries,
+  unambiguous cross-side item display, and displayed/total item counts. It does not add merge
+  execution, merge-base discovery, branch publication, merge commits, persisted evidence objects,
+  display-path filtering, scoped/path-limited merge analysis, JSON output, schema changes, or public
+  `prikk-replay` API stabilization.
 
 ## Last Released Increment
 
@@ -85,8 +88,7 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Next Increments
 
-1. Optional DC-22 hardening after release: non-`Confluent` CLI exit-zero coverage and additional
-   fail-closed object tests.
+1. Implement DC-23 public merge evidence UX stabilization.
 2. **M2+ patch algebra**: commutation, confluence, conflict witnesses, and merge evidence.
 3. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
    rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
