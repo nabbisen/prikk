@@ -22,19 +22,66 @@
 [![docs.rs](https://img.shields.io/docsrs/prikk-store?version=latest)](https://docs.rs/prikk-store)
 [![Dependency Status](https://deps.rs/crate/prikk-store/latest/status.svg)](https://deps.rs/crate/prikk-store)
 
-**A next-generation VCS built around block-oriented patch theory.**
+**Prikk is a standalone distributed version control system built around block-oriented patch theory.**
 
-## Overview
+Prikk uses a native `.prikk/` repository format. It is not a Git wrapper and does not use `.git/` as a
+storage backend. The project aims to combine patch-based semantic precision with practical performance
+by sealing history into immutable blocks and keeping expensive patch reasoning bounded to active work.
 
-Prikk is an experimental distributed version control system focused on ease of use, safety,
-resilience, flexibility, and long-term performance. The implementation follows the approved FDD
-sequence: object identity and storage first, then WAL/ref durability, patch algebra, plugins, and
-sync.
+## Project Goals
 
-## Why / When
+Prikk is designed to be:
 
-Use Prikk development builds when evaluating the architecture or contributing to the implementation.
-Do not use Prikk for real project history yet.
+- easy to use for ordinary local development workflows;
+- safe and secure by default, with role-bound signatures and fail-closed validation;
+- resilient against corruption, interrupted operations, and lost mutable pointers;
+- flexible enough for local, peer, and future hosted workflows;
+- fast for long-lived repositories by separating active patch reasoning from sealed block history;
+- explainable when patch reasoning cannot prove a safe result.
+
+## Current Status
+
+Current released implementation: **0.15.0**.
+
+This is an early implementation suitable for architecture review, experimentation, and contribution.
+Do not use Prikk as the sole store for important project history yet. The repository format and command
+surface are still evolving, and future releases may require migration.
+
+The local core can initialize a repository, author signed patches, seal them into blocks, inspect
+history, verify integrity, diagnose common repository issues, perform safe checkout planning and
+materialization for the supported subset, and display read-only merge evidence for explicit sealed
+candidates.
+
+## Good Fit
+
+Prikk may be a good match if you are:
+
+- evaluating next-generation VCS architecture;
+- interested in patch theory, commutation, conflict evidence, or signed history;
+- building tools that need verifiable local history and conservative recovery behavior;
+- contributing to a Rust implementation of a correctness-sensitive CLI and storage system;
+- reviewing security, durability, and publication-trust boundaries.
+
+## Not a Good Fit Yet
+
+Prikk is not yet the right tool if you need:
+
+- a production replacement for Git;
+- stable repository-format compatibility;
+- Git object compatibility or transparent Git interoperability;
+- hosted forge workflows, remotes, or sync;
+- complete branch management, tags, semantic merge, or merge execution;
+- plugin/audit execution, attestations, or full publication policy;
+- mature key lifecycle features such as revocation, rotation, hardware signing, or thresholds.
+
+## Core Ideas
+
+- **Patch**: an atomic logical change with ordered operations and an AUTHOR signature.
+- **Block**: an immutable sealed collection of patches; blocks are the scalability boundary.
+- **Ref state**: signed reference state; ref files are pointers, not the root of trust.
+- **Ref update**: append-only publication evidence for a ref transition.
+- **WAL**: active signed patch envelopes before sealing.
+- **Attestation**: future audit/policy evidence targeting blocks without defining block identity.
 
 ## Quick Start
 
@@ -42,100 +89,95 @@ Do not use Prikk for real project history yet.
 cargo build -p prikk
 export PRIKK="$PWD/target/debug/prikk"
 
-cargo fmt --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
 $PRIKK init ./sample-repo
-# Author and publish a first commit (genesis) on a fresh repository:
+
 export PRIKK_AUTHOR_KEY_ID="dev-author"
 export PRIKK_AUTHOR_SEED="00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 export PRIKK_MAINTAINER_KEY_ID="dev-maintainer"
 export PRIKK_MAINTAINER_SEED="111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
+
 (cd ./sample-repo && "$PRIKK" trust maintainer add \
   --key-id "$PRIKK_MAINTAINER_KEY_ID" \
   --public-key "a00899dfd3357aee69729405913f9324dfc033cec04a2215239eda64ae6d9d91")
+
 echo "hello prikk" > ./sample-repo/readme.txt
 (cd ./sample-repo && "$PRIKK" commit -m "genesis")
 (cd ./sample-repo && "$PRIKK" seal --allow-no-audit)
+
 $PRIKK log ./sample-repo
 $PRIKK worktree-status ./sample-repo
 $PRIKK verify ./sample-repo
 $PRIKK doctor ./sample-repo
-# If doctor reports only incomplete trailing WAL bytes:
-# $PRIKK doctor ./sample-repo --repair-wal-tail
-# If doctor reports only a missing heads/main pointer recoverable from the ref log:
-# $PRIKK doctor ./sample-repo --repair-main-ref
 ```
 
-`prikk commit` authors node-addressed worktree patches signed with a real role-bound Ed25519 AUTHOR
-signature; key material is supplied via `PRIKK_AUTHOR_KEY_ID` / `PRIKK_AUTHOR_SEED` (a minimal key-input
-mechanism, not a trust store). On a fresh repository the first commit is a **genesis** commit (all files
-authored as `CreateFile`); the first `seal` publishes a Root block on `heads/main`. An explicit unborn
-local branch ref can be started with `commit --ref heads/<branch>` and published with
-`seal --ref heads/<branch>` as an independent Root history.
+For a fresh repository, the first `commit` authors a genesis patch set and the first `seal` publishes a
+Root block on `heads/main`. The current key-input mechanism is intentionally minimal: seeds are passed
+through environment variables for local experimentation, not as a complete key-management system.
 
-## Design Notes
+## Useful Commands
 
-Current release candidate: **0.15.0** (DC-22 — public merge evidence UX boundary). The latest released
-implementation is **0.14.0** (DC-21 — merge conflict evidence contract). This candidate adds
-`prikk merge-evidence` as a read-only public display over the DC-21 report contract. It requires an
-explicit `--baseline-block`, resolves exactly one left and one right target selector from `--*-block`
-or `--*-ref`, derives sealed candidate sequences by walking single-parent ancestry back to the
-baseline, and reports evidence without writing objects, refs, WAL records, merge commits, or worktree
-files. It does not add CLI merge behavior, merge execution, automatic merge-base discovery, branch
-publication, multi-parent Blocks, persisted proof/witness objects, schema changes, worktree conflict
-materialization, JSON output, patch-algebra extraction, or public `prikk-replay` API stabilization.
+```text
+prikk init [path]
+prikk trust maintainer add --key-id ID --public-key HEX
+prikk commit [--ref heads/<branch>] -m <message>
+prikk seal --allow-no-audit [--ref heads/<branch>]
+prikk status
+prikk log [path] [--limit N] [--ref REF]
+prikk checkout --plan-only [path] [--ref REF]
+prikk checkout --snapshot-plan [path] [--ref REF]
+prikk checkout --snapshot-materialize [path] [--ref REF]
+prikk checkout --patch-plan [path] [--ref REF]
+prikk checkout --patch-materialize [path] [--ref REF]
+prikk checkout --patch-delete-plan [path] [--ref REF]
+prikk checkout --patch-materialize-delete [path] [--ref REF]
+prikk merge-evidence --baseline-block ID (--left-block ID|--left-ref REF) (--right-block ID|--right-ref REF) [path]
+prikk inverse-plan [path] [--ref REF]
+prikk rollback-preview [path] [--ref REF]
+prikk rollback-draft --append-inverse [path] [--ref REF] -m <message>
+prikk rollback-draft-verify [path] [--ref REF]
+prikk worktree-status [path] [--ref REF]
+prikk verify [path]
+prikk doctor [path]
+prikk doctor [path] --repair-wal-tail
+prikk doctor [path] --repair-main-ref
+```
 
-Implemented:
+## Project Structure
 
-- Rust workspace scaffold.
-- Deterministic canonical object identity seed.
-- Object envelopes with signatures outside identity.
-- Persistent `.prikk/` layout and object store.
-- Active-session WAL append/replay for signed patch envelopes.
-- Read-only repository verification for objects, block references, sealed rollback Patch classification, ref pointers, ref logs, active WAL, and publication trust.
-- `doctor` diagnostics layered on top of verification, with opt-in safe WAL tail and missing-ref-pointer repair.
-- Read-only sealed-history inspection from the current RefState chain, including rollback block labels.
-- Snapshot-manifest validation, path-safety checks, opt-in snapshot materialization, and read-only worktree status.
-- Initial RefState publication primitives with flat hashed ref pointer paths.
-- Node-addressed worktree patch authoring (`prikk commit`): against a published local branch baseline reconstructed from authoritative replay — or, on an unborn `heads/*` ref, a **genesis** first commit against an empty baseline (all files authored as `CreateFile`) — worktree changes are authored as node-addressed §9.3 operations (`CreateFile`, `DeleteNode`, `EditText`, `ReplaceBinary`, `ChangePerm`) with CSPRNG-minted node identities in canonical order, normalized file modes, and shared text-span identity. Existing-node kind is authoritative; rename inference, symlink authoring, branch copy/fork, branch switching, and text↔binary transitions are out of scope.
-- **Role-bound Ed25519 AUTHOR signing** for production Patch authoring paths: worktree commits and rollback drafts sign through an injected `AuthorSigner`; the production `Ed25519AuthorSigner` produces a real Ed25519 signature over the role-bound preimage (`Ed25519, Patch, unsigned-patch-id, Author, key_id`). Key material is supplied via `PRIKK_AUTHOR_KEY_ID` / `PRIKK_AUTHOR_SEED` (a minimal key-input mechanism, not a trust store).
-- Local no-audit seal scaffold that persists WAL patches, creates a Block, signs publication objects with a trusted MAINTAINER key, and advances `heads/main` or an explicit `--ref heads/<branch>`.
-- Active-WAL ref ownership metadata prevents sealing queued patches to a different ref than the one they were authored for. Non-empty active WALs with missing, malformed, or mismatched ref metadata fail closed.
-- Supported patch replay planning/materialization for `CreateFile`/`DeleteNode` and deterministic arbitrary-span `EditText`, with node-addressed record reconciliation for the remaining §9.3 kinds.
-- Explicit deletion planning and opt-in deletion of patch-removed files whose bytes still match the old blob.
-- Read-only inverse planning, non-mutating rollback preview, rollback-draft append/verification, and sealed rollback block classification for the supported subset, including deterministic direct inverse for supported arbitrary-span `EditText`. Rollback-draft identity is recorded as `PatchPurpose::RollbackDraft`, not as a reserved AUTHOR key id.
-- Minimal local publication trust: `prikk trust maintainer add` records one trusted MAINTAINER public key, and `verify` checks Block/RefState/RefUpdate MAINTAINER signatures against that policy.
-- Internal patch-algebra foundation for pair classification (`Independent`, `OrderedDependency`,
-  `Conflict`, `Unknown`) plus replay-backed pair commutation and flat two-sequence confluence for the
-  supported subset. This is not a public merge/conflict API.
-- Internally scoped `prikk-replay` crate for replay/lifecycle semantics. It owns the node lifecycle
-  substrate and lexical repository path type needed by lifecycle state, while repository layout, object
-  storage, refs, WAL, active sessions, lifecycle-cache persistence, verification, doctor, worktree
-  integration, and store-backed resolver construction remain in `prikk-store`.
-- Replay-boundary stabilization keeps `prikk-replay` internally scoped and non-stable as an external
-  Rust API, keeps `prikk-store` compatibility wrappers import/reexport-oriented, and keeps filesystem
-  root joining in `prikk-store`. The crate is publishable for workspace release packaging, but that
-  does not make its public items stable API.
-- Read-only public merge evidence UX (`prikk merge-evidence`) over sealed object histories, with
-  explicit baseline selection, block/ref target selectors, resolved target identities, DC-21 outcome
-  and reason-code display, and no repository or worktree mutation.
+- `crates/` — Rust workspace crates for the CLI, object model, crypto, repository store, replay
+  semantics, hash primitives, and shared errors.
+- `docs/` — mdBook documentation.
+- `rfcs/` — design records and lifecycle state. `rfcs/done/000-rfc-lifecycle-policy.md` defines how
+  `proposed/`, `accepted/`, `done/`, `archive/`, and `handoffs/` are used.
+- `ROADMAP.md` — current release and upcoming theme summary.
+- `CHANGELOG.md` — released changes.
+- `.git-exclude/specs/` — project requirements, external design, non-functional requirements, and
+  handoff material used by maintainers and reviewers.
+- `.git-exclude/rules/` — local development and lifecycle rules for this repository.
+- `.git-exclude/review-request/` and `.git-exclude/reviewed/` — review intake packages and review
+  results used by the design-first workflow.
 
-Signing scope (interim): AUTHOR-role Patch signatures and MAINTAINER publication signatures produced by production commands are real role-bound Ed25519 signatures. Publication trust is local and minimal (`required = 1`); this does **not** yet imply key rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, or publication-grade audit policy.
+## Development Gates
 
-Minimal CLI commands: `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `merge-evidence --baseline-block`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+Before proposing changes, run the relevant subset of:
 
-Not implemented yet:
+```sh
+cargo fmt --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+```
 
-- Rename detection, multi-operation text diff minimization, rollback refs, rollback authorization,
-  public conflict witnesses, semantic merge, merge execution, and general destructive checkout
-  pruning.
-- Branch switching, branch copy/fork from an existing tip, merge-base semantics, branch deletion/rename,
-  tag or remote ref creation, rollback refs, multi-commit queued active sessions, and per-ref active WALs.
-- Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy.
-- Policy-aware audit/attestation publication through seal; plugin/audit execution.
-- Remote sync.
+In restricted environments where the default temporary directory is read-only, use a workspace-local
+temporary directory for integration tests:
+
+```sh
+TMPDIR="$PWD/.git-exclude/tmp" cargo test --workspace
+```
 
 ## More Detail
 
-Full documentation is kept under `docs/src` and is structured for mdBook.
+The roadmap, RFCs, and mdBook docs are the best entry points for design details:
+
+- [ROADMAP.md](./ROADMAP.md)
+- [rfcs/README.md](./rfcs/README.md)
+- [docs/src](./docs/src)

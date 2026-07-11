@@ -1,7 +1,7 @@
-# RFC (accepted) - DC-22 Public Merge Evidence UX Boundary
+# RFC (done) - DC-22 Public Merge Evidence UX Boundary
 
-**Status.** Accepted for implementation after design review v1 clarifications.
-**Target release.** v0.15.0.
+**Status.** Released in v0.15.0.
+**Release.** v0.15.0.
 **Tracks.** First public read-only merge/conflict evidence surface after DC-21.
 **Touches.** CLI evidence display, store-backed evidence request construction, explicit candidate
 selection, report redaction, output stability, and FDD-01 merge/conflict wording.
