@@ -5,14 +5,19 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-23 - public merge evidence UX stabilization (0.16.0 release candidate).** The current release
-  candidate stabilizes the released `prikk merge-evidence` text UX with clearer selector summaries,
-  unambiguous cross-side item display, and displayed/total item counts. It does not add merge
-  execution, merge-base discovery, branch publication, merge commits, persisted evidence objects,
-  display-path filtering, scoped/path-limited merge analysis, JSON output, schema changes, or public
-  `prikk-replay` API stabilization.
+- No active implementation increment is selected after the 0.16.0 release. The next increment should
+  be chosen design-first from the tracked candidates below.
 
 ## Last Released Increment
+
+- **DC-23 - public merge evidence UX stabilization (released as 0.16.0).** This release stabilizes the
+  released `prikk merge-evidence` text UX with clearer selector summaries, unambiguous cross-side item
+  display, displayed/total item counts, and report-level output cleanup. It also adds the
+  merge-evidence mdBook page, GitHub Pages mdBook publishing configuration, and store-level coverage
+  that pins distinct left/right cross-item display summaries. It does not add merge execution,
+  merge-base discovery, branch publication, merge commits, persisted evidence objects,
+  display-path filtering, scoped/path-limited merge analysis, JSON output, schema changes, or public
+  `prikk-replay` API stabilization.
 
 - **DC-22 - public merge evidence UX boundary (released as 0.15.0).** `prikk merge-evidence` exposes
   DC-21 merge/conflict evidence through a read-only public UX with explicit baseline and candidate
@@ -88,16 +93,15 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Next Increments
 
-1. Review and, if accepted, release the 0.16.0 DC-23 candidate.
-2. **Docs source-tree Phase 2**: physically move `docs/src/` pages into the functional subdirectories
+1. **Docs source-tree Phase 2**: physically move `docs/src/` pages into the functional subdirectories
    already represented by the mdBook navigation. This should preserve rendered navigation and edit no
    page content.
-3. **Consolidated data-model and trust/threat-model documentation**: design a dedicated documentation
+2. **Consolidated data-model and trust/threat-model documentation**: design a dedicated documentation
    increment so the published book can honestly explain Prikk's object/block model, seal/replay
    lifecycle, signing/trust roots, and current trust limitations without duplicating RFC authority.
-4. **M2+ patch algebra / merge planning**: the next increment should turn from evidence display toward
+3. **M2+ patch algebra / merge planning**: the next increment should turn from evidence display toward
    user-facing merge planning or execution design.
-5. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
+4. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
    rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
    their dedicated plans and FDDs.
 

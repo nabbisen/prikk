@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.16.0 — 2026-07-11 (release candidate)
+## 0.16.0 — 2026-07-11
 
 DC-23: public merge evidence UX stabilization.
 
@@ -10,7 +10,7 @@ DC-23: public merge evidence UX stabilization.
   `right[...]` operation lines, replacing the ambiguous one-line `<->` form.
 - Renders report-level items as `report:` without a fake operation label such as `report report`.
 - Shows item counts as `items: N displayed of N`. DC-23 does not add display filtering, so the two
-  counts are equal in this release candidate.
+  counts are equal in this release.
 - Preserves DC-22 command shape, selector semantics, exit-status behavior, read-only behavior, and
   privacy/redaction rules.
 - Adds store-level coverage that pins distinct left and right operation summaries for cross-side

@@ -41,8 +41,7 @@ Prikk is designed to be:
 
 ## Current Status
 
-Current release candidate: **0.16.0**.
-Latest released implementation: **0.15.0**.
+Current released implementation: **0.16.0**.
 
 This is an early implementation suitable for architecture review, experimentation, and contribution.
 Do not use Prikk as the sole store for important project history yet. The repository format and command

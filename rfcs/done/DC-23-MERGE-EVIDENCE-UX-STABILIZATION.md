@@ -1,6 +1,6 @@
-# RFC (accepted) - DC-23 Public Merge Evidence UX Stabilization
+# RFC (done) - DC-23 Public Merge Evidence UX Stabilization
 
-**Status.** Accepted for implementation.
+**Status.** Released in v0.16.0.
 **Target release.** v0.16.0.
 **Tracks.** Stabilization of the released `prikk merge-evidence` public display boundary after DC-22.
 **Touches.** Text display labels, selector summaries, cross-side item rendering, displayed/total item
