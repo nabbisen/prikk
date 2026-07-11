@@ -13,6 +13,10 @@ DC-23: public merge evidence UX stabilization.
   counts are equal in this release candidate.
 - Preserves DC-22 command shape, selector semantics, exit-status behavior, read-only behavior, and
   privacy/redaction rules.
+- Adds store-level coverage that pins distinct left and right operation summaries for cross-side
+  evidence display items.
+- Reorganizes the mdBook navigation by function, adds the `merge-evidence` command page, and adds a
+  GitHub Pages workflow with mdBook metadata and ignored generated output.
 
 Still deferred: `prikk merge`, merge execution, automatic merge-base discovery, branch merge
 semantics, branch publication, merge commits, multi-parent Blocks, active-WAL merge drafts, persisted

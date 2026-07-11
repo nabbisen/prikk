@@ -2,8 +2,9 @@
 
 use prikk_error::Result;
 use prikk_object::{
-    BlobKind, BlobPayload, BlockKind, CanonicalEncode, CreateFile, NodeId, ObjectEnvelope,
-    ObjectId, ObjectType, Operation, OperationKind, PatchPayload, PatchPurpose,
+    BlobKind, BlobPayload, BlockKind, CanonicalEncode, ChangePerm, CreateFile, DeleteNode,
+    DeleteNodePreimage, NodeId, NodeKind, ObjectEnvelope, ObjectId, ObjectType, Operation,
+    OperationKind, PatchPayload, PatchPurpose,
 };
 
 use super::{MergeEvidenceTarget, prepare_merge_evidence};
@@ -88,6 +89,78 @@ fn empty_sequences_are_report_level_success() -> Result<()> {
     assert_eq!(report.reason, Some("proven_confluent"));
     assert_eq!(report.left_operation_count, 0);
     assert_eq!(report.right_operation_count, 0);
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+#[test]
+fn cross_display_preserves_distinct_left_and_right_operations() -> Result<()> {
+    let root = unique_temp_dir("merge-evidence-cross-display-sides");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let node_id = NodeId::from_bytes([0x41; 32]);
+    let blob_id = write_blob(&layout, b"tracked.txt\n")?;
+    let baseline = write_operation_block(
+        &layout,
+        BlockKind::Root,
+        Vec::new(),
+        OperationKind::CreateFile(CreateFile {
+            path: "tracked.txt".to_string(),
+            node_id,
+            blob_id,
+            mode: 0o100_644,
+        }),
+    )?;
+    let left = write_operation_block(
+        &layout,
+        BlockKind::Normal,
+        vec![baseline],
+        OperationKind::ChangePerm(ChangePerm {
+            node_id,
+            old_mode: 0o100_644,
+            new_mode: 0o100_755,
+        }),
+    )?;
+    let right = write_operation_block(
+        &layout,
+        BlockKind::Normal,
+        vec![baseline],
+        OperationKind::DeleteNode(DeleteNode {
+            path: "tracked.txt".to_string(),
+            node_id,
+            old_node_kind: NodeKind::TextFile,
+            preimage: DeleteNodePreimage::File {
+                old_blob_id: blob_id,
+                old_mode: 0o100_644,
+            },
+        }),
+    )?;
+
+    let report = prepare_merge_evidence(
+        &layout,
+        baseline,
+        MergeEvidenceTarget::Block(left),
+        MergeEvidenceTarget::Block(right),
+    )?;
+
+    assert_eq!(report.outcome, "Conflict");
+    assert_eq!(report.reason, Some("pair_conflict"));
+    let Some(cross_item) = report.items.iter().find(|item| item.side == "cross") else {
+        panic!("missing cross display item");
+    };
+    let Some(left_operation) = cross_item.operation.as_ref() else {
+        panic!("missing left operation summary");
+    };
+    let Some(right_operation) = cross_item.peer_operation.as_ref() else {
+        panic!("missing right operation summary");
+    };
+    assert_eq!(left_operation.index, 0);
+    assert_eq!(left_operation.op_seq, Some(1));
+    assert_eq!(left_operation.kind, Some("ChangePerm"));
+    assert_eq!(left_operation.path, None);
+    assert_eq!(right_operation.index, 0);
+    assert_eq!(right_operation.op_seq, Some(1));
+    assert_eq!(right_operation.kind, Some("DeleteNode"));
+    assert_eq!(right_operation.path.as_deref(), Some("tracked.txt"));
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -209,6 +282,37 @@ fn write_create_block(
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
     };
+    write_patch_block(layout, kind, parents, patch)
+}
+
+fn write_operation_block(
+    layout: &RepositoryLayout,
+    kind: BlockKind,
+    parents: Vec<ObjectId>,
+    operation: OperationKind,
+) -> Result<ObjectId> {
+    let patch = PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: operation,
+        }],
+        parent_patch_ids: Vec::new(),
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+    };
+    write_patch_block(layout, kind, parents, patch)
+}
+
+fn write_patch_block(
+    layout: &RepositoryLayout,
+    kind: BlockKind,
+    parents: Vec<ObjectId>,
+    patch: PatchPayload,
+) -> Result<ObjectId> {
+    let mut store = FileObjectStore::new(layout.clone());
     let mut patch_env = ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch.to_canonical_bytes()?);
     patch_env.add_signature(dummy_signature())?;
     let patch_id = store.write_object(&patch_env)?;
