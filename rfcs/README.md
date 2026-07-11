@@ -24,11 +24,19 @@ consistent with its folder.
 
 ## Proposed
 
-No proposed RFCs are currently tracked.
+These records currently live under `proposed/`.
+
+| ID | Title |
+|---|---|
+| DC-26 | [Documentation Home Correction](./proposed/DC-26-DOCUMENTATION-HOME-CORRECTION.md) |
 
 ## Accepted
 
-No accepted RFCs are currently tracked.
+These records currently live under `accepted/`.
+
+| ID | Title |
+|---|---|
+| DC-25 | [Merge Planning Surface](./accepted/DC-25-MERGE-PLANNING-SURFACE.md) |
 
 ## Done
 
@@ -96,7 +104,7 @@ These records currently live under `archive/`.
 
 ## Handoffs
 
-Companion handoff directories currently exist for DC-10 through DC-24:
+Companion handoff directories currently exist for DC-10 through DC-25:
 
 - [DC-10 rollback draft signing](./handoffs/DC-10-rollback-draft-signing/)
 - [DC-11 maintainer trust store](./handoffs/DC-11-maintainer-trust-store/)
@@ -113,6 +121,7 @@ Companion handoff directories currently exist for DC-10 through DC-24:
 - [DC-22 public merge evidence UX](./handoffs/DC-22-public-merge-evidence-ux/)
 - [DC-23 merge evidence UX stabilization](./handoffs/DC-23-merge-evidence-ux-stabilization/)
 - [DC-24 data model and trust/threat docs](./handoffs/DC-24-data-model-trust-threat-docs/)
+- [DC-25 merge planning surface](./handoffs/DC-25-merge-planning-surface/)
 
 ## Current FDD References
 
