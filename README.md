@@ -43,7 +43,8 @@ Prikk is designed to be:
 
 Latest released implementation: **0.16.1**.
 
-No later release candidate is selected yet. Next increment candidates are tracked in `ROADMAP.md`.
+Current release candidate: **0.17.0**, adding the read-only `prikk merge-plan` surface. Next increment
+candidates are tracked in `ROADMAP.md`.
 
 This is an early implementation suitable for architecture review, experimentation, and contribution.
 Do not use Prikk as the sole store for important project history yet. The repository format and command
@@ -51,8 +52,8 @@ surface are still evolving, and future releases may require migration.
 
 The local core can initialize a repository, author signed patches, seal them into blocks, inspect
 history, verify integrity, diagnose common repository issues, perform safe checkout planning and
-materialization for the supported subset, and display read-only merge evidence for explicit sealed
-candidates.
+materialization for the supported subset, and display read-only merge evidence and merge plans for
+explicit sealed candidates.
 
 ## Good Fit
 
@@ -133,6 +134,7 @@ prikk checkout --patch-materialize [path] [--ref REF]
 prikk checkout --patch-delete-plan [path] [--ref REF]
 prikk checkout --patch-materialize-delete [path] [--ref REF]
 prikk merge-evidence --baseline-block ID (--left-block ID|--left-ref REF) (--right-block ID|--right-ref REF) [path]
+prikk merge-plan --baseline-block ID (--left-block ID|--left-ref REF) (--right-block ID|--right-ref REF) [path]
 prikk inverse-plan [path] [--ref REF]
 prikk rollback-preview [path] [--ref REF]
 prikk rollback-draft --append-inverse [path] [--ref REF] -m <message>

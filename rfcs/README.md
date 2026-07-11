@@ -28,11 +28,7 @@ No proposed RFCs are currently tracked.
 
 ## Accepted
 
-These records currently live under `accepted/`.
-
-| ID | Title |
-|---|---|
-| DC-25 | [Merge Planning Surface](./accepted/DC-25-MERGE-PLANNING-SURFACE.md) |
+No accepted RFCs are currently tracked.
 
 ## Done
 
@@ -56,6 +52,7 @@ These records currently live under `done/`.
 | DC-22 | [Public Merge Evidence UX Boundary](./done/DC-22-PUBLIC-MERGE-EVIDENCE-UX.md) |
 | DC-23 | [Public Merge Evidence UX Stabilization](./done/DC-23-MERGE-EVIDENCE-UX-STABILIZATION.md) |
 | DC-24 | [Data Model and Trust/Threat Documentation](./done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md) |
+| DC-25 | [Merge Planning Surface](./done/DC-25-MERGE-PLANNING-SURFACE.md) |
 | DC-26 | [Documentation Home Correction](./done/DC-26-DOCUMENTATION-HOME-CORRECTION.md) |
 | PR-001 | [Implementation Handoff](./done/PR-001-IMPLEMENTATION-HANDOFF.md) |
 | PR-002 | [CI Fix Handoff](./done/PR-002-CI-FIX-HANDOFF.md) |
@@ -128,6 +125,6 @@ lifecycle records; their authoritative home is the published mdBook source under
 - [Data model](../docs/src/reference/data-model.md)
 - [Trust and threat model](../docs/src/reference/trust-threat-model.md)
 
-The old `rfcs/fdds/FDD-00-DATA-MODEL.md` and `rfcs/fdds/FDD-04-TRUST-THREAT-MODEL.md` paths are
-temporary compatibility pointers for 0.16.1 and are scheduled for removal in 0.17.0 unless a later
-review extends the window. Future `rfcs/fdds/` content is reserved for genuine gating FDDs.
+The old `rfcs/fdds/FDD-00-DATA-MODEL.md` and `rfcs/fdds/FDD-04-TRUST-THREAT-MODEL.md` compatibility
+pointers were removed in 0.17.0 after the 0.16.1 transition window. Future `rfcs/fdds/` content is
+reserved for genuine gating FDDs.

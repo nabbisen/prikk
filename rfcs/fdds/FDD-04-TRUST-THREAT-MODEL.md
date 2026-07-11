@@ -1,1 +1,0 @@
-Moved to the authoritative mdBook reference page: [Trust and Threat Model](../../docs/src/reference/trust-threat-model.md). This compatibility pointer remains for 0.16.1 and is scheduled for removal in 0.17.0 unless a later review extends the window.

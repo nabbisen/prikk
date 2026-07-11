@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.17.0 — 2026-07-11
+
+DC-25: merge planning surface.
+
+- Adds `prikk merge-plan`, a read-only planning classification over the existing explicit-input
+  merge evidence path.
+- Requires explicit `--baseline-block` plus exactly one left selector and one right selector from
+  `--left-block` / `--left-ref` and `--right-block` / `--right-ref`.
+- Shows submitted selectors, resolved target Blocks, operation counts, plan status, underlying
+  evidence outcome/reason, action text, evidence item counts, and evidence items.
+- Maps `Confluent` evidence to `ConfluentSubset`, explicitly avoiding a whole-merge or executable
+  merge claim.
+- Maps blocked evidence outcomes to `BlockedConflict`, `BlockedOrderedDependency`,
+  `BlockedUnsupported`, `BlockedDeferred`, `BlockedNotConfluent`, `BlockedEvidenceFailure`, and
+  `BlockedInvalidCandidate`.
+- Keeps process success separate from plan status: a valid blocked plan is still a successfully
+  produced plan, while invalid arguments, selector failures, ancestry failures, object failures, and
+  ref failures remain command failures.
+- Preserves the existing `prikk merge-evidence` command and shares its read-only selector/evidence
+  boundary without changing its diagnostic meaning.
+- Removes the temporary 0.16.1 FDD-00/FDD-04 compatibility pointer files after their contents moved to
+  the authoritative mdBook reference pages in 0.16.1.
+
+Still deferred: `prikk merge`, merge execution, automatic merge-base discovery, branch merge
+semantics, branch publication, merge commits, multi-parent Blocks, active-WAL merge drafts, worktree
+conflict materialization, conflict resolution UI, persisted plan/proof/witness/evidence objects,
+path-scoped merge analysis, display-path filtering, JSON output, schema changes, patch-algebra crate
+extraction, and public `prikk-replay` API stabilization.
+
 ## 0.16.1 — 2026-07-11
 
 DC-26: documentation home correction.

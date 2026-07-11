@@ -1,1 +1,0 @@
-Moved to the authoritative mdBook reference page: [Data Model](../../docs/src/reference/data-model.md). This compatibility pointer remains for 0.16.1 and is scheduled for removal in 0.17.0 unless a later review extends the window.

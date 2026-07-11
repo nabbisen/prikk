@@ -1,7 +1,7 @@
 # DC-25 Future FDD-01 Input - Merge Planning Surface
 
-Status: Companion for accepted DC-25
-Related RFC: `../../accepted/DC-25-MERGE-PLANNING-SURFACE.md`
+Status: Companion for done DC-25
+Related RFC: `../../done/DC-25-MERGE-PLANNING-SURFACE.md`
 Target future reference: TASK-08 patch algebra / merge-evidence concepts, after DC-26 decides the
 documentation home.
 

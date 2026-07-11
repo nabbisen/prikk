@@ -1,7 +1,7 @@
-# RFC (accepted) - DC-25 Merge Planning Surface
+# RFC (done) - DC-25 Merge Planning Surface
 
-**Status.** Accepted for implementation after architect design review.
-**Target release.** 0.17.0 candidate.
+**Status.** Done on main; prepared for release in 0.17.0.
+**Target release.** 0.17.0.
 **Tracks.** First public, non-mutating merge planning surface after DC-21 through DC-23 merge evidence.
 **Touches.** CLI planning UX, store-backed plan construction, merge evidence classification mapping,
 read-only mutation guarantees, output vocabulary, future TASK-08 patch-algebra/merge-reference input,

@@ -1,22 +1,26 @@
 # Prikk Implementation Status
 
-Version: 0.16.1 released (DC-26 documentation home correction)
-
 Latest released version: 0.16.1 (DC-26 — documentation home correction)
+Current release candidate: 0.17.0 (DC-25 — merge planning surface)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current Implementation Candidate (unreleased)
+## Current Release Candidate (0.17.0)
 
-- DC-25 is implemented as an unreleased 0.17.0 candidate pending review. It adds `prikk merge-plan`,
-  a read-only planning surface over the existing explicit-input merge evidence path. The command
-  resolves explicit baseline/left/right selectors, derives sealed candidate sequences, preserves the
-  underlying evidence outcome and reason, maps it to a plan status/action, and reports that no merge
-  commit, ref update, WAL write, object write, or worktree change was performed. It does not add
-  automatic merge-base discovery, merge execution, branch publication, multi-parent Blocks, persisted
-  plan/evidence objects, schema changes, scoped/path-limited analysis, JSON output, or public
-  `prikk-replay` API stabilization.
+- DC-25 is prepared as the 0.17.0 release candidate after implementation review acceptance. It adds
+  `prikk merge-plan`, a read-only planning surface over the existing explicit-input merge evidence
+  path. The command resolves explicit baseline/left/right selectors, derives sealed candidate
+  sequences, preserves the underlying evidence outcome and reason, maps it to a plan status/action,
+  and reports that no merge commit, ref update, WAL write, object write, or worktree change was
+  performed. It does not add automatic merge-base discovery, merge execution, branch publication,
+  multi-parent Blocks, persisted plan/evidence objects, schema changes, scoped/path-limited analysis,
+  JSON output, or public `prikk-replay` API stabilization.
+
+- The temporary `rfcs/fdds/FDD-00-DATA-MODEL.md` and
+  `rfcs/fdds/FDD-04-TRUST-THREAT-MODEL.md` compatibility pointers from 0.16.1 were removed during the
+  0.17.0 release-candidate prep. The authoritative current-state references remain
+  `docs/src/reference/data-model.md` and `docs/src/reference/trust-threat-model.md`.
 
 ## Current State (0.16.1)
 

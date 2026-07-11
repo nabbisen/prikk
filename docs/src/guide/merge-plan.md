@@ -1,6 +1,6 @@
 # Merge Plan
 
-DC-25 (0.17.0 candidate) adds `prikk merge-plan`, a read-only planning classification over the
+DC-25 (0.17.0) adds `prikk merge-plan`, a read-only planning classification over the
 existing [merge evidence](merge-evidence.md) report. It answers what Prikk can say about the selected
 explicit inputs today; it does not execute or prepare a merge commit.
 
