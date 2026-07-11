@@ -5,8 +5,11 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- No active implementation increment is selected after the 0.16.0 release. The next increment should
-  be chosen design-first from the tracked candidates below.
+- **DC-24 - data model and trust/threat documentation (accepted).** The current accepted design
+  increment creates reviewed data-model and trust/threat-model references, then exposes them through
+  the mdBook without duplicating RFC/FDD authority or overstating Prikk's current trust posture. The
+  accepted design requires inline public caveats, claim-to-source FDD anchor tables, and no-drift
+  checks between mdBook caveats and FDD caveats.
 
 ## Last Released Increment
 
@@ -93,12 +96,9 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Next Increments
 
-1. **Consolidated data-model and trust/threat-model documentation**: design a dedicated documentation
-   increment so the published book can honestly explain Prikk's object/block model, seal/replay
-   lifecycle, signing/trust roots, and current trust limitations without duplicating RFC authority.
-2. **M2+ patch algebra / merge planning**: the next increment should turn from evidence display toward
+1. **M2+ patch algebra / merge planning**: the next increment should turn from evidence display toward
    user-facing merge planning or execution design.
-3. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
+2. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
    rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
    their dedicated plans and FDDs.
 
@@ -112,7 +112,7 @@ They remain managed in this section until each completion condition is met.
 | ID | Owner | Status | Trigger / next action | Completion condition |
 |---|---|---|---|---|
 | TASK-01 docs Phase-2 physical subdirectories | Designer, then architect reviewer | In review | Architect review of `.git-exclude/review-request/prikk-0.16.0-docs-phase2-subdirs-review-v1` | Accepted review and committed docs source-tree move |
-| TASK-02 consolidated data-model + trust/threat-model docs | Architect + maintainer | Tracked as next increment | Maintainer chooses the post-0.16.0 design theme | Proposed RFC/DC exists in `rfcs/proposed/` and is scheduled |
+| TASK-02 consolidated data-model + trust/threat-model docs | Architect + maintainer | Accepted as DC-24 | Implement `rfcs/accepted/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md` | DC-24 docs are implemented, reviewed, and committed |
 | TASK-03 docs Pages workflow hardening | Maintainer | Local hardening done; deploy verification pending | After release/docs workflow changes are pushed, run GitHub Actions `workflow_dispatch` | First Pages build/deploy succeeds, or a tracked follow-up records any GitHub-side failure |
 | TASK-04 DC-23 store-unit test carry-forwards | Designer/implementer | Implemented and verified | Commit with the accepted 0.16.0 pre-release hardening bundle | Store-level cross-item test is committed |
 | TASK-05 0.16.0 release finalization | Maintainer | Prepared in working tree; tag/publish pending | After TASK-01 review is accepted and release-finalization changes are committed | `v0.16.0` tag and crate publish are completed by the maintainer |

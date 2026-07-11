@@ -28,7 +28,11 @@ No proposed RFCs are currently tracked.
 
 ## Accepted
 
-No accepted RFCs are currently tracked.
+These records currently live under `accepted/`.
+
+| ID | Title |
+|---|---|
+| DC-24 | [Data Model and Trust/Threat Documentation](./accepted/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md) |
 
 ## Done
 
@@ -95,7 +99,7 @@ These records currently live under `archive/`.
 
 ## Handoffs
 
-Companion handoff directories currently exist for DC-10 through DC-23:
+Companion handoff directories currently exist for DC-10 through DC-24:
 
 - [DC-10 rollback draft signing](./handoffs/DC-10-rollback-draft-signing/)
 - [DC-11 maintainer trust store](./handoffs/DC-11-maintainer-trust-store/)
@@ -111,3 +115,4 @@ Companion handoff directories currently exist for DC-10 through DC-23:
 - [DC-21 merge conflict evidence contract](./handoffs/DC-21-merge-conflict-evidence-contract/)
 - [DC-22 public merge evidence UX](./handoffs/DC-22-public-merge-evidence-ux/)
 - [DC-23 merge evidence UX stabilization](./handoffs/DC-23-merge-evidence-ux-stabilization/)
+- [DC-24 data model and trust/threat docs](./handoffs/DC-24-data-model-trust-threat-docs/)
