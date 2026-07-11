@@ -1,5 +1,7 @@
 //! Merge-evidence store boundary tests.
 
+mod merge_plan;
+
 use prikk_error::Result;
 use prikk_object::{
     BlobKind, BlobPayload, BlockKind, CanonicalEncode, ChangePerm, CreateFile, DeleteNode,
@@ -250,7 +252,7 @@ fn missing_or_wrong_type_patch_fails_before_report() -> Result<()> {
     Ok(())
 }
 
-fn write_create_block(
+pub(super) fn write_create_block(
     layout: &RepositoryLayout,
     kind: BlockKind,
     parents: Vec<ObjectId>,
@@ -285,7 +287,7 @@ fn write_create_block(
     write_patch_block(layout, kind, parents, patch)
 }
 
-fn write_operation_block(
+pub(super) fn write_operation_block(
     layout: &RepositoryLayout,
     kind: BlockKind,
     parents: Vec<ObjectId>,
@@ -319,7 +321,7 @@ fn write_patch_block(
     write_block(layout, kind, parents, vec![patch_id])
 }
 
-fn write_blob(layout: &RepositoryLayout, content: &[u8]) -> Result<ObjectId> {
+pub(super) fn write_blob(layout: &RepositoryLayout, content: &[u8]) -> Result<ObjectId> {
     let mut store = FileObjectStore::new(layout.clone());
     let blob = BlobPayload::new(BlobKind::Text, content.to_vec());
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob.to_canonical_bytes()?);
@@ -327,7 +329,7 @@ fn write_blob(layout: &RepositoryLayout, content: &[u8]) -> Result<ObjectId> {
     store.write_object(&envelope)
 }
 
-fn write_block(
+pub(super) fn write_block(
     layout: &RepositoryLayout,
     kind: BlockKind,
     parents: Vec<ObjectId>,

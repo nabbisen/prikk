@@ -11,7 +11,7 @@ mod help;
 mod merge_evidence;
 
 pub(crate) use help::print_help;
-pub(crate) use merge_evidence::print_merge_evidence;
+pub(crate) use merge_evidence::{print_merge_evidence, print_merge_plan};
 
 /// Print a checkout plan.
 pub(crate) fn print_checkout_plan(layout: &RepositoryLayout, plan: &CheckoutPlan) {

@@ -21,14 +21,14 @@ mod seal;
 use args::{
     CheckoutMode, MergeEvidenceTargetArg, current_dir, optional_path_or_current,
     parse_checkout_args, parse_commit_args, parse_doctor_args, parse_inverse_plan_args,
-    parse_log_args, parse_merge_evidence_args, parse_rollback_draft_args,
+    parse_log_args, parse_merge_evidence_args, parse_merge_plan_args, parse_rollback_draft_args,
     parse_rollback_draft_verify_args, parse_rollback_preview_args, parse_worktree_status_args,
 };
 use output::{
     print_checkout_plan, print_doctor_report, print_help, print_history, print_merge_evidence,
-    print_patch_deletion_plan, print_patch_inverse_plan, print_patch_materialization_report,
-    print_patch_replay_plan, print_rollback_draft_report, print_rollback_draft_verification,
-    print_rollback_preview_plan, print_snapshot_checkout_plan,
+    print_merge_plan, print_patch_deletion_plan, print_patch_inverse_plan,
+    print_patch_materialization_report, print_patch_replay_plan, print_rollback_draft_report,
+    print_rollback_draft_verification, print_rollback_preview_plan, print_snapshot_checkout_plan,
     print_snapshot_materialization_report, print_verify_report, print_worktree_status,
 };
 use prikk_store::{
@@ -37,9 +37,9 @@ use prikk_store::{
     append_rollback_draft, commit_worktree_changes_signed, doctor_repository, load_ref_history,
     materialize_patch_checkout, materialize_patch_checkout_with_deletions,
     materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan,
-    prepare_merge_evidence, prepare_patch_inverse_plan, prepare_patch_replay_plan,
-    prepare_rollback_preview, prepare_snapshot_checkout_plan, repair_repository,
-    verify_active_rollback_draft, verify_repository, worktree_status,
+    prepare_merge_evidence, prepare_merge_plan, prepare_patch_inverse_plan,
+    prepare_patch_replay_plan, prepare_rollback_preview, prepare_snapshot_checkout_plan,
+    repair_repository, verify_active_rollback_draft, verify_repository, worktree_status,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -73,6 +73,7 @@ fn run() -> std::result::Result<(), String> {
         Some("log") => run_log(args.collect()),
         Some("checkout") => run_checkout(args.collect()),
         Some("merge-evidence") => run_merge_evidence(args.collect()),
+        Some("merge-plan") => run_merge_plan(args.collect()),
         Some("inverse-plan") => run_inverse_plan(args.collect()),
         Some("rollback-preview") => run_rollback_preview(args.collect()),
         Some("rollback-draft") => run_rollback_draft(args.collect()),
@@ -272,6 +273,20 @@ fn run_merge_evidence(args: Vec<String>) -> std::result::Result<(), String> {
     )
     .map_err(|err| err.to_string())?;
     print_merge_evidence(&report);
+    Ok(())
+}
+
+fn run_merge_plan(args: Vec<String>) -> std::result::Result<(), String> {
+    let args = parse_merge_plan_args(args)?;
+    let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
+    let plan = prepare_merge_plan(
+        &layout,
+        args.baseline_block_id,
+        merge_target_from_arg(args.left_target),
+        merge_target_from_arg(args.right_target),
+    )
+    .map_err(|err| err.to_string())?;
+    print_merge_plan(&plan);
     Ok(())
 }
 

@@ -1,4 +1,4 @@
-//! Argument parsing for read-only merge evidence.
+//! Argument parsing for read-only merge evidence and merge planning.
 
 use std::path::PathBuf;
 
@@ -18,6 +18,9 @@ pub(crate) struct MergeEvidenceArgs {
     pub(crate) right_target: MergeEvidenceTargetArg,
 }
 
+/// Parsed merge-plan command arguments.
+pub(crate) type MergePlanArgs = MergeEvidenceArgs;
+
 /// Parsed merge-evidence target selector.
 pub(crate) enum MergeEvidenceTargetArg {
     /// Block selector.
@@ -30,6 +33,20 @@ pub(crate) enum MergeEvidenceTargetArg {
 pub(crate) fn parse_merge_evidence_args(
     args: Vec<String>,
 ) -> std::result::Result<MergeEvidenceArgs, String> {
+    parse_merge_args(args, "merge-evidence")
+}
+
+/// Parse `prikk merge-plan` arguments.
+pub(crate) fn parse_merge_plan_args(
+    args: Vec<String>,
+) -> std::result::Result<MergePlanArgs, String> {
+    parse_merge_args(args, "merge-plan")
+}
+
+fn parse_merge_args(
+    args: Vec<String>,
+    command: &str,
+) -> std::result::Result<MergeEvidenceArgs, String> {
     let mut path = None;
     let mut baseline_block_id = None;
     let mut left_target = None;
@@ -40,43 +57,53 @@ pub(crate) fn parse_merge_evidence_args(
             "--baseline-block" => {
                 baseline_block_id = Some(parse_object_id_arg(
                     iter.next(),
-                    "merge-evidence --baseline-block",
+                    &format!("{command} --baseline-block"),
                 )?);
             }
             "--left-block" => {
-                let id = parse_object_id_arg(iter.next(), "merge-evidence --left-block")?;
-                set_merge_target(&mut left_target, MergeEvidenceTargetArg::Block(id), "left")?;
+                let id = parse_object_id_arg(iter.next(), &format!("{command} --left-block"))?;
+                set_merge_target(
+                    &mut left_target,
+                    MergeEvidenceTargetArg::Block(id),
+                    "left",
+                    command,
+                )?;
             }
             "--right-block" => {
-                let id = parse_object_id_arg(iter.next(), "merge-evidence --right-block")?;
+                let id = parse_object_id_arg(iter.next(), &format!("{command} --right-block"))?;
                 set_merge_target(
                     &mut right_target,
                     MergeEvidenceTargetArg::Block(id),
                     "right",
+                    command,
                 )?;
             }
             "--left-ref" => {
-                let ref_name = parse_non_empty_value(iter.next(), "merge-evidence --left-ref")?;
+                let ref_name =
+                    parse_non_empty_value(iter.next(), &format!("{command} --left-ref"))?;
                 set_merge_target(
                     &mut left_target,
                     MergeEvidenceTargetArg::Ref(ref_name),
                     "left",
+                    command,
                 )?;
             }
             "--right-ref" => {
-                let ref_name = parse_non_empty_value(iter.next(), "merge-evidence --right-ref")?;
+                let ref_name =
+                    parse_non_empty_value(iter.next(), &format!("{command} --right-ref"))?;
                 set_merge_target(
                     &mut right_target,
                     MergeEvidenceTargetArg::Ref(ref_name),
                     "right",
+                    command,
                 )?;
             }
             other if other.starts_with('-') => {
-                return Err(format!("unknown merge-evidence argument: {other}"));
+                return Err(format!("unknown {command} argument: {other}"));
             }
             _ => {
                 if path.is_some() {
-                    return Err("merge-evidence accepts at most one path".to_string());
+                    return Err(format!("{command} accepts at most one path"));
                 }
                 path = Some(arg);
             }
@@ -85,11 +112,11 @@ pub(crate) fn parse_merge_evidence_args(
     Ok(MergeEvidenceArgs {
         root: optional_path_or_current(path)?,
         baseline_block_id: baseline_block_id
-            .ok_or_else(|| "merge-evidence requires --baseline-block".to_string())?,
+            .ok_or_else(|| format!("{command} requires --baseline-block"))?,
         left_target: left_target
-            .ok_or_else(|| "merge-evidence requires --left-block or --left-ref".to_string())?,
+            .ok_or_else(|| format!("{command} requires --left-block or --left-ref"))?,
         right_target: right_target
-            .ok_or_else(|| "merge-evidence requires --right-block or --right-ref".to_string())?,
+            .ok_or_else(|| format!("{command} requires --right-block or --right-ref"))?,
     })
 }
 
@@ -97,10 +124,11 @@ fn set_merge_target(
     slot: &mut Option<MergeEvidenceTargetArg>,
     value: MergeEvidenceTargetArg,
     side: &str,
+    command: &str,
 ) -> std::result::Result<(), String> {
     if slot.is_some() {
         return Err(format!(
-            "merge-evidence {side} side accepts exactly one selector"
+            "{command} {side} side accepts exactly one selector"
         ));
     }
     *slot = Some(value);

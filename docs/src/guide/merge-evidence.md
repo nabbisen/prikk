@@ -3,6 +3,9 @@
 DC-22 (0.15.0) adds `prikk merge-evidence`, the first public read-only UX over the DC-21
 merge/conflict evidence vocabulary. DC-23 (0.16.0) stabilizes its text output.
 
+For the planning classification layer over the same explicit-input evidence, see
+[Merge Plan](merge-plan.md). Neither command executes a merge.
+
 ```sh
 prikk merge-evidence \
   --baseline-block BLOCK \

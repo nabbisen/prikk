@@ -1,6 +1,7 @@
 //! Public read-only merge/conflict evidence display boundary (DC-22).
 
 mod display;
+mod merge_plan;
 
 use std::collections::BTreeSet;
 
@@ -11,6 +12,7 @@ pub use display::{
     MergeEvidenceDisplay, MergeEvidenceDisplayItem, MergeEvidenceDisplayOperation,
     MergeEvidenceDisplaySelector,
 };
+pub use merge_plan::MergePlanDisplay;
 
 use crate::lifecycle_cache::replay_derived_state;
 use crate::object_store::FileObjectStore;
@@ -67,6 +69,17 @@ pub fn prepare_merge_evidence(
         left_selector,
         right_selector,
     ))
+}
+
+/// Prepare a read-only merge plan display report.
+pub fn prepare_merge_plan(
+    layout: &RepositoryLayout,
+    baseline_block_id: ObjectId,
+    left_target: MergeEvidenceTarget,
+    right_target: MergeEvidenceTarget,
+) -> Result<MergePlanDisplay> {
+    let evidence = prepare_merge_evidence(layout, baseline_block_id, left_target, right_target)?;
+    Ok(MergePlanDisplay::from_evidence(evidence))
 }
 
 fn resolve_target(

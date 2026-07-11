@@ -8,7 +8,9 @@ mod checkout;
 mod merge_evidence;
 
 pub(crate) use checkout::{CheckoutMode, parse_checkout_args};
-pub(crate) use merge_evidence::{MergeEvidenceTargetArg, parse_merge_evidence_args};
+pub(crate) use merge_evidence::{
+    MergeEvidenceTargetArg, parse_merge_evidence_args, parse_merge_plan_args,
+};
 
 /// Parsed commit command arguments.
 pub(crate) struct CommitArgs {

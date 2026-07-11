@@ -1,6 +1,6 @@
 //! Output for read-only merge evidence reports.
 
-use prikk_store::{MergeEvidenceDisplay, MergeEvidenceDisplayOperation};
+use prikk_store::{MergeEvidenceDisplay, MergeEvidenceDisplayOperation, MergePlanDisplay};
 
 /// Print a read-only merge evidence report.
 pub(crate) fn print_merge_evidence(report: &MergeEvidenceDisplay) {
@@ -28,7 +28,49 @@ pub(crate) fn print_merge_evidence(report: &MergeEvidenceDisplay) {
         report.displayed_item_count(),
         report.total_item_count()
     );
-    for item in &report.items {
+    print_items(&report.items);
+    println!(
+        "note: read-only evidence; no merge commit, ref update, WAL write, or worktree change was performed"
+    );
+}
+
+/// Print a read-only merge plan.
+pub(crate) fn print_merge_plan(plan: &MergePlanDisplay) {
+    let report = &plan.evidence;
+    println!("merge plan");
+    println!("baseline block: {}", report.baseline_block_id);
+    println!("left selector: {}", report.left_selector.selector);
+    println!(
+        "left target block: {}",
+        report.left_selector.target_block_id
+    );
+    println!("left operations: {}", report.left_operation_count);
+    println!("right selector: {}", report.right_selector.selector);
+    println!(
+        "right target block: {}",
+        report.right_selector.target_block_id
+    );
+    println!("right operations: {}", report.right_operation_count);
+    println!("status: {}", plan.status);
+    println!("evidence outcome: {}", report.outcome);
+    match report.reason {
+        Some(reason) => println!("reason: {reason}"),
+        None => println!("reason: <none>"),
+    }
+    println!("action: {}", plan.action);
+    println!(
+        "items: {} displayed of {}",
+        plan.displayed_item_count(),
+        plan.total_item_count()
+    );
+    print_items(&report.items);
+    println!(
+        "note: read-only plan; no merge commit, ref update, WAL write, object write, or worktree change was performed"
+    );
+}
+
+fn print_items(items: &[prikk_store::MergeEvidenceDisplayItem]) {
+    for item in items {
         println!();
         println!("{}:", item.side);
         match item.side {
@@ -49,9 +91,6 @@ pub(crate) fn print_merge_evidence(report: &MergeEvidenceDisplay) {
             println!("  evidence-scope: {scope}");
         }
     }
-    println!(
-        "note: read-only evidence; no merge commit, ref update, WAL write, or worktree change was performed"
-    );
 }
 
 fn print_labeled_operation(label: &str, operation: Option<&MergeEvidenceDisplayOperation>) {

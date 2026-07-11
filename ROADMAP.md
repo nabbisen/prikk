@@ -5,7 +5,11 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- No active design/implementation increment is selected after 0.16.1.
+- **DC-25 - merge planning surface (implementation pending review, 0.17.0 candidate).** The active
+  implementation increment adds a read-only `prikk merge-plan` boundary over explicit baseline and
+  left/right targets. It remains non-executing and does not add merge-base discovery, merge execution,
+  branch publication, merge commits, persisted plan/evidence objects, schema changes, or public
+  `prikk-replay` API stabilization.
 
 ## Release Candidate Increment
 
@@ -102,14 +106,12 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Next Increments
 
-1. **DC-25 merge planning surface (accepted, 0.17.0 candidate)**: the accepted substantive next
-   implementation increment adds a read-only `prikk merge-plan` boundary over explicit baseline and
-   left/right targets. It remains non-executing and does not add merge-base discovery.
-2. **Documentation reference series (after 0.16.1)**: the current-state reference subjects surfaced
-   by the DC-24 spec recap — durability/crash-recovery, verify/doctor, patch-algebra concepts, key
-   setup, and further layout/safety/policy references. Tracked in the *Post-0.16.1 Documentation Reference
-   Backlog* section below. Graduation homes follow the DC-26 `docs/src/reference/` authority model.
-3. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
+1. **Documentation reference series (after DC-25 / 0.17.0 planning work, unless reprioritized)**:
+   the current-state reference subjects surfaced by the DC-24 spec recap — durability/crash-recovery,
+   verify/doctor, patch-algebra concepts, key setup, and further layout/safety/policy references.
+   Tracked in the *Post-0.16.1 Documentation Reference Backlog* section below. Graduation homes follow
+   the DC-26 `docs/src/reference/` authority model.
+2. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
    rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
    their dedicated plans and FDDs.
 

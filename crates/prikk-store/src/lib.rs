@@ -78,7 +78,8 @@ pub use maintainer_signing::{Ed25519MaintainerSigner, MaintainerSigner, maintain
 pub use memory_store::MemoryObjectStore;
 pub use merge_evidence::{
     MergeEvidenceDisplay, MergeEvidenceDisplayItem, MergeEvidenceDisplayOperation,
-    MergeEvidenceDisplaySelector, MergeEvidenceTarget, prepare_merge_evidence,
+    MergeEvidenceDisplaySelector, MergeEvidenceTarget, MergePlanDisplay, prepare_merge_evidence,
+    prepare_merge_plan,
 };
 pub use object_store::{FileObjectStore, ObjectReader, ObjectWriter};
 pub use patch_checkout::{
