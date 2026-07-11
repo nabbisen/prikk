@@ -5,7 +5,11 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- No active design/implementation increment is selected after 0.17.0.
+- **DC-27 - patch algebra and merge-evidence concepts reference (accepted, 0.17.1 candidate).** The
+  active implementation increment is TASK-08: an authoritative current-state mdBook
+  reference for patch algebra, commutation/confluence, merge-evidence outcomes, and merge-plan status
+  mapping. It is documentation-only and does not add merge execution, merge-base discovery, command
+  behavior, schema changes, persisted proof/witness objects, or public Rust API stabilization.
 
 ## Release Candidate Increment
 
@@ -110,11 +114,10 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Next Increments
 
-1. **Documentation reference series (after DC-25 / 0.17.0 planning work, unless reprioritized)**:
-   the current-state reference subjects surfaced by the DC-24 spec recap — durability/crash-recovery,
-   verify/doctor, patch-algebra concepts, key setup, and further layout/safety/policy references.
-   Tracked in the *Post-0.16.1 Documentation Reference Backlog* section below. Graduation homes follow
-   the DC-26 `docs/src/reference/` authority model.
+1. **Remaining Tier-1 documentation reference series (after DC-27 unless reprioritized)**:
+   durability/crash-recovery, verify/doctor, and key setup remain the next major current-state
+   reference gaps. Tracked in the *Post-0.16.1 Documentation Reference Backlog* section below.
+   Graduation homes follow the DC-26 `docs/src/reference/` authority model.
 2. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
    rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
    their dedicated plans and FDDs.
@@ -155,7 +158,7 @@ references. The durable homes below are authoritative `docs/src/reference/` or `
 |---|---:|---|---|---|---|---|
 | TASK-06 durability & crash-recovery reference | 1 | Architect + maintainer | Open | After DC-24 docs are reviewed/committed, draft the storage transaction/durability reference. | Reviewed durability/crash-recovery reference is committed. | `docs/src/reference/durability-recovery.md` |
 | TASK-07 verify & doctor reference | 1 | Architect + maintainer | Open | Coordinate with TASK-06 or start when verify/doctor scope needs public release wording. | Reviewed integrity/recovery docs define what `verify` and `doctor` do and do not prove. | `docs/src/reference/integrity-recovery.md` |
-| TASK-08 patch algebra & merge-evidence concepts | 1 | Architect + maintainer | Open | Next Tier-1 concept candidate after DC-26; draft the current-state mdBook concept page. | Reviewed current concept page explains commutation, evidence outcomes, and non-goals. | `docs/src/reference/patch-algebra.md` |
+| TASK-08 patch algebra & merge-evidence concepts | 1 | Architect + maintainer | Design accepted | Implement accepted DC-27 as the current-state mdBook concept page. | Reviewed current concept page explains commutation, evidence outcomes, and non-goals. | `docs/src/reference/patch-algebra.md` |
 | TASK-09 key management & signing setup | 1 | Designer/maintainer | Open | After the trust/threat reference lands, write the operator setup guide for current env-var key input and maintainer trust. | Reviewed operator guide is committed and links the trust/threat reference without promising key lifecycle features. | `docs/src/guide/security-setup.md` |
 | TASK-10 repository layout & authority model | 2 | Architect + maintainer | Open | Start when the data-model reference needs more layout detail or when format/authority claims expand. | Current directories and authority-vs-cache rules are reviewed and committed. | `docs/src/reference/repository-layout.md` |
 | TASK-11 path & worktree safety rules | 2 | Architect + maintainer | Open | Start before expanding checkout/worktree docs or when path rejection UX needs public explanation. | Reviewed path/worktree safety reference is committed with current gaps marked. | `docs/src/reference/path-safety.md` |

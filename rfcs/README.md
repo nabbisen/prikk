@@ -28,7 +28,11 @@ No proposed RFCs are currently tracked.
 
 ## Accepted
 
-No accepted RFCs are currently tracked.
+These records currently live under `accepted/`.
+
+| ID | Title |
+|---|---|
+| DC-27 | [Patch Algebra and Merge-Evidence Concepts Reference](./accepted/DC-27-PATCH-ALGEBRA-MERGE-EVIDENCE-CONCEPTS.md) |
 
 ## Done
 
