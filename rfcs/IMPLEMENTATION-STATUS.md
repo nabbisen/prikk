@@ -167,7 +167,7 @@ documentation references)
   above.
 - Internal read-only merge/conflict evidence reports for the DC-21 vocabulary; see Current State above.
 - Current-state data-model and trust/threat-model reference docs:
-  `rfcs/fdds/FDD-00-DATA-MODEL.md` and `rfcs/fdds/FDD-04-TRUST-THREAT-MODEL.md`.
+  `docs/src/reference/data-model.md` and `docs/src/reference/trust-threat-model.md`.
 - Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `merge-evidence --baseline-block`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
 
 ## Not Implemented Yet

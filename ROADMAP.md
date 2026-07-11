@@ -5,11 +5,11 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-26 - documentation home correction (accepted).** The current documentation-structure increment
-  implements the accepted decision to move current-state architecture/concept references from
-  `rfcs/fdds/` into the published `docs/src/reference/` book as their authoritative, self-contained
-  home. It is documentation-structure only: no code, schema, trust, CLI, or RFC lifecycle policy
-  changes.
+- **DC-26 - documentation home correction (implementation pending review).** The current
+  documentation-structure increment implements the accepted decision to move current-state
+  architecture/concept references from `rfcs/fdds/` into the published `docs/src/reference/` book as
+  their authoritative, self-contained home. It is documentation-structure only: no code, schema, trust,
+  CLI, or RFC lifecycle policy changes.
 
 ## Release Candidate Increment
 
@@ -111,12 +111,13 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 3. **Documentation reference series (0.16.1 or later)**: the current-state reference subjects surfaced
    by the DC-24 spec recap — durability/crash-recovery, verify/doctor, patch-algebra concepts, key
    setup, and further layout/safety/policy references. Tracked in the *0.16.1+ Documentation Reference
-   Backlog* section below. Graduation homes are pending DC-26 acceptance.
+   Backlog* section below. Graduation homes follow the DC-26 `docs/src/reference/` authority model.
 4. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
    rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
    their dedicated plans and FDDs.
 
-Final feature scope remains governed by the FDDs and RFCs.
+Final feature scope remains governed by accepted RFCs, genuine gating FDDs when present, and the
+current-state reference docs.
 
 ## 0.16.0 Release Task Management
 
@@ -143,20 +144,19 @@ into DC-24, and every one must preserve the same honest-limits discipline (unit-
 durability, no repository-format stability, `verify` is not a global-trust proof) or it re-creates the
 over-trust risk DC-24 exists to prevent.
 
-**Home pending DC-26.** The *Home* targets in the table below reflect the DC-24 `rfcs/fdds/` pattern,
-which accepted **DC-26** (documentation home correction) retires in favour of authoritative
-`docs/src/reference/` pages. Do not build these references until DC-26 is implemented; during DC-26
-implementation, update this table's homes to `docs/src/reference/` in the same pass.
+**Documentation home.** Accepted **DC-26** retires the DC-24 `rfcs/fdds/` pattern for current-state
+references. The durable homes below are authoritative `docs/src/reference/` or `docs/src/guide/` pages;
+`rfcs/fdds/` is reserved for future gating FDDs only.
 
 | ID | Tier | Owner | Status | Trigger / next action | Completion condition | Durable home |
 |---|---:|---|---|---|---|---|
-| TASK-06 durability & crash-recovery reference | 1 | Architect + maintainer | Open | After DC-24 docs are reviewed/committed, draft the storage transaction/durability reference. | Reviewed FDD-02 durability material and mdBook entry are committed. | `rfcs/fdds/FDD-02-STORAGE-TRANSACTION-MODEL.md` + `docs/src/reference/durability-recovery.md` |
-| TASK-07 verify & doctor reference | 1 | Architect + maintainer | Open | Coordinate with TASK-06 or start when verify/doctor scope needs public release wording. | Reviewed integrity/recovery docs define what `verify` and `doctor` do and do not prove. | FDD-02 section or `docs/src/reference/integrity-recovery.md` |
-| TASK-08 patch algebra & merge-evidence concepts | 1 | Architect + maintainer | Open | Next Tier-1 concept candidate after DC-24; draft current-state FDD-01 and mdBook concept page. | Reviewed FDD-01/current concept page explains commutation, evidence outcomes, and non-goals. | `rfcs/fdds/FDD-01-PATCH-ALGEBRA.md` + `docs/src/reference/patch-algebra.md` |
-| TASK-09 key management & signing setup | 1 | Designer/maintainer | Open | After DC-24 trust model lands, write the operator setup guide for current env-var key input and maintainer trust. | Reviewed operator guide is committed and links DC-24/FDD-04 without promising key lifecycle features. | `docs/src/guide/security-setup.md` |
-| TASK-10 repository layout & authority model | 2 | Architect + maintainer | Open | Start when FDD-00 needs more layout detail or when format/authority claims expand. | Current directories and authority-vs-cache rules are reviewed and committed. | Extend `rfcs/fdds/FDD-00-DATA-MODEL.md` or add `docs/src/reference/repository-layout.md` |
+| TASK-06 durability & crash-recovery reference | 1 | Architect + maintainer | Open | After DC-24 docs are reviewed/committed, draft the storage transaction/durability reference. | Reviewed durability/crash-recovery reference is committed. | `docs/src/reference/durability-recovery.md` |
+| TASK-07 verify & doctor reference | 1 | Architect + maintainer | Open | Coordinate with TASK-06 or start when verify/doctor scope needs public release wording. | Reviewed integrity/recovery docs define what `verify` and `doctor` do and do not prove. | `docs/src/reference/integrity-recovery.md` |
+| TASK-08 patch algebra & merge-evidence concepts | 1 | Architect + maintainer | Open | Next Tier-1 concept candidate after DC-26; draft the current-state mdBook concept page. | Reviewed current concept page explains commutation, evidence outcomes, and non-goals. | `docs/src/reference/patch-algebra.md` |
+| TASK-09 key management & signing setup | 1 | Designer/maintainer | Open | After the trust/threat reference lands, write the operator setup guide for current env-var key input and maintainer trust. | Reviewed operator guide is committed and links the trust/threat reference without promising key lifecycle features. | `docs/src/guide/security-setup.md` |
+| TASK-10 repository layout & authority model | 2 | Architect + maintainer | Open | Start when the data-model reference needs more layout detail or when format/authority claims expand. | Current directories and authority-vs-cache rules are reviewed and committed. | `docs/src/reference/repository-layout.md` |
 | TASK-11 path & worktree safety rules | 2 | Architect + maintainer | Open | Start before expanding checkout/worktree docs or when path rejection UX needs public explanation. | Reviewed path/worktree safety reference is committed with current gaps marked. | `docs/src/reference/path-safety.md` |
-| TASK-12 concurrency & locking model | 2 | Architect + maintainer | Open | Coordinate with TASK-06, especially stale `active.lock` and CAS behavior. | Reviewed locking/concurrency docs are committed and describe manual stale-lock limits. | FDD-02 section or `docs/src/reference/concurrency-locking.md` |
+| TASK-12 concurrency & locking model | 2 | Architect + maintainer | Open | Coordinate with TASK-06, especially stale `active.lock` and CAS behavior. | Reviewed locking/concurrency docs are committed and describe manual stale-lock limits. | `docs/src/reference/concurrency-locking.md` |
 | TASK-13 release, versioning & compatibility policy | 2 | Maintainer | Open | Start before the next release/docs pass that makes compatibility or repository-format claims. | Reviewed release/compatibility policy is committed and linked from README/CHANGELOG as needed. | `docs/src/reference/release-compatibility.md` or contributing policy page |
 | TASK-14 consolidated non-goals / deferred features | 3 | Maintainer/architect | Open | Start when deferred-feature lists begin drifting across README, ROADMAP, mdBook, and release notes. | Reviewed non-goals page is committed and links ROADMAP as the planning authority. | `docs/src/reference/non-goals.md` |
 | TASK-15 roles & user-classes orientation | 3 | Designer | Open | Start when the docs need a clearer audience map after the Reference section settles. | Reviewed orientation page or index update is committed. | `docs/src/index.md` or `docs/src/guide/audience.md` |

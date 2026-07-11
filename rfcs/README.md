@@ -120,10 +120,14 @@ Companion handoff directories currently exist for DC-10 through DC-25:
 - [DC-24 data model and trust/threat docs](./handoffs/DC-24-data-model-trust-threat-docs/)
 - [DC-25 merge planning surface](./handoffs/DC-25-merge-planning-surface/)
 
-## Current FDD References
+## Current Reference Docs
 
-These current-state references consolidate implementation facts for public documentation. They are not
-RFC lifecycle records.
+Current-state references consolidate implementation facts for public documentation. They are not RFC
+lifecycle records; their authoritative home is the published mdBook source under `docs/src/reference/`.
 
-- [FDD-00 data model](./fdds/FDD-00-DATA-MODEL.md)
-- [FDD-04 trust and threat model](./fdds/FDD-04-TRUST-THREAT-MODEL.md)
+- [Data model](../docs/src/reference/data-model.md)
+- [Trust and threat model](../docs/src/reference/trust-threat-model.md)
+
+The old `rfcs/fdds/FDD-00-DATA-MODEL.md` and `rfcs/fdds/FDD-04-TRUST-THREAT-MODEL.md` paths are
+temporary compatibility pointers for 0.16.1 and are scheduled for removal in 0.17.0 unless a later
+review extends the window. Future `rfcs/fdds/` content is reserved for genuine gating FDDs.

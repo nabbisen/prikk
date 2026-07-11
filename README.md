@@ -182,6 +182,6 @@ The roadmap, RFCs, and mdBook docs are the best entry points for design details:
 
 - [ROADMAP.md](./ROADMAP.md)
 - [rfcs/README.md](./rfcs/README.md)
-- [Current data model](./rfcs/fdds/FDD-00-DATA-MODEL.md)
-- [Current trust and threat model](./rfcs/fdds/FDD-04-TRUST-THREAT-MODEL.md)
+- [Current data model](./docs/src/reference/data-model.md)
+- [Current trust and threat model](./docs/src/reference/trust-threat-model.md)
 - [docs/src](./docs/src)
