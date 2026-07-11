@@ -113,6 +113,69 @@ fn missing_ancestry_fails_before_report() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn multi_parent_candidate_fails_before_report() -> Result<()> {
+    let root = unique_temp_dir("merge-evidence-multi-parent-candidate");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let baseline = write_block(&layout, BlockKind::Root, Vec::new(), Vec::new())?;
+    let other_parent = write_create_block(
+        &layout,
+        BlockKind::Root,
+        Vec::new(),
+        "other-parent.txt",
+        0x25,
+    )?;
+    let mut parents = vec![baseline, other_parent];
+    parents.sort();
+    let target = write_block(&layout, BlockKind::Normal, parents, Vec::new())?;
+
+    let err = match prepare_merge_evidence(
+        &layout,
+        baseline,
+        MergeEvidenceTarget::Block(target),
+        MergeEvidenceTarget::Block(baseline),
+    ) {
+        Ok(_) => panic!("multi-parent candidate unexpectedly succeeded"),
+        Err(err) => err,
+    };
+
+    assert!(err.to_string().contains("single-parent candidate chains"));
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+#[test]
+fn missing_or_wrong_type_patch_fails_before_report() -> Result<()> {
+    let root = unique_temp_dir("merge-evidence-missing-patch");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let baseline = write_block(&layout, BlockKind::Root, Vec::new(), Vec::new())?;
+    let wrong_type_id = write_blob(&layout, b"not a patch")?;
+    let target = write_block(
+        &layout,
+        BlockKind::Normal,
+        vec![baseline],
+        vec![wrong_type_id],
+    )?;
+
+    let err = match prepare_merge_evidence(
+        &layout,
+        baseline,
+        MergeEvidenceTarget::Block(target),
+        MergeEvidenceTarget::Block(baseline),
+    ) {
+        Ok(_) => panic!("wrong-type patch unexpectedly succeeded"),
+        Err(err) => err,
+    };
+
+    let error = err.to_string();
+    assert!(
+        error.contains("Patch") || error.contains("object type mismatch"),
+        "unexpected error: {error}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 fn write_create_block(
     layout: &RepositoryLayout,
     kind: BlockKind,
@@ -149,6 +212,14 @@ fn write_create_block(
     patch_env.add_signature(dummy_signature())?;
     let patch_id = store.write_object(&patch_env)?;
     write_block(layout, kind, parents, vec![patch_id])
+}
+
+fn write_blob(layout: &RepositoryLayout, content: &[u8]) -> Result<ObjectId> {
+    let mut store = FileObjectStore::new(layout.clone());
+    let blob = BlobPayload::new(BlobKind::Text, content.to_vec());
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob.to_canonical_bytes()?);
+    envelope.add_signature(maintainer_signature())?;
+    store.write_object(&envelope)
 }
 
 fn write_block(
