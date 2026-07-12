@@ -41,9 +41,7 @@ Prikk is designed to be:
 
 ## Current Status
 
-Latest released implementation: **0.17.2**, adding the durability and crash-recovery reference.
-
-Current release candidate: **0.17.3**, adding the verify and doctor integrity/recovery reference.
+Latest released implementation: **0.17.3**, adding the verify and doctor integrity/recovery reference.
 
 Next increment candidates are tracked in `ROADMAP.md`.
 

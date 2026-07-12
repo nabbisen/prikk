@@ -5,17 +5,19 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- No active design/implementation increment is selected during the 0.17.3 release-candidate review.
+- No active design/implementation increment is selected after the 0.17.3 release.
 
 ## Release Candidate Increment
 
-- **DC-29 verify and doctor integrity/recovery reference (0.17.3 release candidate).** Adds a
-  current-state mdBook reference for what `prikk verify` checks and does not prove, how `prikk doctor`
-  interprets verification results, current doctor issue codes/severities, and narrow repair
-  boundaries. This is documentation-only and does not change code, schema, CLI behavior, repository
-  behavior, verify, doctor, trust, or repair behavior.
+- No active release candidate is selected after the 0.17.3 release.
 
 ## Last Released Increment
+
+- **DC-29 - verify and doctor integrity/recovery reference (released as 0.17.3).** The release adds a
+  current-state mdBook reference for what `prikk verify` checks and does not prove, how `prikk doctor`
+  interprets verification results, current doctor issue codes/severities, rollback-verification
+  relationship, and narrow repair boundaries. It is documentation-only and does not change code,
+  schema, CLI behavior, repository behavior, verify, doctor, trust, or repair behavior.
 
 - **DC-28 - durability and crash-recovery reference (released as 0.17.2).** The release adds a
   current-state mdBook reference for active-WAL durability, WAL replay/tail handling, seal publication
@@ -169,7 +171,7 @@ references. The durable homes below are authoritative `docs/src/reference/` or `
 | ID | Tier | Owner | Status | Trigger / next action | Completion condition | Durable home |
 |---|---:|---|---|---|---|---|
 | TASK-06 durability & crash-recovery reference | 1 | Architect + maintainer | Released in 0.17.2 | Complete; use the reference as the current public durability/recovery baseline. | Reviewed durability/crash-recovery reference is committed. | `docs/src/reference/durability-recovery.md` |
-| TASK-07 verify & doctor reference | 1 | Architect + maintainer | 0.17.3 release-candidate review | Review the 0.17.3 release candidate. | Reviewed integrity/recovery docs define what `verify` and `doctor` do and do not prove. | `docs/src/reference/integrity-recovery.md` |
+| TASK-07 verify & doctor reference | 1 | Architect + maintainer | Released in 0.17.3 | Complete; use the reference as the current public verify/doctor diagnostic baseline. | Reviewed integrity/recovery docs define what `verify` and `doctor` do and do not prove. | `docs/src/reference/integrity-recovery.md` |
 | TASK-08 patch algebra & merge-evidence concepts | 1 | Architect + maintainer | Released in 0.17.1 | Complete; use the reference as the current public concept baseline. | Reviewed current concept page explains commutation, evidence outcomes, and non-goals. | `docs/src/reference/patch-algebra.md` |
 | TASK-09 key management & signing setup | 1 | Designer/maintainer | Open | After the trust/threat reference lands, write the operator setup guide for current env-var key input and maintainer trust. | Reviewed operator guide is committed and links the trust/threat reference without promising key lifecycle features. | `docs/src/guide/security-setup.md` |
 | TASK-10 repository layout & authority model | 2 | Architect + maintainer | Open | Start when the data-model reference needs more layout detail or when format/authority claims expand. | Current directories and authority-vs-cache rules are reviewed and committed. | `docs/src/reference/repository-layout.md` |

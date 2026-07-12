@@ -1,19 +1,19 @@
 # Prikk Implementation Status
 
-Latest released version: 0.17.2 (DC-28 — durability and crash-recovery reference)
-Current release candidate: 0.17.3 (DC-29 — verify and doctor integrity/recovery reference)
+Latest released version: 0.17.3 (DC-29 — verify and doctor integrity/recovery reference)
+Current release candidate: none
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (0.17.3 release candidate)
+## Current State (0.17.3)
 
-- DC-29 is prepared as the 0.17.3 release candidate. It adds
-  `docs/src/reference/integrity-recovery.md`, a current-state reference for repository verification and
-  doctor diagnostics. It documents verify scope and limits, output/failure behavior, all six active WAL
-  metadata states, the current doctor issue catalog, narrow doctor repair boundaries, rollback
-  verification relationship, deferred work, and source anchors. It does not change code, schema, CLI
-  behavior, repository format, trust policy, verify behavior, doctor behavior, or repair behavior.
+- DC-29 shipped in 0.17.3. It adds `docs/src/reference/integrity-recovery.md`, a current-state
+  reference for repository verification and doctor diagnostics. It documents verify scope and limits,
+  output/failure behavior, all six active WAL metadata states, the current doctor issue catalog, narrow
+  doctor repair boundaries, rollback verification relationship, deferred work, and source anchors. It
+  does not change code, schema, CLI behavior, repository format, trust policy, verify behavior, doctor
+  behavior, or repair behavior.
 
 ## Previous State (0.17.2)
 

@@ -1,7 +1,6 @@
 # RFC (done) - DC-29 Verify and Doctor Integrity/Recovery Reference
 
-**Status.** Implemented and prepared for the 0.17.3 release candidate after architect implementation
-review.
+**Status.** Released in 0.17.3.
 **Target release.** 0.17.3.
 **Tracks.** TASK-07 verify and doctor integrity/recovery reference.
 **Touches.** mdBook reference documentation, verify/doctor integrity wording, claim-to-source
