@@ -93,6 +93,8 @@ Repository verification is read-only. It checks object placement, envelope decod
 Block references, ref pointer and log consistency, active WAL checksums, active WAL metadata health,
 sealed rollback Patch classification, and publication trust for publication envelopes. Doctor converts
 verification results into actionable diagnostics and exposes only the narrow repairs described above.
+The diagnostic catalog lives in the
+[integrity and recovery diagnostics](./integrity-recovery.md) reference.
 
 ## Deferred
 

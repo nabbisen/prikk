@@ -3,6 +3,9 @@
 Latest released version: 0.17.2 (DC-28 — durability and crash-recovery reference)
 Current release candidate: none
 
+Current accepted increment: DC-29 (verify and doctor integrity/recovery reference), a
+documentation-only current-state reference targeted for 0.17.3.
+
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 

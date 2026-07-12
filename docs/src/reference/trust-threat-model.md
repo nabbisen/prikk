@@ -21,7 +21,9 @@ implementation status records listed in the anchor table at the foot of the page
 Changes that alter trust, threat, verification, signature, key-management, durability,
 platform-support, or production-readiness claims require architect review or accepted RFC/DC coverage.
 The local persistence and crash-recovery boundary is covered by the
-[durability and crash recovery](./durability-recovery.md) reference.
+[durability and crash recovery](./durability-recovery.md) reference. The current `verify` / `doctor`
+diagnostic catalog is covered by the
+[integrity and recovery diagnostics](./integrity-recovery.md) reference.
 
 ## Trust Roots and Roles
 

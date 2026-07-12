@@ -25,6 +25,8 @@ into a block.
 `prikk verify` also counts active WAL records classified as rollback drafts. For those records, verification decodes the Patch payload purpose and the supported replay subset. This check is intentionally weaker than `rollback-draft-verify` because repository-level verification has no selected ref target.
 
 `prikk verify` also counts sealed rollback Blocks and sealed rollback Patch references after a rollback draft has been sealed through the existing seal path.
+The broader repository verification and doctor diagnostic boundary is described in the
+[integrity and recovery diagnostics](../../reference/integrity-recovery.md) reference.
 
 ## Current limits
 

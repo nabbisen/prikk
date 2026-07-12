@@ -131,6 +131,7 @@ lifecycle records; their authoritative home is the published mdBook source under
 - [Data model](../docs/src/reference/data-model.md)
 - [Trust and threat model](../docs/src/reference/trust-threat-model.md)
 - [Durability and crash recovery](../docs/src/reference/durability-recovery.md)
+- [Integrity and recovery diagnostics](../docs/src/reference/integrity-recovery.md)
 - [Patch algebra and merge evidence](../docs/src/reference/patch-algebra.md)
 
 The old `rfcs/fdds/FDD-00-DATA-MODEL.md` and `rfcs/fdds/FDD-04-TRUST-THREAT-MODEL.md` compatibility

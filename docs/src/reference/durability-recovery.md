@@ -6,7 +6,7 @@ verification, doctor, or command semantics.
 
 For related concepts, see the [data model](./data-model.md), the
 [trust and threat model](./trust-threat-model.md), and the command guides for `verify` and `doctor`
-when they are expanded into a dedicated integrity/recovery reference.
+through the [integrity and recovery diagnostics](./integrity-recovery.md) reference.
 
 ## Core Caveats
 
@@ -108,9 +108,9 @@ DC-28 owns the durability and crash-recovery framing for `doctor`. The current r
 - `doctor --repair-main-ref`, which reconstructs a missing `heads/main` pointer from already-valid
   ref-log and RefState evidence.
 
-The future verify/doctor reference owns the full diagnostic catalog: verification checks,
-`DoctorIssue` codes, severities, and diagnostic interpretation. This page intentionally does not
-duplicate that catalog.
+The [integrity and recovery diagnostics](./integrity-recovery.md) reference owns the full diagnostic
+catalog: verification checks, `DoctorIssue` codes, severities, and diagnostic interpretation. This
+page intentionally does not duplicate that catalog.
 
 Doctor repair refuses to modify the repository when verification has error-severity issues. It also
 does not auto-trust keys, repair signatures, repair checksum mismatches, rebuild missing objects,

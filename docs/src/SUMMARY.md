@@ -27,6 +27,7 @@
 - [Data Model](reference/data-model.md)
 - [Trust and Threat Model](reference/trust-threat-model.md)
 - [Durability and Crash Recovery](reference/durability-recovery.md)
+- [Integrity and Recovery Diagnostics](reference/integrity-recovery.md)
 - [Patch Algebra and Merge Evidence](reference/patch-algebra.md)
 
 # Contributing
