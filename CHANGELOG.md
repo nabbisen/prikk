@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.17.3 — 2026-07-13
+
+DC-29: verify and doctor integrity/recovery reference.
+
+- Adds `docs/src/reference/integrity-recovery.md`, an authoritative current-state reference for
+  repository verification and doctor diagnostics.
+- Documents what `prikk verify` checks, what it does not prove, verify output and failure behavior,
+  all six active WAL metadata states, the current doctor issue catalog, and narrow doctor repair
+  boundaries.
+- Links the data-model, trust/threat, durability/recovery, and rollback-draft verification pages to
+  the integrity and recovery diagnostics reference.
+- Keeps the release documentation-only: no Rust code, CLI behavior, object schema, repository format,
+  trust policy, verify behavior, doctor behavior, or repair behavior is changed.
+
 ## 0.17.2 — 2026-07-12
 
 DC-28: durability and crash-recovery reference.

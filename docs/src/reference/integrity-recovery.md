@@ -169,11 +169,11 @@ readiness.
 | Doctor currently owns nine issue codes; publication-trust issues can also be surfaced by doctor using trust issue codes. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs) |
 | Doctor repairs are opt-in and limited to WAL-tail truncation plus guarded `heads/main` pointer reconstruction. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [`args.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/args.rs), [PR-012](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-012-DOCTOR-REPAIR-HANDOFF.md), [PR-013](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-013-REF-RECOVERY-HANDOFF.md), [durability and crash recovery](./durability-recovery.md) |
 | Repository verification classifies rollback draft WAL records and sealed rollback material, while `rollback-draft-verify` performs a stronger selected-ref check. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`rollback_verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/rollback_verify.rs), [PR-029](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-029-ROLLBACK-DRAFT-VERIFY-HANDOFF.md), [PR-030](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-030-SEALED-ROLLBACK-HISTORY-HANDOFF.md), [rollback draft verification guide](../guide/rollback/rollback-draft-verify.md) |
-| Verify/doctor output is current CLI vocabulary, not a stable machine-readable schema. | [`output.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/output.rs), [DC-29](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-29-VERIFY-DOCTOR-INTEGRITY-RECOVERY-REFERENCE.md) |
+| Verify/doctor output is current CLI vocabulary, not a stable machine-readable schema. | [`output.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/output.rs), [DC-29](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-29-VERIFY-DOCTOR-INTEGRITY-RECOVERY-REFERENCE.md) |
 
 ## Provenance
 
-This reference consolidates current released records through DC-28 plus the accepted DC-29 design. It
+This reference consolidates current released records through DC-29. It
 follows the DC-26 documentation-home model: current-state references live in the published mdBook, not
 under `rfcs/fdds/`. It is documentation-only and does not change verification, doctor, repair, trust,
 CLI, object schema, repository format, or repository behavior.

@@ -43,10 +43,9 @@ Prikk is designed to be:
 
 Latest released implementation: **0.17.2**, adding the durability and crash-recovery reference.
 
-Next increment candidates are tracked in `ROADMAP.md`.
+Current release candidate: **0.17.3**, adding the verify and doctor integrity/recovery reference.
 
-Current accepted increment: **DC-29**, a documentation-only verify and doctor integrity/recovery
-reference targeted for `0.17.3`.
+Next increment candidates are tracked in `ROADMAP.md`.
 
 This is an early implementation suitable for architecture review, experimentation, and contribution.
 Do not use Prikk as the sole store for important project history yet. The repository format and command
