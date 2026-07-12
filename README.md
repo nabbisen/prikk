@@ -181,6 +181,7 @@ TMPDIR="$PWD/.git-exclude/tmp" cargo test --workspace
 
 The roadmap, RFCs, and mdBook docs are the best entry points for design details:
 
+- [Documentation](https://nabbisen.github.io/prikk/) 
 - [ROADMAP.md](./ROADMAP.md)
 - [rfcs/README.md](./rfcs/README.md)
 - [Current data model](./docs/src/reference/data-model.md)

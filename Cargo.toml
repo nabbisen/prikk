@@ -17,6 +17,7 @@ rust-version    = "1.85"
 license             = "Apache-2.0"
 authors             = ["nabbisen"]
 repository          = "https://github.com/nabbisen/prikk"
+homepage            = "https://nabbisen.github.io/prikk/"
 categories          = ["algorithms"]
 keywords            = ["vcs"]
 
