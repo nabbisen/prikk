@@ -1,6 +1,6 @@
-# RFC (accepted) - DC-28 Durability and Crash-Recovery Reference
+# RFC (done) - DC-28 Durability and Crash-Recovery Reference
 
-**Status.** Accepted for implementation after architect design review.
+**Status.** Done on main; prepared for release in 0.17.2.
 **Target release.** 0.17.2.
 **Tracks.** TASK-06 durability and crash-recovery reference.
 **Touches.** mdBook reference documentation, durability/crash-recovery wording, claim-to-source

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.17.2 — 2026-07-12
+
+DC-28: durability and crash-recovery reference.
+
+- Adds `docs/src/reference/durability-recovery.md`, an authoritative current-state reference for
+  active-WAL persistence, WAL replay/tail handling, active ref metadata, seal publication flow,
+  ref-pointer recovery, doctor repair limits, stale-lock limits, and deferred crash/platform
+  evidence.
+- Links the data-model and trust/threat reference pages to the durability and crash-recovery
+  reference.
+- Keeps the release documentation-only: no Rust code, CLI behavior, object schema, repository format,
+  WAL/ref/seal/verify/doctor behavior, or release semantics are changed.
+
 ## 0.17.1 — 2026-07-12
 
 DC-27: patch algebra and merge-evidence concepts reference.

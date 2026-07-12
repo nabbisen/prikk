@@ -46,8 +46,8 @@ reference.
 
 Next increment candidates are tracked in `ROADMAP.md`.
 
-Current accepted increment: **DC-28**, a documentation-only durability and crash-recovery reference
-targeted for `0.17.2`.
+Current release candidate: **0.17.2**, adding the documentation-only durability and crash-recovery
+reference.
 
 This is an early implementation suitable for architecture review, experimentation, and contribution.
 Do not use Prikk as the sole store for important project history yet. The repository format and command

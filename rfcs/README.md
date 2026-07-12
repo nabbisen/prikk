@@ -28,11 +28,7 @@ No proposed RFCs are currently tracked.
 
 ## Accepted
 
-These records currently live under `accepted/`.
-
-| ID | Title |
-|---|---|
-| DC-28 | [Durability and Crash-Recovery Reference](./accepted/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md) |
+No accepted RFCs are currently tracked.
 
 ## Done
 
@@ -59,6 +55,7 @@ These records currently live under `done/`.
 | DC-25 | [Merge Planning Surface](./done/DC-25-MERGE-PLANNING-SURFACE.md) |
 | DC-26 | [Documentation Home Correction](./done/DC-26-DOCUMENTATION-HOME-CORRECTION.md) |
 | DC-27 | [Patch Algebra and Merge-Evidence Concepts Reference](./done/DC-27-PATCH-ALGEBRA-MERGE-EVIDENCE-CONCEPTS.md) |
+| DC-28 | [Durability and Crash-Recovery Reference](./done/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md) |
 | PR-001 | [Implementation Handoff](./done/PR-001-IMPLEMENTATION-HANDOFF.md) |
 | PR-002 | [CI Fix Handoff](./done/PR-002-CI-FIX-HANDOFF.md) |
 | PR-003 | [Persistent Store Handoff](./done/PR-003-PERSISTENT-STORE-HANDOFF.md) |
