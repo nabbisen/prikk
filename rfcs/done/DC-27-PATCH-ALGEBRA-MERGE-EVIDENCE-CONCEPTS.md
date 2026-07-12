@@ -1,7 +1,7 @@
 # RFC (done) - DC-27 Patch Algebra and Merge-Evidence Concepts Reference
 
-**Status.** Done on main; prepared for release in 0.17.1.
-**Target release.** 0.17.1 candidate unless bundled with a feature release.
+**Status.** Released in 0.17.1.
+**Target release.** 0.17.1.
 **Tracks.** TASK-08 patch algebra and merge-evidence concepts reference.
 **Touches.** mdBook reference documentation, merge-evidence / merge-plan concept vocabulary,
 claim-to-source anchors, roadmap/status docs.

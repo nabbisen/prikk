@@ -41,10 +41,10 @@ Prikk is designed to be:
 
 ## Current Status
 
-Latest released implementation: **0.17.0**.
+Latest released implementation: **0.17.1**, adding the patch algebra and merge-evidence concepts
+reference.
 
-Current release candidate: **0.17.1**, adding the patch algebra and merge-evidence concepts
-reference. Next increment candidates are tracked in `ROADMAP.md`.
+Next increment candidates are tracked in `ROADMAP.md`.
 
 This is an early implementation suitable for architecture review, experimentation, and contribution.
 Do not use Prikk as the sole store for important project history yet. The repository format and command
