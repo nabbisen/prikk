@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.17.1 — 2026-07-12
+
+DC-27: patch algebra and merge-evidence concepts reference.
+
+- Adds `docs/src/reference/patch-algebra.md`, an authoritative current-state reference for patch
+  algebra, commutation, flat confluence, merge-evidence outcomes, reason codes, proof phases, and
+  merge-plan status mapping.
+- Links the `merge-evidence` and `merge-plan` guide pages to the concept reference, so command output
+  terms such as `op_seq`, `pair_conflict`, `classification`, `Confluent`, and `ConfluentSubset` have a
+  reviewed explanation.
+- Adds visible claim-to-source anchors tying the reference to released DCs and implementation paths.
+- Keeps the release documentation-only: no Rust code, CLI behavior, object schema, merge execution,
+  merge-base discovery, persisted proof/witness objects, JSON output, or public Rust API stability is
+  changed.
+
 ## 0.17.0 — 2026-07-11
 
 DC-25: merge planning surface.

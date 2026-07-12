@@ -1,14 +1,15 @@
 # Prikk Implementation Status
 
 Latest released version: 0.17.0 (DC-25 — merge planning surface)
+Current release candidate: 0.17.1 (DC-27 — patch algebra and merge-evidence concepts reference)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current Implementation Candidate (unreleased)
+## Current Release Candidate (0.17.1)
 
-- DC-27 is implemented as an unreleased 0.17.1 documentation candidate pending review. It adds the
-  current-state `docs/src/reference/patch-algebra.md` reference for patch algebra, commutation,
+- DC-27 is prepared as the 0.17.1 release candidate after implementation review acceptance. It adds
+  the current-state `docs/src/reference/patch-algebra.md` reference for patch algebra, commutation,
   confluence, merge-evidence outcomes, reason-code/proof-phase vocabulary, and merge-plan mapping. It
   does not change code, schema, CLI behavior, merge execution, merge-base discovery, branch
   publication, persisted proof/witness objects, JSON output, or public Rust API stability.
