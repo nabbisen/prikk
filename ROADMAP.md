@@ -5,7 +5,11 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- No active design/implementation increment is selected after the 0.17.2 release.
+- **DC-29 verify and doctor integrity/recovery reference (accepted for implementation).** Implement a current-state
+  mdBook reference for what `prikk verify` checks and does not prove, how `prikk doctor` interprets
+  verification results, current doctor issue codes/severities, and narrow repair boundaries. This is
+  documentation-only and must not change code, schema, CLI behavior, repository behavior, verify,
+  doctor, trust, or release version.
 
 ## Release Candidate Increment
 
@@ -165,7 +169,7 @@ references. The durable homes below are authoritative `docs/src/reference/` or `
 | ID | Tier | Owner | Status | Trigger / next action | Completion condition | Durable home |
 |---|---:|---|---|---|---|---|
 | TASK-06 durability & crash-recovery reference | 1 | Architect + maintainer | Released in 0.17.2 | Complete; use the reference as the current public durability/recovery baseline. | Reviewed durability/crash-recovery reference is committed. | `docs/src/reference/durability-recovery.md` |
-| TASK-07 verify & doctor reference | 1 | Architect + maintainer | Open | Coordinate with TASK-06 or start when verify/doctor scope needs public release wording. | Reviewed integrity/recovery docs define what `verify` and `doctor` do and do not prove. | `docs/src/reference/integrity-recovery.md` |
+| TASK-07 verify & doctor reference | 1 | Architect + maintainer | DC-29 accepted | Implement the accepted DC-29 verify/doctor integrity-recovery reference. | Reviewed integrity/recovery docs define what `verify` and `doctor` do and do not prove. | `docs/src/reference/integrity-recovery.md` |
 | TASK-08 patch algebra & merge-evidence concepts | 1 | Architect + maintainer | Released in 0.17.1 | Complete; use the reference as the current public concept baseline. | Reviewed current concept page explains commutation, evidence outcomes, and non-goals. | `docs/src/reference/patch-algebra.md` |
 | TASK-09 key management & signing setup | 1 | Designer/maintainer | Open | After the trust/threat reference lands, write the operator setup guide for current env-var key input and maintainer trust. | Reviewed operator guide is committed and links the trust/threat reference without promising key lifecycle features. | `docs/src/guide/security-setup.md` |
 | TASK-10 repository layout & authority model | 2 | Architect + maintainer | Open | Start when the data-model reference needs more layout detail or when format/authority claims expand. | Current directories and authority-vs-cache rules are reviewed and committed. | `docs/src/reference/repository-layout.md` |
