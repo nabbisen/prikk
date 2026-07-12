@@ -1,6 +1,6 @@
 # RFC (done) - DC-28 Durability and Crash-Recovery Reference
 
-**Status.** Done on main; prepared for release in 0.17.2.
+**Status.** Released in 0.17.2.
 **Target release.** 0.17.2.
 **Tracks.** TASK-06 durability and crash-recovery reference.
 **Touches.** mdBook reference documentation, durability/crash-recovery wording, claim-to-source

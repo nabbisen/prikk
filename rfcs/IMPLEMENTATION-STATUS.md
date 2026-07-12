@@ -1,21 +1,18 @@
 # Prikk Implementation Status
 
-Latest released version: 0.17.1 (DC-27 — patch algebra and merge-evidence concepts reference)
-Current release candidate: 0.17.2 (DC-28 — durability and crash-recovery reference)
+Latest released version: 0.17.2 (DC-28 — durability and crash-recovery reference)
+Current release candidate: none
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current Release Candidate (0.17.2)
+## Current State (0.17.2)
 
-- DC-28 is prepared as the 0.17.2 release candidate after implementation review acceptance. It adds
-  the current-state `docs/src/reference/durability-recovery.md` reference for active-WAL
-  persistence, WAL replay/tail handling, active ref metadata, seal publication flow, ref-pointer
-  recovery, doctor repair limits, stale-lock limits, and deferred crash/platform evidence. It does
-  not change code, schema, CLI behavior, repository format, WAL, refs, seal, verify, doctor, trust, or
-  release semantics.
-
-## Current State (0.17.1)
+- DC-28 shipped in 0.17.2. It adds the current-state
+  `docs/src/reference/durability-recovery.md` reference for active-WAL persistence, WAL replay/tail
+  handling, active ref metadata, seal publication flow, ref-pointer recovery, doctor repair limits,
+  stale-lock limits, and deferred crash/platform evidence. It does not change code, schema, CLI
+  behavior, repository format, WAL, refs, seal, verify, doctor, trust, or release semantics.
 
 - DC-27 shipped in 0.17.1. It adds the current-state
   `docs/src/reference/patch-algebra.md` reference for patch algebra, commutation, confluence,

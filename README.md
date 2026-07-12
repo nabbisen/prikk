@@ -41,13 +41,9 @@ Prikk is designed to be:
 
 ## Current Status
 
-Latest released implementation: **0.17.1**, adding the patch algebra and merge-evidence concepts
-reference.
+Latest released implementation: **0.17.2**, adding the durability and crash-recovery reference.
 
 Next increment candidates are tracked in `ROADMAP.md`.
-
-Current release candidate: **0.17.2**, adding the documentation-only durability and crash-recovery
-reference.
 
 This is an early implementation suitable for architecture review, experimentation, and contribution.
 Do not use Prikk as the sole store for important project history yet. The repository format and command
