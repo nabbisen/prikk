@@ -28,7 +28,11 @@ No proposed RFCs are currently tracked.
 
 ## Accepted
 
-No accepted RFCs are currently tracked.
+These records currently live under `accepted/`.
+
+| ID | Title |
+|---|---|
+| DC-28 | [Durability and Crash-Recovery Reference](./accepted/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md) |
 
 ## Done
 
@@ -125,6 +129,7 @@ lifecycle records; their authoritative home is the published mdBook source under
 
 - [Data model](../docs/src/reference/data-model.md)
 - [Trust and threat model](../docs/src/reference/trust-threat-model.md)
+- [Patch algebra and merge evidence](../docs/src/reference/patch-algebra.md)
 
 The old `rfcs/fdds/FDD-00-DATA-MODEL.md` and `rfcs/fdds/FDD-04-TRUST-THREAT-MODEL.md` compatibility
 pointers were removed in 0.17.0 after the 0.16.1 transition window. Future `rfcs/fdds/` content is

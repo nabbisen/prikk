@@ -5,7 +5,12 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- No active design/implementation increment is selected after the 0.17.1 release.
+- **DC-28 durability and crash-recovery reference (accepted for implementation).** Implement a
+  current-state mdBook
+  reference for active-WAL durability, WAL replay/tail handling, seal publication flow, ref recovery,
+  doctor repair limits, stale-lock limits, and deferred crash/platform evidence. This is
+  documentation-only and must not change code, schema, CLI behavior, repository behavior, or release
+  version.
 
 ## Release Candidate Increment
 
@@ -158,7 +163,7 @@ references. The durable homes below are authoritative `docs/src/reference/` or `
 
 | ID | Tier | Owner | Status | Trigger / next action | Completion condition | Durable home |
 |---|---:|---|---|---|---|---|
-| TASK-06 durability & crash-recovery reference | 1 | Architect + maintainer | Open | After DC-24 docs are reviewed/committed, draft the storage transaction/durability reference. | Reviewed durability/crash-recovery reference is committed. | `docs/src/reference/durability-recovery.md` |
+| TASK-06 durability & crash-recovery reference | 1 | Architect + maintainer | DC-28 accepted | Implement the accepted DC-28 durability/crash-recovery reference. | Reviewed durability/crash-recovery reference is committed. | `docs/src/reference/durability-recovery.md` |
 | TASK-07 verify & doctor reference | 1 | Architect + maintainer | Open | Coordinate with TASK-06 or start when verify/doctor scope needs public release wording. | Reviewed integrity/recovery docs define what `verify` and `doctor` do and do not prove. | `docs/src/reference/integrity-recovery.md` |
 | TASK-08 patch algebra & merge-evidence concepts | 1 | Architect + maintainer | Released in 0.17.1 | Complete; use the reference as the current public concept baseline. | Reviewed current concept page explains commutation, evidence outcomes, and non-goals. | `docs/src/reference/patch-algebra.md` |
 | TASK-09 key management & signing setup | 1 | Designer/maintainer | Open | After the trust/threat reference lands, write the operator setup guide for current env-var key input and maintainer trust. | Reviewed operator guide is committed and links the trust/threat reference without promising key lifecycle features. | `docs/src/guide/security-setup.md` |
