@@ -3,6 +3,9 @@
 Latest released version: 0.17.1 (DC-27 — patch algebra and merge-evidence concepts reference)
 Current release candidate: none
 
+Current accepted increment: DC-28 (durability and crash-recovery reference), a documentation-only
+current-state reference targeted for 0.17.2.
+
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 

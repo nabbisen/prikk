@@ -17,7 +17,8 @@ status records listed in the anchor table at the foot of the page.
   trust, plugin execution, and production merge execution remain deferred.
 
 Trust, signature, and threat-boundary caveats live in the
-[trust and threat model](./trust-threat-model.md).
+[trust and threat model](./trust-threat-model.md). The local persistence and crash-recovery boundary
+lives in the [durability and crash recovery](./durability-recovery.md) reference.
 
 ## Object Identity
 
@@ -69,6 +70,9 @@ The active WAL stores exact signed Patch envelopes before sealing. WAL append re
 envelope with at least one signature, writes a checksummed record, and fsyncs the WAL file. WAL replay
 reads valid records from the start and reports incomplete trailing bytes separately from checksum
 failures.
+
+The detailed persistence, seal-publication, and recovery framing lives in the
+[durability and crash recovery](./durability-recovery.md) reference.
 
 The current active-session model is single-commit-per-active-WAL. Active ref metadata records which
 branch ref owns a non-empty active WAL. Missing or malformed active ref metadata on a non-empty WAL is
