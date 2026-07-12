@@ -5,6 +5,14 @@ Latest released version: 0.17.0 (DC-25 — merge planning surface)
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
+## Current Implementation Candidate (unreleased)
+
+- DC-27 is implemented as an unreleased 0.17.1 documentation candidate pending review. It adds the
+  current-state `docs/src/reference/patch-algebra.md` reference for patch algebra, commutation,
+  confluence, merge-evidence outcomes, reason-code/proof-phase vocabulary, and merge-plan mapping. It
+  does not change code, schema, CLI behavior, merge execution, merge-base discovery, branch
+  publication, persisted proof/witness objects, JSON output, or public Rust API stability.
+
 ## Current State (0.17.0)
 
 - DC-25 shipped in 0.17.0. It adds `prikk merge-plan`, a read-only planning surface over the existing

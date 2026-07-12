@@ -4,6 +4,10 @@ DC-25 (0.17.0) adds `prikk merge-plan`, a read-only planning classification over
 existing [merge evidence](merge-evidence.md) report. It answers what Prikk can say about the selected
 explicit inputs today; it does not execute or prepare a merge commit.
 
+For the current concepts behind evidence outcomes, reason codes, proof phases, and the
+`ConfluentSubset` mapping, see
+[Patch Algebra and Merge Evidence](../reference/patch-algebra.md).
+
 ```sh
 prikk merge-plan \
   --baseline-block BLOCK \
