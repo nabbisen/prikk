@@ -30,7 +30,9 @@ No proposed RFCs are currently tracked.
 
 These records currently live under `accepted/`.
 
-No accepted RFCs are currently tracked.
+| ID | Title |
+|---|---|
+| DC-30 | [Key Management and Signing Setup Guide](./accepted/DC-30-KEY-MANAGEMENT-SIGNING-SETUP-GUIDE.md) |
 
 ## Done
 
