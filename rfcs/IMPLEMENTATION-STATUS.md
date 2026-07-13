@@ -2,7 +2,8 @@
 
 Latest released version: 0.17.6 (DC-32 - path and worktree safety reference)
 Current release candidate: none
-Current accepted increment: none
+Current accepted increment: DC-33 - concurrency and locking reference
+Current proposed increment: none
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
@@ -14,6 +15,14 @@ Current accepted increment: none
   deferred path/platform gaps. It does not change code, schema, CLI behavior, checkout behavior,
   materialization behavior, worktree authoring behavior, repository behavior, or repository-format
   stability claims.
+
+## Accepted Increment
+
+- DC-33 is accepted for a documentation-only 0.17.7 increment. It should add
+  `docs/src/reference/concurrency-locking.md`, a current-state reference for active-session locking,
+  ref-specific publication locks, compare-and-swap behavior, narrow ref repair locking, and manual
+  stale-lock limits. It must not change code, schema, CLI behavior, lock behavior, repository behavior,
+  verification, doctor, trust, release semantics, or repository-format stability claims.
 
 ## Previous State (0.17.5)
 

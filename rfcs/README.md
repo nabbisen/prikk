@@ -30,7 +30,9 @@ No proposed RFCs are currently tracked.
 
 These records currently live under `accepted/`.
 
-No accepted RFCs are currently tracked.
+| ID | Title |
+|---|---|
+| DC-33 | [Concurrency and Locking Reference](./accepted/DC-33-CONCURRENCY-LOCKING-REFERENCE.md) |
 
 ## Done
 
