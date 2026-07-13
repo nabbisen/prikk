@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.17.5 — 2026-07-13
+
+DC-31: repository layout and authority reference.
+
+- Adds `docs/src/reference/repository-layout.md`, an authoritative current-state reference for the
+  initialized `.prikk/` layout, `.prikk/FORMAT`, persistent object directories, ref pointer/log paths,
+  active-session paths, trust-store paths, and authority-vs-pointer/cache boundaries.
+- Documents that `.prikk/FORMAT` is a current format gate, not a stable-format or migration guarantee.
+- Documents that `cache/` and `quarantine/` are initialized but not current roots of trust, that
+  `gc/` is not a current initialized directory, and that runtime files such as WALs, ref pointers, ref
+  logs, trust policies, and maintainer keys are written by later operations rather than bare init.
+- Links README, the data-model reference, durability/recovery reference, trust/threat reference, and
+  signing setup guide to the layout reference.
+- Keeps the release documentation-only: no Rust code, CLI behavior, object schema, repository format,
+  trust policy, verification behavior, repair behavior, or release semantics are changed.
+
 ## 0.17.4 — 2026-07-13
 
 DC-30: key management and signing setup guide.

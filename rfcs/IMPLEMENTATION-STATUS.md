@@ -1,20 +1,20 @@
 # Prikk Implementation Status
 
-Latest released version: 0.17.4 (DC-30 - key management and signing setup guide)
+Latest released version: 0.17.5 (DC-31 - repository layout and authority reference)
 Current release candidate: none
-Current accepted increment: DC-31 - repository layout and authority reference
+Current accepted increment: none
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Accepted Increment
+## Current State (0.17.5)
 
-- DC-31 is implemented for review as a documentation-only repository layout and authority reference
-  targeted at 0.17.5. It documents current initialized `.prikk/` paths and authority-vs-pointer/cache
-  boundaries without changing code, schema, CLI behavior, repository behavior, trust policy,
-  verification, repair, or repository-format stability claims.
+- DC-31 shipped in 0.17.5. It adds `docs/src/reference/repository-layout.md`, a current-state
+  reference for initialized `.prikk/` paths, `.prikk/FORMAT`, object/ref/active/trust paths, and
+  authority-vs-pointer/cache boundaries. It does not change code, schema, CLI behavior, repository
+  behavior, trust policy, verification, repair, or repository-format stability claims.
 
-## Current State (0.17.4)
+## Previous State (0.17.4)
 
 - DC-30 shipped in 0.17.4. It adds `docs/src/guide/security-setup.md`, a current-state operator guide
   for AUTHOR and MAINTAINER signing setup, environment key inputs, repository-local maintainer trust,

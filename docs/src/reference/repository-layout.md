@@ -1,7 +1,7 @@
 # Repository Layout and Authority
 
 This page is the authoritative current-state reference for Prikk's on-disk repository layout and
-storage authority boundaries. It describes the released implementation through 0.17.4 and is grounded
+storage authority boundaries. It describes the released implementation through 0.17.5 and is grounded
 in the code, released RFCs, and implementation status records listed in the anchor table at the foot of
 the page.
 
@@ -190,7 +190,7 @@ validation.
 
 | Claim | Source anchors |
 |---|---|
-| Repository initialization creates the listed directories and writes `.prikk/FORMAT`. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-31](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
+| Repository initialization creates the listed directories and writes `.prikk/FORMAT`. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-31](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
 | `.prikk/FORMAT` is required when opening a repository and currently contains `1`. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
 | Persistent object placement uses object-type directories, two-hex fanout, and `.pobj` files. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`object_store.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/object_store.rs) |
 | Six object types currently have initialized persistent object directories; `RefUpdate` is inline-only in ref logs. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`object_store.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/object_store.rs), [`refs/log.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/log.rs) |
@@ -200,7 +200,7 @@ validation.
 | Active WAL and active ref metadata are runtime active-session state, not fresh-init files. | [`active.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/active.rs), [`wal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/wal.rs), [durability and crash recovery](./durability-recovery.md) |
 | Trust policy and maintainer public-key files are written by the trust command and define current repository-local MAINTAINER trust. | [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [security and signing setup](../guide/security-setup.md) |
 | Verification checks object placement, ref pointer/log consistency, active WAL state, and publication trust within current limits. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [integrity and recovery diagnostics](./integrity-recovery.md), [trust and threat model](./trust-threat-model.md) |
-| `cache/` and `quarantine/` are initialized but not current roots of trust, and `gc/` is not a current initialized directory. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-31](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
+| `cache/` and `quarantine/` are initialized but not current roots of trust, and `gc/` is not a current initialized directory. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-31](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
 
 ## Provenance
 

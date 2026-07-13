@@ -41,7 +41,7 @@ Prikk is designed to be:
 
 ## Current Status
 
-Latest released implementation: **0.17.4**, adding the key management and signing setup guide.
+Latest released implementation: **0.17.5**, adding the repository layout and authority reference.
 
 Next increment candidates are tracked in `ROADMAP.md`.
 

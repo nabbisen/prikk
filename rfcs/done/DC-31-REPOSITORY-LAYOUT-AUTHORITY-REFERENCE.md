@@ -1,6 +1,6 @@
-# RFC (proposed) - DC-31 Repository Layout and Authority Reference
+# RFC (done) - DC-31 Repository Layout and Authority Reference
 
-**Status.** Accepted after architect design review.
+**Status.** Released in 0.17.5.
 **Target release.** 0.17.5.
 **Tracks.** TASK-10 repository layout and authority model.
 **Touches.** mdBook reference documentation, mdBook navigation, README/reference cross-links,
