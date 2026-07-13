@@ -1,10 +1,18 @@
 # Prikk Implementation Status
 
-Latest released version: 0.17.4 (DC-30 — key management and signing setup guide)
+Latest released version: 0.17.4 (DC-30 - key management and signing setup guide)
 Current release candidate: none
+Current accepted increment: DC-31 - repository layout and authority reference
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
+
+## Accepted Increment
+
+- DC-31 is accepted for 0.17.5 as a documentation-only repository layout and authority reference. It
+  should document current initialized `.prikk/` paths and authority-vs-pointer/cache boundaries without
+  changing code, schema, CLI behavior, repository behavior, trust policy, verification, repair, or
+  repository-format stability claims.
 
 ## Current State (0.17.4)
 

@@ -30,7 +30,9 @@ No proposed RFCs are currently tracked.
 
 These records currently live under `accepted/`.
 
-No accepted RFCs are currently tracked.
+| ID | Title |
+|---|---|
+| DC-31 | [Repository Layout and Authority Reference](./accepted/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
 
 ## Done
 

@@ -5,7 +5,11 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- No active design/implementation increment is selected after the 0.17.4 release.
+- **DC-31 - repository layout and authority reference (accepted; ready for implementation).**
+  Documentation-only increment for 0.17.5. It should add a current-state mdBook reference for the
+  initialized `.prikk/` layout and authority-vs-pointer/cache boundaries without changing code,
+  schema, CLI behavior, repository behavior, trust policy, verification, repair, or repository-format
+  stability claims.
 
 ## Release Candidate Increment
 
@@ -182,7 +186,7 @@ references. The durable homes below are authoritative `docs/src/reference/` or `
 | TASK-07 verify & doctor reference | 1 | Architect + maintainer | Released in 0.17.3 | Complete; use the reference as the current public verify/doctor diagnostic baseline. | Reviewed integrity/recovery docs define what `verify` and `doctor` do and do not prove. | `docs/src/reference/integrity-recovery.md` |
 | TASK-08 patch algebra & merge-evidence concepts | 1 | Architect + maintainer | Released in 0.17.1 | Complete; use the reference as the current public concept baseline. | Reviewed current concept page explains commutation, evidence outcomes, and non-goals. | `docs/src/reference/patch-algebra.md` |
 | TASK-09 key management & signing setup | 1 | Designer/maintainer | Released in 0.17.4 | Complete; use the guide as the current public signing setup baseline. | Reviewed operator guide is committed and links the trust/threat reference without promising key lifecycle features. | `docs/src/guide/security-setup.md` |
-| TASK-10 repository layout & authority model | 2 | Architect + maintainer | Open | Start when the data-model reference needs more layout detail or when format/authority claims expand. | Current directories and authority-vs-cache rules are reviewed and committed. | `docs/src/reference/repository-layout.md` |
+| TASK-10 repository layout & authority model | 2 | Architect + maintainer | DC-31 accepted | Implement the accepted DC-31 reference page. | Current directories and authority-vs-cache rules are reviewed and committed. | `docs/src/reference/repository-layout.md` |
 | TASK-11 path & worktree safety rules | 2 | Architect + maintainer | Open | Start before expanding checkout/worktree docs or when path rejection UX needs public explanation. | Reviewed path/worktree safety reference is committed with current gaps marked. | `docs/src/reference/path-safety.md` |
 | TASK-12 concurrency & locking model | 2 | Architect + maintainer | Open | Coordinate with TASK-06, especially stale `active.lock` and CAS behavior. | Reviewed locking/concurrency docs are committed and describe manual stale-lock limits. | `docs/src/reference/concurrency-locking.md` |
 | TASK-13 release, versioning & compatibility policy | 2 | Maintainer | Open | Start before the next release/docs pass that makes compatibility or repository-format claims. | Reviewed release/compatibility policy is committed and linked from README/CHANGELOG as needed. | `docs/src/reference/release-compatibility.md` or contributing policy page |
