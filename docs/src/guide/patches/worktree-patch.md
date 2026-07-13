@@ -46,7 +46,8 @@ Existing-node kind is authoritative:
 - permission-only change → `ChangePerm`
 
 Path handling is strict: non-UTF-8 worktree paths fail closed, and traversal/reserved-name/collision
-rules apply as elsewhere.
+rules apply as elsewhere. For the exact repository path and worktree scanner boundary, see
+[path and worktree safety](../../reference/path-safety.md).
 
 ## Out of scope (this stage)
 

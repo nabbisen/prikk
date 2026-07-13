@@ -34,4 +34,5 @@ Safety boundaries:
 - `ReplaceBinary`, renames, chmod, symlinks, merge conflicts, inverse logic, and full patch algebra remain later increments.
 
 This command is useful for exercising the current Prikk object/WAL/ref/block pipeline end-to-end,
-but it is not yet a complete checkout implementation.
+but it is not yet a complete checkout implementation. For the shared write-safety boundary and its
+race caveats, see [path and worktree safety](../../reference/path-safety.md).

@@ -27,7 +27,9 @@ diagnostic catalog is covered by the
 environment key input and repository-local maintainer trust is covered by the
 [security and signing setup](../guide/security-setup.md) guide. Physical trust-store paths and other
 `.prikk/` authority boundaries are covered by the
-[repository layout and authority](./repository-layout.md) reference.
+[repository layout and authority](./repository-layout.md) reference. Repository path validation and
+worktree write-safety limits are covered by the
+[path and worktree safety](./path-safety.md) reference.
 
 ## Trust Roots and Roles
 

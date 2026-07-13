@@ -9,11 +9,11 @@ Current accepted increment: DC-32 - path and worktree safety reference
 
 ## Accepted Increment
 
-- DC-32 is accepted for 0.17.6 as a documentation-only path and worktree safety reference. It should
-  document current repository path validation, checkout/worktree materialization safety, worktree
-  authoring safety, and deferred path/platform gaps without changing code, schema, CLI behavior,
-  checkout behavior, materialization behavior, worktree authoring behavior, repository behavior, or
-  repository-format stability claims.
+- DC-32 is implemented for review as a documentation-only path and worktree safety reference targeted
+  at 0.17.6. It documents current repository path validation, checkout/worktree materialization safety,
+  worktree authoring safety, and deferred path/platform gaps without changing code, schema, CLI
+  behavior, checkout behavior, materialization behavior, worktree authoring behavior, repository
+  behavior, or repository-format stability claims.
 
 ## Current State (0.17.5)
 

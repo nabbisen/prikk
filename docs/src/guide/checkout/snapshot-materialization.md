@@ -12,4 +12,5 @@ refuses symlinked parent directories and symlink targets so snapshot checkout ca
 write outside the repository worktree.
 
 The path validator remains conservative: non-ASCII paths are deferred until Unicode NFC
-normalization is implemented, and paths targeting `.prikk/` are rejected.
+normalization is implemented, and paths targeting `.prikk/` are rejected. For the exact validator and
+write-safety caveats, see [path and worktree safety](../../reference/path-safety.md).

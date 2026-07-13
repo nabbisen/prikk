@@ -85,6 +85,8 @@ Prikk is not yet the right tool if you need:
 - **WAL**: active signed patch envelopes before sealing.
 - **Repository layout**: `.prikk/` stores native Prikk objects, refs, active WAL state, and local trust
   data; see the [repository layout reference](./docs/src/reference/repository-layout.md).
+- **Path safety**: repository paths use a conservative validated subset; see the
+  [path and worktree safety reference](./docs/src/reference/path-safety.md).
 - **Attestation**: future audit/policy evidence targeting blocks without defining block identity.
 
 ## Quick Start

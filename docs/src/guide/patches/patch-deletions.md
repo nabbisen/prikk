@@ -23,3 +23,6 @@ Safety boundaries:
 - Symlink targets and non-file targets are refused.
 - General checkout pruning remains deferred.
 - Text edits, renames, chmod, symlinks, merge conflicts, inverse logic, and full patch algebra remain later increments.
+
+For exact deletion and materialization safety boundaries, see
+[path and worktree safety](../../reference/path-safety.md).

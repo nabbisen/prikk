@@ -26,6 +26,7 @@
 # Reference
 
 - [Repository Layout and Authority](reference/repository-layout.md)
+- [Path and Worktree Safety](reference/path-safety.md)
 - [Data Model](reference/data-model.md)
 - [Trust and Threat Model](reference/trust-threat-model.md)
 - [Durability and Crash Recovery](reference/durability-recovery.md)

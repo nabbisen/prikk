@@ -22,4 +22,6 @@ The current path-safety scaffold is deliberately conservative. It rejects:
 - non-ASCII paths until Unicode NFC normalization is implemented
 - duplicate paths and case-insensitive collisions
 
-Use `prikk checkout --snapshot-materialize` to write validated snapshot files. Supported patch replay is available separately, while full patch algebra remains deferred.
+Use `prikk checkout --snapshot-materialize` to write validated snapshot files. Supported patch replay
+is available separately, while full patch algebra remains deferred. For exact validator rules, see
+[path and worktree safety](../../reference/path-safety.md).

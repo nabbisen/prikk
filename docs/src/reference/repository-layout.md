@@ -5,9 +5,10 @@ storage authority boundaries. It describes the released implementation through 0
 in the code, released RFCs, and implementation status records listed in the anchor table at the foot of
 the page.
 
-For logical object concepts, see the [data model](./data-model.md). For local persistence and recovery
-behavior, see [durability and crash recovery](./durability-recovery.md). For trust and signature
-scope, see the [trust and threat model](./trust-threat-model.md).
+For logical object concepts, see the [data model](./data-model.md). For repository path and worktree
+write-safety rules, see [path and worktree safety](./path-safety.md). For local persistence and
+recovery behavior, see [durability and crash recovery](./durability-recovery.md). For trust and
+signature scope, see the [trust and threat model](./trust-threat-model.md).
 
 ## Core Caveats
 

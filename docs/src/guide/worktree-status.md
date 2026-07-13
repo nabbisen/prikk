@@ -16,3 +16,6 @@ The scanner is intentionally conservative:
 - existing path-safety validation is reused;
 - non-ASCII paths remain unsupported until Unicode NFC normalization is implemented;
 - no writes are performed.
+
+For the exact repository path validator rules, see
+[path and worktree safety](../reference/path-safety.md).
