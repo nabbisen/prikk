@@ -5,15 +5,16 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- **DC-30 key management and signing setup guide (implementation review).** Added a current-state operator
-  guide for AUTHOR/MAINTAINER signing setup, environment key inputs, repository-local maintainer trust
-  configuration, seed-handling foot-guns, and missing key-lifecycle features. This is
-  documentation-only and must not change code, schema, CLI behavior, repository behavior, trust
-  policy, signing behavior, verify, seal, or release version.
+- No active design/implementation increment is selected during the 0.17.4 release-candidate review.
 
 ## Release Candidate Increment
 
-- No active release candidate is selected after the 0.17.3 release.
+- **DC-30 key management and signing setup guide (0.17.4 release candidate).** Adds a current-state
+  operator guide for AUTHOR/MAINTAINER signing setup, environment key inputs, repository-local
+  maintainer trust configuration, seed-handling foot-guns, missing key-lifecycle features, and the
+  absence of built-in key-generation/public-key-derivation commands. This is documentation-only and
+  does not change code, schema, CLI behavior, repository behavior, trust policy, signing behavior,
+  verify, or seal behavior.
 
 ## Last Released Increment
 
@@ -178,7 +179,7 @@ references. The durable homes below are authoritative `docs/src/reference/` or `
 | TASK-06 durability & crash-recovery reference | 1 | Architect + maintainer | Released in 0.17.2 | Complete; use the reference as the current public durability/recovery baseline. | Reviewed durability/crash-recovery reference is committed. | `docs/src/reference/durability-recovery.md` |
 | TASK-07 verify & doctor reference | 1 | Architect + maintainer | Released in 0.17.3 | Complete; use the reference as the current public verify/doctor diagnostic baseline. | Reviewed integrity/recovery docs define what `verify` and `doctor` do and do not prove. | `docs/src/reference/integrity-recovery.md` |
 | TASK-08 patch algebra & merge-evidence concepts | 1 | Architect + maintainer | Released in 0.17.1 | Complete; use the reference as the current public concept baseline. | Reviewed current concept page explains commutation, evidence outcomes, and non-goals. | `docs/src/reference/patch-algebra.md` |
-| TASK-09 key management & signing setup | 1 | Designer/maintainer | DC-30 implementation review | Review the implemented DC-30 operator security/signing setup guide. | Reviewed operator guide is committed and links the trust/threat reference without promising key lifecycle features. | `docs/src/guide/security-setup.md` |
+| TASK-09 key management & signing setup | 1 | Designer/maintainer | 0.17.4 release-candidate review | Review the 0.17.4 release candidate. | Reviewed operator guide is committed and links the trust/threat reference without promising key lifecycle features. | `docs/src/guide/security-setup.md` |
 | TASK-10 repository layout & authority model | 2 | Architect + maintainer | Open | Start when the data-model reference needs more layout detail or when format/authority claims expand. | Current directories and authority-vs-cache rules are reviewed and committed. | `docs/src/reference/repository-layout.md` |
 | TASK-11 path & worktree safety rules | 2 | Architect + maintainer | Open | Start before expanding checkout/worktree docs or when path rejection UX needs public explanation. | Reviewed path/worktree safety reference is committed with current gaps marked. | `docs/src/reference/path-safety.md` |
 | TASK-12 concurrency & locking model | 2 | Architect + maintainer | Open | Coordinate with TASK-06, especially stale `active.lock` and CAS behavior. | Reviewed locking/concurrency docs are committed and describe manual stale-lock limits. | `docs/src/reference/concurrency-locking.md` |

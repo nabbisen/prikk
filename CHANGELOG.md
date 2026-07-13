@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.17.4 — 2026-07-13
+
+DC-30: key management and signing setup guide.
+
+- Adds `docs/src/guide/security-setup.md`, a current-state operator guide for AUTHOR and MAINTAINER
+  signing setup, environment key inputs, repository-local maintainer trust, and sensitive seed
+  handling.
+- Documents that Prikk currently has no key-generation or public-key-derivation command, that
+  operators must obtain matched Ed25519 seed/public-key material externally, and that published sample
+  seeds and keys are unsafe for real signing.
+- Links README, the trust/threat reference, and the integrity/recovery diagnostics reference to the
+  setup guide.
+- Cleans public README and ROADMAP wording so durable docs do not direct readers to local scratch
+  paths.
+- Keeps the release documentation-only: no Rust code, CLI behavior, object schema, repository format,
+  signing behavior, trust policy, verify behavior, seal behavior, or release semantics are changed.
+
 ## 0.17.3 — 2026-07-13
 
 DC-29: verify and doctor integrity/recovery reference.

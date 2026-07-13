@@ -30,9 +30,7 @@ No proposed RFCs are currently tracked.
 
 These records currently live under `accepted/`.
 
-| ID | Title |
-|---|---|
-| DC-30 | [Key Management and Signing Setup Guide](./accepted/DC-30-KEY-MANAGEMENT-SIGNING-SETUP-GUIDE.md) |
+No accepted RFCs are currently tracked.
 
 ## Done
 
@@ -61,6 +59,7 @@ These records currently live under `done/`.
 | DC-27 | [Patch Algebra and Merge-Evidence Concepts Reference](./done/DC-27-PATCH-ALGEBRA-MERGE-EVIDENCE-CONCEPTS.md) |
 | DC-28 | [Durability and Crash-Recovery Reference](./done/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md) |
 | DC-29 | [Verify and Doctor Integrity/Recovery Reference](./done/DC-29-VERIFY-DOCTOR-INTEGRITY-RECOVERY-REFERENCE.md) |
+| DC-30 | [Key Management and Signing Setup Guide](./done/DC-30-KEY-MANAGEMENT-SIGNING-SETUP-GUIDE.md) |
 | PR-001 | [Implementation Handoff](./done/PR-001-IMPLEMENTATION-HANDOFF.md) |
 | PR-002 | [CI Fix Handoff](./done/PR-002-CI-FIX-HANDOFF.md) |
 | PR-003 | [Persistent Store Handoff](./done/PR-003-PERSISTENT-STORE-HANDOFF.md) |

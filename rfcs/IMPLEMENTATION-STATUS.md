@@ -1,15 +1,21 @@
 # Prikk Implementation Status
 
 Latest released version: 0.17.3 (DC-29 — verify and doctor integrity/recovery reference)
-Current release candidate: none
-
-Current accepted increment: DC-30 (key management and signing setup guide), a documentation-only
-operator guide implemented for review and targeted for 0.17.4.
+Current release candidate: 0.17.4 (DC-30 — key management and signing setup guide)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Current State (0.17.3)
+## Current State (0.17.4 release candidate)
+
+- DC-30 is prepared as the 0.17.4 release candidate. It adds
+  `docs/src/guide/security-setup.md`, a current-state operator guide for AUTHOR and MAINTAINER signing
+  setup, environment key inputs, repository-local maintainer trust, sensitive seed handling,
+  key-generation/public-key-derivation absence, current failure hints, and deferred key-management
+  work. It does not change code, schema, CLI behavior, repository format, signing behavior, trust
+  policy, verify behavior, or seal behavior.
+
+## Previous State (0.17.3)
 
 - DC-29 shipped in 0.17.3. It adds `docs/src/reference/integrity-recovery.md`, a current-state
   reference for repository verification and doctor diagnostics. It documents verify scope and limits,
