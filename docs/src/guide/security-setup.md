@@ -3,7 +3,8 @@
 This guide describes the current operator setup for Prikk signing and repository-local maintainer
 trust. For the full security model, see the [trust and threat model](../reference/trust-threat-model.md).
 For verification diagnostics after setup, see
-[integrity and recovery diagnostics](../reference/integrity-recovery.md).
+[integrity and recovery diagnostics](../reference/integrity-recovery.md). For the physical trust-store
+paths, see [repository layout and authority](../reference/repository-layout.md).
 
 ## Core Caveats
 

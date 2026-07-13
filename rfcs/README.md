@@ -131,6 +131,7 @@ Current-state references consolidate implementation facts for public documentati
 lifecycle records; their authoritative home is the published mdBook source under `docs/src/reference/`.
 
 - [Data model](../docs/src/reference/data-model.md)
+- [Repository layout and authority](../docs/src/reference/repository-layout.md)
 - [Trust and threat model](../docs/src/reference/trust-threat-model.md)
 - [Durability and crash recovery](../docs/src/reference/durability-recovery.md)
 - [Integrity and recovery diagnostics](../docs/src/reference/integrity-recovery.md)

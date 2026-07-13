@@ -25,7 +25,9 @@ The local persistence and crash-recovery boundary is covered by the
 diagnostic catalog is covered by the
 [integrity and recovery diagnostics](./integrity-recovery.md) reference. Current operator setup for
 environment key input and repository-local maintainer trust is covered by the
-[security and signing setup](../guide/security-setup.md) guide.
+[security and signing setup](../guide/security-setup.md) guide. Physical trust-store paths and other
+`.prikk/` authority boundaries are covered by the
+[repository layout and authority](./repository-layout.md) reference.
 
 ## Trust Roots and Roles
 

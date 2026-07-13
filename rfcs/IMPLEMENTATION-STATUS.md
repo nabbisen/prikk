@@ -9,10 +9,10 @@ Current accepted increment: DC-31 - repository layout and authority reference
 
 ## Accepted Increment
 
-- DC-31 is accepted for 0.17.5 as a documentation-only repository layout and authority reference. It
-  should document current initialized `.prikk/` paths and authority-vs-pointer/cache boundaries without
-  changing code, schema, CLI behavior, repository behavior, trust policy, verification, repair, or
-  repository-format stability claims.
+- DC-31 is implemented for review as a documentation-only repository layout and authority reference
+  targeted at 0.17.5. It documents current initialized `.prikk/` paths and authority-vs-pointer/cache
+  boundaries without changing code, schema, CLI behavior, repository behavior, trust policy,
+  verification, repair, or repository-format stability claims.
 
 ## Current State (0.17.4)
 

@@ -83,6 +83,8 @@ Prikk is not yet the right tool if you need:
 - **Ref state**: signed reference state; ref files are pointers, not the root of trust.
 - **Ref update**: append-only publication evidence for a ref transition.
 - **WAL**: active signed patch envelopes before sealing.
+- **Repository layout**: `.prikk/` stores native Prikk objects, refs, active WAL state, and local trust
+  data; see the [repository layout reference](./docs/src/reference/repository-layout.md).
 - **Attestation**: future audit/policy evidence targeting blocks without defining block identity.
 
 ## Quick Start

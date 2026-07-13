@@ -4,9 +4,10 @@ This page is the authoritative current-state reference for Prikk's local persist
 crash-recovery model. It describes the current implementation behavior without adding storage,
 verification, doctor, or command semantics.
 
-For related concepts, see the [data model](./data-model.md), the
-[trust and threat model](./trust-threat-model.md), and the command guides for `verify` and `doctor`
-through the [integrity and recovery diagnostics](./integrity-recovery.md) reference.
+For related concepts, see the [repository layout and authority](./repository-layout.md) reference, the
+[data model](./data-model.md), the [trust and threat model](./trust-threat-model.md), and the command
+guides for `verify` and `doctor` through the
+[integrity and recovery diagnostics](./integrity-recovery.md) reference.
 
 ## Core Caveats
 

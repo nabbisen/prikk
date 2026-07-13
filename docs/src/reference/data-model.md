@@ -18,7 +18,9 @@ status records listed in the anchor table at the foot of the page.
 
 Trust, signature, and threat-boundary caveats live in the
 [trust and threat model](./trust-threat-model.md). The local persistence and crash-recovery boundary
-lives in the [durability and crash recovery](./durability-recovery.md) reference.
+lives in the [durability and crash recovery](./durability-recovery.md) reference. The physical
+`.prikk/` layout and authority-vs-pointer/cache boundary lives in the
+[repository layout and authority](./repository-layout.md) reference.
 
 ## Object Identity
 
