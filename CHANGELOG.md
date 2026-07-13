@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.17.7 — 2026-07-13
+
+DC-33: concurrency and locking reference.
+
+- Adds `docs/src/reference/concurrency-locking.md`, an authoritative current-state reference for
+  active-session locking, ref-specific publication locks, compare-and-swap behavior, narrow ref repair
+  locking, stale-lock limits, and current concurrency non-goals.
+- Documents the current lock primitive: local lock files created with exclusive file creation,
+  fail-closed `LockConflict` behavior, fsynced lock files, best-effort parent-directory sync, and
+  best-effort release on drop.
+- Distinguishes lock-file conflicts from ref CAS baseline mismatches, including the different operator
+  responses for `lock already exists` versus `ref CAS mismatch` failures.
+- Connects the ref publication crash window between RefUpdate log append and pointer promotion to the
+  narrow `doctor --repair-main-ref` missing-pointer repair path.
+- Links the data-model, durability/recovery, integrity/recovery, repository-layout, and path-safety
+  references to the new concurrency and locking reference.
+- Keeps the release documentation-only: no Rust code, CLI behavior, object schema, repository format,
+  lock behavior, seal behavior, commit behavior, verification behavior, doctor behavior, trust policy,
+  repair behavior, or release semantics are changed.
+
 ## 0.17.6 — 2026-07-13
 
 DC-32: path and worktree safety reference.

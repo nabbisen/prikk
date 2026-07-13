@@ -43,6 +43,8 @@ Prikk is designed to be:
 
 Latest released implementation: **0.17.6**, adding the path and worktree safety reference.
 
+Current release candidate: **0.17.7**, adding the concurrency and locking reference.
+
 Next increment candidates are tracked in `ROADMAP.md`.
 
 This is an early implementation suitable for architecture review, experimentation, and contribution.
@@ -85,6 +87,8 @@ Prikk is not yet the right tool if you need:
 - **WAL**: active signed patch envelopes before sealing.
 - **Repository layout**: `.prikk/` stores native Prikk objects, refs, active WAL state, and local trust
   data; see the [repository layout reference](./docs/src/reference/repository-layout.md).
+- **Concurrency and locking**: local lock files guard active-session and ref publication writes; see the
+  [concurrency and locking reference](./docs/src/reference/concurrency-locking.md).
 - **Path safety**: repository paths use a conservative validated subset; see the
   [path and worktree safety reference](./docs/src/reference/path-safety.md).
 - **Attestation**: future audit/policy evidence targeting blocks without defining block identity.

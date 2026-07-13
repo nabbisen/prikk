@@ -28,11 +28,7 @@ No proposed RFCs are currently tracked.
 
 ## Accepted
 
-These records currently live under `accepted/`.
-
-| ID | Title |
-|---|---|
-| DC-33 | [Concurrency and Locking Reference](./accepted/DC-33-CONCURRENCY-LOCKING-REFERENCE.md) |
+No accepted RFCs are currently tracked.
 
 ## Done
 
@@ -64,6 +60,7 @@ These records currently live under `done/`.
 | DC-30 | [Key Management and Signing Setup Guide](./done/DC-30-KEY-MANAGEMENT-SIGNING-SETUP-GUIDE.md) |
 | DC-31 | [Repository Layout and Authority Reference](./done/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
 | DC-32 | [Path and Worktree Safety Reference](./done/DC-32-PATH-WORKTREE-SAFETY-REFERENCE.md) |
+| DC-33 | [Concurrency and Locking Reference](./done/DC-33-CONCURRENCY-LOCKING-REFERENCE.md) |
 | PR-001 | [Implementation Handoff](./done/PR-001-IMPLEMENTATION-HANDOFF.md) |
 | PR-002 | [CI Fix Handoff](./done/PR-002-CI-FIX-HANDOFF.md) |
 | PR-003 | [Persistent Store Handoff](./done/PR-003-PERSISTENT-STORE-HANDOFF.md) |

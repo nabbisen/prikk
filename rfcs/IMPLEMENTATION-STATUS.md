@@ -1,8 +1,8 @@
 # Prikk Implementation Status
 
 Latest released version: 0.17.6 (DC-32 - path and worktree safety reference)
-Current release candidate: none
-Current accepted increment: DC-33 - concurrency and locking reference
+Current release candidate: 0.17.7 (DC-33 - concurrency and locking reference)
+Current accepted increment: none
 Current proposed increment: none
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
@@ -16,9 +16,9 @@ Current proposed increment: none
   materialization behavior, worktree authoring behavior, repository behavior, or repository-format
   stability claims.
 
-## Accepted Increment
+## Release Candidate (0.17.7)
 
-- DC-33 is implemented for review as a documentation-only 0.17.7 increment. It adds
+- DC-33 is the current 0.17.7 release candidate. It adds
   `docs/src/reference/concurrency-locking.md`, a current-state reference for active-session locking,
   ref-specific publication locks, compare-and-swap behavior, narrow ref repair locking, and manual
   stale-lock limits. It does not change code, schema, CLI behavior, lock behavior, repository behavior,

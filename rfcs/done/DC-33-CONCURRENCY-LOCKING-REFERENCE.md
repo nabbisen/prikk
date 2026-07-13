@@ -1,6 +1,6 @@
-# RFC (accepted) - DC-33 Concurrency and Locking Reference
+# RFC (done) - DC-33 Concurrency and Locking Reference
 
-**Status.** Accepted for implementation.
+**Status.** Release candidate for 0.17.7.
 **Target release.** 0.17.7.
 **Tracks.** TASK-12 concurrency and locking model.
 **Touches.** mdBook reference documentation, durability/recovery and repository-layout cross-links,
