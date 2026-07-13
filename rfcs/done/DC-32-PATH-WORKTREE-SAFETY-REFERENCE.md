@@ -1,6 +1,6 @@
-# RFC (accepted) - DC-32 Path and Worktree Safety Reference
+# RFC (done) - DC-32 Path and Worktree Safety Reference
 
-**Status.** Accepted after architect design review.
+**Status.** Released in 0.17.6.
 **Target release.** 0.17.6.
 **Tracks.** TASK-11 path and worktree safety rules.
 **Touches.** mdBook reference documentation, checkout/worktree guide cross-links, roadmap/status docs.

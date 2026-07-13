@@ -41,7 +41,7 @@ Prikk is designed to be:
 
 ## Current Status
 
-Latest released implementation: **0.17.5**, adding the repository layout and authority reference.
+Latest released implementation: **0.17.6**, adding the path and worktree safety reference.
 
 Next increment candidates are tracked in `ROADMAP.md`.
 

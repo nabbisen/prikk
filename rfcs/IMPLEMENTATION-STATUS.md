@@ -1,21 +1,21 @@
 # Prikk Implementation Status
 
-Latest released version: 0.17.5 (DC-31 - repository layout and authority reference)
+Latest released version: 0.17.6 (DC-32 - path and worktree safety reference)
 Current release candidate: none
-Current accepted increment: DC-32 - path and worktree safety reference
+Current accepted increment: none
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
 
-## Accepted Increment
+## Current State (0.17.6)
 
-- DC-32 is implemented for review as a documentation-only path and worktree safety reference targeted
-  at 0.17.6. It documents current repository path validation, checkout/worktree materialization safety,
-  worktree authoring safety, and deferred path/platform gaps without changing code, schema, CLI
-  behavior, checkout behavior, materialization behavior, worktree authoring behavior, repository
-  behavior, or repository-format stability claims.
+- DC-32 shipped in 0.17.6. It adds `docs/src/reference/path-safety.md`, a current-state reference for
+  repository path validation, checkout/worktree materialization safety, worktree authoring safety, and
+  deferred path/platform gaps. It does not change code, schema, CLI behavior, checkout behavior,
+  materialization behavior, worktree authoring behavior, repository behavior, or repository-format
+  stability claims.
 
-## Current State (0.17.5)
+## Previous State (0.17.5)
 
 - DC-31 shipped in 0.17.5. It adds `docs/src/reference/repository-layout.md`, a current-state
   reference for initialized `.prikk/` paths, `.prikk/FORMAT`, object/ref/active/trust paths, and

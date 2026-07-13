@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.17.6 — 2026-07-13
+
+DC-32: path and worktree safety reference.
+
+- Adds `docs/src/reference/path-safety.md`, an authoritative current-state reference for repository
+  path validation, snapshot manifest paths, checkout/worktree materialization safety, patch deletion
+  safety, and worktree authoring safety.
+- Documents the exact current `RepoPath` rejection set, including ASCII-only paths, top-level `.prikk`
+  rejection, control-byte rejection, Windows reserved component basenames, duplicate paths, and
+  case-insensitive collisions.
+- Documents that materialization safety is conservative but check-then-write: it uses lexical
+  root-containment and symlink-aware parent/target checks, but does not claim `openat`/`O_NOFOLLOW`,
+  canonical realpath proof, or race-free protection under concurrent worktree mutation.
+- Links README, checkout/worktree guides, the repository-layout reference, and the trust/threat
+  reference to the path-safety reference.
+- Keeps the release documentation-only: no Rust code, CLI behavior, object schema, repository format,
+  path validator behavior, checkout behavior, materialization behavior, worktree authoring behavior,
+  trust policy, verification behavior, repair behavior, or release semantics are changed.
+
 ## 0.17.5 — 2026-07-13
 
 DC-31: repository layout and authority reference.

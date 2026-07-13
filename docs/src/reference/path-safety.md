@@ -1,7 +1,7 @@
 # Path and Worktree Safety
 
 This page is the authoritative current-state reference for Prikk's repository path validation and
-worktree write-safety boundaries. It describes the current implementation through 0.17.5 and is
+worktree write-safety boundaries. It describes the current implementation through 0.17.6 and is
 grounded in the code, released RFCs, and implementation status records listed in the anchor table at
 the foot of the page.
 
@@ -145,7 +145,7 @@ Current checks are deliberately strict so future path policy can expand from a c
 
 | Claim | Source anchors |
 |---|---|
-| `RepoPath` accepts only the current ASCII, repository-relative, slash-separated subset. | [`path.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-replay/src/path.rs), [`path/tests.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-replay/src/path/tests.rs), [DC-32](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-32-PATH-WORKTREE-SAFETY-REFERENCE.md) |
+| `RepoPath` accepts only the current ASCII, repository-relative, slash-separated subset. | [`path.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-replay/src/path.rs), [`path/tests.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-replay/src/path/tests.rs), [DC-32](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-32-PATH-WORKTREE-SAFETY-REFERENCE.md) |
 | The `.prikk` validator rule applies to the first component case-insensitively. | [`path.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-replay/src/path.rs), [repository layout](./repository-layout.md) |
 | Duplicate paths and case-insensitive collisions are rejected. | [`path.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-replay/src/path.rs), [`snapshot.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/snapshot.rs) |
 | Snapshot manifests decode UTF-8 path bytes, parse `RepoPath`, enforce sorted paths, and length-frame content bytes. | [`snapshot.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/snapshot.rs), [snapshot checkout guide](../guide/checkout/snapshot-checkout.md) |
