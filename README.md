@@ -41,9 +41,7 @@ Prikk is designed to be:
 
 ## Current Status
 
-Latest released implementation: **0.17.6**, adding the path and worktree safety reference.
-
-Current release candidate: **0.17.7**, adding the concurrency and locking reference.
+Latest released implementation: **0.17.7**, adding the concurrency and locking reference.
 
 Next increment candidates are tracked in `ROADMAP.md`.
 
