@@ -2,10 +2,18 @@
 
 Latest released version: 0.17.5 (DC-31 - repository layout and authority reference)
 Current release candidate: none
-Current accepted increment: none
+Current accepted increment: DC-32 - path and worktree safety reference
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
+
+## Accepted Increment
+
+- DC-32 is accepted for 0.17.6 as a documentation-only path and worktree safety reference. It should
+  document current repository path validation, checkout/worktree materialization safety, worktree
+  authoring safety, and deferred path/platform gaps without changing code, schema, CLI behavior,
+  checkout behavior, materialization behavior, worktree authoring behavior, repository behavior, or
+  repository-format stability claims.
 
 ## Current State (0.17.5)
 

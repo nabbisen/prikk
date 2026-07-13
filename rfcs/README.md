@@ -30,7 +30,9 @@ No proposed RFCs are currently tracked.
 
 These records currently live under `accepted/`.
 
-No accepted RFCs are currently tracked.
+| ID | Title |
+|---|---|
+| DC-32 | [Path and Worktree Safety Reference](./accepted/DC-32-PATH-WORKTREE-SAFETY-REFERENCE.md) |
 
 ## Done
 
