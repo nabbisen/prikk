@@ -114,7 +114,9 @@ $PRIKK doctor ./sample-repo
 
 For a fresh repository, the first `commit` authors a genesis patch set and the first `seal` publishes a
 Root block on `heads/main`. The current key-input mechanism is intentionally minimal: seeds are passed
-through environment variables for local experimentation, not as a complete key-management system.
+through environment variables for local experimentation, not as a complete key-management system. The
+sample values above are public examples and must never be used for real signing. See the
+[security and signing setup guide](./docs/src/guide/security-setup.md) for the current setup boundary.
 
 ## Useful Commands
 
@@ -186,5 +188,6 @@ The roadmap, RFCs, and mdBook docs are the best entry points for design details:
 - [rfcs/README.md](./rfcs/README.md)
 - [Current data model](./docs/src/reference/data-model.md)
 - [Current trust and threat model](./docs/src/reference/trust-threat-model.md)
+- [Security and signing setup](./docs/src/guide/security-setup.md)
 - [Current patch algebra and merge evidence concepts](./docs/src/reference/patch-algebra.md)
 - [docs/src](./docs/src)

@@ -4,7 +4,7 @@ Latest released version: 0.17.3 (DC-29 — verify and doctor integrity/recovery 
 Current release candidate: none
 
 Current accepted increment: DC-30 (key management and signing setup guide), a documentation-only
-operator guide targeted for 0.17.4.
+operator guide implemented for review and targeted for 0.17.4.
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).

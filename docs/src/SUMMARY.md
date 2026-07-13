@@ -4,6 +4,7 @@
 
 # Guide
 
+- [Security and Signing Setup](guide/security-setup.md)
 - [History Inspection](guide/history.md)
 - [Worktree Status](guide/worktree-status.md)
 - [Checkout Planning](guide/checkout/checkout.md)

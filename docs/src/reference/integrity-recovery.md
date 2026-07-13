@@ -6,7 +6,8 @@ interprets verification results, and which repair boundaries are intentionally n
 
 For the storage recovery mechanics behind WAL-tail truncation and ref-pointer reconstruction, see the
 [durability and crash recovery](./durability-recovery.md) reference. For trust scope, see the
-[trust and threat model](./trust-threat-model.md).
+[trust and threat model](./trust-threat-model.md). For operator key input and local maintainer trust
+setup, see the [security and signing setup](../guide/security-setup.md) guide.
 
 ## Core Caveats
 

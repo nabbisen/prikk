@@ -23,7 +23,9 @@ platform-support, or production-readiness claims require architect review or acc
 The local persistence and crash-recovery boundary is covered by the
 [durability and crash recovery](./durability-recovery.md) reference. The current `verify` / `doctor`
 diagnostic catalog is covered by the
-[integrity and recovery diagnostics](./integrity-recovery.md) reference.
+[integrity and recovery diagnostics](./integrity-recovery.md) reference. Current operator setup for
+environment key input and repository-local maintainer trust is covered by the
+[security and signing setup](../guide/security-setup.md) guide.
 
 ## Trust Roots and Roles
 
@@ -45,7 +47,9 @@ maintainer trust policy before publishing.
 Current key input is intentionally minimal. The CLI reads AUTHOR key material from
 `PRIKK_AUTHOR_KEY_ID` and `PRIKK_AUTHOR_SEED`, and MAINTAINER key material from
 `PRIKK_MAINTAINER_KEY_ID` and `PRIKK_MAINTAINER_SEED`. The seed values are caller-provided 32-byte
-Ed25519 secret seeds encoded as 64 hex characters. Prikk does not provide local secret storage.
+Ed25519 secret seeds encoded as 64 hex characters. Prikk does not provide local secret storage, key
+generation, or public-key derivation. For the current setup workflow and seed-handling warnings, see
+the [security and signing setup](../guide/security-setup.md) guide.
 
 The local maintainer trust store supports a single repository-local trusted MAINTAINER key with
 `required = 1`. `prikk trust maintainer add` writes the trusted public key and fixed-shape policy. The
