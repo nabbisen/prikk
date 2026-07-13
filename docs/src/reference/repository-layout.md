@@ -8,7 +8,8 @@ the page.
 For logical object concepts, see the [data model](./data-model.md). For repository path and worktree
 write-safety rules, see [path and worktree safety](./path-safety.md). For local persistence and
 recovery behavior, see [durability and crash recovery](./durability-recovery.md). For trust and
-signature scope, see the [trust and threat model](./trust-threat-model.md).
+signature scope, see the [trust and threat model](./trust-threat-model.md). For lock and ref
+compare-and-swap behavior, see [concurrency and locking](./concurrency-locking.md).
 
 ## Core Caveats
 
@@ -140,7 +141,8 @@ history until publication succeeds.
 metadata on a non-empty WAL is an integrity issue because seal must not guess the publication target.
 
 `active.lock` is a local synchronization file. It prevents concurrent active-session writers, but it is
-not evidence of repository history or trust. Stale lock cleanup after a crash is manual today.
+not evidence of repository history or trust. Stale lock cleanup after a crash is manual today; see
+[concurrency and locking](./concurrency-locking.md) for the current operator boundary.
 
 ## Trust Store
 

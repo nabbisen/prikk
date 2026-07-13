@@ -134,6 +134,7 @@ lifecycle records; their authoritative home is the published mdBook source under
 
 - [Data model](../docs/src/reference/data-model.md)
 - [Repository layout and authority](../docs/src/reference/repository-layout.md)
+- [Concurrency and locking](../docs/src/reference/concurrency-locking.md)
 - [Path and worktree safety](../docs/src/reference/path-safety.md)
 - [Trust and threat model](../docs/src/reference/trust-threat-model.md)
 - [Durability and crash recovery](../docs/src/reference/durability-recovery.md)

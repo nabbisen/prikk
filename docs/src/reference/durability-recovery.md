@@ -20,8 +20,8 @@ guides for `verify` and `doctor` through the
 - Ref pointer files are mutable convenience pointers, not roots of trust.
 - `doctor` repairs are opt-in and narrow; they do not synthesize missing objects, signatures, trust
   policy, or key material.
-- Stale `active.lock` cleanup after a crash is manual today and belongs to the future
-  concurrency/locking reference.
+- Stale `active.lock` cleanup after a crash is manual today; the current lock/CAS boundary is covered
+  by the [concurrency and locking](./concurrency-locking.md) reference.
 
 ## Commit Persistence Boundary
 
@@ -121,7 +121,8 @@ recover missing key material, or clear unsafe active sessions.
 
 `active.lock` is acquired with exclusive file creation. If a process dies while holding it, stale lock
 cleanup is manual today. DC-28 does not define lock stealing, lock expiry, process ownership checks, or
-automatic stale-lock repair. That policy belongs with the future concurrency/locking reference.
+automatic stale-lock repair. The current lock and compare-and-swap behavior is covered by the
+[concurrency and locking](./concurrency-locking.md) reference.
 
 ## Deferred Work
 

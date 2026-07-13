@@ -7,7 +7,8 @@ the foot of the page.
 
 For physical repository layout and `.prikk/` authority boundaries, see
 [repository layout and authority](./repository-layout.md). For trust and threat boundaries, see the
-[trust and threat model](./trust-threat-model.md).
+[trust and threat model](./trust-threat-model.md). For local lock and stale-lock behavior, see
+[concurrency and locking](./concurrency-locking.md).
 
 ## Core Caveats
 

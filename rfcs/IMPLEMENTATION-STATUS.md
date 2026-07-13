@@ -18,10 +18,10 @@ Current proposed increment: none
 
 ## Accepted Increment
 
-- DC-33 is accepted for a documentation-only 0.17.7 increment. It should add
+- DC-33 is implemented for review as a documentation-only 0.17.7 increment. It adds
   `docs/src/reference/concurrency-locking.md`, a current-state reference for active-session locking,
   ref-specific publication locks, compare-and-swap behavior, narrow ref repair locking, and manual
-  stale-lock limits. It must not change code, schema, CLI behavior, lock behavior, repository behavior,
+  stale-lock limits. It does not change code, schema, CLI behavior, lock behavior, repository behavior,
   verification, doctor, trust, release semantics, or repository-format stability claims.
 
 ## Previous State (0.17.5)

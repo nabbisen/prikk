@@ -20,7 +20,8 @@ Trust, signature, and threat-boundary caveats live in the
 [trust and threat model](./trust-threat-model.md). The local persistence and crash-recovery boundary
 lives in the [durability and crash recovery](./durability-recovery.md) reference. The physical
 `.prikk/` layout and authority-vs-pointer/cache boundary lives in the
-[repository layout and authority](./repository-layout.md) reference.
+[repository layout and authority](./repository-layout.md) reference. Local lock and ref
+compare-and-swap behavior lives in the [concurrency and locking](./concurrency-locking.md) reference.
 
 ## Object Identity
 
@@ -61,10 +62,11 @@ RefState id for convenience and recovery, but the pointer file is not itself the
 RefUpdate records are signed envelope entries in append-only ref logs and link old and new RefState
 ids, target Block id, update sequence, creation timestamp, and maintainer key id.
 
-Publication is guarded by ref-specific locking and compare-and-swap checks. Seal persists WAL Patch
-envelopes, creates a signed Block, creates a signed RefState, appends a signed RefUpdate log entry,
-promotes the ref pointer, then drains the active WAL and active ref metadata after successful
-publication.
+Publication is guarded by ref-specific locking and compare-and-swap checks. The
+[concurrency and locking](./concurrency-locking.md) reference owns the detailed lock/CAS behavior.
+Seal persists WAL Patch envelopes, creates a signed Block, creates a signed RefState, appends a signed
+RefUpdate log entry, promotes the ref pointer, then drains the active WAL and active ref metadata after
+successful publication.
 
 ## Active WAL and Recovery Boundary
 

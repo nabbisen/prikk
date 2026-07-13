@@ -131,7 +131,9 @@ Doctor currently exposes two repair switches:
 
 Repair refuses to run when repository health has error-severity issues. The detailed recovery
 mechanics and safety preconditions for those repairs live in the
-[durability and crash recovery](./durability-recovery.md) reference.
+[durability and crash recovery](./durability-recovery.md) reference. Local lock conflicts, stale-lock
+limits, and ref compare-and-swap conflicts are covered by the
+[concurrency and locking](./concurrency-locking.md) reference.
 
 Doctor does not synthesize missing objects, repair malformed logs, repair checksum mismatches, repair
 signatures, auto-trust keys, reconstruct trust policy, recover key material, clear unsafe active
