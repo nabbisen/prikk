@@ -1,7 +1,6 @@
 # RFC (done) - DC-30 Key Management and Signing Setup Guide
 
-**Status.** Implemented and prepared for the 0.17.4 release candidate after architect implementation
-review.
+**Status.** Released in 0.17.4.
 **Target release.** 0.17.4.
 **Tracks.** TASK-09 key management and signing setup.
 **Touches.** mdBook guide documentation, README links, trust/threat cross-links, roadmap/status docs.

@@ -41,9 +41,7 @@ Prikk is designed to be:
 
 ## Current Status
 
-Latest released implementation: **0.17.3**, adding the verify and doctor integrity/recovery reference.
-
-Current release candidate: **0.17.4**, adding the key management and signing setup guide.
+Latest released implementation: **0.17.4**, adding the key management and signing setup guide.
 
 Next increment candidates are tracked in `ROADMAP.md`.
 
