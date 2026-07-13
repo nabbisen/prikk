@@ -145,13 +145,14 @@ current-state reference docs.
 
 ## 0.16.0 Release Task Management
 
-These tasks are tracked here because `.git-exclude/tasks/` is scratch space and not a durable backlog.
+These tasks are tracked here because the original task notes are local scratch space and not a durable
+backlog.
 They remain managed in this section until each completion condition is met.
 
 | ID | Owner | Status | Trigger / next action | Completion condition |
 |---|---|---|---|---|
-| TASK-01 docs Phase-2 physical subdirectories | Designer, then architect reviewer | Done | Reviewed in `.git-exclude/reviewed/prikk-0.16.0-docs-phase2-subdirs-review-v1.md` and committed | Accepted review and committed docs source-tree move |
-| TASK-02 consolidated data-model + trust/threat-model docs | Architect + maintainer | Done | Reviewed in `.git-exclude/reviewed/prikk-dc-24-0.16.0-docs-implementation-review-v1.md`, repaired, and committed | DC-24 docs are reviewed and committed |
+| TASK-01 docs Phase-2 physical subdirectories | Designer, then architect reviewer | Done | Reviewed and committed | Accepted review and committed docs source-tree move |
+| TASK-02 consolidated data-model + trust/threat-model docs | Architect + maintainer | Done | Reviewed, repaired, and committed | DC-24 docs are reviewed and committed |
 | TASK-03 docs Pages workflow hardening | Maintainer | Local prep done; external deploy verification pending | After release/docs workflow changes are pushed, run GitHub Actions `workflow_dispatch` or observe the release-triggered Pages run | First Pages build/deploy succeeds, or a tracked follow-up records any GitHub-side failure |
 | TASK-04 DC-23 store-unit test carry-forwards | Designer/implementer | Done | Reviewed and committed with the accepted 0.16.0 pre-release hardening bundle | Store-level cross-item test is committed |
 | TASK-05 0.16.0 release finalization | Maintainer | Done | Released as tag `0.16.0` and crates published | `0.16.0` tag and crate publish are completed by the maintainer |
@@ -161,7 +162,7 @@ They remain managed in this section until each completion condition is met.
 Documentation-only, current-state reference increments targeted for after **0.16.1**, following
 DC-24 (data model + trust/threat). They are grounded through the tracked DC-24 baseline recap
 (`rfcs/handoffs/DC-24-data-model-trust-threat-docs/baseline-recap.md`) and current released code/RFCs;
-local `.git-exclude/specs/` files are not reviewer-facing authority. Each task must carry source
+local scratch specs are not reviewer-facing authority. Each task must carry source
 anchors and mandatory honest-limits caveats when it graduates. Sequencing: Tier 1 first; TASK-06 and
 TASK-08 are the largest gaps; TASK-09 rides close behind the DC-24 threat model. These must not creep
 into DC-24, and every one must preserve the same honest-limits discipline (unit-test-evidenced
@@ -186,9 +187,9 @@ references. The durable homes below are authoritative `docs/src/reference/` or `
 | TASK-15 roles & user-classes orientation | 3 | Designer | Open | Start when the docs need a clearer audience map after the Reference section settles. | Reviewed orientation page or index update is committed. | `docs/src/index.md` or `docs/src/guide/audience.md` |
 | TASK-16 error taxonomy & diagnostics | 3 | Implementer/architect | Open | Start with TASK-07 or when diagnostics need user-facing interpretation. | Reviewed diagnostics reference is committed and grounded in `crates/prikk-error`. | `docs/src/reference/errors.md` |
 
-Scratch detail lives in `.git-exclude/tasks/002-update-management/TASK-06..16-*.md` until each
-graduates; update the **Status**, **Trigger / next action**, **Completion condition**, and **Durable
-home** here as they land. This section is the durable record, not the scratch files.
+Scratch detail may exist locally until each task graduates; update the **Status**, **Trigger / next
+action**, **Completion condition**, and **Durable home** here as they land. This section is the durable
+record, not the scratch files.
 
 ## Historical Note — PR-030
 

@@ -156,11 +156,6 @@ prikk doctor [path] --repair-main-ref
   `proposed/`, `accepted/`, `done/`, `archive/`, and `handoffs/` are used.
 - `ROADMAP.md` — current release and upcoming theme summary.
 - `CHANGELOG.md` — released changes.
-- `.git-exclude/specs/` — project requirements, external design, non-functional requirements, and
-  handoff material used by maintainers and reviewers.
-- `.git-exclude/rules/` — local development and lifecycle rules for this repository.
-- `.git-exclude/review-request/` and `.git-exclude/reviewed/` — review intake packages and review
-  results used by the design-first workflow.
 
 ## Development Gates
 
@@ -176,7 +171,8 @@ In restricted environments where the default temporary directory is read-only, u
 temporary directory for integration tests:
 
 ```sh
-TMPDIR="$PWD/.git-exclude/tmp" cargo test --workspace
+mkdir -p target/tmp
+TMPDIR="$PWD/target/tmp" cargo test --workspace
 ```
 
 ## More Detail
