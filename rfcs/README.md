@@ -24,11 +24,30 @@ consistent with its folder.
 
 ## Proposed
 
-No proposed RFCs are currently tracked.
+These records are under design review. DC-36 is the current proposed increment; DC-34 is accepted
+architecture authority, and the remaining RFCs must respect the dependencies in
+[`MILESTONES.md`](../MILESTONES.md).
+
+| ID | Title | Milestone |
+|---|---|---|
+| DC-35 | [Release Compatibility and Status Correction](./proposed/DC-35-RELEASE-COMPATIBILITY-STATUS-CORRECTION.md) | M1 / 0.18.0 |
+| DC-36 | [Existing-Object Publication Integrity](./proposed/DC-36-EXISTING-OBJECT-PUBLICATION-INTEGRITY.md) | M1 / 0.18.0 |
+| DC-37 | [Required Filesystem Durability](./proposed/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md) | M1 / 0.18.0 |
+| DC-39 | [Signature and Envelope Authority](./proposed/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md) | M1 / 0.18.0 |
+| DC-41 | [Integrity Evidence Campaign](./proposed/DC-41-INTEGRITY-EVIDENCE-CAMPAIGN.md) | M2 / 0.19.0 |
+| DC-42 | [Performance and Maintainability Gates](./proposed/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md) | M2 / 0.19.0 |
+| DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0 |
+| DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 
 ## Accepted
 
-No accepted RFCs are currently tracked.
+These reviewed designs may govern downstream work but have not yet released.
+
+| ID | Title | Milestone |
+|---|---|---|
+| DC-34 | [Publication and Identity Authority](./accepted/DC-34-PUBLICATION-IDENTITY-AUTHORITY.md) | M0 complete; governs DC-38 through DC-40 |
+| DC-38 | [Ref Publication Crash Recovery](./accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) | M1 / 0.18.0; implementation waits for DC-37 |
+| DC-40 | [State Merkle Root and Format Transition](./accepted/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md) | M1 / 0.18.0; implementation evidence pending |
 
 ## Done
 
@@ -105,7 +124,7 @@ These records currently live under `archive/`.
 
 ## Handoffs
 
-Companion handoff directories currently exist for DC-10 through DC-25:
+Companion handoff directories currently exist for DC-10 through DC-25 and for proposed DC-40:
 
 - [DC-10 rollback draft signing](./handoffs/DC-10-rollback-draft-signing/)
 - [DC-11 maintainer trust store](./handoffs/DC-11-maintainer-trust-store/)
@@ -123,6 +142,7 @@ Companion handoff directories currently exist for DC-10 through DC-25:
 - [DC-23 merge evidence UX stabilization](./handoffs/DC-23-merge-evidence-ux-stabilization/)
 - [DC-24 data model and trust/threat docs](./handoffs/DC-24-data-model-trust-threat-docs/)
 - [DC-25 merge planning surface](./handoffs/DC-25-merge-planning-surface/)
+- [DC-40 state Merkle and format transition](./handoffs/DC-40-state-merkle-format-transition/)
 
 ## Current Reference Docs
 

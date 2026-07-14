@@ -1,11 +1,16 @@
 # Prikk Roadmap
 
 This repository follows the design-first Prikk roadmap. Change history is tracked in `CHANGELOG.md`;
-milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
+the corrective release sequence is in `MILESTONES.md`, and current-state detail is in
+`rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Current Increment
 
-- No active design/implementation increment is selected after the 0.17.7 release.
+- **DC-36 - existing-object publication integrity (proposed).** DC-34 publication and identity
+  authority is accepted. DC-36 is the next design-closure increment, followed by DC-37 required
+  filesystem durability. DC-38 and DC-40 are accepted designs; DC-38 implementation waits for DC-37,
+  and DC-40 implementation evidence remains pending. DC-35 through DC-44 remain scheduled according
+  to `MILESTONES.md`.
 
 ## Release Candidate Increment
 
@@ -153,16 +158,34 @@ milestone/status detail is in `rfcs/IMPLEMENTATION-STATUS.md`.
 
 ## Next Increments
 
-1. **Remaining Tier-1 documentation reference series (after DC-27 unless reprioritized)**:
-   durability/crash-recovery, verify/doctor, and key setup remain the next major current-state
-   reference gaps. Tracked in the *Post-0.16.1 Documentation Reference Backlog* section below.
-   Graduation homes follow the DC-26 `docs/src/reference/` authority model.
-2. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
-   rollback authorization, audit/plugin, key lifecycle, and sync remain gated by
-   their dedicated plans and FDDs.
+1. **M0 architecture ratification:** DC-34 decides publication and signature identity authority. It is
+   a no-release design gate.
+2. **M1 corrective storage and identity baseline (target 0.18.0):** DC-35 through DC-40 close the five
+   blocking architecture findings together. No intermediate feature/docs release is planned.
+3. **M2 assurance and distribution baseline (target 0.19.0):** DC-41 through DC-43 add adversarial
+   evidence, performance/maintainability gates, and release security controls after corrected behavior
+   exists.
+4. **M3 migration and recoverable backup (release target unassigned):** DC-44 owns NFR-REL-03,
+   verifiable backup/restore, and migration exercises that are explicitly outside DC-40 and M2.
+5. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
+   rollback authorization, audit/plugin, key lifecycle, sync, and unrelated documentation themes remain
+   frozen through M1.
 
 Final feature scope remains governed by accepted RFCs, genuine gating FDDs when present, and the
 current-state reference docs.
+
+## Corrective Program After 0.17.7
+
+The independent architecture review of 0.17.7 found a critical ref-publication interruption state and
+high-severity gaps in state-root identity, required directory durability, existing-object validation,
+and signature-preimage authority. The tracked finding-to-RFC matrix, dependencies, target releases, and
+completion gates are in `MILESTONES.md`.
+
+The project remains an experimental architecture implementation. Successful routine gates do not
+override reproduced negative evidence. Public-preview readiness remains no-go through M2 and requires
+a new independent review after M2. Production suitability remains no-go through M3 and likewise
+requires an explicit independent ruling. Repository-format stability is not granted by any scheduled
+milestone; it requires a separate future stability RFC and review.
 
 ## 0.16.0 Release Task Management
 
@@ -203,7 +226,7 @@ references. The durable homes below are authoritative `docs/src/reference/` or `
 | TASK-10 repository layout & authority model | 2 | Architect + maintainer | Released in 0.17.5 | Complete; use the reference as the current public repository-layout/authority baseline. | Current directories and authority-vs-cache rules are reviewed and committed. | `docs/src/reference/repository-layout.md` |
 | TASK-11 path & worktree safety rules | 2 | Architect + maintainer | Released in 0.17.6 | Complete; use the reference as the current public path/worktree safety baseline. | Reviewed path/worktree safety reference is committed with current gaps marked. | `docs/src/reference/path-safety.md` |
 | TASK-12 concurrency & locking model | 2 | Architect + maintainer | Released in 0.17.7 | Complete; use the reference as the current public concurrency/locking baseline. | Reviewed locking/concurrency docs are committed and describe manual stale-lock limits. | `docs/src/reference/concurrency-locking.md` |
-| TASK-13 release, versioning & compatibility policy | 2 | Maintainer | Open | Start before the next release/docs pass that makes compatibility or repository-format claims. | Reviewed release/compatibility policy is committed and linked from README/CHANGELOG as needed. | `docs/src/reference/release-compatibility.md` or contributing policy page |
+| TASK-13 release, versioning & compatibility policy | 2 | Maintainer | Scheduled as DC-35 in M1 | Complete design review, then implement before the 0.18.0 release candidate. | Reviewed release/compatibility policy is committed and linked from README/CHANGELOG as needed. | `docs/src/reference/release-compatibility.md` |
 | TASK-14 consolidated non-goals / deferred features | 3 | Maintainer/architect | Open | Start when deferred-feature lists begin drifting across README, ROADMAP, mdBook, and release notes. | Reviewed non-goals page is committed and links ROADMAP as the planning authority. | `docs/src/reference/non-goals.md` |
 | TASK-15 roles & user-classes orientation | 3 | Designer | Open | Start when the docs need a clearer audience map after the Reference section settles. | Reviewed orientation page or index update is committed. | `docs/src/index.md` or `docs/src/guide/audience.md` |
 | TASK-16 error taxonomy & diagnostics | 3 | Implementer/architect | Open | Start with TASK-07 or when diagnostics need user-facing interpretation. | Reviewed diagnostics reference is committed and grounded in `crates/prikk-error`. | `docs/src/reference/errors.md` |
