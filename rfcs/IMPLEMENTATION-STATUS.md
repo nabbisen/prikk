@@ -2,8 +2,8 @@
 
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
-Current accepted increments: DC-34 authority; DC-38 and DC-40 designs (implementation pending)
-Current proposed increment: DC-36 (existing-object publication integrity)
+Current accepted increments: DC-34, DC-36, DC-37, DC-38, and DC-40
+Current implementation increment: DC-37 required filesystem durability
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
@@ -17,10 +17,11 @@ repository-format stabilization, and public-preview readiness. The durable corre
 - DC-34 is accepted architecture authority. It owns the publication state-machine and
   signature-preimage decisions required by downstream identity-bearing implementation, but does not
   itself authorize DC-38 through DC-40 implementation before their own gates pass.
-- DC-38 and DC-40 are accepted M1 designs. DC-38 implementation waits for DC-37 required-sync
-  semantics; DC-40 implementation and identity-vector evidence remain pending.
-- DC-35, DC-36, DC-37, and DC-39 remain proposed M1 RFCs held with the accepted work for one 0.18.0
-  corrective release after all blocking findings close.
+- DC-36, DC-37, DC-38, and DC-40 are accepted M1 designs. DC-37 is the current implementation
+  increment; DC-36 and DC-38 follow it in that order. DC-40 implementation and identity-vector
+  evidence remain pending.
+- DC-35 and DC-39 remain proposed M1 RFCs held with the accepted work for one 0.18.0 corrective release
+  after all blocking findings close.
 - DC-41 through DC-43 are proposed M2 assurance/distribution RFCs and do not authorize implementation
   before their dependencies and individual design reviews are satisfied.
 - DC-44 is the proposed post-M2 migration/backup/restore RFC; no release target is assigned.

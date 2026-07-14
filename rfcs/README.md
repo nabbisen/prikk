@@ -24,15 +24,12 @@ consistent with its folder.
 
 ## Proposed
 
-These records are under design review. DC-36 is the current proposed increment; DC-34 is accepted
-architecture authority, and the remaining RFCs must respect the dependencies in
-[`MILESTONES.md`](../MILESTONES.md).
+These records are under design review. DC-37 is the current accepted implementation increment; the
+remaining proposed RFCs must respect the dependencies in [`MILESTONES.md`](../MILESTONES.md).
 
 | ID | Title | Milestone |
 |---|---|---|
 | DC-35 | [Release Compatibility and Status Correction](./proposed/DC-35-RELEASE-COMPATIBILITY-STATUS-CORRECTION.md) | M1 / 0.18.0 |
-| DC-36 | [Existing-Object Publication Integrity](./proposed/DC-36-EXISTING-OBJECT-PUBLICATION-INTEGRITY.md) | M1 / 0.18.0 |
-| DC-37 | [Required Filesystem Durability](./proposed/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md) | M1 / 0.18.0 |
 | DC-39 | [Signature and Envelope Authority](./proposed/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md) | M1 / 0.18.0 |
 | DC-41 | [Integrity Evidence Campaign](./proposed/DC-41-INTEGRITY-EVIDENCE-CAMPAIGN.md) | M2 / 0.19.0 |
 | DC-42 | [Performance and Maintainability Gates](./proposed/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md) | M2 / 0.19.0 |
@@ -46,6 +43,8 @@ These reviewed designs may govern downstream work but have not yet released.
 | ID | Title | Milestone |
 |---|---|---|
 | DC-34 | [Publication and Identity Authority](./accepted/DC-34-PUBLICATION-IDENTITY-AUTHORITY.md) | M0 complete; governs DC-38 through DC-40 |
+| DC-36 | [Existing-Object Publication Integrity](./accepted/DC-36-EXISTING-OBJECT-PUBLICATION-INTEGRITY.md) | M1 / 0.18.0; implementation waits for DC-37 |
+| DC-37 | [Required Filesystem Durability](./accepted/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md) | M1 / 0.18.0; current implementation increment |
 | DC-38 | [Ref Publication Crash Recovery](./accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) | M1 / 0.18.0; implementation waits for DC-37 |
 | DC-40 | [State Merkle Root and Format Transition](./accepted/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md) | M1 / 0.18.0; implementation evidence pending |
 
@@ -142,6 +141,7 @@ Companion handoff directories currently exist for DC-10 through DC-25 and for pr
 - [DC-23 merge evidence UX stabilization](./handoffs/DC-23-merge-evidence-ux-stabilization/)
 - [DC-24 data model and trust/threat docs](./handoffs/DC-24-data-model-trust-threat-docs/)
 - [DC-25 merge planning surface](./handoffs/DC-25-merge-planning-surface/)
+- [DC-37 required filesystem durability](./handoffs/DC-37-required-filesystem-durability/)
 - [DC-40 state Merkle and format transition](./handoffs/DC-40-state-merkle-format-transition/)
 
 ## Current Reference Docs
