@@ -116,7 +116,7 @@ pub(crate) fn signed_ref_update_envelope(
         new_ref_state_id,
         new_target_object_id,
         update_seq,
-        created_at: 7,
+        created_at: 0,
         author_key_id: "maintainer-key".to_string(),
     };
     let payload_bytes = payload.to_canonical_bytes();

@@ -1,208 +1,160 @@
-//! Ref pointer and ref-log verification.
+//! Joint ref pointer and ref-log verification.
 
-use std::fs::{self, File};
-use std::io::Read;
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{ObjectId, ObjectType, RefStatePayload, RefUpdatePayload};
 
+use crate::fsutil::{EntryKind, list_directory};
 use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
-use crate::refs::log::decode_log_file_bytes;
-use crate::refs::pointer::read_ref_pointer;
 
-/// Ref verification counters.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct RefVerification {
-    /// Number of checked ref pointer files.
-    pub pointer_count: usize,
-    /// Number of checked ref-log records.
-    pub log_record_count: usize,
+mod scan;
+
+use scan::{LogState, PointerState, read_logs, read_pointers};
+
+/// One recognized interrupted-publication or local-debris condition.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefPublicationIssue {
+    /// Stable diagnostic code.
+    pub code: &'static str,
+    /// Ref name when the condition belongs to one ref.
+    pub ref_name: Option<String>,
+    /// Human-readable diagnosis without host paths.
+    pub message: String,
+    /// Whether verification must return non-zero and unrelated mutation must remain blocked.
+    pub blocking: bool,
 }
 
-/// Verify all ref pointer files and log records for a repository.
+/// Ref verification counters and publication-state issues.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RefVerification {
+    pub pointer_count: usize,
+    pub log_record_count: usize,
+    pub ref_update_envelopes: Vec<prikk_object::ObjectEnvelope>,
+    pub publication_issues: Vec<RefPublicationIssue>,
+}
+
 pub(crate) fn verify_refs(layout: &RepositoryLayout) -> Result<RefVerification> {
-    let object_store = FileObjectStore::new(layout.clone());
-    let pointer_count = verify_ref_pointers(layout, &object_store)?;
-    let log_count = verify_ref_logs(layout, &object_store)?;
+    let objects = FileObjectStore::new(layout.clone());
+    let pointers = read_pointers(layout, &objects)?;
+    let (logs, log_record_count, ref_update_envelopes) = read_logs(layout, &objects, &pointers)?;
+    let mut names = BTreeSet::new();
+    names.extend(pointers.keys().cloned());
+    names.extend(logs.keys().cloned());
+    let mut publication_issues = candidate_issues(layout)?;
+    for ref_name in names {
+        classify_ref_state(
+            &ref_name,
+            pointers.get(&ref_name),
+            logs.get(&ref_name),
+            &mut publication_issues,
+        )?;
+    }
     Ok(RefVerification {
-        pointer_count,
-        log_record_count: log_count,
+        pointer_count: pointers.len(),
+        log_record_count,
+        ref_update_envelopes,
+        publication_issues,
     })
 }
 
-fn verify_ref_pointers(layout: &RepositoryLayout, object_store: &FileObjectStore) -> Result<usize> {
-    let dir = layout.refs_dir().join("by-id");
-    if !dir.exists() {
-        return Ok(0);
+fn classify_ref_state(
+    ref_name: &str,
+    pointer: Option<&PointerState>,
+    log: Option<&LogState>,
+    issues: &mut Vec<RefPublicationIssue>,
+) -> Result<()> {
+    if log.is_some_and(|state| state.has_legacy_timestamp) {
+        issues.push(RefPublicationIssue {
+            code: "PRIKK-VERIFY-REF-LEGACY-TIMESTAMP",
+            ref_name: Some(ref_name.to_string()),
+            message: "format-1 RefUpdate uses a non-canonical legacy timestamp".to_string(),
+            blocking: false,
+        });
     }
-    let mut checked = 0_usize;
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            return Err(PrikkError::Integrity(format!(
-                "unexpected directory in ref pointer directory: {}",
-                path.display()
-            )));
+    match (pointer, log) {
+        (Some(pointer), Some(log)) if Some(pointer.id) == log.tip => {
+            if log.trailing_partial_bytes != 0 {
+                return Err(PrikkError::Integrity(format!(
+                    "ref {ref_name} has an incomplete log tail without a pointer lead"
+                )));
+            }
+            Ok(())
         }
-        if is_temporary_path(&path) {
-            continue;
+        (Some(pointer), log)
+            if pointer.payload.previous_ref_state_id == log.and_then(|state| state.tip)
+                && pointer.payload.update_seq == next_log_sequence(log)? =>
+        {
+            let partial = log.map_or(0, |state| state.trailing_partial_bytes);
+            issues.push(blocking_issue(
+                "PRIKK-VERIFY-REF-POINTER-LEADS-LOG",
+                ref_name,
+                if partial == 0 {
+                    "authoritative pointer leads committed ref log by one transition".to_string()
+                } else {
+                    format!(
+                        "authoritative pointer leads ref log by one transition with {partial} incomplete trailing byte(s)"
+                    )
+                },
+            ));
+            Ok(())
         }
-        ensure_ref_path_shape(&path, ".ref")?;
-        let Some(pointer) = read_ref_pointer(layout, &path)? else {
-            continue;
-        };
-        let expected_path = layout.ref_pointer_path(&pointer.ref_name);
-        if path != expected_path {
-            return Err(PrikkError::Integrity(format!(
-                "ref pointer {} does not match canonical path {}",
-                path.display(),
-                expected_path.display()
-            )));
+        (Some(pointer), Some(log)) if log.previous_tip == Some(pointer.id) => {
+            issues.push(blocking_issue(
+                "PRIKK-VERIFY-REF-LEGACY-LOG-LEADS",
+                ref_name,
+                "format-1 ref log leads the authoritative pointer by one transition".to_string(),
+            ));
+            Ok(())
         }
-        let payload = verified_ref_state_payload(object_store, pointer.ref_state_id)?;
-        if payload.ref_name != pointer.ref_name {
-            return Err(PrikkError::Integrity(format!(
-                "RefState {} name mismatch: pointer {}, payload {}",
-                pointer.ref_state_id, pointer.ref_name, payload.ref_name
-            )));
+        (None, Some(log)) if log.record_count == 1 && log.previous_tip.is_none() => {
+            issues.push(blocking_issue(
+                "PRIKK-VERIFY-REF-POINTER-MISSING",
+                ref_name,
+                "format-1 ref pointer is missing while committed log history exists".to_string(),
+            ));
+            Ok(())
         }
-        ensure_block_exists(object_store, payload.target_object_id, pointer.ref_state_id)?;
-        checked = checked
-            .checked_add(1)
-            .ok_or_else(|| PrikkError::Integrity("ref pointer count overflow".to_string()))?;
+        (None, None) => Ok(()),
+        _ => Err(PrikkError::Integrity(format!(
+            "unexplained pointer/log divergence for ref {ref_name}"
+        ))),
     }
-    Ok(checked)
 }
 
-fn verify_ref_logs(layout: &RepositoryLayout, object_store: &FileObjectStore) -> Result<usize> {
-    let dir = layout.refs_dir().join("logs");
-    if !dir.exists() {
-        return Ok(0);
-    }
-    let mut checked = 0_usize;
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            return Err(PrikkError::Integrity(format!(
-                "unexpected directory in ref-log directory: {}",
-                path.display()
-            )));
-        }
-        if is_temporary_path(&path) {
-            continue;
-        }
-        ensure_ref_path_shape(&path, ".log")?;
-        let mut bytes = Vec::new();
-        File::open(path)?.read_to_end(&mut bytes)?;
-        let replay = decode_log_file_bytes(&bytes)?;
-        if replay.trailing_partial_bytes != 0 {
+fn next_log_sequence(log: Option<&LogState>) -> Result<u64> {
+    u64::try_from(log.map_or(0, |state| state.record_count))
+        .ok()
+        .and_then(|value| value.checked_add(1))
+        .ok_or_else(|| PrikkError::Integrity("ref-log sequence overflow".to_string()))
+}
+
+fn candidate_issues(layout: &RepositoryLayout) -> Result<Vec<RefPublicationIssue>> {
+    let mut issues = Vec::new();
+    let relative = Path::new("refs/tmp");
+    for entry in list_directory(layout.repository_mutation_root(), relative)? {
+        if entry.kind == EntryKind::Regular {
+            issues.push(RefPublicationIssue {
+                code: "PRIKK-VERIFY-REF-CANDIDATE-DEBRIS",
+                ref_name: None,
+                message: "non-authoritative ref pointer candidate remains".to_string(),
+                blocking: false,
+            });
+        } else {
             return Err(PrikkError::Integrity(
-                "ref log contains trailing partial record".to_string(),
+                "unexpected non-file in ref candidate directory".to_string(),
             ));
         }
-        let mut previous_ref_state_id = None;
-        for record in &replay.records {
-            let payload = RefUpdatePayload::decode_canonical(&record.envelope.canonical_payload)?;
-            if payload.old_ref_state_id != previous_ref_state_id {
-                return Err(PrikkError::Integrity(format!(
-                    "ref-log chain mismatch for {} at update {}",
-                    payload.ref_name, payload.update_seq
-                )));
-            }
-            let ref_state_payload =
-                verified_ref_state_payload(object_store, payload.new_ref_state_id)?;
-            if ref_state_payload.ref_name != payload.ref_name {
-                return Err(PrikkError::Integrity(format!(
-                    "RefUpdate points to RefState with different ref name: {} vs {}",
-                    payload.ref_name, ref_state_payload.ref_name
-                )));
-            }
-            if ref_state_payload.previous_ref_state_id != payload.old_ref_state_id {
-                return Err(PrikkError::Integrity(format!(
-                    "RefState previous link disagrees with RefUpdate for {}",
-                    payload.ref_name
-                )));
-            }
-            if ref_state_payload.target_object_id != payload.new_target_object_id {
-                return Err(PrikkError::Integrity(format!(
-                    "RefState target disagrees with RefUpdate for {}",
-                    payload.ref_name
-                )));
-            }
-            ensure_block_exists(
-                object_store,
-                payload.new_target_object_id,
-                payload.new_ref_state_id,
-            )?;
-            previous_ref_state_id = Some(payload.new_ref_state_id);
-        }
-        checked = checked
-            .checked_add(replay.records.len())
-            .ok_or_else(|| PrikkError::Integrity("ref-log count overflow".to_string()))?;
     }
-    Ok(checked)
+    Ok(issues)
 }
 
-fn verified_ref_state_payload(
-    object_store: &FileObjectStore,
-    ref_state_id: ObjectId,
-) -> Result<RefStatePayload> {
-    let Some(envelope) = object_store.read_typed(ref_state_id, ObjectType::RefState)? else {
-        return Err(PrikkError::Integrity(format!(
-            "missing RefState object: {ref_state_id}"
-        )));
-    };
-    if envelope.signatures.is_empty() {
-        return Err(PrikkError::Integrity(format!(
-            "RefState {ref_state_id} is unsigned"
-        )));
+fn blocking_issue(code: &'static str, ref_name: &str, message: String) -> RefPublicationIssue {
+    RefPublicationIssue {
+        code,
+        ref_name: Some(ref_name.to_string()),
+        message,
+        blocking: true,
     }
-    RefStatePayload::decode_canonical(&envelope.canonical_payload)
-}
-
-fn ensure_block_exists(
-    object_store: &FileObjectStore,
-    block_id: ObjectId,
-    owner: ObjectId,
-) -> Result<()> {
-    let exists = object_store
-        .read_typed(block_id, ObjectType::Block)?
-        .is_some();
-    if exists {
-        return Ok(());
-    }
-    Err(PrikkError::Integrity(format!(
-        "ref object {owner} targets missing block {block_id}"
-    )))
-}
-
-fn ensure_ref_path_shape(path: &Path, extension: &str) -> Result<()> {
-    let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
-        return Err(PrikkError::Integrity(format!(
-            "ref path is not valid UTF-8: {}",
-            path.display()
-        )));
-    };
-    let expected_len = 64_usize
-        .checked_add(extension.len())
-        .ok_or_else(|| PrikkError::Integrity("ref extension length overflow".to_string()))?;
-    if file_name.len() != expected_len || !file_name.ends_with(extension) {
-        return Err(PrikkError::Integrity(format!(
-            "ref path does not use sha256hex{} shape: {}",
-            extension,
-            path.display()
-        )));
-    }
-    Ok(())
-}
-
-fn is_temporary_path(path: &Path) -> bool {
-    path.file_name()
-        .and_then(|value| value.to_str())
-        .map(|value| value.contains(".tmp"))
-        .unwrap_or(false)
 }

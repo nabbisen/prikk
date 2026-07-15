@@ -1,6 +1,7 @@
 //! Ref publication tests.
 
 mod object_mismatch;
+mod publication_recovery;
 
 use prikk_object::ObjectType;
 
@@ -228,6 +229,34 @@ fn ref_cas_log_and_publication_remain_on_retained_repository_root() -> prikk_err
 }
 
 #[test]
+fn ref_verification_returns_envelopes_from_retained_anchored_observation() -> prikk_error::Result<()>
+{
+    let root = unique_temp_dir("ref-verification-root-replacement");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let block = signed_empty_block_envelope();
+    let target = FileObjectStore::new(layout.clone()).write_object(&block)?;
+    let ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
+    let ref_state_id = ref_state.object_id();
+    let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, target, 1);
+    RefStore::new(layout.clone()).publish(&RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_state,
+        ref_update: ref_update.clone(),
+    })?;
+
+    std::fs::rename(layout.prikk_dir(), root.join(".prikk-displaced"))?;
+    std::fs::create_dir_all(root.join(".prikk/refs/logs"))?;
+    std::fs::write(root.join(".prikk/refs/logs/replacement.log"), b"malicious")?;
+
+    let verification = super::verify_refs(&layout)?;
+    assert_eq!(verification.ref_update_envelopes, vec![ref_update]);
+    assert_eq!(verification.log_record_count, 1);
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+#[test]
 fn ref_store_rejects_cas_mismatch() {
     let root = unique_temp_dir("ref-cas");
     let layout = RepositoryLayout::init(root.clone());
@@ -392,7 +421,7 @@ fn verify_repository_detects_missing_ref_state_object() {
 }
 
 #[test]
-fn ref_store_reconstructs_missing_pointer_from_log() {
+fn ref_store_refuses_unsigned_missing_pointer_reconstruction() {
     let root = unique_temp_dir("ref-reconstruct");
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
@@ -421,16 +450,11 @@ fn ref_store_reconstructs_missing_pointer_from_log() {
             Some(ref_state_id)
         );
         let repair = store.reconstruct_missing_ref_from_log("heads/main");
-        assert!(repair.is_ok());
-        if let Ok(repair) = repair {
-            assert!(repair.wrote_pointer);
-            assert_eq!(repair.ref_state_id, ref_state_id);
-        }
-        assert_eq!(
-            store.read_current_ref_state_id("heads/main"),
-            Ok(Some(ref_state_id))
-        );
-        assert!(verify_repository(&layout).is_ok());
+        assert!(repair.is_err());
+        assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(None));
+        let report = verify_repository(&layout);
+        assert!(report.is_ok());
+        assert!(report.is_ok_and(|report| report.has_blocking_ref_publication_issues()));
     }
     let _ = std::fs::remove_dir_all(root);
 }
@@ -471,14 +495,8 @@ fn ref_log_ahead_of_pointer_is_recoverable() {
         }
 
         let repair = store.reconstruct_missing_ref_from_log("heads/topic");
-        assert!(repair.is_ok());
-        if let Ok(repair) = repair {
-            assert!(repair.wrote_pointer);
-        }
-        assert_eq!(
-            store.read_current_ref_state_id("heads/topic"),
-            Ok(Some(ref_state_id))
-        );
+        assert!(repair.is_err());
+        assert_eq!(store.read_current_ref_state_id("heads/topic"), Ok(None));
     }
     let _ = std::fs::remove_dir_all(root);
 }

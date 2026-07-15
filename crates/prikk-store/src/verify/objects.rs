@@ -1,6 +1,5 @@
 //! Canonical object-tree verification and temp-debris classification.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -9,6 +8,7 @@ use prikk_object::{ObjectId, ObjectType};
 
 use super::{ObjectVerification, PublicationTrustVerifier, verify_block_payload};
 use crate::file_codec::decode_envelope_file;
+use crate::fsutil::{EntryKind, inspect_entry, list_directory, read_file_required};
 use crate::layout::{RepositoryLayout, persisted_object_types};
 use crate::object_store::FileObjectStore;
 
@@ -73,13 +73,21 @@ fn verify_object_type(
     trust_verifier: &mut PublicationTrustVerifier<'_>,
 ) -> Result<ObjectSummary> {
     let dir = layout.object_type_dir(object_type);
-    if !dir.exists() {
-        return Ok(ObjectSummary::empty());
+    let relative_dir = layout.repository_relative(&dir)?;
+    match inspect_entry(layout.repository_mutation_root(), &relative_dir)? {
+        None => return Ok(ObjectSummary::empty()),
+        Some(EntryKind::Directory) => {}
+        Some(_) => {
+            return Err(PrikkError::Integrity(format!(
+                "unexpected non-directory in object type directory: {}",
+                dir.display()
+            )));
+        }
     }
     let mut summary = ObjectSummary::empty();
-    for entry in fs::read_dir(&dir)? {
-        let prefix_path = entry?.path();
-        if !prefix_path.is_dir() {
+    for entry in list_directory(layout.repository_mutation_root(), &relative_dir)? {
+        let prefix_path = dir.join(&entry.name);
+        if entry.kind != EntryKind::Directory {
             return Err(PrikkError::Integrity(format!(
                 "unexpected non-directory in object type directory: {}",
                 prefix_path.display()
@@ -104,11 +112,12 @@ fn verify_prefix_dir(
     trust_verifier: &mut PublicationTrustVerifier<'_>,
 ) -> Result<ObjectSummary> {
     let mut summary = ObjectSummary::empty();
-    for entry in fs::read_dir(prefix_path)? {
-        let path = entry?.path();
-        if path.is_dir() {
+    let relative_prefix = layout.repository_relative(prefix_path)?;
+    for entry in list_directory(layout.repository_mutation_root(), &relative_prefix)? {
+        let path = prefix_path.join(&entry.name);
+        if entry.kind != EntryKind::Regular {
             return Err(PrikkError::Integrity(format!(
-                "unexpected directory in object prefix directory: {}",
+                "unexpected non-file in object prefix directory: {}",
                 path.display()
             )));
         }
@@ -150,7 +159,11 @@ fn verify_object_file(
             expected_path.display()
         )));
     }
-    let envelope = decode_envelope_file(&fs::read(path)?)?;
+    let relative = layout.repository_relative(path)?;
+    let envelope = decode_envelope_file(&read_file_required(
+        layout.repository_mutation_root(),
+        &relative,
+    )?)?;
     if envelope.object_type != object_type {
         return Err(PrikkError::Integrity(format!(
             "object file {} is under type {} but envelope type is {}",

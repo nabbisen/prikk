@@ -180,6 +180,7 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     // record and fails the "seal first" guard. Released on return (RAII). The append below uses the
     // raw WAL under this held lock (not `ActiveSession::append_patch`, which would re-acquire).
     let _active_lock = ActiveLock::acquire(layout).map_err(AuthorError::Store)?;
+    crate::refs::ensure_no_incomplete_publication(layout).map_err(AuthorError::Store)?;
 
     let wal = Wal::for_layout(layout);
     let active_replay = wal.replay().map_err(AuthorError::Store)?;

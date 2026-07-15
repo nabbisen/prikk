@@ -8,6 +8,7 @@ use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_u16, push_u64};
 use crate::fsutil::{
     append_file_required, ensure_directory_required, len_to_u64, read_file_if_exists,
+    truncate_existing_file_required,
 };
 use crate::layout::RepositoryLayout;
 use crate::refs::require_signed_type;
@@ -76,6 +77,50 @@ pub(crate) fn replay_log(layout: &RepositoryLayout, ref_name: &str) -> Result<Re
 
 pub(crate) fn decode_log_file_bytes(bytes: &[u8]) -> Result<RefLogReplay> {
     decode_log_records(bytes)
+}
+
+/// Truncate only a structurally incomplete final frame and required-sync the retained log.
+pub(crate) fn truncate_incomplete_tail(layout: &RepositoryLayout, ref_name: &str) -> Result<usize> {
+    let path = layout.repository_relative(&layout.ref_log_path(ref_name))?;
+    let bytes = read_file_if_exists(layout.repository_mutation_root(), &path)?.unwrap_or_default();
+    let replay = decode_log_records(&bytes)?;
+    if replay.trailing_partial_bytes == 0 {
+        return Ok(0);
+    }
+    let retained = bytes
+        .len()
+        .checked_sub(replay.trailing_partial_bytes)
+        .ok_or_else(|| PrikkError::Integrity("ref-log retained length underflow".to_string()))?;
+    truncate_existing_file_required(
+        layout.repository_mutation_root(),
+        &path,
+        u64::try_from(retained)
+            .map_err(|_| PrikkError::Integrity("ref-log length exceeds u64".to_string()))?,
+    )?;
+    Ok(replay.trailing_partial_bytes)
+}
+
+/// Return whether the incomplete suffix is an exact prefix of the expected next record.
+pub(crate) fn incomplete_tail_matches(
+    layout: &RepositoryLayout,
+    ref_name: &str,
+    expected: &ObjectEnvelope,
+) -> Result<bool> {
+    let path = layout.repository_relative(&layout.ref_log_path(ref_name))?;
+    let bytes = read_file_if_exists(layout.repository_mutation_root(), &path)?.unwrap_or_default();
+    let replay = decode_log_records(&bytes)?;
+    if replay.trailing_partial_bytes == 0 {
+        return Ok(false);
+    }
+    let retained = bytes
+        .len()
+        .checked_sub(replay.trailing_partial_bytes)
+        .ok_or_else(|| PrikkError::Integrity("ref-log retained length underflow".to_string()))?;
+    let expected_record = encode_log_record(expected)?;
+    let suffix = bytes.get(retained..).ok_or_else(|| {
+        PrikkError::Integrity("ref-log incomplete suffix range overflow".to_string())
+    })?;
+    Ok(expected_record.starts_with(suffix))
 }
 
 fn encode_log_record(envelope: &ObjectEnvelope) -> Result<Vec<u8>> {

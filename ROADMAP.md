@@ -6,11 +6,11 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
 
 ## Current Increment
 
-- **DC-38 - ref publication crash recovery (accepted).** DC-36 implementation was accepted on
-  2026-07-15 after DC-37 supplied the required-sync and anchored-directory primitives. DC-38 is now the
-  current implementation increment. DC-40 is also accepted with implementation evidence pending. The
-  remaining DC-35 through DC-44 work remains scheduled according to `MILESTONES.md`; the combined
-  0.18.0/M1 release gate remains closed.
+- **DC-38 - ref publication crash recovery (implementation accepted).** Architect repair re-review
+  accepted the isolated DC-38 implementation commit point on 2026-07-15. No subsequent implementation
+  increment is selected yet. DC-35 and DC-39 remain proposed, and DC-40 remains accepted with
+  implementation evidence pending. The remaining DC-35 through DC-44 work stays scheduled according
+  to `MILESTONES.md`; the combined 0.18.0/M1 release gate remains closed.
 
 ## Release Candidate Increment
 

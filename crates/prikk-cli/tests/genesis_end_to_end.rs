@@ -290,7 +290,7 @@ fn seal_rejects_missing_pointer_with_ref_log_history() {
     fail(&out, "seal missing pointer with log");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains("pointer is missing but ref-log history exists"),
+        stderr.contains("pointer/log state does not match the expected publication transition"),
         "unexpected stderr: {stderr}"
     );
 

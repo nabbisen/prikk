@@ -75,6 +75,8 @@ The active lock protects writes to this active-session state. Current command pa
   authoring boundary, and final WAL append;
 - rollback-draft append acquires the active lock before appending rollback-draft state;
 - the active-session append helper acquires the active lock before appending a signed Patch envelope;
+- doctor WAL-tail repair acquires the active lock before its final publication guard and holds it
+  through verification, truncation, and the post-repair report;
 - seal acquires the active lock before replaying the WAL, checking active ref metadata, publishing the
   ref, and draining active state after successful publication.
 
@@ -91,7 +93,7 @@ non-empty WAL and fails with guidance to seal first.
 Ref publication uses a ref-specific lock and repeated expected-current checks. These are related but
 distinct mechanisms:
 
-- the per-ref lock serializes Prikk publications and missing-pointer reconstructions for the same ref;
+- the per-ref lock serializes Prikk publications and signer-backed completion for the same ref;
 - the expected-current checks reject stale-baseline publication when the caller's expected previous
   RefState no longer matches the current pointer.
 
@@ -105,16 +107,15 @@ Current ref publication is scoped to one ref:
 
 1. Validate the publication inputs.
 2. Acquire `refs/locks/<ref-name-storage-key>.lock`.
-3. For unborn-ref creation, require the ref pointer to be absent and the ref log to be empty with no
-   trailing partial bytes.
-4. Write the signed RefState object.
+3. Validate pointer/log state, including the empty state required for unborn-ref creation.
+4. Persist the signed RefState object and validate the deterministic signed RefUpdate.
 5. Check the current ref pointer against `expected_previous_ref_state_id`.
-6. Append a signed RefUpdate record to the ref log.
+6. Write and required-sync a candidate pointer under `refs/tmp/`.
 7. Check the current ref pointer against `expected_previous_ref_state_id` again.
-8. Write a candidate pointer under `refs/tmp/`.
-9. Check the current ref pointer against `expected_previous_ref_state_id` again.
-10. Rename the candidate pointer into `refs/by-id/`, required-sync the destination directory, then
-    required-sync `refs/tmp/` for durable candidate removal.
+8. Rename the candidate pointer into `refs/by-id/`, required-sync the destination directory, then
+   required-sync `refs/tmp/` for durable candidate removal.
+9. Append and required-sync exactly one signed RefUpdate record.
+10. Confirm pointer/log agreement before active state is removed.
 
 Those checks prevent silent overwrite when the on-disk ref pointer has moved away from the caller's
 expected baseline. They are not a global repository transaction, a distributed consensus protocol, or a
@@ -123,23 +124,18 @@ proof that every crash point has been exhaustively tested.
 Seal takes `active.lock` first and then enters ref publication, which acquires the ref lock. Current
 code does not acquire those locks in the reverse order.
 
-## Ref Repair Locking
+## Interrupted Publication Locking
 
-`doctor --repair-main-ref` can reconstruct a missing `heads/main` pointer only from already-valid
-evidence. The repair path acquires the same ref-specific lock used by publication. It no-ops if the
-pointer already exists. Otherwise it replays the ref log, verifies the chain, checks referenced
-RefState and Block evidence, writes a candidate pointer, checks the pointer is still absent, and
-promotes the candidate.
+Pointer promotion is the publication commit point. If interruption leaves the pointer exactly one
+transition ahead of the log, only signer-backed `seal` retry may finish publication. It takes the
+active lock and the same ref-specific lock, revalidates retained WAL, RefState, Block, sequence,
+old/new ids, and maintainer trust, then appends the exact deterministic RefUpdate. A structurally
+incomplete final log frame may be truncated only by that path after the complete prefix verifies.
 
-This repair writes only the missing pointer file. It does not synthesize objects, repair malformed
-logs, truncate ref-log tails, repair signatures, auto-trust keys, reconstruct trust policy, recover key
-material, or clear unsafe active sessions.
-
-A crash after appending a valid RefUpdate log record but before pointer promotion can leave a missing
-pointer with valid log evidence. That is the narrow shape this repair path is designed to handle,
-subject to the verification and repair limits documented in the
-[durability and crash recovery](./durability-recovery.md) and
-[integrity and recovery diagnostics](./integrity-recovery.md) references.
+Doctor diagnoses interrupted publication but does not sign, append, promote, or reconstruct a
+missing pointer. The former format-1 missing-pointer repair is refused in 0.18.0. The sole bounded
+legacy mutation is signer-backed seal completion of one exact format-1 log-ahead transition with
+matching retained active state.
 
 ## Stale Locks and Manual Cleanup
 
@@ -186,10 +182,10 @@ and production-readiness claims.
 | Rollback-draft append acquires `active.lock` before appending rollback-draft state. | [`rollback_draft.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/rollback_draft.rs), [DC-10](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-10-ROLLBACK-DRAFT-SIGNING.md) |
 | Seal acquires `active.lock`, validates active ref metadata, publishes through the ref store, then drains active state after successful publication. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [durability and crash recovery](./durability-recovery.md) |
 | Non-empty active WALs require valid active ref metadata; missing or malformed metadata is an integrity issue. | [`active.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/active.rs), [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [integrity and recovery diagnostics](./integrity-recovery.md) |
-| Ref publication uses a per-ref lock, expected-current checks, signed RefState persistence, signed RefUpdate log append, candidate pointer write, rename promotion, and parent-directory sync. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`refs/log.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/log.rs), [`refs/pointer.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer.rs), [PR-007](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-007-REF-PUBLICATION-HANDOFF.md) |
+| Ref publication uses a per-ref lock, expected-current checks, signed RefState persistence, candidate pointer promotion as the commit point, then exactly one signed RefUpdate append. | [`refs/publication.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/publication.rs), [`refs/log.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/log.rs), [`refs/pointer.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
 | Ref CAS mismatch returns `LockConflict` and is distinct from an existing lock-file conflict. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`lock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/lock.rs) |
 | Unborn ref publication is allowed only when the pointer is absent and the ref log is empty with no trailing partial bytes. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-13](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-13-NONDEFAULT-REF-GENESIS.md) |
-| Missing `heads/main` pointer reconstruction is guarded by the ref lock and writes only a missing pointer from already-valid ref-log, RefState, and Block evidence. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [PR-013](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-013-REF-RECOVERY-HANDOFF.md) |
+| Doctor refuses format-1 missing-pointer reconstruction; exact interrupted publication completion requires signer-backed seal under the active and ref locks. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
 | Doctor repairs are opt-in and do not clear unsafe active sessions or define stale-lock cleanup. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [integrity and recovery diagnostics](./integrity-recovery.md), [DC-29](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-29-VERIFY-DOCTOR-INTEGRITY-RECOVERY-REFERENCE.md) |
 | Repository path, durability, and platform claims remain limited by current test evidence and Linux-only exercised gates. | [durability and crash recovery](./durability-recovery.md), [path and worktree safety](./path-safety.md), [DC-28](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md), [DC-32](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-32-PATH-WORKTREE-SAFETY-REFERENCE.md) |
 

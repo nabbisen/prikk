@@ -352,6 +352,8 @@ fn run_verify(path: Option<String>) -> std::result::Result<(), String> {
     print_verify_report(&layout, &report);
     if report.has_active_wal_metadata_integrity_issue() {
         Err("repository has active-WAL metadata integrity issues".to_string())
+    } else if report.has_blocking_ref_publication_issues() {
+        Err("repository has interrupted or divergent ref publication state".to_string())
     } else if report.has_publication_trust_issues() {
         Err("repository has publication-trust issues".to_string())
     } else {

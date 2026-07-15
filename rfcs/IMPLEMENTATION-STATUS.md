@@ -3,7 +3,7 @@
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-36, DC-37, DC-38, and DC-40
-Current implementation increment: DC-38 ref publication crash recovery
+Current implementation increment: none; DC-38 implementation accepted on 2026-07-15
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
@@ -18,8 +18,9 @@ repository-format stabilization, and public-preview readiness. The durable corre
   signature-preimage decisions required by downstream identity-bearing implementation, but does not
   itself authorize DC-38 through DC-40 implementation before their own gates pass.
 - DC-36, DC-37, DC-38, and DC-40 are accepted M1 designs. DC-37 implementation was accepted and
-  committed on 2026-07-15, and DC-36 implementation was subsequently accepted. DC-38 is the current
-  implementation increment. DC-40 implementation and identity-vector evidence remain pending.
+  committed on 2026-07-15, DC-36 implementation was subsequently accepted, and DC-38 implementation
+  was accepted after repair re-review on 2026-07-15. No subsequent implementation increment is
+  selected. DC-40 implementation and identity-vector evidence remain pending.
 - DC-35 and DC-39 remain proposed M1 RFCs held with the accepted work for one 0.18.0 corrective release
   after all blocking findings close.
 - DC-41 through DC-43 are proposed M2 assurance/distribution RFCs and do not authorize implementation
@@ -262,7 +263,7 @@ repository-format stabilization, and public-preview readiness. The durable corre
 - Internal read-only merge/conflict evidence reports for the DC-21 vocabulary; see Current State above.
 - Current-state data-model and trust/threat-model reference docs:
   `docs/src/reference/data-model.md` and `docs/src/reference/trust-threat-model.md`.
-- Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `merge-evidence --baseline-block`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, `doctor --repair-main-ref`, and `--version`.
+- Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `merge-evidence --baseline-block`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, and `--version`. The former `doctor --repair-main-ref` input is retained only to return an explicit compatibility refusal.
 
 ## Not Implemented Yet
 
@@ -280,10 +281,10 @@ repository-format stabilization, and public-preview readiness. The durable corre
   duplicate scalar-field rejection, and `Operation.preconditions` / `PatchPayload.preconditions`
   migration to the FDD-03 §9.2.2 discriminator model.
 
-## Conservative Repairs Added Through PR-014
+## Conservative Repair Boundary
 
 - `prikk doctor --repair-wal-tail` truncates only incomplete trailing active-WAL bytes after verification confirms that all preceding records are valid.
-- `prikk doctor --repair-main-ref` reconstructs only a missing `heads/main` pointer from an already-valid ref log and RefState object.
+- Format-1 missing-pointer reconstruction is refused in the 0.18.0 corrective implementation; exact interrupted publication completion requires signer-backed `seal` and matching retained active state.
 - Repair refuses to mutate the repository when verification reports integrity errors.
 - Missing-object repair, checksum-mismatch repair, object quarantine, GC, and malformed-log repair remain deferred.
 

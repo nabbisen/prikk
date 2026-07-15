@@ -1,13 +1,14 @@
 //! Repository doctor diagnostics and narrowly-scoped repair helpers.
 //!
-//! PR-014 keeps doctor repairs deliberately conservative. Mutating repairs are opt-in and
-//! limited to incomplete active-WAL tail truncation plus reconstruction of a missing `heads/main`
-//! pointer from already-verified ref-log and RefState data.
+//! Doctor repairs are deliberately conservative. Mutating repair is opt-in and limited to
+//! incomplete active-WAL tail truncation. The former format-1 missing-pointer switch remains a
+//! compatibility input but is explicitly refused.
 
 use prikk_error::{PrikkError, Result};
 
 use crate::layout::RepositoryLayout;
-use crate::refs::{RefRecoveryRepair, RefStore};
+use crate::lock::ActiveLock;
+use crate::refs::RefRecoveryRepair;
 use crate::verify::{ActiveWalMetadataStatus, RepositoryVerification, verify_repository};
 use crate::wal::{Wal, WalRepair};
 
@@ -129,7 +130,7 @@ pub struct DoctorRepairOptions {
     /// Truncate incomplete trailing bytes from the active WAL after verification confirms that the
     /// prefix is valid.
     pub truncate_wal_tail: bool,
-    /// Reconstruct `heads/main` from a valid ref log when the pointer file is missing.
+    /// Request the refused format-1 `heads/main` reconstruction compatibility path.
     pub reconstruct_main_ref: bool,
 }
 
@@ -152,7 +153,7 @@ impl DoctorRepairOptions {
         }
     }
 
-    /// Return options that enable only guarded `heads/main` pointer reconstruction.
+    /// Return options that request the refused format-1 missing-pointer compatibility path.
     #[must_use]
     pub const fn reconstruct_main_ref() -> Self {
         Self {
@@ -183,8 +184,8 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
         Ok(verification) => {
             issues.push(DoctorIssue::info(
                 "PRIKK-DOCTOR-VERIFY-OK",
-                "repository verification completed without integrity errors",
-                "no repair action is required",
+                "repository structural verification scan completed",
+                "review the remaining diagnostics before deciding whether action is required",
             ));
             if verification.trailing_partial_wal_bytes != 0 {
                 issues.push(DoctorIssue::warning(
@@ -219,8 +220,34 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                     "preserve it for inspection; doctor does not infer ownership or remove object temps",
                 ));
             }
+            for issue in &verification.ref_publication_issues {
+                let recommendation = match issue.code {
+                    "PRIKK-VERIFY-REF-POINTER-LEADS-LOG"
+                    | "PRIKK-VERIFY-REF-LEGACY-LOG-LEADS"
+                    | "PRIKK-VERIFY-REF-ACTIVE-CLEANUP-PENDING" => {
+                        "run signer-backed `prikk seal --allow-no-audit` for the affected ref; doctor does not sign or append"
+                    }
+                    "PRIKK-VERIFY-REF-POINTER-MISSING" => {
+                        "preserve the repository; use signer-backed seal retry only with matching retained active state, otherwise restore from backup"
+                    }
+                    "PRIKK-VERIFY-REF-LEGACY-TIMESTAMP" => {
+                        "treat the value as non-authoritative legacy data; do not normalize signed bytes in place"
+                    }
+                    "PRIKK-VERIFY-REF-DIVERGENCE" => {
+                        "preserve the repository for manual recovery; signer-backed retry is not authorized without exact retained evidence"
+                    }
+                    _ => {
+                        "preserve the candidate for inspection; doctor does not infer ownership or remove it"
+                    }
+                };
+                let doctor_issue = if issue.blocking {
+                    DoctorIssue::error(issue.code, issue.message.clone(), recommendation)
+                } else {
+                    DoctorIssue::warning(issue.code, issue.message.clone(), recommendation)
+                };
+                issues.push(doctor_issue);
+            }
             add_active_wal_metadata_issues(&verification, &mut issues);
-            add_missing_main_ref_issue(layout, &mut issues);
             DoctorReport {
                 verification: Some(verification),
                 issues,
@@ -245,6 +272,14 @@ pub fn repair_repository(
     layout: &RepositoryLayout,
     options: DoctorRepairOptions,
 ) -> Result<DoctorRepairReport> {
+    if options.reconstruct_main_ref {
+        return Err(PrikkError::Integrity(
+            "format-1 missing-pointer doctor repair is unsupported in 0.18.0; preserve the repository for signer-backed retry or later recovery tooling"
+                .to_string(),
+        ));
+    }
+    let _active_lock = ActiveLock::acquire(layout)?;
+    crate::refs::ensure_no_incomplete_publication(layout)?;
     let before = doctor_repository(layout);
     if !before.is_healthy() {
         return Err(PrikkError::Integrity(
@@ -260,12 +295,7 @@ pub fn repair_repository(
             truncated_bytes: 0,
         }
     };
-    let ref_repair = if options.reconstruct_main_ref {
-        let ref_store = RefStore::new(layout.clone());
-        Some(ref_store.reconstruct_missing_ref_from_log("heads/main")?)
-    } else {
-        None
-    };
+    let ref_repair = None;
     let after = doctor_repository(layout);
     Ok(DoctorRepairReport {
         before,
@@ -273,27 +303,6 @@ pub fn repair_repository(
         ref_repair,
         after,
     })
-}
-
-fn add_missing_main_ref_issue(layout: &RepositoryLayout, issues: &mut Vec<DoctorIssue>) {
-    let ref_store = RefStore::new(layout.clone());
-    match ref_store.recoverable_missing_ref("heads/main") {
-        Ok(Some(candidate)) => issues.push(DoctorIssue::warning(
-            "PRIKK-DOCTOR-REF-POINTER-MISSING",
-            format!(
-                "heads/main pointer is missing but ref log can recover RefState {} at update {}",
-                candidate.ref_state_id, candidate.update_seq
-            ),
-            "run `prikk doctor --repair-main-ref` to reconstruct only the missing \
-             heads/main pointer from the verified ref log",
-        )),
-        Ok(None) => {}
-        Err(error) => issues.push(DoctorIssue::error(
-            "PRIKK-DOCTOR-REF-RECOVERY-ERROR",
-            format!("heads/main ref recovery analysis failed: {error}"),
-            "preserve the repository and inspect refs/logs before attempting ref repair",
-        )),
-    }
 }
 
 fn add_active_wal_metadata_issues(

@@ -59,8 +59,8 @@ mod worktree_status;
 mod test_support;
 
 pub use active::{
-    ActiveCommitResult, ActiveRefMetadata, ActiveSession, read_active_ref_metadata,
-    remove_active_ref_metadata, write_active_ref_metadata,
+    ActiveCommitResult, ActiveRefMetadata, ActiveSession, finish_active_publication_cleanup,
+    read_active_ref_metadata, remove_active_ref_metadata, write_active_ref_metadata,
 };
 pub use author_signing::{AuthorSigner, Ed25519AuthorSigner, author_signature};
 pub use checkout::{
@@ -94,8 +94,8 @@ pub use patch_inverse::{
 pub use patch_replay::{PatchReplayPlan, prepare_patch_replay_plan};
 pub use path::{RepoPath, validate_no_path_collisions, validate_repo_path};
 pub use refs::{
-    RefLogRecord, RefLogReplay, RefPublication, RefRecoveryCandidate, RefRecoveryRepair, RefStore,
-    validate_local_branch_ref,
+    RefLogRecord, RefLogReplay, RefPublication, RefPublicationIssue, RefRecoveryCandidate,
+    RefRecoveryRepair, RefStore, validate_local_branch_ref,
 };
 pub use rollback_draft::{RollbackDraftReport, append_rollback_draft};
 pub use rollback_preview::{

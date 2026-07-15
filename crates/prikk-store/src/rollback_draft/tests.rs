@@ -143,6 +143,34 @@ fn rollback_draft_appends_inverse_patch_to_empty_active_wal() {
 }
 
 #[test]
+fn rollback_draft_refuses_candidate_debris_before_planning_or_wal_mutation()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("rollback-draft-candidate-guard");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let candidate = layout.ref_tmp_path("heads/main");
+    let parent = candidate
+        .parent()
+        .ok_or_else(|| prikk_error::PrikkError::Integrity("candidate has no parent".to_string()))?;
+    std::fs::create_dir_all(parent)?;
+    std::fs::write(&candidate, b"candidate")?;
+
+    let error = append_rollback_draft(&layout, "heads/main", "blocked", &test_signer())
+        .err()
+        .ok_or_else(|| {
+            prikk_error::PrikkError::Integrity("rollback draft unexpectedly ran".to_string())
+        })?;
+    assert!(
+        error
+            .to_string()
+            .contains("repository mutation is blocked by incomplete ref publication")
+    );
+    assert_eq!(std::fs::read(&candidate)?, b"candidate");
+    assert!(Wal::for_layout(&layout).replay()?.records.is_empty());
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+#[test]
 fn rollback_draft_appends_arbitrary_span_text_inverse() {
     let root = unique_temp_dir("rollback-draft-edit-text");
     let layout = RepositoryLayout::init(root.clone());

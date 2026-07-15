@@ -86,6 +86,7 @@ pub fn append_rollback_draft(
     message: &str,
     signer: &impl AuthorSigner,
 ) -> Result<RollbackDraftReport> {
+    crate::refs::ensure_no_incomplete_publication(layout)?;
     let canonical_ref = validate_local_branch_ref(ref_name)?;
     if message.trim().is_empty() {
         return Err(PrikkError::InvalidName(
@@ -123,6 +124,7 @@ pub fn append_rollback_draft(
 
     let wal = Wal::for_layout(layout);
     let _lock = ActiveLock::acquire(layout)?;
+    crate::refs::ensure_no_incomplete_publication(layout)?;
     let replay = wal.replay()?;
     if replay.trailing_partial_bytes != 0 {
         return Err(PrikkError::Integrity(format!(

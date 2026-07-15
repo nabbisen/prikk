@@ -6,15 +6,21 @@
 
 use std::path::PathBuf;
 
-use prikk_hash::sha256;
 use prikk_object::{
-    BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType, RefKind,
-    RefStatePayload, RefUpdatePayload,
+    BlockKind, BlockPayload, CanonicalEncode, ObjectType, RefKind, RefStatePayload,
+    RefUpdatePayload,
 };
 use prikk_store::{
     ActiveLock, ActiveRefMetadata, FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication,
-    RefStore, RepositoryLayout, Wal, maintainer_signature, read_active_ref_metadata,
+    RefStore, RepositoryLayout, Wal, finish_active_publication_cleanup, read_active_ref_metadata,
     remove_active_ref_metadata, validate_local_branch_ref, verify_signer_trusted,
+};
+
+mod support;
+
+use support::{
+    collect_wal_patch_ids, current_ref_state, current_tip_matches_wal_patches,
+    finish_current_publication, persist_wal_patches, scaffold_state_root, signed_envelope,
 };
 
 const DEFAULT_BRANCH_REF: &str = "heads/main";
@@ -71,7 +77,7 @@ fn seal_active_no_audit(
     signer: &impl MaintainerSigner,
 ) -> std::result::Result<SealCommandResult, String> {
     let ref_name = validate_local_branch_ref(ref_name).map_err(|err| err.to_string())?;
-    let _active_lock = ActiveLock::acquire(&layout).map_err(|err| err.to_string())?;
+    let active_lock = ActiveLock::acquire(&layout).map_err(|err| err.to_string())?;
     let wal = Wal::for_layout(&layout);
     let replay = wal.replay().map_err(|err| err.to_string())?;
     if replay.trailing_partial_bytes != 0 {
@@ -112,8 +118,10 @@ fn seal_active_no_audit(
     let wal_patch_ids = collect_wal_patch_ids(&replay.records)?;
     if let Some(current) = current.as_ref() {
         if current_tip_matches_wal_patches(&object_store, current, &wal_patch_ids)? {
-            wal.truncate_empty().map_err(|err| err.to_string())?;
-            remove_active_ref_metadata(&layout).map_err(|err| err.to_string())?;
+            verify_signer_trusted(&layout, signer).map_err(|err| err.to_string())?;
+            finish_current_publication(&ref_store, &active_lock, &ref_name, current, signer)?;
+            finish_active_publication_cleanup(&layout, &active_lock)
+                .map_err(|err| err.to_string())?;
             return Ok(SealCommandResult {
                 ref_name,
                 patch_count: wal_patch_ids.len(),
@@ -193,157 +201,13 @@ fn seal_active_no_audit(
         ref_update: ref_update_envelope,
     };
     let published_ref_state_id = ref_store
-        .publish(&publication)
+        .finish_interrupted_publication(&active_lock, &publication)
         .map_err(|err| err.to_string())?;
-    wal.truncate_empty().map_err(|err| err.to_string())?;
-    remove_active_ref_metadata(&layout).map_err(|err| err.to_string())?;
+    finish_active_publication_cleanup(&layout, &active_lock).map_err(|err| err.to_string())?;
     Ok(SealCommandResult {
         ref_name,
         patch_count: patch_ids.len(),
         block_id,
         ref_state_id: published_ref_state_id,
     })
-}
-
-fn persist_wal_patches(
-    object_store: &mut FileObjectStore,
-    records: &[prikk_store::WalRecord],
-) -> std::result::Result<Vec<prikk_object::ObjectId>, String> {
-    let mut patch_ids = Vec::with_capacity(records.len());
-    for record in records {
-        if record.envelope.object_type != ObjectType::Patch {
-            return Err(format!(
-                "active WAL record {} is {}, expected patch",
-                record.seq, record.envelope.object_type
-            ));
-        }
-        let id = object_store
-            .write_object(&record.envelope)
-            .map_err(|err| err.to_string())?;
-        patch_ids.push(id);
-    }
-    Ok(patch_ids)
-}
-
-fn collect_wal_patch_ids(
-    records: &[prikk_store::WalRecord],
-) -> std::result::Result<Vec<prikk_object::ObjectId>, String> {
-    let mut patch_ids = Vec::with_capacity(records.len());
-    for record in records {
-        if record.envelope.object_type != ObjectType::Patch {
-            return Err(format!(
-                "active WAL record {} is {}, expected patch",
-                record.seq, record.envelope.object_type
-            ));
-        }
-        patch_ids.push(record.envelope.object_id());
-    }
-    Ok(patch_ids)
-}
-
-fn current_tip_matches_wal_patches(
-    object_store: &FileObjectStore,
-    current: &CurrentRefState,
-    wal_patch_ids: &[prikk_object::ObjectId],
-) -> std::result::Result<bool, String> {
-    let envelope = object_store
-        .read_typed(current.target_block_id, ObjectType::Block)
-        .map_err(|err| err.to_string())?
-        .ok_or_else(|| {
-            format!(
-                "current ref targets missing block {}",
-                current.target_block_id
-            )
-        })?;
-    let block = BlockPayload::decode_canonical(&envelope.canonical_payload)
-        .map_err(|err| err.to_string())?;
-    Ok(block.patch_ids == wal_patch_ids)
-}
-
-fn current_ref_state(
-    object_store: &FileObjectStore,
-    ref_store: &RefStore,
-    ref_name: &str,
-) -> std::result::Result<Option<CurrentRefState>, String> {
-    let Some(ref_state_id) = ref_store
-        .read_current_ref_state_id(ref_name)
-        .map_err(|err| err.to_string())?
-    else {
-        let log = ref_store
-            .replay_log(ref_name)
-            .map_err(|err| err.to_string())?;
-        if log.trailing_partial_bytes != 0 {
-            return Err(format!(
-                "ref {ref_name} pointer is missing and its log has trailing partial bytes; \
-                 run `prikk doctor` before seal"
-            ));
-        }
-        if !log.records.is_empty() {
-            return Err(format!(
-                "ref {ref_name} pointer is missing but ref-log history exists; \
-                 run `prikk doctor` before seal"
-            ));
-        }
-        return Ok(None);
-    };
-    let envelope = object_store
-        .read_typed(ref_state_id, ObjectType::RefState)
-        .map_err(|err| err.to_string())?
-        .ok_or_else(|| {
-            format!("current ref {ref_name} points to missing RefState {ref_state_id}")
-        })?;
-    let payload = RefStatePayload::decode_canonical(&envelope.canonical_payload)
-        .map_err(|err| err.to_string())?;
-    if payload.ref_name != ref_name {
-        return Err(format!(
-            "current RefState name mismatch: expected {ref_name}, got {}",
-            payload.ref_name
-        ));
-    }
-    let target_exists = object_store
-        .read_typed(payload.target_object_id, ObjectType::Block)
-        .map_err(|err| err.to_string())?
-        .is_some();
-    if !target_exists {
-        return Err(format!(
-            "current RefState {ref_state_id} targets missing block {}",
-            payload.target_object_id
-        ));
-    }
-    Ok(Some(CurrentRefState {
-        ref_state_id,
-        target_block_id: payload.target_object_id,
-        update_seq: payload.update_seq,
-    }))
-}
-
-fn scaffold_state_root(patch_ids: &[prikk_object::ObjectId]) -> MerkleRoot {
-    let mut preimage = Vec::new();
-    preimage.extend_from_slice(b"prikk.dev.scaffold-state-root.v1");
-    for id in patch_ids {
-        preimage.extend_from_slice(id.as_bytes());
-    }
-    MerkleRoot(sha256(&preimage))
-}
-
-fn signed_envelope(
-    object_type: ObjectType,
-    canonical_payload: Vec<u8>,
-    signer: &impl MaintainerSigner,
-) -> std::result::Result<ObjectEnvelope, String> {
-    let mut envelope = ObjectEnvelope::unsigned(object_type, 1, canonical_payload);
-    let object_id = envelope.object_id();
-    envelope
-        .add_signature(
-            maintainer_signature(signer, object_type, object_id).map_err(|err| err.to_string())?,
-        )
-        .map_err(|err| err.to_string())?;
-    Ok(envelope)
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct CurrentRefState {
-    ref_state_id: prikk_object::ObjectId,
-    target_block_id: prikk_object::ObjectId,
-    update_seq: u64,
 }

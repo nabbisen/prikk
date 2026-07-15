@@ -64,8 +64,9 @@ parser deliberately rejects broader policy shapes. There is no implicit trust-on
 Seal requires `--allow-no-audit`, a valid local branch ref, a non-empty active WAL, valid active ref
 metadata matching the requested ref, and no trailing partial WAL bytes. It verifies that the configured
 MAINTAINER signer matches the repository-local trust policy before publication. It then persists Patch
-objects, signs and writes the Block and RefState, appends a signed RefUpdate, promotes the ref pointer,
-and clears active state.
+objects, signs and writes the Block and RefState, promotes the ref pointer as the commit point, appends
+exactly one signed RefUpdate, confirms pointer/log agreement, and clears active state. Signer-backed
+retry is also the only authority that may finish an exact interrupted publication.
 
 Current seal does not run audit plugins, evaluate attestation policy, perform semantic merge, publish
 multi-parent merge Blocks, or provide remote trust distribution.

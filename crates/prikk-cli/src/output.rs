@@ -426,6 +426,13 @@ pub(crate) fn print_verify_report(
         report.checked_ref_log_records
     );
     println!(
+        "ref publication issues: {}",
+        report.ref_publication_issues.len()
+    );
+    for issue in &report.ref_publication_issues {
+        println!("ref-publication [{}]: {}", issue.code, issue.message);
+    }
+    println!(
         "checked rollback draft WAL records: {}",
         report.checked_rollback_draft_records
     );

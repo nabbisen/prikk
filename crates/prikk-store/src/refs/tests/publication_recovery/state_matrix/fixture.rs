@@ -1,0 +1,233 @@
+//! Trusted persisted-state construction for the DC-38 outcome matrix.
+
+use std::io::Write;
+use std::path::Path;
+
+use prikk_object::{
+    BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType, RefKind,
+    RefStatePayload, RefUpdatePayload,
+};
+
+use crate::fsutil::{TestFailPoint, fail_once_for_test};
+use crate::test_support::{signed_patch_envelope, unique_temp_dir};
+use crate::{
+    Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication,
+    RefStore, RepositoryLayout, Wal, add_trusted_maintainer, maintainer_signature,
+    write_active_ref_metadata,
+};
+
+#[derive(Debug, Clone, Copy)]
+pub(super) enum PersistedState {
+    Candidate,
+    PointerLeading,
+    PartialTail,
+    CompleteCleanup,
+    LegacyLogLeading,
+    Divergence,
+    EmptyWalMetadata,
+}
+
+pub(super) struct Fixture {
+    pub(super) root: std::path::PathBuf,
+    pub(super) layout: RepositoryLayout,
+    pub(super) publication: RefPublication,
+}
+
+impl Fixture {
+    pub(super) fn new(state: PersistedState) -> prikk_error::Result<Self> {
+        let root = unique_temp_dir("dc38-outcome-matrix");
+        let layout = RepositoryLayout::init(root.clone())?;
+        let signer = Ed25519MaintainerSigner::from_seed("matrix-maintainer", &[0x61; 32])?;
+        let public_key = signer
+            .public_key_bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        add_trusted_maintainer(&layout, signer.key_id(), &public_key)?;
+        let patch = signed_patch_envelope();
+        let publication = if matches!(state, PersistedState::LegacyLogLeading) {
+            existing_ref_publication(&layout, &signer, &patch)?
+        } else {
+            root_publication(&layout, &signer, &patch)?
+        };
+        construct_state(&layout, state, &publication)?;
+        if matches!(state, PersistedState::EmptyWalMetadata) {
+            write_active_ref_metadata(&layout, "heads/topic")?;
+        } else {
+            write_active_ref_metadata(&layout, "heads/main")?;
+            Wal::for_layout(&layout).append_patch(&patch)?;
+        }
+        Ok(Self {
+            root,
+            layout,
+            publication,
+        })
+    }
+
+    pub(super) fn state_bytes(&self) -> prikk_error::Result<Vec<Option<Vec<u8>>>> {
+        [
+            self.layout.ref_tmp_path("heads/main"),
+            self.layout.ref_pointer_path("heads/main"),
+            self.layout.ref_log_path("heads/main"),
+            self.layout.default_queue_wal_path(),
+            self.layout.default_active_ref_name_path(),
+        ]
+        .iter()
+        .map(|path| read_optional(path))
+        .collect()
+    }
+
+    pub(super) fn remove(self) {
+        let _ = std::fs::remove_dir_all(self.root);
+    }
+}
+
+fn construct_state(
+    layout: &RepositoryLayout,
+    state: PersistedState,
+    publication: &RefPublication,
+) -> prikk_error::Result<()> {
+    let store = RefStore::new(layout.clone());
+    match state {
+        PersistedState::Candidate => {
+            let path = layout.ref_tmp_path("heads/main");
+            std::fs::write(path, b"candidate")?;
+        }
+        PersistedState::PointerLeading => {
+            fail_once_for_test(TestFailPoint::PromotionDestinationSync);
+            assert!(store.publish(publication).is_err());
+        }
+        PersistedState::PartialTail => {
+            fail_once_for_test(TestFailPoint::AppendWrite);
+            assert!(store.publish(publication).is_err());
+            std::fs::OpenOptions::new()
+                .append(true)
+                .open(layout.ref_log_path("heads/main"))?
+                .write_all(b"PREF")?;
+        }
+        PersistedState::CompleteCleanup => {
+            store.publish(publication)?;
+        }
+        PersistedState::LegacyLogLeading => {
+            FileObjectStore::new(layout.clone()).write_object(&publication.ref_state)?;
+            super::super::super::super::log::append_log_record(
+                layout,
+                "heads/main",
+                &publication.ref_update,
+            )?;
+        }
+        PersistedState::Divergence => {
+            store.publish(publication)?;
+            let bytes = std::fs::read(layout.ref_log_path("heads/main"))?;
+            std::fs::OpenOptions::new()
+                .append(true)
+                .open(layout.ref_log_path("heads/main"))?
+                .write_all(&bytes)?;
+        }
+        PersistedState::EmptyWalMetadata => {}
+    }
+    Ok(())
+}
+
+fn root_publication(
+    layout: &RepositoryLayout,
+    signer: &impl MaintainerSigner,
+    patch: &ObjectEnvelope,
+) -> prikk_error::Result<RefPublication> {
+    publication(layout, signer, patch, None, 1)
+}
+
+fn existing_ref_publication(
+    layout: &RepositoryLayout,
+    signer: &impl MaintainerSigner,
+    patch: &ObjectEnvelope,
+) -> prikk_error::Result<RefPublication> {
+    let baseline = publication(layout, signer, &signed_patch_envelope(), None, 1)?;
+    RefStore::new(layout.clone()).publish(&baseline)?;
+    publication(
+        layout,
+        signer,
+        patch,
+        Some(baseline.ref_state.object_id()),
+        2,
+    )
+}
+
+fn publication(
+    layout: &RepositoryLayout,
+    signer: &impl MaintainerSigner,
+    patch: &ObjectEnvelope,
+    previous: Option<prikk_object::ObjectId>,
+    sequence: u64,
+) -> prikk_error::Result<RefPublication> {
+    let mut objects = FileObjectStore::new(layout.clone());
+    let patch_id = objects.write_object(patch)?;
+    let block_payload = BlockPayload {
+        parent_block_ids: Vec::new(),
+        kind: BlockKind::Root,
+        patch_ids: vec![patch_id],
+        state_merkle_root: MerkleRoot([0; 32]),
+        snapshot_blob_ref: None,
+    };
+    let block = signed_publication(
+        ObjectType::Block,
+        block_payload.to_canonical_bytes()?,
+        signer,
+    )?;
+    let target = objects.write_object(&block)?;
+    let state_payload = RefStatePayload {
+        ref_name: "heads/main".to_string(),
+        kind: RefKind::Branch,
+        target_object_id: target,
+        update_seq: sequence,
+        previous_ref_state_id: previous,
+        required_attestation_ids: Vec::new(),
+    };
+    let ref_state = signed_publication(
+        ObjectType::RefState,
+        state_payload.to_canonical_bytes()?,
+        signer,
+    )?;
+    let state_id = ref_state.object_id();
+    let update_payload = RefUpdatePayload {
+        ref_name: "heads/main".to_string(),
+        old_ref_state_id: previous,
+        new_ref_state_id: state_id,
+        new_target_object_id: target,
+        update_seq: sequence,
+        created_at: 0,
+        author_key_id: signer.key_id().to_string(),
+    };
+    Ok(RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: previous,
+        ref_update: signed_publication(
+            ObjectType::RefUpdate,
+            update_payload.to_canonical_bytes()?,
+            signer,
+        )?,
+        ref_state,
+    })
+}
+
+fn signed_publication(
+    object_type: ObjectType,
+    canonical_payload: Vec<u8>,
+    signer: &impl MaintainerSigner,
+) -> prikk_error::Result<ObjectEnvelope> {
+    let mut envelope = ObjectEnvelope::unsigned(object_type, 1, canonical_payload);
+    envelope.add_signature(maintainer_signature(
+        signer,
+        object_type,
+        envelope.object_id(),
+    )?)?;
+    Ok(envelope)
+}
+
+fn read_optional(path: &Path) -> prikk_error::Result<Option<Vec<u8>>> {
+    match std::fs::read(path) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}

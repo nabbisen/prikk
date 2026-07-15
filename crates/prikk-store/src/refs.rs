@@ -5,8 +5,10 @@
 //! and RefUpdate entries are stored inline in an append-only log. The module does not yet perform
 //! publication-policy evaluation or patch/block sealing.
 
+mod evidence;
 mod log;
 mod pointer;
+mod publication;
 mod verify;
 
 use prikk_error::{PrikkError, Result};
@@ -14,14 +16,27 @@ use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, RefUpd
 
 use crate::fsutil::{ensure_directory_required, promote_file_required};
 use crate::layout::RepositoryLayout;
-use crate::lock::RefLock;
-use crate::object_store::{FileObjectStore, ObjectReader, ObjectWriter};
+use crate::lock::ActiveLock;
+use crate::object_store::{FileObjectStore, ObjectReader};
 
-pub(crate) use log::decode_log_file_bytes;
 pub use log::{RefLogRecord, RefLogReplay};
+pub use verify::RefPublicationIssue;
 pub(crate) use verify::verify_refs;
 
-/// Recoverable ref candidate reconstructed from an append-only ref log.
+pub(crate) fn ensure_no_incomplete_publication(layout: &RepositoryLayout) -> Result<()> {
+    let verification = verify_refs(layout)?;
+    if verification.publication_issues.is_empty()
+        && !evidence::has_incomplete_active_cleanup(layout)?
+    {
+        return Ok(());
+    }
+    Err(PrikkError::LockConflict(
+        "repository mutation is blocked by incomplete ref publication; run verify/doctor and use signer-backed seal retry"
+            .to_string(),
+    ))
+}
+
+/// Diagnostic ref candidate derived from an append-only format-1 ref log.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RefRecoveryCandidate {
     /// Human-readable ref name.
@@ -34,7 +49,7 @@ pub struct RefRecoveryCandidate {
     pub update_seq: u64,
 }
 
-/// Result of a guarded ref-pointer reconstruction attempt.
+/// Compatibility result type retained for the now-refused format-1 reconstruction API.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RefRecoveryRepair {
     /// Human-readable ref name.
@@ -79,34 +94,26 @@ impl RefStore {
 
     /// Publish a signed RefState with ref-specific locking and CAS.
     pub fn publish(&self, publication: &RefPublication) -> Result<ObjectId> {
-        validate_publication(publication)?;
-        let ref_state_id = publication.ref_state.object_id();
-        let ref_lock = RefLock::acquire(&self.layout, &publication.ref_name)?;
-        if publication.expected_previous_ref_state_id.is_none() {
-            self.ensure_unborn_ref_creation_allowed(
-                &publication.ref_name,
-                &publication.ref_update,
-            )?;
-        }
-        let mut object_store = FileObjectStore::new(self.layout.clone());
-        object_store.write_object(&publication.ref_state)?;
-        self.ensure_current_matches(
-            &publication.ref_name,
-            publication.expected_previous_ref_state_id,
-        )?;
-        log::append_log_record(&self.layout, &publication.ref_name, &publication.ref_update)?;
-        self.ensure_current_matches(
-            &publication.ref_name,
-            publication.expected_previous_ref_state_id,
-        )?;
-        self.write_ref_pointer_candidate(&publication.ref_name, ref_state_id)?;
-        self.ensure_current_matches(
-            &publication.ref_name,
-            publication.expected_previous_ref_state_id,
-        )?;
-        self.promote_ref_pointer_candidate(&publication.ref_name)?;
-        drop(ref_lock);
-        Ok(ref_state_id)
+        publication::publish(self, publication)
+    }
+
+    /// Finish an exact signer-backed interrupted publication, including a framing-incomplete tail.
+    pub fn finish_interrupted_publication(
+        &self,
+        active_lock: &ActiveLock,
+        publication: &RefPublication,
+    ) -> Result<ObjectId> {
+        active_lock.require_layout(&self.layout)?;
+        evidence::validate_signer_backed_recovery(&self.layout, publication)?;
+        publication::finish_interrupted(self, publication)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn finish_interrupted_publication_for_test(
+        &self,
+        publication: &RefPublication,
+    ) -> Result<ObjectId> {
+        publication::finish_interrupted(self, publication)
     }
 
     /// Read the current RefState object ID for a ref name.
@@ -129,7 +136,7 @@ impl RefStore {
         log::replay_log(&self.layout, ref_name)
     }
 
-    /// Return a recoverable ref-pointer candidate when the pointer is missing but the log is valid.
+    /// Return a diagnostic candidate when the pointer is missing but the format-1 log is valid.
     pub fn recoverable_missing_ref(&self, ref_name: &str) -> Result<Option<RefRecoveryCandidate>> {
         if self.read_current_ref_state_id(ref_name)?.is_some() {
             return Ok(None);
@@ -190,35 +197,12 @@ impl RefStore {
         }))
     }
 
-    /// Reconstruct a missing ref pointer from the latest valid log record.
-    ///
-    /// This method is deliberately narrow: it writes only the pointer file for a ref whose log and
-    /// target RefState object already verify. It does not synthesize objects or repair malformed
-    /// logs.
+    /// Refuse unsigned reconstruction of a missing format-1 ref pointer.
     pub fn reconstruct_missing_ref_from_log(&self, ref_name: &str) -> Result<RefRecoveryRepair> {
-        let ref_lock = RefLock::acquire(&self.layout, ref_name)?;
-        if let Some(current) = self.read_current_ref_state_id(ref_name)? {
-            drop(ref_lock);
-            return Ok(RefRecoveryRepair {
-                ref_name: ref_name.to_string(),
-                ref_state_id: current,
-                wrote_pointer: false,
-            });
-        }
-        let candidate = self.recoverable_missing_ref(ref_name)?.ok_or_else(|| {
-            PrikkError::Integrity(format!(
-                "ref {ref_name} has no recoverable committed ref-log record"
-            ))
-        })?;
-        self.write_ref_pointer_candidate(ref_name, candidate.ref_state_id)?;
-        self.ensure_current_matches(ref_name, None)?;
-        self.promote_ref_pointer_candidate(ref_name)?;
-        drop(ref_lock);
-        Ok(RefRecoveryRepair {
-            ref_name: ref_name.to_string(),
-            ref_state_id: candidate.ref_state_id,
-            wrote_pointer: true,
-        })
+        let _ = ref_name;
+        Err(PrikkError::Integrity(
+            "format-1 missing-pointer reconstruction is unsupported in 0.18.0".to_string(),
+        ))
     }
 
     fn ensure_current_matches(&self, ref_name: &str, expected: Option<ObjectId>) -> Result<()> {
@@ -227,33 +211,6 @@ impl RefStore {
             return Err(PrikkError::LockConflict(format!(
                 "ref CAS mismatch for {ref_name}: expected {:?}, got {:?}",
                 expected, current
-            )));
-        }
-        Ok(())
-    }
-
-    fn ensure_unborn_ref_creation_allowed(
-        &self,
-        ref_name: &str,
-        proposed_update: &ObjectEnvelope,
-    ) -> Result<()> {
-        self.ensure_current_matches(ref_name, None)?;
-        let log = self.replay_log(ref_name)?;
-        if log.trailing_partial_bytes != 0 {
-            return Err(PrikkError::Integrity(format!(
-                "ref {ref_name} pointer is missing and its log has trailing partial bytes; \
-                 run doctor before creating a root publication"
-            )));
-        }
-        let is_exact_retry = log.records.len() == 1
-            && log
-                .records
-                .first()
-                .is_some_and(|record| record.envelope == *proposed_update);
-        if !log.records.is_empty() && !is_exact_retry {
-            return Err(PrikkError::Integrity(format!(
-                "ref {ref_name} pointer is missing but ref-log history exists; \
-                 run doctor before creating a root publication"
             )));
         }
         Ok(())

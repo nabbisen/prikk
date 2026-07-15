@@ -64,9 +64,9 @@ ids, target Block id, update sequence, creation timestamp, and maintainer key id
 
 Publication is guarded by ref-specific locking and compare-and-swap checks. The
 [concurrency and locking](./concurrency-locking.md) reference owns the detailed lock/CAS behavior.
-Seal persists WAL Patch envelopes, creates a signed Block, creates a signed RefState, appends a signed
-RefUpdate log entry, promotes the ref pointer, then drains the active WAL and active ref metadata after
-successful publication.
+Seal persists WAL Patch envelopes, creates a signed Block and RefState, promotes the authoritative ref
+pointer as the publication commit point, appends exactly one signed RefUpdate log entry, confirms
+pointer/log agreement, then drains the active WAL and active ref metadata.
 
 ## Active WAL and Recovery Boundary
 
@@ -82,10 +82,10 @@ The current active-session model is single-commit-per-active-WAL. Active ref met
 branch ref owns a non-empty active WAL. Missing or malformed active ref metadata on a non-empty WAL is
 an integrity issue; stale metadata on an empty WAL is local debris.
 
-Doctor repair is intentionally narrow. It can truncate an incomplete trailing WAL record after the
-preceding records verify, and can reconstruct a missing ref pointer from an already-valid ref log and
-RefState. It does not synthesize missing objects, repair malformed logs, or prove crash behavior
-beyond the current test evidence.
+Doctor repair is intentionally narrow. It can truncate an incomplete trailing active-WAL record after
+the preceding records verify. It does not reconstruct missing ref pointers, sign or append RefUpdates,
+synthesize missing objects, repair malformed logs, or prove crash behavior beyond current test
+evidence. Exact interrupted ref publication completion belongs to signer-backed `seal` retry.
 
 ## Replay, Checkout, Verify, and Doctor
 

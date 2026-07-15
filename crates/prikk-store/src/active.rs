@@ -11,7 +11,7 @@ use prikk_object::ObjectEnvelope;
 use crate::fsutil::{read_file_if_exists, remove_file_if_present_required, write_file_atomically};
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
-use crate::refs::validate_local_branch_ref;
+use crate::refs::{ensure_no_incomplete_publication, validate_local_branch_ref};
 use crate::wal::Wal;
 
 /// Result of appending a patch envelope to the active session.
@@ -48,6 +48,7 @@ impl ActiveSession {
     /// Append one signed patch envelope while holding the active-session lock.
     pub fn append_patch(&self, envelope: &ObjectEnvelope) -> Result<ActiveCommitResult> {
         let _lock = ActiveLock::acquire(&self.layout)?;
+        ensure_no_incomplete_publication(&self.layout)?;
         let wal = Wal::for_layout(&self.layout);
         let replay = wal.replay()?;
         if replay.trailing_partial_bytes != 0 {
@@ -105,6 +106,17 @@ pub fn write_active_ref_metadata(layout: &RepositoryLayout, ref_name: &str) -> R
 pub fn remove_active_ref_metadata(layout: &RepositoryLayout) -> Result<bool> {
     let relative = layout.repository_relative(&layout.default_active_ref_name_path())?;
     remove_file_if_present_required(layout.repository_mutation_root(), &relative)
+}
+
+/// Drain a fully published active WAL and remove its ownership metadata under the active lock.
+pub fn finish_active_publication_cleanup(
+    layout: &RepositoryLayout,
+    active_lock: &ActiveLock,
+) -> Result<()> {
+    active_lock.require_layout(layout)?;
+    Wal::for_layout(layout).truncate_empty()?;
+    remove_active_ref_metadata(layout)?;
+    Ok(())
 }
 
 /// Prepare active ref metadata for the first WAL append.

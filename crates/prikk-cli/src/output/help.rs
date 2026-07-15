@@ -57,8 +57,5 @@ pub(crate) fn print_help(version: &str) {
     );
     println!("  prikk doctor [path]                       Run health diagnostics");
     println!("  prikk doctor [path] --repair-wal-tail     Truncate incomplete trailing WAL bytes");
-    println!(
-        "  prikk doctor [path] --repair-main-ref     Reconstruct a missing heads/main pointer"
-    );
     println!("  prikk --version                           Print version");
 }

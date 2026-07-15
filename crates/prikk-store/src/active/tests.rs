@@ -3,8 +3,9 @@
 #![allow(clippy::unwrap_used)]
 
 use crate::{
-    ActiveLock, ActiveRefMetadata, ActiveSession, RepositoryLayout, Wal, read_active_ref_metadata,
-    remove_active_ref_metadata, write_active_ref_metadata,
+    ActiveLock, ActiveRefMetadata, ActiveSession, RepositoryLayout, Wal,
+    finish_active_publication_cleanup, read_active_ref_metadata, remove_active_ref_metadata,
+    write_active_ref_metadata,
 };
 
 use crate::fsutil::{TestFailPoint, fail_once_for_test};
@@ -188,6 +189,70 @@ fn active_metadata_write_and_removal_failures_pin_retained_state() {
     assert!(!remove_active_ref_metadata(&layout).unwrap());
 
     let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn active_publication_cleanup_failures_preserve_retryable_states() {
+    for point in [
+        TestFailPoint::Truncate,
+        TestFailPoint::Unlink,
+        TestFailPoint::CleanupDirectorySync,
+    ] {
+        let root = unique_temp_dir("active-publication-cleanup-failpoint");
+        let layout = RepositoryLayout::init(root.clone()).unwrap();
+        write_active_ref_metadata(&layout, "heads/main").unwrap();
+        Wal::for_layout(&layout)
+            .append_patch(&signed_patch_envelope())
+            .unwrap();
+        let wal_before = std::fs::read(layout.default_queue_wal_path()).unwrap();
+        let metadata_before = std::fs::read(layout.default_active_ref_name_path()).unwrap();
+        let active_lock = ActiveLock::acquire(&layout).unwrap();
+
+        fail_once_for_test(point);
+        assert!(finish_active_publication_cleanup(&layout, &active_lock).is_err());
+        match point {
+            TestFailPoint::Truncate => {
+                assert_eq!(
+                    std::fs::read(layout.default_queue_wal_path()).unwrap(),
+                    wal_before
+                );
+                assert_eq!(
+                    std::fs::read(layout.default_active_ref_name_path()).unwrap(),
+                    metadata_before
+                );
+            }
+            TestFailPoint::Unlink => {
+                assert!(
+                    std::fs::read(layout.default_queue_wal_path())
+                        .unwrap()
+                        .is_empty()
+                );
+                assert_eq!(
+                    std::fs::read(layout.default_active_ref_name_path()).unwrap(),
+                    metadata_before
+                );
+            }
+            TestFailPoint::CleanupDirectorySync => {
+                assert!(
+                    std::fs::read(layout.default_queue_wal_path())
+                        .unwrap()
+                        .is_empty()
+                );
+                assert!(!layout.default_active_ref_name_path().exists());
+            }
+            _ => unreachable!(),
+        }
+
+        finish_active_publication_cleanup(&layout, &active_lock).unwrap();
+        assert!(
+            std::fs::read(layout.default_queue_wal_path())
+                .unwrap()
+                .is_empty()
+        );
+        assert!(!layout.default_active_ref_name_path().exists());
+        drop(active_lock);
+        let _ = std::fs::remove_dir_all(root);
+    }
 }
 
 #[test]

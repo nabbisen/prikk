@@ -1,5 +1,7 @@
 //! Repository verification tests.
 
+mod root_authority;
+
 use prikk_object::{
     BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType,
 };

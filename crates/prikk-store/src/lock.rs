@@ -34,6 +34,18 @@ impl ActiveLock {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    pub(crate) fn require_layout(&self, layout: &RepositoryLayout) -> Result<()> {
+        if self
+            .mutation_root
+            .same_authority(layout.repository_mutation_root())
+        {
+            return Ok(());
+        }
+        Err(PrikkError::LockConflict(
+            "active lock belongs to a different repository authority".to_string(),
+        ))
+    }
 }
 
 impl Drop for ActiveLock {

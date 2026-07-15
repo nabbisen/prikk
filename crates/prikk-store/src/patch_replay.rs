@@ -194,8 +194,8 @@ pub(crate) enum WorktreeBaseline {
 /// Decide whether worktree authoring runs against a published lineage or a genesis (first-commit)
 /// context (DC-09 4.4b). Genesis is selected **only** when the target ref has never been published:
 /// the ref pointer is absent **and** the ref log is readable and empty. A missing pointer with any
-/// ref-log history, or an unreadable/partial ref log, is treated as corruption — not genesis — and
-/// fails closed pointing at `doctor` (design §4, review E2). The active-WAL guard (review E1) is the
+/// ref-log history, or an unreadable/partial ref log, is treated as corruption - not genesis - and
+/// fails closed with preserve/restore guidance (design §4, review E2). The active-WAL guard (review E1) is the
 /// authoring caller's responsibility and is enforced there.
 pub(crate) fn resolve_worktree_baseline(
     layout: &RepositoryLayout,
@@ -230,7 +230,7 @@ pub(crate) fn resolve_worktree_baseline(
     if !log.records.is_empty() {
         return Err(PrikkError::Integrity(format!(
             "ref {canonical_ref} pointer is missing but ref-log history exists; \
-             run `prikk doctor --repair-main-ref` (this is not a genesis repository)"
+             preserve the repository and restore from backup (this is not a genesis repository)"
         )));
     }
     Ok(WorktreeBaseline::Genesis)

@@ -10,6 +10,7 @@ use prikk_object::{ObjectEnvelope, Signature, SignatureAlgorithm, SignerRole};
 
 use crate::fsutil::{ensure_directory_required, read_file_required, write_file_atomically};
 use crate::layout::RepositoryLayout;
+use crate::lock::ActiveLock;
 use crate::maintainer_signing::MaintainerSigner;
 
 /// One publication-trust issue found during repository verification.
@@ -47,6 +48,8 @@ pub fn add_trusted_maintainer(
     key_id: &str,
     public_key_hex: &str,
 ) -> Result<MaintainerTrustPolicy> {
+    let _active_lock = ActiveLock::acquire(layout)?;
+    crate::refs::ensure_no_incomplete_publication(layout)?;
     Signature::validate_key_id(key_id)?;
     let public_key = decode_public_key_hex(public_key_hex)?;
     let keys_dir = layout.repository_relative(&layout.maintainer_trust_keys_dir())?;

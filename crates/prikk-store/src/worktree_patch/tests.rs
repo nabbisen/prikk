@@ -1128,7 +1128,8 @@ fn genesis_missing_pointer_with_log_fails_closed() {
     )
     .unwrap_err();
     assert!(
-        err.to_string().contains("ref-log history exists"),
+        err.to_string()
+            .contains("repository mutation is blocked by incomplete ref publication"),
         "unexpected error: {err}"
     );
     let _ = std::fs::remove_dir_all(root);

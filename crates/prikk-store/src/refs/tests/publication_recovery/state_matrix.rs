@@ -1,0 +1,217 @@
+//! Declarative persisted-state outcomes required by DC-34/DC-38.
+
+mod fixture;
+
+use crate::{
+    ActiveLock, ActiveRefMetadata, ActiveSession, DoctorSeverity, RefStore, Wal, doctor_repository,
+    finish_active_publication_cleanup, read_active_ref_metadata, verify_repository,
+};
+use fixture::{Fixture, PersistedState};
+
+#[derive(Clone, Copy)]
+enum VerifyExpectation {
+    Issue { code: &'static str, blocking: bool },
+    NoRefIssue,
+    Error,
+}
+
+#[derive(Clone, Copy)]
+enum RetryExpectation {
+    Completes { log_records: usize },
+    Refuses,
+}
+
+#[derive(Clone, Copy)]
+struct StateCase {
+    state: PersistedState,
+    verify: VerifyExpectation,
+    doctor_code: &'static str,
+    doctor_severity: DoctorSeverity,
+    recommendation: &'static str,
+    retry: RetryExpectation,
+    mutation_succeeds: bool,
+}
+
+const CASES: &[StateCase] = &[
+    StateCase {
+        state: PersistedState::Candidate,
+        verify: VerifyExpectation::Issue {
+            code: "PRIKK-VERIFY-REF-CANDIDATE-DEBRIS",
+            blocking: false,
+        },
+        doctor_code: "PRIKK-VERIFY-REF-CANDIDATE-DEBRIS",
+        doctor_severity: DoctorSeverity::Warning,
+        recommendation: "preserve the candidate",
+        retry: RetryExpectation::Completes { log_records: 1 },
+        mutation_succeeds: false,
+    },
+    StateCase {
+        state: PersistedState::PointerLeading,
+        verify: VerifyExpectation::Issue {
+            code: "PRIKK-VERIFY-REF-POINTER-LEADS-LOG",
+            blocking: true,
+        },
+        doctor_code: "PRIKK-VERIFY-REF-POINTER-LEADS-LOG",
+        doctor_severity: DoctorSeverity::Error,
+        recommendation: "signer-backed",
+        retry: RetryExpectation::Completes { log_records: 1 },
+        mutation_succeeds: false,
+    },
+    StateCase {
+        state: PersistedState::PartialTail,
+        verify: VerifyExpectation::Issue {
+            code: "PRIKK-VERIFY-REF-POINTER-LEADS-LOG",
+            blocking: true,
+        },
+        doctor_code: "PRIKK-VERIFY-REF-POINTER-LEADS-LOG",
+        doctor_severity: DoctorSeverity::Error,
+        recommendation: "signer-backed",
+        retry: RetryExpectation::Completes { log_records: 1 },
+        mutation_succeeds: false,
+    },
+    StateCase {
+        state: PersistedState::CompleteCleanup,
+        verify: VerifyExpectation::Issue {
+            code: "PRIKK-VERIFY-REF-ACTIVE-CLEANUP-PENDING",
+            blocking: true,
+        },
+        doctor_code: "PRIKK-VERIFY-REF-ACTIVE-CLEANUP-PENDING",
+        doctor_severity: DoctorSeverity::Error,
+        recommendation: "signer-backed",
+        retry: RetryExpectation::Completes { log_records: 1 },
+        mutation_succeeds: false,
+    },
+    StateCase {
+        state: PersistedState::LegacyLogLeading,
+        verify: VerifyExpectation::Issue {
+            code: "PRIKK-VERIFY-REF-LEGACY-LOG-LEADS",
+            blocking: true,
+        },
+        doctor_code: "PRIKK-VERIFY-REF-LEGACY-LOG-LEADS",
+        doctor_severity: DoctorSeverity::Error,
+        recommendation: "signer-backed",
+        retry: RetryExpectation::Completes { log_records: 2 },
+        mutation_succeeds: false,
+    },
+    StateCase {
+        state: PersistedState::Divergence,
+        verify: VerifyExpectation::Error,
+        doctor_code: "PRIKK-DOCTOR-VERIFY-ERROR",
+        doctor_severity: DoctorSeverity::Error,
+        recommendation: "preserve the repository",
+        retry: RetryExpectation::Refuses,
+        mutation_succeeds: false,
+    },
+    StateCase {
+        state: PersistedState::EmptyWalMetadata,
+        verify: VerifyExpectation::NoRefIssue,
+        doctor_code: "PRIKK-DOCTOR-ACTIVE-REF-METADATA-DEBRIS",
+        doctor_severity: DoctorSeverity::Warning,
+        recommendation: "no repair is required",
+        retry: RetryExpectation::Refuses,
+        mutation_succeeds: true,
+    },
+];
+
+#[test]
+fn every_state_has_explicit_verify_and_doctor_read_only_outcomes() -> prikk_error::Result<()> {
+    for case in CASES {
+        let fixture = Fixture::new(case.state)?;
+        let before = fixture.state_bytes()?;
+        match (verify_repository(&fixture.layout), case.verify) {
+            (Ok(report), VerifyExpectation::Issue { code, blocking }) => {
+                assert!(
+                    report
+                        .ref_publication_issues
+                        .iter()
+                        .any(|issue| { issue.code == code && issue.blocking == blocking })
+                );
+            }
+            (Ok(report), VerifyExpectation::NoRefIssue) => {
+                assert!(report.ref_publication_issues.is_empty());
+                assert!(report.has_active_wal_metadata_warning());
+            }
+            (Err(_), VerifyExpectation::Error) => {}
+            (result, _) => panic!("unexpected verify result for {:?}: {result:?}", case.state),
+        }
+        let doctor = doctor_repository(&fixture.layout);
+        let issue = doctor
+            .issues
+            .iter()
+            .find(|issue| issue.code == case.doctor_code)
+            .ok_or_else(|| {
+                prikk_error::PrikkError::Integrity(format!(
+                    "missing doctor issue {} for {:?}",
+                    case.doctor_code, case.state
+                ))
+            })?;
+        assert_eq!(issue.severity, case.doctor_severity);
+        assert!(issue.recommendation.contains(case.recommendation));
+        assert_eq!(fixture.state_bytes()?, before);
+        fixture.remove();
+    }
+    Ok(())
+}
+
+#[test]
+fn every_state_has_explicit_production_retry_and_exact_post_state() -> prikk_error::Result<()> {
+    for case in CASES {
+        let fixture = Fixture::new(case.state)?;
+        let before = fixture.state_bytes()?;
+        let active_lock = ActiveLock::acquire(&fixture.layout)?;
+        let store = RefStore::new(fixture.layout.clone());
+        let first = store.finish_interrupted_publication(&active_lock, &fixture.publication);
+        let second = store.finish_interrupted_publication(&active_lock, &fixture.publication);
+        match case.retry {
+            RetryExpectation::Completes { log_records } => {
+                assert_eq!(first?, fixture.publication.ref_state.object_id());
+                assert_eq!(second?, fixture.publication.ref_state.object_id());
+                assert_eq!(store.replay_log("heads/main")?.records.len(), log_records);
+                finish_active_publication_cleanup(&fixture.layout, &active_lock)?;
+                assert!(
+                    Wal::for_layout(&fixture.layout)
+                        .replay()?
+                        .records
+                        .is_empty()
+                );
+                assert_eq!(
+                    read_active_ref_metadata(&fixture.layout)?,
+                    ActiveRefMetadata::Missing
+                );
+                let report = verify_repository(&fixture.layout)?;
+                assert!(report.ref_publication_issues.is_empty());
+                assert!(report.publication_trust_issues.is_empty());
+            }
+            RetryExpectation::Refuses => {
+                assert!(first.is_err());
+                assert!(second.is_err());
+                assert_eq!(fixture.state_bytes()?, before);
+            }
+        }
+        drop(active_lock);
+        fixture.remove();
+    }
+    Ok(())
+}
+
+#[test]
+fn every_state_has_explicit_representative_command_mutation_outcome() -> prikk_error::Result<()> {
+    for case in CASES {
+        let fixture = Fixture::new(case.state)?;
+        let before = fixture.state_bytes()?;
+        let result = ActiveSession::new(fixture.layout.clone())
+            .append_patch(&crate::test_support::signed_patch_envelope());
+        assert_eq!(result.is_ok(), case.mutation_succeeds);
+        if case.mutation_succeeds {
+            assert_eq!(Wal::for_layout(&fixture.layout).replay()?.records.len(), 1);
+            assert_eq!(
+                read_active_ref_metadata(&fixture.layout)?,
+                ActiveRefMetadata::Valid("heads/main".to_string())
+            );
+        } else {
+            assert_eq!(fixture.state_bytes()?, before);
+        }
+        fixture.remove();
+    }
+    Ok(())
+}

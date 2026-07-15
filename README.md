@@ -150,7 +150,6 @@ prikk worktree-status [path] [--ref REF]
 prikk verify [path]
 prikk doctor [path]
 prikk doctor [path] --repair-wal-tail
-prikk doctor [path] --repair-main-ref
 ```
 
 ## Project Structure

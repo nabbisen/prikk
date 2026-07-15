@@ -184,7 +184,7 @@ fn doctor_reports_empty_active_metadata_debris_as_warning() {
 }
 
 #[test]
-fn doctor_repair_reconstructs_missing_main_ref_pointer() {
+fn doctor_refuses_missing_main_ref_pointer_reconstruction() {
     let root = unique_temp_dir("doctor-repair-main-ref");
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
@@ -255,25 +255,65 @@ fn doctor_repair_reconstructs_missing_main_ref_pointer() {
         assert!(std::fs::remove_file(layout.ref_pointer_path("heads/main")).is_ok());
 
         let before = doctor_repository(&layout);
-        assert!(before.is_healthy());
-        assert_eq!(before.count_by_severity(DoctorSeverity::Warning), 1);
+        assert!(!before.is_healthy());
+        assert_eq!(before.count_by_severity(DoctorSeverity::Error), 1);
 
         let repair = repair_repository(&layout, DoctorRepairOptions::reconstruct_main_ref());
-        assert!(repair.is_ok());
-        if let Ok(repair) = repair {
-            assert_eq!(
-                repair.ref_repair.as_ref().map(|value| value.wrote_pointer),
-                Some(true)
-            );
-            assert!(repair.after.is_healthy());
-            assert_eq!(repair.after.count_by_severity(DoctorSeverity::Warning), 0);
-        }
-        assert_eq!(
-            store.read_current_ref_state_id("heads/main"),
-            Ok(Some(ref_state_id))
-        );
+        assert!(repair.is_err());
+        assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(None));
     }
     let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn doctor_repair_requires_active_lock_before_wal_mutation() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("doctor-active-lock");
+    let layout = RepositoryLayout::init(root.clone())?;
+    std::fs::write(layout.default_queue_wal_path(), b"partial")?;
+    let before = std::fs::read(layout.default_queue_wal_path())?;
+    let active_lock = crate::ActiveLock::acquire(&layout)?;
+
+    let error = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())
+        .err()
+        .ok_or_else(|| prikk_error::PrikkError::Integrity("repair unexpectedly ran".to_string()))?;
+    assert!(matches!(error, prikk_error::PrikkError::LockConflict(_)));
+    assert_eq!(std::fs::read(layout.default_queue_wal_path())?, before);
+
+    drop(active_lock);
+    let report = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())?;
+    assert_eq!(report.wal_repair.truncated_bytes, before.len());
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+#[test]
+fn doctor_rechecks_publication_guard_after_acquiring_active_lock() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("doctor-under-lock-guard");
+    let layout = RepositoryLayout::init(root.clone())?;
+    std::fs::write(layout.default_queue_wal_path(), b"partial")?;
+    let before = std::fs::read(layout.default_queue_wal_path())?;
+    let active_lock = crate::ActiveLock::acquire(&layout)?;
+    let candidate = layout.ref_tmp_path("heads/main");
+    let parent = candidate
+        .parent()
+        .ok_or_else(|| prikk_error::PrikkError::Integrity("candidate has no parent".to_string()))?;
+    std::fs::create_dir_all(parent)?;
+    std::fs::write(&candidate, b"candidate")?;
+
+    assert!(repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail()).is_err());
+    drop(active_lock);
+    let error = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())
+        .err()
+        .ok_or_else(|| prikk_error::PrikkError::Integrity("repair unexpectedly ran".to_string()))?;
+    assert!(
+        error
+            .to_string()
+            .contains("repository mutation is blocked by incomplete ref publication")
+    );
+    assert_eq!(std::fs::read(layout.default_queue_wal_path())?, before);
+    assert_eq!(std::fs::read(&candidate)?, b"candidate");
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
 }
 
 fn signed_publication_envelope(

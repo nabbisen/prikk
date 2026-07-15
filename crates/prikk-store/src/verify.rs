@@ -1,29 +1,28 @@
 //! Repository verification routines.
 //!
-//! Verification remains read-only in PR-014. It checks object identity, object-type
-//! placement, envelope decoding, sealed block references, ref pointer/log consistency, and active
-//! WAL replay checksums. Repair/truncation belongs to a later `doctor` increment.
+//! Verification is read-only. It checks object identity, object-type placement, envelope decoding,
+//! sealed block references, joint ref publication state, active WAL replay checksums, and retained
+//! active-publication cleanup state. Mutation belongs to narrow doctor or signer-backed seal paths.
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 mod objects;
+mod ref_publication;
+mod trust;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{BlockPayload, ObjectEnvelope, ObjectId, ObjectType};
+use prikk_object::{BlockPayload, ObjectId, ObjectType};
 
 use crate::active::{ActiveRefMetadata, read_active_ref_metadata};
 use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
-use crate::refs::{decode_log_file_bytes, verify_refs};
+use crate::refs::verify_refs;
 use crate::rollback_verify::{verify_rollback_draft_wal_records, verify_rollback_patch_envelope};
-use crate::trust::{
-    MaintainerTrustPolicy, PublicationTrustIssue, load_maintainer_trust_policy,
-    verify_trusted_publication_envelope,
-};
+use crate::trust::PublicationTrustIssue;
 use crate::wal::Wal;
 
 use objects::verify_objects;
+use trust::PublicationTrustVerifier;
 
 /// Verification summary for a single persisted object.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,6 +56,8 @@ pub struct RepositoryVerification {
     pub checked_refs: usize,
     /// Number of inline ref-log records checked successfully.
     pub checked_ref_log_records: usize,
+    /// Interrupted ref-publication and candidate-debris conditions found by joint verification.
+    pub ref_publication_issues: Vec<crate::refs::RefPublicationIssue>,
     /// Number of active WAL records classified and decoded as rollback drafts.
     pub checked_rollback_draft_records: usize,
     /// Number of publication envelopes checked against repository-local trust.
@@ -82,6 +83,14 @@ impl RepositoryVerification {
     #[must_use]
     pub fn has_publication_trust_issues(&self) -> bool {
         !self.publication_trust_issues.is_empty()
+    }
+
+    /// Return true when pointer/log state requires signer-backed recovery or manual intervention.
+    #[must_use]
+    pub fn has_blocking_ref_publication_issues(&self) -> bool {
+        self.ref_publication_issues
+            .iter()
+            .any(|issue| issue.blocking)
     }
 
     /// Return true when a non-empty active WAL lacks valid ownership metadata.
@@ -152,13 +161,23 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
     let mut trust_verifier = PublicationTrustVerifier::new(layout);
     let object_summary = verify_objects(layout, &object_store, &mut trust_verifier)?;
     let ref_verification = verify_refs(layout)?;
-    verify_ref_update_publication_trust(layout, &mut trust_verifier)?;
-    let wal = Wal::new(layout.default_queue_wal_path());
+    for envelope in &ref_verification.ref_update_envelopes {
+        trust_verifier.verify(envelope)?;
+    }
+    let wal = Wal::for_layout(layout);
     let replay = wal.replay()?;
     let persisted_wal_patches = verify_wal_persistence(&object_store, &replay.records)?;
     let checked_rollback_draft_records = verify_rollback_draft_wal_records(&replay.records)?;
     let active_wal_metadata_status =
         classify_active_wal_metadata(layout, replay.records.is_empty())?;
+    let mut ref_publication_issues = ref_verification.publication_issues;
+    ref_publication::require_retained_evidence(
+        layout,
+        &replay.records,
+        &active_wal_metadata_status,
+        trust_verifier.issues.is_empty(),
+        &mut ref_publication_issues,
+    )?;
     Ok(RepositoryVerification {
         checked_objects: object_summary.object_count,
         checked_wal_records: replay.records.len(),
@@ -168,6 +187,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
         persisted_wal_patches,
         checked_refs: ref_verification.pointer_count,
         checked_ref_log_records: ref_verification.log_record_count,
+        ref_publication_issues,
         checked_rollback_draft_records,
         checked_publication_trust_records: trust_verifier.checked_records,
         publication_trust_issues: trust_verifier.issues,
@@ -197,78 +217,6 @@ fn classify_active_wal_metadata(
             Ok(ActiveWalMetadataStatus::InvalidForNonEmptyWal { reason })
         }
     }
-}
-
-struct PublicationTrustVerifier<'a> {
-    layout: &'a RepositoryLayout,
-    policy: Option<MaintainerTrustPolicy>,
-    policy_issue_added: bool,
-    checked_records: usize,
-    issues: Vec<PublicationTrustIssue>,
-}
-
-impl<'a> PublicationTrustVerifier<'a> {
-    const fn new(layout: &'a RepositoryLayout) -> Self {
-        Self {
-            layout,
-            policy: None,
-            policy_issue_added: false,
-            checked_records: 0,
-            issues: Vec::new(),
-        }
-    }
-
-    fn verify(&mut self, envelope: &ObjectEnvelope) -> Result<()> {
-        self.checked_records = self
-            .checked_records
-            .checked_add(1)
-            .ok_or_else(|| PrikkError::Integrity("publication trust count overflow".to_string()))?;
-        if self.policy.is_none() && !self.policy_issue_added {
-            match load_maintainer_trust_policy(self.layout) {
-                Ok(policy) => self.policy = Some(policy),
-                Err(err) => {
-                    self.policy_issue_added = true;
-                    self.issues.push(PublicationTrustIssue::new(
-                        "PRIKK-TRUST-POLICY-INVALID",
-                        format!("publication trust policy is invalid: {err}"),
-                    ));
-                    return Ok(());
-                }
-            }
-        }
-        if let Some(policy) = &self.policy {
-            if let Err(issue) = verify_trusted_publication_envelope(policy, envelope) {
-                self.issues.push(issue);
-            }
-        }
-        Ok(())
-    }
-}
-
-fn verify_ref_update_publication_trust(
-    layout: &RepositoryLayout,
-    trust_verifier: &mut PublicationTrustVerifier<'_>,
-) -> Result<()> {
-    let dir = layout.refs_dir().join("logs");
-    if !dir.exists() {
-        return Ok(());
-    }
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() || is_temporary_path(&path) {
-            continue;
-        }
-        let bytes = fs::read(&path)?;
-        let replay = decode_log_file_bytes(&bytes)?;
-        if replay.trailing_partial_bytes != 0 {
-            continue;
-        }
-        for record in &replay.records {
-            trust_verifier.verify(&record.envelope)?;
-        }
-    }
-    Ok(())
 }
 
 fn verify_block_payload(
@@ -347,13 +295,6 @@ fn verify_wal_persistence(
         }
     }
     Ok(persisted)
-}
-
-fn is_temporary_path(path: &Path) -> bool {
-    path.file_name()
-        .and_then(|value| value.to_str())
-        .map(|value| value.contains(".tmp."))
-        .unwrap_or(false)
 }
 
 #[cfg(test)]

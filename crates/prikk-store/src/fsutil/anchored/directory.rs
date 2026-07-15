@@ -39,6 +39,17 @@ pub(super) struct AnchoredDirectory {
 }
 
 impl MutationRoot {
+    pub(crate) fn same_authority(&self, other: &Self) -> bool {
+        #[cfg(target_os = "linux")]
+        {
+            Arc::ptr_eq(&self.directory, &other.directory)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            Arc::ptr_eq(&self.path, &other.path)
+        }
+    }
+
     /// Bind mutation authority to an existing no-follow directory handle.
     pub(crate) fn open(path: &Path) -> Result<Self> {
         #[cfg(target_os = "linux")]

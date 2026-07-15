@@ -80,7 +80,7 @@ pub(crate) struct DoctorArgs {
     pub(crate) root: PathBuf,
     /// Whether to repair incomplete trailing WAL bytes.
     pub(crate) repair_wal_tail: bool,
-    /// Whether to reconstruct a missing heads/main pointer from valid logs.
+    /// Whether the refused format-1 missing-pointer compatibility input was supplied.
     pub(crate) repair_main_ref: bool,
 }
 

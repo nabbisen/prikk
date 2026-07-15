@@ -1,7 +1,7 @@
 # RFC (accepted) - DC-38 Ref Publication Crash Recovery
 
-**Status.** Accepted after architect re-review on 2026-07-14; current M1 implementation increment
-after accepted DC-37 and DC-36 storage semantics.
+**Status.** Accepted after architect re-review on 2026-07-14; implementation accepted after repair
+re-review on 2026-07-15.
 **Target milestone.** M1 - 0.18.0 corrective release.
 **Tracks.** Architect review B1.
 **Touches.** Ref publication order, seal retry, ref verification, doctor diagnostics, active-session

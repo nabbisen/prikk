@@ -6,7 +6,10 @@ use std::path::Path;
 
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::push_bytes_u64;
-use crate::fsutil::{ensure_directory_required, read_file_if_exists, write_file_atomically};
+use crate::fsutil::{
+    EntryKind, ensure_directory_required, list_directory, read_file_if_exists,
+    remove_file_if_present_required, write_file_atomically,
+};
 use crate::layout::RepositoryLayout;
 
 const REF_POINTER_MAGIC: &[u8; 8] = b"PREFPTR1";
@@ -46,6 +49,60 @@ pub(crate) fn write_ref_pointer_candidate(
     ensure_directory_required(layout.repository_mutation_root(), parent)?;
     let bytes = encode_ref_pointer(ref_name, ref_state_id)?;
     write_file_atomically(layout.repository_mutation_root(), &candidate, &bytes)
+}
+
+/// Remove only uniquely named atomic-write temps belonging to this ref's candidate.
+pub(crate) fn remove_candidate_write_temps(
+    layout: &RepositoryLayout,
+    ref_name: &str,
+) -> Result<()> {
+    let candidate = layout.repository_relative(&layout.ref_tmp_path(ref_name))?;
+    let parent = candidate.parent().ok_or_else(|| {
+        PrikkError::Io("ref pointer candidate path has no parent directory".to_string())
+    })?;
+    let candidate_name = candidate
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| PrikkError::Integrity("candidate name is not valid UTF-8".to_string()))?;
+    let prefix = format!("{candidate_name}.tmp.");
+    for entry in list_directory(layout.repository_mutation_root(), parent)? {
+        let Some(name) = entry.name.to_str() else {
+            continue;
+        };
+        if !name.starts_with(&prefix) {
+            continue;
+        }
+        if !is_generated_candidate_temp(name, &prefix) {
+            return Err(PrikkError::Integrity(
+                "unrecognized same-prefix ref candidate temp remains".to_string(),
+            ));
+        }
+        if entry.kind != EntryKind::Regular {
+            return Err(PrikkError::Integrity(
+                "ref candidate temp is not a regular file".to_string(),
+            ));
+        }
+        remove_file_if_present_required(
+            layout.repository_mutation_root(),
+            &parent.join(&entry.name),
+        )?;
+    }
+    Ok(())
+}
+
+fn is_generated_candidate_temp(name: &str, prefix: &str) -> bool {
+    let Some(suffix) = name.strip_prefix(prefix) else {
+        return false;
+    };
+    let Some((pid, random)) = suffix.split_once('.') else {
+        return false;
+    };
+    !pid.is_empty()
+        && pid.bytes().all(|byte| byte.is_ascii_digit())
+        && random.len() == 32
+        && random
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn encode_ref_pointer(ref_name: &str, ref_state_id: ObjectId) -> Result<Vec<u8>> {
