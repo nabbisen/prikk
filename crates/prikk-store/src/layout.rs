@@ -1,55 +1,86 @@
 //! Repository layout paths and initialization.
 
-use std::fs::{self, File};
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use prikk_error::{PrikkError, Result};
 use prikk_hash::{sha256, to_hex};
 use prikk_object::{ObjectId, ObjectType};
 
-use crate::fsutil::{sync_directory_best_effort, write_file_atomically};
+use crate::fsutil::{
+    MutationRoot, ensure_directory_required, read_file_required, write_file_atomically,
+};
 
 const REPO_DIR: &str = ".prikk";
 const FORMAT_VERSION: &str = "1\n";
 
 /// Repository layout paths.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct RepositoryLayout {
     root: PathBuf,
     prikk_dir: PathBuf,
+    worktree_mutation: MutationRoot,
+    repository_mutation: MutationRoot,
 }
+
+impl PartialEq for RepositoryLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.root == other.root && self.prikk_dir == other.prikk_dir
+    }
+}
+
+impl Eq for RepositoryLayout {}
 
 impl RepositoryLayout {
     /// Create a layout for a working tree root.
-    #[must_use]
-    pub fn new(root: impl Into<PathBuf>) -> Self {
+    pub fn new(root: impl Into<PathBuf>) -> Result<Self> {
         let root = root.into();
         let prikk_dir = root.join(REPO_DIR);
-        Self { root, prikk_dir }
+        let worktree_mutation = MutationRoot::open(&root)?;
+        let repository_mutation = worktree_mutation.open_root(Path::new(REPO_DIR))?;
+        Ok(Self {
+            root,
+            prikk_dir,
+            worktree_mutation,
+            repository_mutation,
+        })
     }
 
     /// Initialize a repository layout on disk.
     pub fn init(root: impl Into<PathBuf>) -> Result<Self> {
-        let layout = Self::new(root);
-        fs::create_dir_all(&layout.prikk_dir)?;
-        for dir in layout.required_directories() {
-            fs::create_dir_all(dir)?;
+        let root = root.into();
+        let prikk_dir = root.join(REPO_DIR);
+        let worktree_mutation = MutationRoot::open(&root)?;
+        let repository_mutation = worktree_mutation.ensure_root(Path::new(REPO_DIR))?;
+        let layout = Self {
+            root,
+            prikk_dir,
+            worktree_mutation,
+            repository_mutation,
+        };
+        for dir in layout.required_repository_directories()? {
+            ensure_directory_required(layout.repository_mutation_root(), &dir)?;
         }
-        write_file_atomically(&layout.format_path(), FORMAT_VERSION.as_bytes())?;
-        sync_directory_best_effort(&layout.prikk_dir)?;
+        write_file_atomically(
+            layout.repository_mutation_root(),
+            Path::new("FORMAT"),
+            FORMAT_VERSION.as_bytes(),
+        )?;
         Ok(layout)
     }
 
     /// Open an existing repository layout.
     pub fn open(root: impl Into<PathBuf>) -> Result<Self> {
-        let layout = Self::new(root);
-        let mut version = String::new();
-        File::open(layout.format_path())?.read_to_string(&mut version)?;
-        if version != FORMAT_VERSION {
+        let layout = Self::new(root)?;
+        layout.validate_format()?;
+        Ok(layout)
+    }
+
+    pub(crate) fn validate_format(&self) -> Result<()> {
+        let version = read_file_required(self.repository_mutation_root(), Path::new("FORMAT"))?;
+        if version != FORMAT_VERSION.as_bytes() {
             return Err(PrikkError::UnsupportedFormatVersion(0));
         }
-        Ok(layout)
+        Ok(())
     }
 
     /// Return the working tree root.
@@ -145,6 +176,29 @@ impl RepositoryLayout {
         dirs.push(self.cache_dir());
         dirs.push(self.quarantine_dir());
         dirs
+    }
+
+    pub(crate) fn repository_mutation_root(&self) -> &MutationRoot {
+        &self.repository_mutation
+    }
+
+    pub(crate) fn worktree_mutation_root(&self) -> &MutationRoot {
+        &self.worktree_mutation
+    }
+
+    pub(crate) fn repository_relative(&self, path: &Path) -> Result<PathBuf> {
+        path.strip_prefix(&self.prikk_dir)
+            .map(Path::to_path_buf)
+            .map_err(|_| {
+                PrikkError::Io("path is outside repository mutation authority".to_string())
+            })
+    }
+
+    fn required_repository_directories(&self) -> Result<Vec<PathBuf>> {
+        self.required_directories()
+            .into_iter()
+            .map(|path| self.repository_relative(&path))
+            .collect()
     }
 
     /// Return the object directory for a persisted object type.

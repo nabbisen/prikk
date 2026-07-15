@@ -1,12 +1,12 @@
 //! File-backed object store.
 
-use std::fs;
-
 use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectEnvelope, ObjectId, ObjectType};
 
 use crate::file_codec::{decode_envelope_file, encode_envelope_file};
-use crate::fsutil::{sync_directory_best_effort, write_file_atomically};
+use crate::fsutil::{
+    EntryKind, ensure_directory_required, inspect_entry, read_file_if_exists, write_file_atomically,
+};
 use crate::layout::{RepositoryLayout, persisted_object_types};
 
 /// Read-only object access boundary.
@@ -46,7 +46,14 @@ impl FileObjectStore {
         if object_type == ObjectType::RefUpdate {
             return false;
         }
-        self.layout.object_path(object_type, id).is_file()
+        let path = self.layout.object_path(object_type, id);
+        let Ok(relative) = self.layout.repository_relative(&path) else {
+            return false;
+        };
+        matches!(
+            inspect_entry(self.layout.repository_mutation_root(), &relative),
+            Ok(Some(EntryKind::Regular))
+        )
     }
 
     /// Read and require a specific object type.
@@ -72,8 +79,10 @@ impl ObjectReader for FileObjectStore {
     fn read_object(&self, id: ObjectId) -> Result<Option<ObjectEnvelope>> {
         for object_type in persisted_object_types() {
             let path = self.layout.object_path(object_type, id);
-            if path.is_file() {
-                let bytes = fs::read(&path)?;
+            let relative = self.layout.repository_relative(&path)?;
+            if let Some(bytes) =
+                read_file_if_exists(self.layout.repository_mutation_root(), &relative)?
+            {
                 let envelope = decode_envelope_file(&bytes)?;
                 let computed = envelope.object_id();
                 if computed != id {
@@ -104,18 +113,18 @@ impl ObjectWriter for FileObjectStore {
         envelope.validate()?;
         let id = envelope.object_id();
         let path = self.layout.object_path(envelope.object_type, id);
-        if path.is_file() {
+        let relative = self.layout.repository_relative(&path)?;
+        if read_file_if_exists(self.layout.repository_mutation_root(), &relative)?.is_some() {
             return Ok(id);
         }
-        let Some(parent) = path.parent() else {
+        let Some(parent) = relative.parent() else {
             return Err(PrikkError::Io(
                 "object path has no parent directory".to_string(),
             ));
         };
-        fs::create_dir_all(parent)?;
+        ensure_directory_required(self.layout.repository_mutation_root(), parent)?;
         let bytes = encode_envelope_file(envelope)?;
-        write_file_atomically(&path, &bytes)?;
-        sync_directory_best_effort(parent)?;
+        write_file_atomically(self.layout.repository_mutation_root(), &relative, &bytes)?;
         Ok(id)
     }
 }

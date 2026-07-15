@@ -1,50 +1,48 @@
 //! Filesystem utility helpers for storage operations.
 
-use std::fs::{self, File};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use prikk_error::{PrikkError, Result};
 
-/// Write a file through a temporary path, fsync the file, rename it, and fsync the parent.
-pub(crate) fn write_file_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
-    let Some(parent) = path.parent() else {
+mod anchored;
+
+#[cfg(test)]
+mod caller_tests;
+#[cfg(test)]
+mod tests;
+
+pub(crate) use anchored::{
+    EntryKind, MutationRoot, append_file_required, create_new_file_required,
+    ensure_directory_required, inspect_entry, list_directory, promote_file_required,
+    read_file_if_exists, read_file_required, read_file_state_if_exists,
+    remove_file_cleanup_best_effort, remove_file_if_present_required,
+    remove_worktree_file_required, sync_directory_required, truncate_existing_file_required,
+    truncate_file_empty_required, write_file_atomically, write_worktree_file_atomically,
+};
+
+#[cfg(test)]
+pub(crate) use anchored::remove_file_required;
+
+#[cfg(test)]
+pub(crate) use anchored::{TestFailPoint, fail_after_for_test, fail_once_for_test};
+
+/// Return a process-unique temporary path next to the destination.
+pub(crate) fn temporary_path(path: &Path) -> Result<PathBuf> {
+    let Some(file_name) = path.file_name() else {
         return Err(PrikkError::Io(
-            "atomic write path has no parent directory".to_string(),
+            "temporary path destination has no file name".to_string(),
         ));
     };
-    fs::create_dir_all(parent)?;
-    let tmp_path = temporary_path(path);
-    {
-        let mut file = File::create(&tmp_path)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
-    }
-    fs::rename(&tmp_path, path)?;
-    sync_directory_best_effort(parent)?;
-    Ok(())
-}
-
-/// Return a process-local temporary path next to the destination.
-pub(crate) fn temporary_path(path: &Path) -> PathBuf {
-    let mut file_name = path
-        .file_name()
-        .map(|name| name.to_os_string())
-        .unwrap_or_default();
-    file_name.push(format!(".tmp.{}", std::process::id()));
-    path.with_file_name(file_name)
-}
-
-/// Best-effort directory sync used after durable file creation or rename.
-pub(crate) fn sync_directory_best_effort(path: &Path) -> Result<()> {
-    match File::open(path) {
-        Ok(file) => {
-            let _ = file.sync_all();
-            Ok(())
-        }
-        Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => Ok(()),
-        Err(err) => Err(err.into()),
-    }
+    let mut random = [0_u8; 16];
+    getrandom::getrandom(&mut random)
+        .map_err(|error| PrikkError::Io(format!("temporary path randomness failed: {error}")))?;
+    let mut name = file_name.to_os_string();
+    name.push(format!(
+        ".tmp.{}.{:032x}",
+        std::process::id(),
+        u128::from_le_bytes(random)
+    ));
+    Ok(path.with_file_name(name))
 }
 
 /// Convert a usize length to u16.

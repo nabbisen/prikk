@@ -3,14 +3,12 @@
 //! DC-11 deliberately supports only one trusted MAINTAINER key with `required = 1`. The parser is
 //! strict and fixed-shape; this module is not a general TOML implementation.
 
-use std::fs;
-
 use prikk_crypto::{ED25519_KEY_LEN, verify_ed25519};
 use prikk_error::{PrikkError, Result};
 use prikk_hash::to_hex;
 use prikk_object::{ObjectEnvelope, Signature, SignatureAlgorithm, SignerRole};
 
-use crate::fsutil::{sync_directory_best_effort, write_file_atomically};
+use crate::fsutil::{ensure_directory_required, read_file_required, write_file_atomically};
 use crate::layout::RepositoryLayout;
 use crate::maintainer_signing::MaintainerSigner;
 
@@ -51,16 +49,23 @@ pub fn add_trusted_maintainer(
 ) -> Result<MaintainerTrustPolicy> {
     Signature::validate_key_id(key_id)?;
     let public_key = decode_public_key_hex(public_key_hex)?;
-    fs::create_dir_all(layout.maintainer_trust_keys_dir())?;
+    let keys_dir = layout.repository_relative(&layout.maintainer_trust_keys_dir())?;
+    ensure_directory_required(layout.repository_mutation_root(), &keys_dir)?;
     let key_path = layout.maintainer_trust_key_path(key_id)?;
+    let key_relative = layout.repository_relative(&key_path)?;
     let public_key_text = format!("{}\n", to_hex(&public_key));
-    write_file_atomically(&key_path, public_key_text.as_bytes())?;
-    if let Some(parent) = key_path.parent() {
-        sync_directory_best_effort(parent)?;
-    }
+    write_file_atomically(
+        layout.repository_mutation_root(),
+        &key_relative,
+        public_key_text.as_bytes(),
+    )?;
     let policy_text = format!("[maintainer]\nrequired = 1\nkeys = [\"{key_id}\"]\n");
-    write_file_atomically(&layout.trust_policy_path(), policy_text.as_bytes())?;
-    sync_directory_best_effort(&layout.trust_dir())?;
+    let policy_relative = layout.repository_relative(&layout.trust_policy_path())?;
+    write_file_atomically(
+        layout.repository_mutation_root(),
+        &policy_relative,
+        policy_text.as_bytes(),
+    )?;
     Ok(MaintainerTrustPolicy {
         key_id: key_id.to_string(),
         public_key,
@@ -69,7 +74,12 @@ pub fn add_trusted_maintainer(
 
 /// Load and validate the repository-local MAINTAINER trust policy.
 pub fn load_maintainer_trust_policy(layout: &RepositoryLayout) -> Result<MaintainerTrustPolicy> {
-    let policy_text = fs::read_to_string(layout.trust_policy_path()).map_err(|err| {
+    let policy_relative = layout.repository_relative(&layout.trust_policy_path())?;
+    let policy_text = String::from_utf8(read_file_required(
+        layout.repository_mutation_root(),
+        &policy_relative,
+    )?)
+    .map_err(|err| {
         PrikkError::Integrity(format!(
             "publication trust policy is missing or unreadable: {err}"
         ))
@@ -77,7 +87,12 @@ pub fn load_maintainer_trust_policy(layout: &RepositoryLayout) -> Result<Maintai
     let key_id = parse_policy_key_id(&policy_text)?;
     Signature::validate_key_id(&key_id)?;
     let key_path = layout.maintainer_trust_key_path(&key_id)?;
-    let public_key_text = fs::read_to_string(&key_path).map_err(|err| {
+    let key_relative = layout.repository_relative(&key_path)?;
+    let public_key_text = String::from_utf8(read_file_required(
+        layout.repository_mutation_root(),
+        &key_relative,
+    )?)
+    .map_err(|err| {
         PrikkError::Integrity(format!(
             "trusted maintainer key {key_id} is missing or unreadable: {err}"
         ))

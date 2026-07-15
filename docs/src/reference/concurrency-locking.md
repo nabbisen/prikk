@@ -47,8 +47,9 @@ refs/tmp/<ref-name-storage-key>.tmp
 The lock primitive is the same for active-session and ref locks. The store creates the lock file with
 exclusive file creation. If the file already exists, acquisition fails with `LockConflict`. When
 acquisition succeeds, the file body records the current process id, lock kind, and a note that stale
-lock stealing is not implemented. The lock file is fsynced, and the parent directory is best-effort
-synced.
+lock stealing is not implemented. The lock file and parent directory are required-synced before
+acquisition succeeds. A post-create sync failure returns failure and deliberately retains the lock as
+an actionable stale-lock state.
 
 Lock release is best-effort file removal when the lock guard is dropped. If a process exits normally,
 that usually removes the lock. If a process dies while holding the lock, the file can remain and later
@@ -112,7 +113,8 @@ Current ref publication is scoped to one ref:
 7. Check the current ref pointer against `expected_previous_ref_state_id` again.
 8. Write a candidate pointer under `refs/tmp/`.
 9. Check the current ref pointer against `expected_previous_ref_state_id` again.
-10. Rename the candidate pointer into `refs/by-id/` and best-effort sync the pointer parent directory.
+10. Rename the candidate pointer into `refs/by-id/`, required-sync the destination directory, then
+    required-sync `refs/tmp/` for durable candidate removal.
 
 Those checks prevent silent overwrite when the on-disk ref pointer has moved away from the caller's
 expected baseline. They are not a global repository transaction, a distributed consensus protocol, or a
@@ -177,7 +179,7 @@ and production-readiness claims.
 
 | Claim | Source anchors |
 |---|---|
-| Active and ref locks use exclusive file creation, fsync the lock file, best-effort sync the parent directory, and remove the lock file on drop. | [`lock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/lock.rs), [PR-007](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-007-REF-PUBLICATION-HANDOFF.md) |
+| Active and ref locks use exclusive anchored file creation, required-sync the lock file and parent directory, retain a stale lock on acquisition-sync failure, and attempt best-effort removal on drop. | [`lock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/lock.rs), [DC-37](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md) |
 | Existing lock files fail closed as `LockConflict`, and current locks have no stale-lock stealing. | [`lock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/lock.rs), [durability and crash recovery](./durability-recovery.md) |
 | Active-session append holds `active.lock` before appending to the active WAL. | [`active.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/active.rs), [`wal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/wal.rs) |
 | Worktree patch authoring holds `active.lock` across the active-WAL guard and final WAL append, enforcing the current seal-before-second-commit behavior. | [`node_authoring.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/worktree_patch/node_authoring.rs), [DC-15](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md) |

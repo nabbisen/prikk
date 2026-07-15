@@ -7,6 +7,7 @@ use crate::{
     remove_active_ref_metadata, write_active_ref_metadata,
 };
 
+use crate::fsutil::{TestFailPoint, fail_once_for_test};
 use crate::test_support::{signed_patch_envelope, unique_temp_dir};
 
 #[test]
@@ -15,12 +16,12 @@ fn active_lock_rejects_second_writer() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let first = ActiveLock::acquire(layout.default_active_lock_path());
+        let first = ActiveLock::acquire(&layout);
         assert!(first.is_ok());
-        let second = ActiveLock::acquire(layout.default_active_lock_path());
+        let second = ActiveLock::acquire(&layout);
         assert!(second.is_err());
         drop(first);
-        let third = ActiveLock::acquire(layout.default_active_lock_path());
+        let third = ActiveLock::acquire(&layout);
         assert!(third.is_ok());
     }
     let _ = std::fs::remove_dir_all(root);
@@ -39,7 +40,7 @@ fn active_session_appends_signed_patch_under_lock() {
         if let Ok(result) = result {
             assert_eq!(result.wal_sequence, 1);
         }
-        let wal = Wal::new(layout.default_queue_wal_path());
+        let wal = Wal::for_layout(&layout);
         let replay = wal.replay();
         assert!(replay.is_ok());
         if let Ok(replay) = replay {
@@ -69,7 +70,7 @@ fn active_session_append_rejects_non_empty_wal() {
         err.to_string().contains("already contains patches"),
         "unexpected error: {err}"
     );
-    let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
+    let replay = Wal::for_layout(&layout).replay().unwrap();
     assert_eq!(replay.records.len(), 1);
 
     let _ = std::fs::remove_dir_all(root);
@@ -100,7 +101,7 @@ fn active_session_append_does_not_overwrite_other_ref_metadata() {
     let root = unique_temp_dir("active-session-owned");
     let layout = RepositoryLayout::init(root.clone()).unwrap();
     write_active_ref_metadata(&layout, "heads/topic").unwrap();
-    Wal::new(layout.default_queue_wal_path())
+    Wal::for_layout(&layout)
         .append_patch(&signed_patch_envelope())
         .unwrap();
     let session = ActiveSession::new(layout.clone());
@@ -115,7 +116,7 @@ fn active_session_append_does_not_overwrite_other_ref_metadata() {
         read_active_ref_metadata(&layout).unwrap(),
         ActiveRefMetadata::Valid("heads/topic".to_string())
     );
-    let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
+    let replay = Wal::for_layout(&layout).replay().unwrap();
     assert_eq!(replay.records.len(), 1);
 
     let _ = std::fs::remove_dir_all(root);
@@ -161,6 +162,61 @@ fn active_ref_metadata_reports_malformed_content() {
         read_active_ref_metadata(&layout).unwrap(),
         ActiveRefMetadata::Invalid(_)
     ));
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn active_metadata_write_and_removal_failures_pin_retained_state() {
+    let root = unique_temp_dir("active-ref-failpoints");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+
+    fail_once_for_test(TestFailPoint::MutableParentSync);
+    assert!(write_active_ref_metadata(&layout, "heads/topic").is_err());
+    assert_eq!(
+        read_active_ref_metadata(&layout).unwrap(),
+        ActiveRefMetadata::Valid("heads/topic".to_string())
+    );
+    fail_once_for_test(TestFailPoint::CleanupDirectorySync);
+    assert!(remove_active_ref_metadata(&layout).is_err());
+    assert_eq!(
+        read_active_ref_metadata(&layout).unwrap(),
+        ActiveRefMetadata::Missing
+    );
+    fail_once_for_test(TestFailPoint::CleanupDirectorySync);
+    assert!(remove_active_ref_metadata(&layout).is_err());
+    assert!(!remove_active_ref_metadata(&layout).unwrap());
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn active_metadata_read_and_write_remain_on_retained_repository_root() {
+    let root = unique_temp_dir("active-ref-root-replacement");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    write_active_ref_metadata(&layout, "heads/original").unwrap();
+    let displaced = root.join(".prikk-displaced");
+    std::fs::rename(layout.prikk_dir(), &displaced).unwrap();
+    std::fs::create_dir_all(root.join(".prikk/active/default")).unwrap();
+    std::fs::write(
+        root.join(".prikk/active/default/ref-name"),
+        b"heads/replacement",
+    )
+    .unwrap();
+
+    assert_eq!(
+        read_active_ref_metadata(&layout).unwrap(),
+        ActiveRefMetadata::Valid("heads/original".to_string())
+    );
+    write_active_ref_metadata(&layout, "heads/updated").unwrap();
+    assert_eq!(
+        std::fs::read(displaced.join("active/default/ref-name")).unwrap(),
+        b"heads/updated"
+    );
+    assert_eq!(
+        std::fs::read(root.join(".prikk/active/default/ref-name")).unwrap(),
+        b"heads/replacement"
+    );
 
     let _ = std::fs::remove_dir_all(root);
 }

@@ -4,14 +4,16 @@
 //! repository-validated snapshot entries, refuses conflicting existing files, refuses symlinked
 //! parents/targets, and never removes files.
 
-use std::fs;
 use std::path::Path;
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::ObjectType;
 
 use crate::checkout::prepare_snapshot_checkout_plan;
-use crate::fsutil::{sync_directory_best_effort, write_file_atomically};
+use crate::fsutil::{
+    ensure_directory_required, read_file_if_exists, sync_directory_required,
+    write_worktree_file_atomically,
+};
 use crate::layout::RepositoryLayout;
 use crate::object_store::{FileObjectStore, ObjectReader};
 use crate::path::join_repo_path_to_root;
@@ -49,7 +51,7 @@ pub fn materialize_snapshot_checkout(
 ) -> Result<SnapshotMaterializationReport> {
     let plan = prepare_snapshot_checkout_plan(layout, ref_name)?;
     let manifest = load_snapshot_manifest(layout, plan.snapshot_blob_id)?;
-    let write_report = materialize_manifest_entries(layout.root(), &manifest)?;
+    let write_report = materialize_manifest_entries(layout, &manifest)?;
     Ok(SnapshotMaterializationReport {
         ref_name: ref_name.to_string(),
         planned_files: manifest.files.len(),
@@ -73,15 +75,15 @@ pub(crate) struct ManifestMaterializationReport {
     pub(crate) unchanged_files: usize,
 }
 
-/// Materialize a validated manifest into `root` without deleting extra files.
+/// Materialize a validated manifest without deleting extra files.
 pub(crate) fn materialize_manifest_entries(
-    root: &Path,
+    layout: &RepositoryLayout,
     manifest: &SnapshotManifest,
 ) -> Result<ManifestMaterializationReport> {
     let mut written_files = 0_usize;
     let mut unchanged_files = 0_usize;
     for entry in &manifest.files {
-        match materialize_entry(root, entry)? {
+        match materialize_entry(layout, entry)? {
             EntryWriteOutcome::Written => written_files += 1,
             EntryWriteOutcome::Unchanged => unchanged_files += 1,
         }
@@ -118,26 +120,19 @@ enum EntryWriteOutcome {
     Unchanged,
 }
 
-fn materialize_entry(root: &Path, entry: &SnapshotEntry) -> Result<EntryWriteOutcome> {
+fn materialize_entry(
+    layout: &RepositoryLayout,
+    entry: &SnapshotEntry,
+) -> Result<EntryWriteOutcome> {
+    let root = layout.root();
     let target = join_repo_path_to_root(&entry.path, root);
     ensure_target_is_inside_root(root, &target)?;
-    ensure_parent_directory(root, entry.path.as_str())?;
-    if target.exists() {
-        let metadata = fs::symlink_metadata(&target)?;
-        if metadata.file_type().is_symlink() {
-            return Err(PrikkError::Integrity(format!(
-                "refusing to overwrite symlink target: {}",
-                target.display()
-            )));
-        }
-        if !metadata.is_file() {
-            return Err(PrikkError::Integrity(format!(
-                "refusing to overwrite non-file target: {}",
-                target.display()
-            )));
-        }
-        let current = fs::read(&target)?;
+    ensure_parent_directory(layout, entry.path.as_str())?;
+    let relative = Path::new(entry.path.as_str());
+    if let Some(current) = read_file_if_exists(layout.worktree_mutation_root(), relative)? {
         if current == entry.bytes {
+            let parent = relative.parent().unwrap_or_else(|| Path::new(""));
+            sync_directory_required(layout.worktree_mutation_root(), parent)?;
             return Ok(EntryWriteOutcome::Unchanged);
         }
         return Err(PrikkError::Integrity(format!(
@@ -145,38 +140,14 @@ fn materialize_entry(root: &Path, entry: &SnapshotEntry) -> Result<EntryWriteOut
             target.display()
         )));
     }
-    write_file_atomically(&target, &entry.bytes)?;
+    write_worktree_file_atomically(layout.worktree_mutation_root(), relative, &entry.bytes)?;
     Ok(EntryWriteOutcome::Written)
 }
 
-fn ensure_parent_directory(root: &Path, repo_path: &str) -> Result<()> {
-    let mut current = root.to_path_buf();
-    let mut components = repo_path.split('/').peekable();
-    while let Some(component) = components.next() {
-        if components.peek().is_none() {
-            break;
-        }
-        current.push(component);
-        if current.exists() {
-            let metadata = fs::symlink_metadata(&current)?;
-            if metadata.file_type().is_symlink() {
-                return Err(PrikkError::Integrity(format!(
-                    "refusing to traverse symlink directory: {}",
-                    current.display()
-                )));
-            }
-            if !metadata.is_dir() {
-                return Err(PrikkError::Integrity(format!(
-                    "worktree parent path is not a directory: {}",
-                    current.display()
-                )));
-            }
-        } else {
-            fs::create_dir(&current)?;
-            sync_directory_best_effort(parent_or_root(&current, root))?;
-        }
-    }
-    Ok(())
+fn ensure_parent_directory(layout: &RepositoryLayout, repo_path: &str) -> Result<()> {
+    let relative = Path::new(repo_path);
+    let parent = relative.parent().unwrap_or_else(|| Path::new(""));
+    ensure_directory_required(layout.worktree_mutation_root(), parent)
 }
 
 fn ensure_target_is_inside_root(root: &Path, target: &Path) -> Result<()> {
@@ -187,8 +158,4 @@ fn ensure_target_is_inside_root(root: &Path, target: &Path) -> Result<()> {
         )));
     }
     Ok(())
-}
-
-fn parent_or_root<'a>(path: &'a Path, root: &'a Path) -> &'a Path {
-    path.parent().unwrap_or(root)
 }

@@ -4,12 +4,11 @@
 //! narrowly scoped: only files removed by replayed `DeleteFile` operations are eligible, and the
 //! current worktree bytes must still match the delete precondition bytes before removal.
 
-use std::fs;
 use std::path::Path;
 
 use prikk_error::{PrikkError, Result};
 
-use crate::fsutil::sync_directory_best_effort;
+use crate::fsutil::{EntryKind, inspect_entry, read_file_required, remove_worktree_file_required};
 use crate::layout::RepositoryLayout;
 use crate::patch_replay::{PatchReplayDeletedFile, replay_supported_patch_chain};
 use crate::path::join_repo_path_to_root;
@@ -112,7 +111,7 @@ pub fn plan_patch_checkout_deletions(
     ref_name: &str,
 ) -> Result<PatchDeletionPlan> {
     let snapshot = replay_supported_patch_chain(layout, ref_name)?;
-    let analysis = analyze_deletions(layout.root(), &snapshot.deleted_files)?;
+    let analysis = analyze_deletions(layout, &snapshot.deleted_files)?;
     Ok(PatchDeletionPlan {
         ref_name: snapshot.ref_name,
         planned_deletions: snapshot.deleted_files.len(),
@@ -133,7 +132,7 @@ fn materialize_patch_checkout_inner(
     delete_removed: bool,
 ) -> Result<PatchMaterializationReport> {
     let snapshot = replay_supported_patch_chain(layout, ref_name)?;
-    let deletion_analysis = analyze_deletions(layout.root(), &snapshot.deleted_files)?;
+    let deletion_analysis = analyze_deletions(layout, &snapshot.deleted_files)?;
     if delete_removed && !deletion_analysis.conflicts.is_empty() {
         return Err(PrikkError::Integrity(format!(
             "refusing checkout deletion because {} candidate(s) are unsafe",
@@ -141,9 +140,13 @@ fn materialize_patch_checkout_inner(
         )));
     }
 
-    let write_report = materialize_manifest_entries(layout.root(), &snapshot.manifest)?;
+    let write_report = materialize_manifest_entries(layout, &snapshot.manifest)?;
     let deleted_files = if delete_removed {
-        apply_deletions(&deletion_analysis.deletable)?
+        apply_deletions(
+            layout,
+            &deletion_analysis.deletable,
+            &deletion_analysis.already_absent_paths,
+        )?
     } else {
         0
     };
@@ -173,6 +176,7 @@ fn materialize_patch_checkout_inner(
 struct DeletionAnalysis {
     deletable: Vec<DeletableFile>,
     already_absent: usize,
+    already_absent_paths: Vec<crate::path::RepoPath>,
     conflicts: Vec<PatchDeletionConflict>,
 }
 
@@ -182,42 +186,40 @@ struct DeletableFile {
     target: std::path::PathBuf,
 }
 
-fn analyze_deletions(root: &Path, deleted: &[PatchReplayDeletedFile]) -> Result<DeletionAnalysis> {
+fn analyze_deletions(
+    layout: &RepositoryLayout,
+    deleted: &[PatchReplayDeletedFile],
+) -> Result<DeletionAnalysis> {
     let mut deletable = Vec::new();
     let mut already_absent = 0_usize;
+    let mut already_absent_paths = Vec::new();
     let mut conflicts = Vec::new();
     for deleted_file in deleted {
-        let target = join_repo_path_to_root(&deleted_file.path, root);
-        if !target.starts_with(root) {
-            conflicts.push(PatchDeletionConflict {
-                path: deleted_file.path.as_str().to_string(),
-                reason: "target escapes repository root".to_string(),
-            });
-            continue;
-        }
-        let metadata = match fs::symlink_metadata(&target) {
-            Ok(metadata) => metadata,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+        let target = join_repo_path_to_root(&deleted_file.path, layout.root());
+        let relative = Path::new(deleted_file.path.as_str());
+        match inspect_entry(layout.worktree_mutation_root(), relative)? {
+            None => {
                 already_absent += 1;
+                already_absent_paths.push(deleted_file.path.clone());
                 continue;
             }
-            Err(err) => return Err(err.into()),
-        };
-        if metadata.file_type().is_symlink() {
-            conflicts.push(PatchDeletionConflict {
-                path: deleted_file.path.as_str().to_string(),
-                reason: "target is a symlink".to_string(),
-            });
-            continue;
+            Some(EntryKind::Regular) => {}
+            Some(EntryKind::Symlink) => {
+                conflicts.push(PatchDeletionConflict {
+                    path: deleted_file.path.as_str().to_string(),
+                    reason: "target is a symlink".to_string(),
+                });
+                continue;
+            }
+            Some(EntryKind::Directory | EntryKind::Other) => {
+                conflicts.push(PatchDeletionConflict {
+                    path: deleted_file.path.as_str().to_string(),
+                    reason: "target is not a regular file".to_string(),
+                });
+                continue;
+            }
         }
-        if !metadata.is_file() {
-            conflicts.push(PatchDeletionConflict {
-                path: deleted_file.path.as_str().to_string(),
-                reason: "target is not a regular file".to_string(),
-            });
-            continue;
-        }
-        let current = fs::read(&target)?;
+        let current = read_file_required(layout.worktree_mutation_root(), relative)?;
         if current != deleted_file.old_bytes {
             conflicts.push(PatchDeletionConflict {
                 path: deleted_file.path.as_str().to_string(),
@@ -236,16 +238,26 @@ fn analyze_deletions(root: &Path, deleted: &[PatchReplayDeletedFile]) -> Result<
     Ok(DeletionAnalysis {
         deletable,
         already_absent,
+        already_absent_paths,
         conflicts,
     })
 }
 
-fn apply_deletions(deletable: &[DeletableFile]) -> Result<usize> {
+fn apply_deletions(
+    layout: &RepositoryLayout,
+    deletable: &[DeletableFile],
+    already_absent: &[crate::path::RepoPath],
+) -> Result<usize> {
     let mut removed = 0_usize;
     for item in deletable {
-        fs::remove_file(&item.target)?;
-        sync_directory_best_effort(item.target.parent().unwrap_or_else(|| Path::new(".")))?;
+        remove_worktree_file_required(
+            layout.worktree_mutation_root(),
+            Path::new(item.path.path.as_str()),
+        )?;
         removed += 1;
+    }
+    for path in already_absent {
+        remove_worktree_file_required(layout.worktree_mutation_root(), Path::new(path.as_str()))?;
     }
     Ok(removed)
 }

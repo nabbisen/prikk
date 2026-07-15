@@ -71,9 +71,8 @@ fn seal_active_no_audit(
     signer: &impl MaintainerSigner,
 ) -> std::result::Result<SealCommandResult, String> {
     let ref_name = validate_local_branch_ref(ref_name).map_err(|err| err.to_string())?;
-    let _active_lock =
-        ActiveLock::acquire(layout.default_active_lock_path()).map_err(|err| err.to_string())?;
-    let wal = Wal::new(layout.default_queue_wal_path());
+    let _active_lock = ActiveLock::acquire(&layout).map_err(|err| err.to_string())?;
+    let wal = Wal::for_layout(&layout);
     let replay = wal.replay().map_err(|err| err.to_string())?;
     if replay.trailing_partial_bytes != 0 {
         return Err(format!(

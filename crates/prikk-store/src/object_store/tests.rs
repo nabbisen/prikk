@@ -50,3 +50,28 @@ fn file_store_roundtrips_signed_object() {
     }
     let _ = std::fs::remove_dir_all(root);
 }
+
+#[test]
+fn object_reads_and_writes_remain_on_retained_repository_root() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("object-root-replacement");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut first = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"first".to_vec());
+    first.add_signature(dummy_signature())?;
+    let mut store = FileObjectStore::new(layout.clone());
+    let first_id = store.write_object(&first)?;
+    let displaced = root.join(".prikk-displaced");
+    std::fs::rename(layout.prikk_dir(), &displaced)?;
+    std::fs::create_dir(root.join(".prikk"))?;
+    std::fs::write(root.join(".prikk/FORMAT"), b"replacement")?;
+
+    assert!(layout.validate_format().is_ok());
+    assert_eq!(store.read_object(first_id)?, Some(first));
+    let mut second = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"second".to_vec());
+    second.add_signature(dummy_signature())?;
+    let second_id = store.write_object(&second)?;
+    assert!(store.read_object(second_id)?.is_some());
+    assert_eq!(std::fs::read(root.join(".prikk/FORMAT"))?, b"replacement");
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}

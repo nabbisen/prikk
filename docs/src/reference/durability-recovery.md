@@ -14,8 +14,9 @@ guides for `verify` and `doctor` through the
 - Prikk is early implementation software and is not a production Git replacement.
 - Durability and recovery claims are supported by current unit and integration tests, not by a
   completed crash-matrix or fuzzing campaign.
-- Linux is the only platform exercised by the current project gates; macOS, Windows, and other
-  filesystem semantics remain unverified release targets.
+- Repository mutation currently requires Linux anchored relative no-follow operations, strict regular
+  file and directory sync, atomic rename, and the required install primitives. macOS, Windows, and
+  filesystems without those proved capabilities remain read-only/diagnostic targets.
 - `.prikk/` is not a stable repository format and there is no stable migration policy yet.
 - Ref pointer files are mutable convenience pointers, not roots of trust.
 - `doctor` repairs are opt-in and narrow; they do not synthesize missing objects, signatures, trust
@@ -26,8 +27,9 @@ guides for `verify` and `doctor` through the
 ## Commit Persistence Boundary
 
 A successful `commit` appends an exact signed Patch envelope to the active WAL. The WAL append path
-rejects non-Patch envelopes and unsigned Patch envelopes, writes a checksummed record, fsyncs the WAL
-file, and best-effort syncs the parent directory when the WAL file is first created.
+rejects non-Patch envelopes and unsigned Patch envelopes, writes a checksummed record, required-syncs
+the WAL file, and required-syncs the parent directory after every append. Any required
+file or directory sync failure returns an operation failure while retaining written state for replay.
 
 That is the active-session persistence boundary. It does not mean the Patch is sealed into a Block, a
 RefState has been published, a ref pointer moved, or the active WAL has been drained. Sealed history is
@@ -78,14 +80,37 @@ If the active WAL's Patch IDs already match the current published tip, seal trea
 idempotent retry case and drains the active WAL/ref metadata instead of appending another publication.
 If the already-published transition cannot be checked, seal fails closed.
 
+## Required Filesystem Boundaries
+
+Authoritative directories are traversed through anchored no-follow handles on the supported Linux
+mutation path. Missing directories are created one component at a time, and each new name is
+established by syncing its parent before descent. Retry also re-syncs the parent of an observed
+component instead of treating presence as proof of earlier durability.
+
+Reads, metadata checks, and directory listings that authorize a mutation use the same retained root
+as the mutation. Replacing the visible worktree or `.prikk` path therefore cannot redirect a
+check-then-mutate workflow to a different tree. Append retries classify an exact retained complete
+record without duplicating it and re-sync the file and parent; required removal re-syncs its retained
+parent even when the final entry is already absent.
+
+Mutable metadata publication uses a unique same-directory exclusive temp, complete file sync, atomic
+replace rename, and required parent sync. An error after rename leaves the final name in place and
+returns failure for verification or retry; it does not blindly roll back visible state.
+
+Worktree writes and removals use separately named strict operations. Their errors propagate and may
+leave partial worktree effects, but the worktree does not become repository authority. Lock removal
+from a guard destructor remains explicitly best-effort because destruction cannot return an error.
+
 ## Ref Pointer and Ref Log Recovery
 
 Ref publication uses a signed RefState object, a signed inline RefUpdate log record, and a mutable ref
 pointer file. The pointer is useful for fast lookup, but it is not trusted by itself.
 
 The ref store validates branch ref names, holds a ref-specific lock, checks the expected current
-RefState ID before and after log append, writes a candidate pointer file, renames that candidate into
-place, and best-effort syncs the parent directory after promotion.
+RefState ID before and after log append, writes a candidate pointer file, and renames that candidate
+into place. It required-syncs `refs/by-id/` to establish the pointer name and then required-syncs
+`refs/tmp/` to establish candidate removal. A destination-sync failure returns without rollback or
+source sync. A later source-sync failure reports committed publication with incomplete cleanup.
 
 If the `heads/main` pointer is missing, `doctor --repair-main-ref` may reconstruct it only from
 already-valid evidence:
@@ -126,7 +151,7 @@ automatic stale-lock repair. The current lock and compare-and-swap behavior is c
 
 ## Deferred Work
 
-Still deferred: crash-matrix testing, filesystem fault injection, fuzzing for WAL/ref-log recovery,
+Still deferred: the broad crash-matrix campaign, fuzzing for WAL/ref-log recovery,
 macOS and Windows filesystem validation, stale-lock policy, broad active-session recovery, ref-log
 repair, missing-object recovery, object quarantine or garbage collection, backup/restore tooling,
 stable repository-format migration, and production-readiness claims.
@@ -135,14 +160,14 @@ stable repository-format migration, and production-readiness claims.
 
 | Claim | Source anchors |
 |---|---|
-| Commit persistence appends exact signed Patch envelopes to the active WAL, fsyncs the WAL file, and best-effort syncs the parent directory only when the WAL is first created. | [`wal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/wal.rs), [PR-004](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-004-WAL-HANDOFF.md) |
+| Commit persistence appends exact signed Patch envelopes to the active WAL, required-syncs the WAL file, and required-syncs the parent directory after every append. | [`wal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/wal.rs), [DC-37](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md) |
 | WAL replay reports incomplete trailing bytes separately from complete-record checksum failures. | [`wal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/wal.rs), [PR-004](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-004-WAL-HANDOFF.md), [PR-006](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-006-VERIFY-HANDOFF.md) |
 | WAL-tail repair truncates only incomplete trailing bytes and refuses complete-record integrity failures. | [`wal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/wal.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [PR-012](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-012-DOCTOR-REPAIR-HANDOFF.md) |
 | Non-empty active WALs require valid active-ref ownership metadata; empty-WAL metadata debris is separate local debris. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [DC-15](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md) |
 | Seal rejects trailing partial WAL bytes, missing/malformed active ref metadata, and mismatched active ref ownership before publication. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-15](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md) |
 | Seal persists WAL Patches, creates signed Block and RefState objects, appends signed RefUpdate evidence, publishes the ref, then drains active state after successful publication. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [PR-009](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-009-SEAL-SCAFFOLD-HANDOFF.md) |
 | Seal verifies the configured MAINTAINER signer against repository-local trust before publication. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [DC-11](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-11-MAINTAINER-TRUST-STORE.md) |
-| Ref publication uses ref-specific locking, compare-and-swap checks, signed RefState/RefUpdate envelopes, candidate pointer write, rename promotion, and parent-directory sync. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`pointer.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer.rs), [`fsutil.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/fsutil.rs), [PR-007](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-007-REF-PUBLICATION-HANDOFF.md) |
+| Ref publication uses ref-specific locking, compare-and-swap checks, signed RefState/RefUpdate envelopes, candidate pointer write, rename promotion, and destination-then-source required directory sync. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`pointer.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer.rs), [`fsutil`](https://github.com/nabbisen/prikk/tree/main/crates/prikk-store/src/fsutil), [DC-37](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md) |
 | Missing `heads/main` pointer reconstruction is limited to already-valid ref-log, RefState, and Block evidence. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [PR-013](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-013-REF-RECOVERY-HANDOFF.md) |
 | Doctor began as read-only diagnostics, and current mutating repairs remain opt-in and narrow. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [PR-011](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-011-DOCTOR-HANDOFF.md), [PR-012](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-012-DOCTOR-REPAIR-HANDOFF.md), [PR-013](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-013-REF-RECOVERY-HANDOFF.md) |
 | Ref pointer files are mutable pointers, not roots of trust. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`pointer.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer.rs), [data model](./data-model.md) |
@@ -150,8 +175,6 @@ stable repository-format migration, and production-readiness claims.
 
 ## Provenance
 
-This reference consolidates current released records through DC-27 plus the done DC-28 design prepared
-for the 0.17.2 release. It
-follows the DC-26 documentation-home model: current-state references live in the published mdBook, not
-under `rfcs/fdds/`. It is documentation-only and does not change WAL, ref, seal, verification, doctor,
-object schema, CLI, trust, or repository behavior.
+This reference follows the DC-26 documentation-home model: current-state references live in the
+published mdBook, not under `rfcs/fdds/`. Its required-sync sections are updated with the DC-37
+implementation and remain subject to the combined 0.18.0 implementation and release reviews.

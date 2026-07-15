@@ -1,15 +1,14 @@
 //! Ref-update log codec and replay.
 
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
-
 use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;
 use prikk_object::{ObjectEnvelope, ObjectType};
 
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_u16, push_u64};
-use crate::fsutil::{len_to_u64, sync_directory_best_effort};
+use crate::fsutil::{
+    append_file_required, ensure_directory_required, len_to_u64, read_file_if_exists,
+};
 use crate::layout::RepositoryLayout;
 use crate::refs::require_signed_type;
 
@@ -39,35 +38,39 @@ pub(crate) fn append_log_record(
     ref_name: &str,
     envelope: &ObjectEnvelope,
 ) -> Result<()> {
-    let path = layout.ref_log_path(ref_name);
+    let path = layout.repository_relative(&layout.ref_log_path(ref_name))?;
     let Some(parent) = path.parent() else {
         return Err(PrikkError::Io(
             "ref log path has no parent directory".to_string(),
         ));
     };
-    fs::create_dir_all(parent)?;
+    ensure_directory_required(layout.repository_mutation_root(), parent)?;
     let record = encode_log_record(envelope)?;
-    let is_new = !path.exists();
-    let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
-    file.write_all(&record)?;
-    file.sync_all()?;
-    if is_new {
-        sync_directory_best_effort(parent)?;
+    let replay = replay_log(layout, ref_name)?;
+    if replay.trailing_partial_bytes != 0 {
+        return Err(PrikkError::Integrity(format!(
+            "cannot append ref log {ref_name} after an incomplete tail"
+        )));
     }
-    Ok(())
+    if replay
+        .records
+        .last()
+        .is_some_and(|last| last.envelope == *envelope)
+    {
+        return append_file_required(layout.repository_mutation_root(), &path, &[]);
+    }
+    append_file_required(layout.repository_mutation_root(), &path, &record)
 }
 
 /// Replay the inline ref-update log for a ref name.
 pub(crate) fn replay_log(layout: &RepositoryLayout, ref_name: &str) -> Result<RefLogReplay> {
-    let path = layout.ref_log_path(ref_name);
-    if !path.exists() {
+    let path = layout.repository_relative(&layout.ref_log_path(ref_name))?;
+    let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &path)? else {
         return Ok(RefLogReplay {
             records: Vec::new(),
             trailing_partial_bytes: 0,
         });
-    }
-    let mut bytes = Vec::new();
-    File::open(path)?.read_to_end(&mut bytes)?;
+    };
     decode_log_records(&bytes)
 }
 

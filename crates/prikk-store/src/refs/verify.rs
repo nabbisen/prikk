@@ -51,7 +51,9 @@ fn verify_ref_pointers(layout: &RepositoryLayout, object_store: &FileObjectStore
             continue;
         }
         ensure_ref_path_shape(&path, ".ref")?;
-        let pointer = read_ref_pointer(&path)?;
+        let Some(pointer) = read_ref_pointer(layout, &path)? else {
+            continue;
+        };
         let expected_path = layout.ref_pointer_path(&pointer.ref_name);
         if path != expected_path {
             return Err(PrikkError::Integrity(format!(

@@ -1,7 +1,6 @@
 //! Write-ahead log for active patch envelopes.
 
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use prikk_error::{PrikkError, Result};
@@ -10,7 +9,11 @@ use prikk_object::{ObjectEnvelope, ObjectType};
 
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_u16, push_u64};
-use crate::fsutil::{len_to_u64, sync_directory_best_effort};
+use crate::fsutil::{
+    MutationRoot, append_file_required, ensure_directory_required, len_to_u64, read_file_if_exists,
+    truncate_existing_file_required, truncate_file_empty_required,
+};
+use crate::layout::RepositoryLayout;
 
 const WAL_RECORD_MAGIC: &[u8; 8] = b"PWALR001";
 const WAL_RECORD_VERSION: u16 = 1;
@@ -47,13 +50,28 @@ pub struct WalRepair {
 #[derive(Debug, Clone)]
 pub struct Wal {
     path: PathBuf,
+    mutation: Option<(MutationRoot, PathBuf)>,
 }
 
 impl Wal {
     /// Create a WAL handle for a path.
     #[must_use]
     pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into() }
+        Self {
+            path: path.into(),
+            mutation: None,
+        }
+    }
+
+    /// Create a WAL handle authorized by a validated repository layout.
+    #[must_use]
+    pub fn for_layout(layout: &RepositoryLayout) -> Self {
+        let path = layout.default_queue_wal_path();
+        let relative = PathBuf::from("active/default/queue.wal");
+        Self {
+            path,
+            mutation: Some((layout.repository_mutation_root().clone(), relative)),
+        }
     }
 
     /// Return the WAL path.
@@ -75,41 +93,47 @@ impl Wal {
                 "commit WAL entries must store signed patch envelopes".to_string(),
             ));
         }
-        let next_seq = self.next_sequence()?;
+        let replay = self.replay()?;
+        if replay.trailing_partial_bytes != 0 {
+            return Err(PrikkError::Integrity(
+                "cannot append after an incomplete WAL tail".to_string(),
+            ));
+        }
+        let (root, relative) = self.mutation()?;
+        if let Some(last) = replay.records.last()
+            && last.envelope == *envelope
+        {
+            append_file_required(root, relative, &[])?;
+            return Ok(last.seq);
+        }
+        let next_seq = replay.records.last().map_or(Ok(1), |last| {
+            last.seq
+                .checked_add(1)
+                .ok_or_else(|| PrikkError::MalformedData("WAL sequence overflow".to_string()))
+        })?;
         let record = WalRecord {
             seq: next_seq,
             envelope: envelope.clone(),
         };
         let bytes = encode_record(&record)?;
-        let Some(parent) = self.path.parent() else {
+        let Some(parent) = relative.parent() else {
             return Err(PrikkError::Io(
                 "WAL path has no parent directory".to_string(),
             ));
         };
-        fs::create_dir_all(parent)?;
-        let is_new = !self.path.exists();
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)?;
-        file.write_all(&bytes)?;
-        file.sync_all()?;
-        if is_new {
-            sync_directory_best_effort(parent)?;
-        }
+        ensure_directory_required(root, parent)?;
+        append_file_required(root, relative, &bytes)?;
         Ok(next_seq)
     }
 
     /// Replay valid WAL records from the beginning.
     pub fn replay(&self) -> Result<WalReplay> {
-        if !self.path.exists() {
+        let Some(bytes) = self.read_bytes()? else {
             return Ok(WalReplay {
                 records: Vec::new(),
                 trailing_partial_bytes: 0,
             });
-        }
-        let mut bytes = Vec::new();
-        File::open(&self.path)?.read_to_end(&mut bytes)?;
+        };
         decode_records(&bytes)
     }
 
@@ -119,32 +143,29 @@ impl Wal {
     /// incomplete final record. Checksum mismatches in complete records still return an error and
     /// are not modified.
     pub fn truncate_trailing_partial(&self) -> Result<WalRepair> {
-        if !self.path.exists() {
+        let Some(bytes) = self.read_bytes()? else {
             return Ok(WalRepair {
                 preserved_records: 0,
                 truncated_bytes: 0,
             });
-        }
-        let replay = self.replay()?;
+        };
+        let replay = decode_records(&bytes)?;
         if replay.trailing_partial_bytes == 0 {
             return Ok(WalRepair {
                 preserved_records: replay.records.len(),
                 truncated_bytes: 0,
             });
         }
-        let current_len = fs::metadata(&self.path)?.len();
+        let current_len = u64::try_from(bytes.len())
+            .map_err(|_| PrikkError::MalformedData("WAL length does not fit u64".to_string()))?;
         let trailing = u64::try_from(replay.trailing_partial_bytes).map_err(|_| {
             PrikkError::MalformedData("trailing WAL byte count does not fit u64".to_string())
         })?;
         let repaired_len = current_len.checked_sub(trailing).ok_or_else(|| {
             PrikkError::MalformedData("trailing WAL byte count exceeds file length".to_string())
         })?;
-        let file = OpenOptions::new().write(true).open(&self.path)?;
-        file.set_len(repaired_len)?;
-        file.sync_all()?;
-        if let Some(parent) = self.path.parent() {
-            sync_directory_best_effort(parent)?;
-        }
+        let (root, relative) = self.mutation()?;
+        truncate_existing_file_required(root, relative, repaired_len)?;
         Ok(WalRepair {
             preserved_records: replay.records.len(),
             truncated_bytes: replay.trailing_partial_bytes,
@@ -153,20 +174,14 @@ impl Wal {
 
     /// Truncate the WAL after a successful publication that made all entries durable elsewhere.
     pub fn truncate_empty(&self) -> Result<()> {
-        let Some(parent) = self.path.parent() else {
+        let (root, relative) = self.mutation()?;
+        let Some(parent) = relative.parent() else {
             return Err(PrikkError::Io(
                 "WAL path has no parent directory".to_string(),
             ));
         };
-        fs::create_dir_all(parent)?;
-        let file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&self.path)?;
-        file.sync_all()?;
-        sync_directory_best_effort(parent)?;
-        Ok(())
+        ensure_directory_required(root, parent)?;
+        truncate_file_empty_required(root, relative)
     }
 
     /// Return the next sequence number for append.
@@ -178,6 +193,29 @@ impl Wal {
         last.seq
             .checked_add(1)
             .ok_or_else(|| PrikkError::MalformedData("WAL sequence overflow".to_string()))
+    }
+
+    fn mutation(&self) -> Result<(&MutationRoot, &Path)> {
+        self.mutation
+            .as_ref()
+            .map(|(root, relative)| (root, relative.as_path()))
+            .ok_or_else(|| {
+                PrikkError::Io(
+                    "WAL mutation requires a validated repository layout capability".to_string(),
+                )
+            })
+    }
+
+    fn read_bytes(&self) -> Result<Option<Vec<u8>>> {
+        if let Some((root, relative)) = &self.mutation {
+            read_file_if_exists(root, relative)
+        } else {
+            match fs::read(&self.path) {
+                Ok(bytes) => Ok(Some(bytes)),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                Err(error) => Err(error.into()),
+            }
+        }
     }
 }
 

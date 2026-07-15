@@ -92,7 +92,7 @@ fn doctor_repair_truncates_only_trailing_partial_wal() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let wal = Wal::new(layout.default_queue_wal_path());
+        let wal = Wal::for_layout(&layout);
         assert!(write_active_ref_metadata(&layout, "heads/main").is_ok());
         assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
         let mut file = std::fs::OpenOptions::new()
@@ -146,7 +146,7 @@ fn doctor_reports_non_empty_active_wal_missing_metadata_as_error() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let wal = Wal::new(layout.default_queue_wal_path());
+        let wal = Wal::for_layout(&layout);
         assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
 
         let report = doctor_repository(&layout);

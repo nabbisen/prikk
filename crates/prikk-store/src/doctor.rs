@@ -241,7 +241,7 @@ pub fn repair_repository(
         ));
     }
     let wal_repair = if options.truncate_wal_tail {
-        let wal = Wal::new(layout.default_queue_wal_path());
+        let wal = Wal::for_layout(layout);
         wal.truncate_trailing_partial()?
     } else {
         WalRepair {

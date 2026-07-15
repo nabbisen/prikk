@@ -13,6 +13,7 @@ use crate::{
 use crate::test_support::{
     maintainer_signature, signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
 };
+use crate::worktree::materialize_manifest_entries;
 
 #[test]
 fn repo_path_rejects_traversal_and_reserved_names() {
@@ -23,6 +24,40 @@ fn repo_path_rejects_traversal_and_reserved_names() {
     assert!(RepoPath::parse("CON.txt").is_err());
     assert!(RepoPath::parse("src\\main.rs").is_err());
     assert!(RepoPath::parse("日本語.txt").is_err());
+}
+
+#[test]
+fn worktree_checks_and_writes_remain_on_retained_root() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("worktree-operation-root-replacement");
+    let layout = RepositoryLayout::init(root.clone())?;
+    std::fs::write(root.join("conflict.txt"), b"original")?;
+    let displaced = root.with_extension("displaced");
+    std::fs::rename(&root, &displaced)?;
+    std::fs::create_dir(&root)?;
+
+    let conflict = SnapshotManifest {
+        files: vec![SnapshotEntry {
+            path: RepoPath::parse("conflict.txt")?,
+            bytes: b"replacement".to_vec(),
+        }],
+    };
+    assert!(materialize_manifest_entries(&layout, &conflict).is_err());
+    assert_eq!(std::fs::read(displaced.join("conflict.txt"))?, b"original");
+    assert!(!root.join("conflict.txt").exists());
+
+    let new_file = SnapshotManifest {
+        files: vec![SnapshotEntry {
+            path: RepoPath::parse("new.txt")?,
+            bytes: b"retained-root".to_vec(),
+        }],
+    };
+    assert!(materialize_manifest_entries(&layout, &new_file).is_ok());
+    assert_eq!(std::fs::read(displaced.join("new.txt"))?, b"retained-root");
+    assert!(!root.join("new.txt").exists());
+
+    let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(displaced);
+    Ok(())
 }
 
 #[test]

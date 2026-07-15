@@ -51,7 +51,7 @@ fn verify_repository_counts_objects_and_wal_records() {
         assert!(blob.add_signature(dummy_signature()).is_ok());
         assert!(store.write_object(&blob).is_ok());
 
-        let wal = Wal::new(layout.default_queue_wal_path());
+        let wal = Wal::for_layout(&layout);
         assert!(write_active_ref_metadata(&layout, "heads/main").is_ok());
         assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
 
@@ -82,7 +82,7 @@ fn verify_repository_reports_missing_active_metadata_for_non_empty_wal() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let wal = Wal::new(layout.default_queue_wal_path());
+        let wal = Wal::for_layout(&layout);
         assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
 
         let report = verify_repository(&layout);

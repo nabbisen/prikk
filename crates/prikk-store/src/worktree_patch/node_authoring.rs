@@ -14,7 +14,8 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::fs;
+
+mod worktree_files;
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
@@ -44,36 +45,13 @@ use crate::{
     validate_local_branch_ref,
 };
 
+use worktree_files::enumerate_worktree_files;
+
 /// Canonical mode recorded for a created regular file with no executable bit, and the default on
 /// platforms without an executable-bit source (4.4a-2aR, ratified rule).
 const REGULAR_FILE_MODE: u32 = 0o100_644;
 /// Canonical mode for a created regular file with an executable bit (4.4a-2aR, ratified rule).
 const EXECUTABLE_FILE_MODE: u32 = 0o100_755;
-
-/// Normalize a regular file's OS mode to a canonical file mode (4.4a-2aR, ratified rule):
-/// any executable bit set (`mode & 0o111 != 0` on Unix) → `0o100755`, otherwise `0o100644`.
-/// Read/write bits, setuid/setgid/sticky, and platform attributes are ignored. On platforms without
-/// an executable-bit source (non-Unix), regular files default to `0o100644`.
-#[cfg(unix)]
-fn normalize_file_mode(metadata: &fs::Metadata) -> u32 {
-    use std::os::unix::fs::PermissionsExt;
-    if metadata.permissions().mode() & 0o111 != 0 {
-        EXECUTABLE_FILE_MODE
-    } else {
-        REGULAR_FILE_MODE
-    }
-}
-
-#[cfg(not(unix))]
-fn normalize_file_mode(_metadata: &fs::Metadata) -> u32 {
-    REGULAR_FILE_MODE
-}
-
-/// A regular worktree file: its bytes plus its canonical (normalized) mode.
-struct WorktreeFile {
-    bytes: Vec<u8>,
-    mode: u32,
-}
 
 /// Structured authoring failure. Kept structured internally (review E2/E3/E4) and flattened into
 /// [`PrikkError`] only at the public command boundary.
@@ -201,10 +179,9 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     // either loses the lock here (LockConflict) or, if it runs after this releases, sees the appended
     // record and fails the "seal first" guard. Released on return (RAII). The append below uses the
     // raw WAL under this held lock (not `ActiveSession::append_patch`, which would re-acquire).
-    let _active_lock =
-        ActiveLock::acquire(layout.default_active_lock_path()).map_err(AuthorError::Store)?;
+    let _active_lock = ActiveLock::acquire(layout).map_err(AuthorError::Store)?;
 
-    let wal = Wal::new(layout.default_queue_wal_path());
+    let wal = Wal::for_layout(layout);
     let active_replay = wal.replay().map_err(AuthorError::Store)?;
     if active_replay.trailing_partial_bytes != 0 {
         return Err(AuthorError::Store(PrikkError::InvalidName(format!(
@@ -620,82 +597,4 @@ fn read_file_blob_bytes(
         })?;
     crate::blob_access::decode_file_content_blob(&envelope.canonical_payload)
         .map_err(AuthorError::Store)
-}
-
-/// Enumerate regular worktree files as `path -> (bytes, normalized mode)`, rejecting symlinks /
-/// non-regular files and validating each path through `prikk-path`. The `.prikk` repository
-/// directory is skipped.
-fn enumerate_worktree_files(
-    layout: &RepositoryLayout,
-) -> std::result::Result<BTreeMap<String, WorktreeFile>, AuthorError> {
-    let mut out = BTreeMap::new();
-    let root = layout.root().to_path_buf();
-    walk_dir(&root, &root, &mut out)?;
-    Ok(out)
-}
-
-fn walk_dir(
-    root: &std::path::Path,
-    dir: &std::path::Path,
-    out: &mut BTreeMap<String, WorktreeFile>,
-) -> std::result::Result<(), AuthorError> {
-    let entries =
-        fs::read_dir(dir).map_err(|e| AuthorError::Store(PrikkError::Io(e.to_string())))?;
-    for entry in entries {
-        let entry = entry.map_err(|e| AuthorError::Store(PrikkError::Io(e.to_string())))?;
-        let file_name = entry.file_name();
-        if file_name == ".prikk" {
-            continue;
-        }
-        let path = entry.path();
-        let metadata = fs::symlink_metadata(&path)
-            .map_err(|e| AuthorError::Store(PrikkError::Io(e.to_string())))?;
-        let file_type = metadata.file_type();
-        if file_type.is_symlink() {
-            // Determine the repo-relative path for the error message.
-            let rel = path
-                .strip_prefix(root)
-                .unwrap_or(&path)
-                .to_string_lossy()
-                .to_string();
-            return Err(AuthorError::UnsupportedSymlinkAuthoring(format!(
-                "{rel}: worktree symlink authoring is out of scope"
-            )));
-        }
-        if file_type.is_dir() {
-            walk_dir(root, &path, out)?;
-            continue;
-        }
-        if !file_type.is_file() {
-            let rel = path
-                .strip_prefix(root)
-                .unwrap_or(&path)
-                .to_string_lossy()
-                .to_string();
-            return Err(AuthorError::Store(PrikkError::InvalidName(format!(
-                "{rel}: worktree entry is not a regular file"
-            ))));
-        }
-        let relative = path.strip_prefix(root).map_err(|_| {
-            AuthorError::Store(PrikkError::Integrity(
-                "worktree path escaped repository root".to_string(),
-            ))
-        })?;
-        // Strict conversion (N2): a non-UTF-8 OS path fails closed here rather than being silently
-        // lossily replaced before `RepoPath::parse`. Identity-bearing paths never derive from lossy
-        // bytes.
-        let rel = relative.to_str().ok_or_else(|| {
-            AuthorError::Store(PrikkError::InvalidName(format!(
-                "worktree path is not valid UTF-8: {}",
-                relative.to_string_lossy()
-            )))
-        })?;
-        // Validate through prikk-path (rejects traversal, reserved names, etc.).
-        let repo_path = RepoPath::parse(rel).map_err(AuthorError::Store)?;
-        let mode = normalize_file_mode(&metadata);
-        let bytes =
-            fs::read(&path).map_err(|e| AuthorError::Store(PrikkError::Io(e.to_string())))?;
-        out.insert(repo_path.as_str().to_string(), WorktreeFile { bytes, mode });
-    }
-    Ok(())
 }

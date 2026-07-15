@@ -1,25 +1,32 @@
 //! Simple file locks for active-session and ref writers.
 
-use std::fs::{self, File, OpenOptions};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use prikk_error::{PrikkError, Result};
 
-use crate::fsutil::sync_directory_best_effort;
+use crate::fsutil::{MutationRoot, create_new_file_required, remove_file_cleanup_best_effort};
+use crate::layout::RepositoryLayout;
 
 /// Active session lock acquired before mutating an active WAL tail.
 #[derive(Debug)]
 pub struct ActiveLock {
     path: PathBuf,
+    relative: PathBuf,
+    mutation_root: MutationRoot,
 }
 
 impl ActiveLock {
     /// Acquire a lock through exclusive file creation.
-    pub fn acquire(path: impl Into<PathBuf>) -> Result<Self> {
-        let path = path.into();
-        acquire_lock_file(&path, "active")?;
-        Ok(Self { path })
+    pub fn acquire(layout: &RepositoryLayout) -> Result<Self> {
+        let path = layout.default_active_lock_path();
+        let relative = layout.repository_relative(&path)?;
+        let mutation_root = layout.repository_mutation_root().clone();
+        acquire_lock_file(&mutation_root, &relative, &path, "active")?;
+        Ok(Self {
+            path,
+            relative,
+            mutation_root,
+        })
     }
 
     /// Return lock file path.
@@ -31,7 +38,7 @@ impl ActiveLock {
 
 impl Drop for ActiveLock {
     fn drop(&mut self) {
-        release_lock_file(&self.path);
+        remove_file_cleanup_best_effort(&self.mutation_root, &self.relative);
     }
 }
 
@@ -39,14 +46,22 @@ impl Drop for ActiveLock {
 #[derive(Debug)]
 pub struct RefLock {
     path: PathBuf,
+    relative: PathBuf,
+    mutation_root: MutationRoot,
 }
 
 impl RefLock {
     /// Acquire a ref lock through exclusive file creation.
-    pub fn acquire(path: impl Into<PathBuf>) -> Result<Self> {
-        let path = path.into();
-        acquire_lock_file(&path, "ref")?;
-        Ok(Self { path })
+    pub fn acquire(layout: &RepositoryLayout, ref_name: &str) -> Result<Self> {
+        let path = layout.ref_lock_path(ref_name);
+        let relative = layout.repository_relative(&path)?;
+        let mutation_root = layout.repository_mutation_root().clone();
+        acquire_lock_file(&mutation_root, &relative, &path, "ref")?;
+        Ok(Self {
+            path,
+            relative,
+            mutation_root,
+        })
     }
 
     /// Return lock file path.
@@ -58,43 +73,32 @@ impl RefLock {
 
 impl Drop for RefLock {
     fn drop(&mut self) {
-        release_lock_file(&self.path);
+        remove_file_cleanup_best_effort(&self.mutation_root, &self.relative);
     }
 }
 
-fn acquire_lock_file(path: &Path, kind: &str) -> Result<()> {
-    let Some(parent) = path.parent() else {
-        return Err(PrikkError::Io(format!(
-            "{kind} lock path has no parent directory"
-        )));
-    };
-    fs::create_dir_all(parent)?;
-    let mut file = match OpenOptions::new().write(true).create_new(true).open(path) {
-        Ok(file) => file,
-        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
-            return Err(PrikkError::LockConflict(format!(
-                "{kind} lock already exists: {}",
-                path.display()
-            )));
-        }
-        Err(err) => return Err(err.into()),
-    };
-    write_lock_body(&mut file, kind)?;
-    file.sync_all()?;
-    sync_directory_best_effort(parent)?;
-    Ok(())
-}
-
-fn release_lock_file(path: &Path) {
-    let _ = fs::remove_file(path);
-    if let Some(parent) = path.parent() {
-        let _ = sync_directory_best_effort(parent);
+fn acquire_lock_file(
+    mutation_root: &MutationRoot,
+    relative: &Path,
+    path: &Path,
+    kind: &str,
+) -> Result<()> {
+    let body = lock_body(kind);
+    match create_new_file_required(mutation_root, relative, body.as_bytes()) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Err(
+            PrikkError::LockConflict(format!("{kind} lock already exists: {}", path.display())),
+        ),
+        Err(err) => Err(err.into()),
     }
 }
 
-fn write_lock_body(file: &mut File, kind: &str) -> Result<()> {
-    writeln!(file, "pid={}", std::process::id())?;
-    writeln!(file, "kind={kind}")?;
-    writeln!(file, "note=PR-007 lock has no stale-lock stealing yet")?;
-    Ok(())
+fn lock_body(kind: &str) -> String {
+    format!(
+        "pid={}\nkind={kind}\nnote=PR-007 lock has no stale-lock stealing yet\n",
+        std::process::id()
+    )
 }
+
+#[cfg(test)]
+mod tests;

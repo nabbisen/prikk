@@ -5,12 +5,10 @@
 //! already-constructed, signed patch envelopes. It also owns the local ref-name metadata that makes a
 //! non-empty active WAL unambiguously belong to one target ref.
 
-use std::fs;
-
 use prikk_error::{PrikkError, Result};
 use prikk_object::ObjectEnvelope;
 
-use crate::fsutil::{sync_directory_best_effort, write_file_atomically};
+use crate::fsutil::{read_file_if_exists, remove_file_if_present_required, write_file_atomically};
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
 use crate::refs::validate_local_branch_ref;
@@ -49,8 +47,8 @@ impl ActiveSession {
 
     /// Append one signed patch envelope while holding the active-session lock.
     pub fn append_patch(&self, envelope: &ObjectEnvelope) -> Result<ActiveCommitResult> {
-        let _lock = ActiveLock::acquire(self.layout.default_active_lock_path())?;
-        let wal = Wal::new(self.layout.default_queue_wal_path());
+        let _lock = ActiveLock::acquire(&self.layout)?;
+        let wal = Wal::for_layout(&self.layout);
         let replay = wal.replay()?;
         if replay.trailing_partial_bytes != 0 {
             return Err(PrikkError::Integrity(format!(
@@ -73,11 +71,10 @@ impl ActiveSession {
 
 /// Read active-WAL ref metadata without mutating it.
 pub fn read_active_ref_metadata(layout: &RepositoryLayout) -> Result<ActiveRefMetadata> {
-    let path = layout.default_active_ref_name_path();
-    if !path.exists() {
+    let relative = layout.repository_relative(&layout.default_active_ref_name_path())?;
+    let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &relative)? else {
         return Ok(ActiveRefMetadata::Missing);
-    }
-    let bytes = fs::read(&path)?;
+    };
     let text = match std::str::from_utf8(&bytes) {
         Ok(text) => text,
         Err(err) => {
@@ -95,23 +92,19 @@ pub fn read_active_ref_metadata(layout: &RepositoryLayout) -> Result<ActiveRefMe
 /// Write active-WAL ref metadata through a durable atomic update.
 pub fn write_active_ref_metadata(layout: &RepositoryLayout, ref_name: &str) -> Result<String> {
     let canonical = validate_local_branch_ref(ref_name)?;
-    // `write_file_atomically` fsyncs the temporary file, renames it, and fsyncs the active-session
-    // directory. The explicit directory sync here keeps the DC-13 metadata-before-WAL durability
-    // contract local to this boundary.
-    write_file_atomically(&layout.default_active_ref_name_path(), canonical.as_bytes())?;
-    sync_directory_best_effort(&layout.default_active_dir())?;
+    let relative = layout.repository_relative(&layout.default_active_ref_name_path())?;
+    write_file_atomically(
+        layout.repository_mutation_root(),
+        &relative,
+        canonical.as_bytes(),
+    )?;
     Ok(canonical)
 }
 
 /// Remove active-WAL ref metadata and fsync the active-session directory.
 pub fn remove_active_ref_metadata(layout: &RepositoryLayout) -> Result<bool> {
-    let path = layout.default_active_ref_name_path();
-    if !path.exists() {
-        return Ok(false);
-    }
-    fs::remove_file(&path)?;
-    sync_directory_best_effort(&layout.default_active_dir())?;
-    Ok(true)
+    let relative = layout.repository_relative(&layout.default_active_ref_name_path())?;
+    remove_file_if_present_required(layout.repository_mutation_root(), &relative)
 }
 
 /// Prepare active ref metadata for the first WAL append.

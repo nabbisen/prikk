@@ -91,7 +91,7 @@ fn rollback_draft_appends_inverse_patch_to_empty_active_wal() {
             assert_eq!(report.author_key_id, "rollback-author-key");
             assert_eq!(report.inverse_operation_count, 2);
             assert_eq!(report.preview_change_count, 2);
-            let wal = Wal::new(layout.default_queue_wal_path());
+            let wal = Wal::for_layout(&layout);
             let replay = wal.replay();
             assert!(replay.is_ok());
             if let Ok(replay) = replay {
@@ -162,7 +162,7 @@ fn rollback_draft_appends_arbitrary_span_text_inverse() {
                     .map(|operation| operation.kind.as_str()),
                 Some("edit-text")
             );
-            let wal = Wal::new(layout.default_queue_wal_path());
+            let wal = Wal::for_layout(&layout);
             let replay = wal.replay();
             assert!(replay.is_ok());
             if let Ok(replay) = replay {
@@ -195,7 +195,7 @@ fn rollback_draft_rejects_ref_change_between_planning_and_append() {
         if let Err(error) = report {
             assert!(error.to_string().contains("target ref changed"));
         }
-        let replay = Wal::new(layout.default_queue_wal_path()).replay();
+        let replay = Wal::for_layout(&layout).replay();
         assert!(replay.is_ok());
         if let Ok(replay) = replay {
             assert_eq!(replay.records.len(), 0);
@@ -212,7 +212,7 @@ fn rollback_draft_refuses_non_empty_active_wal() {
     if let Ok(layout) = layout {
         let result = publish_snapshot_then_patch_block(&layout);
         assert!(result.is_ok());
-        let wal = Wal::new(layout.default_queue_wal_path());
+        let wal = Wal::for_layout(&layout);
         let append = wal.append_patch(&signed_patch_envelope());
         assert!(append.is_ok());
         let signer = test_signer();

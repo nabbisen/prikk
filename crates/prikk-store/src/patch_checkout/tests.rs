@@ -12,6 +12,7 @@ use crate::{
     materialize_patch_checkout_with_deletions, plan_patch_checkout_deletions,
 };
 
+use crate::fsutil::{TestFailPoint, fail_once_for_test};
 use crate::test_support::{
     dummy_signature, maintainer_signature, publish_text_create_then_edit_block,
     signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
@@ -138,6 +139,26 @@ fn patch_materialization_with_deletions_removes_matching_old_file() {
         assert!(!root.join("old.txt").exists());
     }
     let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn patch_deletion_retry_resyncs_observed_absent_parent() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("patch-delete-cleanup-retry");
+    let layout = RepositoryLayout::init(root.clone())?;
+    publish_snapshot_then_patch_block(&layout)?;
+    std::fs::write(root.join("old.txt"), b"old\n")?;
+
+    fail_once_for_test(TestFailPoint::CleanupDirectorySync);
+    assert!(materialize_patch_checkout_with_deletions(&layout, "heads/main").is_err());
+    assert!(!root.join("old.txt").exists());
+    fail_once_for_test(TestFailPoint::CleanupDirectorySync);
+    assert!(materialize_patch_checkout_with_deletions(&layout, "heads/main").is_err());
+    let report = materialize_patch_checkout_with_deletions(&layout, "heads/main")?;
+    assert_eq!(report.deleted_files, 0);
+    assert_eq!(report.already_absent_deleted_files, 1);
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
 }
 
 #[test]

@@ -12,7 +12,7 @@ mod verify;
 use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, RefUpdatePayload};
 
-use crate::fsutil::sync_directory_best_effort;
+use crate::fsutil::{ensure_directory_required, promote_file_required};
 use crate::layout::RepositoryLayout;
 use crate::lock::RefLock;
 use crate::object_store::{FileObjectStore, ObjectReader, ObjectWriter};
@@ -81,9 +81,12 @@ impl RefStore {
     pub fn publish(&self, publication: &RefPublication) -> Result<ObjectId> {
         validate_publication(publication)?;
         let ref_state_id = publication.ref_state.object_id();
-        let ref_lock = RefLock::acquire(self.layout.ref_lock_path(&publication.ref_name))?;
+        let ref_lock = RefLock::acquire(&self.layout, &publication.ref_name)?;
         if publication.expected_previous_ref_state_id.is_none() {
-            self.ensure_unborn_ref_creation_allowed(&publication.ref_name)?;
+            self.ensure_unborn_ref_creation_allowed(
+                &publication.ref_name,
+                &publication.ref_update,
+            )?;
         }
         let mut object_store = FileObjectStore::new(self.layout.clone());
         object_store.write_object(&publication.ref_state)?;
@@ -109,10 +112,9 @@ impl RefStore {
     /// Read the current RefState object ID for a ref name.
     pub fn read_current_ref_state_id(&self, ref_name: &str) -> Result<Option<ObjectId>> {
         let path = self.layout.ref_pointer_path(ref_name);
-        if !path.exists() {
+        let Some(pointer) = pointer::read_ref_pointer(&self.layout, &path)? else {
             return Ok(None);
-        }
-        let pointer = pointer::read_ref_pointer(&path)?;
+        };
         if pointer.ref_name != ref_name {
             return Err(PrikkError::Integrity(format!(
                 "ref pointer name mismatch: expected {ref_name}, got {}",
@@ -194,7 +196,7 @@ impl RefStore {
     /// target RefState object already verify. It does not synthesize objects or repair malformed
     /// logs.
     pub fn reconstruct_missing_ref_from_log(&self, ref_name: &str) -> Result<RefRecoveryRepair> {
-        let ref_lock = RefLock::acquire(self.layout.ref_lock_path(ref_name))?;
+        let ref_lock = RefLock::acquire(&self.layout, ref_name)?;
         if let Some(current) = self.read_current_ref_state_id(ref_name)? {
             drop(ref_lock);
             return Ok(RefRecoveryRepair {
@@ -230,7 +232,11 @@ impl RefStore {
         Ok(())
     }
 
-    fn ensure_unborn_ref_creation_allowed(&self, ref_name: &str) -> Result<()> {
+    fn ensure_unborn_ref_creation_allowed(
+        &self,
+        ref_name: &str,
+        proposed_update: &ObjectEnvelope,
+    ) -> Result<()> {
         self.ensure_current_matches(ref_name, None)?;
         let log = self.replay_log(ref_name)?;
         if log.trailing_partial_bytes != 0 {
@@ -239,7 +245,12 @@ impl RefStore {
                  run doctor before creating a root publication"
             )));
         }
-        if !log.records.is_empty() {
+        let is_exact_retry = log.records.len() == 1
+            && log
+                .records
+                .first()
+                .is_some_and(|record| record.envelope == *proposed_update);
+        if !log.records.is_empty() && !is_exact_retry {
             return Err(PrikkError::Integrity(format!(
                 "ref {ref_name} pointer is missing but ref-log history exists; \
                  run doctor before creating a root publication"
@@ -253,17 +264,19 @@ impl RefStore {
     }
 
     fn promote_ref_pointer_candidate(&self, ref_name: &str) -> Result<()> {
-        let candidate = self.layout.ref_tmp_path(ref_name);
-        let pointer = self.layout.ref_pointer_path(ref_name);
+        let candidate = self
+            .layout
+            .repository_relative(&self.layout.ref_tmp_path(ref_name))?;
+        let pointer = self
+            .layout
+            .repository_relative(&self.layout.ref_pointer_path(ref_name))?;
         let Some(parent) = pointer.parent() else {
             return Err(PrikkError::Io(
                 "ref pointer path has no parent directory".to_string(),
             ));
         };
-        std::fs::create_dir_all(parent)?;
-        std::fs::rename(candidate, &pointer)?;
-        sync_directory_best_effort(parent)?;
-        Ok(())
+        ensure_directory_required(self.layout.repository_mutation_root(), parent)?;
+        promote_file_required(self.layout.repository_mutation_root(), &candidate, &pointer)
     }
 }
 

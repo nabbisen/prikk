@@ -178,6 +178,7 @@ pub(crate) fn unique_temp_dir(name: &str) -> std::path::PathBuf {
         std::process::id(),
         monotonic_suffix()
     ));
+    assert!(std::fs::create_dir_all(&path).is_ok());
     path
 }
 

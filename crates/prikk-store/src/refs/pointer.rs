@@ -1,14 +1,12 @@
 //! Ref pointer file codec.
 
-use std::fs;
-use std::path::Path;
-
 use prikk_error::{PrikkError, Result};
 use prikk_object::ObjectId;
+use std::path::Path;
 
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::push_bytes_u64;
-use crate::fsutil::write_file_atomically;
+use crate::fsutil::{ensure_directory_required, read_file_if_exists, write_file_atomically};
 use crate::layout::RepositoryLayout;
 
 const REF_POINTER_MAGIC: &[u8; 8] = b"PREFPTR1";
@@ -23,9 +21,14 @@ pub(crate) struct RefPointer {
 }
 
 /// Read a ref pointer file.
-pub(crate) fn read_ref_pointer(path: &Path) -> Result<RefPointer> {
-    let bytes = fs::read(path)?;
-    decode_ref_pointer(&bytes)
+pub(crate) fn read_ref_pointer(
+    layout: &RepositoryLayout,
+    path: &Path,
+) -> Result<Option<RefPointer>> {
+    let relative = layout.repository_relative(path)?;
+    read_file_if_exists(layout.repository_mutation_root(), &relative)?
+        .map(|bytes| decode_ref_pointer(&bytes))
+        .transpose()
 }
 
 /// Write a candidate ref pointer file and fsync it.
@@ -34,9 +37,15 @@ pub(crate) fn write_ref_pointer_candidate(
     ref_name: &str,
     ref_state_id: ObjectId,
 ) -> Result<()> {
-    let candidate = layout.ref_tmp_path(ref_name);
+    let candidate = layout.repository_relative(&layout.ref_tmp_path(ref_name))?;
+    let Some(parent) = candidate.parent() else {
+        return Err(PrikkError::Io(
+            "ref pointer candidate path has no parent directory".to_string(),
+        ));
+    };
+    ensure_directory_required(layout.repository_mutation_root(), parent)?;
     let bytes = encode_ref_pointer(ref_name, ref_state_id)?;
-    write_file_atomically(&candidate, &bytes)
+    write_file_atomically(layout.repository_mutation_root(), &candidate, &bytes)
 }
 
 fn encode_ref_pointer(ref_name: &str, ref_state_id: ObjectId) -> Result<Vec<u8>> {

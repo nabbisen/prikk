@@ -121,8 +121,8 @@ pub fn append_rollback_draft(
     envelope.add_signature(signature)?;
     let inverse_patch_id = envelope.object_id();
 
-    let wal = Wal::new(layout.default_queue_wal_path());
-    let _lock = ActiveLock::acquire(layout.default_active_lock_path())?;
+    let wal = Wal::for_layout(layout);
+    let _lock = ActiveLock::acquire(layout)?;
     let replay = wal.replay()?;
     if replay.trailing_partial_bytes != 0 {
         return Err(PrikkError::Integrity(format!(

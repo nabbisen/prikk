@@ -17,6 +17,7 @@ prikk-object                = { workspace = true }
 prikk-replay                = { workspace = true }
 
 getrandom                   = { workspace = true }
+rustix                      = { workspace = true }
 
 [lints]
 workspace = true
