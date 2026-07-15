@@ -14,7 +14,7 @@ mod tests;
 pub(crate) use anchored::{
     EntryKind, MutationRoot, append_file_required, create_new_file_required,
     ensure_directory_required, inspect_entry, list_directory, promote_file_required,
-    read_file_if_exists, read_file_required, read_file_state_if_exists,
+    publish_immutable_file, read_file_if_exists, read_file_required, read_file_state_if_exists,
     remove_file_cleanup_best_effort, remove_file_if_present_required,
     remove_worktree_file_required, sync_directory_required, truncate_existing_file_required,
     truncate_file_empty_required, write_file_atomically, write_worktree_file_atomically,
@@ -25,6 +25,11 @@ pub(crate) use anchored::remove_file_required;
 
 #[cfg(test)]
 pub(crate) use anchored::{TestFailPoint, fail_after_for_test, fail_once_for_test};
+
+#[cfg(test)]
+pub(crate) use anchored::{
+    set_directory_create_barrier_for_test, set_immutable_install_barrier_for_test,
+};
 
 /// Return a process-unique temporary path next to the destination.
 pub(crate) fn temporary_path(path: &Path) -> Result<PathBuf> {

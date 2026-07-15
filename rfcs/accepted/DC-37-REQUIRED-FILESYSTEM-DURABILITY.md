@@ -1,6 +1,7 @@
 # RFC (accepted) - DC-37 Required Filesystem Durability
 
-**Status.** Accepted after architect re-review on 2026-07-15; current M1 implementation increment.
+**Status.** Accepted after architect re-review on 2026-07-15; implementation accepted and committed
+on 2026-07-15.
 **Target milestone.** M1 - 0.18.0 corrective release.
 **Tracks.** Architect review B3.
 **Touches.** Repository metadata fsync policy, `fsutil`, object/WAL/ref/lock/trust/worktree call sites,

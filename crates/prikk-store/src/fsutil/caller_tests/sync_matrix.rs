@@ -25,7 +25,7 @@ fn repository_format_parent_sync_failure_retains_and_retries() -> prikk_error::R
 }
 
 #[test]
-fn transitional_object_parent_sync_failure_retains_and_classifies() -> prikk_error::Result<()> {
+fn immutable_object_install_sync_failure_retains_and_classifies() -> prikk_error::Result<()> {
     let root = unique_temp_dir("object-sync-matrix");
     let layout = RepositoryLayout::init(root.clone())?;
     let mut object = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"sync".to_vec());
@@ -33,7 +33,7 @@ fn transitional_object_parent_sync_failure_retains_and_classifies() -> prikk_err
     let object_id = object.object_id();
     let object_path = layout.object_path(ObjectType::Blob, object_id);
     let mut store = FileObjectStore::new(layout);
-    fail_once_for_test(TestFailPoint::MutableParentSync);
+    fail_once_for_test(TestFailPoint::ImmutableInstallSync);
     assert!(store.write_object(&object).is_err());
     assert!(object_path.is_file());
     assert_eq!(store.write_object(&object)?, object_id);

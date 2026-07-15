@@ -162,10 +162,16 @@ impl AnchoredDirectory {
             }
             Err(rustix::io::Errno::NOENT) => {
                 failpoints::directory_create()?;
-                fs::mkdirat(&self.fd, name, Mode::from_raw_mode(0o755)).map_err(io_error)?;
-                failpoints::created_directory_parent_sync()?;
-                self.sync()?;
-                self.open_child(name)
+                failpoints::wait_at_directory_create();
+                match fs::mkdirat(&self.fd, name, Mode::from_raw_mode(0o755)) {
+                    Ok(()) => {
+                        failpoints::created_directory_parent_sync()?;
+                        self.sync()?;
+                        self.open_child(name)
+                    }
+                    Err(rustix::io::Errno::EXIST) => self.open_validated_child(name),
+                    Err(error) => Err(io_error(error)),
+                }
             }
             Err(error) => Err(io_error(error)),
         }

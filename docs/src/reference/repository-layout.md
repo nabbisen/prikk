@@ -95,6 +95,14 @@ inline in ref logs, not as an object-store file. Current docs should not describ
 Object files are authority only when their envelope decodes, validates, has the expected type, and its
 computed content-addressed object id matches the requested id and path.
 
+Object publication is immutable and no-clobber. A new object is written and synced through a unique
+same-shard temp, installed without replacing an existing final name, and followed by required shard
+sync and invocation-owned temp cleanup. An existing final name succeeds only when one no-follow
+regular-file read proves valid identity/type and exact persisted-byte equality with the candidate.
+
+Crash-left names matching `<object-id>.pobj.tmp.<pid>.<random>` are non-authoritative local debris.
+Canonical reads ignore them; `verify` and `doctor` warn without deleting them or inferring ownership.
+
 ## Refs and Ref Logs
 
 Ref storage paths use a storage key derived from the human-readable ref name:

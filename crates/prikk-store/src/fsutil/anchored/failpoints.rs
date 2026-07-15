@@ -5,6 +5,8 @@ use prikk_error::PrikkError;
 use prikk_error::Result;
 #[cfg(test)]
 use std::cell::RefCell;
+#[cfg(test)]
+use std::sync::{Arc, Barrier};
 
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,11 +27,21 @@ pub(crate) enum Point {
     Truncate,
     Unlink,
     CleanupDirectorySync,
+    ImmutableCleanupSync,
+    ImmutableFileSync,
+    ImmutableInstall,
+    ImmutableInstallUnsupported,
+    ImmutableInstallNoSys,
+    ImmutableInstallPermission,
+    ImmutableInstallSync,
+    ImmutableTempUnlink,
 }
 
 #[cfg(test)]
 std::thread_local! {
     static NEXT: RefCell<Option<(Point, usize)>> = const { RefCell::new(None) };
+    static DIRECTORY_CREATE_BARRIER: RefCell<Option<Arc<Barrier>>> = const { RefCell::new(None) };
+    static IMMUTABLE_INSTALL_BARRIER: RefCell<Option<Arc<Barrier>>> = const { RefCell::new(None) };
 }
 
 #[cfg(test)]
@@ -40,6 +52,24 @@ pub(crate) fn fail_once(point: Point) {
 #[cfg(test)]
 pub(crate) fn fail_after(point: Point, matching_calls_to_skip: usize) {
     NEXT.with(|next| *next.borrow_mut() = Some((point, matching_calls_to_skip)));
+}
+
+#[cfg(test)]
+pub(crate) fn set_directory_create_barrier(barrier: Arc<Barrier>) {
+    DIRECTORY_CREATE_BARRIER.with(|slot| *slot.borrow_mut() = Some(barrier));
+}
+
+#[cfg(test)]
+pub(crate) fn set_immutable_install_barrier(barrier: Arc<Barrier>) {
+    IMMUTABLE_INSTALL_BARRIER.with(|slot| *slot.borrow_mut() = Some(barrier));
+}
+
+pub(super) fn wait_at_directory_create() {
+    wait_at_test_barrier(TestBarrier::DirectoryCreate);
+}
+
+pub(super) fn wait_at_immutable_install() {
+    wait_at_test_barrier(TestBarrier::ImmutableInstall);
 }
 
 pub(super) fn created_directory_parent_sync() -> Result<()> {
@@ -106,6 +136,46 @@ pub(super) fn cleanup_directory_sync() -> Result<()> {
     check_test_point(TestPoint::CleanupDirectorySync)
 }
 
+pub(super) fn immutable_file_sync() -> Result<()> {
+    check_test_point(TestPoint::ImmutableFileSync)
+}
+
+pub(super) fn immutable_install() -> Result<()> {
+    check_test_point(TestPoint::ImmutableInstall)
+}
+
+#[cfg(target_os = "linux")]
+pub(super) fn immutable_install_error() -> Option<rustix::io::Errno> {
+    for (point, error) in [
+        (
+            TestPoint::ImmutableInstallUnsupported,
+            rustix::io::Errno::OPNOTSUPP,
+        ),
+        (TestPoint::ImmutableInstallNoSys, rustix::io::Errno::NOSYS),
+        (
+            TestPoint::ImmutableInstallPermission,
+            rustix::io::Errno::PERM,
+        ),
+    ] {
+        if check_test_point(point).is_err() {
+            return Some(error);
+        }
+    }
+    None
+}
+
+pub(super) fn immutable_install_sync() -> Result<()> {
+    check_test_point(TestPoint::ImmutableInstallSync)
+}
+
+pub(super) fn immutable_temp_unlink() -> Result<()> {
+    check_test_point(TestPoint::ImmutableTempUnlink)
+}
+
+pub(super) fn immutable_cleanup_sync() -> Result<()> {
+    check_test_point(TestPoint::ImmutableCleanupSync)
+}
+
 #[derive(Clone, Copy)]
 enum TestPoint {
     CreatedDirectoryParentSync,
@@ -124,6 +194,14 @@ enum TestPoint {
     Truncate,
     Unlink,
     CleanupDirectorySync,
+    ImmutableCleanupSync,
+    ImmutableFileSync,
+    ImmutableInstall,
+    ImmutableInstallUnsupported,
+    ImmutableInstallNoSys,
+    ImmutableInstallPermission,
+    ImmutableInstallSync,
+    ImmutableTempUnlink,
 }
 
 fn check_test_point(point: TestPoint) -> Result<()> {
@@ -158,7 +236,40 @@ impl From<TestPoint> for Point {
             TestPoint::Truncate => Self::Truncate,
             TestPoint::Unlink => Self::Unlink,
             TestPoint::CleanupDirectorySync => Self::CleanupDirectorySync,
+            TestPoint::ImmutableCleanupSync => Self::ImmutableCleanupSync,
+            TestPoint::ImmutableFileSync => Self::ImmutableFileSync,
+            TestPoint::ImmutableInstall => Self::ImmutableInstall,
+            TestPoint::ImmutableInstallUnsupported => Self::ImmutableInstallUnsupported,
+            TestPoint::ImmutableInstallNoSys => Self::ImmutableInstallNoSys,
+            TestPoint::ImmutableInstallPermission => Self::ImmutableInstallPermission,
+            TestPoint::ImmutableInstallSync => Self::ImmutableInstallSync,
+            TestPoint::ImmutableTempUnlink => Self::ImmutableTempUnlink,
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum TestBarrier {
+    DirectoryCreate,
+    ImmutableInstall,
+}
+
+fn wait_at_test_barrier(barrier: TestBarrier) {
+    #[cfg(test)]
+    {
+        let slot = match barrier {
+            TestBarrier::DirectoryCreate => &DIRECTORY_CREATE_BARRIER,
+            TestBarrier::ImmutableInstall => &IMMUTABLE_INSTALL_BARRIER,
+        };
+        slot.with(|slot| {
+            if let Some(barrier) = slot.borrow_mut().take() {
+                barrier.wait();
+            }
+        });
+    }
+    #[cfg(not(test))]
+    {
+        let _ = barrier;
     }
 }
 

@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::Path;
 
+mod directory;
+
 use crate::RepositoryLayout;
 use crate::test_support::unique_temp_dir;
 
@@ -15,15 +17,6 @@ fn mutation_root(path: &Path) -> MutationRoot {
         Ok(root) => root,
         Err(error) => panic!("test mutation root failed: {error}"),
     }
-}
-
-#[test]
-fn required_directory_creation_builds_each_component() {
-    let path = unique_temp_dir("required-directory");
-    let root = mutation_root(&path);
-    assert!(ensure_directory_required(&root, Path::new("one/two/three")).is_ok());
-    assert!(path.join("one/two/three").is_dir());
-    let _ = fs::remove_dir_all(path);
 }
 
 #[test]
@@ -110,46 +103,12 @@ fn required_open_failure_has_no_side_effect_and_is_retryable() {
 }
 
 #[test]
-fn observed_component_parent_sync_failure_is_retryable() {
-    let path = unique_temp_dir("observed-parent-sync-failure");
-    let root = mutation_root(&path);
-    assert!(fs::create_dir(path.join("existing")).is_ok());
-    fail_once_for_test(TestFailPoint::ObservedDirectoryParentSync);
-    assert!(ensure_directory_required(&root, Path::new("existing/child")).is_err());
-    assert!(!path.join("existing/child").exists());
-    assert!(ensure_directory_required(&root, Path::new("existing/child")).is_ok());
-    let _ = fs::remove_dir_all(path);
-}
-
-#[test]
-fn directory_create_failure_has_no_side_effect_and_is_retryable() {
-    let path = unique_temp_dir("directory-create-failure");
-    let root = mutation_root(&path);
-    fail_once_for_test(TestFailPoint::DirectoryCreate);
-    assert!(ensure_directory_required(&root, Path::new("child")).is_err());
-    assert!(!path.join("child").exists());
-    assert!(ensure_directory_required(&root, Path::new("child")).is_ok());
-    let _ = fs::remove_dir_all(path);
-}
-
-#[test]
 fn mutable_atomic_write_replaces_complete_content() {
     let path = unique_temp_dir("required-atomic-write");
     let root = mutation_root(&path);
     assert!(write_file_atomically(&root, Path::new("state"), b"first").is_ok());
     assert!(write_file_atomically(&root, Path::new("state"), b"second").is_ok());
     assert_eq!(fs::read(path.join("state")).unwrap_or_default(), b"second");
-    let _ = fs::remove_dir_all(path);
-}
-
-#[test]
-fn failed_directory_parent_sync_retains_created_component() {
-    let path = unique_temp_dir("required-directory-failure");
-    let root = mutation_root(&path);
-    fail_once_for_test(TestFailPoint::CreatedDirectoryParentSync);
-    assert!(ensure_directory_required(&root, Path::new("child")).is_err());
-    assert!(path.join("child").is_dir());
-    assert!(ensure_directory_required(&root, Path::new("child")).is_ok());
     let _ = fs::remove_dir_all(path);
 }
 
@@ -345,18 +304,5 @@ fn promotion_source_sync_failure_reports_committed_destination() {
         fs::read(path.join("destination/pointer")).unwrap_or_default(),
         b"pointer"
     );
-    let _ = fs::remove_dir_all(path);
-}
-
-#[cfg(target_family = "unix")]
-#[test]
-fn required_directory_rejects_symlink_component() {
-    use std::os::unix::fs::symlink;
-
-    let path = unique_temp_dir("required-symlink");
-    let root = mutation_root(&path);
-    assert!(ensure_directory_required(&root, Path::new("target")).is_ok());
-    assert!(symlink(path.join("target"), path.join("link")).is_ok());
-    assert!(ensure_directory_required(&root, Path::new("link/child")).is_err());
     let _ = fs::remove_dir_all(path);
 }

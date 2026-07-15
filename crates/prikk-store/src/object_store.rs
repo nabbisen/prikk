@@ -5,7 +5,8 @@ use prikk_object::{ObjectEnvelope, ObjectId, ObjectType};
 
 use crate::file_codec::{decode_envelope_file, encode_envelope_file};
 use crate::fsutil::{
-    EntryKind, ensure_directory_required, inspect_entry, read_file_if_exists, write_file_atomically,
+    EntryKind, ensure_directory_required, inspect_entry, publish_immutable_file,
+    read_file_if_exists,
 };
 use crate::layout::{RepositoryLayout, persisted_object_types};
 
@@ -114,9 +115,6 @@ impl ObjectWriter for FileObjectStore {
         let id = envelope.object_id();
         let path = self.layout.object_path(envelope.object_type, id);
         let relative = self.layout.repository_relative(&path)?;
-        if read_file_if_exists(self.layout.repository_mutation_root(), &relative)?.is_some() {
-            return Ok(id);
-        }
         let Some(parent) = relative.parent() else {
             return Err(PrikkError::Io(
                 "object path has no parent directory".to_string(),
@@ -124,9 +122,37 @@ impl ObjectWriter for FileObjectStore {
         };
         ensure_directory_required(self.layout.repository_mutation_root(), parent)?;
         let bytes = encode_envelope_file(envelope)?;
-        write_file_atomically(self.layout.repository_mutation_root(), &relative, &bytes)?;
+        publish_immutable_file(
+            self.layout.repository_mutation_root(),
+            &relative,
+            &bytes,
+            |existing| validate_existing_object(existing, envelope.object_type, id),
+        )?;
         Ok(id)
     }
+}
+
+fn validate_existing_object(
+    bytes: &[u8],
+    expected_type: ObjectType,
+    expected_id: ObjectId,
+) -> Result<()> {
+    let envelope = decode_envelope_file(bytes).map_err(|error| {
+        PrikkError::Integrity(format!("existing immutable object is malformed: {error}"))
+    })?;
+    if envelope.object_type != expected_type {
+        return Err(PrikkError::Integrity(format!(
+            "existing object type {} differs from path type {expected_type}",
+            envelope.object_type
+        )));
+    }
+    let actual_id = envelope.object_id();
+    if actual_id != expected_id {
+        return Err(PrikkError::Integrity(format!(
+            "existing object id {actual_id} differs from path id {expected_id}"
+        )));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

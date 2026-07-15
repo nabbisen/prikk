@@ -10,12 +10,14 @@ use super::temporary_path;
 
 mod directory;
 mod failpoints;
+mod immutable;
 mod read;
 mod regular;
 
 pub(crate) use directory::{MutationRoot, ensure_directory_required, sync_directory_required};
 #[cfg(target_os = "linux")]
 use directory::{open_existing_directory_required, prepare_directory_required};
+pub(crate) use immutable::publish_immutable_file;
 pub(crate) use read::{
     EntryKind, inspect_entry, list_directory, read_file_if_exists, read_file_required,
     read_file_state_if_exists,
@@ -29,6 +31,8 @@ use regular::{required_file_name, required_parent};
 #[cfg(test)]
 pub(crate) use failpoints::{
     Point as TestFailPoint, fail_after as fail_after_for_test, fail_once as fail_once_for_test,
+    set_directory_create_barrier as set_directory_create_barrier_for_test,
+    set_immutable_install_barrier as set_immutable_install_barrier_for_test,
 };
 
 #[cfg(target_os = "linux")]

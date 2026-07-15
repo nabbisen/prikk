@@ -1,7 +1,7 @@
 # RFC (accepted) - DC-36 Existing-Object Publication Integrity
 
-**Status.** Accepted after architect re-review on 2026-07-15; implementation remains blocked on
-DC-37 required-sync primitives and failure semantics.
+**Status.** Accepted after architect re-review on 2026-07-15; implementation accepted after repair
+re-review on 2026-07-15.
 **Target milestone.** M1 - 0.18.0 corrective release.
 **Tracks.** Architect review B4.
 **Touches.** `FileObjectStore::write_object`, object-file decoding/encoding, corruption errors, and
@@ -106,7 +106,8 @@ ownership. Publication, verification, and doctor never delete these paths under 
 DC-36 can receive design review independently of DC-34. Implementation depends on DC-37's accepted and
 implemented required-sync API and failure semantics: the immutable no-clobber writer must consume that
 shared durability boundary rather than define a private sync policy. DC-37 therefore lands before
-DC-36 implementation, even while DC-36 remains the current design-closure increment.
+DC-36 implementation. That ordering is now satisfied; accepted DC-38 follows the accepted DC-36
+implementation.
 
 DC-36 is complete only with focused store tests and an end-to-end publication refusal test. It ships
 only in the combined 0.18.0 corrective release after all M1 blocker RFCs pass review.

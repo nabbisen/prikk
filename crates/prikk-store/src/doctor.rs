@@ -208,6 +208,17 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                      auto-trust keys or repair signatures",
                 ));
             }
+            for path in &verification.object_temp_paths {
+                let name = path
+                    .file_name()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or("<non-UTF-8 object temp>");
+                issues.push(DoctorIssue::warning(
+                    "PRIKK-DOCTOR-OBJECT-TEMP-DEBRIS",
+                    format!("non-authoritative object publication temp remains: {name}"),
+                    "preserve it for inspection; doctor does not infer ownership or remove object temps",
+                ));
+            }
             add_active_wal_metadata_issues(&verification, &mut issues);
             add_missing_main_ref_issue(layout, &mut issues);
             DoctorReport {

@@ -59,6 +59,27 @@ pub(super) fn open_existing_regular(
 }
 
 #[cfg(target_os = "linux")]
+pub(super) fn open_existing_regular_if_exists(
+    directory: impl AsFd,
+    name: &std::ffi::OsStr,
+    flags: OFlags,
+) -> Result<Option<OwnedFd>> {
+    failpoints::required_open()?;
+    let fd = match fs::openat(
+        directory,
+        name,
+        flags | OFlags::NONBLOCK | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::empty(),
+    ) {
+        Ok(fd) => fd,
+        Err(rustix::io::Errno::NOENT) => return Ok(None),
+        Err(error) => return Err(io_error(error)),
+    };
+    validate_regular(&fd)?;
+    Ok(Some(fd))
+}
+
+#[cfg(target_os = "linux")]
 pub(super) fn open_existing_or_create_regular(
     directory: impl AsFd,
     name: &std::ffi::OsStr,

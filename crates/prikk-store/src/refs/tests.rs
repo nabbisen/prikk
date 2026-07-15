@@ -1,5 +1,7 @@
 //! Ref publication tests.
 
+mod object_mismatch;
+
 use prikk_object::ObjectType;
 
 use super::log;

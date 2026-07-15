@@ -6,11 +6,11 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
 
 ## Current Increment
 
-- **DC-37 - required filesystem durability (accepted).** DC-36 and DC-37 passed architect design
-  re-review on 2026-07-15. DC-37 is the current implementation increment and supplies the shared
-  required-sync and anchored-directory primitives. Accepted DC-36 and DC-38 follow in that order.
-  DC-40 is also accepted with implementation evidence pending. The remaining DC-35 through DC-44 work
-  remains scheduled according to `MILESTONES.md`.
+- **DC-38 - ref publication crash recovery (accepted).** DC-36 implementation was accepted on
+  2026-07-15 after DC-37 supplied the required-sync and anchored-directory primitives. DC-38 is now the
+  current implementation increment. DC-40 is also accepted with implementation evidence pending. The
+  remaining DC-35 through DC-44 work remains scheduled according to `MILESTONES.md`; the combined
+  0.18.0/M1 release gate remains closed.
 
 ## Release Candidate Increment
 

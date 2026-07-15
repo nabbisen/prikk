@@ -66,12 +66,12 @@ begin identity-bearing implementation before DC-34 is accepted by architect revi
 5. DC-39 Signature and Envelope Authority.
 6. DC-40 State Merkle Root and Format Transition.
 
-DC-36 and DC-37 designs were accepted on 2026-07-15. DC-37 is the current implementation increment.
-Storage implementation order is DC-37 required-sync primitives, then DC-36 immutable object
-publication, then DC-38 ref publication recovery. DC-35 remains proposed, and DC-39 implementation
+DC-36 and DC-37 designs were accepted on 2026-07-15. DC-37 implementation was accepted and committed,
+and DC-36 immutable object publication implementation was subsequently accepted. DC-38 ref publication
+recovery is the current implementation increment. DC-35 remains proposed, and DC-39 implementation
 waits for its own design review while using accepted DC-34 authority.
 DC-38 and DC-40 designs, including the DC-40 companion state-root/format FDD, were accepted on
-2026-07-14. DC-36 and DC-38 implementation both wait for implemented DC-37 semantics.
+2026-07-14. DC-40 implementation remains pending behind the current DC-38 increment.
 
 **Release condition:** all five blocking findings are closed by accepted implementation review; the
 reproduced ref failure no longer succeeds; the state-root and signature vectors are pinned; format-1/

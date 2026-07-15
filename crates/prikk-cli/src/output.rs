@@ -440,6 +440,14 @@ pub(crate) fn print_verify_report(
     for issue in &report.publication_trust_issues {
         println!("publication-trust [{}]: {}", issue.code, issue.message);
     }
+    println!("object temp warnings: {}", report.object_temp_paths.len());
+    for path in &report.object_temp_paths {
+        let name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("<non-UTF-8 object temp>");
+        println!("warning: non-authoritative object publication temp: {name}");
+    }
     println!(
         "trailing partial WAL bytes: {}",
         report.trailing_partial_wal_bytes

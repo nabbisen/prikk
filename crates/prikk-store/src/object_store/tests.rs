@@ -1,5 +1,8 @@
 //! Object store and layout tests.
 
+mod immutable;
+mod races;
+
 use prikk_object::{ObjectEnvelope, ObjectType};
 
 use crate::{FileObjectStore, MemoryObjectStore, ObjectReader, ObjectWriter, RepositoryLayout};
