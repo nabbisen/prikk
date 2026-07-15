@@ -1,7 +1,9 @@
 # RFC (accepted) - DC-35 Release Compatibility and Status Correction
 
-**Status.** Accepted after architect design re-review v2 on 2026-07-15; documentation/policy
-implementation pending.
+**Status.** Governance amendment accepted after architect design re-review v3 on 2026-07-15;
+documentation/policy implementation pending.
+**Owner ruling.** Repository-governed signer changes, non-mandatory existing-key approval, and the
+72-hour break-glass hold were approved on 2026-07-15.
 **Target milestone.** M1 - required before the 0.18.0 release candidate.
 **Tracks.** TASK-13 and architect review N3.
 **Touches.** Release/compatibility reference, implementation-status correction, release-signer
@@ -103,6 +105,13 @@ mismatched internal Cargo requirements; distribution-complete claims with missin
 abandoned candidate retaining any target claim. The finalization row without a public tag is allowed
 only as a private local transaction and must never be pushed separately.
 
+The audit must also reject release authority changed inside an RC/finalization commit, an unauthorized
+or ambiguous signer, self-approved signer admission, missing or untyped governance/proof state, an
+active release hold, and a disputed or hostile tag represented as an official release. A transaction
+that introduces a fingerprint requires verified proof of possession. `not-applicable` proof is valid
+only for removal-only or classification-only transactions with a recorded reason and no introduced
+fingerprint; the audit rejects it when any fingerprint is introduced.
+
 External distribution is a separate dimension from Git release state: `pending`, `partial`, `complete`,
 or `superseded`. Atomic publication of the finalization commit and tag is the release event. Absence of
 a release evidence snapshot means distribution is `pending`, never complete.
@@ -111,7 +120,9 @@ a release evidence snapshot means distribution is `pending`, never complete.
 
 The policy must specify this order:
 
-1. Obtain design and implementation acceptance and record their isolated commits.
+1. Obtain design and implementation acceptance and record their isolated commits. Complete any signer-
+   authority bootstrap/change/recovery as an earlier isolated reviewed transaction and verify that no
+   release hold remains active.
 2. Prepare one release-candidate commit: select the version; update workspace metadata, every internal
    registry requirement to exact `=X.Y.Z`, and the lockfile;
    add the candidate changelog entry; update README, ROADMAP, MILESTONES, RFC indexes/status, relevant
@@ -174,6 +185,9 @@ appended, never replaced. Absence means `pending`. Every snapshot is keyed by ve
 - normalized crate names/versions/exact internal requirements, graph order, staged/registry/fetched
   checksums, equality result, and per-crate publication and registry-visibility status;
 - release-page status and, separately, Pages workflow/deployed-revision status;
+- signer-governance transaction type/action or classification, approvals, typed proof state/result or
+  `not-applicable` reason, hold interval, and old/new authority-file blob ids when bootstrap, recovery,
+  containment, dispute, or authority change applies;
 - overall `pending`, `partial`, `complete`, or `superseded` status, attempt time, and prior snapshot.
 
 The snapshot grammar must reject missing required fields, unknown fields, invalid state transitions, a
@@ -184,10 +198,50 @@ existing output.
 
 ### Release-signer authority
 
-DC-35 implementation must add a tracked root `release-signers.toml` containing a schema version and the
-full uppercase OpenPGP fingerprints authorized to sign releases. The project owner must explicitly
-confirm each fingerprint before it is committed; local Git configuration or an imported key is not
-authority. No private or secret key material belongs in the repository, review request, or evidence.
+Official release authority is a composition, not a self-authenticating signer file: reviewed protected-
+branch governance authorizes policy and signer changes; `release-signers.toml` is the commit-local
+allowlist; an allowlisted private key authenticates a tag; hosting/registry administrators control
+publication capabilities; and release evidence binds those outputs. Hosting administrators remain the
+ultimate technical override. Overrides are governance incidents, not ordinary authority changes.
+
+DC-35 implementation must add a tracked root `release-signers.toml` containing a schema version and
+supporting multiple concurrently authorized full uppercase OpenPGP primary fingerprints. Multiple
+independent active operators are encouraged when available but are not an M1 precondition. Local Git
+configuration, an imported key, or control of an existing signer alone is not authority. No private or
+secret key material belongs in the repository, review request, challenge, or evidence.
+
+Every bootstrap, addition, removal, or replacement is an isolated public change completed before RC
+finalization. It requires approval by one repository maintainer/administrator and one independent
+architect or security reviewer who are two distinct natural persons for every authority transaction.
+A proposed signer who is the repository maintainer/administrator may supply the maintainer approval for
+their own admission, but cannot supply or impersonate the independent approval. The second person must
+independently review the signer proof and authority change. Automation may verify evidence but cannot
+occupy either accountable approval identity. Approval by an existing authorized key is recorded when
+available but is supplementary and never a veto.
+
+The protected default branch and public review history are the normative authority-change/recovery root;
+observed branch-protection review controls or an explicitly reviewed equivalent are required before
+release. The equivalent must record an immutable authority-change revision, two accountable approvals,
+an observed no-bypass review path or declared administrator-override incident, and the resulting branch
+commit identity. It is not an undocumented exception. If that evidence is unavailable, release remains
+blocked.
+
+A new signer proves possession with a versioned canonical non-secret challenge that names the Prikk
+repository, full primary fingerprint, intended official-release role, immutable authority-change commit
+or immutable public review revision, fresh nonce, issuance time, and expiry time. An excluded local
+review-request file is not transaction authority. Implementation must pin the byte grammar and freshness
+bounds so an old proof cannot authorize a later transaction. The review records the challenge,
+transaction identity, full primary fingerprint, and verifier result without private material. Initial
+bootstrap uses the break-glass procedure because no prior authorized signer exists.
+
+Every governance transaction has a typed proof state. Bootstrap, addition, and replacement introduce a
+fingerprint and therefore require `verified` proof. Removal-only and classification-only transactions
+introduce no fingerprint and require `not-applicable` plus a reason. Missing/untyped proof is always
+invalid, and `not-applicable` is invalid when the old/new authority comparison introduces a fingerprint.
+Implementation derives introduced, removed, and unchanged effects from parsed normalized old/new primary-
+fingerprint sets before validating the declared transaction type and proof state; operator labels are not
+authority. Authority proof and later release-tag verification use distinct schema fields and fixtures
+because they may involve different signers.
 
 Tag creation must explicitly select an authorized full fingerprint. Verification must extract the full
 primary signer fingerprint from verifier output, compare it exactly with the allowlist in the peeled
@@ -195,7 +249,67 @@ commit, and fail before atomic push on missing authority, ambiguous output, or m
 snapshot records the fingerprint, authorization path, authority-file blob id, and observed verification
 result. Tags created under this policy retain their own authority file through their peeled commits.
 Tags through 0.17.7 predate this authority and must not be reported as passing its signer audit. Key
-rotation/revocation policy, attestations, SBOMs, and broader release-key lifecycle remain DC-43 scope.
+custody, scheduled rotation, expiry/revocation monitoring, attestations, SBOMs, and broader release-key
+lifecycle remain DC-43 scope.
+
+### Break-glass and dispute state machine
+
+Loss recovery is triggered when all authorized keys are unavailable or unusable. Compromise containment
+is triggered when any authorized key is suspected compromised. Dispute containment is triggered when
+any active signer, authority transaction, tag, or release identity is materially disputed. Initial
+bootstrap uses the same controls because no prior authorized signer exists. A healthy remaining signer
+avoids replacement-key deadlock but does not waive containment, review, or the 72-hour hold. The required
+sequence is:
+
+1. Immediately hold new official tags, incomplete/future crate and archive distribution, release-page
+   completion, and Pages-complete claims.
+2. Open a durable public governance/incident record naming the trigger class, affected fingerprints or
+   releases, proposed authority action or classification (including explicit no-authority-change), and
+   non-secret evidence.
+3. Obtain the two-distinct-natural-person maintainer/administrator and independent architect/security
+   approvals required above.
+4. If the transaction introduces a fingerprint through bootstrap, addition, or replacement, verify and
+   record that signer's non-secret proof-of-possession challenge. A removal-only or classification-only
+   transaction records typed `not-applicable` proof and its reason; proof state is never omitted.
+5. Make an isolated history-preserving authority/governance commit. Do not force-push, retag, reuse a
+   version, or combine unrelated release work. A compromised key may be removed after approvals. A
+   classification-only incident may leave the authority file unchanged and records equal old/new blob
+   ids explicitly.
+6. Keep release publication blocked for at least 72 hours after the bootstrap/recovery/containment
+   authority and evidence become public. Any-key compromise/dispute remains held until the affected key
+   is removed or the disputed authority/release is classified.
+7. Obtain architect/security re-review of the authority/governance commit, branch-governance evidence,
+   typed verified or `not-applicable` proof state, containment/classification, and elapsed hold. Only an
+   explicit ruling after both the minimum interval and required containment/classification lifts the hold.
+8. Record the governance/incident reference, transaction type/action or classification, old/new
+   authority-file blob ids (including equality), approvals, hold interval, proof state/reason, and any
+   introduced signer fingerprint/verifier result in the first subsequent release evidence.
+
+If no independent reviewer or repository administrator is available, official upstream release
+authority remains unavailable; source development and downstream forks remain possible. Existing-
+signer approval cannot be required for recovery because total key loss would otherwise be permanent.
+
+After a published-authority dispute, freeze incomplete distribution and future releases and append a
+public incident/dispute record and evidence snapshot. Emergency administrator quarantine may contain
+exposure before classification, but immutable evidence must precede destructive host action where
+technically possible, and quarantine alone never determines official status.
+
+The same two-distinct-natural-person maintainer/administrator and independent architect/security review
+classifies the tag against the authority blob in its peeled commit and that blob's governance record as
+`valid-at-publication`, `never-authorized/hostile`, or still `disputed`. Only the first two terminal
+classifications permit an explicit architect/security hold-lift ruling after the 72-hour minimum;
+`disputed` keeps the hold active. A release valid at publication is never silently retagged or replaced;
+it may be yanked where supported and superseded by a new version. A hostile tag that never satisfied
+official authority is not an official release: administrators may quarantine or remove the hostile ref
+while preserving forensic evidence, burning its version/name, publishing the incident, and never reusing
+or retagging it.
+
+### Open-source governance boundary
+
+This authority governs only official upstream Prikk tags, official release-page assets, and official
+package namespaces. It does not restrict source contributions, review participation, Apache-2.0 forks,
+downstream builds, or downstream tags and packages under distinct identities/namespaces. Threshold or
+mandatory multi-signature releases are deferred until project scale and tooling justify them.
 
 ### Crate-byte identity and completion
 
@@ -240,6 +354,8 @@ The design must require, where applicable:
 - package contents/metadata checks and publish dry runs supported by the installed Cargo;
 - normalized exact internal dependency checks and isolated-registry package builds;
 - authorized signer fingerprint and authority-file identity checks;
+- signer-authority approval, branch-governance, transaction-typed proof applicability/result, hold, and
+  incident checks;
 - staged/registry/fetched crate checksum equality;
 - version, lockfile, changelog, roadmap, RFC lifecycle, tag, archive-root, checksum, evidence-snapshot
   sequence/attempt history, completion output set, and valid/forbidden release-state consistency.
@@ -265,25 +381,30 @@ remains a current-state snapshot rather than a second changelog.
 
 - No version bump, tag, package, publish, CI, executable-code, repository-object-schema, or CLI change.
 - No compatibility promise, support window, LTS policy, migration tool, or 1.0 commitment.
-- No private release-key storage, key-rotation/revocation policy, SBOM, or provenance attestation; those
-  remain DC-43 scope.
+- No private release-key storage, custody/backup design, scheduled rotation, expiry/revocation
+  monitoring, hardware-key mandate, scalable quorum, SBOM, or provenance attestation; those remain
+  DC-43 scope.
 - No claim that a listed gate passed unless observed for the release under review.
 
 ## Dependencies and gates
 
-DC-35 may be implemented after design review independently of storage fixes, but it is held for the
-single 0.18.0 corrective release. The final page must reflect DC-34's format and compatibility rulings,
-DC-40's accepted format-1/format-2 transition, RFC-000's accepted-to-done boundary, and the project
-owner's unprefixed signed-tag convention. `mdbook build docs`, link/status consistency, normalized
-package/local-registry evidence, and a table-driven positive/forbidden release-state audit are required
-implementation-review evidence.
+DC-35 may proceed to scoped policy/documentation implementation but remains held for the single 0.18.0
+corrective release. The final page must reflect DC-34's format and compatibility rulings, DC-40's
+accepted format-1/format-2 transition, RFC-000's accepted-to-done boundary, and the project's unprefixed
+signed-tag convention. `mdbook build docs`, link/status consistency, signer-governance fixtures,
+normalized package/local-registry evidence, and a table-driven positive/forbidden release-state audit
+are required implementation-review evidence.
 
 ## Acceptance criteria
 
 The new reference is reviewed and navigable; the N3 contradictions are corrected; compatibility rules
-cannot override identity authority; development build/source metadata, the three Git states, forbidden mixed rows,
-and external distribution states are unambiguous; the full suite runs on the finalization commit; atomic
-push has no non-atomic fallback; the tag signer is bound to committed fingerprint authority; exact Cargo
-requirements, package order, staged/registry/fetched crate equality, immutable asset bytes, exact
-completion output, and append-only partial-publication evidence are defined; no published asset requires
-later bookkeeping to become truthful; and all compatibility and gate limitations remain explicit.
+cannot override identity authority; development build/source metadata, the three Git states, forbidden
+mixed rows, and external distribution states are unambiguous; the full suite runs on the finalization
+commit; atomic push has no non-atomic fallback; the tag signer is bound to repository-governed commit-
+local fingerprint authority; multi-signer admission, bootstrap, total-loss recovery, 72-hour hold,
+any-key compromise containment, two-person approval, dispute classification/lift, and upstream/community
+boundaries are explicit; proof state is transaction-typed for introduction, removal-only, and
+classification-only paths; exact Cargo requirements, package order, staged/registry/fetched crate
+equality, immutable asset bytes, exact completion output, and append-only partial-publication evidence
+are defined; no published asset requires later bookkeeping to become truthful; and all compatibility
+and gate limitations remain explicit.

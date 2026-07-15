@@ -6,10 +6,11 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
 
 ## Current Increment
 
-- **DC-35 - release compatibility and status correction (accepted).** Architect design re-review v2
-  accepted DC-35 on 2026-07-15. Its scoped documentation/policy implementation is the next increment;
-  no implementation evidence is accepted yet. DC-39 remains proposed, and DC-40 remains accepted with
-  implementation evidence pending. The combined 0.18.0/M1 release gate remains closed.
+- **DC-35 - release compatibility and status correction (accepted).** Architect design re-review v3
+  accepted the repository-governed multi-signer and break-glass amendment on 2026-07-15. Scoped policy/
+  documentation implementation is next; no implementation evidence is accepted yet. DC-39 remains
+  proposed, and DC-40 remains accepted with implementation evidence pending. The combined 0.18.0/M1
+  release gate remains closed.
 
 ## Release Candidate Increment
 

@@ -3,8 +3,8 @@
 **Status.** Proposed; security/architect design review required.
 **Target milestone.** M2 - required before reconsidering public-preview readiness.
 **Tracks.** Architect review N7.
-**Touches.** Vulnerability reporting, dependency policy, SBOM/provenance, release attestations, CI
-platform policy, and public release documentation.
+**Touches.** Vulnerability reporting, dependency policy, SBOM/provenance, release attestations, release-
+key lifecycle, registry-owner lifecycle, CI platform policy, and public release documentation.
 
 ## Design goals
 
@@ -15,6 +15,9 @@ platform policy, and public release documentation.
 - Generate an SBOM for release artifacts and record artifact digests without changing an already
   published asset.
 - Define provenance/attestation generation and verification for source archives and published crates.
+- Define mature release-key custody/backup, scheduled rotation, expiration/revocation monitoring,
+  hardware-backed-key policy, scalable maintainer quorum, and registry-owner lifecycle controls without
+  weakening DC-35's minimum non-deadlocking bootstrap/recovery authority.
 - Make required release gates, optional evidence jobs, and failure handling visible in tracked policy.
 - Preserve the project's explicit experimental/no-production warning until an independent review says
   otherwise.
@@ -28,10 +31,13 @@ secrets and must never be copied into RFCs, logs, fixtures, or review packages.
 - No guarantee of vulnerability-free dependencies, paid support SLA, bug bounty, automatic emergency
   release, or production-readiness claim.
 - No key-management redesign for repository AUTHOR/MAINTAINER signatures.
+- No removal of DC-35's M1 multi-signer capability, two-person authority review, break-glass recovery,
+  or official-upstream/community boundary; DC-43 may strengthen those controls.
 - No mutation or replacement of released tags, crates, archives, checksums, or attestations.
 
 ## Acceptance criteria
 
 Security reporting is usable, dependency policy runs reproducibly, release artifacts have reviewable
-SBOM/digest/provenance evidence, workflow permissions are least-privilege, and independent review finds
-no unsupported readiness claim.
+SBOM/digest/provenance evidence, release-key and registry-owner lifecycle controls are recoverable and
+reviewed, workflow permissions are least-privilege, and independent review finds no unsupported
+readiness claim.
