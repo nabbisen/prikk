@@ -8,6 +8,8 @@ For related concepts, see the [repository layout and authority](./repository-lay
 [data model](./data-model.md), the [trust and threat model](./trust-threat-model.md), and the command
 guides for `verify` and `doctor` through the
 [integrity and recovery diagnostics](./integrity-recovery.md) reference.
+Release-transaction durability, artifact identity, and evidence limits are documented separately in
+[release, versioning, and compatibility](./release-compatibility.md).
 
 ## Core Caveats
 

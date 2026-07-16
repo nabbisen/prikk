@@ -1,7 +1,7 @@
 # RFC (accepted) - DC-35 Release Compatibility and Status Correction
 
 **Status.** Governance amendment accepted after architect design re-review v3 on 2026-07-15;
-documentation/policy implementation pending.
+implementation accepted after architect repair re-review v3 on 2026-07-16 with no signer admitted.
 **Owner ruling.** Repository-governed signer changes, non-mandatory existing-key approval, and the
 72-hour break-glass hold were approved on 2026-07-15.
 **Target milestone.** M1 - required before the 0.18.0 release candidate.
@@ -104,6 +104,10 @@ a different commit; a tagged tree retaining candidate wording or shipped RFCs in
 mismatched internal Cargo requirements; distribution-complete claims with missing outputs; and an
 abandoned candidate retaining any target claim. The finalization row without a public tag is allowed
 only as a private local transaction and must never be pushed separately.
+
+The audit is tracked release-gate tooling, not Prikk product/runtime behavior. DC-35's no-executable-
+product-feature boundary does not prohibit the deterministic validator required to enforce these
+release-policy tables and evidence contracts.
 
 The audit must also reject release authority changed inside an RC/finalization commit, an unauthorized
 or ambiguous signer, self-approved signer admission, missing or untyped governance/proof state, an
@@ -283,7 +287,7 @@ sequence is:
    explicit ruling after both the minimum interval and required containment/classification lifts the hold.
 8. Record the governance/incident reference, transaction type/action or classification, old/new
    authority-file blob ids (including equality), approvals, hold interval, proof state/reason, and any
-   introduced signer fingerprint/verifier result in the first subsequent release evidence.
+   introduced signer fingerprints/verifier results in the first subsequent release evidence.
 
 If no independent reviewer or repository administrator is available, official upstream release
 authority remains unavailable; source development and downstream forks remain possible. Existing-

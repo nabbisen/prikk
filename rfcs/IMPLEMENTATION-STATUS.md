@@ -3,7 +3,7 @@
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, and DC-40
-Current implementation increment: none; DC-35 policy/documentation implementation is next
+Current implementation increment: none; DC-35 implementation accepted; signer bootstrap pending separately
 Current design-review increment: none; DC-35 governance amendment accepted on 2026-07-15
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
@@ -21,8 +21,11 @@ repository-format stabilization, and public-preview readiness. The durable corre
 - DC-35 through DC-38 and DC-40 are accepted M1 designs. DC-37 implementation was accepted and
   committed on 2026-07-15, DC-36 implementation was subsequently accepted, and DC-38 implementation
   was accepted after repair re-review on 2026-07-15. DC-35's governance amendment was accepted after
-  design re-review v3; policy/documentation implementation is next and no implementation evidence is
-  accepted. DC-40 implementation and identity-vector evidence remain pending.
+  design re-review v3; policy/documentation implementation review v1 required repairs. The tracked
+  second repair re-review required byte/object, canonical-governance, tag-shape, and attempt-growth
+  bindings. Architect repair re-review v3 accepted the completed implementation on 2026-07-16. The
+  signer allowlist remains empty; bootstrap and all release work remain blocked. DC-40 implementation and
+  identity-vector evidence remain pending.
 - DC-39 remains proposed. It and the accepted M1 work are held for one 0.18.0 corrective release after
   all blocking findings close.
 - DC-41 through DC-43 are proposed M2 assurance/distribution RFCs and do not authorize implementation
@@ -265,7 +268,7 @@ repository-format stabilization, and public-preview readiness. The durable corre
 - Internal read-only merge/conflict evidence reports for the DC-21 vocabulary; see Current State above.
 - Current-state data-model and trust/threat-model reference docs:
   `docs/src/reference/data-model.md` and `docs/src/reference/trust-threat-model.md`.
-- Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `merge-evidence --baseline-block`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, and `--version`. The former `doctor --repair-main-ref` input is retained only to return an explicit compatibility refusal.
+- Minimal CLI for `init`, `trust maintainer add`, `commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m`, `seal --allow-no-audit [--ref heads/<branch>]`, `status`, `log`, `checkout --plan-only`, `checkout --snapshot-plan`, `checkout --snapshot-materialize`, `checkout --patch-plan`, `checkout --patch-materialize`, `checkout --patch-delete-plan`, `checkout --patch-materialize-delete`, `merge-evidence --baseline-block`, `merge-plan --baseline-block`, `inverse-plan`, `rollback-preview`, `rollback-draft --append-inverse`, `rollback-draft-verify`, `worktree-status`, `verify`, `doctor`, `doctor --repair-wal-tail`, and `--version`. The former `doctor --repair-main-ref` input is retained only to return an explicit compatibility refusal.
 
 ## Not Implemented Yet
 
@@ -274,8 +277,9 @@ repository-format stabilization, and public-preview readiness. The durable corre
   tag or remote ref creation, rollback refs, multi-commit queued active sessions, and per-ref active WALs.
 - Key management/rotation, revocation, expiration, multi-maintainer thresholds, remote trust, hardware signing, and broader signature policy beyond the DC-11 local trust store.
 - Policy-aware audit/attestation publication from seal.
-- Production patch algebra surfaces: rollback ref publication, public conflict witnesses, public merge
-  evidence, merge state, merge execution, and user-facing conflict resolution.
+- Production patch algebra surfaces: rollback ref publication, persisted public conflict witnesses,
+  merge state, merge execution, and user-facing conflict resolution. Read-only public merge evidence
+  and merge planning are implemented.
 - WASM plugin host.
 - Audit publication policy.
 - Remote sync.

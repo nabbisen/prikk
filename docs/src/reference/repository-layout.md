@@ -10,6 +10,8 @@ write-safety rules, see [path and worktree safety](./path-safety.md). For local 
 recovery behavior, see [durability and crash recovery](./durability-recovery.md). For trust and
 signature scope, see the [trust and threat model](./trust-threat-model.md). For lock and ref
 compare-and-swap behavior, see [concurrency and locking](./concurrency-locking.md).
+For format stability, migration limits, and release identity, see
+[release, versioning, and compatibility](./release-compatibility.md).
 
 ## Core Caveats
 

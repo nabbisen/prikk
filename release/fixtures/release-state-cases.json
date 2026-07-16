@@ -1,0 +1,312 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "development",
+      "workspace": "last-release",
+      "latest": "last-release",
+      "candidate": null,
+      "changelog": "no-target-claim",
+      "rfc": "proposed-or-accepted",
+      "tag": "absent-at-head",
+      "distribution": "pending",
+      "expected": "valid"
+    },
+    {
+      "id": "release_candidate",
+      "workspace": "target",
+      "latest": "last-release",
+      "candidate": "target",
+      "changelog": "candidate",
+      "rfc": "accepted",
+      "tag": "absent",
+      "distribution": "pending",
+      "expected": "valid"
+    },
+    {
+      "id": "private_finalization",
+      "workspace": "target",
+      "latest": "target",
+      "candidate": null,
+      "changelog": "final",
+      "rfc": "done",
+      "tag": "local-only-matching",
+      "distribution": "pending",
+      "expected": "valid-local-only"
+    },
+    {
+      "id": "released_pending_distribution",
+      "workspace": "target",
+      "latest": "target",
+      "candidate": null,
+      "changelog": "final",
+      "rfc": "done",
+      "tag": "public-matching",
+      "distribution": "pending",
+      "expected": "valid"
+    },
+    {
+      "id": "released_complete_distribution",
+      "workspace": "target",
+      "latest": "target",
+      "candidate": null,
+      "changelog": "final",
+      "rfc": "done",
+      "tag": "public-matching",
+      "distribution": "complete",
+      "expected": "valid"
+    },
+    {
+      "id": "candidate_claims_latest_target",
+      "workspace": "target",
+      "latest": "target",
+      "candidate": "target",
+      "changelog": "candidate",
+      "rfc": "accepted",
+      "tag": "absent",
+      "distribution": "pending",
+      "expected": "invalid"
+    },
+    {
+      "id": "done_without_target_tag",
+      "workspace": "target",
+      "latest": "target",
+      "candidate": null,
+      "changelog": "final",
+      "rfc": "done",
+      "tag": "absent",
+      "distribution": "pending",
+      "expected": "invalid"
+    },
+    {
+      "id": "tag_peels_to_wrong_commit",
+      "workspace": "target",
+      "latest": "target",
+      "candidate": null,
+      "changelog": "final",
+      "rfc": "done",
+      "tag": "public-mismatched",
+      "distribution": "pending",
+      "expected": "invalid"
+    },
+    {
+      "id": "tagged_tree_retains_candidate",
+      "workspace": "target",
+      "latest": "last-release",
+      "candidate": "target",
+      "changelog": "candidate",
+      "rfc": "accepted",
+      "tag": "public-matching",
+      "distribution": "pending",
+      "expected": "invalid"
+    },
+    {
+      "id": "broad_internal_dependencies",
+      "workspace": "target",
+      "latest": "target",
+      "candidate": null,
+      "changelog": "final",
+      "rfc": "done",
+      "tag": "public-matching",
+      "internal_requirements": "broad",
+      "distribution": "pending",
+      "expected": "invalid"
+    },
+    {
+      "id": "complete_with_missing_output",
+      "workspace": "target",
+      "latest": "target",
+      "candidate": null,
+      "changelog": "final",
+      "rfc": "done",
+      "tag": "public-matching",
+      "distribution": "complete",
+      "missing_output": "pages",
+      "expected": "invalid"
+    },
+    {
+      "id": "abandoned_candidate_retains_target",
+      "workspace": "last-release",
+      "latest": "last-release",
+      "candidate": null,
+      "changelog": "candidate",
+      "rfc": "accepted",
+      "tag": "absent",
+      "distribution": "pending",
+      "expected": "invalid"
+    },
+    {
+      "id": "authority_changed_in_rc",
+      "workspace": "target",
+      "latest": "last-release",
+      "candidate": "target",
+      "changelog": "candidate",
+      "rfc": "accepted",
+      "tag": "absent",
+      "authority_change": "bootstrap",
+      "distribution": "pending",
+      "expected": "invalid",
+      "governance": {
+        "hold_evidence": "bootstrap-active-hold"
+      },
+      "release_hold": "active"
+    },
+    {
+      "id": "release_with_active_hold",
+      "workspace": "target",
+      "latest": "target",
+      "candidate": null,
+      "changelog": "final",
+      "rfc": "done",
+      "tag": "public-matching",
+      "release_hold": "active",
+      "distribution": "pending",
+      "expected": "invalid"
+    },
+    {
+      "id": "disputed_tag_claimed_official",
+      "workspace": "target",
+      "latest": "target",
+      "candidate": null,
+      "changelog": "final",
+      "rfc": "done",
+      "tag": "public-disputed",
+      "distribution": "partial",
+      "expected": "invalid"
+    },
+    {
+      "id": "development_bootstrap_active_hold",
+      "workspace": "last-release",
+      "latest": "last-release",
+      "candidate": null,
+      "changelog": "no-target-claim",
+      "rfc": "proposed-or-accepted",
+      "tag": "absent-at-head",
+      "authority_change": "bootstrap",
+      "governance": {
+        "hold_evidence": "bootstrap-active-hold"
+      },
+      "release_hold": "active",
+      "dispute": "none",
+      "distribution": "pending",
+      "expected": "valid"
+    },
+    {
+      "id": "development_addition_lifted",
+      "workspace": "last-release",
+      "latest": "last-release",
+      "candidate": null,
+      "changelog": "no-target-claim",
+      "rfc": "proposed-or-accepted",
+      "tag": "absent-at-head",
+      "authority_change": "addition",
+      "governance": {
+        "hold_evidence": "addition-lifted-hold"
+      },
+      "release_hold": "lifted",
+      "dispute": "none",
+      "distribution": "pending",
+      "expected": "valid"
+    },
+    {
+      "id": "development_removal_active_hold",
+      "workspace": "last-release",
+      "latest": "last-release",
+      "candidate": null,
+      "changelog": "no-target-claim",
+      "rfc": "proposed-or-accepted",
+      "tag": "absent-at-head",
+      "authority_change": "removal-only",
+      "governance": {
+        "hold_evidence": "removal-active-hold"
+      },
+      "release_hold": "active",
+      "dispute": "none",
+      "distribution": "pending",
+      "expected": "valid"
+    },
+    {
+      "id": "development_classification_active_dispute",
+      "workspace": "last-release",
+      "latest": "last-release",
+      "candidate": null,
+      "changelog": "no-target-claim",
+      "rfc": "proposed-or-accepted",
+      "tag": "absent-at-head",
+      "authority_change": "classification-only",
+      "governance": {
+        "hold_evidence": "active-hold"
+      },
+      "release_hold": "active",
+      "dispute": "active",
+      "distribution": "pending",
+      "expected": "valid"
+    },
+    {
+      "id": "development_authority_change_invalid_governance",
+      "workspace": "last-release",
+      "latest": "last-release",
+      "candidate": null,
+      "changelog": "no-target-claim",
+      "rfc": "proposed-or-accepted",
+      "tag": "absent-at-head",
+      "authority_change": "replacement",
+      "governance": {
+        "hold_evidence": "missing-hold"
+      },
+      "release_hold": "active",
+      "dispute": "none",
+      "distribution": "pending",
+      "expected": "invalid"
+    },
+    {
+      "id": "authority_changed_in_private_finalization",
+      "workspace": "target",
+      "latest": "target",
+      "candidate": null,
+      "changelog": "final",
+      "rfc": "done",
+      "tag": "local-only-matching",
+      "authority_change": "addition",
+      "governance": {
+        "hold_evidence": "addition-lifted-hold"
+      },
+      "release_hold": "active",
+      "distribution": "pending",
+      "expected": "invalid"
+    },
+    {
+      "id": "authority_changed_after_release",
+      "workspace": "target",
+      "latest": "target",
+      "candidate": null,
+      "changelog": "final",
+      "rfc": "done",
+      "tag": "public-matching",
+      "authority_change": "removal-only",
+      "governance": {
+        "hold_evidence": "removal-active-hold"
+      },
+      "release_hold": "active",
+      "distribution": "pending",
+      "expected": "invalid"
+    },
+    {
+      "id": "development_bootstrap_with_unrelated_hold",
+      "workspace": "last-release",
+      "latest": "last-release",
+      "candidate": null,
+      "changelog": "no-target-claim",
+      "rfc": "proposed-or-accepted",
+      "tag": "absent-at-head",
+      "authority_change": "bootstrap",
+      "governance": {
+        "hold_evidence": "active-hold"
+      },
+      "release_hold": "active",
+      "dispute": "none",
+      "distribution": "pending",
+      "expected": "invalid"
+    }
+  ]
+}

@@ -8,9 +8,11 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
 
 - **DC-35 - release compatibility and status correction (accepted).** Architect design re-review v3
   accepted the repository-governed multi-signer and break-glass amendment on 2026-07-15. Scoped policy/
-  documentation implementation is next; no implementation evidence is accepted yet. DC-39 remains
-  proposed, and DC-40 remains accepted with implementation evidence pending. The combined 0.18.0/M1
-  release gate remains closed.
+  implementation repair re-review v3 accepted the completed policy implementation on 2026-07-16 after
+  byte/object identity, canonical-governance, tag-shape, and attempt-growth repairs. The signer allowlist
+  remains empty and fail-closed; bootstrap and all release work remain blocked. DC-39 remains proposed, and DC-40
+  remains accepted with implementation evidence pending. The combined 0.18.0/M1 release gate remains
+  closed.
 
 ## Release Candidate Increment
 
@@ -226,7 +228,7 @@ references. The durable homes below are authoritative `docs/src/reference/` or `
 | TASK-10 repository layout & authority model | 2 | Architect + maintainer | Released in 0.17.5 | Complete; use the reference as the current public repository-layout/authority baseline. | Current directories and authority-vs-cache rules are reviewed and committed. | `docs/src/reference/repository-layout.md` |
 | TASK-11 path & worktree safety rules | 2 | Architect + maintainer | Released in 0.17.6 | Complete; use the reference as the current public path/worktree safety baseline. | Reviewed path/worktree safety reference is committed with current gaps marked. | `docs/src/reference/path-safety.md` |
 | TASK-12 concurrency & locking model | 2 | Architect + maintainer | Released in 0.17.7 | Complete; use the reference as the current public concurrency/locking baseline. | Reviewed locking/concurrency docs are committed and describe manual stale-lock limits. | `docs/src/reference/concurrency-locking.md` |
-| TASK-13 release, versioning & compatibility policy | 2 | Maintainer | Scheduled as DC-35 in M1 | Complete design review, then implement before the 0.18.0 release candidate. | Reviewed release/compatibility policy is committed and linked from README/CHANGELOG as needed. | `docs/src/reference/release-compatibility.md` |
+| TASK-13 release, versioning & compatibility policy | 2 | Maintainer | DC-35 implementation accepted on 2026-07-16; signer set empty | Commit the accepted implementation, then bootstrap the first signer as a separate reviewed governance transaction before the 0.18.0 release candidate. | Reviewed release/compatibility policy is committed, strict fixtures are accepted, and signer bootstrap remains an explicit release prerequisite. | `docs/src/reference/release-compatibility.md` |
 | TASK-14 consolidated non-goals / deferred features | 3 | Maintainer/architect | Open | Start when deferred-feature lists begin drifting across README, ROADMAP, mdBook, and release notes. | Reviewed non-goals page is committed and links ROADMAP as the planning authority. | `docs/src/reference/non-goals.md` |
 | TASK-15 roles & user-classes orientation | 3 | Designer | Open | Start when the docs need a clearer audience map after the Reference section settles. | Reviewed orientation page or index update is committed. | `docs/src/index.md` or `docs/src/guide/audience.md` |
 | TASK-16 error taxonomy & diagnostics | 3 | Implementer/architect | Open | Start with TASK-07 or when diagnostics need user-facing interpretation. | Reviewed diagnostics reference is committed and grounded in `crates/prikk-error`. | `docs/src/reference/errors.md` |

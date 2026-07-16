@@ -1,0 +1,1416 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "pending_schema_and_semantics",
+      "base": "pending",
+      "expected_schema": true,
+      "expected_semantic": true
+    },
+    {
+      "id": "complete_schema_and_semantics",
+      "base": "complete",
+      "expected_schema": true,
+      "expected_semantic": true
+    },
+    {
+      "id": "complete_null_signer_primary_fingerprint",
+      "base": "complete",
+      "mutations": [
+        {
+          "path": "/tag/release_tag_verification/signer_primary_fingerprint",
+          "value": null
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "complete_null_authority_path",
+      "base": "complete",
+      "mutations": [
+        {
+          "path": "/tag/release_tag_verification/authority_path",
+          "value": null
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "complete_null_authority_blob_id",
+      "base": "complete",
+      "mutations": [
+        {
+          "path": "/tag/release_tag_verification/authority_blob_id",
+          "value": null
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "complete_null_verifier_result",
+      "base": "complete",
+      "mutations": [
+        {
+          "path": "/tag/release_tag_verification/verifier_result",
+          "value": null
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "complete_false_exact_requirement",
+      "base": "complete",
+      "mutations": [
+        {
+          "path": "/crates/0/exact_internal_requirements",
+          "value": false
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "complete_missing_archive_attachment",
+      "base": "complete",
+      "mutations": [
+        {
+          "path": "/archive/archive_attached",
+          "value": false
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "complete_failed_release_page",
+      "base": "complete",
+      "mutations": [
+        {
+          "path": "/release_page/status",
+          "value": "failed"
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "complete_deployed_pages_missing_commit",
+      "base": "complete",
+      "mutations": [
+        {
+          "path": "/pages/deployed_commit",
+          "value": null
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "complete_inapplicable_pages_missing_ruling",
+      "base": "complete",
+      "mutations": [
+        {
+          "path": "/pages/status",
+          "value": "inapplicable"
+        },
+        {
+          "path": "/pages/deployed_commit",
+          "value": null
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "unknown_top_level_field",
+      "base": "pending",
+      "mutations": [
+        {
+          "path": "/unexpected",
+          "value": "value"
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "tag_version_mismatch",
+      "base": "complete",
+      "mutations": [
+        {
+          "path": "/tag/name",
+          "value": "0.18.1"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false
+    },
+    {
+      "id": "crate_version_mismatch",
+      "base": "pending",
+      "mutations": [
+        {
+          "path": "/crates/6/version",
+          "value": "0.18.1"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false
+    },
+    {
+      "id": "crate_graph_order_mismatch",
+      "base": "pending",
+      "mutations": [
+        {
+          "path": "/crates/0/name",
+          "value": "prikk-hash"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false
+    },
+    {
+      "id": "pending_false_checksum_match",
+      "base": "pending",
+      "mutations": [
+        {
+          "path": "/crates/0/checksum_equality",
+          "value": "match"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false
+    },
+    {
+      "id": "complete_checksum_mismatch",
+      "base": "complete",
+      "mutations": [
+        {
+          "path": "/crates/0/registry_checksum",
+          "value": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false
+    },
+    {
+      "id": "complete_pages_commit_mismatch",
+      "base": "complete",
+      "mutations": [
+        {
+          "path": "/pages/deployed_commit",
+          "value": "ffffffffffffffffffffffffffffffffffffffff"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false
+    },
+    {
+      "id": "valid_governance_difference_and_proofs",
+      "base": "pending",
+      "mutations": [
+        {
+          "path": "/governance",
+          "value": {
+            "record": "https://github.com/nabbisen/prikk/issues/1",
+            "transaction_type": "bootstrap",
+            "action_or_classification": "initial signer bootstrap",
+            "old_authority_blob_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "new_authority_blob_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "old_authorized_fingerprints": [],
+            "new_authorized_fingerprints": [
+              "1111111111111111111111111111111111111111",
+              "2222222222222222222222222222222222222222"
+            ],
+            "approvals": [
+              {
+                "person": "maintainer-a",
+                "role": "maintainer-administrator",
+                "record": "public-review-a"
+              },
+              {
+                "person": "architect-b",
+                "role": "architect-security",
+                "record": "public-review-b"
+              }
+            ],
+            "authority_proof": {
+              "state": "verified",
+              "reason": null,
+              "introduced_signers": [
+                {
+                  "primary_fingerprint": "1111111111111111111111111111111111111111",
+                  "verifier_result": "verified"
+                },
+                {
+                  "primary_fingerprint": "2222222222222222222222222222222222222222",
+                  "verifier_result": "verified"
+                }
+              ]
+            },
+            "hold_started_at": "2026-07-10T00:00:00Z",
+            "hold_ended_at": "2026-07-13T00:00:00Z",
+            "classification": null,
+            "hold_lift": {
+              "record": "https://github.com/nabbisen/prikk/issues/1#hold-lift",
+              "ruling": "lift-approved"
+            }
+          }
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": true
+    },
+    {
+      "id": "governance_duplicate_proof_fingerprint",
+      "base": "pending",
+      "mutations": [
+        {
+          "path": "/governance",
+          "value": {
+            "record": "https://github.com/nabbisen/prikk/issues/1",
+            "transaction_type": "bootstrap",
+            "action_or_classification": "initial signer bootstrap",
+            "old_authority_blob_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "new_authority_blob_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "old_authorized_fingerprints": [],
+            "new_authorized_fingerprints": [
+              "1111111111111111111111111111111111111111",
+              "2222222222222222222222222222222222222222"
+            ],
+            "approvals": [
+              {
+                "person": "maintainer-a",
+                "role": "maintainer-administrator",
+                "record": "public-review-a"
+              },
+              {
+                "person": "architect-b",
+                "role": "architect-security",
+                "record": "public-review-b"
+              }
+            ],
+            "authority_proof": {
+              "state": "verified",
+              "reason": null,
+              "introduced_signers": [
+                {
+                  "primary_fingerprint": "1111111111111111111111111111111111111111",
+                  "verifier_result": "verified"
+                },
+                {
+                  "primary_fingerprint": "2222222222222222222222222222222222222222",
+                  "verifier_result": "verified"
+                }
+              ]
+            },
+            "hold_started_at": "2026-07-10T00:00:00Z",
+            "hold_ended_at": "2026-07-13T00:00:00Z",
+            "classification": null,
+            "hold_lift": {
+              "record": "https://github.com/nabbisen/prikk/issues/1#hold-lift",
+              "ruling": "lift-approved"
+            }
+          }
+        },
+        {
+          "path": "/governance/authority_proof/introduced_signers/1/primary_fingerprint",
+          "value": "1111111111111111111111111111111111111111"
+        },
+        {
+          "path": "/governance/authority_proof/introduced_signers/1/verifier_result",
+          "value": "verified independently"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false
+    },
+    {
+      "id": "governance_bad_date_time",
+      "base": "pending",
+      "mutations": [
+        {
+          "path": "/governance",
+          "value": {
+            "record": "https://github.com/nabbisen/prikk/issues/1",
+            "transaction_type": "bootstrap",
+            "action_or_classification": "initial signer bootstrap",
+            "old_authority_blob_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "new_authority_blob_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "old_authorized_fingerprints": [],
+            "new_authorized_fingerprints": [
+              "1111111111111111111111111111111111111111",
+              "2222222222222222222222222222222222222222"
+            ],
+            "approvals": [
+              {
+                "person": "maintainer-a",
+                "role": "maintainer-administrator",
+                "record": "public-review-a"
+              },
+              {
+                "person": "architect-b",
+                "role": "architect-security",
+                "record": "public-review-b"
+              }
+            ],
+            "authority_proof": {
+              "state": "verified",
+              "reason": null,
+              "introduced_signers": [
+                {
+                  "primary_fingerprint": "1111111111111111111111111111111111111111",
+                  "verifier_result": "verified"
+                },
+                {
+                  "primary_fingerprint": "2222222222222222222222222222222222222222",
+                  "verifier_result": "verified"
+                }
+              ]
+            },
+            "hold_started_at": "2026-07-10T00:00:00Z",
+            "hold_ended_at": "2026-07-13T00:00:00Z",
+            "classification": null,
+            "hold_lift": {
+              "record": "https://github.com/nabbisen/prikk/issues/1#hold-lift",
+              "ruling": "lift-approved"
+            }
+          }
+        },
+        {
+          "path": "/governance/hold_started_at",
+          "value": "2026-07-10 00:00:00"
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "sequence_valid_predecessor",
+      "base": "pending",
+      "prior_base": "pending",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": true,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: sequence_valid_predecessor",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "sequence_pending_to_complete",
+      "base": "complete",
+      "prior_base": "pending",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": true,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: sequence_pending_to_complete",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "sequence_missing_predecessor",
+      "base": "pending",
+      "prior_base": "pending",
+      "link_prior": false,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: sequence_missing_predecessor",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "sequence_immutable_tag_changed",
+      "base": "pending",
+      "prior_base": "pending",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/tag/object_id",
+          "value": "ffffffffffffffffffffffffffffffffffffffff"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: sequence_immutable_tag_changed",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "sequence_attempts_not_cumulative",
+      "base": "complete",
+      "prior_base": "complete",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/attempts",
+          "value": []
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false
+    },
+    {
+      "id": "sequence_invalid_complete_to_pending",
+      "base": "complete",
+      "prior_base": "complete",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/overall_status",
+          "value": "pending"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: sequence_invalid_complete_to_pending",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "sequence_published_checksum_changed",
+      "base": "complete",
+      "prior_base": "complete",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/crates/0/staged_sha256",
+          "value": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        {
+          "path": "/crates/0/registry_checksum",
+          "value": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        {
+          "path": "/crates/0/fetched_sha256",
+          "value": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: sequence_published_checksum_changed",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "sequence_published_status_regressed",
+      "base": "complete",
+      "prior_base": "complete",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/overall_status",
+          "value": "superseded"
+        },
+        {
+          "path": "/release_page/status",
+          "value": "draft"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: sequence_published_status_regressed",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_pending_to_pending",
+      "base": "pending",
+      "prior_base": "pending",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": true,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_pending_to_pending",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_pending_to_partial",
+      "base": "partial",
+      "prior_base": "pending",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": true,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_pending_to_partial",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_pending_to_complete",
+      "base": "complete",
+      "prior_base": "pending",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": true,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_pending_to_complete",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_pending_to_superseded",
+      "base": "superseded",
+      "prior_base": "pending",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": true,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_pending_to_superseded",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_partial_to_pending",
+      "base": "pending",
+      "prior_base": "partial",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_partial_to_pending",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_partial_to_partial",
+      "base": "partial",
+      "prior_base": "partial",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": true,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_partial_to_partial",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_partial_to_complete",
+      "base": "complete",
+      "prior_base": "partial",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": true,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_partial_to_complete",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_partial_to_superseded",
+      "base": "superseded",
+      "prior_base": "partial",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": true,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_partial_to_superseded",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_complete_to_pending",
+      "base": "complete",
+      "prior_base": "complete",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/overall_status",
+          "value": "pending"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_complete_to_pending",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_complete_to_partial",
+      "base": "complete",
+      "prior_base": "complete",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/overall_status",
+          "value": "partial"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_complete_to_partial",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_complete_to_complete",
+      "base": "complete",
+      "prior_base": "complete",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/overall_status",
+          "value": "complete"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_complete_to_complete",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_complete_to_superseded",
+      "base": "complete",
+      "prior_base": "complete",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/overall_status",
+          "value": "superseded"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": true,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_complete_to_superseded",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_superseded_to_pending",
+      "base": "pending",
+      "prior_base": "superseded",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_superseded_to_pending",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_superseded_to_partial",
+      "base": "partial",
+      "prior_base": "superseded",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_superseded_to_partial",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_superseded_to_complete",
+      "base": "complete",
+      "prior_base": "superseded",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_superseded_to_complete",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "transition_superseded_to_superseded",
+      "base": "superseded",
+      "prior_base": "superseded",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: transition_superseded_to_superseded",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "raw_predecessor_digest_mismatch",
+      "base": "pending",
+      "prior_base": "pending",
+      "link_prior": true,
+      "prior_digest": "wrong",
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: raw_predecessor_digest_mismatch",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "full_schema_boolean_version_rejected",
+      "base": "pending",
+      "mutations": [
+        {
+          "path": "/schema_version",
+          "value": true
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "active_governance_hold_valid_pending",
+      "base": "active-hold",
+      "expected_schema": true,
+      "expected_semantic": true
+    },
+    {
+      "id": "active_governance_hold_blocks_complete",
+      "base": "complete",
+      "mutations": [
+        {
+          "path": "/governance",
+          "value": {
+            "record": "https://github.com/nabbisen/prikk/issues/2",
+            "transaction_type": "classification-only",
+            "action_or_classification": "disputed authority under review",
+            "old_authority_blob_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "new_authority_blob_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "old_authorized_fingerprints": [
+              "1111111111111111111111111111111111111111"
+            ],
+            "new_authorized_fingerprints": [
+              "1111111111111111111111111111111111111111"
+            ],
+            "approvals": [
+              {
+                "person": "maintainer-a",
+                "role": "maintainer-administrator",
+                "record": "public-review-a"
+              },
+              {
+                "person": "architect-b",
+                "role": "architect-security",
+                "record": "public-review-b"
+              }
+            ],
+            "authority_proof": {
+              "state": "not-applicable",
+              "reason": "authority set unchanged",
+              "introduced_signers": []
+            },
+            "classification": null,
+            "hold_started_at": "2026-07-10T00:00:00Z",
+            "hold_ended_at": null,
+            "hold_lift": null
+          }
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false
+    },
+    {
+      "id": "governance_active_to_classified",
+      "base": "classified-hold",
+      "prior_base": "active-hold",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": true,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: governance_active_to_classified",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "governance_classified_to_lifted",
+      "base": "lifted-hold",
+      "prior_base": "classified-hold",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": true,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: governance_classified_to_lifted",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "governance_premature_lift",
+      "base": "lifted-hold",
+      "prior_base": "active-hold",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/governance/hold_ended_at",
+          "value": "2026-07-12T00:00:00Z"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: governance_premature_lift",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "governance_post_lift_classification_mutation",
+      "base": "lifted-hold",
+      "prior_base": "lifted-hold",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/governance/classification",
+          "value": "never-authorized/hostile"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 1,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: governance_post_lift_classification_mutation",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "tag_verification_signer_primary_fingerprint_immutable",
+      "base": "complete",
+      "prior_base": "complete",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/overall_status",
+          "value": "superseded"
+        },
+        {
+          "path": "/tag/release_tag_verification/signer_primary_fingerprint",
+          "value": "2222222222222222222222222222222222222222"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: tag_verification_signer_primary_fingerprint_immutable",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "tag_verification_authority_path_immutable",
+      "base": "complete",
+      "prior_base": "complete",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/overall_status",
+          "value": "superseded"
+        },
+        {
+          "path": "/tag/release_tag_verification/authority_path",
+          "value": null
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: tag_verification_authority_path_immutable",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "tag_verification_authority_blob_id_immutable",
+      "base": "complete",
+      "prior_base": "complete",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/overall_status",
+          "value": "superseded"
+        },
+        {
+          "path": "/tag/release_tag_verification/authority_blob_id",
+          "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: tag_verification_authority_blob_id_immutable",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "tag_verification_verifier_result_immutable",
+      "base": "complete",
+      "prior_base": "complete",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/overall_status",
+          "value": "superseded"
+        },
+        {
+          "path": "/tag/release_tag_verification/verifier_result",
+          "value": "changed verifier result"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: tag_verification_verifier_result_immutable",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "tag_verification_status_immutable",
+      "base": "complete",
+      "prior_base": "complete",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        },
+        {
+          "path": "/overall_status",
+          "value": "superseded"
+        },
+        {
+          "path": "/tag/release_tag_verification/status",
+          "value": "failed"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false,
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "fixture progression: tag_verification_status_immutable",
+        "result": "succeeded"
+      }
+    },
+    {
+      "id": "sequence_zero_attempt_growth",
+      "base": "pending",
+      "prior_base": "pending",
+      "link_prior": true,
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false
+    },
+    {
+      "id": "snapshot_object_bytes_mismatch",
+      "base": "complete",
+      "prior_base": "pending",
+      "link_prior": true,
+      "current_bytes_base": "pending",
+      "mutations": [
+        {
+          "path": "/sequence",
+          "value": "002"
+        }
+      ],
+      "append_attempt": {
+        "sequence": 2,
+        "time": "2026-07-15T00:01:00Z",
+        "operation": "complete publication evidence",
+        "result": "succeeded"
+      },
+      "expected_schema": true,
+      "expected_semantic": false
+    },
+    {
+      "id": "pending_verified_without_details",
+      "base": "pending",
+      "mutations": [
+        {
+          "path": "/tag/release_tag_verification/status",
+          "value": "verified"
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "partial_verified_without_details",
+      "base": "partial",
+      "mutations": [
+        {
+          "path": "/tag/release_tag_verification/status",
+          "value": "verified"
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "pending_not_observed_with_detail",
+      "base": "pending",
+      "mutations": [
+        {
+          "path": "/tag/release_tag_verification/verifier_result",
+          "value": "unexpected detail"
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "pending_failed_without_authority",
+      "base": "pending",
+      "mutations": [
+        {
+          "path": "/tag/release_tag_verification/status",
+          "value": "failed"
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "partial_failed_without_authority",
+      "base": "partial",
+      "mutations": [
+        {
+          "path": "/tag/release_tag_verification/status",
+          "value": "failed"
+        }
+      ],
+      "expected_schema": false,
+      "expected_semantic": false
+    },
+    {
+      "id": "pending_failed_with_authority_and_result",
+      "base": "pending",
+      "mutations": [
+        {
+          "path": "/tag/release_tag_verification/status",
+          "value": "failed"
+        },
+        {
+          "path": "/tag/release_tag_verification/authority_path",
+          "value": "release-signers.toml"
+        },
+        {
+          "path": "/tag/release_tag_verification/authority_blob_id",
+          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "path": "/tag/release_tag_verification/verifier_result",
+          "value": "signature did not match an authorized signer"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": true
+    },
+    {
+      "id": "canonical_bootstrap_hold_transaction",
+      "base": "bootstrap-active-hold",
+      "expected_schema": true,
+      "expected_semantic": true
+    },
+    {
+      "id": "canonical_addition_lifted_transaction",
+      "base": "addition-lifted-hold",
+      "expected_schema": true,
+      "expected_semantic": true
+    },
+    {
+      "id": "canonical_removal_hold_transaction",
+      "base": "removal-active-hold",
+      "expected_schema": true,
+      "expected_semantic": true
+    },
+    {
+      "id": "governance_fingerprint_set_proof_mismatch",
+      "base": "bootstrap-active-hold",
+      "mutations": [
+        {
+          "path": "/governance/new_authorized_fingerprints",
+          "value": [
+            "1111111111111111111111111111111111111111",
+            "2222222222222222222222222222222222222222",
+            "3333333333333333333333333333333333333333"
+          ]
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false
+    },
+    {
+      "id": "governance_approval_identity_mismatch",
+      "base": "bootstrap-active-hold",
+      "mutations": [
+        {
+          "path": "/governance/approvals/1/person",
+          "value": "maintainer-a"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false
+    },
+    {
+      "id": "governance_authority_blob_transition_mismatch",
+      "base": "addition-lifted-hold",
+      "mutations": [
+        {
+          "path": "/governance/new_authority_blob_id",
+          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false
+    },
+    {
+      "id": "governance_declared_type_mismatch",
+      "base": "removal-active-hold",
+      "mutations": [
+        {
+          "path": "/governance/transaction_type",
+          "value": "addition"
+        }
+      ],
+      "expected_schema": true,
+      "expected_semantic": false
+    }
+  ]
+}

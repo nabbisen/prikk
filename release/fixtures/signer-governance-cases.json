@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "bootstrap_two_signers_verified",
+      "old": [],
+      "new": ["1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"],
+      "declared_type": "bootstrap",
+      "proof": {
+        "state": "verified",
+        "reason": null,
+        "introduced_signers": [
+          { "primary_fingerprint": "1111111111111111111111111111111111111111", "verifier_result": "good signature; primary fingerprint matched" },
+          { "primary_fingerprint": "2222222222222222222222222222222222222222", "verifier_result": "good signature; primary fingerprint matched" }
+        ]
+      },
+      "approvals": [
+        { "person": "maintainer-a", "role": "maintainer-administrator" },
+        { "person": "architect-b", "role": "architect-security" }
+      ],
+      "expected": "valid"
+    },
+    {
+      "id": "addition_verified",
+      "old": ["1111111111111111111111111111111111111111"],
+      "new": ["1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"],
+      "declared_type": "addition",
+      "proof": { "state": "verified", "reason": null, "introduced_signers": [{ "primary_fingerprint": "2222222222222222222222222222222222222222", "verifier_result": "verified" }] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "security-b", "role": "architect-security" }],
+      "expected": "valid"
+    },
+    {
+      "id": "replacement_verified",
+      "old": ["1111111111111111111111111111111111111111"],
+      "new": ["2222222222222222222222222222222222222222"],
+      "declared_type": "replacement",
+      "proof": { "state": "verified", "reason": null, "introduced_signers": [{ "primary_fingerprint": "2222222222222222222222222222222222222222", "verifier_result": "verified" }] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "architect-b", "role": "architect-security" }],
+      "expected": "valid"
+    },
+    {
+      "id": "removal_only_not_applicable",
+      "old": ["1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"],
+      "new": ["2222222222222222222222222222222222222222"],
+      "declared_type": "removal-only",
+      "proof": { "state": "not-applicable", "reason": "no fingerprint introduced", "introduced_signers": [] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "security-b", "role": "architect-security" }],
+      "expected": "valid"
+    },
+    {
+      "id": "classification_only_not_applicable",
+      "old": ["2222222222222222222222222222222222222222"],
+      "new": ["2222222222222222222222222222222222222222"],
+      "declared_type": "classification-only",
+      "proof": { "state": "not-applicable", "reason": "authority set unchanged", "introduced_signers": [] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "architect-b", "role": "architect-security" }],
+      "expected": "valid"
+    },
+    {
+      "id": "removal_label_adds_fingerprint",
+      "old": ["1111111111111111111111111111111111111111"],
+      "new": ["1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"],
+      "declared_type": "removal-only",
+      "proof": { "state": "not-applicable", "reason": "claimed removal", "introduced_signers": [] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "architect-b", "role": "architect-security" }],
+      "expected": "invalid"
+    },
+    {
+      "id": "missing_introduced_proof",
+      "old": [],
+      "new": ["1111111111111111111111111111111111111111"],
+      "declared_type": "bootstrap",
+      "proof": { "state": "verified", "reason": null, "introduced_signers": [] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "architect-b", "role": "architect-security" }],
+      "expected": "invalid"
+    },
+    {
+      "id": "duplicate_introduced_proof",
+      "old": [],
+      "new": ["1111111111111111111111111111111111111111"],
+      "declared_type": "bootstrap",
+      "proof": { "state": "verified", "reason": null, "introduced_signers": [{ "primary_fingerprint": "1111111111111111111111111111111111111111", "verifier_result": "verified one" }, { "primary_fingerprint": "1111111111111111111111111111111111111111", "verifier_result": "verified two" }] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "architect-b", "role": "architect-security" }],
+      "expected": "invalid"
+    },
+    {
+      "id": "unexpected_introduced_proof",
+      "old": [],
+      "new": ["1111111111111111111111111111111111111111"],
+      "declared_type": "bootstrap",
+      "proof": { "state": "verified", "reason": null, "introduced_signers": [{ "primary_fingerprint": "2222222222222222222222222222222222222222", "verifier_result": "verified" }] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "architect-b", "role": "architect-security" }],
+      "expected": "invalid"
+    },
+    {
+      "id": "mismatched_introduced_proof_order",
+      "old": [],
+      "new": ["1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"],
+      "declared_type": "bootstrap",
+      "proof": { "state": "verified", "reason": null, "introduced_signers": [{ "primary_fingerprint": "2222222222222222222222222222222222222222", "verifier_result": "verified" }, { "primary_fingerprint": "1111111111111111111111111111111111111111", "verifier_result": "verified" }] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "architect-b", "role": "architect-security" }],
+      "expected": "invalid"
+    },
+    {
+      "id": "same_person_both_approvals",
+      "old": [],
+      "new": ["1111111111111111111111111111111111111111"],
+      "declared_type": "bootstrap",
+      "proof": { "state": "verified", "reason": null, "introduced_signers": [{ "primary_fingerprint": "1111111111111111111111111111111111111111", "verifier_result": "verified" }] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "maintainer-a", "role": "architect-security" }],
+      "expected": "invalid"
+    },
+    {
+      "id": "automation_as_approver",
+      "old": [],
+      "new": ["1111111111111111111111111111111111111111"],
+      "declared_type": "bootstrap",
+      "proof": { "state": "verified", "reason": null, "introduced_signers": [{ "primary_fingerprint": "1111111111111111111111111111111111111111", "verifier_result": "verified" }] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "automation-ci", "role": "architect-security" }],
+      "expected": "invalid"
+    },
+    {
+      "id": "missing_accountable_role",
+      "old": [],
+      "new": ["1111111111111111111111111111111111111111"],
+      "declared_type": "bootstrap",
+      "proof": { "state": "verified", "reason": null, "introduced_signers": [{ "primary_fingerprint": "1111111111111111111111111111111111111111", "verifier_result": "verified" }] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "maintainer-b", "role": "maintainer-administrator" }],
+      "expected": "invalid"
+    },
+    {
+      "id": "lowercase_fingerprint",
+      "old": [],
+      "new": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+      "declared_type": "bootstrap",
+      "proof": { "state": "verified", "reason": null, "introduced_signers": [{ "primary_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "verifier_result": "verified" }] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "architect-b", "role": "architect-security" }],
+      "expected": "invalid"
+    },
+    {
+      "id": "unsorted_fingerprint_set",
+      "old": [],
+      "new": ["2222222222222222222222222222222222222222", "1111111111111111111111111111111111111111"],
+      "declared_type": "bootstrap",
+      "proof": { "state": "verified", "reason": null, "introduced_signers": [{ "primary_fingerprint": "1111111111111111111111111111111111111111", "verifier_result": "verified" }, { "primary_fingerprint": "2222222222222222222222222222222222222222", "verifier_result": "verified" }] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "architect-b", "role": "architect-security" }],
+      "expected": "invalid"
+    },
+    {
+      "id": "not_applicable_with_introduced_fingerprint",
+      "old": [],
+      "new": ["1111111111111111111111111111111111111111"],
+      "declared_type": "bootstrap",
+      "proof": { "state": "not-applicable", "reason": "incorrect waiver", "introduced_signers": [] },
+      "approvals": [{ "person": "maintainer-a", "role": "maintainer-administrator" }, { "person": "architect-b", "role": "architect-security" }],
+      "expected": "invalid"
+    }
+  ]
+}

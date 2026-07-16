@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "sequence": "001",
+  "version": "0.18.0",
+  "overall_status": "complete",
+  "prior_snapshot": null,
+  "tag": {
+    "name": "0.18.0",
+    "object_id": "0000000000000000000000000000000000000000",
+    "peeled_commit": "0000000000000000000000000000000000000000",
+    "release_tag_verification": {
+      "status": "verified",
+      "signer_primary_fingerprint": "1111111111111111111111111111111111111111",
+      "authority_path": "release-signers.toml",
+      "authority_blob_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "verifier_result": "good signature; authorized primary fingerprint matched"
+    }
+  },
+  "archive": {
+    "name": "prikk-v0.18.0.tar.gz",
+    "checksum_name": "prikk-v0.18.0.tar.gz.sha256",
+    "archive_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "archive_attached": true,
+    "checksum_attached": true,
+    "checksum_grammar": "valid",
+    "archive_root": "valid"
+  },
+  "crates": [
+    {
+      "name": "prikk-error",
+      "version": "0.18.0",
+      "exact_internal_requirements": true,
+      "publish_level": 1,
+      "staged_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "registry_checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fetched_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "checksum_equality": "match",
+      "published": true,
+      "registry_visible": true
+    },
+    {
+      "name": "prikk-hash",
+      "version": "0.18.0",
+      "exact_internal_requirements": true,
+      "publish_level": 1,
+      "staged_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "registry_checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fetched_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "checksum_equality": "match",
+      "published": true,
+      "registry_visible": true
+    },
+    {
+      "name": "prikk-crypto",
+      "version": "0.18.0",
+      "exact_internal_requirements": true,
+      "publish_level": 2,
+      "staged_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "registry_checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fetched_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "checksum_equality": "match",
+      "published": true,
+      "registry_visible": true
+    },
+    {
+      "name": "prikk-object",
+      "version": "0.18.0",
+      "exact_internal_requirements": true,
+      "publish_level": 2,
+      "staged_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "registry_checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fetched_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "checksum_equality": "match",
+      "published": true,
+      "registry_visible": true
+    },
+    {
+      "name": "prikk-replay",
+      "version": "0.18.0",
+      "exact_internal_requirements": true,
+      "publish_level": 3,
+      "staged_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "registry_checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fetched_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "checksum_equality": "match",
+      "published": true,
+      "registry_visible": true
+    },
+    {
+      "name": "prikk-store",
+      "version": "0.18.0",
+      "exact_internal_requirements": true,
+      "publish_level": 4,
+      "staged_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "registry_checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fetched_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "checksum_equality": "match",
+      "published": true,
+      "registry_visible": true
+    },
+    {
+      "name": "prikk",
+      "version": "0.18.0",
+      "exact_internal_requirements": true,
+      "publish_level": 5,
+      "staged_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "registry_checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fetched_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "checksum_equality": "match",
+      "published": true,
+      "registry_visible": true
+    }
+  ],
+  "release_page": {
+    "status": "published"
+  },
+  "pages": {
+    "status": "deployed",
+    "deployed_commit": "0000000000000000000000000000000000000000",
+    "inapplicable_ruling": null
+  },
+  "governance": null,
+  "attempts": [
+    {
+      "sequence": 1,
+      "time": "2026-07-15T00:00:00Z",
+      "operation": "publish immutable release outputs",
+      "result": "succeeded"
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "empty_fail_closed",
+      "document": "schema_version = 1\nauthorized_primary_fingerprints = []\n",
+      "expected": "valid"
+    },
+    {
+      "id": "multiple_sorted",
+      "document": "schema_version = 1\nauthorized_primary_fingerprints = [\"1111111111111111111111111111111111111111\", \"2222222222222222222222222222222222222222\"]\n",
+      "expected": "valid"
+    },
+    {
+      "id": "unknown_field",
+      "document": "schema_version = 1\nauthorized_primary_fingerprints = []\nnote = \"not allowed\"\n",
+      "expected": "invalid"
+    },
+    {
+      "id": "unsupported_schema",
+      "document": "schema_version = 2\nauthorized_primary_fingerprints = []\n",
+      "expected": "invalid"
+    },
+    {
+      "id": "boolean_schema_version",
+      "document": "schema_version = true\nauthorized_primary_fingerprints = []\n",
+      "expected": "invalid"
+    },
+    {
+      "id": "lowercase",
+      "document": "schema_version = 1\nauthorized_primary_fingerprints = [\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]\n",
+      "expected": "invalid"
+    },
+    {
+      "id": "wrong_length",
+      "document": "schema_version = 1\nauthorized_primary_fingerprints = [\"1111\"]\n",
+      "expected": "invalid"
+    },
+    {
+      "id": "duplicate",
+      "document": "schema_version = 1\nauthorized_primary_fingerprints = [\"1111111111111111111111111111111111111111\", \"1111111111111111111111111111111111111111\"]\n",
+      "expected": "invalid"
+    },
+    {
+      "id": "unsorted",
+      "document": "schema_version = 1\nauthorized_primary_fingerprints = [\"2222222222222222222222222222222222222222\", \"1111111111111111111111111111111111111111\"]\n",
+      "expected": "invalid"
+    },
+    {
+      "id": "malformed_toml",
+      "document": "schema_version =\n",
+      "expected": "invalid"
+    }
+  ]
+}

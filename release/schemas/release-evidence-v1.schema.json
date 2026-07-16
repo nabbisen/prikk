@@ -1,0 +1,494 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nabbisen.github.io/prikk/schemas/release-evidence-v1.schema.json",
+  "title": "Prikk release evidence snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "sequence",
+    "version",
+    "overall_status",
+    "prior_snapshot",
+    "tag",
+    "archive",
+    "crates",
+    "release_page",
+    "pages",
+    "governance",
+    "attempts"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "sequence": {
+      "type": "string",
+      "pattern": "^(00[1-9]|0[1-9][0-9]|[1-9][0-9]{2})$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "overall_status": {
+      "enum": ["pending", "partial", "complete", "superseded"]
+    },
+    "prior_snapshot": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "sha256"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^prikk-[0-9]+\\.[0-9]+\\.[0-9]+-release-evidence-[0-9]{3}\\.json$"
+            },
+            "sha256": { "$ref": "#/$defs/sha256" }
+          }
+        }
+      ]
+    },
+    "tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "object_id", "peeled_commit", "release_tag_verification"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "object_id": { "$ref": "#/$defs/git_id" },
+        "peeled_commit": { "$ref": "#/$defs/git_id" },
+        "release_tag_verification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "signer_primary_fingerprint",
+            "authority_path",
+            "authority_blob_id",
+            "verifier_result"
+          ],
+          "properties": {
+            "status": { "enum": ["verified", "failed", "not-observed"] },
+            "signer_primary_fingerprint": {
+              "oneOf": [
+                { "type": "null" },
+                { "$ref": "#/$defs/fingerprint" }
+              ]
+            },
+            "authority_path": {
+              "oneOf": [
+                { "type": "null" },
+                { "const": "release-signers.toml" }
+              ]
+            },
+            "authority_blob_id": {
+              "oneOf": [
+                { "type": "null" },
+                { "$ref": "#/$defs/git_id" }
+              ]
+            },
+            "verifier_result": {
+              "oneOf": [
+                { "type": "null" },
+                { "type": "string", "minLength": 1 }
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "status": { "const": "verified" } }, "required": ["status"] },
+              "then": {
+                "properties": {
+                  "signer_primary_fingerprint": { "$ref": "#/$defs/fingerprint" },
+                  "authority_path": { "const": "release-signers.toml" },
+                  "authority_blob_id": { "$ref": "#/$defs/git_id" },
+                  "verifier_result": { "type": "string", "minLength": 1 }
+                }
+              }
+            },
+            {
+              "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
+              "then": {
+                "properties": {
+                  "authority_path": { "const": "release-signers.toml" },
+                  "authority_blob_id": { "$ref": "#/$defs/git_id" },
+                  "verifier_result": { "type": "string", "minLength": 1 }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": { "status": { "const": "not-observed" } },
+                "required": ["status"]
+              },
+              "then": {
+                "properties": {
+                  "signer_primary_fingerprint": { "type": "null" },
+                  "authority_path": { "type": "null" },
+                  "authority_blob_id": { "type": "null" },
+                  "verifier_result": { "type": "null" }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "checksum_name",
+        "archive_sha256",
+        "checksum_sha256",
+        "archive_attached",
+        "checksum_attached",
+        "checksum_grammar",
+        "archive_root"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^prikk-v[0-9]+\\.[0-9]+\\.[0-9]+\\.tar\\.gz$"
+        },
+        "checksum_name": {
+          "type": "string",
+          "pattern": "^prikk-v[0-9]+\\.[0-9]+\\.[0-9]+\\.tar\\.gz\\.sha256$"
+        },
+        "archive_sha256": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/sha256" }
+          ]
+        },
+        "checksum_sha256": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/sha256" }
+          ]
+        },
+        "archive_attached": { "type": "boolean" },
+        "checksum_attached": { "type": "boolean" },
+        "checksum_grammar": { "enum": ["valid", "invalid", "not-observed"] },
+        "archive_root": { "enum": ["valid", "invalid", "not-observed"] }
+      }
+    },
+    "crates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/crate" },
+      "minItems": 1
+    },
+    "release_page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["absent", "draft", "published", "failed"] }
+      }
+    },
+    "pages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "deployed_commit", "inapplicable_ruling"],
+      "properties": {
+        "status": { "enum": ["pending", "deployed", "failed", "inapplicable"] },
+        "deployed_commit": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/git_id" }
+          ]
+        },
+        "inapplicable_ruling": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ]
+        }
+      }
+    },
+    "governance": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/governance" }
+      ]
+    },
+    "attempts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/attempt" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "sequence": { "const": "001" } },
+        "required": ["sequence"]
+      },
+      "then": { "properties": { "prior_snapshot": { "type": "null" } } }
+    },
+    {
+      "if": {
+        "properties": { "overall_status": { "const": "complete" } },
+        "required": ["overall_status"]
+      },
+      "then": {
+        "properties": {
+          "tag": {
+            "properties": {
+              "release_tag_verification": {
+                "properties": {
+                  "status": { "const": "verified" },
+                  "signer_primary_fingerprint": { "$ref": "#/$defs/fingerprint" },
+                  "authority_path": { "const": "release-signers.toml" },
+                  "authority_blob_id": { "$ref": "#/$defs/git_id" },
+                  "verifier_result": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          },
+          "archive": {
+            "properties": {
+              "archive_sha256": { "$ref": "#/$defs/sha256" },
+              "checksum_sha256": { "$ref": "#/$defs/sha256" },
+              "archive_attached": { "const": true },
+              "checksum_attached": { "const": true },
+              "checksum_grammar": { "const": "valid" },
+              "archive_root": { "const": "valid" }
+            }
+          },
+          "crates": {
+            "items": {
+              "allOf": [
+                { "$ref": "#/$defs/crate" },
+                {
+                  "properties": {
+                    "exact_internal_requirements": { "const": true },
+                    "published": { "const": true },
+                    "registry_visible": { "const": true },
+                    "checksum_equality": { "const": "match" },
+                    "staged_sha256": { "$ref": "#/$defs/sha256" },
+                    "registry_checksum": { "$ref": "#/$defs/sha256" },
+                    "fetched_sha256": { "$ref": "#/$defs/sha256" }
+                  }
+                }
+              ]
+            }
+          },
+          "release_page": {
+            "properties": { "status": { "const": "published" } }
+          },
+          "pages": {
+            "oneOf": [
+              {
+                "properties": {
+                  "status": { "const": "deployed" },
+                  "deployed_commit": { "$ref": "#/$defs/git_id" },
+                  "inapplicable_ruling": { "type": "null" }
+                }
+              },
+              {
+                "properties": {
+                  "status": { "const": "inapplicable" },
+                  "deployed_commit": { "type": "null" },
+                  "inapplicable_ruling": { "type": "string", "minLength": 1 }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git_id": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^(?:[0-9A-F]{40}|[0-9A-F]{64})$"
+    },
+    "crate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "exact_internal_requirements",
+        "publish_level",
+        "staged_sha256",
+        "registry_checksum",
+        "fetched_sha256",
+        "checksum_equality",
+        "published",
+        "registry_visible"
+      ],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "exact_internal_requirements": { "type": "boolean" },
+        "publish_level": { "type": "integer", "minimum": 1 },
+        "staged_sha256": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }]
+        },
+        "registry_checksum": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }]
+        },
+        "fetched_sha256": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }]
+        },
+        "checksum_equality": { "enum": ["match", "mismatch", "not-observed"] },
+        "published": { "type": "boolean" },
+        "registry_visible": { "type": "boolean" }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["person", "role", "record"],
+      "properties": {
+        "person": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["maintainer-administrator", "architect-security"] },
+        "record": { "type": "string", "minLength": 1 }
+      }
+    },
+    "authority_proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reason", "introduced_signers"],
+      "properties": {
+        "state": { "enum": ["verified", "not-applicable"] },
+        "reason": { "oneOf": [{ "type": "null" }, { "type": "string", "minLength": 1 }] },
+        "introduced_signers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["primary_fingerprint", "verifier_result"],
+            "properties": {
+              "primary_fingerprint": { "$ref": "#/$defs/fingerprint" },
+              "verifier_result": { "type": "string", "minLength": 1 }
+            }
+          },
+          "uniqueItems": true
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "verified" } }, "required": ["state"] },
+          "then": {
+            "properties": {
+              "reason": { "type": "null" },
+              "introduced_signers": { "minItems": 1 }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "state": { "const": "not-applicable" } },
+            "required": ["state"]
+          },
+          "then": {
+            "properties": {
+              "reason": { "type": "string", "minLength": 1 },
+              "introduced_signers": { "maxItems": 0 }
+            }
+          }
+        }
+      ]
+    },
+    "governance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "transaction_type",
+        "action_or_classification",
+        "old_authority_blob_id",
+        "new_authority_blob_id",
+        "old_authorized_fingerprints",
+        "new_authorized_fingerprints",
+        "approvals",
+        "authority_proof",
+        "classification",
+        "hold_started_at",
+        "hold_ended_at",
+        "hold_lift"
+      ],
+      "properties": {
+        "record": { "type": "string", "minLength": 1 },
+        "transaction_type": {
+          "enum": [
+            "bootstrap",
+            "addition",
+            "replacement",
+            "removal-only",
+            "classification-only"
+          ]
+        },
+        "action_or_classification": { "type": "string", "minLength": 1 },
+        "old_authority_blob_id": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/git_id" }]
+        },
+        "new_authority_blob_id": { "$ref": "#/$defs/git_id" },
+        "old_authorized_fingerprints": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fingerprint" },
+          "uniqueItems": true
+        },
+        "new_authorized_fingerprints": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fingerprint" },
+          "uniqueItems": true
+        },
+        "approvals": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/approval" },
+          "minItems": 2
+        },
+        "authority_proof": { "$ref": "#/$defs/authority_proof" },
+        "classification": {
+          "oneOf": [
+            { "type": "null" },
+            { "enum": ["valid-at-publication", "never-authorized/hostile"] }
+          ]
+        },
+        "hold_started_at": { "type": "string", "format": "date-time" },
+        "hold_ended_at": {
+          "oneOf": [{ "type": "null" }, { "type": "string", "format": "date-time" }]
+        },
+        "hold_lift": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["record", "ruling"],
+              "properties": {
+                "record": { "type": "string", "minLength": 1 },
+                "ruling": { "const": "lift-approved" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sequence", "time", "operation", "result"],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1 },
+        "time": { "type": "string", "format": "date-time" },
+        "operation": { "type": "string", "minLength": 1 },
+        "result": { "enum": ["succeeded", "failed", "not-applicable"] }
+      }
+    }
+  }
+}

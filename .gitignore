@@ -25,4 +25,6 @@ target
 /docs/book/
 *.tmp
 *.log
+__pycache__/
+*.py[cod]
 /.git-exclude/

@@ -48,6 +48,8 @@ Next increment candidates are tracked in `ROADMAP.md`.
 This is an early implementation suitable for architecture review, experimentation, and contribution.
 Do not use Prikk as the sole store for important project history yet. The repository format and command
 surface are still evolving, and future releases may require migration.
+See the [release, versioning, and compatibility reference](./docs/src/reference/release-compatibility.md)
+for the pre-1.0 compatibility and official-release boundary.
 
 The local core can initialize a repository, author signed patches, seal them into blocks, inspect
 history, verify integrity, diagnose common repository issues, perform safe checkout planning and
@@ -73,7 +75,7 @@ Prikk is not yet the right tool if you need:
 - Git object compatibility or transparent Git interoperability;
 - hosted forge workflows, remotes, or sync;
 - complete branch management, tags, semantic merge, or merge execution;
-- plugin/audit execution, attestations, or full publication policy;
+- plugin/audit execution, attestations, or automated publication controls;
 - mature key lifecycle features such as revocation, rotation, hardware signing, or thresholds.
 
 ## Core Ideas
@@ -157,6 +159,8 @@ prikk doctor [path] --repair-wal-tail
 - `crates/` — Rust workspace crates for the CLI, object model, crypto, repository store, replay
   semantics, hash primitives, and shared errors.
 - `docs/` — mdBook documentation.
+- `release/` — release-policy schemas and review fixtures; root `release-signers.toml` is the fail-closed
+  official signer allowlist.
 - `rfcs/` — design records and lifecycle state. `rfcs/done/000-rfc-lifecycle-policy.md` defines how
   `proposed/`, `accepted/`, `done/`, `archive/`, and `handoffs/` are used.
 - `ROADMAP.md` — current release and upcoming theme summary.

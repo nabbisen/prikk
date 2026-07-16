@@ -70,8 +70,10 @@ DC-36 and DC-37 designs were accepted on 2026-07-15. DC-37 implementation was ac
 and DC-36 immutable object publication implementation was subsequently accepted. DC-38 ref publication
 recovery implementation was accepted and committed after repair re-review on 2026-07-15. DC-35's
 repository-governed multi-signer and break-glass amendment was accepted after architect design re-review
-v3 on 2026-07-15; its scoped policy/documentation implementation is next. DC-39 implementation waits for
-its own design review while using accepted DC-34 authority.
+v3 on 2026-07-15. Architect repair re-review v3 accepted its policy implementation on 2026-07-16 after
+byte/object, canonical-governance, tag-shape, and attempt-growth repairs. No signer is admitted; bootstrap
+remains a separate prerequisite. DC-39 implementation waits for its own design review while using accepted DC-34
+authority.
 DC-38 and DC-40 designs, including the DC-40 companion state-root/format FDD, were accepted on
 2026-07-14. DC-40 implementation remains pending behind the remaining M1 sequencing and its own gate.
 
