@@ -1,7 +1,8 @@
 # RFC (accepted) - DC-45 Release Policy Tooling Consolidation
 
-**Status.** Accepted after architect design repair re-review v1 on 2026-07-16; staged implementation
-may begin with pre-oracle profile hardening and the Python observation adapter.
+**Status.** Accepted after architect design repair re-review v1 on 2026-07-16; duplicate-name profile
+hardening accepted after implementation repair re-review v1 on 2026-07-16 and pending commit; Python
+observation adapter not started.
 **Target milestone.** M2 - first tooling increment; cutover required before the 0.19.0 release
 candidate.
 **Tracks.** Architect direction on DC-35 release-policy tooling debt.

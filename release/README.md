@@ -15,9 +15,13 @@ the outcome of every signer, challenge, release-state, and evidence fixture, and
 outcome differs from its `expected` value. Its focused Draft 2020-12 evaluator implements every schema
 keyword used by the tracked release-evidence schema, fails closed on an unknown keyword, and uses strict
 JSON value equality. It asserts canonical UTC `date-time` values rather than treating `format` as
-annotation-only. Separate semantic checks cover relations JSON Schema cannot express, including exact
-signer-proof coverage and append-only snapshot history. Running the command does not create bytecode in
-the worktree.
+annotation-only. Every policy JSON entry path rejects duplicate object names at any nesting depth before
+schema or semantic validation. Raw parser boundary vectors cover valid unique names and duplicate names
+at top level, through escaped-equivalent member spelling, at nested level, inside an array object, and in
+schema-, evidence-, and fixture-shaped inputs. A malformed-JSON control keeps syntax errors distinct
+from duplicate-name errors. Separate semantic checks cover relations JSON Schema cannot express,
+including exact signer-proof coverage and append-only snapshot history. Running the command does not
+create bytecode in the worktree.
 
 ## Signer Authority
 

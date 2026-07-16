@@ -1,12 +1,39 @@
 """Shared strict parsing and comparison helpers."""
 
 from datetime import datetime
+from pathlib import Path
+import json
 import re
 from typing import Any
 
 FINGERPRINT = re.compile(r"(?:[0-9A-F]{40}|[0-9A-F]{64})\Z")
 GIT_ID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+
+
+class DuplicateJsonNameError(ValueError):
+    """Raised when a JSON object repeats a member name."""
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for name, value in pairs:
+        if name in result:
+            raise DuplicateJsonNameError(f"duplicate JSON object name: {name}")
+        result[name] = value
+    return result
+
+
+def strict_json_loads(source: bytes | str) -> Any:
+    """Decode JSON while rejecting duplicate object names at every depth."""
+
+    return json.loads(source, object_pairs_hook=_unique_object)
+
+
+def strict_json_load(path: Path) -> Any:
+    """Decode exact JSON file bytes with duplicate-name rejection."""
+
+    return strict_json_loads(path.read_bytes())
 
 
 def parse_datetime(value: str) -> datetime:

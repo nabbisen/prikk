@@ -3,9 +3,8 @@
 from datetime import timedelta
 from hashlib import sha256
 from typing import Any
-import json
 
-from .common import json_equal, parse_datetime, unique_sorted_fingerprints
+from .common import json_equal, parse_datetime, strict_json_loads, unique_sorted_fingerprints
 
 CRATE_ORDER = [
     "prikk-error", "prikk-hash", "prikk-crypto", "prikk-object",
@@ -64,8 +63,8 @@ def sequence_valid(snapshots: list[dict[str, Any]], observed_bytes: list[bytes])
         return False
     for index, current in enumerate(snapshots):
         try:
-            observed = json.loads(observed_bytes[index])
-        except (UnicodeDecodeError, json.JSONDecodeError):
+            observed = strict_json_loads(observed_bytes[index])
+        except (UnicodeDecodeError, ValueError):
             return False
         if not json_equal(current, observed):
             return False

@@ -6,7 +6,7 @@ from typing import Any, Callable
 import json
 
 from .challenge import challenge_valid
-from .common import pointer_set
+from .common import DuplicateJsonNameError, pointer_set, strict_json_load, strict_json_loads
 from .evidence import evidence_valid, observed_digest, sequence_valid
 from .schema import SchemaValidator
 from .signer import authority_document_valid, transaction_valid
@@ -14,13 +14,12 @@ from .state import release_state_valid
 
 
 def _load(path: Path) -> dict[str, Any]:
-    with path.open(encoding="utf-8") as source:
-        return json.load(source)
+    return strict_json_load(path)
 
 
 def _load_document(path: Path) -> tuple[dict[str, Any], bytes]:
     raw = path.read_bytes()
-    return json.loads(raw), raw
+    return strict_json_loads(raw), raw
 
 
 def _fixture_bytes(document: dict[str, Any]) -> bytes:
@@ -177,6 +176,31 @@ def _check_schema_evaluator(path: Path) -> list[str]:
     return errors
 
 
+def _check_json_parser(path: Path, root: Path) -> list[str]:
+    errors: list[str] = []
+    table = _load(path)
+    if table.get("schema_version") != 1 or not isinstance(table.get("cases"), list):
+        return [f"{path}: invalid fixture table"]
+    ids: set[str] = set()
+    for case in table["cases"]:
+        case_id = case.get("id", "<missing-id>")
+        if case_id in ids:
+            errors.append(f"{path}:{case_id}: duplicate id")
+        ids.add(case_id)
+        try:
+            strict_json_load(root / case["path"])
+            actual = "valid"
+        except DuplicateJsonNameError:
+            actual = "duplicate-name-error"
+        except (KeyError, OSError, TypeError, UnicodeError, json.JSONDecodeError):
+            actual = "parse-error"
+        if actual != case.get("expected"):
+            errors.append(
+                f"{path}:{case_id}: expected {case.get('expected')}, computed {actual}"
+            )
+    return errors
+
+
 def run(root: Path) -> int:
     fixtures = root / "fixtures"
     schema = _load(root / "schemas" / "release-evidence-v1.schema.json")
@@ -190,6 +214,7 @@ def run(root: Path) -> int:
     errors += _check_rows(fixtures / "signer-challenge-cases.json", challenge_valid)
     errors += _check_states(fixtures / "release-state-cases.json", root, validator)
     errors += _check_schema_evaluator(fixtures / "schema-evaluator-cases.json")
+    errors += _check_json_parser(fixtures / "json-parser-cases.json", root)
     errors += _check_evidence(root, validator)
     if errors:
         for error in errors:

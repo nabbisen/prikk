@@ -1,0 +1,10 @@
+{
+  "outer": {
+    "first": 1,
+    "second": 2
+  },
+  "items": [
+    { "name": "one" },
+    { "name": "two" }
+  ]
+}
