@@ -1,8 +1,8 @@
 # RFC (accepted) - DC-45 Release Policy Tooling Consolidation
 
 **Status.** Accepted after architect design repair re-review v1 on 2026-07-16; duplicate-name profile
-hardening accepted after implementation repair re-review v1 on 2026-07-16 and pending commit; Python
-observation adapter not started.
+hardening accepted and committed as `ea427df`; Python observation adapter implemented and pending
+commit after implementation repair re-review v1 acceptance on 2026-07-16.
 **Target milestone.** M2 - first tooling increment; cutover required before the 0.19.0 release
 candidate.
 **Tracks.** Architect direction on DC-35 release-policy tooling debt.
@@ -209,6 +209,9 @@ but the committed reviewed bytes and digests are authority; the gate never regen
 from the mutation DSL.
 
 ### Python observation and reason strategy
+
+A profile-contract implementation was accepted and committed as `ea427df`; this is the
+`profile_contract_commit` bound by adapter output and the future frozen manifest.
 
 A separately reviewed Python observation adapter may call the accepted validators to expose per-case
 structural, semantic, and final values they genuinely compute. It must not assign policy reasons or

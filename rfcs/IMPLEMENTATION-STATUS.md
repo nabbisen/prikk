@@ -3,7 +3,7 @@
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-40, and DC-45
-Current implementation increment: DC-45 duplicate-name profile hardening accepted; commit pending
+Current implementation increment: DC-45 Python observation adapter accepted; commit pending
 Current design-review increment: none; DC-45 design accepted on 2026-07-16
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
@@ -32,10 +32,13 @@ repository-format stabilization, and public-preview readiness. The durable corre
 - DC-41 through DC-43 are proposed M2 assurance/distribution RFCs and do not authorize implementation
   before their dependencies and individual design reviews are satisfied. DC-45 is the accepted first
   M2 tooling increment after architect design repair re-review v1 on 2026-07-16. Duplicate-name profile
-  hardening was accepted after implementation repair re-review v1 on 2026-07-16 and awaits the isolated
-  commit whose identity becomes `profile_contract_commit`. The Python observation adapter remains
-  unstarted and separately reviewable; oracle freeze waits for both accepted commit identities. Rust
-  cutover remains mandatory before the 0.19.0 release candidate.
+  hardening was accepted and committed as profile-contract identity `ea427df`. The separately scoped
+  Python observation adapter review v1 required independent final projection and negative assurance.
+  The repair also checks top-level identity and was accepted after implementation repair re-review v1
+  on 2026-07-16; the isolated adapter commit is pending. An isolated `12c137d` comparison found zero
+  mismatches across 145 common cases and exactly nine profile-contract additions. Oracle freeze waits
+  for the adapter's accepted commit identity. Rust cutover remains mandatory before the 0.19.0 release
+  candidate.
 - DC-44 is the proposed post-M2 migration/backup/restore RFC; no release target is assigned.
 - No release candidate is active. No proposed RFC is implementation authority until it moves to
   `rfcs/accepted/` under RFC-000.

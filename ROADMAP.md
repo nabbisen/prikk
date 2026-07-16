@@ -8,10 +8,13 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
 
 - **DC-45 - release policy tooling consolidation (accepted).** Architect design repair re-review v1
   accepted the executable oracle, schema-profile, Cargo-boundary, and cutover/rollback contracts on
-  2026-07-16. Duplicate-name profile hardening was accepted after implementation repair re-review v1
-  on 2026-07-16 and awaits its isolated commit; that commit becomes the profile-contract identity. The
-  Python observation adapter remains a separate next change, and oracle freeze follows acceptance and
-  commit identity of both.
+  2026-07-16. Duplicate-name profile hardening was accepted and committed as profile-contract identity
+  `ea427df`. The separately scoped Python observation adapter was reviewed; its
+  review v1 required independent final projection and a final-only negative check. The repair and
+  top-level identity self-test were accepted after implementation repair re-review v1 on 2026-07-16;
+  the adapter now awaits its isolated commit. Its per-case comparison has zero mismatches across 145
+  baseline cases and adds only the nine accepted profile cases. Oracle freeze follows the adapter
+  commit identity.
   Design acceptance satisfies only the pre-bootstrap planning dependency: no signer bootstrap or
   release action is authorized by DC-45. Rust cutover remains required before the 0.19.0 release
   candidate but is not an M1 prerequisite.

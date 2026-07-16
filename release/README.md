@@ -23,6 +23,30 @@ from duplicate-name errors. Separate semantic checks cover relations JSON Schema
 including exact signer-proof coverage and append-only snapshot history. Running the command does not
 create bytecode in the worktree.
 
+Emit deterministic machine-readable observations without assigning diagnostic reasons:
+
+```console
+python3 -B release/observe-policy.py
+```
+
+The output binds Python baseline commit `12c137d` and accepted profile-contract commit `ea427df`, sorts
+records by suite and case id, preserves fixture-visible outcomes such as `valid-local-only`, and reports
+structural/semantic stages only where the existing evidence validator computes them. It is a migration
+observation adapter, not the authoritative policy command. Verify computed observations against the
+fixture-owned expected outcomes with:
+
+```console
+python3 -B release/observe-policy.py --check
+```
+
+The expected path independently projects fixture outcomes to final verdicts and verifies the complete
+top-level identity contract. Its negative assurance corrupts only an observed final verdict and then
+all identity fields; both changes must be rejected:
+
+```console
+python3 -B release/observe-policy.py --self-test
+```
+
 ## Signer Authority
 
 The tracked authority file is [`release-signers.toml`](../release-signers.toml). Version 1 has exactly
