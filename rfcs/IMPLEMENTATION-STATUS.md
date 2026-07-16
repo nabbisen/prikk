@@ -2,9 +2,9 @@
 
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
-Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, and DC-40
+Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-40, and DC-45
 Current implementation increment: none; DC-35 implementation accepted; signer bootstrap pending separately
-Current design-review increment: none; DC-35 governance amendment accepted on 2026-07-15
+Current design-review increment: none; DC-45 design accepted on 2026-07-16
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
@@ -24,12 +24,16 @@ repository-format stabilization, and public-preview readiness. The durable corre
   design re-review v3; policy/documentation implementation review v1 required repairs. The tracked
   second repair re-review required byte/object, canonical-governance, tag-shape, and attempt-growth
   bindings. Architect repair re-review v3 accepted the completed implementation on 2026-07-16. The
-  signer allowlist remains empty; bootstrap and all release work remain blocked. DC-40 implementation and
-  identity-vector evidence remain pending.
+  signer allowlist remains empty; bootstrap and all release work remain blocked. DC-45 design acceptance
+  is required before bootstrap, but its Rust migration is not a bootstrap prerequisite. DC-40
+  implementation and identity-vector evidence remain pending.
 - DC-39 remains proposed. It and the accepted M1 work are held for one 0.18.0 corrective release after
   all blocking findings close.
 - DC-41 through DC-43 are proposed M2 assurance/distribution RFCs and do not authorize implementation
-  before their dependencies and individual design reviews are satisfied.
+  before their dependencies and individual design reviews are satisfied. DC-45 is the accepted first
+  M2 tooling increment after architect design repair re-review v1 on 2026-07-16. Its pre-oracle profile
+  hardening and Python observation adapter are the first staged implementation gate; Rust cutover
+  remains mandatory before the 0.19.0 release candidate.
 - DC-44 is the proposed post-M2 migration/backup/restore RFC; no release target is assigned.
 - No release candidate is active. No proposed RFC is implementation authority until it moves to
   `rfcs/accepted/` under RFC-000.

@@ -6,13 +6,15 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
 
 ## Current Increment
 
-- **DC-35 - release compatibility and status correction (accepted).** Architect design re-review v3
-  accepted the repository-governed multi-signer and break-glass amendment on 2026-07-15. Scoped policy/
-  implementation repair re-review v3 accepted the completed policy implementation on 2026-07-16 after
-  byte/object identity, canonical-governance, tag-shape, and attempt-growth repairs. The signer allowlist
-  remains empty and fail-closed; bootstrap and all release work remain blocked. DC-39 remains proposed, and DC-40
-  remains accepted with implementation evidence pending. The combined 0.18.0/M1 release gate remains
-  closed.
+- **DC-45 - release policy tooling consolidation (accepted).** Architect design repair re-review v1
+  accepted the executable oracle, schema-profile, Cargo-boundary, and cutover/rollback contracts on
+  2026-07-16. The first implementation stage is isolated pre-oracle profile hardening and a Python
+  observation adapter; the oracle freeze follows their review. Design acceptance satisfies only the
+  pre-bootstrap planning dependency: no signer bootstrap or release action is authorized by DC-45.
+  Rust cutover remains required before the 0.19.0 release candidate but is not an M1 prerequisite.
+- **M1 remains active.** DC-35 implementation is accepted and committed, but the signer allowlist
+  remains empty and fail-closed. DC-39 remains proposed, DC-40 remains accepted with implementation
+  evidence pending, and the combined 0.18.0/M1 release gate remains closed.
 
 ## Release Candidate Increment
 
@@ -164,9 +166,9 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
    a no-release design gate.
 2. **M1 corrective storage and identity baseline (target 0.18.0):** DC-35 through DC-40 close the five
    blocking architecture findings together. No intermediate feature/docs release is planned.
-3. **M2 assurance and distribution baseline (target 0.19.0):** DC-41 through DC-43 add adversarial
-   evidence, performance/maintainability gates, and release security controls after corrected behavior
-   exists.
+3. **M2 assurance and distribution baseline (target 0.19.0):** DC-45 is the first tooling increment;
+   DC-41 through DC-43 add adversarial evidence, performance/maintainability gates, and release security
+   controls after corrected behavior exists. DC-45 cutover is required before the release candidate.
 4. **M3 migration and recoverable backup (release target unassigned):** DC-44 owns NFR-REL-03,
    verifiable backup/restore, and migration exercises that are explicitly outside DC-40 and M2.
 5. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
@@ -228,7 +230,7 @@ references. The durable homes below are authoritative `docs/src/reference/` or `
 | TASK-10 repository layout & authority model | 2 | Architect + maintainer | Released in 0.17.5 | Complete; use the reference as the current public repository-layout/authority baseline. | Current directories and authority-vs-cache rules are reviewed and committed. | `docs/src/reference/repository-layout.md` |
 | TASK-11 path & worktree safety rules | 2 | Architect + maintainer | Released in 0.17.6 | Complete; use the reference as the current public path/worktree safety baseline. | Reviewed path/worktree safety reference is committed with current gaps marked. | `docs/src/reference/path-safety.md` |
 | TASK-12 concurrency & locking model | 2 | Architect + maintainer | Released in 0.17.7 | Complete; use the reference as the current public concurrency/locking baseline. | Reviewed locking/concurrency docs are committed and describe manual stale-lock limits. | `docs/src/reference/concurrency-locking.md` |
-| TASK-13 release, versioning & compatibility policy | 2 | Maintainer | DC-35 implementation accepted on 2026-07-16; signer set empty | Commit the accepted implementation, then bootstrap the first signer as a separate reviewed governance transaction before the 0.18.0 release candidate. | Reviewed release/compatibility policy is committed, strict fixtures are accepted, and signer bootstrap remains an explicit release prerequisite. | `docs/src/reference/release-compatibility.md` |
+| TASK-13 release, versioning & compatibility policy | 2 | Maintainer | DC-35 implementation committed and DC-45 design accepted on 2026-07-16; signer set empty | Bootstrap the first signer only through its separate reviewed governance transaction before the 0.18.0 release candidate; completed Rust migration is not a bootstrap prerequisite. | Reviewed release/compatibility policy is committed, strict fixtures and DC-45 direction are accepted, and signer bootstrap remains an explicit release prerequisite. | `docs/src/reference/release-compatibility.md` |
 | TASK-14 consolidated non-goals / deferred features | 3 | Maintainer/architect | Open | Start when deferred-feature lists begin drifting across README, ROADMAP, mdBook, and release notes. | Reviewed non-goals page is committed and links ROADMAP as the planning authority. | `docs/src/reference/non-goals.md` |
 | TASK-15 roles & user-classes orientation | 3 | Designer | Open | Start when the docs need a clearer audience map after the Reference section settles. | Reviewed orientation page or index update is committed. | `docs/src/index.md` or `docs/src/guide/audience.md` |
 | TASK-16 error taxonomy & diagnostics | 3 | Implementer/architect | Open | Start with TASK-07 or when diagnostics need user-facing interpretation. | Reviewed diagnostics reference is committed and grounded in `crates/prikk-error`. | `docs/src/reference/errors.md` |

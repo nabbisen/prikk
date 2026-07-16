@@ -35,6 +35,7 @@ release boundary and may change only through an update to this file, `ROADMAP.md
 | Active-Patch warning 800 / hard bound 1000 from NFR-PERF-02 | Requirement gap | DC-42: implement or obtain explicit requirements amendment | M2 |
 | Source/test structure gates absent | Maintainability risk | DC-42 | M2 |
 | Vulnerability reporting, SBOM, provenance absent | Distribution risk | DC-43 | M2 |
+| Mixed release-policy tooling ownership and custom schema evaluator | Tooling debt | DC-45 | M2 |
 | Backup/restore verification and migration exercises absent | Recovery capability gap | DC-44 | M3 |
 
 ## M0 - Architecture ratification
@@ -72,8 +73,11 @@ recovery implementation was accepted and committed after repair re-review on 202
 repository-governed multi-signer and break-glass amendment was accepted after architect design re-review
 v3 on 2026-07-15. Architect repair re-review v3 accepted its policy implementation on 2026-07-16 after
 byte/object, canonical-governance, tag-shape, and attempt-growth repairs. No signer is admitted; bootstrap
-remains a separate prerequisite. DC-39 implementation waits for its own design review while using accepted DC-34
-authority.
+remains a separate prerequisite. DC-45 design acceptance is required before bootstrap, but completing
+the Rust tooling migration is not. Until DC-45 cutover, bootstrap uses the accepted Python gate under
+the separately reviewed DC-35 governance transaction. Architect design repair re-review v1 accepted
+DC-45 on 2026-07-16; this acceptance does not itself authorize bootstrap. DC-39 implementation waits
+for its own design review while using accepted DC-34 authority.
 DC-38 and DC-40 designs, including the DC-40 companion state-root/format FDD, were accepted on
 2026-07-14. DC-40 implementation remains pending behind the remaining M1 sequencing and its own gate.
 
@@ -92,15 +96,22 @@ review accepts the combined state. No production or public-preview claim follows
 1. DC-41 Integrity Evidence Campaign.
 2. DC-42 Performance and Maintainability Gates.
 3. DC-43 Release Security and Distribution Controls.
+4. DC-45 Release Policy Tooling Consolidation.
 
+DC-45 is the first M2 tooling increment. Its design must be accepted before signer bootstrap, and its
+Rust command cutover must be accepted before the 0.19.0 release candidate; migration completion is not
+an M1 or bootstrap prerequisite. Its design was accepted after architect repair re-review v1 on
+2026-07-16; pre-oracle profile hardening and the observation adapter are the first implementation gate.
 DC-41 waits for the corrected contracts so its evidence does not bless superseded behavior. DC-42 may
 perform read-only measurements during M1, but semantic optimization or broad source moves wait until M1
-stabilizes. DC-43 policy design may proceed without credentials; workflow implementation waits for
-security review.
+stabilizes. DC-43 policy design may proceed without credentials; implementation waits for security
+review and must consume the stable post-DC-45-cutover gate rather than extend the Python engine.
 
 **Completion condition:** reproducible crash/fuzz/hash/platform evidence is available, performance and
 source-structure gates are enforced or carry reviewed exceptions, and release artifacts have reviewed
-security reporting, dependency policy, SBOM, digest, and provenance controls.
+security reporting, dependency policy, SBOM, digest, and provenance controls. The release-policy tool
+is consolidated behind the reviewed Rust command with the public schema, product publication graph,
+and differential oracle evidence preserved.
 
 After M2, request a new independent architecture review. Public-preview readiness, repository-format
 stability, and production suitability remain separate decisions and are not milestone completion
