@@ -3,8 +3,8 @@
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-40, and DC-45
-Current implementation increment: DC-45 Python observation adapter accepted; commit pending
-Current design-review increment: none; DC-45 design accepted on 2026-07-16
+Current implementation increment: DC-45 compact oracle architect-accepted; owner decision pending
+Current design-review increment: none; DC-45 retirement schedule accepted on 2026-07-17
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
@@ -35,10 +35,32 @@ repository-format stabilization, and public-preview readiness. The durable corre
   hardening was accepted and committed as profile-contract identity `ea427df`. The separately scoped
   Python observation adapter review v1 required independent final projection and negative assurance.
   The repair also checks top-level identity and was accepted after implementation repair re-review v1
-  on 2026-07-16; the isolated adapter commit is pending. An isolated `12c137d` comparison found zero
-  mismatches across 145 common cases and exactly nine profile-contract additions. Oracle freeze waits
-  for the adapter's accepted commit identity. Rust cutover remains mandatory before the 0.19.0 release
-  candidate.
+  on 2026-07-16 and committed as adapter identity `6be65af`. An isolated `12c137d` comparison found zero
+  mismatches across 145 common cases and exactly nine profile-contract additions. The 154-case exact-
+  byte oracle implementation review v1 found five blocking closure/contract defects. The repaired
+  candidate materializes release-state governance dependencies, separates kebab-case oracle IDs from
+  fixture-visible IDs, binds exact two-snapshot sequences, corrects reason precedence, and enforces
+  exact coverage membership. Architect implementation repair re-review v1 accepted the freeze on
+  2026-07-17 with no semantic blockers. Project-owner acceptance is withheld because the candidate
+  adds 247 files, including 237 per-case vectors. Architect footprint QA conditionally approved three
+  strict suite-level JSON packs and required an explicit decoding/location/closure/archive amendment.
+  Architect design amendment re-review v1 accepted that contract on 2026-07-17. Compact implementation
+  is complete without staging: the candidate has 13 files, retains all 237 logical vectors across three
+  packs, and implementation review v1 found one blocking raw dot-segment grammar defect. The repaired
+  schema and shared lexical validator plus focused direct/packed/registry/physical-pack tests were
+  accepted after architect repair re-review v1 on 2026-07-17. Explicit project-owner acceptance of the
+  exact 13-file inventory remains pending before the isolated freeze commit. Architect design repair
+  re-review v1 accepted the explicit retirement schedule on 2026-07-17, satisfying the lifecycle-design
+  condition for the owner's separate decision. Its five Python authoring and verification files remain
+  through the first Rust-gated 0.19.0 release. The first later release-candidate increment is blocked
+  until architect acceptance of a later-commit stability rerun; the following release-candidate
+  increment is blocked until an exhaustive five-file decommissioning review removes each file or
+  records an individual owner-approved, event-bound exception. Rust must replace the complete accepted
+  manifest verifier and self-test matrix. Its other eight frozen contract/evidence files remain until a
+  later equivalence-backed replacement/consolidation review or an explicit final-retirement review
+  closes migration and rollback needs. These blockers stay tracked even if DC-45 moves to `done/`.
+  Post-commit archive and package-boundary evidence then remains required before Rust implementation.
+  Python stays authoritative, and Rust cutover remains mandatory before the 0.19.0 release candidate.
 - DC-44 is the proposed post-M2 migration/backup/restore RFC; no release target is assigned.
 - No release candidate is active. No proposed RFC is implementation authority until it moves to
   `rfcs/accepted/` under RFC-000.

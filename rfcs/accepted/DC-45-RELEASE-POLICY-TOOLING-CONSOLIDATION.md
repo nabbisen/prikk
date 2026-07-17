@@ -1,8 +1,13 @@
 # RFC (accepted) - DC-45 Release Policy Tooling Consolidation
 
 **Status.** Accepted after architect design repair re-review v1 on 2026-07-16; duplicate-name profile
-hardening accepted and committed as `ea427df`; Python observation adapter implemented and pending
-commit after implementation repair re-review v1 acceptance on 2026-07-16.
+hardening committed as `ea427df`; Python observation adapter committed as `6be65af`; exact-byte oracle
+semantics accepted after architect implementation repair re-review v1 on 2026-07-17, but project-owner
+acceptance withheld; three-pack design amendment accepted after architect re-review v1 on 2026-07-17,
+with compact implementation repair accepted after architect re-review v1 on 2026-07-17 and explicit
+project-owner acceptance of the 13-file inventory pending. The explicit compact-oracle retirement
+schedule added after owner review was accepted after architect design repair re-review v1 on
+2026-07-17.
 **Target milestone.** M2 - first tooling increment; cutover required before the 0.19.0 release
 candidate.
 **Tracks.** Architect direction on DC-35 release-policy tooling debt.
@@ -52,10 +57,10 @@ Rust 1.85, edition 2024, and workspace lints, and has no nested `Cargo.lock`. Th
 Package and publish procedures must explicitly name the seven product packages. They must not infer the
 publication graph from all workspace members. The allowlist, in DC-35 publication order, is
 `prikk-error`, `prikk-hash`, `prikk-crypto`, `prikk-object`, `prikk-replay`, `prikk-store`, and `prikk`.
-The repository source archive includes the tracked tool, contracts, oracle manifest, and required exact
-vectors so the release gate is reproducible; no product `.crate` package may contain the tool. Added
-parser and schema dependencies use the shared lockfile, pass the MSRV gate, and enter the project
-dependency policy when that policy exists.
+The repository source archive includes the tracked tool, contracts, oracle manifest, three vector
+packs, and every direct-file dependency so the release gate is reproducible; no product `.crate`
+package may contain the tool or any oracle artifact. Added parser and schema dependencies use the
+shared lockfile, pass the MSRV gate, and enter the project dependency policy when that policy exists.
 
 ### Executable Cargo and archive boundary
 
@@ -80,10 +85,11 @@ The command asserts:
 - the publication allowlist and dependency order are exactly the seven-package DC-35 graph above, and
   every package/publish command names packages from that allowlist rather than using `--workspace`;
 - `cargo package --locked --list -p <product>` for every product excludes
-  `tools/release-policy/`, the oracle manifest, and private policy vectors; and
+  `tools/release-policy/`, every oracle contract, pack, verifier, generator, and Rust policy-tool file;
+  and
 - a deterministic source-archive listing for the reviewed commit includes
-  `tools/release-policy/`, the normative schema, oracle manifest, and every manifest-required exact
-  vector.
+  `tools/release-policy/`, the normative schema, the ten root oracle artifacts, the three exact vector
+  packs, and every manifest-required direct-file dependency.
 
 Filename searches may support diagnostics but cannot replace Cargo metadata and Cargo package listings
 as package-graph authority. Implementation review records the selected parser/schema crates, exact
@@ -147,25 +153,84 @@ against a committed strict schema. Its top-level `schema_version` is the literal
 path, byte length, and lowercase SHA-256.
 
 Cases are keyed by a globally unique `(suite_id, case_id)` pair. Both identifiers are nonempty ASCII
-lowercase kebab-case, cases are strictly sorted by that pair, and duplicate, missing, or extra cases
-fail closed. Each `inputs` array is nonempty and sorted by unique zero-based `ordinal`. Every input has
-an explicit closed `role`, ordinal, repository-root-relative UTF-8 path, byte length, and lowercase
-SHA-256. The role enum is `authority`, `fixture-table`, `schema`, `challenge`, `prior-snapshot`,
-`current-snapshot`, or `expected-output`.
+lowercase kebab-case. Each case separately binds its fixture-visible `fixture_case_id`; version 1 maps
+that existing lowercase underscore/hyphen identifier to `case_id` by replacing every underscore with
+a hyphen and rejects mapping collisions. Adapter comparison uses the bound fixture identifier. Cases
+are strictly sorted by the oracle key, and duplicate, missing, or extra cases fail closed. Each
+`inputs` array is nonempty and sorted by unique zero-based `ordinal`. Every input has an explicit closed
+`role`, ordinal, discriminated `location`, reconstructed byte length, and lowercase SHA-256. The role
+enum is `authority`, `fixture-table`, `schema`, `challenge`, `prior-snapshot`, `current-snapshot`, or
+`expected-output`.
 
-Paths use `/`, contain no empty, `.` or `..` segment, are not absolute, and after symlink-aware
-canonicalization remain beneath the repository root. Missing inputs, extra declared/observed inputs,
-duplicate roles where a suite requires one, digest/length mismatches, unsupported versions, and
-unrecognized fields fail before policy validation.
+An input location is exactly one closed object variant:
+
+- `kind = "direct"` with one repository-relative filesystem `path`; or
+- `kind = "packed"` with one registered `pack_id` and one logical `entry_id`.
+
+Unknown fields, mixed variants, both variants, neither variant, and unsupported kinds fail schema
+validation. Direct paths use `/`, contain no empty, `.` or `..` segment, are not absolute, identify a
+regular file, and after symlink-aware canonicalization remain beneath the repository root. Packed entry
+IDs preserve the candidate's repository-relative vector names for audit continuity and use the same
+separator/segment grammar, but are logical identifiers: they are never resolved or materialized as
+filesystem paths.
+
+### Exact UTF-8 vector-pack profile
+
+The manifest has a closed pack registry containing exactly these three identities:
+
+- `signer-challenge` at `release/oracle/packs/signer-challenge-v1.json`;
+- `release-state` at `release/oracle/packs/release-state-v1.json`; and
+- `release-evidence` at `release/oracle/packs/release-evidence-v1.json`.
+
+Each registry member binds its direct repository-relative pack path, whole-file byte length, and
+lowercase SHA-256. Each pack is a UTF-8 JSON document without a byte-order mark. Its exact closed shape
+is `schema_version = "oracle-vector-pack-v1"` plus `entries`; each entry has exactly `entry_id` and
+`content`. This grammar is a reusable normative definition in the existing manifest schema; no separate
+pack-schema file is added. Entries are strictly sorted by unique logical ID. JSON parsing rejects
+malformed syntax and duplicate object names recursively. Decoding rejects an unpaired UTF-16 surrogate
+escape or any non-scalar value.
+
+An entry's reconstructed payload is exactly the UTF-8 encoding of the JSON string's decoded Unicode
+scalar-value sequence. There is no Unicode normalization, newline conversion, embedded-JSON parsing,
+reserialization, or filesystem materialization. CR, LF, CRLF, missing final LF, escaped control
+characters, and non-ASCII scalars are preserved. Reconstructed byte length and SHA-256 are verified
+before policy parsing. Pack JSON bytes need not have a canonical whitespace, member-order, escape, or
+final-newline serialization: whole-pack identity binds the reviewed bytes, while strict semantic
+grammar and entry identities bind their meaning. The tracked authoring generator is deterministic but
+never runs in a release gate.
+
+This profile applies only to the observed UTF-8 version-1 corpus. A future oracle requiring arbitrary
+or invalid UTF-8 uses a separately reviewed representation version or a direct-file input; it cannot
+silently reinterpret such bytes through this pack profile.
+
+Every packed signer-challenge, release-state, or release-evidence entry occurs only in its named suite
+pack. The three packs retain all 237 logical entries, including 38 duplicate payloads. Every entry is
+referenced exactly once by the 154-case manifest, every packed reference resolves exactly once, and no
+entry is omitted, extra, substituted, duplicate-referenced, or unreferenced. Content-addressed aliases
+and payload deduplication are outside version 1. Sequence identity continues to bind reconstructed
+prior/current bytes and exact input ordinals, never a container path or independently parsed value.
+
+Manifest/schema grammar, location discrimination, pack registry/grammar, scalar decoding, suite
+binding, and entry-closure failures use `manifest-contract`. Missing, irregular, outside-root, or
+symlink-escaping direct files/packs, whole-pack identity mismatch, and reconstructed entry length/digest
+mismatch use `input-identity`. Those failures occur before policy validation under the reason precedence
+below.
+
+Each release-state case materializes a per-case context as its `fixture-table` input. That context
+contains the exact state row and either the resolved governance evidence document or an explicit
+expected-absence record. The verifier binds the reference, source path, presence state, and parsed
+document to the tracked governance dependency; changing or omitting that dependency fails input
+closure before policy validation.
 
 Every case records `expected.structural`, `expected.semantic`, `expected.final`, and
 `expected.case_outcome`. Structural and semantic stage values are `valid`, `invalid`, `not-run`, or
 `validator-error`; final is `valid`, `invalid`, or `validator-error`. `case_outcome` preserves the
-fixture-visible token and is `valid`, `valid-local-only`, `invalid`, or `validator-error`.
-`valid-local-only` is allowed only for the release-state suite and has final `valid`. `not-run` is
-required for every stage after the first `invalid` or `validator-error`. Final is `validator-error` if
-any executed stage has that value, otherwise `invalid` if any executed stage is invalid, otherwise
-`valid`.
+fixture-visible token and is `valid`, `valid-local-only`, `invalid`, `validator-error`,
+`duplicate-name-error`, or `parse-error`. `valid-local-only` is allowed only for the release-state suite
+and has final `valid`. `duplicate-name-error` and `parse-error` are allowed only for the JSON-parser
+profile suite and have final `invalid`. `not-run` is required for every stage after the first `invalid`
+or `validator-error`. Final is `validator-error` if any executed stage has that value, otherwise
+`invalid` if any executed stage is invalid, otherwise `valid`.
 
 `expected.primary_reason` uses this closed version-1 enum, in precedence order:
 
@@ -190,28 +255,61 @@ Validators collect applicable failures and choose the earliest enum member; ties
 Pointer byte order and then rule-id byte order. `none` is valid only when final is `valid`. Human
 diagnostic wording is not contractual.
 
-Sequence cases include a `sequence` array whose members are strictly ordered by snapshot sequence and
-carry the input ordinal, predecessor name or `null`, current name, byte length, and digest. Sequence
-inputs are materialized after mutations so neither engine's interpretation of the current fixture
+The manifest binds `release/oracle/reason-map-v1.json` by path, length, and digest. That strict map has
+exactly one fixture-visible key for every invalid case and no valid or unknown case. It is the auditable
+review authority for reason assignments; the authoring generator does not infer reasons from filenames.
+
+Version-1 sequence cases have exactly two members, bound in prior-snapshot then current-snapshot role
+order with unique input ordinals. Names are derived from each exact materialized snapshot's version and
+sequence fields, and predecessor names bind adjacent members. Members also carry byte length and digest.
+Sequence inputs are materialized after mutations so neither engine's interpretation of the current fixture
 mutation DSL is authority at gate time. Both engines consume the same exact raw challenge and release-
 evidence bytes rather than independently re-serializing them.
 
 The frozen corpus includes every current authority, challenge, release-state, schema, governance,
 transition, exact-byte, tag, hold, completion, and sequence case; all 16 overall-status transition
 pairs; and every DC-35 repair-regression case. The complete corpus remains intact through cutover.
-The oracle-freeze review receives the strict manifest schema, complete manifest, all materialized bytes,
-a case/transition/repair coverage inventory, and the observed command
+The oracle-freeze review receives the strict manifest schema, complete manifest, all packed/direct exact
+inputs, a case/transition/repair coverage inventory, and the observed command
 `python3 release/oracle/verify-manifest.py --format json`. That standard-library-only verifier owns only
 manifest grammar, path containment, input identity, ordering, and coverage inventory; it does not
-reimplement policy semantics. Rust later implements the same verifier contract and differential checks
-its output before the narrow Python verifier is eligible for deletion. A generator may assist authoring,
+reimplement policy semantics. The inventory is an exact closed value: suite and reason counts, every
+subject member, the complete named repair set, and transition labels derived from materialized prior and
+current statuses must match. Unknown, duplicate, omitted, substituted, or relabeled entries fail. The
+narrow verifier also owns strict pack parsing, registry and entry closure, reconstructed byte identity,
+and packed/direct location validation; it does not evaluate policy semantics. Rust later implements the
+same verifier contract and differential checks its output before the narrow Python verifier is eligible
+for deletion. A generator may assist authoring,
 but the committed reviewed bytes and digests are authority; the gate never regenerates expected inputs
 from the mutation DSL.
+
+The compact implementation review must include durable negative tests for malformed/duplicate-name/BOM
+pack JSON; unknown, missing, or duplicate fields; unsupported versions; duplicate or unsorted entry IDs; lone surrogate
+escapes; valid surrogate-pair, raw/escaped non-ASCII, CRLF, missing-final-LF, normalization-distinct,
+and escaped-control preservation; all invalid location variants and path/ID forms; absent, wrong-suite,
+unbound, extra, omitted, substituted, duplicate-referenced, and unreferenced packs/entries; independent pack and
+entry identity corruption; packed sequence reversal/reuse; and every previously accepted manifest,
+governance-input, sequence, coverage, reason-map, and identifier bypass.
+
+An independent conversion audit compares all 237 pre-pack candidate files byte-for-byte with packed
+reconstruction, proves 237 unique logical references with no extras, and shows unchanged expectations
+and live Python observations for all 154 cases. Normal verification and self-test consume packs without
+materializing entries. Two clean generator runs reproduce identical packs and manifest data.
+
+Before owner acceptance, review receives the exact proposed 13-file tracked inventory, export-ignore
+attributes, conversion proof, and deterministic archive procedure. After the isolated freeze commit,
+evidence records its identity; exact `git ls-files release/oracle` and deterministic `git archive`
+listings; checkout/archive byte hashes for the manifest, schema, verifier, generator, and three packs;
+successful verification from an extracted archive; and `cargo package --locked --list` for all seven
+product packages proving no oracle or policy-tool artifact enters a product `.crate`.
 
 ### Python observation and reason strategy
 
 A profile-contract implementation was accepted and committed as `ea427df`; this is the
 `profile_contract_commit` bound by adapter output and the future frozen manifest.
+
+The Python observation adapter was accepted and committed as `6be65af`; the frozen oracle records this
+as `observation_adapter_commit` in addition to the required baseline and profile identities.
 
 A separately reviewed Python observation adapter may call the accepted validators to expose per-case
 structural, semantic, and final values they genuinely compute. It must not assign policy reasons or
@@ -247,9 +345,11 @@ an isolated `CARGO_TARGET_DIR` and is reported separately.
 
 Implementation proceeds through separately reviewable stages:
 
-1. Freeze and review the exact-byte oracle manifest and materialized vector set without changing the
-   authoritative command. Any pre-oracle profile hardening and Python observation adapter are isolated,
-   behavior-reviewed prerequisites to this freeze.
+1. Freeze and review the exact-byte oracle manifest and three packed vector sets without changing the
+   authoritative command. The freeze uses exactly three reviewed vector packs, requires project-owner
+   acceptance before commit, and records post-commit archive evidence before Rust implementation review.
+   Any pre-oracle profile hardening and Python observation adapter are isolated, behavior-reviewed
+   prerequisites to this freeze.
 2. Add the Rust workspace package, mature schema validator, typed semantic checks, independent tests,
    metadata/package-graph gates, and dual-engine differential command.
 3. Obtain architect acceptance of the Rust implementation and differential evidence while Python
@@ -261,8 +361,8 @@ Implementation proceeds through separately reviewable stages:
    equivalence evidence.
 
 Directory cleanup follows ownership and comprehension cost, not a target file count. `release/`
-retains its concise explanation, public contracts, exact canonical raw vectors, and compact case
-metadata. Executable Rust belongs under `tools/release-policy/`.
+retains its concise explanation, public contracts, three exact vector packs, and compact case metadata.
+Executable Rust belongs under `tools/release-policy/`.
 
 ### Cutover, stability, and rollback authority
 
@@ -278,7 +378,7 @@ while registered historical text does not produce a false positive.
 
 The isolated cutover may change only that command inventory, authoritative command wrapper/references,
 and contributor/CI documentation. It cannot change either engine, dependency selection, schema,
-profile, manifest, expected stage/verdict/reason, or materialized vector. On one cutover commit, evidence
+profile, manifest, expected stage/verdict/reason, reconstructed vector payload, or pack. On one cutover commit, evidence
 must run Python, Rust, differential comparison, deliberate-disagreement self-test, oracle verification,
 Cargo/package/archive boundary checks, the Git-visible-state and lockfile comparison, and the full
 applicable repository gates: format, workspace check, Clippy, test, build, mdBook, and diff check. An
@@ -293,6 +393,82 @@ Stability means an architect-accepted rerun from a later commit, with no unresol
 policy defect; elapsed time alone is insufficient. Python is retained through the first Rust-gated
 0.19.0 release and its accepted post-release stability rerun. Deletion is forbidden before that point
 and remains a separate architect-reviewed change. Fixture compaction occurs only after deletion review.
+
+### Compact-oracle retirement schedule
+
+The 13-file compact oracle is bounded migration evidence, not permanent parallel release tooling. Its
+five Python authoring and verification files are explicitly:
+
+- `release/oracle/coverage_contract.py`;
+- `release/oracle/generate-manifest.py`;
+- `release/oracle/manifest_self_test.py`;
+- `release/oracle/manifest_verify.py`; and
+- `release/oracle/verify-manifest.py`.
+
+All five remain tracked through Rust implementation review, cutover, and the first Rust-gated 0.19.0
+release; changing their frozen behavior requires its own review. Before the first release-candidate
+increment after that accepted 0.19.0 release may begin, an architect must accept the later-commit
+stability rerun. Elapsed time, a successful release alone, movement of DC-45 to `done/`, or silence in
+the durable trackers does not satisfy this stability gate.
+
+After stability acceptance, the next release-candidate increment may begin, but the following release-
+candidate increment is blocked until one separately reviewed decommissioning change disposes of all
+five files. That review must list each file individually, remove every non-excepted file in the same
+change, and reject a blanket exception. A retained file requires its own owner-approved exception with
+a named maintainer, continued purpose, correctness/rollback blocker, and objective next event trigger.
+If a defect prevents deletion, the decommissioning review records that exception before the release-
+candidate boundary; silence or an open-ended postponement is not an exception.
+
+Removal is permitted only when the Rust tool executes the complete accepted `oracle-manifest-v1`
+normal verifier contract and a case-by-case replacement for the full manifest self-test matrix. That
+matrix includes pack syntax and duplicate-name handling; Unicode scalar and exact-byte preservation;
+location grammar and path containment; direct, physical-pack, registry, entry, suite, and one-to-one
+closure; identity and failure-category layering; governance contexts; sequence ordering and identity;
+reason-map and coverage-inventory closure; repair regressions; and every compact-representation and
+pre-pack bypass regression accepted by the freeze reviews. The differential deliberate-disagreement
+self-test remains a separate requirement and does not substitute for that matrix.
+
+The decommissioning review includes an exact inventory mapping every check owned by the five retiring
+Python files to a Rust test/check, or proving that the check is generator-only and non-authoritative.
+The mapping preserves error-category ownership and one-to-one consumption of the retained eight files.
+One clean run uses a fresh checkout of the decommissioning candidate; a second uses its extracted
+deterministic source archive. Both run without importing or invoking any retired Python oracle file and
+must report identical accepted manifest and pack identities. The source archive and all seven product-
+package boundaries still pass, and tracked command/reference scans find no live invocation.
+
+Rollback evidence records the exact Python-capable pre-deletion commit ID and deterministic source-
+archive SHA-256, then proves that anchor can still run the Python path. The authoring generator is not
+release-gate authority and needs no Rust generator replacement, but its removal must preserve the rule
+that reviewed frozen bytes and digests, rather than regeneration, are authoritative.
+
+The other eight compact-oracle files remain after that decommissioning change as frozen contracts and
+evidence:
+
+- `release/oracle/oracle-manifest-v1.schema.json`;
+- `release/oracle/oracle-manifest-v1.json`;
+- `release/oracle/packs/release-evidence-v1.json`;
+- `release/oracle/packs/release-state-v1.json`;
+- `release/oracle/packs/signer-challenge-v1.json`;
+- `release/oracle/python-observations-v1.json`;
+- `release/oracle/reason-map-v1.json`; and
+- `release/oracle/coverage-inventory-v1.json`.
+
+Their regeneration, deduplication, replacement, or consolidation into a Rust-owned test corpus requires
+a later separately reviewed change that retains a bound equivalent corpus and proves exact-byte
+identity, complete 154-case and 237-logical-vector coverage, reason/transition/repair-set equivalence,
+source-archive reproducibility, and product-package exclusion. Final retirement without replacement is
+a distinct later review: it must explicitly close migration and rollback needs and record the exact
+source commit and archive identity preserving the historical evidence. Until one of those reviews
+passes, Rust tests and gates consume the frozen files directly; they do not silently copy their facts
+into a second unbound corpus.
+
+`ROADMAP.md`, `MILESTONES.md`, and `rfcs/IMPLEMENTATION-STATUS.md` must continue to name the pending
+stability rerun, five-file decommissioning, and eight-file evidence-retention obligations until each is
+accepted. They treat the first and second post-0.19.0 release-candidate boundaries above as explicit
+status/release blockers. If the primary RFC moves to `done/` first, its status/index entry must retain
+these triggers and link the later review evidence. The project owner owns scheduling and acceptance;
+the release-policy tool maintainer owns implementation and gate evidence. Any correctness or rollback
+defect blocks deletion and requires the explicit file-specific exception process above.
 
 Until architect cutover acceptance, Python remains authoritative. If differential evidence or cutover
 regresses, restore only the command-switch diff and continue using the committed Python oracle. Such a
@@ -326,6 +502,15 @@ bounded obligations justify. Normal Rust and integration tests remain mandatory.
 
 ## Acceptance criteria
 
+The pre-Rust freeze is accepted only after design re-review, compact implementation re-review,
+project-owner acceptance of the exact 13-file inventory, an isolated commit, and the required
+post-commit source-archive evidence. Architect semantic acceptance of an untracked candidate does not
+substitute for project-owner acceptance of its tracked representation.
+
+Project-owner acceptance of the 13-file freeze also requires architect acceptance of the compact-
+oracle retirement schedule. Acceptance makes the files eligible for a bounded migration lifetime; it
+does not authorize any deletion before the explicit decommissioning gates pass.
+
 DC-45 is complete only when the reviewed Rust tool preserves the frozen exact-byte oracle, independently
 executes the normative Draft 2020-12 schema, passes invariant and differential tests including the
 deliberate-disagreement self-test, leaves the worktree unchanged, and satisfies the workspace/package-
@@ -340,6 +525,7 @@ the Rust implementation or cutover.
 
 DC-45's primary implementation may move to `done/` with the first accepted Rust-gated 0.19.0 release
 even though Python is intentionally retained for rollback. In that transition, the RFC status and RFC
-index must explicitly record Python deletion and later fixture compaction as separately reviewed
-deferred work. Movement to `done/` must not claim that decommissioning, stability, deletion, or
-compaction evidence passed unless each was actually observed and accepted.
+index must explicitly record Python-engine deletion, five-file compact-oracle decommissioning, and
+eight-file evidence retention or later consolidation as separately reviewed deferred work. Movement to
+`done/` must not claim that decommissioning, stability, deletion, or compaction evidence passed unless
+each was actually observed and accepted.

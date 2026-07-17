@@ -1,0 +1,531 @@
+{
+  "schema_version": "oracle-coverage-v1",
+  "total_cases": 154,
+  "suites": [
+    {
+      "suite_id": "json-parser",
+      "case_count": 9
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_count": 73
+    },
+    {
+      "suite_id": "release-state",
+      "case_count": 23
+    },
+    {
+      "suite_id": "schema-evaluator",
+      "case_count": 6
+    },
+    {
+      "suite_id": "signer-authority",
+      "case_count": 10
+    },
+    {
+      "suite_id": "signer-authority-live",
+      "case_count": 1
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_count": 16
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_count": 16
+    }
+  ],
+  "reason_counts": [
+    {
+      "primary_reason": "authority-grammar",
+      "case_count": 8
+    },
+    {
+      "primary_reason": "challenge-grammar-or-binding",
+      "case_count": 11
+    },
+    {
+      "primary_reason": "challenge-time-window",
+      "case_count": 4
+    },
+    {
+      "primary_reason": "evidence-byte-identity-or-link",
+      "case_count": 6
+    },
+    {
+      "primary_reason": "evidence-tag-or-artifact",
+      "case_count": 10
+    },
+    {
+      "primary_reason": "evidence-transition-or-attempt-prefix",
+      "case_count": 11
+    },
+    {
+      "primary_reason": "governance-review-or-hold",
+      "case_count": 6
+    },
+    {
+      "primary_reason": "governance-transition-or-proof",
+      "case_count": 13
+    },
+    {
+      "primary_reason": "json-syntax-or-duplicate-name",
+      "case_count": 8
+    },
+    {
+      "primary_reason": "none",
+      "case_count": 41
+    },
+    {
+      "primary_reason": "release-state",
+      "case_count": 14
+    },
+    {
+      "primary_reason": "schema-instance",
+      "case_count": 21
+    },
+    {
+      "primary_reason": "schema-profile-or-compilation",
+      "case_count": 1
+    }
+  ],
+  "subjects": [
+    {
+      "subject": "authority",
+      "case_keys": [
+        "signer-authority-live:release-signers-toml",
+        "signer-authority:boolean-schema-version",
+        "signer-authority:duplicate",
+        "signer-authority:empty-fail-closed",
+        "signer-authority:lowercase",
+        "signer-authority:malformed-toml",
+        "signer-authority:multiple-sorted",
+        "signer-authority:unknown-field",
+        "signer-authority:unsorted",
+        "signer-authority:unsupported-schema",
+        "signer-authority:wrong-length"
+      ]
+    },
+    {
+      "subject": "challenge",
+      "case_keys": [
+        "signer-challenge:authority-revision-binding-mismatch",
+        "signer-challenge:canonical-golden-bytes",
+        "signer-challenge:crlf-bytes",
+        "signer-challenge:duplicate-field",
+        "signer-challenge:expired-challenge",
+        "signer-challenge:expiry-instant-is-exclusive",
+        "signer-challenge:expiry-window-too-long",
+        "signer-challenge:extra-space",
+        "signer-challenge:issue-time-too-far-in-future",
+        "signer-challenge:missing-final-lf",
+        "signer-challenge:missing-verifier-result",
+        "signer-challenge:non-ascii-bytes",
+        "signer-challenge:observed-fingerprint-mismatch",
+        "signer-challenge:reordered-fields",
+        "signer-challenge:wrong-nonce-length",
+        "signer-challenge:wrong-repository"
+      ]
+    },
+    {
+      "subject": "release-state",
+      "case_keys": [
+        "release-state:abandoned-candidate-retains-target",
+        "release-state:authority-changed-after-release",
+        "release-state:authority-changed-in-private-finalization",
+        "release-state:authority-changed-in-rc",
+        "release-state:broad-internal-dependencies",
+        "release-state:candidate-claims-latest-target",
+        "release-state:complete-with-missing-output",
+        "release-state:development",
+        "release-state:development-addition-lifted",
+        "release-state:development-authority-change-invalid-governance",
+        "release-state:development-bootstrap-active-hold",
+        "release-state:development-bootstrap-with-unrelated-hold",
+        "release-state:development-classification-active-dispute",
+        "release-state:development-removal-active-hold",
+        "release-state:disputed-tag-claimed-official",
+        "release-state:done-without-target-tag",
+        "release-state:private-finalization",
+        "release-state:release-candidate",
+        "release-state:release-with-active-hold",
+        "release-state:released-complete-distribution",
+        "release-state:released-pending-distribution",
+        "release-state:tag-peels-to-wrong-commit",
+        "release-state:tagged-tree-retains-candidate"
+      ]
+    },
+    {
+      "subject": "schema",
+      "case_keys": [
+        "json-parser:duplicate-evidence-field",
+        "json-parser:duplicate-fixture-case-field",
+        "json-parser:duplicate-name-in-array-object",
+        "json-parser:duplicate-nested-name",
+        "json-parser:duplicate-schema-keyword",
+        "json-parser:duplicate-top-level-name",
+        "json-parser:escaped-equivalent-duplicate-name",
+        "json-parser:malformed-json",
+        "json-parser:unique-object-names",
+        "release-evidence:complete-deployed-pages-missing-commit",
+        "release-evidence:complete-failed-release-page",
+        "release-evidence:complete-false-exact-requirement",
+        "release-evidence:complete-inapplicable-pages-missing-ruling",
+        "release-evidence:complete-missing-archive-attachment",
+        "release-evidence:complete-null-authority-blob-id",
+        "release-evidence:complete-null-authority-path",
+        "release-evidence:complete-null-signer-primary-fingerprint",
+        "release-evidence:complete-null-verifier-result",
+        "release-evidence:full-schema-boolean-version-rejected",
+        "release-evidence:governance-bad-date-time",
+        "release-evidence:partial-failed-without-authority",
+        "release-evidence:partial-verified-without-details",
+        "release-evidence:pending-failed-without-authority",
+        "release-evidence:pending-not-observed-with-detail",
+        "release-evidence:pending-verified-without-details",
+        "release-evidence:tag-verification-authority-path-immutable",
+        "release-evidence:unknown-top-level-field",
+        "schema-evaluator:boolean-and-integer-are-unique",
+        "schema-evaluator:boolean-enum-distinct-from-integer",
+        "schema-evaluator:integer-and-equivalent-number-are-duplicates",
+        "schema-evaluator:integer-const-accepts-integer",
+        "schema-evaluator:integer-const-rejects-boolean",
+        "schema-evaluator:unknown-assertion-keyword-fails-closed"
+      ]
+    },
+    {
+      "subject": "governance",
+      "case_keys": [
+        "release-evidence:active-governance-hold-blocks-complete",
+        "release-evidence:active-governance-hold-valid-pending",
+        "release-evidence:governance-active-to-classified",
+        "release-evidence:governance-approval-identity-mismatch",
+        "release-evidence:governance-authority-blob-transition-mismatch",
+        "release-evidence:governance-bad-date-time",
+        "release-evidence:governance-classified-to-lifted",
+        "release-evidence:governance-declared-type-mismatch",
+        "release-evidence:governance-duplicate-proof-fingerprint",
+        "release-evidence:governance-fingerprint-set-proof-mismatch",
+        "release-evidence:governance-post-lift-classification-mutation",
+        "release-evidence:governance-premature-lift",
+        "release-evidence:valid-governance-difference-and-proofs",
+        "release-state:development-authority-change-invalid-governance",
+        "signer-governance:addition-verified",
+        "signer-governance:automation-as-approver",
+        "signer-governance:bootstrap-two-signers-verified",
+        "signer-governance:classification-only-not-applicable",
+        "signer-governance:duplicate-introduced-proof",
+        "signer-governance:lowercase-fingerprint",
+        "signer-governance:mismatched-introduced-proof-order",
+        "signer-governance:missing-accountable-role",
+        "signer-governance:missing-introduced-proof",
+        "signer-governance:not-applicable-with-introduced-fingerprint",
+        "signer-governance:removal-label-adds-fingerprint",
+        "signer-governance:removal-only-not-applicable",
+        "signer-governance:replacement-verified",
+        "signer-governance:same-person-both-approvals",
+        "signer-governance:unexpected-introduced-proof",
+        "signer-governance:unsorted-fingerprint-set"
+      ]
+    },
+    {
+      "subject": "transition",
+      "case_keys": [
+        "release-evidence:transition-complete-to-complete",
+        "release-evidence:transition-complete-to-partial",
+        "release-evidence:transition-complete-to-pending",
+        "release-evidence:transition-complete-to-superseded",
+        "release-evidence:transition-partial-to-complete",
+        "release-evidence:transition-partial-to-partial",
+        "release-evidence:transition-partial-to-pending",
+        "release-evidence:transition-partial-to-superseded",
+        "release-evidence:transition-pending-to-complete",
+        "release-evidence:transition-pending-to-partial",
+        "release-evidence:transition-pending-to-pending",
+        "release-evidence:transition-pending-to-superseded",
+        "release-evidence:transition-superseded-to-complete",
+        "release-evidence:transition-superseded-to-partial",
+        "release-evidence:transition-superseded-to-pending",
+        "release-evidence:transition-superseded-to-superseded"
+      ]
+    },
+    {
+      "subject": "exact-byte",
+      "case_keys": [
+        "release-evidence:raw-predecessor-digest-mismatch",
+        "release-evidence:snapshot-object-bytes-mismatch",
+        "signer-challenge:authority-revision-binding-mismatch",
+        "signer-challenge:canonical-golden-bytes",
+        "signer-challenge:crlf-bytes",
+        "signer-challenge:duplicate-field",
+        "signer-challenge:expired-challenge",
+        "signer-challenge:expiry-instant-is-exclusive",
+        "signer-challenge:expiry-window-too-long",
+        "signer-challenge:extra-space",
+        "signer-challenge:issue-time-too-far-in-future",
+        "signer-challenge:missing-final-lf",
+        "signer-challenge:missing-verifier-result",
+        "signer-challenge:non-ascii-bytes",
+        "signer-challenge:observed-fingerprint-mismatch",
+        "signer-challenge:reordered-fields",
+        "signer-challenge:wrong-nonce-length",
+        "signer-challenge:wrong-repository"
+      ]
+    },
+    {
+      "subject": "tag",
+      "case_keys": [
+        "release-evidence:sequence-immutable-tag-changed",
+        "release-evidence:tag-verification-authority-blob-id-immutable",
+        "release-evidence:tag-verification-authority-path-immutable",
+        "release-evidence:tag-verification-signer-primary-fingerprint-immutable",
+        "release-evidence:tag-verification-status-immutable",
+        "release-evidence:tag-verification-verifier-result-immutable",
+        "release-evidence:tag-version-mismatch",
+        "release-state:disputed-tag-claimed-official",
+        "release-state:done-without-target-tag",
+        "release-state:tag-peels-to-wrong-commit",
+        "release-state:tagged-tree-retains-candidate"
+      ]
+    },
+    {
+      "subject": "hold",
+      "case_keys": [
+        "release-evidence:active-governance-hold-blocks-complete",
+        "release-evidence:active-governance-hold-valid-pending",
+        "release-evidence:canonical-bootstrap-hold-transaction",
+        "release-evidence:canonical-removal-hold-transaction",
+        "release-evidence:governance-active-to-classified",
+        "release-evidence:governance-approval-identity-mismatch",
+        "release-evidence:governance-authority-blob-transition-mismatch",
+        "release-evidence:governance-bad-date-time",
+        "release-evidence:governance-classified-to-lifted",
+        "release-evidence:governance-declared-type-mismatch",
+        "release-evidence:governance-duplicate-proof-fingerprint",
+        "release-evidence:governance-fingerprint-set-proof-mismatch",
+        "release-evidence:governance-post-lift-classification-mutation",
+        "release-evidence:governance-premature-lift",
+        "release-evidence:valid-governance-difference-and-proofs",
+        "release-state:development-authority-change-invalid-governance",
+        "release-state:development-bootstrap-active-hold",
+        "release-state:development-bootstrap-with-unrelated-hold",
+        "release-state:development-removal-active-hold",
+        "release-state:release-with-active-hold"
+      ]
+    },
+    {
+      "subject": "completion",
+      "case_keys": [
+        "release-evidence:active-governance-hold-blocks-complete",
+        "release-evidence:complete-checksum-mismatch",
+        "release-evidence:complete-deployed-pages-missing-commit",
+        "release-evidence:complete-failed-release-page",
+        "release-evidence:complete-false-exact-requirement",
+        "release-evidence:complete-inapplicable-pages-missing-ruling",
+        "release-evidence:complete-missing-archive-attachment",
+        "release-evidence:complete-null-authority-blob-id",
+        "release-evidence:complete-null-authority-path",
+        "release-evidence:complete-null-signer-primary-fingerprint",
+        "release-evidence:complete-null-verifier-result",
+        "release-evidence:complete-pages-commit-mismatch",
+        "release-evidence:complete-schema-and-semantics",
+        "release-evidence:crate-graph-order-mismatch",
+        "release-evidence:crate-version-mismatch",
+        "release-evidence:pending-false-checksum-match",
+        "release-evidence:sequence-invalid-complete-to-pending",
+        "release-evidence:sequence-pending-to-complete",
+        "release-evidence:sequence-published-checksum-changed",
+        "release-evidence:transition-complete-to-complete",
+        "release-evidence:transition-complete-to-partial",
+        "release-evidence:transition-complete-to-pending",
+        "release-evidence:transition-complete-to-superseded",
+        "release-evidence:transition-partial-to-complete",
+        "release-evidence:transition-pending-to-complete",
+        "release-evidence:transition-superseded-to-complete",
+        "release-state:complete-with-missing-output",
+        "release-state:released-complete-distribution"
+      ]
+    },
+    {
+      "subject": "sequence",
+      "case_keys": [
+        "release-evidence:governance-active-to-classified",
+        "release-evidence:governance-classified-to-lifted",
+        "release-evidence:governance-post-lift-classification-mutation",
+        "release-evidence:governance-premature-lift",
+        "release-evidence:raw-predecessor-digest-mismatch",
+        "release-evidence:sequence-attempts-not-cumulative",
+        "release-evidence:sequence-immutable-tag-changed",
+        "release-evidence:sequence-invalid-complete-to-pending",
+        "release-evidence:sequence-missing-predecessor",
+        "release-evidence:sequence-pending-to-complete",
+        "release-evidence:sequence-published-checksum-changed",
+        "release-evidence:sequence-published-status-regressed",
+        "release-evidence:sequence-valid-predecessor",
+        "release-evidence:sequence-zero-attempt-growth",
+        "release-evidence:snapshot-object-bytes-mismatch",
+        "release-evidence:tag-verification-authority-blob-id-immutable",
+        "release-evidence:tag-verification-authority-path-immutable",
+        "release-evidence:tag-verification-signer-primary-fingerprint-immutable",
+        "release-evidence:tag-verification-status-immutable",
+        "release-evidence:tag-verification-verifier-result-immutable",
+        "release-evidence:transition-complete-to-complete",
+        "release-evidence:transition-complete-to-partial",
+        "release-evidence:transition-complete-to-pending",
+        "release-evidence:transition-complete-to-superseded",
+        "release-evidence:transition-partial-to-complete",
+        "release-evidence:transition-partial-to-partial",
+        "release-evidence:transition-partial-to-pending",
+        "release-evidence:transition-partial-to-superseded",
+        "release-evidence:transition-pending-to-complete",
+        "release-evidence:transition-pending-to-partial",
+        "release-evidence:transition-pending-to-pending",
+        "release-evidence:transition-pending-to-superseded",
+        "release-evidence:transition-superseded-to-complete",
+        "release-evidence:transition-superseded-to-partial",
+        "release-evidence:transition-superseded-to-pending",
+        "release-evidence:transition-superseded-to-superseded"
+      ]
+    }
+  ],
+  "transition_pairs": [
+    {
+      "case_key": "release-evidence:transition-complete-to-complete",
+      "from": "complete",
+      "to": "complete",
+      "expected_valid": false
+    },
+    {
+      "case_key": "release-evidence:transition-complete-to-partial",
+      "from": "complete",
+      "to": "partial",
+      "expected_valid": false
+    },
+    {
+      "case_key": "release-evidence:transition-complete-to-pending",
+      "from": "complete",
+      "to": "pending",
+      "expected_valid": false
+    },
+    {
+      "case_key": "release-evidence:transition-complete-to-superseded",
+      "from": "complete",
+      "to": "superseded",
+      "expected_valid": true
+    },
+    {
+      "case_key": "release-evidence:transition-partial-to-complete",
+      "from": "partial",
+      "to": "complete",
+      "expected_valid": true
+    },
+    {
+      "case_key": "release-evidence:transition-partial-to-partial",
+      "from": "partial",
+      "to": "partial",
+      "expected_valid": true
+    },
+    {
+      "case_key": "release-evidence:transition-partial-to-pending",
+      "from": "partial",
+      "to": "pending",
+      "expected_valid": false
+    },
+    {
+      "case_key": "release-evidence:transition-partial-to-superseded",
+      "from": "partial",
+      "to": "superseded",
+      "expected_valid": true
+    },
+    {
+      "case_key": "release-evidence:transition-pending-to-complete",
+      "from": "pending",
+      "to": "complete",
+      "expected_valid": true
+    },
+    {
+      "case_key": "release-evidence:transition-pending-to-partial",
+      "from": "pending",
+      "to": "partial",
+      "expected_valid": true
+    },
+    {
+      "case_key": "release-evidence:transition-pending-to-pending",
+      "from": "pending",
+      "to": "pending",
+      "expected_valid": true
+    },
+    {
+      "case_key": "release-evidence:transition-pending-to-superseded",
+      "from": "pending",
+      "to": "superseded",
+      "expected_valid": true
+    },
+    {
+      "case_key": "release-evidence:transition-superseded-to-complete",
+      "from": "superseded",
+      "to": "complete",
+      "expected_valid": false
+    },
+    {
+      "case_key": "release-evidence:transition-superseded-to-partial",
+      "from": "superseded",
+      "to": "partial",
+      "expected_valid": false
+    },
+    {
+      "case_key": "release-evidence:transition-superseded-to-pending",
+      "from": "superseded",
+      "to": "pending",
+      "expected_valid": false
+    },
+    {
+      "case_key": "release-evidence:transition-superseded-to-superseded",
+      "from": "superseded",
+      "to": "superseded",
+      "expected_valid": false
+    }
+  ],
+  "repair_regressions": [
+    "json-parser:duplicate-evidence-field",
+    "json-parser:duplicate-fixture-case-field",
+    "json-parser:duplicate-name-in-array-object",
+    "json-parser:duplicate-nested-name",
+    "json-parser:duplicate-schema-keyword",
+    "json-parser:duplicate-top-level-name",
+    "json-parser:escaped-equivalent-duplicate-name",
+    "json-parser:malformed-json",
+    "json-parser:unique-object-names",
+    "release-evidence:canonical-addition-lifted-transaction",
+    "release-evidence:canonical-bootstrap-hold-transaction",
+    "release-evidence:canonical-removal-hold-transaction",
+    "release-evidence:full-schema-boolean-version-rejected",
+    "release-evidence:governance-active-to-classified",
+    "release-evidence:governance-approval-identity-mismatch",
+    "release-evidence:governance-authority-blob-transition-mismatch",
+    "release-evidence:governance-classified-to-lifted",
+    "release-evidence:governance-declared-type-mismatch",
+    "release-evidence:governance-fingerprint-set-proof-mismatch",
+    "release-evidence:governance-post-lift-classification-mutation",
+    "release-evidence:governance-premature-lift",
+    "release-evidence:partial-failed-without-authority",
+    "release-evidence:partial-verified-without-details",
+    "release-evidence:pending-failed-with-authority-and-result",
+    "release-evidence:pending-failed-without-authority",
+    "release-evidence:pending-not-observed-with-detail",
+    "release-evidence:pending-verified-without-details",
+    "release-evidence:raw-predecessor-digest-mismatch",
+    "release-evidence:sequence-zero-attempt-growth",
+    "release-evidence:snapshot-object-bytes-mismatch",
+    "release-evidence:tag-verification-authority-blob-id-immutable",
+    "release-evidence:tag-verification-authority-path-immutable",
+    "release-evidence:tag-verification-signer-primary-fingerprint-immutable",
+    "release-evidence:tag-verification-status-immutable",
+    "release-evidence:tag-verification-verifier-result-immutable",
+    "schema-evaluator:boolean-and-integer-are-unique",
+    "schema-evaluator:boolean-enum-distinct-from-integer",
+    "schema-evaluator:integer-and-equivalent-number-are-duplicates",
+    "schema-evaluator:integer-const-rejects-boolean",
+    "schema-evaluator:unknown-assertion-keyword-fails-closed"
+  ]
+}

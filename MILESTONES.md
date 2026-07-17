@@ -101,7 +101,25 @@ review accepts the combined state. No production or public-preview claim follows
 DC-45 is the first M2 tooling increment. Its design must be accepted before signer bootstrap, and its
 Rust command cutover must be accepted before the 0.19.0 release candidate; migration completion is not
 an M1 or bootstrap prerequisite. Its design was accepted after architect repair re-review v1 on
-2026-07-16; pre-oracle profile hardening and the observation adapter are the first implementation gate.
+2026-07-16. Profile hardening and the observation adapter are committed, and architect implementation
+repair re-review v1 accepted the exact-byte oracle semantics on 2026-07-17. Project-owner acceptance is
+withheld pending a compact tracked representation that avoids the candidate's 237 per-case vector
+files. Architect footprint QA conditionally approved three strict suite packs, and architect design
+amendment re-review v1 accepted the pack, location, closure, and archive contract on 2026-07-17. Compact
+implementation is complete without staging and awaits implementation re-review. Owner acceptance,
+isolated commit, and source-archive evidence precede Rust implementation. Compact implementation
+review v1 found one blocking dot-segment grammar defect. Architect repair re-review v1 accepted its
+narrow repair on 2026-07-17; explicit project-owner acceptance of the exact 13-file inventory remains
+the next gate before the isolated freeze commit. Architect design repair re-review v1 accepted the
+explicit retirement schedule on 2026-07-17, satisfying the lifecycle-design condition for that separate
+owner decision. Five Python oracle authoring/verification files remain through the first Rust-gated
+0.19.0 release. The first later release-candidate increment is blocked until an architect accepts the
+later-commit stability rerun; the following release-candidate increment is blocked until the exhaustive
+five-file decommissioning review removes each file or records an individual owner-approved, event-bound
+exception. Rust must replace the complete accepted manifest verifier and self-test matrix. The other
+eight frozen evidence/contract files remain until a later equivalence-backed replacement/consolidation
+review or an explicit final-retirement review closes migration and rollback needs. These blockers
+remain durably tracked if DC-45 moves to `done/` before their completion.
 DC-41 waits for the corrected contracts so its evidence does not bless superseded behavior. DC-42 may
 perform read-only measurements during M1, but semantic optimization or broad source moves wait until M1
 stabilizes. DC-43 policy design may proceed without credentials; implementation waits for security

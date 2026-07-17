@@ -1,0 +1,1077 @@
+{
+  "schema_version": "python-policy-observations-v1",
+  "python_baseline_commit": "12c137d",
+  "profile_contract_commit": "ea427df",
+  "cases": [
+    {
+      "suite_id": "json-parser",
+      "case_id": "duplicate-evidence-field",
+      "final": "invalid",
+      "case_outcome": "duplicate-name-error"
+    },
+    {
+      "suite_id": "json-parser",
+      "case_id": "duplicate-fixture-case-field",
+      "final": "invalid",
+      "case_outcome": "duplicate-name-error"
+    },
+    {
+      "suite_id": "json-parser",
+      "case_id": "duplicate-name-in-array-object",
+      "final": "invalid",
+      "case_outcome": "duplicate-name-error"
+    },
+    {
+      "suite_id": "json-parser",
+      "case_id": "duplicate-nested-name",
+      "final": "invalid",
+      "case_outcome": "duplicate-name-error"
+    },
+    {
+      "suite_id": "json-parser",
+      "case_id": "duplicate-schema-keyword",
+      "final": "invalid",
+      "case_outcome": "duplicate-name-error"
+    },
+    {
+      "suite_id": "json-parser",
+      "case_id": "duplicate-top-level-name",
+      "final": "invalid",
+      "case_outcome": "duplicate-name-error"
+    },
+    {
+      "suite_id": "json-parser",
+      "case_id": "escaped-equivalent-duplicate-name",
+      "final": "invalid",
+      "case_outcome": "duplicate-name-error"
+    },
+    {
+      "suite_id": "json-parser",
+      "case_id": "malformed-json",
+      "final": "invalid",
+      "case_outcome": "parse-error"
+    },
+    {
+      "suite_id": "json-parser",
+      "case_id": "unique-object-names",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "active_governance_hold_blocks_complete",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "active_governance_hold_valid_pending",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "canonical_addition_lifted_transaction",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "canonical_bootstrap_hold_transaction",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "canonical_removal_hold_transaction",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "complete_checksum_mismatch",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "complete_deployed_pages_missing_commit",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "complete_failed_release_page",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "complete_false_exact_requirement",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "complete_inapplicable_pages_missing_ruling",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "complete_missing_archive_attachment",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "complete_null_authority_blob_id",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "complete_null_authority_path",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "complete_null_signer_primary_fingerprint",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "complete_null_verifier_result",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "complete_pages_commit_mismatch",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "complete_schema_and_semantics",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "crate_graph_order_mismatch",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "crate_version_mismatch",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "full_schema_boolean_version_rejected",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "governance_active_to_classified",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "governance_approval_identity_mismatch",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "governance_authority_blob_transition_mismatch",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "governance_bad_date_time",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "governance_classified_to_lifted",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "governance_declared_type_mismatch",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "governance_duplicate_proof_fingerprint",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "governance_fingerprint_set_proof_mismatch",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "governance_post_lift_classification_mutation",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "governance_premature_lift",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "partial_failed_without_authority",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "partial_verified_without_details",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "pending_failed_with_authority_and_result",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "pending_failed_without_authority",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "pending_false_checksum_match",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "pending_not_observed_with_detail",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "pending_schema_and_semantics",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "pending_verified_without_details",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "raw_predecessor_digest_mismatch",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "sequence_attempts_not_cumulative",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "sequence_immutable_tag_changed",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "sequence_invalid_complete_to_pending",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "sequence_missing_predecessor",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "sequence_pending_to_complete",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "sequence_published_checksum_changed",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "sequence_published_status_regressed",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "sequence_valid_predecessor",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "sequence_zero_attempt_growth",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "snapshot_object_bytes_mismatch",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "tag_verification_authority_blob_id_immutable",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "tag_verification_authority_path_immutable",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "tag_verification_signer_primary_fingerprint_immutable",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "tag_verification_status_immutable",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "tag_verification_verifier_result_immutable",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "tag_version_mismatch",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_complete_to_complete",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_complete_to_partial",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_complete_to_pending",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_complete_to_superseded",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_partial_to_complete",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_partial_to_partial",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_partial_to_pending",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_partial_to_superseded",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_pending_to_complete",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_pending_to_partial",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_pending_to_pending",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_pending_to_superseded",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_superseded_to_complete",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_superseded_to_partial",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_superseded_to_pending",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "transition_superseded_to_superseded",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "valid",
+      "semantic": "invalid"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "unknown_top_level_field",
+      "final": "invalid",
+      "case_outcome": "invalid",
+      "structural": "invalid",
+      "semantic": "not-run"
+    },
+    {
+      "suite_id": "release-evidence",
+      "case_id": "valid_governance_difference_and_proofs",
+      "final": "valid",
+      "case_outcome": "valid",
+      "structural": "valid",
+      "semantic": "valid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "abandoned_candidate_retains_target",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "authority_changed_after_release",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "authority_changed_in_private_finalization",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "authority_changed_in_rc",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "broad_internal_dependencies",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "candidate_claims_latest_target",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "complete_with_missing_output",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "development",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "development_addition_lifted",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "development_authority_change_invalid_governance",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "development_bootstrap_active_hold",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "development_bootstrap_with_unrelated_hold",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "development_classification_active_dispute",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "development_removal_active_hold",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "disputed_tag_claimed_official",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "done_without_target_tag",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "private_finalization",
+      "final": "valid",
+      "case_outcome": "valid-local-only"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "release_candidate",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "release_with_active_hold",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "released_complete_distribution",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "released_pending_distribution",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "tag_peels_to_wrong_commit",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "release-state",
+      "case_id": "tagged_tree_retains_candidate",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "schema-evaluator",
+      "case_id": "boolean_and_integer_are_unique",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "schema-evaluator",
+      "case_id": "boolean_enum_distinct_from_integer",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "schema-evaluator",
+      "case_id": "integer_and_equivalent_number_are_duplicates",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "schema-evaluator",
+      "case_id": "integer_const_accepts_integer",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "schema-evaluator",
+      "case_id": "integer_const_rejects_boolean",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "schema-evaluator",
+      "case_id": "unknown_assertion_keyword_fails_closed",
+      "final": "validator-error",
+      "case_outcome": "validator-error"
+    },
+    {
+      "suite_id": "signer-authority",
+      "case_id": "boolean_schema_version",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-authority",
+      "case_id": "duplicate",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-authority",
+      "case_id": "empty_fail_closed",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "signer-authority",
+      "case_id": "lowercase",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-authority",
+      "case_id": "malformed_toml",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-authority",
+      "case_id": "multiple_sorted",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "signer-authority",
+      "case_id": "unknown_field",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-authority",
+      "case_id": "unsorted",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-authority",
+      "case_id": "unsupported_schema",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-authority",
+      "case_id": "wrong_length",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-authority-live",
+      "case_id": "release-signers-toml",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "authority_revision_binding_mismatch",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "canonical_golden_bytes",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "crlf_bytes",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "duplicate_field",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "expired_challenge",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "expiry_instant_is_exclusive",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "expiry_window_too_long",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "extra_space",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "issue_time_too_far_in_future",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "missing_final_lf",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "missing_verifier_result",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "non_ascii_bytes",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "observed_fingerprint_mismatch",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "reordered_fields",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "wrong_nonce_length",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-challenge",
+      "case_id": "wrong_repository",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "addition_verified",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "automation_as_approver",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "bootstrap_two_signers_verified",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "classification_only_not_applicable",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "duplicate_introduced_proof",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "lowercase_fingerprint",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "mismatched_introduced_proof_order",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "missing_accountable_role",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "missing_introduced_proof",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "not_applicable_with_introduced_fingerprint",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "removal_label_adds_fingerprint",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "removal_only_not_applicable",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "replacement_verified",
+      "final": "valid",
+      "case_outcome": "valid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "same_person_both_approvals",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "unexpected_introduced_proof",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    },
+    {
+      "suite_id": "signer-governance",
+      "case_id": "unsorted_fingerprint_set",
+      "final": "invalid",
+      "case_outcome": "invalid"
+    }
+  ]
+}

@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nabbisen.github.io/prikk/schemas/oracle-manifest-v1.schema.json",
+  "title": "Prikk release-policy oracle manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "python_baseline_commit",
+    "profile_contract_commit",
+    "observation_adapter_commit",
+    "reason_taxonomy_version",
+    "reason_map",
+    "normative_schema",
+    "packs",
+    "cases"
+  ],
+  "properties": {
+    "schema_version": { "const": "oracle-manifest-v1" },
+    "python_baseline_commit": { "const": "12c137d" },
+    "profile_contract_commit": { "const": "ea427df" },
+    "observation_adapter_commit": { "const": "6be65af" },
+    "reason_taxonomy_version": { "const": 1 },
+    "reason_map": { "$ref": "#/$defs/inputIdentity" },
+    "normative_schema": { "$ref": "#/$defs/inputIdentity" },
+    "packs": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "$ref": "#/$defs/packIdentity" }
+    },
+    "cases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/case" }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "path": {
+      "type": "string",
+      "pattern": "^(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.{3,}[A-Za-z0-9_.-]*)(?:/(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.\\.[A-Za-z0-9_-][A-Za-z0-9_.-]*|\\.{3,}[A-Za-z0-9_.-]*))*$"
+    },
+    "inputIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byte_length", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/path" },
+        "byte_length": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "packIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pack_id", "path", "byte_length", "sha256"],
+      "properties": {
+        "pack_id": { "$ref": "#/$defs/packId" },
+        "path": { "$ref": "#/$defs/path" },
+        "byte_length": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "packId": {
+      "enum": ["release-evidence", "release-state", "signer-challenge"]
+    },
+    "directLocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path"],
+      "properties": {
+        "kind": { "const": "direct" },
+        "path": { "$ref": "#/$defs/path" }
+      }
+    },
+    "packedLocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "pack_id", "entry_id"],
+      "properties": {
+        "kind": { "const": "packed" },
+        "pack_id": { "$ref": "#/$defs/packId" },
+        "entry_id": { "$ref": "#/$defs/path" }
+      }
+    },
+    "location": {
+      "oneOf": [
+        { "$ref": "#/$defs/directLocation" },
+        { "$ref": "#/$defs/packedLocation" }
+      ]
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "ordinal", "location", "byte_length", "sha256"],
+      "properties": {
+        "role": {
+          "enum": [
+            "authority",
+            "fixture-table",
+            "schema",
+            "challenge",
+            "prior-snapshot",
+            "current-snapshot",
+            "expected-output"
+          ]
+        },
+        "ordinal": { "type": "integer", "minimum": 0 },
+        "location": { "$ref": "#/$defs/location" },
+        "byte_length": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "vectorEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry_id", "content"],
+      "properties": {
+        "entry_id": { "$ref": "#/$defs/path" },
+        "content": { "type": "string" }
+      }
+    },
+    "vectorPack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "entries"],
+      "properties": {
+        "schema_version": { "const": "oracle-vector-pack-v1" },
+        "entries": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/vectorEntry" }
+        }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["structural", "semantic", "final", "case_outcome", "primary_reason"],
+      "properties": {
+        "structural": { "enum": ["valid", "invalid", "not-run", "validator-error"] },
+        "semantic": { "enum": ["valid", "invalid", "not-run", "validator-error"] },
+        "final": { "enum": ["valid", "invalid", "validator-error"] },
+        "case_outcome": {
+          "enum": [
+            "valid",
+            "valid-local-only",
+            "invalid",
+            "validator-error",
+            "duplicate-name-error",
+            "parse-error"
+          ]
+        },
+        "primary_reason": {
+          "enum": [
+            "manifest-contract",
+            "input-identity",
+            "json-syntax-or-duplicate-name",
+            "schema-profile-or-compilation",
+            "schema-instance",
+            "authority-grammar",
+            "challenge-grammar-or-binding",
+            "challenge-time-window",
+            "governance-transition-or-proof",
+            "governance-review-or-hold",
+            "release-state",
+            "evidence-byte-identity-or-link",
+            "evidence-transition-or-attempt-prefix",
+            "evidence-tag-or-artifact",
+            "evidence-completion",
+            "none"
+          ]
+        }
+      }
+    },
+    "sequenceMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_ordinal",
+        "predecessor_name",
+        "current_name",
+        "byte_length",
+        "sha256"
+      ],
+      "properties": {
+        "input_ordinal": { "type": "integer", "minimum": 0 },
+        "predecessor_name": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ]
+        },
+        "current_name": { "type": "string", "minLength": 1 },
+        "byte_length": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["suite_id", "case_id", "fixture_case_id", "inputs", "expected"],
+      "properties": {
+        "suite_id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "case_id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "fixture_case_id": { "type": "string", "pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*$" },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/input" }
+        },
+        "expected": { "$ref": "#/$defs/expected" },
+        "sequence": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/sequenceMember" }
+        }
+      }
+    }
+  }
+}

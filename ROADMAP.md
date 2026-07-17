@@ -12,9 +12,31 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   `ea427df`. The separately scoped Python observation adapter was reviewed; its
   review v1 required independent final projection and a final-only negative check. The repair and
   top-level identity self-test were accepted after implementation repair re-review v1 on 2026-07-16;
-  the adapter now awaits its isolated commit. Its per-case comparison has zero mismatches across 145
-  baseline cases and adds only the nine accepted profile cases. Oracle freeze follows the adapter
-  commit identity.
+  the adapter was committed as `6be65af`. Its per-case comparison has zero mismatches across 145
+  baseline cases and adds only the nine accepted profile cases. Oracle implementation review v1 found
+  five blocking closure/contract defects. The repaired 154-case exact-byte oracle now materializes
+  release-state governance dependencies, binds fixture/oracle identifiers and two-snapshot sequences,
+  and enforces exact reason and coverage contracts. Architect repair re-review v1 accepted the freeze
+  semantics on 2026-07-17, but project-owner acceptance is withheld because the candidate adds 247
+  files, including 237 per-case vector files. Architect footprint QA conditionally approved a
+  three-pack direction, and architect design amendment re-review v1 accepted the explicit decoding,
+  location, closure, and archive contract on 2026-07-17. The untracked compact implementation now has
+  exactly ten root artifacts and three packs, preserves all 237 logical vectors, and awaits separate
+  implementation re-review and owner acceptance. Implementation re-review v1 found one blocking raw
+  dot-segment grammar defect; the repaired candidate and focused end-to-end negatives await repair
+  re-review. Architect repair re-review v1 accepted the repair with no findings on 2026-07-17. Explicit
+  project-owner acceptance of the exact 13-file inventory is still required before the isolated freeze
+  commit. Architect design repair re-review v1 accepted the explicit compact-oracle retirement schedule
+  on 2026-07-17, satisfying the lifecycle-design condition for the owner's separate decision. The five
+  Python authoring/verification files remain through the first Rust-gated 0.19.0 release. The first
+  later release-candidate increment is blocked until an architect accepts a later-commit stability
+  rerun; the following release-candidate increment is blocked until an exhaustive five-file
+  decommissioning review removes each file or records an individual owner-approved, event-bound
+  exception. Rust must replace the complete accepted manifest verifier and self-test matrix, not only
+  the differential-disagreement test. The other eight frozen contract/evidence files remain until a
+  later equivalence-backed replacement/consolidation review or an explicit final-retirement review
+  closes migration and rollback needs. Explicit project-owner acceptance of the exact 13-file freeze
+  remains pending. No Rust implementation is authorized; Python remains authoritative.
   Design acceptance satisfies only the pre-bootstrap planning dependency: no signer bootstrap or
   release action is authorized by DC-45. Rust cutover remains required before the 0.19.0 release
   candidate but is not an M1 prerequisite.
