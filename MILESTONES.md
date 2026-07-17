@@ -119,7 +119,12 @@ five-file decommissioning review removes each file or records an individual owne
 exception. Rust must replace the complete accepted manifest verifier and self-test matrix. The other
 eight frozen evidence/contract files remain until a later equivalence-backed replacement/consolidation
 review or an explicit final-retirement review closes migration and rollback needs. These blockers
-remain durably tracked if DC-45 moves to `done/` before their completion.
+remain durably tracked if DC-45 moves to `done/` before their completion. The project owner committed
+the exact 13-file oracle with the reviewed design/status update as stage-1 freeze commit `47aec9c` on
+2026-07-17. Deterministic archive, checkout/extracted verification, direct-dependency/identity, and
+seven-product-package exclusion evidence was accepted after architect post-commit evidence review v1
+on 2026-07-17. Stage-2 Rust implementation may begin while Python remains authoritative; separate
+implementation and differential-evidence acceptance remains required before cutover.
 DC-41 waits for the corrected contracts so its evidence does not bless superseded behavior. DC-42 may
 perform read-only measurements during M1, but semantic optimization or broad source moves wait until M1
 stabilizes. DC-43 policy design may proceed without credentials; implementation waits for security

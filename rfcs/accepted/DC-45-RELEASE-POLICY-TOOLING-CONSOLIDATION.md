@@ -7,7 +7,11 @@ acceptance withheld; three-pack design amendment accepted after architect re-rev
 with compact implementation repair accepted after architect re-review v1 on 2026-07-17 and explicit
 project-owner acceptance of the 13-file inventory pending. The explicit compact-oracle retirement
 schedule added after owner review was accepted after architect design repair re-review v1 on
-2026-07-17.
+2026-07-17. The project owner committed the exact 13-file compact oracle with the reviewed
+design/status update as stage-1 freeze commit `47aec9c` on 2026-07-17. Required post-commit
+archive/package evidence was accepted after architect review v1 on 2026-07-17. Stage-2 Rust
+implementation is authorized while Python remains authoritative; cutover and every later authority
+gate remain separate.
 **Target milestone.** M2 - first tooling increment; cutover required before the 0.19.0 release
 candidate.
 **Tracks.** Architect direction on DC-35 release-policy tooling debt.

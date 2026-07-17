@@ -35,8 +35,14 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   exception. Rust must replace the complete accepted manifest verifier and self-test matrix, not only
   the differential-disagreement test. The other eight frozen contract/evidence files remain until a
   later equivalence-backed replacement/consolidation review or an explicit final-retirement review
-  closes migration and rollback needs. Explicit project-owner acceptance of the exact 13-file freeze
-  remains pending. No Rust implementation is authorized; Python remains authoritative.
+  closes migration and rollback needs. The project owner committed the exact 13-file oracle with the
+  reviewed design/status update as stage-1 freeze commit `47aec9c` on 2026-07-17. Two deterministic
+  archives matched, checkout and extracted-archive verification/self-test passed all 154 cases, all 19
+  manifest-bound direct dependencies and seven required checkout/archive identities matched, and all
+  seven product package listings excluded oracle/tool paths. Architect post-commit evidence review v1
+  accepted the isolated freeze and this evidence on 2026-07-17. Stage-2 Rust implementation is now the
+  next authorized increment. Python remains authoritative; implementation and differential evidence
+  require separate review before cutover.
   Design acceptance satisfies only the pre-bootstrap planning dependency: no signer bootstrap or
   release action is authorized by DC-45. Rust cutover remains required before the 0.19.0 release
   candidate but is not an M1 prerequisite.
