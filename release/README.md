@@ -7,12 +7,12 @@ They do not claim that a hosted-service action or signer bootstrap has passed.
 Run the tracked policy audit from the repository root:
 
 ```console
-python3 release/check-policy.py
+cargo run --locked -p prikk-release-policy -- check
 ```
 
-The command uses only the Python standard library. It strictly parses the actual authority file, derives
-the outcome of every signer, challenge, release-state, and evidence fixture, and fails when a computed
-outcome differs from its `expected` value. Its focused Draft 2020-12 evaluator implements every schema
+The Rust workspace tool strictly parses the actual authority file, derives the outcome of every signer,
+challenge, release-state, and evidence fixture, and fails when a computed outcome differs from its
+`expected` value. Its focused Draft 2020-12 evaluator implements every schema
 keyword used by the tracked release-evidence schema, fails closed on an unknown keyword, and uses strict
 JSON value equality. It asserts canonical UTC `date-time` values rather than treating `format` as
 annotation-only. Every policy JSON entry path rejects duplicate object names at any nesting depth before

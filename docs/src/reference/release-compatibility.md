@@ -93,10 +93,10 @@ The authoritative field inventory is:
 
 Unregistered duplicate release claims are audit failures. The positive and forbidden abstract rows are
 tracked in [`release-state-cases.json`](https://github.com/nabbisen/prikk/blob/main/release/fixtures/release-state-cases.json).
-Run `python3 release/check-policy.py` from the repository root to execute the signer, canonical
-challenge-byte, release-state, and evidence-schema/sequence fixture tables. The standard-library gate
-asserts date-time formats, rejects unknown schema assertions, and fails when computed validity differs
-from a fixture's expected outcome. It leaves the worktree unchanged.
+Run `cargo run --locked -p prikk-release-policy -- check` from the repository root to execute the
+signer, canonical challenge-byte, release-state, and evidence-schema/sequence fixture tables. The Rust
+gate asserts date-time formats, rejects unknown schema assertions, and fails when computed validity
+differs from a fixture's expected outcome. It leaves the worktree unchanged.
 
 ## Required Release Workflow
 

@@ -19,5 +19,5 @@ Run the standard checks before submitting a source drop:
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-python3 release/check-policy.py
+cargo run --locked -p prikk-release-policy -- check
 ```
