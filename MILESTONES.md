@@ -130,7 +130,12 @@ committed as `6a65a35` on 2026-07-21. Its deterministic archive, isolated checko
 Python/Rust engine, differential, boundary, reference, identity, and seven-product-package exclusion
 evidence was accepted after architect post-commit evidence review v1 on 2026-07-21. Preparation of an
 isolated authoritative-command cutover candidate and disposable rollback rehearsal is now authorized.
-Python remains authoritative; cutover remains a separate reviewed gate.
+Preparation found that the accepted stale-reference gate hardcodes Python live authority and cannot
+validate an inventory/documentation-only Rust switch without a Rust-source transition repair. Focused
+architect QA v1 accepted a separate exact two-state transition repair before cutover implementation
+resumes. Its Python-primary implementation candidate is complete and awaits review, isolated commit,
+and post-commit preservation evidence. Python remains authoritative; cutover remains a separate
+reviewed gate.
 DC-41 waits for the corrected contracts so its evidence does not bless superseded behavior. DC-42 may
 perform read-only measurements during M1, but semantic optimization or broad source moves wait until M1
 stabilizes. DC-43 policy design may proceed without credentials; implementation waits for security

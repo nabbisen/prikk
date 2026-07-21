@@ -3,7 +3,7 @@
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-40, and DC-45
-Current implementation increment: DC-45 cutover candidate and rollback rehearsal preparation authorized
+Current implementation increment: DC-45 pre-cutover reference transition repair; review pending
 Current design-review increment: DC-46 proposed; review begins after DC-45 cutover acceptance
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
@@ -105,11 +105,19 @@ repository-format stabilization, and public-preview readiness. The durable corre
   collected after the accepted implementation was committed as `6a65a35` on 2026-07-21; architect
   post-commit evidence review v1 accepted them on 2026-07-21. Preparation of the isolated
   authoritative-command cutover candidate and disposable rollback rehearsal is authorized for
-  separate architect review. Before Python retirement, follow-up controls must restrict `defaults.run`
-  nested keys to the GitHub Actions configuration contract, classify extractor/allowlist changes as
-  policy changes, and close responsibility-map executable correspondence. Python remains
-  authoritative; cutover remains separately reviewed and mandatory before the 0.19.0 release
-  candidate.
+  separate architect review. Preparation found that `tools/release-policy/src/reference.rs` requires
+  the Python executable, command, and all three Python live references as immutable constants. Merely
+  switching the RFC-permitted inventory and documentation therefore fails `reference-check`, while
+  changing the Rust gate would exceed the stated command-only cutover scope. Architect QA v1 accepted a
+  separate pre-cutover repair with exact immutable descriptors for the Python path/command and Rust
+  manifest/Cargo command. The candidate implements exact pair selection, regular-file anchors, exactly
+  one selected live registration at each required path, and fail-closed mixed, unknown, missing,
+  duplicate, extra-path, and classification-substituted states. The inventory and live references are
+  unchanged and remain Python-primary; implementation review is pending. Before Python retirement,
+  follow-up controls must restrict `defaults.run` nested keys to the GitHub Actions configuration
+  contract, classify extractor/allowlist changes as policy changes, and close responsibility-map
+  executable correspondence. Python remains authoritative; cutover remains separately reviewed and
+  mandatory before the 0.19.0 release candidate.
 - DC-44 is the proposed post-M2 migration/backup/restore RFC; no release target is assigned.
 - DC-46 is the proposed Rust 1.85 compatibility corrective increment. It starts after DC-45 cutover
   acceptance and must restore or explicitly amend the declared minimum-version contract before the

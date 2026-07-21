@@ -79,7 +79,14 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   frozen identities match; and all seven product package listings exclude tool/oracle paths. This
   post-commit evidence was accepted after architect review v1 on 2026-07-21. The next authorized work
   is preparation of an isolated authoritative-command cutover candidate and disposable rollback
-  rehearsal for separate review. Python remains authoritative, and cutover remains a separate
+  rehearsal for separate review. Preparation found that the accepted stale-reference gate hardcodes
+  the Python primary executable and required live command, so the RFC-permitted inventory/reference-
+  only Rust cutover cannot pass without changing Rust tool source. Architect QA v1 confirmed the
+  mismatch and required a separate two-state repair with exact immutable Python/Rust path-command
+  descriptors. The repair candidate now
+  enforces exact descriptor selection, regular anchors, one selected live registration at each required
+  path, and mixed/unknown-state rejection; implementation review is pending. The inventory and live
+  references remain Python-primary. Python remains authoritative, and cutover remains a separate
   decision.
   Design acceptance satisfies only the pre-bootstrap planning dependency: no signer bootstrap or
   release action is authorized by DC-45. Rust cutover remains required before the 0.19.0 release

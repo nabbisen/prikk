@@ -392,6 +392,17 @@ Cargo/package/archive boundary checks, the Git-visible-state and lockfile compar
 applicable repository gates: format, workspace check, Clippy, test, build, mdBook, and diff check. An
 architect cutover ruling is the only authority that makes Rust primary.
 
+Before that isolated cutover, a separately reviewed and committed transition repair must make the
+stale-reference gate capable of validating exactly two immutable authority descriptors while Python
+remains selected: `release/check-policy.py` with the Python 3 executable and that path as its sole
+argument, and
+`tools/release-policy/Cargo.toml` with
+`cargo run --locked -p prikk-release-policy -- check`. The exact path/command pair selects the state;
+mixed or unknown pairs, alternate commands, missing or non-regular anchors, and mixed/missing/duplicate
+live references fail closed. All three required live paths must register the selected command exactly
+once. This repair requires separate implementation review, commit, and post-commit preservation
+evidence before cutover preparation resumes; it does not itself switch authority.
+
 Before cutover acceptance, rehearse rollback in a disposable worktree or equivalent isolated checkout.
 Restore only the command-switch diff, then observe the Python oracle, manifest verification, stale-
 reference check, metadata/package boundary, and applicable repository gates pass. Record both commit

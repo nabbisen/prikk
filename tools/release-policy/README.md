@@ -3,6 +3,17 @@
 This unpublished workspace tool is the Rust migration candidate for Prikk's repository release-policy
 checks. Python remains authoritative until the separately reviewed DC-45 cutover.
 
+The stale-reference gate recognizes exactly two immutable primary authority descriptors:
+
+- `release/check-policy.py` with the Python 3 executable and that path as its sole argument; and
+- `tools/release-policy/Cargo.toml` with
+  `cargo run --locked -p prikk-release-policy -- check`.
+
+The inventory may select one exact pair but cannot define another authority state. Each required live
+documentation path must register the selected command exactly once; mixed authority, alternate pairs,
+missing or non-regular anchors, and unregistered invocations fail closed. Python remains selected until
+the separately reviewed inventory/documentation-only cutover.
+
 The workflow scanner intentionally preserves the frozen dependency set during stage 2. It normalizes
 quoted and whitespace-separated block and flow `run` keys through one structural path and fails closed
 when a recognized `run` value cannot be parsed. Replacing this bounded extractor with a YAML dependency

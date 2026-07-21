@@ -14,9 +14,19 @@ const REQUIRED_LIVE_PATHS: [&str; 3] = [
     "docs/src/reference/release-compatibility.md",
     "release/README.md",
 ];
+const PYTHON_PRIMARY: AuthorityDescriptor = AuthorityDescriptor {
+    path: "release/check-policy.py",
+    command: "python3 release/check-policy.py",
+};
+const RUST_PRIMARY: AuthorityDescriptor = AuthorityDescriptor {
+    path: "tools/release-policy/Cargo.toml",
+    command: "cargo run --locked -p prikk-release-policy -- check",
+};
 
-fn python_command() -> String {
-    ["python3 release/", "check-policy.py"].concat()
+#[derive(Clone, Copy)]
+struct AuthorityDescriptor {
+    path: &'static str,
+    command: &'static str,
 }
 
 fn required_markers() -> Vec<String> {
@@ -87,9 +97,9 @@ fn verify(root: &Path, inventory: &Inventory) -> Result<Vec<String>> {
     if inventory.schema_version != "release-policy-command-inventory-v1" {
         errors.push("inventory-version".to_owned());
     }
-    if inventory.primary_executable.path != "release/check-policy.py"
-        || inventory.primary_executable.command != python_command()
-        || !root.join(&inventory.primary_executable.path).is_file()
+    let selected = authority_descriptor(&inventory.primary_executable);
+    if selected.is_none()
+        || !selected.is_some_and(|descriptor| regular_file(root.join(descriptor.path)))
     {
         errors.push("primary-executable".to_owned());
     }
@@ -111,9 +121,20 @@ fn verify(root: &Path, inventory: &Inventory) -> Result<Vec<String>> {
     if registered.len() != inventory.references.len() {
         errors.push("duplicate-reference".to_owned());
     }
-    let python = python_command();
     for path in REQUIRED_LIVE_PATHS {
-        if !registered.contains(&(path, python.as_str(), Classification::LiveInvocation)) {
+        let live: Vec<_> = inventory
+            .references
+            .iter()
+            .filter(|reference| {
+                reference.path == path && reference.classification == Classification::LiveInvocation
+            })
+            .collect();
+        if live.len() != 1
+            || !selected.is_some_and(|descriptor| {
+                live.first()
+                    .is_some_and(|reference| reference.command == descriptor.command)
+            })
+        {
             errors.push(format!("required-live-reference:{path}"));
         }
     }
@@ -121,11 +142,12 @@ fn verify(root: &Path, inventory: &Inventory) -> Result<Vec<String>> {
         let classification_valid = match reference.classification {
             Classification::LiveInvocation => {
                 REQUIRED_LIVE_PATHS.contains(&reference.path.as_str())
-                    && reference.command == python_command()
+                    && selected.is_some_and(|descriptor| reference.command == descriptor.command)
             }
             Classification::HistoricalOrExplanatory => {
-                reference.path.starts_with("rfcs/")
-                    || reference.path == "tools/release-policy/README.md"
+                (reference.path.starts_with("rfcs/")
+                    || reference.path == "tools/release-policy/README.md")
+                    && authority_command(&reference.command)
             }
         };
         if !classification_valid {
@@ -192,6 +214,24 @@ fn verify(root: &Path, inventory: &Inventory) -> Result<Vec<String>> {
     }
     errors.sort();
     Ok(errors)
+}
+
+fn authority_descriptor(executable: &Executable) -> Option<AuthorityDescriptor> {
+    [PYTHON_PRIMARY, RUST_PRIMARY]
+        .into_iter()
+        .find(|descriptor| {
+            executable.path == descriptor.path && executable.command == descriptor.command
+        })
+}
+
+fn authority_command(command: &str) -> bool {
+    [PYTHON_PRIMARY, RUST_PRIMARY]
+        .iter()
+        .any(|descriptor| command == descriptor.command)
+}
+
+fn regular_file(path: PathBuf) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file())
 }
 
 fn command_invocation(command: &str) -> Option<Invocation> {
