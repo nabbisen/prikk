@@ -14,8 +14,11 @@ implementation was accepted after architect repair re-review v11 and committed a
 2026-07-21 while Python remains authoritative. Deterministic archive, isolated checkout/extraction,
 engine, boundary, reference, identity, and product-package evidence was accepted after architect
 post-commit evidence review v1 on 2026-07-21. Preparation of an isolated authoritative-command cutover
-candidate and disposable rollback rehearsal is authorized; cutover and every later authority gate
-remain separate.
+candidate and disposable rollback rehearsal exposed a reference-transition prerequisite. Its exact
+two-state repair was accepted after architect implementation review v1 and committed as `2bfb7cc` on
+2026-07-21 while Python remained authoritative. Post-commit preservation evidence was accepted after
+architect review v1 on 2026-07-21. Preparation of the isolated cutover candidate and disposable
+rollback rehearsal is authorized; cutover and every later authority gate remain separate.
 **Target milestone.** M2 - first tooling increment; cutover required before the 0.19.0 release
 candidate.
 **Tracks.** Architect direction on DC-35 release-policy tooling debt.

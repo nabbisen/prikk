@@ -3,7 +3,7 @@
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-40, and DC-45
-Current implementation increment: DC-45 pre-cutover reference transition repair; review pending
+Current implementation increment: DC-45 cutover preparation and rollback rehearsal; Python authoritative
 Current design-review increment: DC-46 proposed; review begins after DC-45 cutover acceptance
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
@@ -110,10 +110,13 @@ repository-format stabilization, and public-preview readiness. The durable corre
   switching the RFC-permitted inventory and documentation therefore fails `reference-check`, while
   changing the Rust gate would exceed the stated command-only cutover scope. Architect QA v1 accepted a
   separate pre-cutover repair with exact immutable descriptors for the Python path/command and Rust
-  manifest/Cargo command. The candidate implements exact pair selection, regular-file anchors, exactly
+  manifest/Cargo command. The repair implements exact pair selection, regular-file anchors, exactly
   one selected live registration at each required path, and fail-closed mixed, unknown, missing,
-  duplicate, extra-path, and classification-substituted states. The inventory and live references are
-  unchanged and remain Python-primary; implementation review is pending. Before Python retirement,
+  duplicate, extra-path, and classification-substituted states. Architect implementation review v1
+  accepted it, and it was committed as `2bfb7cc` on 2026-07-21. Its post-commit preservation evidence
+  was accepted after architect review v1 on 2026-07-21. Preparation of the isolated inventory/live-
+  reference cutover candidate and disposable rollback rehearsal is authorized for separate review.
+  The inventory and live references are unchanged and remain Python-primary. Before Python retirement,
   follow-up controls must restrict `defaults.run` nested keys to the GitHub Actions configuration
   contract, classify extractor/allowlist changes as policy changes, and close responsibility-map
   executable correspondence. Python remains authoritative; cutover remains separately reviewed and

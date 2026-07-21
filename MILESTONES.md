@@ -133,9 +133,11 @@ isolated authoritative-command cutover candidate and disposable rollback rehears
 Preparation found that the accepted stale-reference gate hardcodes Python live authority and cannot
 validate an inventory/documentation-only Rust switch without a Rust-source transition repair. Focused
 architect QA v1 accepted a separate exact two-state transition repair before cutover implementation
-resumes. Its Python-primary implementation candidate is complete and awaits review, isolated commit,
-and post-commit preservation evidence. Python remains authoritative; cutover remains a separate
-reviewed gate.
+resumes. Architect implementation review v1 accepted the Python-primary repair, and it was committed
+as `2bfb7cc` on 2026-07-21. Post-commit preservation evidence was accepted after architect review v1
+on 2026-07-21. Preparation of the isolated inventory/live-reference cutover candidate and disposable
+rollback rehearsal is authorized for separate review. Python remains authoritative; cutover remains a
+separate reviewed gate.
 DC-41 waits for the corrected contracts so its evidence does not bless superseded behavior. DC-42 may
 perform read-only measurements during M1, but semantic optimization or broad source moves wait until M1
 stabilizes. DC-43 policy design may proceed without credentials; implementation waits for security

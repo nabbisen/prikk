@@ -83,11 +83,14 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   the Python primary executable and required live command, so the RFC-permitted inventory/reference-
   only Rust cutover cannot pass without changing Rust tool source. Architect QA v1 confirmed the
   mismatch and required a separate two-state repair with exact immutable Python/Rust path-command
-  descriptors. The repair candidate now
-  enforces exact descriptor selection, regular anchors, one selected live registration at each required
-  path, and mixed/unknown-state rejection; implementation review is pending. The inventory and live
-  references remain Python-primary. Python remains authoritative, and cutover remains a separate
-  decision.
+  descriptors. The repair enforces exact descriptor selection, regular anchors, one selected live
+  registration at each required path, and mixed/unknown-state rejection. Architect implementation
+  review v1 accepted it, and it was committed as `2bfb7cc` on 2026-07-21. Deterministic archive,
+  isolated checkout/extraction, authority behavior, identity, and product-package preservation
+  evidence was accepted after architect post-commit evidence review v1 on 2026-07-21. Preparation of
+  the isolated inventory/live-reference cutover candidate and disposable rollback rehearsal is now
+  authorized for separate review. The inventory and live references remain Python-primary. Python
+  remains authoritative, and cutover remains a separate decision.
   Design acceptance satisfies only the pre-bootstrap planning dependency: no signer bootstrap or
   release action is authorized by DC-45. Rust cutover remains required before the 0.19.0 release
   candidate but is not an M1 prerequisite. DC-46 separately tracks the pre-existing mismatch between
