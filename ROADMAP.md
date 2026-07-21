@@ -12,8 +12,15 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   declare zero features and the exact locked all-features command passes. DC-47 proposes preserving
   DC-35's stronger contract, aligning stable CI and contributor guidance, and adding one exact
   non-authority classifier vector. Architect design review v1 accepted the bounded design on
-  2026-07-21; implementation may begin but requires separate review. DC-47 must close before the
-  0.19.0 release candidate.
+  2026-07-21. Architect legacy-vector test-contract QA v1 resolved the accepted test contradiction:
+  the locked legacy vector remains positive, while all non-colliding near misses fail closed. The
+  bounded implementation was accepted by architect implementation review v1 on 2026-07-21. The owner
+  commit and separate post-commit evidence review remain required. DC-47 must close before the 0.19.0
+  release candidate.
+- **DC-48 - legacy Clippy production retirement (planned).** After DC-47's implementation commit and
+  post-commit evidence are accepted, draft the separate subtractive design to remove the historical
+  unlocked and locked no-all-features classifier productions. DC-48 restores classifier-enforced
+  canonical selection and must close before the 0.19.0 release candidate.
 - **DC-45 - release policy tooling consolidation (accepted).** Architect design repair re-review v1
   accepted the executable oracle, schema-profile, Cargo-boundary, and cutover/rollback contracts on
   2026-07-16. Duplicate-name profile hardening was accepted and committed as profile-contract identity

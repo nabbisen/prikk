@@ -3,7 +3,7 @@
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-40, DC-45, DC-46, and DC-47
-Current implementation increment: DC-47 accepted; bounded implementation not started
+Current implementation increment: DC-47 implementation accepted; owner commit and post-commit evidence pending
 Current design-review increment: none
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
@@ -126,7 +126,11 @@ repository-format stabilization, and public-preview readiness. The durable corre
 - DC-47 is the accepted stable Clippy gate-alignment increment. It preserves DC-35's public
   `--all-features` release contract and proposes aligning stable CI, contributor guidance, and one
   exact default-closed non-authority command-classifier vector before the 0.19.0 release candidate.
-  Architect design review v1 accepted the bounded design on 2026-07-21; implementation has not started.
+  Architect design review v1 accepted the bounded design on 2026-07-21. Architect legacy-vector
+  test-contract QA v1 resolved the retained-vector contradiction. Architect implementation review v1
+  accepted the bounded candidate on 2026-07-21; the owner commit and post-commit evidence review remain
+  required. Planned DC-48 must retire both unconsumed legacy Clippy productions after DC-47 post-commit
+  acceptance and before the 0.19.0 release candidate.
 - DC-46 is the accepted Rust 1.85 compatibility corrective increment. Architect design rereview v1
   accepted three bounded `prikk-store` control-flow rewrites, focused production-path trust tests,
   pinned locked MSRV/stable CI commands, unchanged dependencies and lockfile, and separate current-

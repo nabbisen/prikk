@@ -33,6 +33,16 @@ fn cargo(command: &str, arguments: &[String]) -> bool {
                         "-D",
                         "warnings",
                     ]
+                || arguments
+                    == [
+                        "--workspace",
+                        "--all-targets",
+                        "--all-features",
+                        "--locked",
+                        "--",
+                        "-D",
+                        "warnings",
+                    ]
         }
         "check" => arguments == ["--workspace", "--all-targets", "--locked"],
         "build" => arguments == ["--workspace", "--locked"],

@@ -1,6 +1,8 @@
 # DC-47 - Stable Clippy Gate Alignment
 
-**Status.** Accepted after architect design review v1 on 2026-07-21.
+**Status.** Accepted after architect design review v1 and legacy-vector test-contract QA v1 on
+2026-07-21; architect implementation review v1 accepted the candidate on 2026-07-21; owner commit and
+post-commit evidence review pending.
 **Target milestone.** M2 - before the 0.19.0 release candidate.
 **Tracks.** DC-46 implementation-review N1 and post-commit-review N1.
 **Touches.** Stable CI Clippy command, governed ordinary-Cargo procedure grammar and tests,
@@ -82,19 +84,20 @@ Add table-driven tests proving:
 1. the exact canonical vector passes strict shell and YAML scanning;
 2. it emits no policy or publication invocation in either mode;
 3. existing assignment, `env`, and `command` prefixes retain their reviewed behavior;
-4. missing flags, duplicate flags, extra flags, reordered flags, and placement of `--all-features` or
-   `--locked` after the `--` separator fail closed;
-5. toolchain-prefixed, dynamic-command, dynamic-argument, opaque-shell, and project-local-wrapper forms
+4. the canonical vector without `--all-features` remains the accepted locked legacy positive case;
+5. missing `--locked` while retaining `--all-features`, duplicate flags, extra flags, reordered
+   `--all-features`/`--locked`, and placement of either flag after the `--` separator fail closed;
+6. toolchain-prefixed, dynamic-command, dynamic-argument, opaque-shell, and project-local-wrapper forms
    fail closed; and
-6. all previously accepted ordinary-Cargo vectors remain accepted.
+7. all previously accepted ordinary-Cargo vectors remain accepted.
 
 The full release-policy test suite, authoritative 154-case Rust policy check, and valid empty-error
 boundary/reference reports are mandatory implementation evidence.
 
-Because the classifier retains legacy forms, implementation review must directly verify the exact
-stable CI line and the three public command surfaces (`README.md`, contributor development guidance,
-and release compatibility guidance). Boundary/reference success alone does not prove canonical
-selection.
+Because the classifier retains legacy forms, implementation review must directly verify that the
+stable CI line and all three public command surfaces (`README.md`, contributor development guidance,
+and release compatibility guidance) literally match the canonical command shown in the Decision
+section. Boundary/reference success alone does not prove canonical selection.
 
 ## Implementation And Evidence Sequence
 
@@ -104,7 +107,7 @@ selection.
    ```text
    cargo fmt --all -- --check
    RUSTFLAGS="-D warnings" cargo check --workspace --all-targets --locked
-   cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+   canonical stable Clippy command from the Decision section
    cargo test --workspace --locked
    cargo build --workspace --locked
    cargo +1.85.0 check --workspace --all-targets --locked
@@ -134,8 +137,19 @@ selection.
    package listings after normalizing only Cargo's expected `.cargo_vcs_info.json`, verify frozen
    identities, and obtain separate post-commit evidence acceptance.
 
+Architect implementation review v1 accepted the bounded candidate on 2026-07-21. The owner commit and
+the post-commit evidence sequence remain pending; DC-47 is not yet complete.
+
 The frozen identities include root `Cargo.toml`, every workspace package manifest, `Cargo.lock`, both
 command inventories, the oracle manifest, and `release-signers.toml`.
+
+## Required Follow-Up
+
+DC-48 will retire the historical unlocked and locked no-all-features Clippy productions after DC-47's
+implementation commit and post-commit evidence are accepted. At that trigger, stable CI is the sole
+current governed Clippy consumer and uses the canonical vector, so the subtraction can restore
+classifier-enforced canonical selection. DC-48 requires its own design, implementation, and policy
+review; it is targeted before the 0.19.0 release candidate and is not part of DC-47 scope.
 
 ## Failure And Rollback
 

@@ -17,7 +17,7 @@ Run the standard checks before submitting a source drop:
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --locked
 cargo run --locked -p prikk-release-policy -- check
 ```

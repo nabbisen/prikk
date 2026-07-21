@@ -174,6 +174,7 @@ fn recognizes_exact_locked_workspace_procedures_without_authority() {
     let commands = [
         "cargo fmt --all -- --check",
         "cargo clippy --workspace --all-targets --locked -- -D warnings",
+        "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
         "cargo test --workspace --locked",
         "cargo check --workspace --all-targets --locked",
         "cargo build --workspace --locked",
@@ -187,8 +188,9 @@ fn recognizes_exact_locked_workspace_procedures_without_authority() {
     }
 
     for command in [
-        "env MODE=ci cargo test --workspace --locked",
-        "command cargo check --workspace --all-targets --locked",
+        "MODE=ci cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
+        "env MODE=ci cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
+        "command cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
     ] {
         for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
             assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
@@ -201,7 +203,18 @@ fn recognizes_exact_locked_workspace_procedures_without_authority() {
 fn rejects_near_miss_locked_workspace_procedures() {
     for command in [
         "cargo fmt --all --check",
-        "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
+        "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+        "cargo clippy --workspace --all-targets --all-features --all-features --locked -- -D warnings",
+        "cargo clippy --workspace --all-targets --all-features --locked --locked -- -D warnings",
+        "cargo clippy --workspace --all-targets --all-features --locked --all-targets -- -D warnings",
+        "cargo clippy --workspace --all-targets --locked --all-features -- -D warnings",
+        "cargo clippy --workspace --all-targets --locked -- -D warnings --all-features",
+        "cargo clippy --workspace --all-targets --all-features -- -D warnings --locked",
+        "cargo +stable clippy --workspace --all-targets --all-features --locked -- -D warnings",
+        "$CARGO clippy --workspace --all-targets --all-features --locked -- -D warnings",
+        "cargo clippy \"$SCOPE\" --all-targets --all-features --locked -- -D warnings",
+        "bash -c 'cargo clippy --workspace --all-targets --all-features --locked -- -D warnings'",
+        "project-local-wrapper cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
         "cargo test --locked --workspace",
         "cargo check --workspace --locked",
         "cargo build --workspace --all-targets --locked --release",
