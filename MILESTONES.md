@@ -149,9 +149,9 @@ bounded source rewrites, focused trust regressions, and pinned locked CI gates. 
 rereview v1 accepted it on 2026-07-21. Architect command-grammar amendment QA v1 then authorized five
 exact ordinary-Cargo vectors and existing scanner tests after the prepared candidate exposed a DC-45
 classifier conflict. Architect implementation review v1 accepted the complete candidate on 2026-07-21;
-the owner commit and post-commit checkout/archive evidence remain pending. It must close before
-the 0.19.0 release candidate or obtain an explicit architect-reviewed minimum-version and schedule
-amendment; DC-45 does not silently absorb this pre-existing product-workspace mismatch.
+it was committed as `0d221af`, and architect post-commit evidence review v1 accepted its clean
+checkout/archive evidence. DC-46 and the Rust 1.85 compatibility blocker are complete; DC-45 does not
+silently absorb this resolved product-workspace mismatch.
 
 **Completion condition:** reproducible crash/fuzz/hash/platform evidence is available, performance and
 source-structure gates are enforced or carry reviewed exceptions, and release artifacts have reviewed

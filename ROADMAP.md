@@ -101,13 +101,13 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   through three bounded source rewrites, focused trust regressions, and pinned locked CI gates on
   2026-07-21. The bounded implementation candidate exposed a conflict with the accepted DC-45
   procedure grammar. Architect command-grammar amendment QA v1 authorized five exact ordinary-Cargo
-  vectors and existing scanner tests. Architect implementation review v1 accepted the complete
-  candidate on 2026-07-21; the owner commit and post-commit checkout/archive evidence remain pending.
+  vectors and existing scanner tests. Architect implementation review v1 accepted the candidate,
+  committed as `0d221af`, and architect post-commit evidence review v1 accepted its clean
+  checkout/archive evidence on 2026-07-21. DC-46 and the Rust 1.85 compatibility blocker are complete.
   Before the 0.19.0 release candidate, deliberately reconcile the public `--all-features` Clippy gate
   with the governed classifier's accepted CI vector; do not discover that divergence in a later
-  workflow edit. DC-46 must close, or be explicitly
-  rescheduled through reviewed roadmap and release-contract changes, before the 0.19.0 release
-  candidate.
+  workflow edit. This follow-up remains separate from completed DC-46 and must close before the 0.19.0
+  release candidate.
 - **M1 remains active.** DC-35 implementation is accepted and committed, but the signer allowlist
   remains empty and fail-closed. DC-39 remains proposed, DC-40 remains accepted with implementation
   evidence pending, and the combined 0.18.0/M1 release gate remains closed.

@@ -1,7 +1,7 @@
 # DC-46 - Workspace Rust 1.85 Compatibility
 
-**Status:** Implementation accepted after architect implementation review v1 on 2026-07-21; owner
-commit and post-commit checkout/archive evidence pending
+**Status:** Complete after architect post-commit evidence review v1 on 2026-07-21 at commit
+`0d221af338888ff0cf21f0935541212f6bdac625`
 **Milestone:** M2
 **Release target:** Before the 0.19.0 release candidate
 **Trigger:** Satisfied by architect acceptance of the DC-45 Rust policy-command cutover on 2026-07-21
