@@ -18,7 +18,10 @@ candidate and disposable rollback rehearsal exposed a reference-transition prere
 two-state repair was accepted after architect implementation review v1 and committed as `2bfb7cc` on
 2026-07-21 while Python remained authoritative. Post-commit preservation evidence was accepted after
 architect review v1 on 2026-07-21. Preparation of the isolated cutover candidate and disposable
-rollback rehearsal is authorized; cutover and every later authority gate remain separate.
+rollback rehearsal was authorized. The exact four-file cutover was committed as `6a8e365` and accepted
+with its deterministic archive and committed-identity rollback evidence after final architect ruling v1
+on 2026-07-21. The Rust command is now governance-authoritative; later stability, Python/oracle
+retirement, signer, and release gates remain separate.
 **Target milestone.** M2 - first tooling increment; cutover required before the 0.19.0 release
 candidate.
 **Tracks.** Architect direction on DC-35 release-policy tooling debt.

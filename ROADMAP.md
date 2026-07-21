@@ -88,15 +88,18 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   review v1 accepted it, and it was committed as `2bfb7cc` on 2026-07-21. Deterministic archive,
   isolated checkout/extraction, authority behavior, identity, and product-package preservation
   evidence was accepted after architect post-commit evidence review v1 on 2026-07-21. Preparation of
-  the isolated inventory/live-reference cutover candidate and disposable rollback rehearsal is now
-  authorized for separate review. The inventory and live references remain Python-primary. Python
-  remains authoritative, and cutover remains a separate decision.
+  the isolated inventory/live-reference cutover candidate and disposable rollback rehearsal was then
+  authorized. The exact four-file cutover was committed as `6a8e365`; deterministic archive, clean
+  checkout/extraction, full gate, and committed-identity rollback evidence was accepted after final
+  architect ruling v1 on 2026-07-21. The Rust command is governance-authoritative. Python and the
+  frozen oracle remain required through the first Rust-gated 0.19.0 release and an accepted later-
+  commit stability rerun.
   Design acceptance satisfies only the pre-bootstrap planning dependency: no signer bootstrap or
-  release action is authorized by DC-45. Rust cutover remains required before the 0.19.0 release
-  candidate but is not an M1 prerequisite. DC-46 separately tracks the pre-existing mismatch between
-  the declared Rust 1.85 minimum and the locked product workspace. Its design starts after DC-45
-  cutover acceptance and must close, or be explicitly rescheduled through reviewed roadmap and
-  release-contract changes, before the 0.19.0 release candidate.
+  release action is authorized by DC-45. The required Rust cutover is accepted, but it is not release
+  authority. DC-46 separately tracks the pre-existing mismatch between the declared Rust 1.85 minimum
+  and the locked product workspace. Its design may now start and must close, or be explicitly
+  rescheduled through reviewed roadmap and release-contract changes, before the 0.19.0 release
+  candidate.
 - **M1 remains active.** DC-35 implementation is accepted and committed, but the signer allowlist
   remains empty and fail-closed. DC-39 remains proposed, DC-40 remains accepted with implementation
   evidence pending, and the combined 0.18.0/M1 release gate remains closed.

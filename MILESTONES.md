@@ -135,14 +135,16 @@ validate an inventory/documentation-only Rust switch without a Rust-source trans
 architect QA v1 accepted a separate exact two-state transition repair before cutover implementation
 resumes. Architect implementation review v1 accepted the Python-primary repair, and it was committed
 as `2bfb7cc` on 2026-07-21. Post-commit preservation evidence was accepted after architect review v1
-on 2026-07-21. Preparation of the isolated inventory/live-reference cutover candidate and disposable
-rollback rehearsal is authorized for separate review. Python remains authoritative; cutover remains a
-separate reviewed gate.
+on 2026-07-21. The exact four-file inventory/live-reference cutover was committed as `6a8e365`;
+deterministic archive, clean checkout/extraction, full gate, and committed-identity rollback evidence
+was accepted after final architect ruling v1 on 2026-07-21. The Rust command is governance-
+authoritative. Python and the frozen oracle remain required through the first Rust-gated 0.19.0 release
+and an accepted later-commit stability rerun.
 DC-41 waits for the corrected contracts so its evidence does not bless superseded behavior. DC-42 may
 perform read-only measurements during M1, but semantic optimization or broad source moves wait until M1
 stabilizes. DC-43 policy design may proceed without credentials; implementation waits for security
 review and must consume the stable post-DC-45-cutover gate rather than extend the Python engine.
-DC-46 starts after DC-45 cutover acceptance and before the 0.19.0 release candidate. It must restore
+DC-46 may now start and must close before the 0.19.0 release candidate. It must restore
 the declared Rust 1.85 locked-workspace contract or obtain an explicit architect-reviewed minimum-version
 and schedule amendment; DC-45 does not silently absorb this pre-existing product-workspace mismatch.
 

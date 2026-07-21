@@ -3,8 +3,8 @@
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-40, and DC-45
-Current implementation increment: DC-45 cutover preparation and rollback rehearsal; Python authoritative
-Current design-review increment: DC-46 proposed; review begins after DC-45 cutover acceptance
+Current implementation increment: none; DC-45 Rust command authoritative, later stability rerun pending
+Current design-review increment: DC-46 proposed and ready for design review
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
@@ -114,13 +114,14 @@ repository-format stabilization, and public-preview readiness. The durable corre
   one selected live registration at each required path, and fail-closed mixed, unknown, missing,
   duplicate, extra-path, and classification-substituted states. Architect implementation review v1
   accepted it, and it was committed as `2bfb7cc` on 2026-07-21. Its post-commit preservation evidence
-  was accepted after architect review v1 on 2026-07-21. Preparation of the isolated inventory/live-
-  reference cutover candidate and disposable rollback rehearsal is authorized for separate review.
-  The inventory and live references are unchanged and remain Python-primary. Before Python retirement,
+  was accepted after architect review v1 on 2026-07-21. The exact inventory/live-reference cutover was
+  committed as `6a8e365`; deterministic archive, clean checkout/extraction, full gate, and committed-
+  identity rollback evidence was accepted after final architect ruling v1 on 2026-07-21. The Rust
+  command is governance-authoritative. Before Python retirement,
   follow-up controls must restrict `defaults.run` nested keys to the GitHub Actions configuration
   contract, classify extractor/allowlist changes as policy changes, and close responsibility-map
-  executable correspondence. Python remains authoritative; cutover remains separately reviewed and
-  mandatory before the 0.19.0 release candidate.
+  executable correspondence. Python and the frozen oracle remain required through the first Rust-gated
+  0.19.0 release and an accepted later-commit stability rerun.
 - DC-44 is the proposed post-M2 migration/backup/restore RFC; no release target is assigned.
 - DC-46 is the proposed Rust 1.85 compatibility corrective increment. It starts after DC-45 cutover
   acceptance and must restore or explicitly amend the declared minimum-version contract before the
