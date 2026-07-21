@@ -144,9 +144,11 @@ DC-41 waits for the corrected contracts so its evidence does not bless supersede
 perform read-only measurements during M1, but semantic optimization or broad source moves wait until M1
 stabilizes. DC-43 policy design may proceed without credentials; implementation waits for security
 review and must consume the stable post-DC-45-cutover gate rather than extend the Python engine.
-DC-46 may now start and must close before the 0.19.0 release candidate. It must restore
-the declared Rust 1.85 locked-workspace contract or obtain an explicit architect-reviewed minimum-version
-and schedule amendment; DC-45 does not silently absorb this pre-existing product-workspace mismatch.
+DC-46 design now selects restoration of the declared Rust 1.85 locked-workspace contract through three
+bounded source rewrites, focused trust regressions, and pinned locked CI gates. Architect design
+rereview v1 accepted it on 2026-07-21; bounded implementation may begin. It must close before
+the 0.19.0 release candidate or obtain an explicit architect-reviewed minimum-version and schedule
+amendment; DC-45 does not silently absorb this pre-existing product-workspace mismatch.
 
 **Completion condition:** reproducible crash/fuzz/hash/platform evidence is available, performance and
 source-structure gates are enforced or carry reviewed exceptions, and release artifacts have reviewed

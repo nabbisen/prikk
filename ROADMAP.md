@@ -97,7 +97,9 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   Design acceptance satisfies only the pre-bootstrap planning dependency: no signer bootstrap or
   release action is authorized by DC-45. The required Rust cutover is accepted, but it is not release
   authority. DC-46 separately tracks the pre-existing mismatch between the declared Rust 1.85 minimum
-  and the locked product workspace. Its design may now start and must close, or be explicitly
+  and the locked product workspace. Architect design rereview v1 accepted restoration of Rust 1.85
+  through three bounded source rewrites, focused trust regressions, and pinned locked CI gates on
+  2026-07-21. Bounded implementation may begin. DC-46 must close, or be explicitly
   rescheduled through reviewed roadmap and release-contract changes, before the 0.19.0 release
   candidate.
 - **M1 remains active.** DC-35 implementation is accepted and committed, but the signer allowlist
