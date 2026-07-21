@@ -8,6 +8,16 @@ members = [
     "crates/prikk-object",
     "crates/prikk-replay",
     "crates/prikk-store",
+    "tools/release-policy",
+]
+default-members = [
+    "crates/prikk-cli",
+    "crates/prikk-crypto",
+    "crates/prikk-error",
+    "crates/prikk-hash",
+    "crates/prikk-object",
+    "crates/prikk-replay",
+    "crates/prikk-store",
 ]
 
 [workspace.package]

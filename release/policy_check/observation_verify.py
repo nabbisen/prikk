@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .observation import observe
+from .observation_identity import InputIdentity
 from .runner import _load
 
 
@@ -72,6 +73,7 @@ def _expected_observations(root: Path) -> list[dict[str, str]]:
             )
         )
     records.sort(key=lambda item: (item["suite_id"], item["case_id"]))
+    InputIdentity(root).bind_expected(records)
     return records
 
 
@@ -147,4 +149,22 @@ def self_test(root: Path) -> list[str]:
     observed = {error.split(":", 1)[0] for error in identity_errors}
     if not required <= observed:
         return ["self-test: top-level identity drift was not rejected"]
+
+    wrong_input = deepcopy(document)
+    wrong_input["cases"][0]["input_digest"] = "0" * 64
+    if not any(
+        error.startswith(
+            f"{wrong_input['cases'][0]['suite_id']}:{wrong_input['cases'][0]['case_id']}:"
+        )
+        for error in verify_observation_document(root, wrong_input)
+    ):
+        return ["self-test: input identity drift was not rejected"]
+
+    substituted = _expected_record("signer-authority-live", "release-signers-toml", "valid")
+    try:
+        InputIdentity(root).bind(substituted, {"authority": b"substituted\n"})
+    except ValueError:
+        pass
+    else:
+        return ["self-test: evaluated input substitution was not rejected"]
     return []

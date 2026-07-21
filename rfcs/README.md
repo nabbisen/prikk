@@ -34,6 +34,7 @@ dependencies in [`MILESTONES.md`](../MILESTONES.md).
 | DC-42 | [Performance and Maintainability Gates](./proposed/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md) | M2 / 0.19.0 |
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0 |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
+| DC-46 | [Workspace Rust 1.85 Compatibility](./proposed/DC-46-WORKSPACE-RUST-1.85-COMPATIBILITY.md) | M2 / before 0.19.0 RC |
 
 ## Accepted
 
@@ -47,7 +48,7 @@ These reviewed designs may govern downstream work but have not yet released.
 | DC-37 | [Required Filesystem Durability](./accepted/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md) | M1 / 0.18.0; implementation accepted |
 | DC-38 | [Ref Publication Crash Recovery](./accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) | M1 / 0.18.0; implementation accepted |
 | DC-40 | [State Merkle Root and Format Transition](./accepted/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md) | M1 / 0.18.0; implementation evidence pending |
-| DC-45 | [Release Policy Tooling Consolidation](./accepted/DC-45-RELEASE-POLICY-TOOLING-CONSOLIDATION.md) | M2 / 0.19.0; design accepted; pre-oracle stage pending |
+| DC-45 | [Release Policy Tooling Consolidation](./accepted/DC-45-RELEASE-POLICY-TOOLING-CONSOLIDATION.md) | M2 / 0.19.0; stage-2 repair re-review pending |
 
 ## Done
 

@@ -40,12 +40,48 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   archives matched, checkout and extracted-archive verification/self-test passed all 154 cases, all 19
   manifest-bound direct dependencies and seven required checkout/archive identities matched, and all
   seven product package listings excluded oracle/tool paths. Architect post-commit evidence review v1
-  accepted the isolated freeze and this evidence on 2026-07-17. Stage-2 Rust implementation is now the
-  next authorized increment. Python remains authoritative; implementation and differential evidence
-  require separate review before cutover.
+  accepted the isolated freeze and this evidence on 2026-07-17. The stage-2 candidate now adds the
+  isolated unpublished Rust tool, mature offline Draft 2020-12 validation, independent typed policy
+  evaluation, the complete 154-case oracle and negative matrix, differential disagreement detection,
+  Cargo/package boundaries, and command-reference/publication inventories. The first repair re-review
+  accepted Pages parity, complete self-test replacement, and independent invariants. Repair re-review
+  v2 then accepted consumed-byte input identity but retained command closure over quoted comments,
+  long Python option sequences, and malformed executable text. The third repair candidate closes
+  those parser surfaces. Repair re-review v3 retained empty-quoted-word and dynamic Cargo authority
+  gaps. The fourth repair candidate tracks shell word start independently and rejects dynamic Cargo
+  executables/subcommands plus Cargo-less Rust-policy shapes under an explicit literal-inventory
+  authority boundary. Repair re-review v4 closed reference scanning but retained generic dynamic
+  executable-plus-phase publication. The fifth repair candidate rejects dynamic command heads by
+  structural command position, independent of variable names. Repair re-review v5 retained inline
+  YAML sequence and wrapper-option-operand gaps. The sixth repair candidate replaces permissive prefix
+  skipping with a closed YAML/assignment/`env`/`command` grammar. Repair re-review v6 accepted those
+  cases but retained arbitrary exec-wrapper indirection. The seventh repair candidate adds a
+  fail-closed default for unrecognized literal heads carrying dynamic arguments, with only an explicit
+  inert set exempted. Repair re-review v7 accepted that wrapper-class closure but retained backtick
+  command substitution and opaque shell-string execution. The eighth repair candidate fails closed on
+  executable backticks, shell `-c`, and `eval` command strings. Repair re-review v8 closed backticks
+  but retained the general opaque-string class. The ninth repair candidate structurally extracts YAML
+  `run:` scripts and applies a default-closed governed-command allowlist, closing unknown wrappers and
+  interpreters as a class. Repair re-review v9 accepted the default-closed model but found sequence
+  whitespace and non-first flow-key extraction gaps. The tenth repair candidate hardens both forms and
+  fails closed on malformed recognized command mappings. Repair re-review v10 closed those B7.3 gaps
+  but found that equivalent quoted or whitespace-separated block-mapping `run` keys were silently
+  omitted. The eleventh repair normalizes block and flow keys through the same quote/whitespace-aware
+  path, rejects recognized empty command values, and preserves the non-command `defaults.run` mapping
+  used by GitHub Actions. Architect repair re-review v11 accepted B7.4 and authorized the isolated
+  stage-2 implementation commit on 2026-07-17. The frozen dependency set remains unchanged under an
+  explicit fail-closed extractor decision; adding a YAML dependency would require a separate reviewed
+  dependency and lockfile re-freeze. Before Python retirement, follow-up controls must validate the
+  allowed nested keys under `defaults.run`, treat extractor/allowlist changes as policy changes, and
+  close responsibility-map executable correspondence. Python remains authoritative; post-commit
+  identity, archive, extracted-archive, checkout/archive, and product-package evidence remain required
+  before any cutover decision.
   Design acceptance satisfies only the pre-bootstrap planning dependency: no signer bootstrap or
   release action is authorized by DC-45. Rust cutover remains required before the 0.19.0 release
-  candidate but is not an M1 prerequisite.
+  candidate but is not an M1 prerequisite. DC-46 separately tracks the pre-existing mismatch between
+  the declared Rust 1.85 minimum and the locked product workspace. Its design starts after DC-45
+  cutover acceptance and must close, or be explicitly rescheduled through reviewed roadmap and
+  release-contract changes, before the 0.19.0 release candidate.
 - **M1 remains active.** DC-35 implementation is accepted and committed, but the signer allowlist
   remains empty and fail-closed. DC-39 remains proposed, DC-40 remains accepted with implementation
   evidence pending, and the combined 0.18.0/M1 release gate remains closed.
@@ -203,6 +239,8 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
 3. **M2 assurance and distribution baseline (target 0.19.0):** DC-45 is the first tooling increment;
    DC-41 through DC-43 add adversarial evidence, performance/maintainability gates, and release security
    controls after corrected behavior exists. DC-45 cutover is required before the release candidate.
+   DC-46 then resolves the separately tracked Rust 1.85 workspace compatibility mismatch before that
+   candidate unless an architect-reviewed schedule and compatibility-contract amendment says otherwise.
 4. **M3 migration and recoverable backup (release target unassigned):** DC-44 owns NFR-REL-03,
    verifiable backup/restore, and migration exercises that are explicitly outside DC-40 and M2.
 5. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,

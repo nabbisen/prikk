@@ -3,8 +3,8 @@
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-40, and DC-45
-Current implementation increment: DC-45 stage-2 Rust implementation authorized; not started
-Current design-review increment: none; DC-45 retirement schedule accepted on 2026-07-17
+Current implementation increment: DC-45 stage-2 implementation accepted; isolated commit pending
+Current design-review increment: DC-46 proposed; review begins after DC-45 cutover acceptance
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
@@ -64,10 +64,52 @@ repository-format stabilization, and public-preview readiness. The durable corre
   the manifest, manifest schema, verifier, generator, and three packs matched byte-for-byte between
   checkout and archive; and all seven product package listings excluded oracle/tool paths. Architect
   post-commit evidence review v1 accepted the isolated freeze and this evidence on 2026-07-17. Stage-2
-  Rust implementation is authorized while Python stays authoritative. Separate Rust implementation and
-  differential-evidence acceptance remains required before cutover, which is mandatory before the
-  0.19.0 release candidate.
+  Rust implementation is authorized while Python stays authoritative. Architect stage-2 implementation
+  re-review v1 found six blockers: Pages progression parity, per-case input identity, complete Python
+  self-test replacement, independent policy invariants, fail-closed reference scanning, and independent
+  publication-procedure authority. Architect repair re-review v1 closed Pages parity, self-test
+  replacement, and independent invariants, but kept input identity and both command scanners open.
+  Architect repair re-review v2 accepted consumed-byte input identity but found quoted-comment and
+  long Python-option escapes in the shared parser. The third repair uses quote-aware shell tokenization,
+  explicit command boundaries, arbitrary leading Python flags plus `--`, and fail-closed malformed or
+  unsupported executable command handling. Repair re-review v3 accepted those cases but found an
+  empty-quoted-word comment escape and dynamic Cargo authority gaps. The fourth repair tracks shell
+  word start independently from token bytes and enforces literal inventory-backed Cargo authority by
+  rejecting dynamic Cargo executables, dynamic Cargo subcommands, and Cargo-less Rust-policy shapes.
+  Repair re-review v4 closed reference scanning but found that generic dynamic executable and phase
+  names could still hide publication. The fifth repair rejects every dynamic command head after
+  bounded YAML/wrapper/assignment prefixes, independent of identifier spelling, while retaining
+  literal-inventory-only publication authority. Repair re-review v5 found incomplete YAML sequence
+  positioning and wrapper-option arity. The sixth repair uses a closed prefix grammar for `run:` and
+  `- run:`, explicit `env` option operands, bounded `command` options, and fail-closed unsupported or
+  incomplete wrapper prefixes. Repair re-review v6 accepted those forms but found that unrecognized
+  exec wrappers could still hide dynamic publication. The seventh repair rejects every unrecognized
+  literal head carrying dynamic arguments, with only an explicit inert command/metadata set exempted.
+  Repair re-review v7 accepted that wrapper-class closure but found backtick-substituted heads and
+  opaque shell command strings. The eighth repair preserves executable backtick evidence through
+  tokenization and fails closed on backticks, `sh`/`bash`/`dash -c`, and `eval` command strings rather
+  than interpreting them. Repair re-review v8 closed backticks but found the opaque-string class open
+  through other interpreters and nested wrappers. The ninth repair replaces denylist closure for
+  governed procedures with structural YAML `run:` extraction and a default-closed head model; only
+  policy commands, inventory publication forms, exact current CI commands, `mdbook build`, and inert
+  heads are accepted. Repair re-review v9 accepted the policy model but found valid YAML `run` shapes
+  silently omitted. The tenth repair accepts arbitrary post-dash whitespace, locates `run` anywhere in
+  flow mappings, and fails closed on malformed or unsupported recognized command forms. Repair
+  re-review v10 closed those B7.3 cases but found equivalent quoted and whitespace-separated block
+  `run` keys silently omitted. The eleventh repair uses the same normalized key path for block and flow
+  mappings, fails closed on recognized empty command values, and explicitly preserves GitHub Actions'
+  non-command `defaults.run` mapping. It keeps the frozen dependency identity and records that a YAML
+  dependency requires separate review and lockfile re-freeze. Architect repair re-review v11 accepted
+  B7.4 and authorized the isolated stage-2 implementation commit on 2026-07-17. Post-commit identity,
+  deterministic archive, extracted-archive, checkout/archive, and product-package evidence remain the
+  next required gate. Before Python retirement, follow-up controls must restrict `defaults.run` nested
+  keys to the GitHub Actions configuration contract, classify extractor/allowlist changes as policy
+  changes, and close responsibility-map executable correspondence. Python remains authoritative;
+  cutover remains separately reviewed and mandatory before the 0.19.0 release candidate.
 - DC-44 is the proposed post-M2 migration/backup/restore RFC; no release target is assigned.
+- DC-46 is the proposed Rust 1.85 compatibility corrective increment. It starts after DC-45 cutover
+  acceptance and must restore or explicitly amend the declared minimum-version contract before the
+  0.19.0 release candidate.
 - No release candidate is active. No proposed RFC is implementation authority until it moves to
   `rfcs/accepted/` under RFC-000.
 

@@ -7,6 +7,7 @@ import json
 
 from .challenge import challenge_valid
 from .evidence import evidence_valid, observed_digest, sequence_valid
+from .observation_identity import InputIdentity
 from .runner import _fixture_bytes, _load, _load_document, _mutate
 from .schema import SchemaValidator
 from .signer import authority_document_valid, transaction_valid
@@ -42,43 +43,100 @@ def _record(
     return record
 
 
+def _observed_record(
+    identity: InputIdentity,
+    suite_id: str,
+    case_id: str,
+    case_outcome: str,
+    consumed: dict[str, bytes],
+    *,
+    structural: str | None = None,
+    semantic: str | None = None,
+) -> dict[str, str]:
+    record = _record(
+        suite_id,
+        case_id,
+        case_outcome,
+        structural=structural,
+        semantic=semantic,
+    )
+    identity.bind(record, consumed)
+    return record
+
+
 def _boolean_suite(
-    path: Path, suite_id: str, validator: Callable[[dict[str, Any]], bool]
+    path: Path,
+    suite_id: str,
+    validator: Callable[[dict[str, Any]], bool],
+    identity: InputIdentity,
 ) -> list[dict[str, str]]:
+    table_bytes = path.read_bytes()
     return [
-        _record(suite_id, case["id"], "valid" if validator(case) else "invalid")
+        _observed_record(
+            identity,
+            suite_id,
+            case["id"],
+            "valid" if validator(case) else "invalid",
+            {"fixture-table": table_bytes},
+        )
         for case in _load(path)["cases"]
     ]
 
 
-def _state_observations(path: Path, root: Path, schema: SchemaValidator) -> list[dict[str, str]]:
-    def governance_valid(case: dict[str, Any]) -> bool | None:
+def _state_observations(
+    path: Path,
+    root: Path,
+    schema: SchemaValidator,
+    schema_bytes: bytes,
+    identity: InputIdentity,
+) -> list[dict[str, str]]:
+    def governance(case: dict[str, Any]) -> tuple[bool | None, dict[str, Any] | None]:
         reference = case.get("governance")
         if reference is None:
-            return None
+            return None, None
         if not isinstance(reference, dict):
-            return False
+            return False, None
+        name = reference.get("hold_evidence")
+        source = root / "fixtures" / f"release-evidence-{name}.json"
         try:
-            hold = _load(root / "fixtures" / f"release-evidence-{reference.get('hold_evidence')}.json")
+            hold = _load(source)
         except (OSError, TypeError):
-            return False
+            return False, {"state": "absent", "reference": name}
+        resolved = {
+            "state": "present",
+            "reference": name,
+            "source_path": source.relative_to(root.parent).as_posix(),
+            "document": hold,
+        }
         if schema.validate(hold) or not evidence_valid(hold) or hold["governance"] is None:
-            return False
+            return False, resolved
         if hold["governance"]["transaction_type"] != case.get("authority_change"):
-            return False
-        return (case.get("release_hold") == "active") == (
+            return False, resolved
+        valid = (case.get("release_hold") == "active") == (
             hold["governance"]["hold_ended_at"] is None
         )
+        return valid, resolved
 
     records = []
     for case in _load(path)["cases"]:
-        valid, local_only = release_state_valid(case, governance_valid(case))
+        governance_valid, resolved = governance(case)
+        valid, local_only = release_state_valid(case, governance_valid)
         outcome = "valid-local-only" if valid and local_only else "valid" if valid else "invalid"
-        records.append(_record("release-state", case["id"], outcome))
+        context = _fixture_bytes({"case": case, "governance_evidence": resolved})
+        records.append(
+            _observed_record(
+                identity,
+                "release-state",
+                case["id"],
+                outcome,
+                {"fixture-table": context, "schema": schema_bytes},
+            )
+        )
     return records
 
 
-def _schema_observations(path: Path) -> list[dict[str, str]]:
+def _schema_observations(path: Path, identity: InputIdentity) -> list[dict[str, str]]:
+    table_bytes = path.read_bytes()
     records = []
     for case in _load(path)["cases"]:
         try:
@@ -86,17 +144,29 @@ def _schema_observations(path: Path) -> list[dict[str, str]]:
             outcome = "valid" if valid else "invalid"
         except ValueError:
             outcome = "validator-error"
-        records.append(_record("schema-evaluator", case["id"], outcome))
+        records.append(
+            _observed_record(
+                identity,
+                "schema-evaluator",
+                case["id"],
+                outcome,
+                {"fixture-table": table_bytes},
+            )
+        )
     return records
 
 
-def _parser_observations(path: Path, root: Path) -> list[dict[str, str]]:
+def _parser_observations(
+    path: Path, root: Path, identity: InputIdentity
+) -> list[dict[str, str]]:
     if not path.exists():
         return []
     records = []
     for case in _load(path)["cases"]:
+        source = root / case["path"]
+        source_bytes = source.read_bytes()
         try:
-            _load(root / case["path"])
+            _load(source)
             outcome = "valid"
         except json.JSONDecodeError:
             outcome = "parse-error"
@@ -106,11 +176,24 @@ def _parser_observations(path: Path, root: Path) -> list[dict[str, str]]:
                 if type(error).__name__ == "DuplicateJsonNameError"
                 else "parse-error"
             )
-        records.append(_record("json-parser", case["id"], outcome))
+        records.append(
+            _observed_record(
+                identity,
+                "json-parser",
+                case["id"],
+                outcome,
+                {"fixture-table": source_bytes},
+            )
+        )
     return records
 
 
-def _evidence_observations(root: Path, validator: SchemaValidator) -> list[dict[str, str]]:
+def _evidence_observations(
+    root: Path,
+    validator: SchemaValidator,
+    schema_bytes: bytes,
+    identity: InputIdentity,
+) -> list[dict[str, str]]:
     fixtures = root / "fixtures"
     base_names = {
         "pending": "release-evidence-pending.json",
@@ -164,11 +247,20 @@ def _evidence_observations(root: Path, validator: SchemaValidator) -> list[dict[
         structural = "valid" if structural_valid else "invalid"
         semantic = "valid" if semantic_valid else "invalid" if structural_valid else "not-run"
         outcome = "valid" if structural_valid and semantic_valid else "invalid"
+        consumed = {
+            "schema": schema_bytes,
+            "fixture-table": _fixture_bytes({"prior": snapshots[-2] if len(snapshots) > 1 else None, "current": current}),
+            "current-snapshot": snapshot_bytes[-1],
+        }
+        if len(snapshots) > 1:
+            consumed["prior-snapshot"] = snapshot_bytes[0]
         records.append(
-            _record(
+            _observed_record(
+                identity,
                 "release-evidence",
                 case["id"],
                 outcome,
+                consumed,
                 structural=structural,
                 semantic=semantic,
             )
@@ -178,25 +270,78 @@ def _evidence_observations(root: Path, validator: SchemaValidator) -> list[dict[
 
 def observe(root: Path) -> dict[str, Any]:
     fixtures = root / "fixtures"
-    schema = SchemaValidator(_load(root / "schemas" / "release-evidence-v1.schema.json"))
+    identity = InputIdentity(root)
+    schema_path = root / "schemas" / "release-evidence-v1.schema.json"
+    schema_bytes = schema_path.read_bytes()
+    schema = SchemaValidator(_load(schema_path))
+    authority_bytes = (root.parent / "release-signers.toml").read_bytes()
     authority_valid = authority_document_valid(
-        (root.parent / "release-signers.toml").read_text(encoding="utf-8")
+        authority_bytes.decode("utf-8")
     )
-    records = [_record("signer-authority-live", "release-signers-toml", "valid" if authority_valid else "invalid")]
+    records = [
+        _observed_record(
+            identity,
+            "signer-authority-live",
+            "release-signers-toml",
+            "valid" if authority_valid else "invalid",
+            {"authority": authority_bytes},
+        )
+    ]
+    authority_table = fixtures / "signer-authority-cases.json"
+    authority_table_bytes = authority_table.read_bytes()
     records += [
-        _record(
+        _observed_record(
+            identity,
             "signer-authority",
             case["id"],
             "valid" if authority_document_valid(case["document"]) else "invalid",
+            {"fixture-table": authority_table_bytes},
         )
-        for case in _load(fixtures / "signer-authority-cases.json")["cases"]
+        for case in _load(authority_table)["cases"]
     ]
-    records += _boolean_suite(fixtures / "signer-governance-cases.json", "signer-governance", transaction_valid)
-    records += _boolean_suite(fixtures / "signer-challenge-cases.json", "signer-challenge", challenge_valid)
-    records += _state_observations(fixtures / "release-state-cases.json", root, schema)
-    records += _schema_observations(fixtures / "schema-evaluator-cases.json")
-    records += _parser_observations(fixtures / "json-parser-cases.json", root)
-    records += _evidence_observations(root, schema)
+    records += _boolean_suite(
+        fixtures / "signer-governance-cases.json",
+        "signer-governance",
+        transaction_valid,
+        identity,
+    )
+    for case in _load(fixtures / "signer-challenge-cases.json")["cases"]:
+        context = {
+            key: value
+            for key, value in case.items()
+            if key not in {"challenge", "expected"}
+        }
+        evaluated = {
+            **context,
+            "challenge": case["challenge"],
+            "expected": case["expected"],
+        }
+        records.append(
+            _observed_record(
+                identity,
+                "signer-challenge",
+                case["id"],
+                "valid" if challenge_valid(evaluated) else "invalid",
+                {
+                    "fixture-table": _fixture_bytes(context),
+                    "challenge": case["challenge"].encode("utf-8"),
+                },
+            )
+        )
+    records += _state_observations(
+        fixtures / "release-state-cases.json",
+        root,
+        schema,
+        schema_bytes,
+        identity,
+    )
+    records += _schema_observations(
+        fixtures / "schema-evaluator-cases.json", identity
+    )
+    records += _parser_observations(
+        fixtures / "json-parser-cases.json", root, identity
+    )
+    records += _evidence_observations(root, schema, schema_bytes, identity)
     records.sort(key=lambda item: (item["suite_id"], item["case_id"]))
     return {
         "schema_version": "python-policy-observations-v1",

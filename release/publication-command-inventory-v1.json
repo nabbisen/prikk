@@ -1,0 +1,28 @@
+{
+  "schema_version": "publication-command-inventory-v1",
+  "packages": [
+    "prikk-error",
+    "prikk-hash",
+    "prikk-crypto",
+    "prikk-object",
+    "prikk-replay",
+    "prikk-store",
+    "prikk"
+  ],
+  "procedures": [
+    {"phase": "package", "argv": ["cargo", "package", "--locked", "-p", "prikk-error"]},
+    {"phase": "package", "argv": ["cargo", "package", "--locked", "-p", "prikk-hash"]},
+    {"phase": "package", "argv": ["cargo", "package", "--locked", "-p", "prikk-crypto"]},
+    {"phase": "package", "argv": ["cargo", "package", "--locked", "-p", "prikk-object"]},
+    {"phase": "package", "argv": ["cargo", "package", "--locked", "-p", "prikk-replay"]},
+    {"phase": "package", "argv": ["cargo", "package", "--locked", "-p", "prikk-store"]},
+    {"phase": "package", "argv": ["cargo", "package", "--locked", "-p", "prikk"]},
+    {"phase": "publish", "argv": ["cargo", "publish", "--locked", "-p", "prikk-error"]},
+    {"phase": "publish", "argv": ["cargo", "publish", "--locked", "-p", "prikk-hash"]},
+    {"phase": "publish", "argv": ["cargo", "publish", "--locked", "-p", "prikk-crypto"]},
+    {"phase": "publish", "argv": ["cargo", "publish", "--locked", "-p", "prikk-object"]},
+    {"phase": "publish", "argv": ["cargo", "publish", "--locked", "-p", "prikk-replay"]},
+    {"phase": "publish", "argv": ["cargo", "publish", "--locked", "-p", "prikk-store"]},
+    {"phase": "publish", "argv": ["cargo", "publish", "--locked", "-p", "prikk"]}
+  ]
+}

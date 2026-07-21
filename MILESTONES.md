@@ -36,6 +36,7 @@ release boundary and may change only through an update to this file, `ROADMAP.md
 | Source/test structure gates absent | Maintainability risk | DC-42 | M2 |
 | Vulnerability reporting, SBOM, provenance absent | Distribution risk | DC-43 | M2 |
 | Mixed release-policy tooling ownership and custom schema evaluator | Tooling debt | DC-45 | M2 |
+| Declared Rust 1.85 minimum does not pass the locked product workspace | Compatibility debt | DC-46 | M2 |
 | Backup/restore verification and migration exercises absent | Recovery capability gap | DC-44 | M3 |
 
 ## M0 - Architecture ratification
@@ -97,6 +98,7 @@ review accepts the combined state. No production or public-preview claim follows
 2. DC-42 Performance and Maintainability Gates.
 3. DC-43 Release Security and Distribution Controls.
 4. DC-45 Release Policy Tooling Consolidation.
+5. DC-46 Workspace Rust 1.85 Compatibility.
 
 DC-45 is the first M2 tooling increment. Its design must be accepted before signer bootstrap, and its
 Rust command cutover must be accepted before the 0.19.0 release candidate; migration completion is not
@@ -129,6 +131,9 @@ DC-41 waits for the corrected contracts so its evidence does not bless supersede
 perform read-only measurements during M1, but semantic optimization or broad source moves wait until M1
 stabilizes. DC-43 policy design may proceed without credentials; implementation waits for security
 review and must consume the stable post-DC-45-cutover gate rather than extend the Python engine.
+DC-46 starts after DC-45 cutover acceptance and before the 0.19.0 release candidate. It must restore
+the declared Rust 1.85 locked-workspace contract or obtain an explicit architect-reviewed minimum-version
+and schedule amendment; DC-45 does not silently absorb this pre-existing product-workspace mismatch.
 
 **Completion condition:** reproducible crash/fuzz/hash/platform evidence is available, performance and
 source-structure gates are enforced or carry reviewed exceptions, and release artifacts have reviewed

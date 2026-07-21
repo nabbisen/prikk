@@ -1,0 +1,42 @@
+{
+  "schema_version": "release-policy-command-inventory-v1",
+  "primary_executable": {
+    "path": "release/check-policy.py",
+    "command": "python3 release/check-policy.py"
+  },
+  "invocation_markers": [
+    "python3 release/check-policy.py",
+    "python3 -B release/check-policy.py",
+    "python release/check-policy.py",
+    "python -B release/check-policy.py",
+    "cargo run --locked -p prikk-release-policy -- check",
+    "cargo run -p prikk-release-policy -- check"
+  ],
+  "references": [
+    {
+      "path": "docs/src/contributing/development.md",
+      "classification": "live-invocation",
+      "command": "python3 release/check-policy.py"
+    },
+    {
+      "path": "docs/src/reference/release-compatibility.md",
+      "classification": "live-invocation",
+      "command": "python3 release/check-policy.py"
+    },
+    {
+      "path": "release/README.md",
+      "classification": "live-invocation",
+      "command": "python3 release/check-policy.py"
+    },
+    {
+      "path": "rfcs/accepted/DC-45-RELEASE-POLICY-TOOLING-CONSOLIDATION.md",
+      "classification": "historical-or-explanatory",
+      "command": "cargo run --locked -p prikk-release-policy -- check"
+    },
+    {
+      "path": "tools/release-policy/README.md",
+      "classification": "historical-or-explanatory",
+      "command": "cargo run --locked -p prikk-release-policy -- check"
+    }
+  ]
+}
