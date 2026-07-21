@@ -168,3 +168,53 @@ fn governed_procedures_are_default_closed() {
                     - run: mdbook build\n";
     assert!(scan_yaml(workflow).errors.is_empty());
 }
+
+#[test]
+fn recognizes_exact_locked_workspace_procedures_without_authority() {
+    let commands = [
+        "cargo fmt --all -- --check",
+        "cargo clippy --workspace --all-targets --locked -- -D warnings",
+        "cargo test --workspace --locked",
+        "cargo check --workspace --all-targets --locked",
+        "cargo build --workspace --locked",
+    ];
+
+    for command in commands {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+            assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+
+    for command in [
+        "env MODE=ci cargo test --workspace --locked",
+        "command cargo check --workspace --all-targets --locked",
+    ] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+            assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+}
+
+#[test]
+fn rejects_near_miss_locked_workspace_procedures() {
+    for command in [
+        "cargo fmt --all --check",
+        "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
+        "cargo test --locked --workspace",
+        "cargo check --workspace --locked",
+        "cargo build --workspace --all-targets --locked --release",
+        "cargo +1.85.0 test --workspace --locked",
+        "$CARGO test --workspace --locked",
+        "cargo test \"$SCOPE\" --locked",
+        "bash -c 'cargo test --workspace --locked'",
+        "project-local-wrapper cargo test --workspace --locked",
+    ] {
+        assert!(!scan_shell(command).errors.is_empty(), "{command}");
+        assert!(
+            !scan_yaml(&format!("- run: {command}")).errors.is_empty(),
+            "{command}"
+        );
+    }
+}

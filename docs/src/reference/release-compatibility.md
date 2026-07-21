@@ -40,6 +40,18 @@ canonical identity schema, or domain change requires accepted design authority, 
 or domain, refusal or migration behavior, and literal compatibility vectors. Existing identity
 versions are never reinterpreted.
 
+The workspace's declared minimum Rust version is exactly 1.85.0. The locked product workspace must
+check, test, and build on that toolchain:
+
+```sh
+cargo +1.85.0 check --workspace --all-targets --locked
+cargo +1.85.0 test --workspace --locked
+cargo +1.85.0 build --workspace --locked
+```
+
+Current-stable quality gates are separate from minimum-version compatibility. In particular, strict
+Clippy runs on current stable because its lint set changes between compiler releases.
+
 A patch release must not intentionally break a documented surface. An unavoidable correctness or
 security break uses a minor release unless a committed emergency exception is accepted by maintainer
 and architect before tagging. The exception cannot waive identity versioning.
@@ -244,10 +256,10 @@ Applicable deterministic release gates include:
 
 ```sh
 cargo fmt --all -- --check
-cargo check --workspace --all-targets
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace
-cargo build --workspace
+cargo check --workspace --all-targets --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo test --workspace --locked
+cargo build --workspace --locked
 mdbook build docs
 git diff --check
 ```

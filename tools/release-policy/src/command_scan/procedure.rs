@@ -20,9 +20,22 @@ pub(super) fn allowed(tokens: &[String], index: usize, head: &str) -> bool {
 
 fn cargo(command: &str, arguments: &[String]) -> bool {
     match command {
-        "fmt" => arguments == ["--check"],
-        "test" => arguments == ["--workspace"],
-        "clippy" => arguments == ["--workspace", "--all-targets", "--", "-D", "warnings"],
+        "fmt" => arguments == ["--check"] || arguments == ["--all", "--", "--check"],
+        "test" => arguments == ["--workspace"] || arguments == ["--workspace", "--locked"],
+        "clippy" => {
+            arguments == ["--workspace", "--all-targets", "--", "-D", "warnings"]
+                || arguments
+                    == [
+                        "--workspace",
+                        "--all-targets",
+                        "--locked",
+                        "--",
+                        "-D",
+                        "warnings",
+                    ]
+        }
+        "check" => arguments == ["--workspace", "--all-targets", "--locked"],
+        "build" => arguments == ["--workspace", "--locked"],
         "install" => {
             arguments
                 == [

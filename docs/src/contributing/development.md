@@ -16,8 +16,20 @@ not passing evidence unless it was observed for the exact commit or release unde
 Run the standard checks before submitting a source drop:
 
 ```sh
-cargo fmt --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
 cargo run --locked -p prikk-release-policy -- check
 ```
+
+The workspace declares Rust 1.85 as its minimum supported version. Verify that contract with the exact
+minimum toolchain and locked dependency graph:
+
+```sh
+cargo +1.85.0 check --workspace --all-targets --locked
+cargo +1.85.0 test --workspace --locked
+cargo +1.85.0 build --workspace --locked
+```
+
+Strict Clippy remains a current-stable quality gate. It is not an MSRV gate because Clippy's lint set
+changes with the toolchain.

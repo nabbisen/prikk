@@ -171,9 +171,9 @@ prikk doctor [path] --repair-wal-tail
 Before proposing changes, run the relevant subset of:
 
 ```sh
-cargo fmt --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
 ```
 
 In restricted environments where the default temporary directory is read-only, use a workspace-local
@@ -181,7 +181,7 @@ temporary directory for integration tests:
 
 ```sh
 mkdir -p target/tmp
-TMPDIR="$PWD/target/tmp" cargo test --workspace
+TMPDIR="$PWD/target/tmp" cargo test --workspace --locked
 ```
 
 ## More Detail

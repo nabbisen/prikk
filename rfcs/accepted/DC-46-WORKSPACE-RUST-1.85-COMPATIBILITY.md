@@ -1,6 +1,7 @@
 # DC-46 - Workspace Rust 1.85 Compatibility
 
-**Status:** Accepted after architect design rereview v1 on 2026-07-21
+**Status:** Implementation accepted after architect implementation review v1 on 2026-07-21; owner
+commit and post-commit checkout/archive evidence pending
 **Milestone:** M2
 **Release target:** Before the 0.19.0 release candidate
 **Trigger:** Satisfied by architect acceptance of the DC-45 Rust policy-command cutover on 2026-07-21
@@ -13,7 +14,7 @@ unchanged. Rust 1.85 compile and test gates become release-blocking; strict Clip
 stable gate because Clippy's version-specific lint set is not part of the language compatibility
 contract.
 
-This proposed decision does not authorize implementation until architect design acceptance.
+Design acceptance authorizes only the bounded implementation and evidence sequence defined here.
 
 ## Problem And Reproduced Baseline
 
@@ -135,6 +136,13 @@ Specifically, existing stable Clippy becomes
 rustfmt does not resolve dependencies and that command does not accept `--locked`. CI labels and failure
 output must distinguish `stable` from `msrv-1.85.0`; a stable success cannot mask an MSRV failure.
 
+Architect command-grammar amendment QA v1 authorizes the five unique exact vectors above in the
+DC-45 governed-procedure classifier. The classifier applies repository-wide to governed shell and YAML
+under `.github`, `scripts`, and `release`; this is not a path-specific CI exception. Existing assignment,
+`env`, and `command` prefix normalization remains unchanged. The implementation must remain
+default-closed and add no toolchain-prefix, dynamic-argument, opaque-shell, or project-local-wrapper
+production. These ordinary commands must emit no policy or publication invocation.
+
 Rust 1.85 Clippy is deliberately not a required gate. A disposable repair probe showed that Rust 1.85
 check and the full test suite pass after the three control-flow rewrites, while Rust 1.85 Clippy rejects
 unrelated accepted source for version-specific lints including duplicated attributes, needless
@@ -151,13 +159,17 @@ The initial implementation candidate is limited to:
 - `crates/prikk-store/src/verify/tests.rs` only to declare the focused module;
 - `crates/prikk-store/src/verify/tests/trust.rs` for the required production-path regressions;
 - `.github/workflows/ci.yml`;
+- `tools/release-policy/src/command_scan/procedure.rs` only for the five exact ordinary-Cargo vectors;
+- existing `tools/release-policy/src/command_scan` test modules for positive and adversarial grammar
+  coverage;
 - public contributor/release compatibility documentation that states the exact MSRV gate; and
 - RFC, roadmap, milestone, and implementation-status bookkeeping.
 
 It must not change `Cargo.toml`, `Cargo.lock`, package manifests, the release-policy command inventory,
-either policy evaluator, oracle files, signer authority, release state, or product behavior outside the
-three compatibility rewrites. Test support changes outside the two authorized verification-test paths
-require design rereview.
+semantic policy evaluators, `command_scan/prefix.rs`, policy/publication invocation recognition,
+publication grammar, oracle files, signer authority, release state, or product behavior outside the
+three compatibility rewrites. Test support changes outside the authorized verification and command-scan
+test paths require design rereview.
 
 ## Required Implementation Evidence
 
@@ -186,7 +198,7 @@ unpublished tool must never enter the publication list.
 ### Current-toolchain and authority evidence
 
 ```text
-cargo fmt --all --check
+cargo fmt --all -- --check
 RUSTFLAGS="-D warnings" cargo check --workspace --all-targets --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
@@ -238,8 +250,9 @@ implementation.
 - No minimum-version increase or rolling-MSRV policy.
 - No dependency refresh, lockfile regeneration, feature change, or package-graph refactor.
 - No product behavior, storage format, cryptographic, trust, WAL, or failpoint semantics change.
-- No release-policy evaluator, command authority, oracle, signer, release-state, tag, publication, or
-  release action.
+- No semantic release-policy evaluator, command authority, inventory, oracle, signer, release-state,
+  tag, publication, or release action. The architect-approved exact ordinary-command classifier
+  amendment is the sole release-policy tooling exception.
 - No Python retirement or DC-45 stability claim.
 - No broad syntax downgrade beyond the four reproduced let-chain expressions.
 - No trust implementation/refactor beyond the one compatibility rewrite and focused regression tests.

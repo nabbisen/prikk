@@ -99,7 +99,13 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   authority. DC-46 separately tracks the pre-existing mismatch between the declared Rust 1.85 minimum
   and the locked product workspace. Architect design rereview v1 accepted restoration of Rust 1.85
   through three bounded source rewrites, focused trust regressions, and pinned locked CI gates on
-  2026-07-21. Bounded implementation may begin. DC-46 must close, or be explicitly
+  2026-07-21. The bounded implementation candidate exposed a conflict with the accepted DC-45
+  procedure grammar. Architect command-grammar amendment QA v1 authorized five exact ordinary-Cargo
+  vectors and existing scanner tests. Architect implementation review v1 accepted the complete
+  candidate on 2026-07-21; the owner commit and post-commit checkout/archive evidence remain pending.
+  Before the 0.19.0 release candidate, deliberately reconcile the public `--all-features` Clippy gate
+  with the governed classifier's accepted CI vector; do not discover that divergence in a later
+  workflow edit. DC-46 must close, or be explicitly
   rescheduled through reviewed roadmap and release-contract changes, before the 0.19.0 release
   candidate.
 - **M1 remains active.** DC-35 implementation is accepted and committed, but the signer allowlist

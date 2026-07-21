@@ -46,8 +46,10 @@ impl<'a> PublicationTrustVerifier<'a> {
                 }
             }
         }
-        if let Some(policy) = &self.policy
-            && let Err(issue) = verify_trusted_publication_envelope(policy, envelope)
+        if let Some(issue) = self
+            .policy
+            .as_ref()
+            .and_then(|policy| verify_trusted_publication_envelope(policy, envelope).err())
         {
             self.issues.push(issue);
         }

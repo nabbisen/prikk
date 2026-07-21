@@ -100,11 +100,12 @@ impl Wal {
             ));
         }
         let (root, relative) = self.mutation()?;
-        if let Some(last) = replay.records.last()
-            && last.envelope == *envelope
-        {
-            append_file_required(root, relative, &[])?;
-            return Ok(last.seq);
+        match replay.records.last() {
+            Some(last) if last.envelope == *envelope => {
+                append_file_required(root, relative, &[])?;
+                return Ok(last.seq);
+            }
+            _ => {}
         }
         let next_seq = replay.records.last().map_or(Ok(1), |last| {
             last.seq

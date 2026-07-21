@@ -3,7 +3,7 @@
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-40, DC-45, and DC-46
-Current implementation increment: DC-46 accepted; bounded Rust 1.85 restoration not started
+Current implementation increment: DC-46 implementation accepted; owner commit and post-commit evidence pending
 Current design-review increment: none
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
@@ -126,7 +126,10 @@ repository-format stabilization, and public-preview readiness. The durable corre
 - DC-46 is the accepted Rust 1.85 compatibility corrective increment. Architect design rereview v1
   accepted three bounded `prikk-store` control-flow rewrites, focused production-path trust tests,
   pinned locked MSRV/stable CI commands, unchanged dependencies and lockfile, and separate current-
-  stable Clippy on 2026-07-21. Bounded implementation may begin. It must restore
+  stable Clippy on 2026-07-21. Architect command-grammar amendment QA v1 authorized the five exact
+  ordinary-Cargo vectors and existing scanner tests needed by the accepted CI contract. Architect
+  implementation review v1 accepted the complete candidate on 2026-07-21; the owner commit and
+  post-commit checkout/archive evidence remain pending. It must restore
   or explicitly amend the declared minimum-version contract before the 0.19.0 release candidate.
 - No release candidate is active. No proposed RFC is implementation authority until it moves to
   `rfcs/accepted/` under RFC-000.

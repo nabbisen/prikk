@@ -277,16 +277,17 @@ fn wait_at_test_barrier(barrier: TestBarrier) {
 fn check(point: Point) -> Result<()> {
     NEXT.with(|next| {
         let mut next = next.borrow_mut();
-        if let Some((selected, remaining)) = next.as_mut()
-            && *selected == point
-        {
-            if *remaining == 0 {
-                *next = None;
-                return Err(PrikkError::Io(format!(
-                    "injected filesystem failure at {point:?}"
-                )));
+        match next.as_mut() {
+            Some((selected, remaining)) if *selected == point => {
+                if *remaining == 0 {
+                    *next = None;
+                    return Err(PrikkError::Io(format!(
+                        "injected filesystem failure at {point:?}"
+                    )));
+                }
+                *remaining = remaining.saturating_sub(1);
             }
-            *remaining = remaining.saturating_sub(1);
+            _ => {}
         }
         Ok(())
     })

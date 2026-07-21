@@ -146,7 +146,10 @@ stabilizes. DC-43 policy design may proceed without credentials; implementation 
 review and must consume the stable post-DC-45-cutover gate rather than extend the Python engine.
 DC-46 design now selects restoration of the declared Rust 1.85 locked-workspace contract through three
 bounded source rewrites, focused trust regressions, and pinned locked CI gates. Architect design
-rereview v1 accepted it on 2026-07-21; bounded implementation may begin. It must close before
+rereview v1 accepted it on 2026-07-21. Architect command-grammar amendment QA v1 then authorized five
+exact ordinary-Cargo vectors and existing scanner tests after the prepared candidate exposed a DC-45
+classifier conflict. Architect implementation review v1 accepted the complete candidate on 2026-07-21;
+the owner commit and post-commit checkout/archive evidence remain pending. It must close before
 the 0.19.0 release candidate or obtain an explicit architect-reviewed minimum-version and schedule
 amendment; DC-45 does not silently absorb this pre-existing product-workspace mismatch.
 
