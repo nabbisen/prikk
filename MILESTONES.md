@@ -99,8 +99,8 @@ review accepts the combined state. No production or public-preview claim follows
 3. DC-43 Release Security and Distribution Controls.
 4. DC-45 Release Policy Tooling Consolidation.
 5. DC-46 Workspace Rust 1.85 Compatibility.
-6. DC-47 Stable Clippy Gate Alignment.
-7. DC-48 Legacy Clippy Production Retirement (planned after DC-47 post-commit acceptance).
+6. DC-47 Stable Clippy Gate Alignment (complete at `ea95e92`; post-commit evidence accepted).
+7. DC-48 Legacy Clippy Production Retirement (design preparation; required before the 0.19.0 RC).
 
 DC-45 is the first M2 tooling increment. Its design must be accepted before signer bootstrap, and its
 Rust command cutover must be accepted before the 0.19.0 release candidate; migration completion is not
@@ -160,9 +160,10 @@ DC-45 governed classifier select the no-all-features vector. It proposes preserv
 release gate and adding one exact non-authority classifier production. Architect design review v1
 accepted the bounded design on 2026-07-21. Architect legacy-vector test-contract QA v1 resolved the
 retained-vector contradiction and authorized bounded implementation. Architect implementation review
-v1 accepted the candidate on 2026-07-21; the owner commit and post-commit review remain required. After
-those pass, DC-48 must separately retire both unconsumed legacy Clippy productions before the 0.19.0
-release candidate.
+v1 accepted the candidate on 2026-07-21, committed as `ea95e92`. Architect post-commit evidence review
+v1 accepted its clean checkout/archive evidence on 2026-07-21, completing DC-47. DC-48 must separately
+retire both unconsumed legacy Clippy productions before the 0.19.0 release candidate; its design
+preparation is next and implementation is not yet authorized.
 
 **Completion condition:** reproducible crash/fuzz/hash/platform evidence is available, performance and
 source-structure gates are enforced or carry reviewed exceptions, and release artifacts have reviewed

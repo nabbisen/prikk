@@ -1,8 +1,8 @@
 # DC-47 - Stable Clippy Gate Alignment
 
-**Status.** Accepted after architect design review v1 and legacy-vector test-contract QA v1 on
-2026-07-21; architect implementation review v1 accepted the candidate on 2026-07-21; owner commit and
-post-commit evidence review pending.
+**Status.** Complete at `ea95e925a38c8d26052684575d331c1393d98533`; architect implementation
+review v1 and post-commit evidence review v1 accepted the implementation and immutable evidence on
+2026-07-21.
 **Target milestone.** M2 - before the 0.19.0 release candidate.
 **Tracks.** DC-46 implementation-review N1 and post-commit-review N1.
 **Touches.** Stable CI Clippy command, governed ordinary-Cargo procedure grammar and tests,
@@ -137,19 +137,21 @@ section. Boundary/reference success alone does not prove canonical selection.
    package listings after normalizing only Cargo's expected `.cargo_vcs_info.json`, verify frozen
    identities, and obtain separate post-commit evidence acceptance.
 
-Architect implementation review v1 accepted the bounded candidate on 2026-07-21. The owner commit and
-the post-commit evidence sequence remain pending; DC-47 is not yet complete.
+Architect implementation review v1 accepted the bounded candidate on 2026-07-21. The owner committed
+it as `ea95e925a38c8d26052684575d331c1393d98533`; architect post-commit evidence review v1 accepted
+the clean no-hardlink checkout and deterministic archive evidence on 2026-07-21.
 
 The frozen identities include root `Cargo.toml`, every workspace package manifest, `Cargo.lock`, both
 command inventories, the oracle manifest, and `release-signers.toml`.
 
 ## Required Follow-Up
 
-DC-48 will retire the historical unlocked and locked no-all-features Clippy productions after DC-47's
-implementation commit and post-commit evidence are accepted. At that trigger, stable CI is the sole
-current governed Clippy consumer and uses the canonical vector, so the subtraction can restore
-classifier-enforced canonical selection. DC-48 requires its own design, implementation, and policy
-review; it is targeted before the 0.19.0 release candidate and is not part of DC-47 scope.
+DC-48 will retire the historical unlocked and locked no-all-features Clippy productions. DC-47's
+implementation commit and post-commit evidence are accepted, so this design-preparation trigger is now
+satisfied. Stable CI is the sole current governed Clippy consumer and uses the canonical vector, so the
+subtraction can restore classifier-enforced canonical selection. DC-48 requires its own design,
+implementation, and policy review; it is targeted before the 0.19.0 release candidate and is not part
+of DC-47 scope.
 
 ## Failure And Rollback
 
@@ -176,3 +178,6 @@ public contributor/release guidance, and the governed classifier; implementation
 reviews accept the exact-vector grammar and evidence; all frozen identities and product boundaries are
 preserved; and durable status records the immutable completion commit. Completion removes only this
 pre-0.19.0 release-candidate blocker.
+
+This gate was satisfied at `ea95e925a38c8d26052684575d331c1393d98533` after architect post-commit
+evidence review v1 on 2026-07-21. DC-48 remains the separate pre-0.19.0 release-candidate blocker.

@@ -6,7 +6,12 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
 
 ## Current Increment
 
-- **DC-47 - stable Clippy gate alignment (accepted).** DC-46 implementation and post-commit reviews
+- **DC-48 - legacy Clippy production retirement (design preparation).** DC-47's implementation commit
+  and post-commit evidence are accepted, satisfying the trigger for a separate subtractive design to
+  remove the historical unlocked and locked no-all-features classifier productions. DC-48 must restore
+  classifier-enforced canonical selection before the 0.19.0 release candidate. Design preparation and
+  architect review are next; implementation is not yet authorized.
+- **DC-47 - stable Clippy gate alignment (complete).** DC-46 implementation and post-commit reviews
   identified that DC-35's public release gate uses `--all-features` while stable CI and the DC-45
   default-closed classifier recognize only the no-all-features form. All workspace packages currently
   declare zero features and the exact locked all-features command passes. DC-47 proposes preserving
@@ -14,13 +19,9 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   non-authority classifier vector. Architect design review v1 accepted the bounded design on
   2026-07-21. Architect legacy-vector test-contract QA v1 resolved the accepted test contradiction:
   the locked legacy vector remains positive, while all non-colliding near misses fail closed. The
-  bounded implementation was accepted by architect implementation review v1 on 2026-07-21. The owner
-  commit and separate post-commit evidence review remain required. DC-47 must close before the 0.19.0
-  release candidate.
-- **DC-48 - legacy Clippy production retirement (planned).** After DC-47's implementation commit and
-  post-commit evidence are accepted, draft the separate subtractive design to remove the historical
-  unlocked and locked no-all-features classifier productions. DC-48 restores classifier-enforced
-  canonical selection and must close before the 0.19.0 release candidate.
+  bounded implementation was accepted by architect implementation review v1 on 2026-07-21 and committed
+  as `ea95e92`. Architect post-commit evidence review v1 accepted the clean checkout/archive evidence
+  on 2026-07-21. DC-47 is complete; its required DC-48 follow-up remains a pre-0.19.0 RC blocker.
 - **DC-45 - release policy tooling consolidation (accepted).** Architect design repair re-review v1
   accepted the executable oracle, schema-profile, Cargo-boundary, and cutover/rollback contracts on
   2026-07-16. Duplicate-name profile hardening was accepted and committed as profile-contract identity
