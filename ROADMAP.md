@@ -6,6 +6,14 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
 
 ## Current Increment
 
+- **DC-47 - stable Clippy gate alignment (accepted).** DC-46 implementation and post-commit reviews
+  identified that DC-35's public release gate uses `--all-features` while stable CI and the DC-45
+  default-closed classifier recognize only the no-all-features form. All workspace packages currently
+  declare zero features and the exact locked all-features command passes. DC-47 proposes preserving
+  DC-35's stronger contract, aligning stable CI and contributor guidance, and adding one exact
+  non-authority classifier vector. Architect design review v1 accepted the bounded design on
+  2026-07-21; implementation may begin but requires separate review. DC-47 must close before the
+  0.19.0 release candidate.
 - **DC-45 - release policy tooling consolidation (accepted).** Architect design repair re-review v1
   accepted the executable oracle, schema-profile, Cargo-boundary, and cutover/rollback contracts on
   2026-07-16. Duplicate-name profile hardening was accepted and committed as profile-contract identity
@@ -104,10 +112,8 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   vectors and existing scanner tests. Architect implementation review v1 accepted the candidate,
   committed as `0d221af`, and architect post-commit evidence review v1 accepted its clean
   checkout/archive evidence on 2026-07-21. DC-46 and the Rust 1.85 compatibility blocker are complete.
-  Before the 0.19.0 release candidate, deliberately reconcile the public `--all-features` Clippy gate
-  with the governed classifier's accepted CI vector; do not discover that divergence in a later
-  workflow edit. This follow-up remains separate from completed DC-46 and must close before the 0.19.0
-  release candidate.
+  DC-47 now owns the separately tracked public `--all-features` Clippy and governed-classifier
+  reconciliation before the 0.19.0 release candidate.
 - **M1 remains active.** DC-35 implementation is accepted and committed, but the signer allowlist
   remains empty and fail-closed. DC-39 remains proposed, DC-40 remains accepted with implementation
   evidence pending, and the combined 0.18.0/M1 release gate remains closed.

@@ -2,8 +2,8 @@
 
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
-Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-40, DC-45, and DC-46
-Current implementation increment: none; DC-46 completed at `0d221af`
+Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-40, DC-45, DC-46, and DC-47
+Current implementation increment: DC-47 accepted; bounded implementation not started
 Current design-review increment: none
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
@@ -123,6 +123,10 @@ repository-format stabilization, and public-preview readiness. The durable corre
   executable correspondence. Python and the frozen oracle remain required through the first Rust-gated
   0.19.0 release and an accepted later-commit stability rerun.
 - DC-44 is the proposed post-M2 migration/backup/restore RFC; no release target is assigned.
+- DC-47 is the accepted stable Clippy gate-alignment increment. It preserves DC-35's public
+  `--all-features` release contract and proposes aligning stable CI, contributor guidance, and one
+  exact default-closed non-authority command-classifier vector before the 0.19.0 release candidate.
+  Architect design review v1 accepted the bounded design on 2026-07-21; implementation has not started.
 - DC-46 is the accepted Rust 1.85 compatibility corrective increment. Architect design rereview v1
   accepted three bounded `prikk-store` control-flow rewrites, focused production-path trust tests,
   pinned locked MSRV/stable CI commands, unchanged dependencies and lockfile, and separate current-

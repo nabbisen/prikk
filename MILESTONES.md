@@ -99,6 +99,7 @@ review accepts the combined state. No production or public-preview claim follows
 3. DC-43 Release Security and Distribution Controls.
 4. DC-45 Release Policy Tooling Consolidation.
 5. DC-46 Workspace Rust 1.85 Compatibility.
+6. DC-47 Stable Clippy Gate Alignment.
 
 DC-45 is the first M2 tooling increment. Its design must be accepted before signer bootstrap, and its
 Rust command cutover must be accepted before the 0.19.0 release candidate; migration completion is not
@@ -152,6 +153,11 @@ classifier conflict. Architect implementation review v1 accepted the complete ca
 it was committed as `0d221af`, and architect post-commit evidence review v1 accepted its clean
 checkout/archive evidence. DC-46 and the Rust 1.85 compatibility blocker are complete; DC-45 does not
 silently absorb this resolved product-workspace mismatch.
+DC-47 is the accepted pre-0.19.0 release-candidate correction for the remaining Clippy command
+divergence: DC-35 public release guidance selects `--all-features`, while current stable CI and the
+DC-45 governed classifier select the no-all-features vector. It proposes preserving the stronger
+release gate and adding one exact non-authority classifier production. Architect design review v1
+accepted the bounded design on 2026-07-21; implementation and post-commit reviews remain required.
 
 **Completion condition:** reproducible crash/fuzz/hash/platform evidence is available, performance and
 source-structure gates are enforced or carry reviewed exceptions, and release artifacts have reviewed
