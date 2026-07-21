@@ -10,8 +10,12 @@ schedule added after owner review was accepted after architect design repair re-
 2026-07-17. The project owner committed the exact 13-file compact oracle with the reviewed
 design/status update as stage-1 freeze commit `47aec9c` on 2026-07-17. Required post-commit
 archive/package evidence was accepted after architect review v1 on 2026-07-17. Stage-2 Rust
-implementation is authorized while Python remains authoritative; cutover and every later authority
-gate remain separate.
+implementation was accepted after architect repair re-review v11 and committed as `6a65a35` on
+2026-07-21 while Python remains authoritative. Deterministic archive, isolated checkout/extraction,
+engine, boundary, reference, identity, and product-package evidence was accepted after architect
+post-commit evidence review v1 on 2026-07-21. Preparation of an isolated authoritative-command cutover
+candidate and disposable rollback rehearsal is authorized; cutover and every later authority gate
+remain separate.
 **Target milestone.** M2 - first tooling increment; cutover required before the 0.19.0 release
 candidate.
 **Tracks.** Architect direction on DC-35 release-policy tooling debt.

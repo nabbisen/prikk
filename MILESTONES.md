@@ -125,8 +125,12 @@ remain durably tracked if DC-45 moves to `done/` before their completion. The pr
 the exact 13-file oracle with the reviewed design/status update as stage-1 freeze commit `47aec9c` on
 2026-07-17. Deterministic archive, checkout/extracted verification, direct-dependency/identity, and
 seven-product-package exclusion evidence was accepted after architect post-commit evidence review v1
-on 2026-07-17. Stage-2 Rust implementation may begin while Python remains authoritative; separate
-implementation and differential-evidence acceptance remains required before cutover.
+on 2026-07-17. Stage-2 Rust implementation was accepted after architect repair re-review v11 and
+committed as `6a65a35` on 2026-07-21. Its deterministic archive, isolated checkout/extraction,
+Python/Rust engine, differential, boundary, reference, identity, and seven-product-package exclusion
+evidence was accepted after architect post-commit evidence review v1 on 2026-07-21. Preparation of an
+isolated authoritative-command cutover candidate and disposable rollback rehearsal is now authorized.
+Python remains authoritative; cutover remains a separate reviewed gate.
 DC-41 waits for the corrected contracts so its evidence does not bless superseded behavior. DC-42 may
 perform read-only measurements during M1, but semantic optimization or broad source moves wait until M1
 stabilizes. DC-43 policy design may proceed without credentials; implementation waits for security

@@ -73,9 +73,14 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   explicit fail-closed extractor decision; adding a YAML dependency would require a separate reviewed
   dependency and lockfile re-freeze. Before Python retirement, follow-up controls must validate the
   allowed nested keys under `defaults.run`, treat extractor/allowlist changes as policy changes, and
-  close responsibility-map executable correspondence. Python remains authoritative; post-commit
-  identity, archive, extracted-archive, checkout/archive, and product-package evidence remain required
-  before any cutover decision.
+  close responsibility-map executable correspondence. The accepted stage-2 implementation was
+  committed as `6a65a35` on 2026-07-21. Two deterministic archives match; isolated checkout and
+  extracted-archive Python/Rust, differential, boundary, and reference checks pass; source trees and
+  frozen identities match; and all seven product package listings exclude tool/oracle paths. This
+  post-commit evidence was accepted after architect review v1 on 2026-07-21. The next authorized work
+  is preparation of an isolated authoritative-command cutover candidate and disposable rollback
+  rehearsal for separate review. Python remains authoritative, and cutover remains a separate
+  decision.
   Design acceptance satisfies only the pre-bootstrap planning dependency: no signer bootstrap or
   release action is authorized by DC-45. Rust cutover remains required before the 0.19.0 release
   candidate but is not an M1 prerequisite. DC-46 separately tracks the pre-existing mismatch between

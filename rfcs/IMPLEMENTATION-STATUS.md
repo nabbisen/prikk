@@ -3,7 +3,7 @@
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-40, and DC-45
-Current implementation increment: DC-45 stage-2 implementation accepted; isolated commit pending
+Current implementation increment: DC-45 cutover candidate and rollback rehearsal preparation authorized
 Current design-review increment: DC-46 proposed; review begins after DC-45 cutover acceptance
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
@@ -101,11 +101,15 @@ repository-format stabilization, and public-preview readiness. The durable corre
   non-command `defaults.run` mapping. It keeps the frozen dependency identity and records that a YAML
   dependency requires separate review and lockfile re-freeze. Architect repair re-review v11 accepted
   B7.4 and authorized the isolated stage-2 implementation commit on 2026-07-17. Post-commit identity,
-  deterministic archive, extracted-archive, checkout/archive, and product-package evidence remain the
-  next required gate. Before Python retirement, follow-up controls must restrict `defaults.run` nested
-  keys to the GitHub Actions configuration contract, classify extractor/allowlist changes as policy
-  changes, and close responsibility-map executable correspondence. Python remains authoritative;
-  cutover remains separately reviewed and mandatory before the 0.19.0 release candidate.
+  deterministic archive, extracted-archive, checkout/archive, and product-package evidence were
+  collected after the accepted implementation was committed as `6a65a35` on 2026-07-21; architect
+  post-commit evidence review v1 accepted them on 2026-07-21. Preparation of the isolated
+  authoritative-command cutover candidate and disposable rollback rehearsal is authorized for
+  separate architect review. Before Python retirement, follow-up controls must restrict `defaults.run`
+  nested keys to the GitHub Actions configuration contract, classify extractor/allowlist changes as
+  policy changes, and close responsibility-map executable correspondence. Python remains
+  authoritative; cutover remains separately reviewed and mandatory before the 0.19.0 release
+  candidate.
 - DC-44 is the proposed post-M2 migration/backup/restore RFC; no release target is assigned.
 - DC-46 is the proposed Rust 1.85 compatibility corrective increment. It starts after DC-45 cutover
   acceptance and must restore or explicitly amend the declared minimum-version contract before the
