@@ -77,8 +77,13 @@ byte/object, canonical-governance, tag-shape, and attempt-growth repairs. No sig
 remains a separate prerequisite. DC-45 design acceptance is required before bootstrap, but completing
 the Rust tooling migration is not. Until DC-45 cutover, bootstrap uses the accepted Python gate under
 the separately reviewed DC-35 governance transaction. Architect design repair re-review v1 accepted
-DC-45 on 2026-07-16; this acceptance does not itself authorize bootstrap. DC-39 implementation waits
-for its own design review while using accepted DC-34 authority.
+DC-45 on 2026-07-16; this acceptance does not itself authorize bootstrap. DC-39 architect review v1
+required authority over the public canonical serializer and strict Ed25519 signature shape. The
+design repair adds those rules, the invalid-predecessor `add_signature` invariant, and deterministic
+diagnostic multiplicity/order while retaining the DC-34 preimage vector, canonical envelope tuple,
+format-1 diagnostics, writer inventory, and companion RefUpdate no-clock erratum. Architect design
+re-review v1 accepted the repaired design on 2026-07-22. Bounded implementation is authorized next;
+implementation evidence remains pending.
 DC-38 and DC-40 designs, including the DC-40 companion state-root/format FDD, were accepted on
 2026-07-14. DC-40 implementation remains pending behind the remaining M1 sequencing and its own gate.
 

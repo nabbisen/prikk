@@ -24,12 +24,11 @@ consistent with its folder.
 
 ## Proposed
 
-These records are under design review. DC-39 remains proposed, and all proposed RFCs must respect the
-dependencies in [`MILESTONES.md`](../MILESTONES.md).
+These records are under design review. All proposed RFCs must respect the dependencies in
+[`MILESTONES.md`](../MILESTONES.md).
 
 | ID | Title | Milestone |
 |---|---|---|
-| DC-39 | [Signature and Envelope Authority](./proposed/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md) | M1 / 0.18.0 |
 | DC-41 | [Integrity Evidence Campaign](./proposed/DC-41-INTEGRITY-EVIDENCE-CAMPAIGN.md) | M2 / 0.19.0 |
 | DC-42 | [Performance and Maintainability Gates](./proposed/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md) | M2 / 0.19.0 |
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0 |
@@ -46,6 +45,7 @@ These reviewed designs may govern downstream work but have not yet released.
 | DC-36 | [Existing-Object Publication Integrity](./accepted/DC-36-EXISTING-OBJECT-PUBLICATION-INTEGRITY.md) | M1 / 0.18.0; implementation accepted |
 | DC-37 | [Required Filesystem Durability](./accepted/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md) | M1 / 0.18.0; implementation accepted |
 | DC-38 | [Ref Publication Crash Recovery](./accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) | M1 / 0.18.0; implementation accepted |
+| DC-39 | [Signature and Envelope Authority](./accepted/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md) | M1 / 0.18.0; implementation evidence pending |
 | DC-40 | [State Merkle Root and Format Transition](./accepted/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md) | M1 / 0.18.0; implementation evidence pending |
 | DC-45 | [Release Policy Tooling Consolidation](./accepted/DC-45-RELEASE-POLICY-TOOLING-CONSOLIDATION.md) | M2 / 0.19.0; Rust command authoritative, later stability and Python retirement pending |
 | DC-46 | [Workspace Rust 1.85 Compatibility](./accepted/DC-46-WORKSPACE-RUST-1.85-COMPATIBILITY.md) | M2 / before 0.19.0 RC; complete at `0d221af`, post-commit evidence accepted |
@@ -127,7 +127,8 @@ These records currently live under `archive/`.
 
 ## Handoffs
 
-Companion handoff directories currently exist for DC-10 through DC-25 and for proposed DC-40:
+Companion handoff directories currently exist for DC-10 through DC-25 and corrective DC-37, DC-39,
+and DC-40:
 
 - [DC-10 rollback draft signing](./handoffs/DC-10-rollback-draft-signing/)
 - [DC-11 maintainer trust store](./handoffs/DC-11-maintainer-trust-store/)
@@ -146,6 +147,7 @@ Companion handoff directories currently exist for DC-10 through DC-25 and for pr
 - [DC-24 data model and trust/threat docs](./handoffs/DC-24-data-model-trust-threat-docs/)
 - [DC-25 merge planning surface](./handoffs/DC-25-merge-planning-surface/)
 - [DC-37 required filesystem durability](./handoffs/DC-37-required-filesystem-durability/)
+- [DC-39 signature and envelope authority](./handoffs/DC-39-signature-envelope-authority/)
 - [DC-40 state Merkle and format transition](./handoffs/DC-40-state-merkle-format-transition/)
 
 ## Current Reference Docs

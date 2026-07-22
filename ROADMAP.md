@@ -6,6 +6,16 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
 
 ## Current Increment
 
+- **DC-39 - signature and envelope authority (accepted; implementation next).** Architect review v1
+  required the public canonical envelope serializer and strict Ed25519 shape to enter the authority boundary. The
+  repaired design now pins those rules, invalid-predecessor handling for `add_signature`, and
+  deterministic diagnostic multiplicity/order. It also retains the accepted DC-34 preimage with a
+  literal deterministic Ed25519 vector, defines one duplicate/order tuple excluding advisory
+  signature time, separates structural format-1 diagnosis from strict
+  new-write/format-2 validation, inventories persistence and signing surfaces, and records the
+  schema-1 RefUpdate zero no-clock sentinel in a companion FDD-03 erratum. Architect design re-review
+  v1 accepted the repaired RFC and companion on 2026-07-22. Bounded implementation is the next step;
+  no implementation evidence or release authority is yet accepted.
 - **DC-48 - legacy Clippy production retirement (complete).** DC-47's implementation commit
   and post-commit evidence are accepted, satisfying the trigger for a separate subtractive design to
   remove the historical unlocked and locked no-all-features classifier productions. DC-48 must restore
@@ -126,8 +136,8 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   DC-47 now owns the separately tracked public `--all-features` Clippy and governed-classifier
   reconciliation before the 0.19.0 release candidate.
 - **M1 remains active.** DC-35 implementation is accepted and committed, but the signer allowlist
-  remains empty and fail-closed. DC-39 remains proposed, DC-40 remains accepted with implementation
-  evidence pending, and the combined 0.18.0/M1 release gate remains closed.
+  remains empty and fail-closed. DC-39 and DC-40 are accepted with implementation evidence pending,
+  and the combined 0.18.0/M1 release gate remains closed.
 
 ## Release Candidate Increment
 
