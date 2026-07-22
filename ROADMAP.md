@@ -11,8 +11,8 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   remove the historical unlocked and locked no-all-features classifier productions. DC-48 must restore
   classifier-enforced canonical selection before the 0.19.0 release candidate. Architect design review
   v1 accepted the bounded subtraction and required exact bare/prefixed A/B rejection evidence on
-  2026-07-22. Bounded implementation preparation is authorized; no implementation or commit is yet
-  accepted.
+  2026-07-22. Architect implementation review v1 accepted the bounded candidate on 2026-07-22. The
+  owner commit and separate post-commit evidence review remain required; DC-48 is not yet complete.
 - **DC-47 - stable Clippy gate alignment (complete).** DC-46 implementation and post-commit reviews
   identified that DC-35's public release gate uses `--all-features` while stable CI and the DC-45
   default-closed classifier recognize only the no-all-features form. All workspace packages currently

@@ -23,26 +23,16 @@ fn cargo(command: &str, arguments: &[String]) -> bool {
         "fmt" => arguments == ["--check"] || arguments == ["--all", "--", "--check"],
         "test" => arguments == ["--workspace"] || arguments == ["--workspace", "--locked"],
         "clippy" => {
-            arguments == ["--workspace", "--all-targets", "--", "-D", "warnings"]
-                || arguments
-                    == [
-                        "--workspace",
-                        "--all-targets",
-                        "--locked",
-                        "--",
-                        "-D",
-                        "warnings",
-                    ]
-                || arguments
-                    == [
-                        "--workspace",
-                        "--all-targets",
-                        "--all-features",
-                        "--locked",
-                        "--",
-                        "-D",
-                        "warnings",
-                    ]
+            arguments
+                == [
+                    "--workspace",
+                    "--all-targets",
+                    "--all-features",
+                    "--locked",
+                    "--",
+                    "-D",
+                    "warnings",
+                ]
         }
         "check" => arguments == ["--workspace", "--all-targets", "--locked"],
         "build" => arguments == ["--workspace", "--locked"],

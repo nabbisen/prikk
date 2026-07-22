@@ -163,7 +163,7 @@ fn governed_procedures_are_default_closed() {
 
     let workflow = "url: ${{ steps.deployment.outputs.page_url }}\n\
                     - run: cargo fmt --check\n\
-                    - run: cargo clippy --workspace --all-targets -- -D warnings\n\
+                    - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings\n\
                     - run: cargo test --workspace\n\
                     - run: mdbook build\n";
     assert!(scan_yaml(workflow).errors.is_empty());
@@ -173,7 +173,6 @@ fn governed_procedures_are_default_closed() {
 fn recognizes_exact_locked_workspace_procedures_without_authority() {
     let commands = [
         "cargo fmt --all -- --check",
-        "cargo clippy --workspace --all-targets --locked -- -D warnings",
         "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
         "cargo test --workspace --locked",
         "cargo check --workspace --all-targets --locked",
@@ -191,10 +190,36 @@ fn recognizes_exact_locked_workspace_procedures_without_authority() {
         "MODE=ci cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
         "env MODE=ci cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
         "command cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
+        "MODE=ci cargo test --workspace --locked",
+        "env MODE=ci cargo test --workspace --locked",
+        "command cargo test --workspace --locked",
     ] {
         for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
             assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
             assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+}
+
+#[test]
+fn rejects_retired_clippy_productions_through_bounded_prefixes() {
+    for arguments in [
+        "--workspace --all-targets -- -D warnings",
+        "--workspace --all-targets --locked -- -D warnings",
+    ] {
+        for prefix in ["", "MODE=ci ", "env MODE=ci ", "command "] {
+            let command = format!("{prefix}cargo clippy {arguments}");
+            for scan in [
+                scan_shell(&command),
+                scan_yaml(&format!("- run: {command}")),
+            ] {
+                assert_eq!(
+                    scan.errors,
+                    vec!["unclassified-procedure-command"],
+                    "{command}"
+                );
+                assert!(scan.invocations.is_empty(), "{command}");
+            }
         }
     }
 }

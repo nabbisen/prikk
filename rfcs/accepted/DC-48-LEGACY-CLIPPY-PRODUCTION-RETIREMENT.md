@@ -1,7 +1,7 @@
 # DC-48 - Legacy Clippy Production Retirement
 
-**Status.** Accepted after architect design review v1 on 2026-07-22; bounded implementation
-preparation authorized, but no implementation or owner commit accepted.
+**Status.** Architect implementation review v1 accepted the bounded candidate on 2026-07-22; owner
+commit and post-commit evidence review pending; DC-48 is not yet complete.
 **Target milestone.** M2 - required before the 0.19.0 release candidate.
 **Tracks.** DC-47 required follow-up and post-commit-review N1/N2.
 **Touches.** Governed ordinary-Cargo procedure grammar and command-scan tests only, plus RFC/status
@@ -152,6 +152,9 @@ line. Historical RFCs and handoffs are excluded from this current-surface invari
    invocation, compare product package listings after normalizing only Cargo's expected
    `.cargo_vcs_info.json`, verify frozen identities, and obtain separate post-commit evidence
    acceptance.
+
+Architect implementation review v1 accepted the bounded candidate on 2026-07-22. The owner commit and
+post-commit evidence sequence remain pending; DC-48 is not yet complete.
 
 The frozen identities include root `Cargo.toml`, every workspace package manifest, `Cargo.lock`, both
 command inventories, the oracle manifest, and `release-signers.toml`.

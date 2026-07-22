@@ -164,7 +164,8 @@ v1 accepted the candidate on 2026-07-21, committed as `ea95e92`. Architect post-
 v1 accepted its clean checkout/archive evidence on 2026-07-21, completing DC-47. DC-48 must separately
 retire both unconsumed legacy Clippy productions before the 0.19.0 release candidate; its design
 was accepted after architect review v1 on 2026-07-22 with exact bare/prefixed A/B rejection evidence
-required. Bounded implementation preparation is authorized; no implementation or commit is accepted.
+required. Architect implementation review v1 accepted the bounded candidate on 2026-07-22; the owner
+commit and post-commit evidence review remain required.
 
 **Completion condition:** reproducible crash/fuzz/hash/platform evidence is available, performance and
 source-structure gates are enforced or carry reviewed exceptions, and release artifacts have reviewed
