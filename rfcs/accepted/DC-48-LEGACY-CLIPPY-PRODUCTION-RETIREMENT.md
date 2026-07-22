@@ -1,7 +1,8 @@
 # DC-48 - Legacy Clippy Production Retirement
 
-**Status.** Architect implementation review v1 accepted the bounded candidate on 2026-07-22; owner
-commit and post-commit evidence review pending; DC-48 is not yet complete.
+**Status.** Complete at `383e503c3a87b0bcf8e370df9e48bc406a3e59d0`; architect implementation
+review v1 and post-commit evidence review v1 accepted the implementation and immutable evidence on
+2026-07-22.
 **Target milestone.** M2 - required before the 0.19.0 release candidate.
 **Tracks.** DC-47 required follow-up and post-commit-review N1/N2.
 **Touches.** Governed ordinary-Cargo procedure grammar and command-scan tests only, plus RFC/status
@@ -153,8 +154,9 @@ line. Historical RFCs and handoffs are excluded from this current-surface invari
    `.cargo_vcs_info.json`, verify frozen identities, and obtain separate post-commit evidence
    acceptance.
 
-Architect implementation review v1 accepted the bounded candidate on 2026-07-22. The owner commit and
-post-commit evidence sequence remain pending; DC-48 is not yet complete.
+Architect implementation review v1 accepted the bounded candidate on 2026-07-22. The owner committed
+it as `383e503c3a87b0bcf8e370df9e48bc406a3e59d0`; architect post-commit evidence review v1 accepted
+the clean no-hardlink checkout and deterministic archive evidence on 2026-07-22.
 
 The frozen identities include root `Cargo.toml`, every workspace package manifest, `Cargo.lock`, both
 command inventories, the oracle manifest, and `release-signers.toml`.
@@ -199,3 +201,6 @@ surfaces remain exactly canonical; implementation and post-commit evidence revie
 subtraction; all frozen identities and product boundaries are preserved; and durable status records
 the immutable completion commit. Completion removes only the legacy-Clippy-production blocker before
 the 0.19.0 release candidate.
+
+This gate was satisfied at `383e503c3a87b0bcf8e370df9e48bc406a3e59d0` after architect post-commit
+evidence review v1 on 2026-07-22. No release-candidate or other M1/M2 authorization follows.

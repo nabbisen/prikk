@@ -6,13 +6,14 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
 
 ## Current Increment
 
-- **DC-48 - legacy Clippy production retirement (accepted).** DC-47's implementation commit
+- **DC-48 - legacy Clippy production retirement (complete).** DC-47's implementation commit
   and post-commit evidence are accepted, satisfying the trigger for a separate subtractive design to
   remove the historical unlocked and locked no-all-features classifier productions. DC-48 must restore
   classifier-enforced canonical selection before the 0.19.0 release candidate. Architect design review
   v1 accepted the bounded subtraction and required exact bare/prefixed A/B rejection evidence on
-  2026-07-22. Architect implementation review v1 accepted the bounded candidate on 2026-07-22. The
-  owner commit and separate post-commit evidence review remain required; DC-48 is not yet complete.
+  2026-07-22. Architect implementation review v1 accepted the bounded candidate, committed as
+  `383e503`. Architect post-commit evidence review v1 accepted its clean checkout/archive evidence on
+  2026-07-22. DC-48 and the legacy-Clippy-production blocker are complete.
 - **DC-47 - stable Clippy gate alignment (complete).** DC-46 implementation and post-commit reviews
   identified that DC-35's public release gate uses `--all-features` while stable CI and the DC-45
   default-closed classifier recognize only the no-all-features form. All workspace packages currently

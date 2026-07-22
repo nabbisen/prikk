@@ -3,7 +3,7 @@
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-40, DC-45, DC-46, DC-47, and DC-48
-Current implementation increment: DC-48 implementation accepted; owner commit and post-commit evidence pending
+Current implementation increment: none
 Current design-review increment: none
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
@@ -132,8 +132,9 @@ repository-format stabilization, and public-preview readiness. The durable corre
   review v1 accepted its clean checkout/archive evidence on 2026-07-21, completing DC-47. DC-48 design
   was accepted after architect review v1 on 2026-07-22 and must retire both unconsumed legacy Clippy
   productions before the 0.19.0 release candidate. Exact bare and bounded-prefix A/B rejection evidence
-  is binding. Architect implementation review v1 accepted the bounded candidate on 2026-07-22; the
-  owner commit and post-commit evidence review remain required, so DC-48 is not yet complete.
+  is binding. Architect implementation review v1 accepted the bounded candidate, committed as
+  `383e503`. Architect post-commit evidence review v1 accepted its clean checkout/archive evidence on
+  2026-07-22, completing DC-48 and the legacy-Clippy-production blocker.
 - DC-46 is the accepted Rust 1.85 compatibility corrective increment. Architect design rereview v1
   accepted three bounded `prikk-store` control-flow rewrites, focused production-path trust tests,
   pinned locked MSRV/stable CI commands, unchanged dependencies and lockfile, and separate current-
