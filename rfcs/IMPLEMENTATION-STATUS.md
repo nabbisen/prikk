@@ -4,7 +4,7 @@ Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-39, DC-40, DC-45, DC-46, DC-47,
 and DC-48
-Current implementation increment: DC-39 (candidate awaiting implementation review)
+Current implementation increment: DC-40 (accepted design; implementation next)
 Current design-review increment: none
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
@@ -26,20 +26,21 @@ repository-format stabilization, and public-preview readiness. The durable corre
   second repair re-review required byte/object, canonical-governance, tag-shape, and attempt-growth
   bindings. Architect repair re-review v3 accepted the completed implementation on 2026-07-16. The
   signer allowlist remains empty; bootstrap and all release work remain blocked. DC-45 design acceptance
-  is required before bootstrap, but its Rust migration is not a bootstrap prerequisite. DC-40
-  implementation and identity-vector evidence remain pending.
+  is required before bootstrap, but its Rust migration is not a bootstrap prerequisite. DC-39 is
+  complete at `8f565f2` after accepted post-commit evidence. DC-40 implementation and identity-vector
+  evidence remain pending and are the current M1 increment.
 - DC-39 is accepted after architect design re-review v1 on 2026-07-22. Architect review v1 required
   authority over the public canonical envelope serializer and algorithm-specific signature shape.
   The design repair now adds strict 64-byte
   Ed25519 admission, serializer rejection before output, invalid-predecessor handling for
   `add_signature`, and deterministic diagnostic multiplicity/order to the existing DC-34 vector,
   format boundary, persistence inventory, and RefUpdate no-clock rule. The bounded implementation
-  candidate now applies strict admission at all inventoried new-write boundaries, preserves format-1
+  applies strict admission at all inventoried new-write boundaries, preserves format-1
   bytes while reporting deterministic warning-only diagnostics, and pins the required vectors and
-  compatibility matrix. Current-toolchain and Rust 1.85 workspace tests, warnings-denied Clippy, and
-  the mdBook build pass. Architect implementation review remains pending; no implementation acceptance
-  or release authority is claimed. It and the other accepted M1 work are held for one 0.18.0 corrective
-  release after all blocking findings close.
+  compatibility matrix. Architect implementation repair re-review v2 accepted the candidate, committed
+  as `8f565f2`; architect post-commit evidence review v1 accepted independent no-hardlink checkout and
+  deterministic-archive evidence on 2026-07-22. DC-39 implementation is complete but remains under
+  `accepted/` until the 0.18.0 release. No release authority follows from this closure.
 - DC-41 through DC-43 are proposed M2 assurance/distribution RFCs and do not authorize implementation
   before their dependencies and individual design reviews are satisfied. DC-45 is the accepted first
   M2 tooling increment after architect design repair re-review v1 on 2026-07-16. Duplicate-name profile

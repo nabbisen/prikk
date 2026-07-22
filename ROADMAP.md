@@ -6,20 +6,27 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
 
 ## Current Increment
 
-- **DC-39 - signature and envelope authority (implementation review pending).** Architect review v1
-  required the public canonical envelope serializer and strict Ed25519 shape to enter the authority boundary. The
-  repaired design now pins those rules, invalid-predecessor handling for `add_signature`, and
+- **DC-40 - state Merkle root and format transition (implementation next).** The accepted RFC and
+  companion state-root/format FDD define the remaining M1 identity correction: a canonical clean-tree
+  Merkle root, repository-format-aware reads, seal/replay/verify integration, pinned vectors, and
+  explicit format-1/format-2 compatibility behavior. DC-39 now supplies the accepted strict envelope
+  validator required by this increment. DC-40 implementation and evidence remain separately gated;
+  no format transition or release authority is claimed yet.
+- **DC-39 - signature and envelope authority (complete at `8f565f2`).** Architect review v1
+  required the public canonical envelope serializer and strict Ed25519 shape to enter the authority
+  boundary. The repaired design now pins those rules, invalid-predecessor handling for `add_signature`, and
   deterministic diagnostic multiplicity/order. It also retains the accepted DC-34 preimage with a
   literal deterministic Ed25519 vector, defines one duplicate/order tuple excluding advisory
   signature time, separates structural format-1 diagnosis from strict
   new-write/format-2 validation, inventories persistence and signing surfaces, and records the
   schema-1 RefUpdate zero no-clock sentinel in a companion FDD-03 erratum. Architect design re-review
-  v1 accepted the repaired RFC and companion on 2026-07-22. The bounded implementation candidate now
+  v1 accepted the repaired RFC and companion on 2026-07-22. The bounded implementation
   enforces strict canonical admission before new persistence, retains structural format-1 reads with
   deterministic warning-only diagnostics, pins the signature preimage and shape matrix, and documents
-  the public compatibility boundary. Current-toolchain and Rust 1.85 workspace tests, warnings-denied
-  Clippy, and the mdBook build pass; architect implementation review and release authority remain
-  pending.
+  the public compatibility boundary. Implementation repair re-review v2 accepted the candidate and
+  post-commit evidence review v1 accepted independent no-hardlink checkout and deterministic-archive
+  evidence on 2026-07-22. The implementation is complete but remains in `accepted/` until 0.18.0 is
+  released; no release authority follows from completion.
 - **DC-48 - legacy Clippy production retirement (complete).** DC-47's implementation commit
   and post-commit evidence are accepted, satisfying the trigger for a separate subtractive design to
   remove the historical unlocked and locked no-all-features classifier productions. DC-48 must restore
@@ -140,9 +147,9 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   DC-47 now owns the separately tracked public `--all-features` Clippy and governed-classifier
   reconciliation before the 0.19.0 release candidate.
 - **M1 remains active.** DC-35 implementation is accepted and committed, but the signer allowlist
-  remains empty and fail-closed. DC-39 has an implementation candidate awaiting review, DC-40 remains
-  accepted with implementation evidence pending, and the combined 0.18.0/M1 release gate remains
-  closed.
+  remains empty and fail-closed. DC-39 implementation and post-commit evidence are complete. DC-40 is
+  the current separately gated implementation increment, and the combined 0.18.0/M1 release gate
+  remains closed.
 
 ## Release Candidate Increment
 

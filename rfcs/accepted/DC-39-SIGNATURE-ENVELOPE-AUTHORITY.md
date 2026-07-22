@@ -1,7 +1,8 @@
 # RFC (accepted) - DC-39 Signature and Envelope Authority
 
-**Status.** Accepted after architect design re-review on 2026-07-22; bounded implementation evidence
-remains pending. DC-34 is accepted upstream authority.
+**Status.** Accepted after architect design re-review on 2026-07-22; implementation complete at
+`8f565f2` after accepted post-commit evidence review. Awaits the 0.18.0 release lifecycle transition.
+DC-34 is accepted upstream authority.
 **Target milestone.** M1 - 0.18.0 corrective release.
 **Tracks.** Architect review B5, N1, and N2.
 **Baseline.** `df80c14932df15a1e8f0f54e3a6f79401efd0003`.
