@@ -301,17 +301,13 @@ fn rollback_purpose_with_legacy_marker_signature_is_rejected() {
 fn rollback_purpose_with_short_ed25519_author_signature_is_rejected() {
     let mut envelope = rollback_patch_envelope();
     envelope.signatures.clear();
-    assert!(
-        envelope
-            .add_signature(Signature {
-                algorithm: SignatureAlgorithm::Ed25519,
-                key_id: "rollback-author-key".to_string(),
-                signature_bytes: vec![1],
-                created_at: 1,
-                signer_role: SignerRole::Author,
-            })
-            .is_ok()
-    );
+    envelope.signatures.push(Signature {
+        algorithm: SignatureAlgorithm::Ed25519,
+        key_id: "rollback-author-key".to_string(),
+        signature_bytes: vec![1],
+        created_at: 1,
+        signer_role: SignerRole::Author,
+    });
     let verified = super::verify_rollback_patch_envelope(&envelope, "test rollback patch");
     assert!(verified.is_err());
 }

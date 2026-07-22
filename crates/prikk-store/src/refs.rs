@@ -11,6 +11,11 @@ mod pointer;
 mod publication;
 mod verify;
 
+#[cfg(test)]
+pub(crate) use log::{
+    append_log_record as append_log_record_for_signature_test, encode_log_record_for_test,
+};
+
 use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, RefUpdatePayload};
 
@@ -283,6 +288,8 @@ pub(crate) fn validate_publication(publication: &RefPublication) -> Result<()> {
     validate_local_branch_ref(&publication.ref_name)?;
     require_signed_type(&publication.ref_state, ObjectType::RefState)?;
     require_signed_type(&publication.ref_update, ObjectType::RefUpdate)?;
+    publication.ref_state.validate_strict()?;
+    publication.ref_update.validate_strict()?;
     Ok(())
 }
 

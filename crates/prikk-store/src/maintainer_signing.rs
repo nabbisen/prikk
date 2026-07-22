@@ -31,13 +31,16 @@ pub fn maintainer_signature(
         signer.key_id(),
     )?;
     let signature_bytes = signer.sign(&preimage)?;
-    Ok(Signature {
+    let signature = Signature {
         algorithm: SignatureAlgorithm::Ed25519,
         key_id: signer.key_id().to_string(),
         signature_bytes,
         created_at: 0,
         signer_role: SignerRole::Maintainer,
-    })
+    };
+    signature.validate()?;
+    signature.validate_shape()?;
+    Ok(signature)
 }
 
 /// Ed25519-backed maintainer signer built from caller-supplied key material.

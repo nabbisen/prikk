@@ -132,7 +132,8 @@ pub struct RefUpdatePayload {
     pub new_target_object_id: ObjectId,
     /// Update sequence.
     pub update_seq: u64,
-    /// Authoritative event creation timestamp.
+    /// Schema-1 no-clock sentinel; production writes require zero.
+    /// Retained nonzero format-1 values are legacy diagnostic data, never authoritative time.
     pub created_at: u64,
     /// Author key ID.
     pub author_key_id: String,

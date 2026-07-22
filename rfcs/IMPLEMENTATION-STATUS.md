@@ -4,7 +4,7 @@ Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-39, DC-40, DC-45, DC-46, DC-47,
 and DC-48
-Current implementation increment: none
+Current implementation increment: DC-39 (candidate awaiting implementation review)
 Current design-review increment: none
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
@@ -33,9 +33,13 @@ repository-format stabilization, and public-preview readiness. The durable corre
   The design repair now adds strict 64-byte
   Ed25519 admission, serializer rejection before output, invalid-predecessor handling for
   `add_signature`, and deterministic diagnostic multiplicity/order to the existing DC-34 vector,
-  format boundary, persistence inventory, and RefUpdate no-clock rule. Bounded implementation is the
-  next step; no implementation evidence is yet accepted. It and the other accepted M1 work are held
-  for one 0.18.0 corrective release after all blocking findings close.
+  format boundary, persistence inventory, and RefUpdate no-clock rule. The bounded implementation
+  candidate now applies strict admission at all inventoried new-write boundaries, preserves format-1
+  bytes while reporting deterministic warning-only diagnostics, and pins the required vectors and
+  compatibility matrix. Current-toolchain and Rust 1.85 workspace tests, warnings-denied Clippy, and
+  the mdBook build pass. Architect implementation review remains pending; no implementation acceptance
+  or release authority is claimed. It and the other accepted M1 work are held for one 0.18.0 corrective
+  release after all blocking findings close.
 - DC-41 through DC-43 are proposed M2 assurance/distribution RFCs and do not authorize implementation
   before their dependencies and individual design reviews are satisfied. DC-45 is the accepted first
   M2 tooling increment after architect design repair re-review v1 on 2026-07-16. Duplicate-name profile

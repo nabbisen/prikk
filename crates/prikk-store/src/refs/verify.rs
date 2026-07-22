@@ -8,6 +8,9 @@ use prikk_error::{PrikkError, Result};
 use crate::fsutil::{EntryKind, list_directory};
 use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
+use crate::signature_diagnostics::{
+    SignatureEnvelopeIssue, SignatureEnvelopeSource, classify_signature_envelope,
+};
 
 mod scan;
 
@@ -33,12 +36,26 @@ pub(crate) struct RefVerification {
     pub log_record_count: usize,
     pub ref_update_envelopes: Vec<prikk_object::ObjectEnvelope>,
     pub publication_issues: Vec<RefPublicationIssue>,
+    pub signature_envelope_issues: Vec<SignatureEnvelopeIssue>,
 }
 
 pub(crate) fn verify_refs(layout: &RepositoryLayout) -> Result<RefVerification> {
     let objects = FileObjectStore::new(layout.clone());
     let pointers = read_pointers(layout, &objects)?;
-    let (logs, log_record_count, ref_update_envelopes) = read_logs(layout, &objects, &pointers)?;
+    let (logs, log_record_count, ref_log_envelopes) = read_logs(layout, &objects, &pointers)?;
+    let mut ref_update_envelopes = Vec::with_capacity(ref_log_envelopes.len());
+    let mut signature_envelope_issues = Vec::new();
+    for record in ref_log_envelopes {
+        signature_envelope_issues.extend(classify_signature_envelope(
+            &record.envelope,
+            SignatureEnvelopeSource::RefLog {
+                ref_name: record.ref_name,
+                sequence: record.sequence,
+                object_id: record.envelope.object_id(),
+            },
+        )?);
+        ref_update_envelopes.push(record.envelope);
+    }
     let mut names = BTreeSet::new();
     names.extend(pointers.keys().cloned());
     names.extend(logs.keys().cloned());
@@ -56,6 +73,7 @@ pub(crate) fn verify_refs(layout: &RepositoryLayout) -> Result<RefVerification> 
         log_record_count,
         ref_update_envelopes,
         publication_issues,
+        signature_envelope_issues,
     })
 }
 

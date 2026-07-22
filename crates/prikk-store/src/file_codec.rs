@@ -10,7 +10,17 @@ const ENVELOPE_FILE_MAGIC: &[u8; 8] = b"POBJ0001";
 
 /// Encode an envelope for object-store or WAL persistence.
 pub(crate) fn encode_envelope_file(envelope: &ObjectEnvelope) -> Result<Vec<u8>> {
+    envelope.validate_strict()?;
+    encode_envelope_fields(envelope)
+}
+
+#[cfg(test)]
+pub(crate) fn encode_envelope_file_structural(envelope: &ObjectEnvelope) -> Result<Vec<u8>> {
     envelope.validate()?;
+    encode_envelope_fields(envelope)
+}
+
+fn encode_envelope_fields(envelope: &ObjectEnvelope) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     out.extend_from_slice(ENVELOPE_FILE_MAGIC);
     push_u16(&mut out, envelope.object_type.code());

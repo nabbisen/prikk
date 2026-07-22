@@ -46,6 +46,7 @@ mod refs;
 mod rollback_draft;
 mod rollback_preview;
 mod rollback_verify;
+mod signature_diagnostics;
 mod snapshot;
 mod text_span;
 mod trust;
@@ -55,6 +56,8 @@ mod worktree;
 mod worktree_patch;
 mod worktree_status;
 
+#[cfg(test)]
+mod signature_contract_tests;
 #[cfg(test)]
 mod test_support;
 
@@ -102,6 +105,7 @@ pub use rollback_preview::{
     RollbackPreviewChange, RollbackPreviewChangeKind, RollbackPreviewPlan, prepare_rollback_preview,
 };
 pub use rollback_verify::{RollbackDraftVerification, verify_active_rollback_draft};
+pub use signature_diagnostics::{SignatureEnvelopeIssue, SignatureEnvelopeSource};
 pub use snapshot::{SnapshotEntry, SnapshotManifest};
 pub use trust::{
     MaintainerTrustPolicy, PublicationTrustIssue, add_trusted_maintainer,

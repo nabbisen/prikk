@@ -135,7 +135,7 @@ pub(crate) fn dummy_signature() -> Signature {
     Signature {
         algorithm: SignatureAlgorithm::Ed25519,
         key_id: "author-key".to_string(),
-        signature_bytes: vec![1, 2, 3, 4],
+        signature_bytes: vec![1; 64],
         created_at: 7,
         signer_role: SignerRole::Author,
     }
@@ -155,7 +155,7 @@ pub(crate) fn legacy_rollback_marker_signature() -> Signature {
     Signature {
         algorithm: SignatureAlgorithm::Ed25519,
         key_id: "dev-placeholder-rollback-author".to_string(),
-        signature_bytes: vec![9, 9, 9, 9],
+        signature_bytes: vec![9; 64],
         created_at: 9,
         signer_role: SignerRole::Author,
     }
@@ -165,7 +165,7 @@ pub(crate) fn maintainer_signature() -> Signature {
     Signature {
         algorithm: SignatureAlgorithm::Ed25519,
         key_id: "maintainer-key".to_string(),
-        signature_bytes: vec![5, 6, 7, 8],
+        signature_bytes: vec![5; 64],
         created_at: 8,
         signer_role: SignerRole::Maintainer,
     }

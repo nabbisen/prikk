@@ -20,7 +20,10 @@ fn legacy_timestamp_is_warning_only_for_reads_but_blocks_mutation() -> prikk_err
     let mut envelope =
         ObjectEnvelope::unsigned(ObjectType::RefUpdate, 1, update.to_canonical_bytes()?);
     envelope.add_signature(maintainer_signature())?;
-    log::append_log_record(&layout, "heads/main", &envelope)?;
+    std::fs::write(
+        layout.ref_log_path("heads/main"),
+        log::encode_log_record_for_test(&envelope)?,
+    )?;
 
     let report = verify_repository(&layout)?;
     assert!(!report.has_blocking_ref_publication_issues());

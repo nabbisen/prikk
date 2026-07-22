@@ -11,6 +11,9 @@ use crate::file_codec::decode_envelope_file;
 use crate::fsutil::{EntryKind, inspect_entry, list_directory, read_file_required};
 use crate::layout::{RepositoryLayout, persisted_object_types};
 use crate::object_store::FileObjectStore;
+use crate::signature_diagnostics::{
+    SignatureEnvelopeIssue, SignatureEnvelopeSource, classify_signature_envelope,
+};
 
 pub(super) struct ObjectSummary {
     pub(super) object_count: usize,
@@ -18,6 +21,7 @@ pub(super) struct ObjectSummary {
     pub(super) rollback_block_count: usize,
     pub(super) rollback_patch_count: usize,
     pub(super) temp_paths: Vec<PathBuf>,
+    pub(super) signature_issues: Vec<SignatureEnvelopeIssue>,
 }
 
 impl ObjectSummary {
@@ -28,6 +32,7 @@ impl ObjectSummary {
             rollback_block_count: 0,
             rollback_patch_count: 0,
             temp_paths: Vec::new(),
+            signature_issues: Vec::new(),
         }
     }
 
@@ -45,6 +50,7 @@ impl ObjectSummary {
             "rollback patch",
         )?;
         self.temp_paths.extend(other.temp_paths);
+        self.signature_issues.extend(other.signature_issues);
         Ok(())
     }
 }
@@ -85,7 +91,13 @@ fn verify_object_type(
         }
     }
     let mut summary = ObjectSummary::empty();
-    for entry in list_directory(layout.repository_mutation_root(), &relative_dir)? {
+    let mut entries = list_directory(layout.repository_mutation_root(), &relative_dir)?;
+    entries.sort_by(|left, right| {
+        left.name
+            .as_encoded_bytes()
+            .cmp(right.name.as_encoded_bytes())
+    });
+    for entry in entries {
         let prefix_path = dir.join(&entry.name);
         if entry.kind != EntryKind::Directory {
             return Err(PrikkError::Integrity(format!(
@@ -113,7 +125,13 @@ fn verify_prefix_dir(
 ) -> Result<ObjectSummary> {
     let mut summary = ObjectSummary::empty();
     let relative_prefix = layout.repository_relative(prefix_path)?;
-    for entry in list_directory(layout.repository_mutation_root(), &relative_prefix)? {
+    let mut entries = list_directory(layout.repository_mutation_root(), &relative_prefix)?;
+    entries.sort_by(|left, right| {
+        left.name
+            .as_encoded_bytes()
+            .cmp(right.name.as_encoded_bytes())
+    });
+    for entry in entries {
         let path = prefix_path.join(&entry.name);
         if entry.kind != EntryKind::Regular {
             return Err(PrikkError::Integrity(format!(
@@ -125,7 +143,9 @@ fn verify_prefix_dir(
             summary.temp_paths.push(path);
             continue;
         }
-        let object = verify_object_file(layout, object_store, object_type, &path, trust_verifier)?;
+        let (object, signature_issues) =
+            verify_object_file(layout, object_store, object_type, &path, trust_verifier)?;
+        summary.signature_issues.extend(signature_issues);
         summary.object_count = checked_add(summary.object_count, 1, "object")?;
         if object.object_type == ObjectType::Block {
             summary.block_count = checked_add(summary.block_count, 1, "block")?;
@@ -149,7 +169,7 @@ fn verify_object_file(
     object_type: ObjectType,
     path: &Path,
     trust_verifier: &mut PublicationTrustVerifier<'_>,
-) -> Result<ObjectVerification> {
+) -> Result<(ObjectVerification, Vec<SignatureEnvelopeIssue>)> {
     let object_id = object_id_from_path(path)?;
     let expected_path = layout.object_path(object_type, object_id);
     if path != expected_path {
@@ -181,6 +201,13 @@ fn verify_object_file(
             computed
         )));
     }
+    let signature_issues = classify_signature_envelope(
+        &envelope,
+        SignatureEnvelopeSource::Object {
+            object_type,
+            object_id,
+        },
+    )?;
     if matches!(object_type, ObjectType::Block | ObjectType::RefState) {
         trust_verifier.verify(&envelope)?;
     }
@@ -189,12 +216,15 @@ fn verify_object_file(
     } else {
         0
     };
-    Ok(ObjectVerification {
-        object_id,
-        object_type,
-        path: path.to_path_buf(),
-        rollback_patch_count,
-    })
+    Ok((
+        ObjectVerification {
+            object_id,
+            object_type,
+            path: path.to_path_buf(),
+            rollback_patch_count,
+        },
+        signature_issues,
+    ))
 }
 
 fn object_id_from_path(path: &Path) -> Result<ObjectId> {

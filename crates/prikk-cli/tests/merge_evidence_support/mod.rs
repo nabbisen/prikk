@@ -135,7 +135,7 @@ fn author_signature() -> Signature {
     Signature {
         algorithm: SignatureAlgorithm::Ed25519,
         key_id: "merge-evidence-author".to_string(),
-        signature_bytes: vec![1, 2, 3, 4],
+        signature_bytes: vec![1; 64],
         created_at: 7,
         signer_role: SignerRole::Author,
     }
@@ -145,7 +145,7 @@ fn maintainer_signature() -> Signature {
     Signature {
         algorithm: SignatureAlgorithm::Ed25519,
         key_id: "merge-evidence-maintainer".to_string(),
-        signature_bytes: vec![5, 6, 7, 8],
+        signature_bytes: vec![5; 64],
         created_at: 8,
         signer_role: SignerRole::Maintainer,
     }

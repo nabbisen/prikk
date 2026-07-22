@@ -16,7 +16,7 @@ pub mod signature;
 mod vectors;
 
 pub use canonical::{CanonicalEncode, CanonicalWriter, WireType};
-pub use envelope::ObjectEnvelope;
+pub use envelope::{ObjectEnvelope, SignatureEnvelopeIssues};
 pub use id::{OBJECT_ID_DOMAIN, ObjectId, ObjectType};
 pub use payload::*;
-pub use signature::{Signature, SignatureAlgorithm, SignerRole};
+pub use signature::{ED25519_SIGNATURE_LEN, Signature, SignatureAlgorithm, SignerRole};

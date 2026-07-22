@@ -30,6 +30,12 @@ containing the object type, schema version, payload length, and unsigned canonic
 Signatures live outside that identity preimage, so adding or sorting signatures does not change the
 object id.
 
+New envelope serialization and repository writes require a strict signature sequence. Ed25519
+signatures must be 64 bytes, duplicate signature tuples are rejected, and signatures are ordered by
+key-id bytes, signer-role code, algorithm code, then signature bytes. Advisory signature timestamps
+do not affect that order. Format-1 verification preserves older structurally readable bytes and
+reports malformed shape, duplicate, or non-canonical ordering as warnings instead of rewriting them.
+
 The current object model includes persistent Patch, Block, RefState, and Blob object directories. Tag
 and Attestation object types and directories are defined, but current public command surfaces do not
 produce Tag or Attestation objects. RefUpdate is an object-envelope type stored inline in ref logs
@@ -60,7 +66,8 @@ surfaces do not publish merge execution or import behavior.
 RefState is the content-addressed state for a branch or tag ref. A ref pointer file stores the current
 RefState id for convenience and recovery, but the pointer file is not itself the root of trust.
 RefUpdate records are signed envelope entries in append-only ref logs and link old and new RefState
-ids, target Block id, update sequence, creation timestamp, and maintainer key id.
+ids, target Block id, update sequence, a schema-1 no-clock sentinel, and maintainer key id. The
+`created_at` field is exactly zero for current writes and is not a trusted creation or event timestamp.
 
 Publication is guarded by ref-specific locking and compare-and-swap checks. The
 [concurrency and locking](./concurrency-locking.md) reference owns the detailed lock/CAS behavior.
@@ -112,13 +119,13 @@ filesystem validation.
 | Claim | Source anchors |
 |---|---|
 | Object ids derive from type, schema version, payload length, and unsigned canonical payload. | [`id.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/id.rs), [`envelope.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/envelope.rs), [DC-09](https://github.com/nabbisen/prikk/blob/main/rfcs/archive/DC-09-PHASE-4-NODE-MODEL.md) |
-| Signatures are outside object identity. | [`envelope.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/envelope.rs), [`signature.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/signature.rs), [DC-10](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-10-ROLLBACK-DRAFT-SIGNING.md) |
+| Signatures are outside object identity; strict new envelopes enforce Ed25519 shape, tuple uniqueness, and canonical order. | [`envelope.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/envelope.rs), [`signature.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/signature.rs), [DC-39](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md) |
 | Current persistent object directories exclude RefUpdate. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`id.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/id.rs) |
 | Patch payloads require non-empty contiguous operations and carry identity-bearing purpose. | [`patch.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/patch.rs), [DC-10](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-10-ROLLBACK-DRAFT-SIGNING.md) |
 | Worktree authoring derives baselines from authoritative replay or valid genesis. | [`node_authoring.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/worktree_patch/node_authoring.rs), [DC-13](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-13-NONDEFAULT-REF-GENESIS.md), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
 | Blocks contain parent ids, kind, Patch ids, state root, and optional snapshot Blob ref. | [`block.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/block.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs) |
 | RefState is content-addressed state and ref pointer files are mutable pointers. | [`refs.rs` payload](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/refs.rs), [`refs.rs` store](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [DC-11](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-11-MAINTAINER-TRUST-STORE.md) |
-| RefUpdate is append-only publication evidence stored inline in ref logs. | [`refs.rs` payload](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/refs.rs), [`refs.rs` store](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs) |
+| RefUpdate is append-only publication evidence stored inline in ref logs; schema-1 writes use zero as a no-clock sentinel. | [`refs.rs` payload](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/refs.rs), [`refs.rs` store](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-39](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md) |
 | Active WAL records exact signed Patch envelopes and detects trailing partial bytes. | [`wal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/wal.rs), [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [DC-15](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md) |
 | Verification is read-only and bounded to structural, WAL, ref, rollback, and publication-trust checks. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
 | `prikk-replay` is internally scoped and not a stable external API. | [DC-19](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-19-REPLAY-LIFECYCLE-CRATE-BOUNDARY.md), [DC-20](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-20-REPLAY-BOUNDARY-STABILIZATION.md), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |

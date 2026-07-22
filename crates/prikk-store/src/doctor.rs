@@ -209,6 +209,13 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                      auto-trust keys or repair signatures",
                 ));
             }
+            for issue in &verification.signature_envelope_issues {
+                issues.push(DoctorIssue::warning(
+                    issue.code,
+                    format!("{}: {}", issue.source, issue.message),
+                    "preserve the format-1 bytes for inspection; do not normalize or reuse the envelope for mutation",
+                ));
+            }
             for path in &verification.object_temp_paths {
                 let name = path
                     .file_name()

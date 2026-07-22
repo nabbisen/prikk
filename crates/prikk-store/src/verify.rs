@@ -18,6 +18,9 @@ use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
 use crate::refs::verify_refs;
 use crate::rollback_verify::{verify_rollback_draft_wal_records, verify_rollback_patch_envelope};
+use crate::signature_diagnostics::{
+    SignatureEnvelopeIssue, SignatureEnvelopeSource, classify_signature_envelope,
+};
 use crate::trust::PublicationTrustIssue;
 use crate::wal::Wal;
 
@@ -58,6 +61,8 @@ pub struct RepositoryVerification {
     pub checked_ref_log_records: usize,
     /// Interrupted ref-publication and candidate-debris conditions found by joint verification.
     pub ref_publication_issues: Vec<crate::refs::RefPublicationIssue>,
+    /// Warning-level format-1 signature-envelope compatibility findings in deterministic order.
+    pub signature_envelope_issues: Vec<SignatureEnvelopeIssue>,
     /// Number of active WAL records classified and decoded as rollback drafts.
     pub checked_rollback_draft_records: usize,
     /// Number of publication envelopes checked against repository-local trust.
@@ -168,6 +173,17 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
     let replay = wal.replay()?;
     let persisted_wal_patches = verify_wal_persistence(&object_store, &replay.records)?;
     let checked_rollback_draft_records = verify_rollback_draft_wal_records(&replay.records)?;
+    let mut signature_envelope_issues = object_summary.signature_issues;
+    for record in &replay.records {
+        signature_envelope_issues.extend(classify_signature_envelope(
+            &record.envelope,
+            SignatureEnvelopeSource::ActiveWal {
+                sequence: record.seq,
+                object_id: record.envelope.object_id(),
+            },
+        )?);
+    }
+    signature_envelope_issues.extend(ref_verification.signature_envelope_issues);
     let active_wal_metadata_status =
         classify_active_wal_metadata(layout, replay.records.is_empty())?;
     let mut ref_publication_issues = ref_verification.publication_issues;
@@ -188,6 +204,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
         checked_refs: ref_verification.pointer_count,
         checked_ref_log_records: ref_verification.log_record_count,
         ref_publication_issues,
+        signature_envelope_issues,
         checked_rollback_draft_records,
         checked_publication_trust_records: trust_verifier.checked_records,
         publication_trust_issues: trust_verifier.issues,

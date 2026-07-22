@@ -59,7 +59,7 @@ impl ObjectReader for MemoryObjectStore {
 
 impl ObjectWriter for MemoryObjectStore {
     fn write_object(&mut self, envelope: &ObjectEnvelope) -> Result<ObjectId> {
-        envelope.validate()?;
+        envelope.validate_strict()?;
         let id = envelope.object_id();
         self.objects.insert(id, envelope.clone());
         Ok(id)

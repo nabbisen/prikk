@@ -111,7 +111,7 @@ impl ObjectWriter for FileObjectStore {
                 "RefUpdate is stored inline in ref logs for v1".to_string(),
             ));
         }
-        envelope.validate()?;
+        envelope.validate_strict()?;
         let id = envelope.object_id();
         let path = self.layout.object_path(envelope.object_type, id);
         let relative = self.layout.repository_relative(&path)?;

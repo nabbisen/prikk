@@ -33,6 +33,8 @@ verification covers:
 - Block payload decoding and references to parent Blocks, Patch objects, and optional snapshot Blobs;
 - joint ref pointer, RefState-chain, and ref-log-chain consistency;
 - signed RefUpdate log record decoding;
+- warning-level format-1 signature-envelope diagnosis for malformed Ed25519 shape, duplicate tuples,
+  and non-canonical order;
 - active WAL replay, including trailing partial WAL byte reporting;
 - whether active WAL Patch records already exist as persisted Patch objects;
 - active WAL ref metadata health;
@@ -45,9 +47,10 @@ all use the same retained repository-root authority. Publication trust consumes 
 RefState, and RefUpdate envelopes returned by those anchored structural scans; it does not reopen
 publication paths in a separate trust phase.
 
-Publication trust and recognized ref-publication state issues are collected separately from hard
-structural verification errors. This lets the command print a report while still returning command
-failure when trust is invalid or a blocking interrupted-publication state exists.
+Publication trust, format-1 signature-envelope warnings, and recognized ref-publication state issues
+are collected separately from hard structural verification errors. This lets the command preserve and
+diagnose legacy bytes while still returning command failure when trust is invalid or a blocking
+interrupted-publication state exists.
 
 ## What Verify Does Not Prove
 
@@ -65,7 +68,13 @@ coverage, or successful recovery from every crash shape.
 The current CLI prints counters for checked objects, Blocks, rollback Blocks, sealed rollback Patches,
 WAL records, persisted WAL Patches, refs, ref-log records, rollback draft WAL records, publication
 trust records, publication trust issues, ref-publication issues, and trailing partial WAL bytes. It
-also prints the active WAL metadata state.
+also prints signature-envelope warnings and the active WAL metadata state.
+
+Signature-envelope warnings use at most one issue per code per envelope, in malformed, duplicate,
+then non-canonical-order sequence. Object findings are ordered by numeric object type and raw ObjectId
+bytes, followed by active WAL sequence, then unsigned UTF-8 ref-name bytes and ref-log sequence. These
+warnings do not independently make `verify` fail and never authorize normalization or mutation of the
+legacy envelope.
 
 The command exits with failure when:
 
@@ -126,6 +135,9 @@ Publication-trust issues can also appear in doctor output as error-severity diag
 trust issue code and message from publication-trust verification. Ref-publication diagnostics use
 their verification codes: pointer lead, legacy log lead, retained active cleanup, missing pointer,
 and unproved divergence are errors; candidate debris and non-canonical legacy timestamps are warnings.
+Signature-envelope diagnostics appear as warnings using
+`PRIKK-VERIFY-SIGNATURE-MALFORMED`, `PRIKK-VERIFY-SIGNATURE-DUPLICATE`, and
+`PRIKK-VERIFY-SIGNATURE-NONCANONICAL-ORDER`. Doctor does not rewrite those envelopes.
 
 `MissingForEmptyWal` and `ValidForNonEmptyWal` are healthy metadata states and do not produce doctor
 issues by themselves.
@@ -170,7 +182,7 @@ readiness.
 
 | Claim | Source anchors |
 |---|---|
-| Repository verification reports counters for objects, WAL records, Blocks, refs, ref logs, rollback material, publication trust, ref-publication issues, trailing partial WAL bytes, and active WAL metadata state. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`output.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/output.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
+| Repository verification reports counters for objects, WAL records, Blocks, refs, ref logs, rollback material, publication trust, signature-envelope warnings, ref-publication issues, trailing partial WAL bytes, and active WAL metadata state. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`signature_diagnostics.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/signature_diagnostics.rs), [`verification.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/output/verification.rs), [DC-39](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md) |
 | Verification checks object placement, envelope decoding, object identity, Block references, ref pointer/log consistency, WAL replay, rollback classification, and publication trust. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [data model](./data-model.md) |
 | Publication trust checks Block, RefState, and RefUpdate envelopes against repository-local maintainer trust and reports issues separately. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [DC-11](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-11-MAINTAINER-TRUST-STORE.md), [trust and threat model](./trust-threat-model.md) |
 | `verify` command failure occurs for active-WAL metadata integrity issues, publication-trust issues, or blocking ref-publication issues after printing the report. | [`main.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/main.rs), [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
@@ -183,6 +195,7 @@ readiness.
 
 ## Provenance
 
-This reference consolidates current behavior through DC-38. It follows the DC-26 documentation-home
-model: current-state references live in the published mdBook, not under `rfcs/fdds/`. The DC-38
-revision documents pointer-first publication diagnostics and the narrower doctor boundary.
+This reference consolidates current behavior through the DC-39 implementation candidate. It follows
+the DC-26 documentation-home model: current-state references live in the published mdBook, not under
+`rfcs/fdds/`. DC-38 documents pointer-first publication diagnostics and the narrower doctor boundary;
+DC-39 adds strict new-envelope admission and byte-preserving format-1 signature diagnostics.

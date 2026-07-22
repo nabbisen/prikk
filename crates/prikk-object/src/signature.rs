@@ -1,6 +1,7 @@
 //! Signature metadata and signed-byte construction.
 
 use prikk_error::{PrikkError, Result};
+use std::cmp::Ordering;
 
 use crate::{CanonicalEncode, CanonicalWriter, ObjectId, ObjectType};
 
@@ -9,6 +10,9 @@ pub const SIGNATURE_DOMAIN: &[u8] = b"prikk.sig.v1";
 
 /// Maximum byte length for a role-bound signature key id.
 pub const SIGNATURE_KEY_ID_MAX_LEN: usize = 128;
+
+/// Required byte length for a version-1 Ed25519 signature.
+pub const ED25519_SIGNATURE_LEN: usize = 64;
 
 /// Supported signature algorithms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -72,6 +76,9 @@ impl SignerRole {
 }
 
 /// Signature attached to an object envelope.
+///
+/// Standalone canonical encoding is structural field encoding only. Strict semantic admission is an
+/// [`crate::ObjectEnvelope`] responsibility.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Signature {
     /// Signature algorithm.
@@ -124,7 +131,8 @@ impl Signature {
                 "signature key_id is too long for the signature preimage length field".to_string(),
             )
         })?;
-        let mut out = Vec::with_capacity(SIGNATURE_DOMAIN.len() + 2 + 32 + 2 + 2 + key_id.len());
+        let mut out =
+            Vec::with_capacity(SIGNATURE_DOMAIN.len() + 2 + 2 + 32 + 2 + 2 + key_id.len());
         out.extend_from_slice(SIGNATURE_DOMAIN);
         out.extend_from_slice(&algorithm.code().to_be_bytes());
         out.extend_from_slice(&object_type.code().to_be_bytes());
@@ -144,6 +152,30 @@ impl Signature {
             ));
         }
         Ok(())
+    }
+
+    /// Validate the registered algorithm's syntactic signature shape.
+    pub fn validate_shape(&self) -> Result<()> {
+        match self.algorithm {
+            SignatureAlgorithm::Ed25519 if self.signature_bytes.len() == ED25519_SIGNATURE_LEN => {
+                Ok(())
+            }
+            SignatureAlgorithm::Ed25519 => Err(PrikkError::InvalidSignature(format!(
+                "Ed25519 signature must be {ED25519_SIGNATURE_LEN} bytes, got {}",
+                self.signature_bytes.len()
+            ))),
+        }
+    }
+
+    /// Compare signatures by the canonical envelope tuple.
+    #[must_use]
+    pub fn canonical_cmp(&self, other: &Self) -> Ordering {
+        self.key_id
+            .as_bytes()
+            .cmp(other.key_id.as_bytes())
+            .then_with(|| self.signer_role.code().cmp(&other.signer_role.code()))
+            .then_with(|| self.algorithm.code().cmp(&other.algorithm.code()))
+            .then_with(|| self.signature_bytes.cmp(&other.signature_bytes))
     }
 }
 

@@ -93,6 +93,7 @@ impl Wal {
                 "commit WAL entries must store signed patch envelopes".to_string(),
             ));
         }
+        envelope.validate_strict()?;
         let replay = self.replay()?;
         if replay.trailing_partial_bytes != 0 {
             return Err(PrikkError::Integrity(
@@ -222,15 +223,25 @@ impl Wal {
 
 fn encode_record(record: &WalRecord) -> Result<Vec<u8>> {
     let body = encode_envelope_file(&record.envelope)?;
+    frame_record(record.seq, &body)
+}
+
+#[cfg(test)]
+pub(crate) fn encode_record_for_test(record: &WalRecord) -> Result<Vec<u8>> {
+    let body = crate::file_codec::encode_envelope_file_structural(&record.envelope)?;
+    frame_record(record.seq, &body)
+}
+
+fn frame_record(sequence: u64, body: &[u8]) -> Result<Vec<u8>> {
     let body_len = len_to_u64(body.len())?;
-    let checksum = record_checksum(record.seq, body_len, &body);
+    let checksum = record_checksum(sequence, body_len, body);
     let mut out = Vec::with_capacity(WAL_HEADER_LEN + body.len());
     out.extend_from_slice(WAL_RECORD_MAGIC);
     push_u16(&mut out, WAL_RECORD_VERSION);
-    push_u64(&mut out, record.seq);
+    push_u64(&mut out, sequence);
     push_u64(&mut out, body_len);
     out.extend_from_slice(&checksum);
-    out.extend_from_slice(&body);
+    out.extend_from_slice(body);
     Ok(out)
 }
 

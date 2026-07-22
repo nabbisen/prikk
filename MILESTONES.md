@@ -82,8 +82,9 @@ required authority over the public canonical serializer and strict Ed25519 signa
 design repair adds those rules, the invalid-predecessor `add_signature` invariant, and deterministic
 diagnostic multiplicity/order while retaining the DC-34 preimage vector, canonical envelope tuple,
 format-1 diagnostics, writer inventory, and companion RefUpdate no-clock erratum. Architect design
-re-review v1 accepted the repaired design on 2026-07-22. Bounded implementation is authorized next;
-implementation evidence remains pending.
+re-review v1 accepted the repaired design on 2026-07-22. The bounded implementation candidate and its
+current-toolchain/Rust 1.85 tests, warnings-denied Clippy evidence, and public documentation are ready
+for implementation review; no implementation acceptance or release authority is claimed.
 DC-38 and DC-40 designs, including the DC-40 companion state-root/format FDD, were accepted on
 2026-07-14. DC-40 implementation remains pending behind the remaining M1 sequencing and its own gate.
 

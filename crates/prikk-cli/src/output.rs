@@ -1,17 +1,21 @@
 //! CLI output helpers.
 
 use prikk_store::{
-    ActiveWalMetadataStatus, CheckoutMaterialization, CheckoutPlan, DoctorSeverity,
-    PatchDeletionPlan, PatchInversePlan, PatchMaterializationReport, PatchReplayPlan, RefHistory,
-    RepositoryLayout, RollbackDraftReport, RollbackDraftVerification, RollbackPreviewPlan,
-    SnapshotCheckoutPlan, SnapshotMaterializationReport, WorktreeChangeKind, WorktreeStatusReport,
+    CheckoutMaterialization, CheckoutPlan, PatchDeletionPlan, PatchInversePlan,
+    PatchMaterializationReport, PatchReplayPlan, RepositoryLayout, RollbackDraftReport,
+    RollbackDraftVerification, RollbackPreviewPlan, SnapshotCheckoutPlan,
+    SnapshotMaterializationReport,
 };
 
 mod help;
 mod merge_evidence;
+mod verification;
+mod worktree;
 
 pub(crate) use help::print_help;
 pub(crate) use merge_evidence::{print_merge_evidence, print_merge_plan};
+pub(crate) use verification::{print_doctor_report, print_verify_report};
+pub(crate) use worktree::{print_history, print_worktree_status};
 
 /// Print a checkout plan.
 pub(crate) fn print_checkout_plan(layout: &RepositoryLayout, plan: &CheckoutPlan) {
@@ -306,188 +310,4 @@ pub(crate) fn print_rollback_draft_verification(
         "note: this validates the active rollback draft against the current inverse plan only; \
          seal, rollback refs, authorization, audit policy, and worktree writes remain separate"
     );
-}
-
-/// Print a worktree status report.
-pub(crate) fn print_worktree_status(layout: &RepositoryLayout, report: &WorktreeStatusReport) {
-    println!(
-        "worktree-status repository: {}",
-        layout.prikk_dir().display()
-    );
-    println!("ref: {}", report.ref_name);
-    println!("tracked files: {}", report.tracked_files);
-    println!("unchanged files: {}", report.unchanged_files);
-    println!(
-        "missing files: {}",
-        report.count_kind(WorktreeChangeKind::Missing)
-    );
-    println!(
-        "modified files: {}",
-        report.count_kind(WorktreeChangeKind::Modified)
-    );
-    println!(
-        "untracked files: {}",
-        report.count_kind(WorktreeChangeKind::Untracked)
-    );
-    println!(
-        "unsupported paths: {}",
-        report.count_kind(WorktreeChangeKind::UnsupportedPath)
-    );
-    if report.is_clean() {
-        println!("worktree: clean against snapshot baseline");
-    } else {
-        println!("worktree: changed against snapshot baseline");
-        for change in &report.changes {
-            println!(
-                "  {} {} — {}",
-                change.kind.as_str(),
-                change.path,
-                change.detail
-            );
-        }
-    }
-    println!(
-        "note: use `prikk commit -m <message>` to author node-addressed worktree changes; \
-         text nodes use deterministic arbitrary-span EditText"
-    );
-}
-
-/// Print ref history.
-pub(crate) fn print_history(layout: &RepositoryLayout, history: &RefHistory) {
-    println!("history repository: {}", layout.prikk_dir().display());
-    println!("ref: {}", history.ref_name);
-    if history.is_empty() {
-        println!("history: <empty>");
-        return;
-    }
-    for entry in &history.entries {
-        println!("block {}", entry.block_id);
-        println!("  ref-state: {}", entry.ref_state_id);
-        println!("  update-seq: {}", entry.update_seq);
-        println!("  kind: {:?}", entry.block_kind);
-        println!("  rollback-block: {}", entry.is_rollback_block);
-        println!("  parents: {}", entry.parent_count);
-        println!("  patches: {}", entry.patch_count);
-        println!("  rollback-patches: {}", entry.rollback_patch_count);
-        println!(
-            "  required-attestations: {}",
-            entry.required_attestation_count
-        );
-        match entry.previous_ref_state_id {
-            Some(previous) => println!("  previous-ref-state: {previous}"),
-            None => println!("  previous-ref-state: <none>"),
-        }
-    }
-}
-
-/// Print doctor results.
-pub(crate) fn print_doctor_report(layout: &RepositoryLayout, report: &prikk_store::DoctorReport) {
-    if let Some(verification) = &report.verification {
-        print_verify_report(layout, verification);
-    }
-    for issue in &report.issues {
-        println!(
-            "{} [{}]: {}",
-            issue.severity.as_str(),
-            issue.code,
-            issue.message
-        );
-        println!("  recommendation: {}", issue.recommendation);
-    }
-    println!(
-        "issue summary: errors={}, warnings={}, info={}",
-        report.count_by_severity(DoctorSeverity::Error),
-        report.count_by_severity(DoctorSeverity::Warning),
-        report.count_by_severity(DoctorSeverity::Info)
-    );
-}
-
-/// Print verification results.
-pub(crate) fn print_verify_report(
-    layout: &RepositoryLayout,
-    report: &prikk_store::RepositoryVerification,
-) {
-    println!("verified repository: {}", layout.prikk_dir().display());
-    println!("checked objects: {}", report.checked_objects);
-    println!("checked blocks: {}", report.checked_blocks);
-    println!(
-        "checked rollback blocks: {}",
-        report.checked_rollback_blocks
-    );
-    println!(
-        "checked sealed rollback patches: {}",
-        report.checked_sealed_rollback_patches
-    );
-    println!("checked WAL records: {}", report.checked_wal_records);
-    println!("persisted WAL patches: {}", report.persisted_wal_patches);
-    println!("checked refs: {}", report.checked_refs);
-    println!(
-        "checked ref-log records: {}",
-        report.checked_ref_log_records
-    );
-    println!(
-        "ref publication issues: {}",
-        report.ref_publication_issues.len()
-    );
-    for issue in &report.ref_publication_issues {
-        println!("ref-publication [{}]: {}", issue.code, issue.message);
-    }
-    println!(
-        "checked rollback draft WAL records: {}",
-        report.checked_rollback_draft_records
-    );
-    println!(
-        "checked publication trust records: {}",
-        report.checked_publication_trust_records
-    );
-    println!(
-        "publication trust issues: {}",
-        report.publication_trust_issues.len()
-    );
-    for issue in &report.publication_trust_issues {
-        println!("publication-trust [{}]: {}", issue.code, issue.message);
-    }
-    println!("object temp warnings: {}", report.object_temp_paths.len());
-    for path in &report.object_temp_paths {
-        let name = path
-            .file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or("<non-UTF-8 object temp>");
-        println!("warning: non-authoritative object publication temp: {name}");
-    }
-    println!(
-        "trailing partial WAL bytes: {}",
-        report.trailing_partial_wal_bytes
-    );
-    if report.has_trailing_partial_wal() {
-        println!("warning: active WAL contains an incomplete trailing record");
-    }
-    print_active_wal_metadata_status(&report.active_wal_metadata_status);
-}
-
-fn print_active_wal_metadata_status(status: &ActiveWalMetadataStatus) {
-    match status {
-        ActiveWalMetadataStatus::MissingForEmptyWal => {
-            println!("active WAL metadata: absent for empty WAL");
-        }
-        ActiveWalMetadataStatus::ValidForEmptyWal { ref_name } => {
-            println!("active WAL metadata: stale local metadata for empty WAL ({ref_name})");
-            println!("warning: active WAL ref metadata exists but the active WAL is empty");
-        }
-        ActiveWalMetadataStatus::InvalidForEmptyWal { reason } => {
-            println!("active WAL metadata: malformed local metadata for empty WAL ({reason})");
-            println!("warning: active WAL ref metadata exists but the active WAL is empty");
-        }
-        ActiveWalMetadataStatus::ValidForNonEmptyWal { ref_name } => {
-            println!("active WAL metadata: valid for {ref_name}");
-        }
-        ActiveWalMetadataStatus::MissingForNonEmptyWal => {
-            println!("active WAL metadata: missing for non-empty WAL");
-            println!("error: active WAL contains records but has no ref metadata");
-        }
-        ActiveWalMetadataStatus::InvalidForNonEmptyWal { reason } => {
-            println!("active WAL metadata: malformed for non-empty WAL ({reason})");
-            println!("error: active WAL contains records but has malformed ref metadata");
-        }
-    }
 }

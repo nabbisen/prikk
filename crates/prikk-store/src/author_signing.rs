@@ -47,6 +47,7 @@ pub fn author_signature(signer: &impl AuthorSigner, object_id: ObjectId) -> Resu
         signer_role: SignerRole::Author,
     };
     signature.validate()?;
+    signature.validate_shape()?;
     Ok(signature)
 }
 

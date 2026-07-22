@@ -27,6 +27,12 @@ pub(super) struct LogState {
     pub(super) has_legacy_timestamp: bool,
 }
 
+pub(super) struct RefLogEnvelope {
+    pub(super) ref_name: String,
+    pub(super) sequence: u64,
+    pub(super) envelope: ObjectEnvelope,
+}
+
 pub(super) fn read_pointers(
     layout: &RepositoryLayout,
     objects: &FileObjectStore,
@@ -80,7 +86,7 @@ pub(super) fn read_logs(
     layout: &RepositoryLayout,
     objects: &FileObjectStore,
     pointers: &BTreeMap<String, PointerState>,
-) -> Result<(BTreeMap<String, LogState>, usize, Vec<ObjectEnvelope>)> {
+) -> Result<(BTreeMap<String, LogState>, usize, Vec<RefLogEnvelope>)> {
     let dir = layout.refs_dir().join("logs");
     let mut logs = BTreeMap::new();
     let mut total = 0_usize;
@@ -121,7 +127,17 @@ pub(super) fn read_logs(
             continue;
         }
         let (name, state) = validate_log(layout, objects, &path, &replay)?;
-        envelopes.extend(replay.records.iter().map(|record| record.envelope.clone()));
+        for (index, record) in replay.records.iter().enumerate() {
+            let sequence = u64::try_from(index)
+                .ok()
+                .and_then(|value| value.checked_add(1))
+                .ok_or_else(|| PrikkError::Integrity("ref-log sequence overflow".to_string()))?;
+            envelopes.push(RefLogEnvelope {
+                ref_name: name.clone(),
+                sequence,
+                envelope: record.envelope.clone(),
+            });
+        }
         total = total
             .checked_add(replay.records.len())
             .ok_or_else(|| PrikkError::Integrity("ref-log count overflow".to_string()))?;
@@ -131,6 +147,12 @@ pub(super) fn read_logs(
             )));
         }
     }
+    envelopes.sort_by(|left, right| {
+        left.ref_name
+            .as_bytes()
+            .cmp(right.ref_name.as_bytes())
+            .then_with(|| left.sequence.cmp(&right.sequence))
+    });
     Ok((logs, total, envelopes))
 }
 

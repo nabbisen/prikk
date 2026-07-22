@@ -2,7 +2,7 @@
 
 use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;
-use prikk_object::{ObjectEnvelope, ObjectType};
+use prikk_object::{ObjectEnvelope, ObjectType, RefUpdatePayload};
 
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_u16, push_u64};
@@ -39,6 +39,7 @@ pub(crate) fn append_log_record(
     ref_name: &str,
     envelope: &ObjectEnvelope,
 ) -> Result<()> {
+    validate_log_record(envelope)?;
     let path = layout.repository_relative(&layout.ref_log_path(ref_name))?;
     let Some(parent) = path.parent() else {
         return Err(PrikkError::Io(
@@ -124,16 +125,39 @@ pub(crate) fn incomplete_tail_matches(
 }
 
 fn encode_log_record(envelope: &ObjectEnvelope) -> Result<Vec<u8>> {
-    require_signed_type(envelope, ObjectType::RefUpdate)?;
+    validate_log_record(envelope)?;
     let body = encode_envelope_file(envelope)?;
+    frame_log_record(&body)
+}
+
+fn validate_log_record(envelope: &ObjectEnvelope) -> Result<()> {
+    require_signed_type(envelope, ObjectType::RefUpdate)?;
+    envelope.validate_strict()?;
+    let update = RefUpdatePayload::decode_canonical(&envelope.canonical_payload)?;
+    if envelope.schema_version == 1 && update.created_at != 0 {
+        return Err(PrikkError::Integrity(
+            "schema-1 RefUpdate mutation requires created_at == 0".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn encode_log_record_for_test(envelope: &ObjectEnvelope) -> Result<Vec<u8>> {
+    require_signed_type(envelope, ObjectType::RefUpdate)?;
+    let body = crate::file_codec::encode_envelope_file_structural(envelope)?;
+    frame_log_record(&body)
+}
+
+fn frame_log_record(body: &[u8]) -> Result<Vec<u8>> {
     let body_len = len_to_u64(body.len())?;
-    let checksum = log_record_checksum(body_len, &body);
+    let checksum = log_record_checksum(body_len, body);
     let mut out = Vec::new();
     out.extend_from_slice(REF_LOG_MAGIC);
     push_u16(&mut out, REF_LOG_VERSION);
     push_u64(&mut out, body_len);
     out.extend_from_slice(&checksum);
-    out.extend_from_slice(&body);
+    out.extend_from_slice(body);
     Ok(out)
 }
 
