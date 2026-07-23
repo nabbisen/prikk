@@ -1,7 +1,8 @@
 # RFC (accepted) - DC-40 State Merkle Root and Format Transition
 
 **Status.** Accepted with companion FDD after architect re-review on 2026-07-14; implementation
-evidence remains pending.
+complete at `70c3902` after architect post-commit evidence acceptance on 2026-07-23. Remains accepted
+until the 0.18.0 release.
 **Target milestone.** M1 - 0.18.0 corrective release.
 **Tracks.** Architect review B2.
 **Touches.** Canonical clean-tree model, Block schema, repository format gate, seal, replay/verify,

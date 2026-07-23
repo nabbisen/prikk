@@ -4,7 +4,7 @@ Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-39, DC-40, DC-45, DC-46, DC-47,
 and DC-48
-Current implementation increment: DC-40 (repair candidate complete; repair re-review pending)
+Current implementation increment: none (DC-40 complete; next M1 action separately gated)
 Current design-review increment: none
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
@@ -30,7 +30,11 @@ repository-format stabilization, and public-preview readiness. The durable corre
   complete at `8f565f2` after accepted post-commit evidence. DC-40 architect implementation review v1
   required four format-transition authority and evidence repairs. The repaired candidate closes strict
   format-2 reads, anchored mutation admission, exact legacy cleanup authorization, and the full
-  format-1 CLI matrix; focused repair re-review remains pending for the current M1 increment.
+  format-1 CLI matrix. Repair re-review v1 accepted it, committed as `70c3902`; post-commit evidence
+  review v1 accepted independent checkout/archive and regression evidence on 2026-07-23. DC-40
+  implementation delivery is complete. The signer allowlist remains empty, so the next M1 action is a
+  separately reviewed DC-35 bootstrap governance transaction; it has not started and release work
+  remains blocked.
 - DC-39 is accepted after architect design re-review v1 on 2026-07-22. Architect review v1 required
   authority over the public canonical envelope serializer and algorithm-specific signature shape.
   The design repair now adds strict 64-byte

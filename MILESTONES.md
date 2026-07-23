@@ -89,8 +89,11 @@ complete. This closure does not authorize release activity.
 DC-38 and DC-40 designs, including the DC-40 companion state-root/format FDD, were accepted on
 2026-07-14. DC-40 architect implementation review v1 required four repairs covering strict format-2
 read admission, anchored mutation authority, exact legacy cleanup authority, and the end-to-end
-format-1 command matrix. The repaired implementation candidate and identity vectors are complete;
-focused architect repair re-review remains pending under its separate gate.
+format-1 command matrix. Architect repair re-review v1 accepted the repaired candidate, committed as
+`70c3902`; post-commit evidence review v1 accepted independent checkout/archive identity and focused
+plus full regression evidence on 2026-07-23. DC-40 implementation delivery is complete. The next
+separately gated M1 action is the initial DC-35 release-signer bootstrap governance transaction; no
+bootstrap or release action is authorized by this bookkeeping.
 
 **Release condition:** all five blocking findings are closed by accepted implementation review; the
 reproduced ref failure no longer succeeds; the state-root and signature vectors are pinned; format-1/

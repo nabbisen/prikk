@@ -1,7 +1,8 @@
 # DC-40 State-Root and Repository-Format FDD
 
 **Status.** Accepted companion authority inherited from DC-40 after architect re-review on 2026-07-14;
-implementation evidence remains pending.
+implementation complete at `70c3902` after post-commit evidence acceptance on 2026-07-23. Remains
+accepted with its parent until the 0.18.0 release.
 **Parent RFC.** `../../accepted/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md`.
 
 ## Scope

@@ -6,14 +6,17 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
 
 ## Current Increment
 
-- **DC-40 - state Merkle root and format transition (implementation repair re-review pending).** The accepted RFC and
+- **DC-40 - state Merkle root and format transition (complete at `70c3902`).** The accepted RFC and
   companion state-root/format FDD define the remaining M1 identity correction: a canonical clean-tree
   Merkle root, repository-format-aware reads, seal/replay/verify integration, pinned vectors, and
   explicit format-1/format-2 compatibility behavior. DC-39 now supplies the accepted strict envelope
   validator required by this increment. Architect implementation review v1 required strict format-2
   read admission, anchored marker rereads at mutation boundaries, an opaque exact-recovery cleanup
   authority, and a genuine format-1 CLI matrix. The repaired implementation candidate closes those
-  findings and awaits focused repair re-review; no release authority is claimed yet.
+  findings. Architect repair re-review v1 accepted the candidate, committed as `70c3902`; architect
+  post-commit evidence review v1 accepted independent no-hardlink checkout and deterministic-archive
+  evidence on 2026-07-23. DC-40 implementation delivery is complete but remains in `accepted/` until
+  0.18.0 is released; no release authority follows from completion.
 - **DC-39 - signature and envelope authority (complete at `8f565f2`).** Architect review v1
   required the public canonical envelope serializer and strict Ed25519 shape to enter the authority
   boundary. The repaired design now pins those rules, invalid-predecessor handling for `add_signature`, and
@@ -149,9 +152,11 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   DC-47 now owns the separately tracked public `--all-features` Clippy and governed-classifier
   reconciliation before the 0.19.0 release candidate.
 - **M1 remains active.** DC-35 implementation is accepted and committed, but the signer allowlist
-  remains empty and fail-closed. DC-39 implementation and post-commit evidence are complete. The DC-40
-  implementation candidate is awaiting its separate review, and the combined 0.18.0/M1 release gate
-  remains closed.
+  remains empty and fail-closed. DC-39 and DC-40 implementation and post-commit evidence are complete.
+  The next separately gated M1 action is the initial release-signer bootstrap governance transaction
+  under DC-35; it has not started and is not authorized by DC-40 acceptance. The combined 0.18.0/M1
+  release gate remains closed. The cosmetic unknown/malformed-marker diagnostic (`unsupported format
+  version: 0`) is a non-blocking pre-RC correction candidate, not a prerequisite unless selected.
 
 ## Release Candidate Increment
 
