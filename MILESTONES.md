@@ -30,6 +30,7 @@ release boundary and may change only through an update to this file, `ROADMAP.md
 | Signature envelope canonicalization incomplete | Non-blocking | DC-39 | M1 |
 | RefUpdate timestamp always zero | Non-blocking | DC-34 ruling, DC-39 implementation/docs | M0, M1 |
 | Merge status docs contradict released CLI | Non-blocking | DC-35 | M1 |
+| Public portability claim exceeds Linux-only mutation support | Release-claim mismatch | DC-37 boundary plus tracked portability/requirements correction | M1 |
 | Crash/fuzz/platform and hash evidence incomplete | Assurance blocker | DC-41 | M2 |
 | Full-tree commit scan versus NFR-PERF-01 | Requirement gap | DC-42: implement or obtain explicit requirements amendment | M2 |
 | Active-Patch warning 800 / hard bound 1000 from NFR-PERF-02 | Requirement gap | DC-42: implement or obtain explicit requirements amendment | M2 |
@@ -74,10 +75,10 @@ recovery implementation was accepted and committed after repair re-review on 202
 repository-governed multi-signer and break-glass amendment was accepted after architect design re-review
 v3 on 2026-07-15. Architect repair re-review v3 accepted its policy implementation on 2026-07-16 after
 byte/object, canonical-governance, tag-shape, and attempt-growth repairs. No signer is admitted; bootstrap
-remains a separate prerequisite. DC-45 design acceptance is required before bootstrap, but completing
-the Rust tooling migration is not. Until DC-45 cutover, bootstrap uses the accepted Python gate under
-the separately reviewed DC-35 governance transaction. Architect design repair re-review v1 accepted
-DC-45 on 2026-07-16; this acceptance does not itself authorize bootstrap. DC-39 architect review v1
+remains a separate prerequisite. DC-45 design acceptance and the later Rust authority cutover are
+complete. Bootstrap therefore uses the accepted Rust release-policy gate under the separately reviewed
+DC-35 governance transaction. Neither DC-45 acceptance nor cutover authorizes bootstrap. DC-39
+architect review v1
 required authority over the public canonical serializer and strict Ed25519 signature shape. The
 design repair adds those rules, the invalid-predecessor `add_signature` invariant, and deterministic
 diagnostic multiplicity/order while retaining the DC-34 preimage vector, canonical envelope tuple,
@@ -94,6 +95,28 @@ format-1 command matrix. Architect repair re-review v1 accepted the repaired can
 plus full regression evidence on 2026-07-23. DC-40 implementation delivery is complete. The next
 separately gated M1 action is the initial DC-35 release-signer bootstrap governance transaction; no
 bootstrap or release action is authorized by this bookkeeping.
+
+**Remaining M1 gate order:**
+
+1. Prepare the initial DC-35 signer-bootstrap transaction as an isolated public governance change with
+   the required non-secret proof, two distinct accountable approvals, and branch-governance evidence.
+2. After that transaction becomes public, keep release publication blocked for at least 72 hours.
+3. During the hold, re-run the literal older-review stale-pointer/ahead-log crash reproduction against
+   the accepted DC-38 state machine and record the exact result as the B1 release-condition check.
+4. During the hold, align README and other tracked public portability claims with DC-37's accepted
+   0.18.0 support matrix: mutation is experimental on qualifying Linux local filesystems; macOS and
+   Windows remain read-only/diagnostic unless the required primitives and crash evidence are reviewed
+   before RC. Record in durable tracked authority that the excluded NFR-PORT-01 source is historical
+   input, DC-37 is current 0.18.0 authority, and broader cross-platform mutation remains a deferred
+   design target rather than current support or a silently waived goal.
+5. After the minimum interval and required containment/classification checks, obtain the explicit
+   architect/security hold-lift ruling required by DC-35.
+6. Only then prepare the combined 0.18.0 RC, refresh all release assets before publication, run the full
+   relevant gate and corrective failpoint matrix, and request adversarial RC review.
+
+The bootstrap transaction, hold-lift ruling, and RC are separate authority decisions. Evidence work and
+documentation correction during the hold do not shorten it. The cosmetic unknown/malformed-marker
+diagnostic remains optional and does not block the ordered sequence unless separately selected.
 
 **Release condition:** all five blocking findings are closed by accepted implementation review; the
 reproduced ref failure no longer succeeds; the state-root and signature vectors are pinned; format-1/
@@ -115,26 +138,26 @@ review accepts the combined state. No production or public-preview claim follows
 6. DC-47 Stable Clippy Gate Alignment (complete at `ea95e92`; post-commit evidence accepted).
 7. DC-48 Legacy Clippy Production Retirement (complete at `383e503`; post-commit evidence accepted).
 
-DC-45 is the first M2 tooling increment. Its design must be accepted before signer bootstrap, and its
-Rust command cutover must be accepted before the 0.19.0 release candidate; migration completion is not
-an M1 or bootstrap prerequisite. Its design was accepted after architect repair re-review v1 on
-2026-07-16. Profile hardening and the observation adapter are committed, and architect implementation
-repair re-review v1 accepted the exact-byte oracle semantics on 2026-07-17. Project-owner acceptance is
-withheld pending a compact tracked representation that avoids the candidate's 237 per-case vector
-files. Architect footprint QA conditionally approved three strict suite packs, and architect design
+DC-45 through DC-48 are preparatory M2 tooling and compatibility increments that landed before M1
+release. They are not the remaining post-0.18.0 execution sequence. DC-45's design was accepted after
+architect repair re-review v1 on
+2026-07-16. Profile hardening and the observation adapter were committed, and architect implementation
+repair re-review v1 accepted the exact-byte oracle semantics on 2026-07-17. Project-owner acceptance was
+initially withheld pending a compact tracked representation that avoided the candidate's 237 per-case
+vector files. Architect footprint QA conditionally approved three strict suite packs, and architect design
 amendment re-review v1 accepted the pack, location, closure, and archive contract on 2026-07-17. Compact
-implementation is complete without staging and awaits implementation re-review. Owner acceptance,
-isolated commit, and source-archive evidence precede Rust implementation. Compact implementation
-review v1 found one blocking dot-segment grammar defect. Architect repair re-review v1 accepted its
-narrow repair on 2026-07-17; explicit project-owner acceptance of the exact 13-file inventory remains
-the next gate before the isolated freeze commit. Architect design repair re-review v1 accepted the
+implementation was then prepared without staging for implementation re-review. Owner acceptance,
+isolated commit, and source-archive evidence were required to precede Rust implementation. Compact
+implementation review v1 found one blocking dot-segment grammar defect. Architect repair re-review v1 accepted its
+narrow repair on 2026-07-17. Architect design repair re-review v1 accepted the
 explicit retirement schedule on 2026-07-17, satisfying the lifecycle-design condition for that separate
 owner decision. Five Python oracle authoring/verification files remain through the first Rust-gated
 0.19.0 release. The first later release-candidate increment is blocked until an architect accepts the
 later-commit stability rerun; the following release-candidate increment is blocked until the exhaustive
 five-file decommissioning review removes each file or records an individual owner-approved, event-bound
-exception. Rust must replace the complete accepted manifest verifier and self-test matrix. The other
-eight frozen evidence/contract files remain until a later equivalence-backed replacement/consolidation
+exception. The accepted Rust implementation was required to replace the complete manifest verifier and
+self-test matrix, and later did so. The other eight frozen evidence/contract files remain until a later
+equivalence-backed replacement/consolidation
 review or an explicit final-retirement review closes migration and rollback needs. These blockers
 remain durably tracked if DC-45 moves to `done/` before their completion. The project owner committed
 the exact 13-file oracle with the reviewed design/status update as stage-1 freeze commit `47aec9c` on
@@ -144,22 +167,28 @@ on 2026-07-17. Stage-2 Rust implementation was accepted after architect repair r
 committed as `6a65a35` on 2026-07-21. Its deterministic archive, isolated checkout/extraction,
 Python/Rust engine, differential, boundary, reference, identity, and seven-product-package exclusion
 evidence was accepted after architect post-commit evidence review v1 on 2026-07-21. Preparation of an
-isolated authoritative-command cutover candidate and disposable rollback rehearsal is now authorized.
+isolated authoritative-command cutover candidate and disposable rollback rehearsal was then authorized.
 Preparation found that the accepted stale-reference gate hardcodes Python live authority and cannot
 validate an inventory/documentation-only Rust switch without a Rust-source transition repair. Focused
 architect QA v1 accepted a separate exact two-state transition repair before cutover implementation
-resumes. Architect implementation review v1 accepted the Python-primary repair, and it was committed
+resumed. Architect implementation review v1 accepted the Python-primary repair, and it was committed
 as `2bfb7cc` on 2026-07-21. Post-commit preservation evidence was accepted after architect review v1
 on 2026-07-21. The exact four-file inventory/live-reference cutover was committed as `6a8e365`;
 deterministic archive, clean checkout/extraction, full gate, and committed-identity rollback evidence
 was accepted after final architect ruling v1 on 2026-07-21. The Rust command is governance-
 authoritative. Python and the frozen oracle remain required through the first Rust-gated 0.19.0 release
 and an accepted later-commit stability rerun.
-DC-41 waits for the corrected contracts so its evidence does not bless superseded behavior. DC-42 may
-perform read-only measurements during M1, but semantic optimization or broad source moves wait until M1
-stabilizes. DC-43 policy design may proceed without credentials; implementation waits for security
-review and must consume the stable post-DC-45-cutover gate rather than extend the Python engine.
-DC-46 design now selects restoration of the declared Rust 1.85 locked-workspace contract through three
+The remaining M2 execution order after the 0.18.0 release is DC-41, then DC-42, then DC-43. This is
+program sequencing, not implementation authority: each remains proposed until its individual design
+review is accepted. DC-41's former DC-36-through-DC-40 implementation dependency is satisfied; it
+starts after M1 release so its evidence measures the released corrected contracts. DC-42 follows that
+evidence baseline; read-only measurement before then does not authorize optimization or broad source
+moves. DC-43 follows DC-42, requires security/architect design review, and must consume the stable Rust
+release-policy gate rather than extend the retained Python oracle. DC-43 completion remains required
+before any public-preview reconsideration. Separately authorized read-only DC-42 measurement or
+credential-free DC-43 policy drafting may be prepared earlier, but proposed RFCs never authorize
+implementation.
+DC-46 design selected restoration of the declared Rust 1.85 locked-workspace contract through three
 bounded source rewrites, focused trust regressions, and pinned locked CI gates. Architect design
 rereview v1 accepted it on 2026-07-21. Architect command-grammar amendment QA v1 then authorized five
 exact ordinary-Cargo vectors and existing scanner tests after the prepared candidate exposed a DC-45
@@ -167,19 +196,26 @@ classifier conflict. Architect implementation review v1 accepted the complete ca
 it was committed as `0d221af`, and architect post-commit evidence review v1 accepted its clean
 checkout/archive evidence. DC-46 and the Rust 1.85 compatibility blocker are complete; DC-45 does not
 silently absorb this resolved product-workspace mismatch.
-DC-47 is the accepted pre-0.19.0 release-candidate correction for the remaining Clippy command
+DC-47 was the accepted pre-0.19.0 release-candidate correction for the then-remaining Clippy command
 divergence: DC-35 public release guidance selects `--all-features`, while current stable CI and the
-DC-45 governed classifier select the no-all-features vector. It proposes preserving the stronger
-release gate and adding one exact non-authority classifier production. Architect design review v1
+DC-45 governed classifier selected the no-all-features vector. Its design preserved the stronger
+release gate and added one exact non-authority classifier production. Architect design review v1
 accepted the bounded design on 2026-07-21. Architect legacy-vector test-contract QA v1 resolved the
 retained-vector contradiction and authorized bounded implementation. Architect implementation review
 v1 accepted the candidate on 2026-07-21, committed as `ea95e92`. Architect post-commit evidence review
-v1 accepted its clean checkout/archive evidence on 2026-07-21, completing DC-47. DC-48 must separately
-retire both unconsumed legacy Clippy productions before the 0.19.0 release candidate; its design
+v1 accepted its clean checkout/archive evidence on 2026-07-21, completing DC-47. DC-48 then separately
+retired both unconsumed legacy Clippy productions required before the 0.19.0 release candidate; its design
 was accepted after architect review v1 on 2026-07-22 with exact bare/prefixed A/B rejection evidence
 required. Architect implementation review v1 accepted the bounded candidate, committed as `383e503`.
 Architect post-commit evidence review v1 accepted its clean checkout/archive evidence on 2026-07-22,
 completing DC-48 and the legacy-Clippy-production blocker.
+
+**Current DC-45 through DC-48 disposition:** Rust release-policy authority, Rust 1.85 compatibility,
+stable all-features Clippy alignment, and legacy Clippy production retirement are complete. Only DC-45's
+event-bound obligations remain: retain Python and the frozen oracle through the first Rust-gated 0.19.0
+release, obtain accepted later-commit stability evidence, and complete the separately reviewed Python/
+oracle retirement or consolidation events. These obligations do not alter the DC-41 through DC-43
+program order.
 
 **Completion condition:** reproducible crash/fuzz/hash/platform evidence is available, performance and
 source-structure gates are enforced or carry reviewed exceptions, and release artifacts have reviewed

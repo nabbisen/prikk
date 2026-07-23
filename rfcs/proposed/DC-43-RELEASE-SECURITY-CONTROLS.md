@@ -2,6 +2,8 @@
 
 **Status.** Proposed; security/architect design review required.
 **Target milestone.** M2 - required before reconsidering public-preview readiness.
+**Schedule position.** Third remaining post-M1 increment, after DC-42. Completion remains a prerequisite
+for any public-preview reconsideration; this program order is not implementation authority.
 **Tracks.** Architect review N7.
 **Touches.** Vulnerability reporting, dependency policy, SBOM/provenance, release attestations, release-
 key lifecycle, registry-owner lifecycle, CI platform policy, and public release documentation.

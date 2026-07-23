@@ -2,6 +2,8 @@
 
 **Status.** Proposed; design review required.
 **Target milestone.** M2 - post-correction assurance milestone.
+**Schedule position.** Second remaining post-M1 increment, after DC-41 establishes the released
+evidence baseline. This program order is not independent implementation authority.
 **Tracks.** Architect review N5 and project Rust development/testing rules.
 **Touches.** Commit performance benchmark, source/test module boundaries, ELOC reporting, and CI or
 maintainer gate documentation. No semantic feature work.

@@ -34,6 +34,11 @@ These records are under design review. All proposed RFCs must respect the depend
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0 |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 
+The remaining post-0.18.0 M2 order is DC-41, then DC-42, then DC-43. That ordering does not make any
+proposed RFC implementation authority; each still requires individual design acceptance. DC-44 remains
+scheduled after M2. DC-45 through DC-48 are accepted preparatory work already landed before M1 release,
+not competing future increments in this sequence.
+
 ## Accepted
 
 These reviewed designs may govern downstream work but have not yet released.
