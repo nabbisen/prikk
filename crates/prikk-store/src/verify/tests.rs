@@ -34,7 +34,7 @@ fn verify_repository_detects_block_with_missing_patch() {
         let payload_bytes = payload.to_canonical_bytes();
         assert!(payload_bytes.is_ok());
         if let Ok(payload_bytes) = payload_bytes {
-            let mut block = ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes);
+            let mut block = ObjectEnvelope::unsigned(ObjectType::Block, 2, payload_bytes);
             assert!(block.add_signature(maintainer_signature()).is_ok());
             assert!(store.write_object(&block).is_ok());
             assert!(verify_repository(&layout).is_err());

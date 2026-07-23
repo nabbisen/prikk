@@ -39,6 +39,8 @@ pub(crate) fn append_log_record(
     ref_name: &str,
     envelope: &ObjectEnvelope,
 ) -> Result<()> {
+    layout.require_current_format()?;
+    crate::format::validate_object_envelope(layout.format(), envelope)?;
     validate_log_record(envelope)?;
     let path = layout.repository_relative(&layout.ref_log_path(ref_name))?;
     let Some(parent) = path.parent() else {
@@ -73,11 +75,18 @@ pub(crate) fn replay_log(layout: &RepositoryLayout, ref_name: &str) -> Result<Re
             trailing_partial_bytes: 0,
         });
     };
-    decode_log_records(&bytes)
+    decode_log_file_bytes(layout.format(), &bytes)
 }
 
-pub(crate) fn decode_log_file_bytes(bytes: &[u8]) -> Result<RefLogReplay> {
-    decode_log_records(bytes)
+pub(crate) fn decode_log_file_bytes(
+    format: crate::layout::RepositoryFormat,
+    bytes: &[u8],
+) -> Result<RefLogReplay> {
+    let replay = decode_log_records(bytes)?;
+    for record in &replay.records {
+        crate::format::validate_read_schema(format, &record.envelope)?;
+    }
+    Ok(replay)
 }
 
 /// Truncate only a structurally incomplete final frame and required-sync the retained log.

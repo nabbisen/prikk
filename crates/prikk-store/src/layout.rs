@@ -7,11 +7,22 @@ use prikk_hash::{sha256, to_hex};
 use prikk_object::{ObjectId, ObjectType};
 
 use crate::fsutil::{
-    MutationRoot, ensure_directory_required, read_file_required, write_file_atomically,
+    MutationRoot, ensure_directory_required, read_file_if_exists, read_file_required,
+    write_file_atomically,
 };
 
 const REPO_DIR: &str = ".prikk";
-const FORMAT_VERSION: &str = "1\n";
+const LEGACY_FORMAT_VERSION: &[u8] = b"1\n";
+const CURRENT_FORMAT_VERSION: &[u8] = b"2\n";
+
+/// Repository format selected by the authoritative `.prikk/FORMAT` marker.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RepositoryFormat {
+    /// Released format 1, opened for bounded legacy read-only use.
+    LegacyV1,
+    /// Current format 2, writable under the DC-40 schema and state-root rules.
+    CurrentV2,
+}
 
 /// Repository layout paths.
 #[derive(Debug, Clone)]
@@ -20,6 +31,7 @@ pub struct RepositoryLayout {
     prikk_dir: PathBuf,
     worktree_mutation: MutationRoot,
     repository_mutation: MutationRoot,
+    format: RepositoryFormat,
 }
 
 impl PartialEq for RepositoryLayout {
@@ -37,11 +49,13 @@ impl RepositoryLayout {
         let prikk_dir = root.join(REPO_DIR);
         let worktree_mutation = MutationRoot::open(&root)?;
         let repository_mutation = worktree_mutation.open_root(Path::new(REPO_DIR))?;
+        let format = read_repository_format(&repository_mutation)?;
         Ok(Self {
             root,
             prikk_dir,
             worktree_mutation,
             repository_mutation,
+            format,
         })
     }
 
@@ -51,36 +65,59 @@ impl RepositoryLayout {
         let prikk_dir = root.join(REPO_DIR);
         let worktree_mutation = MutationRoot::open(&root)?;
         let repository_mutation = worktree_mutation.ensure_root(Path::new(REPO_DIR))?;
+        if let Some(version) = read_file_if_exists(&repository_mutation, Path::new("FORMAT"))? {
+            if version != CURRENT_FORMAT_VERSION {
+                return Err(PrikkError::Integrity(
+                    "refusing to initialize an existing non-format-2 Prikk repository".to_string(),
+                ));
+            }
+        }
         let layout = Self {
             root,
             prikk_dir,
             worktree_mutation,
             repository_mutation,
+            format: RepositoryFormat::CurrentV2,
         };
         for dir in layout.required_repository_directories()? {
             ensure_directory_required(layout.repository_mutation_root(), &dir)?;
         }
-        write_file_atomically(
-            layout.repository_mutation_root(),
-            Path::new("FORMAT"),
-            FORMAT_VERSION.as_bytes(),
-        )?;
+        if read_file_if_exists(layout.repository_mutation_root(), Path::new("FORMAT"))?.is_none() {
+            write_file_atomically(
+                layout.repository_mutation_root(),
+                Path::new("FORMAT"),
+                CURRENT_FORMAT_VERSION,
+            )?;
+        }
         Ok(layout)
     }
 
     /// Open an existing repository layout.
     pub fn open(root: impl Into<PathBuf>) -> Result<Self> {
-        let layout = Self::new(root)?;
-        layout.validate_format()?;
-        Ok(layout)
+        Self::new(root)
+    }
+
+    /// Return the repository format selected when this layout was opened.
+    #[must_use]
+    pub const fn format(&self) -> RepositoryFormat {
+        self.format
     }
 
     pub(crate) fn validate_format(&self) -> Result<()> {
-        let version = read_file_required(self.repository_mutation_root(), Path::new("FORMAT"))?;
-        if version != FORMAT_VERSION.as_bytes() {
+        let format = read_repository_format(self.repository_mutation_root())?;
+        if format != self.format {
             return Err(PrikkError::UnsupportedFormatVersion(0));
         }
         Ok(())
+    }
+
+    /// Refuse ordinary repository/worktree mutation in legacy format 1.
+    pub fn require_current_format(&self) -> Result<()> {
+        self.validate_format()?;
+        if self.format == RepositoryFormat::CurrentV2 {
+            return Ok(());
+        }
+        Err(PrikkError::UnsupportedFormatVersion(1))
     }
 
     /// Return the working tree root.
@@ -288,6 +325,15 @@ impl RepositoryLayout {
     #[must_use]
     pub fn trust_policy_path(&self) -> PathBuf {
         self.trust_dir().join("policy.toml")
+    }
+}
+
+fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
+    let version = read_file_required(root, Path::new("FORMAT"))?;
+    match version.as_slice() {
+        LEGACY_FORMAT_VERSION => Ok(RepositoryFormat::LegacyV1),
+        CURRENT_FORMAT_VERSION => Ok(RepositoryFormat::CurrentV2),
+        _ => Err(PrikkError::UnsupportedFormatVersion(0)),
     }
 }
 

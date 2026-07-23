@@ -33,16 +33,27 @@ use output::{
 };
 use prikk_store::{
     DoctorRepairOptions, Ed25519AuthorSigner, Ed25519MaintainerSigner, MergeEvidenceTarget,
-    RefStore, RepositoryLayout, Wal, WorktreePatchCommitOptions, add_trusted_maintainer,
-    append_rollback_draft, commit_worktree_changes_signed, doctor_repository, load_ref_history,
-    materialize_patch_checkout, materialize_patch_checkout_with_deletions,
-    materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan,
-    prepare_merge_evidence, prepare_merge_plan, prepare_patch_inverse_plan,
-    prepare_patch_replay_plan, prepare_rollback_preview, prepare_snapshot_checkout_plan,
-    repair_repository, verify_active_rollback_draft, verify_repository, worktree_status,
+    RefStore, RepositoryFormat, RepositoryLayout, Wal, WorktreePatchCommitOptions,
+    add_trusted_maintainer, append_rollback_draft, commit_worktree_changes_signed,
+    doctor_repository, load_ref_history, materialize_patch_checkout,
+    materialize_patch_checkout_with_deletions, materialize_snapshot_checkout,
+    plan_patch_checkout_deletions, prepare_checkout_plan, prepare_merge_evidence,
+    prepare_merge_plan, prepare_patch_inverse_plan, prepare_patch_replay_plan,
+    prepare_rollback_preview, prepare_snapshot_checkout_plan, repair_repository,
+    verify_active_rollback_draft, verify_repository, worktree_status,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+fn open_repository(root: impl Into<PathBuf>) -> std::result::Result<RepositoryLayout, String> {
+    let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
+    if layout.format() == RepositoryFormat::LegacyV1 {
+        eprintln!(
+            "warning: format-1 repository opened in legacy read-only mode; scaffold roots are not verifiable state commitments"
+        );
+    }
+    Ok(layout)
+}
 
 fn main() -> ExitCode {
     match run() {
@@ -101,7 +112,10 @@ fn run_init(path: Option<String>) -> std::result::Result<(), String> {
 fn run_commit(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_commit_args(args)?;
     let root = current_dir()?;
-    let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
+    let layout = open_repository(root)?;
+    layout
+        .require_current_format()
+        .map_err(|err| err.to_string())?;
     let options = if args.text_edits {
         WorktreePatchCommitOptions::prefer_text_edits()
     } else {
@@ -168,7 +182,7 @@ fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {
             let public_key = public_key
                 .ok_or_else(|| "trust maintainer add requires --public-key".to_string())?;
             let root = current_dir()?;
-            let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
+            let layout = open_repository(root)?;
             let policy = add_trusted_maintainer(&layout, &key_id, &public_key)
                 .map_err(|err| err.to_string())?;
             println!("trusted maintainer key: {}", policy.key_id);
@@ -183,8 +197,8 @@ fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {
 
 fn run_status() -> std::result::Result<(), String> {
     let root = current_dir()?;
-    let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
-    let wal = Wal::new(layout.default_queue_wal_path());
+    let layout = open_repository(root)?;
+    let wal = Wal::for_layout(&layout);
     let replay = wal.replay().map_err(|err| err.to_string())?;
     println!("prikk repository: {}", layout.prikk_dir().display());
     let ref_store = RefStore::new(layout.clone());
@@ -209,7 +223,7 @@ fn run_status() -> std::result::Result<(), String> {
 
 fn run_log(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_log_args(args)?;
-    let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
+    let layout = open_repository(args.root)?;
     let history =
         load_ref_history(&layout, &args.ref_name, args.limit).map_err(|err| err.to_string())?;
     print_history(&layout, &history);
@@ -218,7 +232,7 @@ fn run_log(args: Vec<String>) -> std::result::Result<(), String> {
 
 fn run_checkout(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_checkout_args(args)?;
-    let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
+    let layout = open_repository(args.root)?;
     match args.mode {
         CheckoutMode::PlanOnly => {
             let plan =
@@ -264,7 +278,7 @@ fn run_checkout(args: Vec<String>) -> std::result::Result<(), String> {
 
 fn run_merge_evidence(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_merge_evidence_args(args)?;
-    let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
+    let layout = open_repository(args.root)?;
     let report = prepare_merge_evidence(
         &layout,
         args.baseline_block_id,
@@ -278,7 +292,7 @@ fn run_merge_evidence(args: Vec<String>) -> std::result::Result<(), String> {
 
 fn run_merge_plan(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_merge_plan_args(args)?;
-    let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
+    let layout = open_repository(args.root)?;
     let plan = prepare_merge_plan(
         &layout,
         args.baseline_block_id,
@@ -299,7 +313,7 @@ fn merge_target_from_arg(target: MergeEvidenceTargetArg) -> MergeEvidenceTarget 
 
 fn run_inverse_plan(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_inverse_plan_args(args)?;
-    let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
+    let layout = open_repository(args.root)?;
     let plan =
         prepare_patch_inverse_plan(&layout, &args.ref_name).map_err(|err| err.to_string())?;
     print_patch_inverse_plan(&layout, &plan);
@@ -308,7 +322,7 @@ fn run_inverse_plan(args: Vec<String>) -> std::result::Result<(), String> {
 
 fn run_rollback_preview(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_rollback_preview_args(args)?;
-    let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
+    let layout = open_repository(args.root)?;
     let plan = prepare_rollback_preview(&layout, &args.ref_name).map_err(|err| err.to_string())?;
     print_rollback_preview_plan(&layout, &plan);
     Ok(())
@@ -316,7 +330,10 @@ fn run_rollback_preview(args: Vec<String>) -> std::result::Result<(), String> {
 
 fn run_rollback_draft(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_rollback_draft_args(args)?;
-    let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
+    let layout = open_repository(args.root)?;
+    layout
+        .require_current_format()
+        .map_err(|err| err.to_string())?;
     let signer = author_signer_from_env()?;
     let report = append_rollback_draft(&layout, &args.ref_name, &args.message, &signer)
         .map_err(|err| err.to_string())?;
@@ -326,7 +343,7 @@ fn run_rollback_draft(args: Vec<String>) -> std::result::Result<(), String> {
 
 fn run_rollback_draft_verify(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_rollback_draft_verify_args(args)?;
-    let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
+    let layout = open_repository(args.root)?;
     let report =
         verify_active_rollback_draft(&layout, &args.ref_name).map_err(|err| err.to_string())?;
     print_rollback_draft_verification(&layout, &report);
@@ -335,7 +352,7 @@ fn run_rollback_draft_verify(args: Vec<String>) -> std::result::Result<(), Strin
 
 fn run_worktree_status(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_worktree_status_args(args)?;
-    let layout = RepositoryLayout::open(args.root).map_err(|err| err.to_string())?;
+    let layout = open_repository(args.root)?;
     let report = worktree_status(&layout, &args.ref_name).map_err(|err| err.to_string())?;
     print_worktree_status(&layout, &report);
     if report.is_clean() {
@@ -347,10 +364,12 @@ fn run_worktree_status(args: Vec<String>) -> std::result::Result<(), String> {
 
 fn run_verify(path: Option<String>) -> std::result::Result<(), String> {
     let root = optional_path_or_current(path)?;
-    let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
+    let layout = open_repository(root)?;
     let report = verify_repository(&layout).map_err(|err| err.to_string())?;
     print_verify_report(&layout, &report);
-    if report.has_active_wal_metadata_integrity_issue() {
+    if report.has_unverifiable_state_roots() {
+        Err("format-1 scaffold roots are not verifiable state commitments".to_string())
+    } else if report.has_active_wal_metadata_integrity_issue() {
         Err("repository has active-WAL metadata integrity issues".to_string())
     } else if report.has_blocking_ref_publication_issues() {
         Err("repository has interrupted or divergent ref publication state".to_string())
@@ -363,7 +382,7 @@ fn run_verify(path: Option<String>) -> std::result::Result<(), String> {
 
 fn run_doctor(args: Vec<String>) -> std::result::Result<(), String> {
     let doctor_args = parse_doctor_args(args)?;
-    let layout = RepositoryLayout::open(doctor_args.root).map_err(|err| err.to_string())?;
+    let layout = open_repository(doctor_args.root)?;
     if doctor_args.repair_wal_tail || doctor_args.repair_main_ref {
         let options = DoctorRepairOptions {
             truncate_wal_tail: doctor_args.repair_wal_tail,

@@ -158,12 +158,14 @@ fn seal_truncates_only_partial_tail_before_completion() -> TestResult {
 }
 
 #[test]
-fn seal_recovers_exact_format1_ahead_log_without_append() -> TestResult {
+fn seal_rejects_format2_missing_pointer_with_retained_state() -> TestResult {
     let fixture = setup_sealed("legacy-ahead")?;
     std::fs::remove_file(fixture.layout.ref_pointer_path("heads/main"))?;
     restore_active(&fixture)?;
-    assert_verify_fails(&fixture.root, "PRIKK-VERIFY-REF-POINTER-MISSING")?;
-    require_success(&run_seal(&fixture.root)?, "legacy-ahead retry")?;
+    assert_verify_fails(&fixture.root, "PRIKK-VERIFY-REF-DIVERGENCE")?;
+    let output = run_seal(&fixture.root)?;
+    assert!(!output.status.success());
+    assert!(!fixture.layout.ref_pointer_path("heads/main").exists());
     assert_eq!(
         RefStore::new(fixture.layout.clone())
             .replay_log("heads/main")?
@@ -207,7 +209,7 @@ fn missing_pointer_with_mismatched_active_owner_is_divergence() -> TestResult {
 }
 
 #[test]
-fn seal_recovers_existing_format1_log_lead_without_append() -> TestResult {
+fn seal_rejects_format2_log_lead() -> TestResult {
     let fixture = setup_sealed("legacy-existing-ahead")?;
     let pointer_path = fixture.layout.ref_pointer_path("heads/main");
     let old_pointer = std::fs::read(&pointer_path)?;
@@ -230,8 +232,9 @@ fn seal_recovers_existing_format1_log_lead_without_append() -> TestResult {
         retained_metadata,
     )?;
 
-    assert_verify_fails(&fixture.root, "PRIKK-VERIFY-REF-LEGACY-LOG-LEADS")?;
-    require_success(&run_seal(&fixture.root)?, "legacy existing retry")?;
+    assert_verify_fails(&fixture.root, "PRIKK-VERIFY-REF-DIVERGENCE")?;
+    let output = run_seal(&fixture.root)?;
+    assert!(!output.status.success());
     assert_eq!(
         RefStore::new(fixture.layout.clone())
             .replay_log("heads/main")?

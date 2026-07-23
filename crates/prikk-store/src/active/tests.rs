@@ -11,6 +11,8 @@ use crate::{
 use crate::fsutil::{TestFailPoint, fail_once_for_test};
 use crate::test_support::{signed_patch_envelope, unique_temp_dir};
 
+mod format_transition;
+
 #[test]
 fn active_lock_rejects_second_writer() {
     let root = unique_temp_dir("lock");

@@ -8,7 +8,7 @@ use crate::test_support::{maintainer_signature, signed_patch_envelope, unique_te
 use crate::{ActiveSession, RefStore, RepositoryLayout, verify_repository};
 
 #[test]
-fn legacy_timestamp_is_warning_only_for_reads_but_blocks_mutation() -> prikk_error::Result<()> {
+fn format2_legacy_timestamp_is_not_normalized_and_blocks_mutation() -> prikk_error::Result<()> {
     let root = unique_temp_dir("dc38-legacy-timestamp");
     let layout = RepositoryLayout::init(root.clone())?;
     let publication = root_publication(&layout, "heads/main")?;
@@ -25,14 +25,7 @@ fn legacy_timestamp_is_warning_only_for_reads_but_blocks_mutation() -> prikk_err
         log::encode_log_record_for_test(&envelope)?,
     )?;
 
-    let report = verify_repository(&layout)?;
-    assert!(!report.has_blocking_ref_publication_issues());
-    assert!(
-        report
-            .ref_publication_issues
-            .iter()
-            .any(|issue| issue.code == "PRIKK-VERIFY-REF-LEGACY-TIMESTAMP")
-    );
+    assert!(verify_repository(&layout).is_err());
     assert!(
         ActiveSession::new(layout.clone())
             .append_patch(&signed_patch_envelope())

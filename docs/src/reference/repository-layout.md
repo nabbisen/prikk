@@ -1,7 +1,7 @@
 # Repository Layout and Authority
 
 This page is the authoritative current-state reference for Prikk's on-disk repository layout and
-storage authority boundaries. It describes the released implementation through 0.17.5 and is grounded
+storage authority boundaries. It describes the current implementation prepared for 0.18.0 and is grounded
 in the code, released RFCs, and implementation status records listed in the anchor table at the foot of
 the page.
 
@@ -58,9 +58,17 @@ policy files, or maintainer key files.
   quarantine/
 ```
 
-`FORMAT` currently contains `1`. Opening a repository requires that current value. This file is
-load-bearing for recognizing the current repository format version, but it is not a promise that the
-format is stable or that a migration path exists.
+New repositories contain `2` in `FORMAT`. Opening value `2` selects the current writable format;
+opening value `1` selects bounded legacy read-only behavior. Every other value is unsupported. The
+marker is load-bearing and is never inferred from individual objects.
+
+Format 2 admits schema-2 Blocks and schema-1 Patch, RefState, RefUpdate, Tag, Attestation, and Blob
+envelopes in their authorized locations. Ordinary object, WAL, ref, trust, repair, and worktree writes
+are refused for format 1. Read-only inspection and planning remain available with a warning. `verify`
+performs bounded structural/signature checks but returns nonzero because format-1 scaffold roots are
+not state commitments. The sole legacy mutation is exact signer-backed completion of DC-34's retained
+one-record-ahead interrupted publication; it promotes existing signed state without rewriting identity
+bytes or appending another log record.
 
 `cache/` and `quarantine/` are initialized directories. Current released behavior does not use either
 directory as authority for verification, publication, recovery, or trust.
@@ -177,7 +185,7 @@ identity, key rotation, key revocation, hosted forge policy, or a multi-maintain
 
 | Path or data | Classification | Current meaning |
 |---|---|---|
-| `.prikk/FORMAT` | Format gate | Required by repository open; current value is `1`; not a stable-format or migration guarantee. |
+| `.prikk/FORMAT` | Format gate | Required by repository open; `2` is current writable format and `1` is bounded legacy read-only mode. |
 | `objects/<type>/<prefix>/<id>.pobj` | Content-addressed object authority | Authority when the envelope validates and its computed id/type match the path and expected object. |
 | `refs/logs/*.log` | Publication evidence | Append-only signed RefUpdate records; authoritative only with valid chain, object, signature, and trust checks. |
 | `trust/policy.toml` and `trust/keys/maintainer/*.pub` | Repository-local trust authority | Current local MAINTAINER trust input for seal and verify publication-trust checks. |
@@ -191,8 +199,10 @@ identity, key rotation, key revocation, hosted forge policy, or a multi-maintain
 
 ## Deferred and Not Stable
 
-Prikk does not currently provide a stable repository-format contract or migration policy. The
-`FORMAT` marker only gates the current implementation's ability to open the current layout.
+Prikk does not provide in-place or history-preserving migration from format 1 to format 2. The
+documented writable path is a newly initialized format-2 repository followed by deliberate worktree
+re-authoring, which creates new NodeIds, objects, signatures, and history. Copying `.prikk/` data or
+editing `FORMAT` is not migration. This explicit transition does not promise general format stability.
 
 Still deferred: garbage collection, cache rebuild semantics, quarantine enforcement, stable
 repository-format migration, backup/restore workflows, remote trust, hosted forge semantics, complete
@@ -204,7 +214,7 @@ validation.
 | Claim | Source anchors |
 |---|---|
 | Repository initialization creates the listed directories and writes `.prikk/FORMAT`. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-31](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
-| `.prikk/FORMAT` is required when opening a repository and currently contains `1`. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
+| `.prikk/FORMAT` selects current writable format 2 or bounded legacy format 1. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-40](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md) |
 | Persistent object placement uses object-type directories, two-hex fanout, and `.pobj` files. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`object_store.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/object_store.rs) |
 | Six object types currently have initialized persistent object directories; `RefUpdate` is inline-only in ref logs. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`object_store.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/object_store.rs), [`refs/log.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/log.rs) |
 | Ref storage keys are SHA-256 hex digests of human-readable ref names. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs) |

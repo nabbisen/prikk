@@ -84,13 +84,13 @@ const CASES: &[StateCase] = &[
     StateCase {
         state: PersistedState::LegacyLogLeading,
         verify: VerifyExpectation::Issue {
-            code: "PRIKK-VERIFY-REF-LEGACY-LOG-LEADS",
+            code: "PRIKK-VERIFY-REF-DIVERGENCE",
             blocking: true,
         },
-        doctor_code: "PRIKK-VERIFY-REF-LEGACY-LOG-LEADS",
+        doctor_code: "PRIKK-VERIFY-REF-DIVERGENCE",
         doctor_severity: DoctorSeverity::Error,
-        recommendation: "signer-backed",
-        retry: RetryExpectation::Completes { log_records: 2 },
+        recommendation: "preserve the repository",
+        retry: RetryExpectation::Refuses,
         mutation_succeeds: false,
     },
     StateCase {

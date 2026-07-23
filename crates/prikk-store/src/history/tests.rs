@@ -10,8 +10,8 @@ use crate::{
 };
 
 use crate::test_support::{
-    maintainer_signature, rollback_patch_envelope, signed_ref_state_envelope,
-    signed_ref_update_envelope, unique_temp_dir,
+    maintainer_signature, rollback_patch_blob_envelope, rollback_patch_envelope,
+    signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
 };
 
 #[test]
@@ -122,9 +122,21 @@ fn history_and_verify_classify_sealed_rollback_block() {
         let mut object_store = FileObjectStore::new(layout.clone());
         let rollback_patch = rollback_patch_envelope();
         let rollback_patch_id = rollback_patch.object_id();
+        assert!(
+            object_store
+                .write_object(&rollback_patch_blob_envelope())
+                .is_ok()
+        );
         assert!(object_store.write_object(&rollback_patch).is_ok());
 
-        let block = signed_block_envelope(BlockKind::Normal, Vec::new(), vec![rollback_patch_id]);
+        let root = crate::derive_next_state_root(&object_store, None, &[rollback_patch_id]);
+        assert!(root.is_ok());
+        let block = signed_block_envelope_with_root(
+            BlockKind::Root,
+            Vec::new(),
+            vec![rollback_patch_id],
+            root.unwrap_or(MerkleRoot([0; 32])),
+        );
         let block_id = block.object_id();
         assert!(object_store.write_object(&block).is_ok());
 
@@ -166,17 +178,31 @@ fn signed_block_envelope(
     parent_block_ids: Vec<prikk_object::ObjectId>,
     patch_ids: Vec<prikk_object::ObjectId>,
 ) -> ObjectEnvelope {
+    signed_block_envelope_with_root(
+        kind,
+        parent_block_ids,
+        patch_ids,
+        crate::compute_state_root(&[]).unwrap_or(MerkleRoot([0_u8; 32])),
+    )
+}
+
+fn signed_block_envelope_with_root(
+    kind: BlockKind,
+    parent_block_ids: Vec<prikk_object::ObjectId>,
+    patch_ids: Vec<prikk_object::ObjectId>,
+    state_merkle_root: MerkleRoot,
+) -> ObjectEnvelope {
     let payload = BlockPayload {
         parent_block_ids,
         kind,
         patch_ids,
-        state_merkle_root: MerkleRoot([0_u8; 32]),
+        state_merkle_root,
         snapshot_blob_ref: None,
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
     let mut envelope =
-        ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes.unwrap_or_default());
+        ObjectEnvelope::unsigned(ObjectType::Block, 2, payload_bytes.unwrap_or_default());
     assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
 }

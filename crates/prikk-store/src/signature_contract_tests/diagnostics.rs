@@ -9,8 +9,8 @@ use crate::test_support::{
 };
 use crate::wal::encode_record_for_test;
 use crate::{
-    FileObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout,
-    SignatureEnvelopeSource, Wal, WalRecord, verify_repository, write_active_ref_metadata,
+    RepositoryLayout, SignatureEnvelopeSource, Wal, WalRecord, verify_repository,
+    write_active_ref_metadata,
 };
 
 fn all_issues_envelope(object_type: ObjectType, payload: &[u8]) -> ObjectEnvelope {
@@ -71,19 +71,13 @@ fn format1_diagnostics_are_byte_preserving_suppressed_and_deterministic() -> pri
     )?;
     write_active_ref_metadata(&layout, "heads/main")?;
 
-    let mut objects = FileObjectStore::new(layout.clone());
-    let block = signed_empty_block_envelope();
-    let block_id = objects.write_object(&block)?;
+    let mut block = signed_empty_block_envelope();
+    block.schema_version = 1;
+    let block_id = write_legacy_object(&layout, &block)?;
     for ref_name in ["heads/z", "heads/a"] {
         let state = signed_ref_state_envelope(ref_name, None, block_id, 1);
-        let state_id = state.object_id();
+        let state_id = write_legacy_object(&layout, &state)?;
         let update = signed_ref_update_envelope(ref_name, None, state_id, block_id, 1);
-        RefStore::new(layout.clone()).publish(&RefPublication {
-            ref_name: ref_name.to_string(),
-            expected_previous_ref_state_id: None,
-            ref_state: state,
-            ref_update: update.clone(),
-        })?;
         let mut inverted_update = update;
         inverted_update.signatures = vec![signature("z", 9), signature("a", 8)];
         std::fs::write(
@@ -100,12 +94,14 @@ fn format1_diagnostics_are_byte_preserving_suppressed_and_deterministic() -> pri
         layout.ref_log_path("heads/a"),
         layout.ref_log_path("heads/z"),
     ];
+    std::fs::write(root.join(".prikk/FORMAT"), b"1\n")?;
     let before = observed_paths
         .iter()
         .map(std::fs::read)
         .collect::<std::io::Result<Vec<_>>>()?;
 
-    let report = verify_repository(&layout)?;
+    let legacy_layout = RepositoryLayout::open(root.clone())?;
+    let report = verify_repository(&legacy_layout)?;
     let after = observed_paths
         .iter()
         .map(std::fs::read)

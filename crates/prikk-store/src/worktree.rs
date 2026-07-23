@@ -49,6 +49,7 @@ pub fn materialize_snapshot_checkout(
     layout: &RepositoryLayout,
     ref_name: &str,
 ) -> Result<SnapshotMaterializationReport> {
+    layout.require_current_format()?;
     let plan = prepare_snapshot_checkout_plan(layout, ref_name)?;
     let manifest = load_snapshot_manifest(layout, plan.snapshot_blob_id)?;
     let write_report = materialize_manifest_entries(layout, &manifest)?;

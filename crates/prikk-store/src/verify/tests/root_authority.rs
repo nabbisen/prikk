@@ -1,15 +1,17 @@
 //! Full verification must derive recovery authority from one retained repository root.
 
 use prikk_object::{
-    BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType, RefKind,
-    RefStatePayload, RefUpdatePayload,
+    BlockKind, BlockPayload, CanonicalEncode, ObjectEnvelope, ObjectType, RefKind, RefStatePayload,
+    RefUpdatePayload,
 };
 
-use crate::test_support::{rollback_patch_envelope, signed_patch_envelope, unique_temp_dir};
+use crate::test_support::{
+    rollback_patch_envelope, signed_patch_blob_envelope, signed_patch_envelope, unique_temp_dir,
+};
 use crate::{
     Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication,
-    RefStore, RepositoryLayout, Wal, add_trusted_maintainer, maintainer_signature,
-    verify_repository, write_active_ref_metadata,
+    RefStore, RepositoryLayout, Wal, add_trusted_maintainer, derive_next_state_root,
+    maintainer_signature, verify_repository, write_active_ref_metadata,
 };
 
 #[test]
@@ -28,12 +30,13 @@ fn full_verification_retains_wal_objects_trust_and_recovery_diagnosis_after_root
     let patch = signed_patch_envelope();
     let patch_id = patch.object_id();
     let mut objects = FileObjectStore::new(layout.clone());
+    objects.write_object(&signed_patch_blob_envelope())?;
     objects.write_object(&patch)?;
     let block_payload = BlockPayload {
         parent_block_ids: Vec::new(),
         kind: BlockKind::Root,
         patch_ids: vec![patch_id],
-        state_merkle_root: MerkleRoot([0; 32]),
+        state_merkle_root: derive_next_state_root(&objects, None, &[patch_id])?,
         snapshot_blob_ref: None,
     };
     let block = signed_publication(
@@ -103,7 +106,7 @@ fn assert_retained_missing_pointer(
     let report = verify_repository(layout)?;
     assert!(report.publication_trust_issues.is_empty());
     assert!(report.ref_publication_issues.iter().any(|issue| {
-        issue.code == "PRIKK-VERIFY-REF-POINTER-MISSING"
+        issue.code == "PRIKK-VERIFY-REF-DIVERGENCE"
             && issue.ref_name.as_deref() == Some("heads/main")
     }));
     let replay = Wal::for_layout(layout).replay()?;
@@ -123,7 +126,12 @@ fn signed_publication(
     canonical_payload: Vec<u8>,
     signer: &impl MaintainerSigner,
 ) -> prikk_error::Result<ObjectEnvelope> {
-    let mut envelope = ObjectEnvelope::unsigned(object_type, 1, canonical_payload);
+    let schema_version = if object_type == ObjectType::Block {
+        2
+    } else {
+        1
+    };
+    let mut envelope = ObjectEnvelope::unsigned(object_type, schema_version, canonical_payload);
     envelope.add_signature(maintainer_signature(
         signer,
         object_type,

@@ -1,5 +1,6 @@
 mod admission;
 mod diagnostics;
+mod read_admission;
 mod shape_matrix;
 mod vectors;
 

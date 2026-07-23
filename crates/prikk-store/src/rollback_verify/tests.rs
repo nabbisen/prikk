@@ -12,7 +12,8 @@ use crate::{
 };
 
 use crate::test_support::{
-    legacy_rollback_marker_signature, rollback_patch_envelope, signed_block, signed_patch_envelope,
+    legacy_rollback_marker_signature, rollback_patch_blob_envelope, rollback_patch_envelope,
+    signed_block_with_state_root, signed_patch_blob_envelope, signed_patch_envelope,
     signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
 };
 use crate::test_support::{publish_snapshot_then_patch_block, publish_text_create_then_edit_block};
@@ -35,7 +36,7 @@ fn rollback_draft_verify_matches_current_inverse_plan() {
         assert!(published.is_ok());
         let signer = test_signer();
         let draft = append_rollback_draft(&layout, "heads/main", "rollback verify", &signer);
-        assert!(draft.is_ok());
+        assert!(draft.is_ok(), "{draft:?}");
         let verification = verify_active_rollback_draft(&layout, "heads/main");
         assert!(verification.is_ok());
         if let Ok(verification) = verification {
@@ -188,6 +189,11 @@ fn sealed_history_classifies_payload_purpose_not_legacy_key_id() {
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
         let mut object_store = FileObjectStore::new(layout.clone());
+        assert!(
+            object_store
+                .write_object(&rollback_patch_blob_envelope())
+                .is_ok()
+        );
         let rollback_patch = rollback_patch_envelope();
         assert_eq!(
             PatchPurpose::decode_from_patch_payload(&rollback_patch.canonical_payload),
@@ -196,11 +202,15 @@ fn sealed_history_classifies_payload_purpose_not_legacy_key_id() {
         let rollback_patch_id = object_store.write_object(&rollback_patch);
         assert!(rollback_patch_id.is_ok());
         if let Ok(rollback_patch_id) = rollback_patch_id {
-            let block = signed_block(
+            let state_root =
+                crate::derive_next_state_root(&object_store, None, &[rollback_patch_id]);
+            assert!(state_root.is_ok());
+            let block = signed_block_with_state_root(
                 prikk_object::BlockKind::Root,
                 Vec::new(),
                 vec![rollback_patch_id],
                 None,
+                state_root.unwrap_or(prikk_object::MerkleRoot([0; 32])),
             );
             let block_id = object_store.write_object(&block);
             assert!(block_id.is_ok());
@@ -237,6 +247,11 @@ fn legacy_key_id_without_payload_purpose_is_not_classified() {
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
         let mut object_store = FileObjectStore::new(layout.clone());
+        assert!(
+            object_store
+                .write_object(&signed_patch_blob_envelope())
+                .is_ok()
+        );
         let mut legacy = signed_patch_envelope();
         legacy.signatures.clear();
         assert!(
@@ -251,11 +266,14 @@ fn legacy_key_id_without_payload_purpose_is_not_classified() {
         let legacy_patch_id = object_store.write_object(&legacy);
         assert!(legacy_patch_id.is_ok());
         if let Ok(legacy_patch_id) = legacy_patch_id {
-            let block = signed_block(
+            let state_root = crate::derive_next_state_root(&object_store, None, &[legacy_patch_id]);
+            assert!(state_root.is_ok());
+            let block = signed_block_with_state_root(
                 prikk_object::BlockKind::Root,
                 Vec::new(),
                 vec![legacy_patch_id],
                 None,
+                state_root.unwrap_or(prikk_object::MerkleRoot([0; 32])),
             );
             let block_id = object_store.write_object(&block);
             assert!(block_id.is_ok());

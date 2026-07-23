@@ -51,6 +51,7 @@ pub struct WalRepair {
 pub struct Wal {
     path: PathBuf,
     mutation: Option<(MutationRoot, PathBuf)>,
+    layout: Option<RepositoryLayout>,
 }
 
 impl Wal {
@@ -60,6 +61,7 @@ impl Wal {
         Self {
             path: path.into(),
             mutation: None,
+            layout: None,
         }
     }
 
@@ -71,6 +73,7 @@ impl Wal {
         Self {
             path,
             mutation: Some((layout.repository_mutation_root().clone(), relative)),
+            layout: Some(layout.clone()),
         }
     }
 
@@ -82,6 +85,7 @@ impl Wal {
 
     /// Append a signed patch envelope and fsync the WAL file.
     pub fn append_patch(&self, envelope: &ObjectEnvelope) -> Result<u64> {
+        self.require_current_format()?;
         if envelope.object_type != ObjectType::Patch {
             return Err(PrikkError::ObjectTypeMismatch {
                 expected: ObjectType::Patch.to_string(),
@@ -94,6 +98,12 @@ impl Wal {
             ));
         }
         envelope.validate_strict()?;
+        if envelope.schema_version != 1 {
+            return Err(PrikkError::Integrity(format!(
+                "format-2 Patch requires envelope schema 1, got {}",
+                envelope.schema_version
+            )));
+        }
         let replay = self.replay()?;
         if replay.trailing_partial_bytes != 0 {
             return Err(PrikkError::Integrity(
@@ -136,7 +146,13 @@ impl Wal {
                 trailing_partial_bytes: 0,
             });
         };
-        decode_records(&bytes)
+        let replay = decode_records(&bytes)?;
+        if let Some(layout) = &self.layout {
+            for record in &replay.records {
+                crate::format::validate_read_schema(layout.format(), &record.envelope)?;
+            }
+        }
+        Ok(replay)
     }
 
     /// Safely truncate an incomplete trailing WAL record, if one exists.
@@ -145,6 +161,7 @@ impl Wal {
     /// incomplete final record. Checksum mismatches in complete records still return an error and
     /// are not modified.
     pub fn truncate_trailing_partial(&self) -> Result<WalRepair> {
+        self.require_current_format()?;
         let Some(bytes) = self.read_bytes()? else {
             return Ok(WalRepair {
                 preserved_records: 0,
@@ -176,6 +193,15 @@ impl Wal {
 
     /// Truncate the WAL after a successful publication that made all entries durable elsewhere.
     pub fn truncate_empty(&self) -> Result<()> {
+        self.require_current_format()?;
+        self.truncate_empty_authorized()
+    }
+
+    pub(crate) fn truncate_empty_for_legacy_recovery(&self) -> Result<()> {
+        self.truncate_empty_authorized()
+    }
+
+    fn truncate_empty_authorized(&self) -> Result<()> {
         let (root, relative) = self.mutation()?;
         let Some(parent) = relative.parent() else {
             return Err(PrikkError::Io(
@@ -206,6 +232,17 @@ impl Wal {
                     "WAL mutation requires a validated repository layout capability".to_string(),
                 )
             })
+    }
+
+    fn require_current_format(&self) -> Result<()> {
+        self.layout
+            .as_ref()
+            .ok_or_else(|| {
+                PrikkError::Io(
+                    "WAL mutation requires a validated repository layout capability".to_string(),
+                )
+            })?
+            .require_current_format()
     }
 
     fn read_bytes(&self) -> Result<Option<Vec<u8>>> {

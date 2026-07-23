@@ -665,7 +665,7 @@ mod store_resolvers;
 pub(crate) use store_resolvers::StoreBackedResolver;
 
 /// Authoritative lifecycle replay: lineage walker + dispatch skeleton (4.4-2c-2a).
-mod replay;
+pub(crate) mod replay;
 
 /// First trust rung (4.4-2b.2 steps 1–2): a decoded cache that has passed structural
 /// validation, **operational provenance** (its `replay_window_hash` recomputed over the

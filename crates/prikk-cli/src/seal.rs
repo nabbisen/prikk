@@ -12,15 +12,17 @@ use prikk_object::{
 };
 use prikk_store::{
     ActiveLock, ActiveRefMetadata, FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication,
-    RefStore, RepositoryLayout, Wal, finish_active_publication_cleanup, read_active_ref_metadata,
-    remove_active_ref_metadata, validate_local_branch_ref, verify_signer_trusted,
+    RefStore, RepositoryFormat, RepositoryLayout, Wal, derive_next_state_root,
+    finish_active_publication_cleanup, finish_legacy_active_publication_cleanup,
+    read_active_ref_metadata, remove_active_ref_metadata, validate_local_branch_ref,
+    verify_signer_trusted,
 };
 
 mod support;
 
 use support::{
     collect_wal_patch_ids, current_ref_state, current_tip_matches_wal_patches,
-    finish_current_publication, persist_wal_patches, scaffold_state_root, signed_envelope,
+    finish_current_publication, legacy_interrupted_ref_state, persist_wal_patches, signed_envelope,
 };
 
 const DEFAULT_BRANCH_REF: &str = "heads/main";
@@ -46,6 +48,11 @@ pub fn run_seal(
 ) -> std::result::Result<SealCommandResult, String> {
     let ref_name = parse_seal_args(args)?;
     let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
+    if layout.format() == RepositoryFormat::LegacyV1 {
+        eprintln!(
+            "warning: format-1 repository opened in legacy read-only mode; only exact DC-34 interrupted-publication completion is writable"
+        );
+    }
     seal_active_no_audit(layout, &ref_name, signer)
 }
 
@@ -114,14 +121,23 @@ fn seal_active_no_audit(
 
     let mut object_store = FileObjectStore::new(layout.clone());
     let ref_store = RefStore::new(layout.clone());
-    let current = current_ref_state(&object_store, &ref_store, &ref_name)?;
+    let current = match legacy_interrupted_ref_state(&object_store, &ref_store, &ref_name)? {
+        Some(interrupted) => Some(interrupted),
+        None => current_ref_state(&object_store, &ref_store, &ref_name)?,
+    };
     let wal_patch_ids = collect_wal_patch_ids(&replay.records)?;
     if let Some(current) = current.as_ref() {
         if current_tip_matches_wal_patches(&object_store, current, &wal_patch_ids)? {
             verify_signer_trusted(&layout, signer).map_err(|err| err.to_string())?;
-            finish_current_publication(&ref_store, &active_lock, &ref_name, current, signer)?;
-            finish_active_publication_cleanup(&layout, &active_lock)
-                .map_err(|err| err.to_string())?;
+            let legacy_cleanup =
+                finish_current_publication(&ref_store, &active_lock, &ref_name, current, signer)?;
+            if let Some(authorization) = legacy_cleanup {
+                finish_legacy_active_publication_cleanup(&layout, &active_lock, authorization)
+                    .map_err(|err| err.to_string())?;
+            } else {
+                finish_active_publication_cleanup(&layout, &active_lock)
+                    .map_err(|err| err.to_string())?;
+            }
             return Ok(SealCommandResult {
                 ref_name,
                 patch_count: wal_patch_ids.len(),
@@ -130,12 +146,15 @@ fn seal_active_no_audit(
             });
         }
     }
+    layout
+        .require_current_format()
+        .map_err(|err| err.to_string())?;
     verify_signer_trusted(&layout, signer).map_err(|err| err.to_string())?;
     let patch_ids = persist_wal_patches(&mut object_store, &replay.records)?;
-    let parent_block_ids = current
-        .as_ref()
-        .map(|state| vec![state.target_block_id])
-        .unwrap_or_default();
+    let parent = current.as_ref().map(|state| state.target_block_id);
+    let state_merkle_root =
+        derive_next_state_root(&object_store, parent, &patch_ids).map_err(|err| err.to_string())?;
+    let parent_block_ids = parent.into_iter().collect();
     let block_payload = BlockPayload {
         parent_block_ids,
         kind: if current.is_some() {
@@ -144,11 +163,12 @@ fn seal_active_no_audit(
             BlockKind::Root
         },
         patch_ids: patch_ids.clone(),
-        state_merkle_root: scaffold_state_root(&patch_ids),
+        state_merkle_root,
         snapshot_blob_ref: None,
     };
     let block_envelope = signed_envelope(
         ObjectType::Block,
+        2,
         block_payload
             .to_canonical_bytes()
             .map_err(|err| err.to_string())?,
@@ -172,6 +192,7 @@ fn seal_active_no_audit(
     };
     let ref_state_envelope = signed_envelope(
         ObjectType::RefState,
+        1,
         ref_state_payload
             .to_canonical_bytes()
             .map_err(|err| err.to_string())?,
@@ -189,6 +210,7 @@ fn seal_active_no_audit(
     };
     let ref_update_envelope = signed_envelope(
         ObjectType::RefUpdate,
+        1,
         ref_update_payload
             .to_canonical_bytes()
             .map_err(|err| err.to_string())?,

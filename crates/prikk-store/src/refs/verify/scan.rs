@@ -104,7 +104,7 @@ pub(super) fn read_logs(
         ensure_ref_path_shape(&path, ".log")?;
         let relative = layout.repository_relative(&path)?;
         let bytes = read_file_required(layout.repository_mutation_root(), &relative)?;
-        let replay = decode_log_file_bytes(&bytes)?;
+        let replay = decode_log_file_bytes(layout.format(), &bytes)?;
         if replay.records.is_empty() {
             if replay.trailing_partial_bytes == 0 {
                 continue;

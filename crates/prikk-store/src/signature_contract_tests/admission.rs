@@ -10,7 +10,7 @@ use crate::{
     Wal,
 };
 
-fn strict_rejection_variants(
+pub(super) fn strict_rejection_variants(
     object_type: ObjectType,
     payload: &[u8],
 ) -> Vec<prikk_object::ObjectEnvelope> {

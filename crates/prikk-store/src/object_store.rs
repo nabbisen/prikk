@@ -97,6 +97,7 @@ impl ObjectReader for FileObjectStore {
                         envelope.object_type
                     )));
                 }
+                crate::format::validate_read_schema(self.layout.format(), &envelope)?;
                 return Ok(Some(envelope));
             }
         }
@@ -111,7 +112,8 @@ impl ObjectWriter for FileObjectStore {
                 "RefUpdate is stored inline in ref logs for v1".to_string(),
             ));
         }
-        envelope.validate_strict()?;
+        self.layout.validate_format()?;
+        crate::format::validate_object_envelope(self.layout.format(), envelope)?;
         let id = envelope.object_id();
         let path = self.layout.object_path(envelope.object_type, id);
         let relative = self.layout.repository_relative(&path)?;

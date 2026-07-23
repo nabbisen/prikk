@@ -18,10 +18,12 @@
 mod active;
 mod author_signing;
 mod blob_access;
+mod block_state;
 mod byte_cursor;
 mod checkout;
 mod doctor;
 mod file_codec;
+mod format;
 mod fsutil;
 mod history;
 mod layout;
@@ -48,6 +50,7 @@ mod rollback_preview;
 mod rollback_verify;
 mod signature_diagnostics;
 mod snapshot;
+mod state_root;
 mod text_span;
 mod trust;
 mod verify;
@@ -62,10 +65,12 @@ mod signature_contract_tests;
 mod test_support;
 
 pub use active::{
-    ActiveCommitResult, ActiveRefMetadata, ActiveSession, finish_active_publication_cleanup,
+    ActiveCommitResult, ActiveRefMetadata, ActiveSession, LegacyActiveCleanupAuthorization,
+    finish_active_publication_cleanup, finish_legacy_active_publication_cleanup,
     read_active_ref_metadata, remove_active_ref_metadata, write_active_ref_metadata,
 };
 pub use author_signing::{AuthorSigner, Ed25519AuthorSigner, author_signature};
+pub use block_state::{derive_next_state_root, validate_block_v2_shape};
 pub use checkout::{
     CheckoutMaterialization, CheckoutPlan, DEFAULT_CHECKOUT_REF, SnapshotCheckoutPlan,
     prepare_checkout_plan, prepare_snapshot_checkout_plan,
@@ -75,7 +80,7 @@ pub use doctor::{
     doctor_repository, repair_repository,
 };
 pub use history::{DEFAULT_HISTORY_LIMIT, HistoryEntry, RefHistory, load_ref_history};
-pub use layout::RepositoryLayout;
+pub use layout::{RepositoryFormat, RepositoryLayout};
 pub use lock::{ActiveLock, RefLock};
 pub use maintainer_signing::{Ed25519MaintainerSigner, MaintainerSigner, maintainer_signature};
 pub use memory_store::MemoryObjectStore;
@@ -107,6 +112,9 @@ pub use rollback_preview::{
 pub use rollback_verify::{RollbackDraftVerification, verify_active_rollback_draft};
 pub use signature_diagnostics::{SignatureEnvelopeIssue, SignatureEnvelopeSource};
 pub use snapshot::{SnapshotEntry, SnapshotManifest};
+pub use state_root::{
+    StateRootContent, StateRootEntry, compute_state_root, state_leaf_hash, state_leaf_preimage,
+};
 pub use trust::{
     MaintainerTrustPolicy, PublicationTrustIssue, add_trusted_maintainer,
     load_maintainer_trust_policy, verify_signer_trusted, verify_trusted_publication_envelope,

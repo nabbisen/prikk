@@ -6,7 +6,7 @@ use std::path::Path;
 use prikk_error::{PrikkError, Result};
 
 use crate::fsutil::{EntryKind, list_directory};
-use crate::layout::RepositoryLayout;
+use crate::layout::{RepositoryFormat, RepositoryLayout};
 use crate::object_store::FileObjectStore;
 use crate::signature_diagnostics::{
     SignatureEnvelopeIssue, SignatureEnvelopeSource, classify_signature_envelope,
@@ -43,6 +43,13 @@ pub(crate) fn verify_refs(layout: &RepositoryLayout) -> Result<RefVerification> 
     let objects = FileObjectStore::new(layout.clone());
     let pointers = read_pointers(layout, &objects)?;
     let (logs, log_record_count, ref_log_envelopes) = read_logs(layout, &objects, &pointers)?;
+    if layout.format() == RepositoryFormat::CurrentV2
+        && logs.values().any(|state| state.has_legacy_timestamp)
+    {
+        return Err(PrikkError::Integrity(
+            "format-2 RefUpdate requires created_at == 0".to_string(),
+        ));
+    }
     let mut ref_update_envelopes = Vec::with_capacity(ref_log_envelopes.len());
     let mut signature_envelope_issues = Vec::new();
     for record in ref_log_envelopes {
@@ -62,6 +69,7 @@ pub(crate) fn verify_refs(layout: &RepositoryLayout) -> Result<RefVerification> 
     let mut publication_issues = candidate_issues(layout)?;
     for ref_name in names {
         classify_ref_state(
+            layout.format(),
             &ref_name,
             pointers.get(&ref_name),
             logs.get(&ref_name),
@@ -78,12 +86,13 @@ pub(crate) fn verify_refs(layout: &RepositoryLayout) -> Result<RefVerification> 
 }
 
 fn classify_ref_state(
+    format: RepositoryFormat,
     ref_name: &str,
     pointer: Option<&PointerState>,
     log: Option<&LogState>,
     issues: &mut Vec<RefPublicationIssue>,
 ) -> Result<()> {
-    if log.is_some_and(|state| state.has_legacy_timestamp) {
+    if format == RepositoryFormat::LegacyV1 && log.is_some_and(|state| state.has_legacy_timestamp) {
         issues.push(RefPublicationIssue {
             code: "PRIKK-VERIFY-REF-LEGACY-TIMESTAMP",
             ref_name: Some(ref_name.to_string()),
@@ -119,19 +128,33 @@ fn classify_ref_state(
             Ok(())
         }
         (Some(pointer), Some(log)) if log.previous_tip == Some(pointer.id) => {
-            issues.push(blocking_issue(
-                "PRIKK-VERIFY-REF-LEGACY-LOG-LEADS",
-                ref_name,
-                "format-1 ref log leads the authoritative pointer by one transition".to_string(),
-            ));
+            let (code, message) = if format == RepositoryFormat::LegacyV1 {
+                (
+                    "PRIKK-VERIFY-REF-LEGACY-LOG-LEADS",
+                    "format-1 ref log leads the authoritative pointer by one transition",
+                )
+            } else {
+                (
+                    "PRIKK-VERIFY-REF-DIVERGENCE",
+                    "format-2 ref log leads the authoritative pointer",
+                )
+            };
+            issues.push(blocking_issue(code, ref_name, message.to_string()));
             Ok(())
         }
         (None, Some(log)) if log.record_count == 1 && log.previous_tip.is_none() => {
-            issues.push(blocking_issue(
-                "PRIKK-VERIFY-REF-POINTER-MISSING",
-                ref_name,
-                "format-1 ref pointer is missing while committed log history exists".to_string(),
-            ));
+            let (code, message) = if format == RepositoryFormat::LegacyV1 {
+                (
+                    "PRIKK-VERIFY-REF-POINTER-MISSING",
+                    "format-1 ref pointer is missing while committed log history exists",
+                )
+            } else {
+                (
+                    "PRIKK-VERIFY-REF-DIVERGENCE",
+                    "format-2 ref pointer is missing while committed log history exists",
+                )
+            };
+            issues.push(blocking_issue(code, ref_name, message.to_string()));
             Ok(())
         }
         (None, None) => Ok(()),

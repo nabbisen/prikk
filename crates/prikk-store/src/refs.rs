@@ -99,6 +99,9 @@ impl RefStore {
 
     /// Publish a signed RefState with ref-specific locking and CAS.
     pub fn publish(&self, publication: &RefPublication) -> Result<ObjectId> {
+        self.layout.require_current_format()?;
+        crate::format::validate_object_envelope(self.layout.format(), &publication.ref_state)?;
+        crate::format::validate_object_envelope(self.layout.format(), &publication.ref_update)?;
         publication::publish(self, publication)
     }
 
@@ -108,9 +111,28 @@ impl RefStore {
         active_lock: &ActiveLock,
         publication: &RefPublication,
     ) -> Result<ObjectId> {
+        self.finish_interrupted_publication_with_cleanup_authorization(active_lock, publication)
+            .map(|(ref_state_id, _)| ref_state_id)
+    }
+
+    /// Finish an interrupted publication and return legacy cleanup authority when applicable.
+    pub fn finish_interrupted_publication_with_cleanup_authorization(
+        &self,
+        active_lock: &ActiveLock,
+        publication: &RefPublication,
+    ) -> Result<(
+        ObjectId,
+        Option<crate::active::LegacyActiveCleanupAuthorization>,
+    )> {
+        self.layout.validate_format()?;
         active_lock.require_layout(&self.layout)?;
+        crate::format::validate_read_schema(self.layout.format(), &publication.ref_state)?;
+        crate::format::validate_read_schema(self.layout.format(), &publication.ref_update)?;
         evidence::validate_signer_backed_recovery(&self.layout, publication)?;
-        publication::finish_interrupted(self, publication)
+        let ref_state_id = publication::finish_interrupted(self, publication)?;
+        let authorization = (self.layout.format() == crate::layout::RepositoryFormat::LegacyV1)
+            .then(|| crate::active::authorize_legacy_active_cleanup(&self.layout));
+        Ok((ref_state_id, authorization))
     }
 
     #[cfg(test)]

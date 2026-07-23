@@ -3,6 +3,7 @@
 mod candidate_cleanup;
 mod compatibility;
 mod failpoints;
+mod format_transition;
 mod partial_tail_refusal;
 mod state_matrix;
 
@@ -204,7 +205,7 @@ fn fully_framed_checksum_failure_is_never_truncated() -> prikk_error::Result<()>
 }
 
 #[test]
-fn exact_format1_ahead_log_promotes_without_append() -> prikk_error::Result<()> {
+fn format2_ahead_log_refuses_pointer_promotion() -> prikk_error::Result<()> {
     let root = unique_temp_dir("dc38-legacy-ahead");
     let layout = RepositoryLayout::init(root.clone())?;
     let publication = root_publication(&layout, "heads/main")?;
@@ -213,18 +214,19 @@ fn exact_format1_ahead_log_promotes_without_append() -> prikk_error::Result<()> 
     log::append_log_record(&layout, "heads/main", &publication.ref_update)?;
     let store = RefStore::new(layout.clone());
     assert_blocking_issue(&layout, "PRIKK-VERIFY-REF-DIVERGENCE")?;
-    store.finish_interrupted_publication_for_test(&publication)?;
-    assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
-    assert_eq!(
-        store.read_current_ref_state_id("heads/main")?,
-        Some(publication.ref_state.object_id())
+    assert!(
+        store
+            .finish_interrupted_publication_for_test(&publication)
+            .is_err()
     );
+    assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
+    assert_eq!(store.read_current_ref_state_id("heads/main")?, None);
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
 
 #[test]
-fn existing_ref_pointer_lead_and_legacy_ahead_both_finish_once() -> prikk_error::Result<()> {
+fn existing_ref_pointer_lead_finishes_but_format2_ahead_log_refuses() -> prikk_error::Result<()> {
     for legacy_ahead in [false, true] {
         let root = unique_temp_dir("dc38-existing-recovery");
         let layout = RepositoryLayout::init(root.clone())?;
@@ -241,13 +243,25 @@ fn existing_ref_pointer_lead_and_legacy_ahead_both_finish_once() -> prikk_error:
             assert!(store.publish(&second).is_err());
             assert_blocking_issue(&layout, "PRIKK-VERIFY-REF-DIVERGENCE")?;
         }
-        store.finish_interrupted_publication_for_test(&second)?;
-        store.finish_interrupted_publication_for_test(&second)?;
-        assert_eq!(store.replay_log("heads/main")?.records.len(), 2);
-        assert_eq!(
-            store.read_current_ref_state_id("heads/main")?,
-            Some(second.ref_state.object_id())
-        );
+        if legacy_ahead {
+            assert!(
+                store
+                    .finish_interrupted_publication_for_test(&second)
+                    .is_err()
+            );
+            assert_eq!(
+                store.read_current_ref_state_id("heads/main")?,
+                Some(first.ref_state.object_id())
+            );
+        } else {
+            store.finish_interrupted_publication_for_test(&second)?;
+            store.finish_interrupted_publication_for_test(&second)?;
+            assert_eq!(store.replay_log("heads/main")?.records.len(), 2);
+            assert_eq!(
+                store.read_current_ref_state_id("heads/main")?,
+                Some(second.ref_state.object_id())
+            );
+        }
         let _ = std::fs::remove_dir_all(root);
     }
     Ok(())

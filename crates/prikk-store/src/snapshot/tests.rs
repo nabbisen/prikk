@@ -150,7 +150,7 @@ fn signed_snapshot_block_envelope(snapshot_blob_ref: prikk_object::ObjectId) -> 
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
     let mut envelope =
-        ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes.unwrap_or_default());
+        ObjectEnvelope::unsigned(ObjectType::Block, 2, payload_bytes.unwrap_or_default());
     assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
 }

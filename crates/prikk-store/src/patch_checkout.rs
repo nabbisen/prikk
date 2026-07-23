@@ -90,6 +90,7 @@ pub fn materialize_patch_checkout(
     layout: &RepositoryLayout,
     ref_name: &str,
 ) -> Result<PatchMaterializationReport> {
+    layout.require_current_format()?;
     materialize_patch_checkout_inner(layout, ref_name, false)
 }
 
@@ -102,6 +103,7 @@ pub fn materialize_patch_checkout_with_deletions(
     layout: &RepositoryLayout,
     ref_name: &str,
 ) -> Result<PatchMaterializationReport> {
+    layout.require_current_format()?;
     materialize_patch_checkout_inner(layout, ref_name, true)
 }
 

@@ -4,16 +4,19 @@ use std::io::Write;
 use std::path::Path;
 
 use prikk_object::{
-    BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType, RefKind,
-    RefStatePayload, RefUpdatePayload,
+    BlockKind, BlockPayload, CanonicalEncode, ObjectEnvelope, ObjectType, RefKind, RefStatePayload,
+    RefUpdatePayload,
 };
 
 use crate::fsutil::{TestFailPoint, fail_once_for_test};
-use crate::test_support::{signed_patch_envelope, unique_temp_dir};
+use crate::test_support::{
+    rollback_patch_blob_envelope, rollback_patch_envelope, signed_patch_blob_envelope,
+    signed_patch_envelope, unique_temp_dir,
+};
 use crate::{
     Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication,
-    RefStore, RepositoryLayout, Wal, add_trusted_maintainer, maintainer_signature,
-    write_active_ref_metadata,
+    RefStore, RepositoryLayout, Wal, add_trusted_maintainer, derive_next_state_root,
+    maintainer_signature, write_active_ref_metadata,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -44,7 +47,11 @@ impl Fixture {
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>();
         add_trusted_maintainer(&layout, signer.key_id(), &public_key)?;
-        let patch = signed_patch_envelope();
+        let patch = if matches!(state, PersistedState::LegacyLogLeading) {
+            rollback_patch_envelope()
+        } else {
+            signed_patch_envelope()
+        };
         let publication = if matches!(state, PersistedState::LegacyLogLeading) {
             existing_ref_publication(&layout, &signer, &patch)?
         } else {
@@ -161,12 +168,31 @@ fn publication(
     sequence: u64,
 ) -> prikk_error::Result<RefPublication> {
     let mut objects = FileObjectStore::new(layout.clone());
+    objects.write_object(&signed_patch_blob_envelope())?;
+    objects.write_object(&rollback_patch_blob_envelope())?;
     let patch_id = objects.write_object(patch)?;
+    let parent = match previous {
+        Some(previous_ref_state_id) => {
+            let envelope = objects
+                .read_typed(previous_ref_state_id, ObjectType::RefState)?
+                .ok_or_else(|| {
+                    prikk_error::PrikkError::Integrity(
+                        "fixture previous RefState is missing".to_string(),
+                    )
+                })?;
+            Some(RefStatePayload::decode_canonical(&envelope.canonical_payload)?.target_object_id)
+        }
+        None => None,
+    };
     let block_payload = BlockPayload {
-        parent_block_ids: Vec::new(),
-        kind: BlockKind::Root,
+        parent_block_ids: parent.into_iter().collect(),
+        kind: if parent.is_some() {
+            BlockKind::Normal
+        } else {
+            BlockKind::Root
+        },
         patch_ids: vec![patch_id],
-        state_merkle_root: MerkleRoot([0; 32]),
+        state_merkle_root: derive_next_state_root(&objects, parent, &[patch_id])?,
         snapshot_blob_ref: None,
     };
     let block = signed_publication(
@@ -215,7 +241,12 @@ fn signed_publication(
     canonical_payload: Vec<u8>,
     signer: &impl MaintainerSigner,
 ) -> prikk_error::Result<ObjectEnvelope> {
-    let mut envelope = ObjectEnvelope::unsigned(object_type, 1, canonical_payload);
+    let schema_version = if object_type == ObjectType::Block {
+        2
+    } else {
+        1
+    };
+    let mut envelope = ObjectEnvelope::unsigned(object_type, schema_version, canonical_payload);
     envelope.add_signature(maintainer_signature(
         signer,
         object_type,

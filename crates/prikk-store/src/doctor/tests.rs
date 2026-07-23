@@ -74,7 +74,7 @@ fn doctor_reports_verification_error() {
         let payload_bytes = payload.to_canonical_bytes();
         assert!(payload_bytes.is_ok());
         if let Ok(payload_bytes) = payload_bytes {
-            let mut block = ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes);
+            let mut block = ObjectEnvelope::unsigned(ObjectType::Block, 2, payload_bytes);
             assert!(block.add_signature(legacy_maintainer_signature()).is_ok());
             assert!(store.write_object(&block).is_ok());
             let report = doctor_repository(&layout);
@@ -321,7 +321,12 @@ fn signed_publication_envelope(
     canonical_payload: Vec<u8>,
     signer: &impl MaintainerSigner,
 ) -> ObjectEnvelope {
-    let mut envelope = ObjectEnvelope::unsigned(object_type, 1, canonical_payload);
+    let schema_version = if object_type == ObjectType::Block {
+        2
+    } else {
+        1
+    };
+    let mut envelope = ObjectEnvelope::unsigned(object_type, schema_version, canonical_payload);
     let object_id = envelope.object_id();
     let signature = real_maintainer_signature(signer, object_type, object_id);
     assert!(signature.is_ok());

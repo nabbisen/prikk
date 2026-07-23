@@ -192,6 +192,7 @@ fn verify_object_file(
             envelope.object_type
         )));
     }
+    crate::format::validate_read_schema(layout.format(), &envelope)?;
     let computed = envelope.object_id();
     if computed != object_id {
         return Err(PrikkError::Integrity(format!(
@@ -212,7 +213,12 @@ fn verify_object_file(
         trust_verifier.verify(&envelope)?;
     }
     let rollback_patch_count = if object_type == ObjectType::Block {
-        verify_block_payload(object_store, object_id, &envelope.canonical_payload)?
+        verify_block_payload(
+            object_store,
+            object_id,
+            layout.format(),
+            &envelope.canonical_payload,
+        )?
     } else {
         0
     };

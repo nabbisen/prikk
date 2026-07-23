@@ -87,7 +87,10 @@ the bounded candidate, committed as `8f565f2`; post-commit evidence review v1 ac
 no-hardlink checkout and deterministic-archive evidence on 2026-07-22. DC-39 implementation is
 complete. This closure does not authorize release activity.
 DC-38 and DC-40 designs, including the DC-40 companion state-root/format FDD, were accepted on
-2026-07-14. DC-40 is now the current M1 implementation increment and remains subject to its own gate.
+2026-07-14. DC-40 architect implementation review v1 required four repairs covering strict format-2
+read admission, anchored mutation authority, exact legacy cleanup authority, and the end-to-end
+format-1 command matrix. The repaired implementation candidate and identity vectors are complete;
+focused architect repair re-review remains pending under its separate gate.
 
 **Release condition:** all five blocking findings are closed by accepted implementation review; the
 reproduced ref failure no longer succeeds; the state-root and signature vectors are pinned; format-1/

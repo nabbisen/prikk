@@ -48,6 +48,7 @@ pub fn add_trusted_maintainer(
     key_id: &str,
     public_key_hex: &str,
 ) -> Result<MaintainerTrustPolicy> {
+    layout.require_current_format()?;
     let _active_lock = ActiveLock::acquire(layout)?;
     crate::refs::ensure_no_incomplete_publication(layout)?;
     Signature::validate_key_id(key_id)?;

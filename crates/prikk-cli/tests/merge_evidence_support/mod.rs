@@ -187,7 +187,7 @@ fn write_block(
         state_merkle_root: MerkleRoot([0_u8; 32]),
         snapshot_blob_ref: None,
     };
-    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Block, 1, block.to_canonical_bytes()?);
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Block, 2, block.to_canonical_bytes()?);
     envelope.add_signature(maintainer_signature())?;
     Ok(store.write_object(&envelope)?)
 }

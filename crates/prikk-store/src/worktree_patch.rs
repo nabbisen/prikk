@@ -119,6 +119,7 @@ pub fn commit_worktree_changes_signed(
     options: WorktreePatchCommitOptions,
     signer: &impl AuthorSigner,
 ) -> Result<WorktreePatchCommitReport> {
+    layout.require_current_format()?;
     let mut generator = NodeIdGenerator::production();
     node_authoring::author_worktree_patch(
         layout,

@@ -53,7 +53,7 @@ pub fn verify_active_rollback_draft(
     layout: &RepositoryLayout,
     ref_name: &str,
 ) -> Result<RollbackDraftVerification> {
-    let wal = Wal::new(layout.default_queue_wal_path());
+    let wal = Wal::for_layout(layout);
     let replay = wal.replay()?;
     if replay.trailing_partial_bytes != 0 {
         return Err(PrikkError::Integrity(format!(

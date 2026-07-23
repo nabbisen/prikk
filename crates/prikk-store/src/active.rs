@@ -32,6 +32,12 @@ pub enum ActiveRefMetadata {
     Invalid(String),
 }
 
+/// Opaque authority for the active cleanup of one validated legacy publication completion.
+#[derive(Debug)]
+pub struct LegacyActiveCleanupAuthorization {
+    layout: RepositoryLayout,
+}
+
 /// Default active-session handle.
 #[derive(Debug, Clone)]
 pub struct ActiveSession {
@@ -47,6 +53,7 @@ impl ActiveSession {
 
     /// Append one signed patch envelope while holding the active-session lock.
     pub fn append_patch(&self, envelope: &ObjectEnvelope) -> Result<ActiveCommitResult> {
+        self.layout.require_current_format()?;
         let _lock = ActiveLock::acquire(&self.layout)?;
         ensure_no_incomplete_publication(&self.layout)?;
         let wal = Wal::for_layout(&self.layout);
@@ -92,6 +99,7 @@ pub fn read_active_ref_metadata(layout: &RepositoryLayout) -> Result<ActiveRefMe
 
 /// Write active-WAL ref metadata through a durable atomic update.
 pub fn write_active_ref_metadata(layout: &RepositoryLayout, ref_name: &str) -> Result<String> {
+    layout.require_current_format()?;
     let canonical = validate_local_branch_ref(ref_name)?;
     let relative = layout.repository_relative(&layout.default_active_ref_name_path())?;
     write_file_atomically(
@@ -104,6 +112,11 @@ pub fn write_active_ref_metadata(layout: &RepositoryLayout, ref_name: &str) -> R
 
 /// Remove active-WAL ref metadata and fsync the active-session directory.
 pub fn remove_active_ref_metadata(layout: &RepositoryLayout) -> Result<bool> {
+    layout.require_current_format()?;
+    remove_active_ref_metadata_authorized(layout)
+}
+
+fn remove_active_ref_metadata_authorized(layout: &RepositoryLayout) -> Result<bool> {
     let relative = layout.repository_relative(&layout.default_active_ref_name_path())?;
     remove_file_if_present_required(layout.repository_mutation_root(), &relative)
 }
@@ -113,10 +126,37 @@ pub fn finish_active_publication_cleanup(
     layout: &RepositoryLayout,
     active_lock: &ActiveLock,
 ) -> Result<()> {
+    layout.require_current_format()?;
     active_lock.require_layout(layout)?;
     Wal::for_layout(layout).truncate_empty()?;
-    remove_active_ref_metadata(layout)?;
+    remove_active_ref_metadata_authorized(layout)?;
     Ok(())
+}
+
+/// Drain retained active state after exact signer-backed legacy publication completion.
+pub fn finish_legacy_active_publication_cleanup(
+    layout: &RepositoryLayout,
+    active_lock: &ActiveLock,
+    authorization: LegacyActiveCleanupAuthorization,
+) -> Result<()> {
+    active_lock.require_layout(layout)?;
+    if authorization.layout != *layout {
+        return Err(PrikkError::Integrity(
+            "legacy active cleanup authorization belongs to a different repository".to_string(),
+        ));
+    }
+    layout.validate_format()?;
+    Wal::for_layout(layout).truncate_empty_for_legacy_recovery()?;
+    remove_active_ref_metadata_authorized(layout)?;
+    Ok(())
+}
+
+pub(crate) fn authorize_legacy_active_cleanup(
+    layout: &RepositoryLayout,
+) -> LegacyActiveCleanupAuthorization {
+    LegacyActiveCleanupAuthorization {
+        layout: layout.clone(),
+    }
 }
 
 /// Prepare active ref metadata for the first WAL append.

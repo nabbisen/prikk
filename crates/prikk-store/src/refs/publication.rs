@@ -4,8 +4,9 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectId, RefStatePayload, RefUpdatePayload};
 
 use super::{RefPublication, RefStore, log, validate_publication};
+use crate::layout::RepositoryFormat;
 use crate::lock::RefLock;
-use crate::object_store::{FileObjectStore, ObjectWriter};
+use crate::object_store::{FileObjectStore, ObjectReader, ObjectWriter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PublicationState {
@@ -36,9 +37,34 @@ fn publish_locked(
     let ref_lock = RefLock::acquire(&store.layout, &publication.ref_name)?;
     super::pointer::remove_candidate_write_temps(&store.layout, &publication.ref_name)?;
     let mut object_store = FileObjectStore::new(store.layout.clone());
-    object_store.write_object(&publication.ref_state)?;
+    match store.layout.format() {
+        RepositoryFormat::CurrentV2 => {
+            object_store.write_object(&publication.ref_state)?;
+        }
+        RepositoryFormat::LegacyV1 => {
+            let existing = object_store.read_object(ref_state_id)?;
+            if existing.as_ref() != Some(&publication.ref_state) {
+                return Err(PrikkError::Integrity(
+                    "legacy publication completion requires the exact persisted RefState"
+                        .to_string(),
+                ));
+            }
+        }
+    }
 
     let (state, trailing_partial_bytes) = classify_state(store, publication, &update)?;
+    match (store.layout.format(), state, allow_partial_tail_repair) {
+        (RepositoryFormat::LegacyV1, PublicationState::LegacyLogLeading, true) => {}
+        (RepositoryFormat::LegacyV1, _, _) => {
+            return Err(PrikkError::UnsupportedFormatVersion(1));
+        }
+        (RepositoryFormat::CurrentV2, PublicationState::LegacyLogLeading, _) => {
+            return Err(PrikkError::Integrity(
+                "format-2 ref log must not lead its authoritative pointer".to_string(),
+            ));
+        }
+        (RepositoryFormat::CurrentV2, _, _) => {}
+    }
     if trailing_partial_bytes != 0 {
         if !allow_partial_tail_repair
             || state != PublicationState::PointerLeading

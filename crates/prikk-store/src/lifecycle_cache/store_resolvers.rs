@@ -20,11 +20,31 @@ use crate::object_store::ObjectReader;
 /// Lifecycle resolver backed by any object reader (file or memory store).
 pub(crate) struct StoreBackedResolver<'a, R: ObjectReader> {
     reader: &'a R,
+    require_schema_one: bool,
 }
 
 impl<'a, R: ObjectReader> StoreBackedResolver<'a, R> {
     pub(crate) fn new(reader: &'a R) -> Self {
-        Self { reader }
+        Self {
+            reader,
+            require_schema_one: false,
+        }
+    }
+
+    pub(crate) fn new_format2(reader: &'a R) -> Self {
+        Self {
+            reader,
+            require_schema_one: true,
+        }
+    }
+
+    fn validate_blob_schema(&self, schema_version: u32) -> Result<()> {
+        if self.require_schema_one && schema_version != 1 {
+            return Err(PrikkError::Integrity(format!(
+                "format-2 Blob requires envelope schema 1, got {schema_version}"
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -60,6 +80,7 @@ impl<R: ObjectReader> BlobKindResolver for StoreBackedResolver<'_, R> {
                 envelope.object_type
             )));
         }
+        self.validate_blob_schema(envelope.schema_version)?;
         let blob = BlobPayload::decode_canonical(&envelope.canonical_payload)?;
         Ok(Some(blob.blob_kind))
     }
@@ -76,6 +97,7 @@ impl<R: ObjectReader> BlobContentResolver for StoreBackedResolver<'_, R> {
                 envelope.object_type
             )));
         }
+        self.validate_blob_schema(envelope.schema_version)?;
         let blob = BlobPayload::decode_canonical(&envelope.canonical_payload)?;
         Ok(Some((blob.blob_kind, blob.content)))
     }

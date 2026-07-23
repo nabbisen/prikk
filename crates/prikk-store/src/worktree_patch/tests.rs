@@ -132,7 +132,7 @@ fn publish_snapshot_baseline(layout: &RepositoryLayout, path: &str, bytes: &[u8]
         snapshot_blob_ref: Some(blob_id),
     };
     let mut block =
-        ObjectEnvelope::unsigned(ObjectType::Block, 1, payload.to_canonical_bytes().unwrap());
+        ObjectEnvelope::unsigned(ObjectType::Block, 2, payload.to_canonical_bytes().unwrap());
     block.add_signature(maintainer_signature()).unwrap();
     let block_id = block.object_id();
     object_store.write_object(&block).unwrap();

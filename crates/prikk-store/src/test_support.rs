@@ -6,13 +6,11 @@ use prikk_object::{
     RefKind, RefStatePayload, RefUpdatePayload, Signature, SignatureAlgorithm, SignerRole,
 };
 
-use crate::{
-    FileObjectStore, ObjectWriter, RefPublication, RefStore, RepoPath, RepositoryLayout,
-    SnapshotEntry, SnapshotManifest,
-};
-use prikk_object::{BlobKind, BlobPayload, DeleteNode, DeleteNodePreimage, NodeKind};
+use crate::{FileObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout};
+use prikk_object::{BlobKind, BlobPayload};
 
 pub(crate) fn signed_patch_envelope() -> ObjectEnvelope {
+    let blob_id = signed_patch_blob_envelope().object_id();
     let payload = PatchPayload {
         operations: vec![Operation {
             op_seq: 1,
@@ -21,7 +19,7 @@ pub(crate) fn signed_patch_envelope() -> ObjectEnvelope {
             kind: OperationKind::CreateFile(CreateFile {
                 path: "a.txt".to_string(),
                 node_id: NodeId::from_bytes([0x51; 32]),
-                blob_id: sample_object_id("patch-envelope-blob"),
+                blob_id,
                 mode: 0o100_644,
             }),
         }],
@@ -38,8 +36,13 @@ pub(crate) fn signed_patch_envelope() -> ObjectEnvelope {
     envelope
 }
 
+pub(crate) fn signed_patch_blob_envelope() -> ObjectEnvelope {
+    signed_text_blob_envelope(b"patch fixture\n")
+}
+
 /// Return a supported rollback-marked Patch envelope for sealed-history classification tests.
 pub(crate) fn rollback_patch_envelope() -> ObjectEnvelope {
+    let blob_id = rollback_patch_blob_envelope().object_id();
     let payload = PatchPayload {
         operations: vec![Operation {
             op_seq: 1,
@@ -48,7 +51,7 @@ pub(crate) fn rollback_patch_envelope() -> ObjectEnvelope {
             kind: OperationKind::CreateFile(CreateFile {
                 path: "rollback.txt".to_string(),
                 node_id: NodeId::from_bytes([0x73; 32]),
-                blob_id: sample_object_id("rollback-created"),
+                blob_id,
                 mode: 0o100644,
             }),
         }],
@@ -65,18 +68,30 @@ pub(crate) fn rollback_patch_envelope() -> ObjectEnvelope {
     envelope
 }
 
+pub(crate) fn rollback_patch_blob_envelope() -> ObjectEnvelope {
+    signed_text_blob_envelope(b"rollback fixture\n")
+}
+
+fn signed_text_blob_envelope(content: &[u8]) -> ObjectEnvelope {
+    let payload = BlobPayload::new(BlobKind::Text, content.to_vec());
+    let bytes = payload.to_canonical_bytes().unwrap_or_default();
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, bytes);
+    assert!(envelope.add_signature(maintainer_signature()).is_ok());
+    envelope
+}
+
 pub(crate) fn signed_empty_block_envelope() -> ObjectEnvelope {
     let payload = BlockPayload {
         parent_block_ids: Vec::new(),
         kind: BlockKind::Root,
         patch_ids: Vec::new(),
-        state_merkle_root: MerkleRoot([0_u8; 32]),
+        state_merkle_root: crate::compute_state_root(&[]).unwrap_or(MerkleRoot([0_u8; 32])),
         snapshot_blob_ref: None,
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
     let bytes = payload_bytes.unwrap_or_default();
-    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Block, 1, bytes);
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Block, 2, bytes);
     assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
 }
@@ -189,114 +204,8 @@ fn monotonic_suffix() -> u128 {
     }
 }
 
-pub(crate) fn publish_snapshot_then_patch_block(
-    layout: &RepositoryLayout,
-) -> prikk_error::Result<()> {
-    let mut object_store = FileObjectStore::new(layout.clone());
-    let old_blob = write_blob(&mut object_store, b"old\n")?;
-    let extra_blob = write_blob(&mut object_store, b"extra\n")?;
-
-    let snapshot_manifest = SnapshotManifest {
-        files: vec![
-            SnapshotEntry {
-                path: RepoPath::parse("README.md")?,
-                bytes: b"hello\n".to_vec(),
-            },
-            SnapshotEntry {
-                path: RepoPath::parse("old.txt")?,
-                bytes: b"old\n".to_vec(),
-            },
-        ],
-    };
-    let snapshot_blob = BlobPayload::new(BlobKind::Snapshot, snapshot_manifest.encode()?);
-    let snapshot_bytes = snapshot_blob.to_canonical_bytes()?;
-    let mut snapshot_envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, snapshot_bytes);
-    snapshot_envelope.add_signature(maintainer_signature())?;
-    let snapshot_blob_id = object_store.write_object(&snapshot_envelope)?;
-
-    let root_block = signed_block(
-        BlockKind::Root,
-        Vec::new(),
-        Vec::new(),
-        Some(snapshot_blob_id),
-    );
-    let root_block_id = object_store.write_object(&root_block)?;
-
-    // ReplaceBinary is reconciled to the FDD-03 §9.3 node-addressed record but its
-    // replay is deferred to the node model (increment 4.4); this harness exercises
-    // the still-supported DeleteNode + CreateFile replay. README.md is carried
-    // through from the snapshot baseline unchanged.
-    let patch_payload = PatchPayload {
-        operations: vec![
-            Operation {
-                op_seq: 1,
-                op_id: None,
-                preconditions: Vec::new(),
-                kind: OperationKind::DeleteNode(DeleteNode {
-                    path: "old.txt".to_string(),
-                    node_id: NodeId::from_bytes([0x71; 32]),
-                    old_node_kind: NodeKind::TextFile,
-                    preimage: DeleteNodePreimage::File {
-                        old_blob_id: old_blob,
-                        old_mode: 0o100644,
-                    },
-                }),
-            },
-            Operation {
-                op_seq: 2,
-                op_id: None,
-                preconditions: Vec::new(),
-                kind: OperationKind::CreateFile(CreateFile {
-                    path: "extra.txt".to_string(),
-                    node_id: NodeId::from_bytes([0x72; 32]),
-                    blob_id: extra_blob,
-                    mode: 0o100644,
-                }),
-            },
-        ],
-        parent_patch_ids: Vec::new(),
-        intent: None,
-        preconditions: Vec::new(),
-        purpose: PatchPurpose::Normal,
-    };
-    let mut patch =
-        ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch_payload.to_canonical_bytes()?);
-    patch.add_signature(dummy_signature())?;
-    let patch_id = object_store.write_object(&patch)?;
-
-    let patch_block = signed_block(BlockKind::Normal, vec![root_block_id], vec![patch_id], None);
-    let patch_block_id = object_store.write_object(&patch_block)?;
-
-    let ref_store = RefStore::new(layout.clone());
-    let root_ref_state = signed_ref_state_envelope("heads/main", None, root_block_id, 1);
-    let root_ref_state_id = root_ref_state.object_id();
-    let root_ref_update =
-        signed_ref_update_envelope("heads/main", None, root_ref_state_id, root_block_id, 1);
-    ref_store.publish(&RefPublication {
-        ref_name: "heads/main".to_string(),
-        expected_previous_ref_state_id: None,
-        ref_state: root_ref_state,
-        ref_update: root_ref_update,
-    })?;
-
-    let patch_ref_state =
-        signed_ref_state_envelope("heads/main", Some(root_ref_state_id), patch_block_id, 2);
-    let patch_ref_state_id = patch_ref_state.object_id();
-    let patch_ref_update = signed_ref_update_envelope(
-        "heads/main",
-        Some(root_ref_state_id),
-        patch_ref_state_id,
-        patch_block_id,
-        2,
-    );
-    ref_store.publish(&RefPublication {
-        ref_name: "heads/main".to_string(),
-        expected_previous_ref_state_id: Some(root_ref_state_id),
-        ref_state: patch_ref_state,
-        ref_update: patch_ref_update,
-    })?;
-    Ok(())
-}
+mod snapshot_history;
+pub(crate) use snapshot_history::publish_snapshot_then_patch_block;
 
 pub(crate) fn publish_text_create_then_edit_block(
     layout: &RepositoryLayout,
@@ -349,7 +258,14 @@ pub(crate) fn publish_text_create_then_edit_block(
         ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch_payload.to_canonical_bytes()?);
     patch.add_signature(dummy_signature())?;
     let patch_id = object_store.write_object(&patch)?;
-    let block = signed_block(BlockKind::Root, Vec::new(), vec![patch_id], None);
+    let state_root = crate::derive_next_state_root(&object_store, None, &[patch_id])?;
+    let block = signed_block_with_state_root(
+        BlockKind::Root,
+        Vec::new(),
+        vec![patch_id],
+        None,
+        state_root,
+    );
     let block_id = object_store.write_object(&block)?;
 
     let ref_store = RefStore::new(layout.clone());
@@ -426,7 +342,14 @@ pub(crate) fn publish_text_edit_then_unsupported_change_perm_block(
         ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch_payload.to_canonical_bytes()?);
     patch.add_signature(dummy_signature())?;
     let patch_id = object_store.write_object(&patch)?;
-    let block = signed_block(BlockKind::Root, Vec::new(), vec![patch_id], None);
+    let state_root = crate::derive_next_state_root(&object_store, None, &[patch_id])?;
+    let block = signed_block_with_state_root(
+        BlockKind::Root,
+        Vec::new(),
+        vec![patch_id],
+        None,
+        state_root,
+    );
     let block_id = object_store.write_object(&block)?;
 
     let ref_store = RefStore::new(layout.clone());
@@ -458,17 +381,33 @@ pub(crate) fn signed_block(
     patch_ids: Vec<prikk_object::ObjectId>,
     snapshot_blob_ref: Option<prikk_object::ObjectId>,
 ) -> ObjectEnvelope {
+    signed_block_with_state_root(
+        kind,
+        parent_block_ids,
+        patch_ids,
+        snapshot_blob_ref,
+        crate::compute_state_root(&[]).unwrap_or(MerkleRoot([0_u8; 32])),
+    )
+}
+
+pub(crate) fn signed_block_with_state_root(
+    kind: BlockKind,
+    parent_block_ids: Vec<prikk_object::ObjectId>,
+    patch_ids: Vec<prikk_object::ObjectId>,
+    snapshot_blob_ref: Option<prikk_object::ObjectId>,
+    state_merkle_root: MerkleRoot,
+) -> ObjectEnvelope {
     let payload = BlockPayload {
         parent_block_ids,
         kind,
         patch_ids,
-        state_merkle_root: MerkleRoot([0_u8; 32]),
+        state_merkle_root,
         snapshot_blob_ref,
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
     let mut envelope =
-        ObjectEnvelope::unsigned(ObjectType::Block, 1, payload_bytes.unwrap_or_default());
+        ObjectEnvelope::unsigned(ObjectType::Block, 2, payload_bytes.unwrap_or_default());
     assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
 }

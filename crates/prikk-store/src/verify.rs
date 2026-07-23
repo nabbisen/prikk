@@ -14,7 +14,7 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::{BlockPayload, ObjectId, ObjectType};
 
 use crate::active::{ActiveRefMetadata, read_active_ref_metadata};
-use crate::layout::RepositoryLayout;
+use crate::layout::{RepositoryFormat, RepositoryLayout};
 use crate::object_store::FileObjectStore;
 use crate::refs::verify_refs;
 use crate::rollback_verify::{verify_rollback_draft_wal_records, verify_rollback_patch_envelope};
@@ -43,6 +43,8 @@ pub struct ObjectVerification {
 /// Repository verification summary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepositoryVerification {
+    /// True when format-1 scaffold roots cannot be verified as clean-state commitments.
+    pub legacy_state_roots_unverifiable: bool,
     /// Number of persisted object files checked successfully.
     pub checked_objects: usize,
     /// Number of active WAL records replayed successfully.
@@ -78,6 +80,12 @@ pub struct RepositoryVerification {
 }
 
 impl RepositoryVerification {
+    /// Return true when legacy scaffold roots prevent state-commitment verification.
+    #[must_use]
+    pub const fn has_unverifiable_state_roots(&self) -> bool {
+        self.legacy_state_roots_unverifiable
+    }
+
     /// Return true if the active WAL contained an incomplete trailing record.
     #[must_use]
     pub const fn has_trailing_partial_wal(&self) -> bool {
@@ -167,6 +175,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
     let object_summary = verify_objects(layout, &object_store, &mut trust_verifier)?;
     let ref_verification = verify_refs(layout)?;
     for envelope in &ref_verification.ref_update_envelopes {
+        crate::format::validate_read_schema(layout.format(), envelope)?;
         trust_verifier.verify(envelope)?;
     }
     let wal = Wal::for_layout(layout);
@@ -175,6 +184,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
     let checked_rollback_draft_records = verify_rollback_draft_wal_records(&replay.records)?;
     let mut signature_envelope_issues = object_summary.signature_issues;
     for record in &replay.records {
+        crate::format::validate_read_schema(layout.format(), &record.envelope)?;
         signature_envelope_issues.extend(classify_signature_envelope(
             &record.envelope,
             SignatureEnvelopeSource::ActiveWal {
@@ -195,6 +205,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
         &mut ref_publication_issues,
     )?;
     Ok(RepositoryVerification {
+        legacy_state_roots_unverifiable: layout.format() == RepositoryFormat::LegacyV1,
         checked_objects: object_summary.object_count,
         checked_wal_records: replay.records.len(),
         checked_blocks: object_summary.block_count,
@@ -239,6 +250,7 @@ fn classify_active_wal_metadata(
 fn verify_block_payload(
     object_store: &FileObjectStore,
     block_id: ObjectId,
+    format: RepositoryFormat,
     canonical_payload: &[u8],
 ) -> Result<usize> {
     let payload = BlockPayload::decode_canonical(canonical_payload)?;
@@ -273,6 +285,9 @@ fn verify_block_payload(
             "snapshot blob",
             block_id,
         )?;
+    }
+    if format == RepositoryFormat::CurrentV2 {
+        crate::block_state::verify_block_v2_state(object_store, block_id, &payload)?;
     }
     Ok(rollback_patch_count)
 }

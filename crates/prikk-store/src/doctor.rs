@@ -6,7 +6,7 @@
 
 use prikk_error::{PrikkError, Result};
 
-use crate::layout::RepositoryLayout;
+use crate::layout::{RepositoryFormat, RepositoryLayout};
 use crate::lock::ActiveLock;
 use crate::refs::RefRecoveryRepair;
 use crate::verify::{ActiveWalMetadataStatus, RepositoryVerification, verify_repository};
@@ -187,6 +187,13 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                 "repository structural verification scan completed",
                 "review the remaining diagnostics before deciding whether action is required",
             ));
+            if layout.format() == RepositoryFormat::LegacyV1 {
+                issues.push(DoctorIssue::warning(
+                    "PRIKK-DOCTOR-LEGACY-FORMAT",
+                    "repository is open in format-1 legacy read-only mode; scaffold roots are not verifiable state commitments",
+                    "preserve the repository bytes or initialize a new format-2 repository and deliberately re-author the worktree",
+                ));
+            }
             if verification.trailing_partial_wal_bytes != 0 {
                 issues.push(DoctorIssue::warning(
                     "PRIKK-DOCTOR-WAL-TRAILING-PARTIAL",
@@ -279,6 +286,7 @@ pub fn repair_repository(
     layout: &RepositoryLayout,
     options: DoctorRepairOptions,
 ) -> Result<DoctorRepairReport> {
+    layout.require_current_format()?;
     if options.reconstruct_main_ref {
         return Err(PrikkError::Integrity(
             "format-1 missing-pointer doctor repair is unsupported in 0.18.0; preserve the repository for signer-backed retry or later recovery tooling"

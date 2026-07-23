@@ -86,6 +86,7 @@ pub fn append_rollback_draft(
     message: &str,
     signer: &impl AuthorSigner,
 ) -> Result<RollbackDraftReport> {
+    layout.require_current_format()?;
     crate::refs::ensure_no_incomplete_publication(layout)?;
     let canonical_ref = validate_local_branch_ref(ref_name)?;
     if message.trim().is_empty() {

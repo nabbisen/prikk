@@ -40,6 +40,19 @@ canonical identity schema, or domain change requires accepted design authority, 
 or domain, refusal or migration behavior, and literal compatibility vectors. Existing identity
 versions are never reinterpreted.
 
+## Repository Format 2 Transition
+
+New repositories use format 2 and schema-2 Blocks with replay-derived clean-state Merkle roots.
+Released format-1 repositories open only in bounded legacy read-only mode: inspection and planning are
+available with a warning, while `verify` reports scaffold roots as unverifiable and returns nonzero.
+Ordinary commit, seal, trust, repair, object/ref/WAL mutation, and worktree materialization are refused.
+The sole exception is exact signer-backed completion of a retained DC-34 one-record-ahead publication,
+which promotes already-signed state without rewriting identity bytes or appending a log record.
+
+There is no in-place or history-preserving migration in 0.18.0. To resume writable work, initialize a
+new format-2 repository and deliberately re-author the desired worktree. This creates new NodeIds,
+objects, signatures, and history. Do not copy `.prikk/` or edit `FORMAT` to simulate migration.
+
 The workspace's declared minimum Rust version is exactly 1.85.0. The locked product workspace must
 check, test, and build on that toolchain:
 
