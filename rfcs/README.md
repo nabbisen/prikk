@@ -32,11 +32,18 @@ These records are under design review. All proposed RFCs must respect the depend
 | DC-42 | [Performance and Maintainability Gates](./proposed/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md) | M2 / 0.19.0 |
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0 |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
+| DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
+| DC-52 | [Python and Oracle Decommissioning](./proposed/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | M2 / 0.19.0 |
+| DC-53 | [Repository-Wide AUTHOR Trust Verification](./proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md) | Post-M2, unscheduled |
+| DC-55 | [First-Party SHA-256 Replacement](./proposed/DC-55-FIRST-PARTY-SHA256-REPLACEMENT.md) | M2 / 0.19.0 |
 
 DC-41 design review is accepted (below); its staged implementation does not require DC-42 or DC-43 to
-wait. The remaining active M2 development order is DC-42, then DC-43, each still requiring individual
-design acceptance before implementation. DC-44 remains scheduled after M2. DC-45 through DC-48 are
-accepted preparatory work already landed, not competing future increments in this sequence.
+wait. The active M2 development order is DC-55, then DC-42, then DC-52, then DC-43, each still requiring
+individual design acceptance before implementation — see [`EXECUTION-ORDER.md`](./EXECUTION-ORDER.md) for
+what each is blocked on and why DC-55 precedes DC-42. DC-44 remains scheduled after M2 and DC-53 is
+unscheduled; both have design briefs rather than implementation handoffs. DC-49 is proposed but cannot
+complete while the release lane is parked. DC-45 through DC-48 are accepted preparatory work already
+landed, not competing future increments in this sequence.
 
 ## Accepted
 

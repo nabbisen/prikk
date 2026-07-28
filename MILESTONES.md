@@ -75,7 +75,7 @@ release boundary and may change only through an update to this file, `ROADMAP.md
 | Declared Rust 1.85 minimum does not pass the locked product workspace | Compatibility debt | DC-46 | M2 |
 | Backup/restore verification and migration exercises absent | Recovery capability gap | DC-44 | M3 |
 | Cross-platform evidence absent for portable logic | Assurance gap | DC-49 (descoped from DC-41) | M2, blocked on the M1 portability correction |
-| First-party SHA-256 maintenance ROI unanswered | Deferred decision | DC-50 | M2 |
+| First-party SHA-256 maintenance ROI unanswered | Deferred decision | DC-50 — answered at `4005efb`: **replace**; DC-55 implements | M2 |
 | No mechanical gate on product `[dependencies]` placement | Supply-chain risk | DC-51 (DC-41 finding B4) | M2 |
 | DC-45 retirement obligations tracked only in prose | Process debt | DC-52 | M2 |
 | Repository-wide AUTHOR trust unverified | Capability gap | DC-53 | Post-M2, unscheduled |
@@ -184,12 +184,16 @@ gates.
 6. DC-47 Stable Clippy Gate Alignment (complete at `ea95e92`; post-commit evidence accepted).
 7. DC-48 Legacy Clippy Production Retirement (complete at `383e503`; post-commit evidence accepted).
 8. DC-49 Portable-Logic Platform Matrix (blocked on the M1 portability-claim correction).
-9. DC-50 First-Party SHA-256 ROI Decision.
+9. DC-50 First-Party SHA-256 ROI Decision (closed at `4005efb` with a **replace** decision; produced no
+   code and authorized exactly one successor, DC-55).
 10. DC-51 Product Dependency Placement Gate.
 11. DC-52 Python and Oracle Decommissioning.
+12. DC-55 First-Party SHA-256 Replacement (the implementation DC-50 authorized; identity-bearing).
 
 DC-49 through DC-52 were added on 2026-07-28 to give an owner to obligations that previously existed only
-in architect review prose. They are proposed, not scheduled; each requires individual design acceptance.
+in architect review prose. DC-55 was added the same day for the same reason — DC-50's replace decision
+would otherwise have been an authorization living only in a decision record. They are proposed, not
+scheduled; each requires individual design acceptance.
 DC-49 is the platform matrix descoped from DC-41 and is the only development increment blocked on a
 release-lane event. DC-53 (repository-wide AUTHOR trust verification) is recorded as a post-M2 capability
 gap and is deliberately not part of M2. The recommended sequence across all open work is in

@@ -7,7 +7,8 @@ backlog narrative, `rfcs/IMPLEMENTATION-STATUS.md` the current-state snapshot, a
 authority. This file answers only one question the others do not: **what do I pick up next, and what is it
 waiting on?**
 
-Last reconciled: after DC-51 repair (`4c8b7a3`); DC-50 accepted and in flight.
+Last reconciled: after DC-50 closure (`4005efb`); DC-55 drafted from its replace decision and awaiting
+design review.
 
 ## The two lanes
 
@@ -27,8 +28,8 @@ authority, the handoff is what they work from.
 
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
-| 1 | **DC-50** — first-party SHA-256 ROI decision | **Accepted 2026-07-28; with developers** | none — **in flight** | `handoffs/DC-50-first-party-sha256-roi-decision/implementation-handoff-v1.md` |
-| 2 | **DC-42** — performance and maintainability gates | Proposed | design review | `handoffs/DC-42-performance-maintainability-gates/implementation-handoff-v1.md` |
+| 1 | **DC-55** — first-party SHA-256 replacement | Proposed | design review | `handoffs/DC-55-first-party-sha256-replacement/implementation-handoff-v1.md` |
+| 2 | **DC-42** — performance and maintainability gates | Proposed | design review; **DC-55** (see below) | `handoffs/DC-42-performance-maintainability-gates/implementation-handoff-v1.md` |
 | 3 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
 | 4 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
 
@@ -45,12 +46,23 @@ closed the encode/decode path asymmetry found by DC-41 stage 4's campaign.
 **DC-51 is complete** — accepted `d7d49c6`, implemented `d3e939b`, post-commit review accepted with one
 blocking finding, repaired `4c8b7a3`. Dependency placement is now mechanically enforced.
 
-**Why this order.** DC-50 leads because it is accepted and with developers, and it produces a decision
-record rather than code — its evidence input already exists from DC-41 stage 3. DC-42 is the next
-substantial increment and carries a real requirements decision (NFR-PERF-01 and NFR-PERF-02 must each end
-implemented **or** explicitly amended); note DC-50's measured ~5.8x hashing gap is a direct input to it.
-DC-52 needs its stability precondition. DC-43 needs security review and is best consumed against a
-settled tooling gate.
+**DC-50 is closed** — closed at `4005efb` with a **replace** decision. Its record is at
+`handoffs/DC-50-first-party-sha256-roi-decision/decision-record-v1.md`. It stays in `rfcs/accepted/`
+rather than `done/` because `done/` means shipped and DC-50 ships nothing; being a decision-only
+increment, it will never move. DC-50 produced no code and authorized exactly one successor: DC-55.
+
+**Why this order.** DC-55 leads because DC-50 authorized it and because of what it does to DC-42. DC-42
+owns NFR-PERF-01, and DC-50 measured a ~5.8x throughput gap on the SHA-256 primitive underneath it — so
+running DC-42 first would set performance requirements against a baseline DC-55 is already cleared to
+invalidate, forcing a re-measure. DC-55 first means DC-42 measures once, against the primitive that will
+actually ship. DC-42 then carries its real requirements decision (NFR-PERF-01 and NFR-PERF-02 must each
+end implemented **or** explicitly amended). DC-52 needs its stability precondition. DC-43 needs security
+review and is best consumed against a settled tooling gate.
+
+**DC-55 warrants an independent design review specifically.** It is identity-bearing — every ObjectId,
+state root, ref-name path, and signature preimage derives from the function it replaces — and it is the
+category where a green test suite can mean "consistently changed" rather than "unchanged." See its RFC
+Risks section on the `PRIKK_REGEN=1` regeneration hazard.
 
 ## 2. Blocked on a release-lane event
 
