@@ -1,4 +1,5 @@
 mod package;
+mod placement;
 mod publication;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -18,12 +19,13 @@ const PRODUCTS: [(&str, &str); 7] = [
     ("prikk-store", "crates/prikk-store/Cargo.toml"),
     ("prikk", "crates/prikk-cli/Cargo.toml"),
 ];
-const CATEGORY_ORDER: [&str; 8] = [
+const CATEGORY_ORDER: [&str; 9] = [
     "workspace-members",
     "default-members",
     "tool-metadata",
     "lockfile-boundary",
     "dependency-boundary",
+    "dependency-placement",
     "publication-allowlist",
     "package-contents",
     "source-archive-contents",
@@ -52,6 +54,7 @@ pub(crate) fn run(root: &Path) -> Result<BoundaryReport> {
     check_members(root, &metadata, &mut errors);
     check_tool(root, &metadata, &mut errors)?;
     check_dependencies(&metadata, &mut errors);
+    placement::check(root, &mut errors);
     package::check(root, &mut errors)?;
     publication::check(root, &mut errors)?;
     errors.sort_by(|left, right| {
