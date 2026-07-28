@@ -1,25 +1,32 @@
-//! Randomized differential evidence: `prikk-hash`'s first-party SHA-256 against RustCrypto's
-//! audited `sha2` crate, over a fixed-seed, stated-distribution input set (DC-41 stage 3).
+//! Randomized differential evidence that `prikk-hash::sha256` (backed by the `sha2` crate since
+//! DC-55) still agrees with the first-party implementation it replaced, frozen test-only in
+//! `tests::frozen_outgoing`.
 //!
-//! `sha2` is a dev-only dependency of this crate (`[dev-dependencies]` in `Cargo.toml`) and is
-//! never reachable from `[dependencies]`. It is already present in the workspace's locked graph
-//! as a transitive dependency of `ed25519-dalek` (for Ed25519's internal SHA-512), so this stage
-//! adds a dependency *edge*, not a new package. The two implementations remain a genuine
-//! independence check: `ed25519-dalek` uses `sha2`'s SHA-512, a different algorithm from the
-//! SHA-256 exercised here, and their shared presence in one dependency graph does not correlate
-//! their correctness. Adding this dev-dependency edge does not place `sha2` in `prikk-hash`'s
-//! production dependency graph, which is what the RFC's discipline clause (differential
-//! dependencies must not enter object identity or runtime trust paths) exists to prevent.
+//! This module has served two purposes across two increments, over the same fixed-seed,
+//! stated-distribution input set:
+//!
+//! - **DC-41 stage 3** first established that the (then-production) first-party implementation
+//!   agreed with RustCrypto's `sha2` over 10,000 randomized cases — evidence for trusting the
+//!   first-party code.
+//! - **DC-55** repurposed the same generator and distribution to prove the opposite direction:
+//!   that swapping `sha256`'s implementation *to* `sha2` produced no observable difference against
+//!   the implementation it replaced. This is the equivalence campaign DC-55 item 1a requires, and
+//!   the only run that demonstrates the swap preserved identity — comparing the new implementation
+//!   against `sha2` directly would be a self-comparison and prove nothing, which is why the frozen
+//!   module exists.
+//!
+//! Per DC-55 item 5, the frozen module is kept as this differential's **permanent** independent
+//! reference rather than deleted or re-pointed at a third-party crate: it costs no new dependency,
+//! remains genuinely independent of `sha2`, and was already reviewed under DC-41.
 //!
 //! A mismatch here is **not a bug to fix**. It would mean every ObjectId, state root, ref-name
 //! path, and signature preimage computed from the disagreeing input is non-standard —
-//! repository-format-invalidating, not an ordinary defect. Do not patch `sha256`, narrow the
+//! repository-format-invalidating, not an ordinary defect. Do not patch either side, narrow the
 //! distribution, or adjust the seed in response to a failure; stop and escalate to an
 //! architect/security review with the reproducing seed and case index.
 
-use sha2::{Digest, Sha256};
-
 use super::super::sha256;
+use super::frozen_outgoing;
 
 /// Fixed seed: the leading fractional bits of pi (a nothing-up-my-sleeve constant), so the
 /// generated input set is reproducible by construction rather than by discipline.
@@ -111,14 +118,8 @@ fn length_for_case(rng: &mut SplitMix64, index: usize) -> usize {
     }
 }
 
-fn reference_sha256(input: &[u8]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(input);
-    hasher.finalize().into()
-}
-
 #[test]
-fn sha256_matches_rustcrypto_reference_across_randomized_cases() {
+fn sha256_matches_frozen_pre_dc55_implementation_across_randomized_cases() {
     let mut rng = SplitMix64::new(SEED);
     for index in 0..CASE_COUNT {
         let length = length_for_case(&mut rng, index);
@@ -126,12 +127,13 @@ fn sha256_matches_rustcrypto_reference_across_randomized_cases() {
         rng.fill_bytes(&mut input);
 
         let actual = sha256(&input);
-        let expected = reference_sha256(&input);
+        let expected = frozen_outgoing::sha256(&input);
         assert_eq!(
             actual, expected,
             "SHA-256 differential mismatch at case {index} (input length {length}, seed {SEED:#x}): \
-             prikk-hash and RustCrypto sha2 disagree. This is a stop-work finding per DC-41's escalation \
-             clause — do not patch sha256, narrow the distribution, or adjust the seed. Escalate to an \
+             the sha2-backed implementation and the frozen pre-DC-55 first-party implementation \
+             disagree. This is a stop-work finding per DC-41's escalation clause — do not patch \
+             either side, narrow the distribution, or adjust the seed. Escalate to an \
              architect/security review with this seed and case index."
         );
     }

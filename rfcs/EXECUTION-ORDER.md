@@ -158,8 +158,9 @@ These apply to all work above and are not restated in each handoff.
    repository-local `TMPDIR` (`.git-exclude/tmp`) where `/tmp` is read-only.
 10. **Report counts before and after.** Test counts per touched crate, and locked package count where
     dependencies change, so no silent loss or growth can hide. Current: `prikk-store` 543,
-    `prikk-object` 76, `prikk-replay` 4, `prikk-hash` 13, `prikk-crypto` 5, `prikk-release-policy` 57;
-    180 locked packages.
+    `prikk-object` 76, `prikk-replay` 44, `prikk-hash` 14, `prikk-crypto` 5, `prikk-release-policy` 59;
+    180 locked packages. (`prikk-replay` was previously misrecorded here as 4; it has been 44 since
+    before DC-54 and nothing has touched it — corrected during DC-55's baseline check.)
 11. **Submit a review request per candidate** with the diff, an evidence note, gate output, and an explicit
     statement of what did *not* change.
 

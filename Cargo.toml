@@ -42,10 +42,10 @@ prikk-store                 = { version = "0", path = "crates/prikk-store" }
 ed25519-dalek               = "2"
 getrandom                   = "0.2"
 rustix                      = { version = "1", features = ["fs"] }
+sha2                        = "0.10"
 
 # Testing
 proptest                    = "1"
-sha2                        = "0.10"
 
 
 [workspace.lints.rust]

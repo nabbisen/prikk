@@ -33,13 +33,42 @@ fn disallowed_third_party_in_product_dependencies_fails() {
     write_baseline(temporary.path());
     write_manifest(
         temporary.path(),
+        "crates/prikk-error/Cargo.toml",
+        "[dependencies]\nrand = \"0.8\"\n",
+    );
+    let mut errors = Vec::new();
+    check(temporary.path(), &mut errors);
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].detail, "prikk-error:rand");
+}
+
+#[test]
+fn sha2_is_allowlisted_for_prikk_hash_since_dc55() {
+    let temporary = tempfile::tempdir().unwrap();
+    write_baseline(temporary.path());
+    write_manifest(
+        temporary.path(),
         "crates/prikk-hash/Cargo.toml",
         "[dependencies]\nsha2 = \"0.10\"\n",
     );
     let mut errors = Vec::new();
     check(temporary.path(), &mut errors);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn sha2_remains_disallowed_for_other_zero_allowlist_crates() {
+    let temporary = tempfile::tempdir().unwrap();
+    write_baseline(temporary.path());
+    write_manifest(
+        temporary.path(),
+        "crates/prikk-replay/Cargo.toml",
+        "[dependencies]\nsha2 = \"0.10\"\n",
+    );
+    let mut errors = Vec::new();
+    check(temporary.path(), &mut errors);
     assert_eq!(errors.len(), 1);
-    assert_eq!(errors[0].detail, "prikk-hash:sha2");
+    assert_eq!(errors[0].detail, "prikk-replay:sha2");
 }
 
 #[test]

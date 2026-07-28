@@ -8,6 +8,7 @@
 
 use super::{sha256, to_hex};
 
+mod frozen_outgoing;
 mod hash_differential;
 
 // --- Published vectors (FIPS 180-2 / RFC 6234) ---

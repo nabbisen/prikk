@@ -1,0 +1,3 @@
+[maintainer]
+required = 1
+keys = ["fixture-maintainer"]

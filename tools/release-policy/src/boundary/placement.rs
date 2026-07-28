@@ -4,7 +4,7 @@ use super::{BoundaryError, PRODUCTS, push};
 
 const ALLOWED_THIRD_PARTY: [(&str, &[&str]); 7] = [
     ("prikk-error", &[]),
-    ("prikk-hash", &[]),
+    ("prikk-hash", &["sha2"]),
     ("prikk-crypto", &["ed25519-dalek", "getrandom"]),
     ("prikk-object", &[]),
     ("prikk-replay", &[]),
