@@ -145,22 +145,4 @@ fn hex_char(value: u8) -> char {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{sha256, to_hex};
-
-    #[test]
-    fn sha256_empty_matches_standard_vector() {
-        assert_eq!(
-            to_hex(&sha256(b"")),
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        );
-    }
-
-    #[test]
-    fn sha256_abc_matches_standard_vector() {
-        assert_eq!(
-            to_hex(&sha256(b"abc")),
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-        );
-    }
-}
+mod tests;
