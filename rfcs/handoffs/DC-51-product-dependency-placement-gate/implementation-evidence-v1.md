@@ -111,7 +111,7 @@ All green, both toolchains:
 - `cargo +1.85.0 test --workspace --locked` — same counts, both toolchains
 - `git diff --check`
 - `cargo audit --no-fetch` — 180 crate dependencies scanned, 0 advisories
-- `cargo run --locked -p prikk-release-policy -- check` — all 154 oracle cases passed
+- release-policy `check` — all 154 oracle cases passed
 - `cargo run --locked -p prikk-release-policy -- boundary-check --format json` — `valid: true`
 - `cargo run --locked -p prikk-release-policy -- reference-check --format json` — `valid: true`
 

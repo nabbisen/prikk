@@ -119,22 +119,30 @@ These apply to all work above and are not restated in each handoff.
    policy change requiring its own review: `command_scan/procedure.rs` (accepted command productions),
    `command_scan/prefix.rs` (prefix grammar), `reference.rs` (authority descriptors), `format.rs`
    (format-2 schema allowlist), `state_root.rs` (state-root byte grammar).
-6. **Dependency placement is review-enforced until DC-51 lands.** No mechanical gate detects a third-party
-   crate misplaced into a product crate's `[dependencies]`. Verify placement by direct manifest inspection
-   in every dependency-adding candidate and state it explicitly in the evidence note.
-7. **Governed procedure files.** `.github/workflows/ci.yml` and any `.sh`/`.yml` under `.github`,
+6. **Never spell out the full command form in prose.** Write "release-policy `check`", not the
+   full `cargo run --locked -p prikk-release-policy` invocation with the bare subcommand spelled out
+   after `--` — that full form is a recognised policy invocation, so any scanned `.md` file containing
+   it must be registered in the command inventory or `reference-check` fails. DC-51's own evidence note
+   tripped this. `boundary-check` and `reference-check` are safe; only the bare subcommand word
+   triggers it.
+7. **Dependency placement is now mechanically enforced.** DC-51's `boundary-check` category
+   `dependency-placement` catches a third-party crate misplaced into a product crate's
+   `[dependencies]`, including under `[target.*]` and via `package =` renaming. Review-only
+   verification is defense-in-depth going forward, not the primary control.
+8. **Governed procedure files.** `.github/workflows/ci.yml` and any `.sh`/`.yml` under `.github`,
    `scripts`, or `release` are scanned default-closed. Every `run:` command must match an accepted
    production, or `boundary-check`/`reference-check` fail. Adding a CI command means a reviewed classifier
    amendment in the same increment.
-8. **Gate set for every candidate.** `cargo fmt --all -- --check`;
+9. **Gate set for every candidate.** `cargo fmt --all -- --check`;
    `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`;
    `cargo test --workspace --locked`; `cargo +1.85.0 test --workspace --locked`; `git diff --check`;
    `cargo audit --no-fetch`; release-policy `check`, `boundary-check`, `reference-check`. Use a
    repository-local `TMPDIR` (`.git-exclude/tmp`) where `/tmp` is read-only.
-9. **Report counts before and after.** Test counts per touched crate, and locked package count where
-   dependencies change, so no silent loss or growth can hide. Current: `prikk-store` 531, `prikk-object`
-   64, `prikk-replay` 44, `prikk-hash` 13, `prikk-crypto` 5; 169 locked packages.
-10. **Submit a review request per candidate** with the diff, an evidence note, gate output, and an explicit
+10. **Report counts before and after.** Test counts per touched crate, and locked package count where
+    dependencies change, so no silent loss or growth can hide. Current: `prikk-store` 543,
+    `prikk-object` 76, `prikk-replay` 4, `prikk-hash` 13, `prikk-crypto` 5, `prikk-release-policy` 57;
+    180 locked packages.
+11. **Submit a review request per candidate** with the diff, an evidence note, gate output, and an explicit
     statement of what did *not* change.
 
 ## 7. Posture
