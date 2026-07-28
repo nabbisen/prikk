@@ -1,5 +1,6 @@
 //! Payload tests.
 
+mod path_validation;
 mod proptest_decoders;
 
 use super::{

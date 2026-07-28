@@ -3,6 +3,7 @@
 use prikk_error::{PrikkError, Result};
 
 use crate::canonical::{is_contiguous_op_seq, is_strictly_sorted};
+use crate::path::validate_repo_path;
 use crate::payload::common::{Intent, OperationCondition, OperationConditionEntry};
 use crate::payload::node::{NodeId, NodeKind};
 use crate::{CanonicalEncode, CanonicalWriter, ObjectId, WireType};
@@ -328,13 +329,16 @@ pub struct CreateFile {
 
 impl CreateFile {
     /// Reject an all-zero `node_id`; FDD-03 §9.3 forbids the reserved value in any
-    /// persisted node-bearing operation, and the encoder produces identity bytes.
+    /// persisted node-bearing operation, and the encoder produces identity bytes. Also reject a
+    /// `path` that violates the `RepoPath` grammar decode enforces (DC-54): encode must reject
+    /// exactly what decode rejects, using the same validator, so the two sides cannot drift.
     pub fn validate(&self) -> Result<()> {
         if self.node_id.is_zero() {
             return Err(PrikkError::CanonicalEncoding(
                 "CreateFile node_id must be nonzero".to_string(),
             ));
         }
+        validate_repo_path(&self.path)?;
         Ok(())
     }
 }
@@ -383,14 +387,16 @@ pub struct DeleteNode {
 }
 
 impl DeleteNode {
-    /// Reject `old_node_kind` / preimage discriminator mismatches and an all-zero
-    /// `node_id` (FDD-03 §9.3 forbids the reserved value in any node-bearing op).
+    /// Reject `old_node_kind` / preimage discriminator mismatches, an all-zero
+    /// `node_id` (FDD-03 §9.3 forbids the reserved value in any node-bearing op), and a `path`
+    /// that violates the `RepoPath` grammar decode enforces (DC-54).
     pub fn validate(&self) -> Result<()> {
         if self.node_id.is_zero() {
             return Err(PrikkError::CanonicalEncoding(
                 "DeleteNode node_id must be nonzero".to_string(),
             ));
         }
+        validate_repo_path(&self.path)?;
         let consistent = matches!(
             (self.old_node_kind, &self.preimage),
             (
@@ -514,13 +520,18 @@ pub struct RenamePath {
 
 impl RenamePath {
     /// Reject an all-zero `node_id`; FDD-03 §9.3 forbids the reserved value in any
-    /// persisted node-bearing operation, and the encoder produces identity bytes.
+    /// persisted node-bearing operation, and the encoder produces identity bytes. Also reject an
+    /// `old_path` or `new_path` that violates the `RepoPath` grammar decode enforces (DC-54) —
+    /// both fields are checked independently, since a path-safe `new_path` must not mask an
+    /// unsafe `old_path`.
     pub fn validate(&self) -> Result<()> {
         if self.node_id.is_zero() {
             return Err(PrikkError::CanonicalEncoding(
                 "RenamePath node_id must be nonzero".to_string(),
             ));
         }
+        validate_repo_path(&self.old_path)?;
+        validate_repo_path(&self.new_path)?;
         Ok(())
     }
 }
@@ -582,13 +593,16 @@ pub struct CreateSymlink {
 }
 
 impl CreateSymlink {
-    /// Reject an all-zero `node_id` (FDD-03 §9.3).
+    /// Reject an all-zero `node_id` (FDD-03 §9.3) and a `path` that violates the `RepoPath`
+    /// grammar decode enforces (DC-54). `target` is deliberately left untouched: it is an opaque
+    /// symlink target by accepted DC-40 design, not a repository-relative path.
     pub fn validate(&self) -> Result<()> {
         if self.node_id.is_zero() {
             return Err(PrikkError::CanonicalEncoding(
                 "CreateSymlink node_id must be nonzero".to_string(),
             ));
         }
+        validate_repo_path(&self.path)?;
         Ok(())
     }
 }

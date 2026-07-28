@@ -39,53 +39,17 @@ fn object_id_strategy() -> impl Strategy<Value = ObjectId> {
     proptest::array::uniform32(any::<u8>()).prop_map(ObjectId::from_bytes)
 }
 
-/// FINDING (DC-41 stage 4, campaign run, not fixed here — see the module-level note below).
-/// Excludes the Windows-reserved device names (`RepoPath`'s `is_windows_reserved_name`: `con`,
-/// `prn`, `aux`, `nul`, `com1`-`com9`, `lpt1`-`lpt9`) that an unfiltered `[a-z0-9]{1,8}` can
-/// produce. Campaign run `PROPTEST_CASES=100000` shrank a real failure to exactly this: a
-/// `RenamePath` with `new_path: "com1"` **encodes successfully** (no operation's `validate()`
-/// checks path safety) but **fails to decode** (`decode_rename_path` calls `RepoPath::parse`,
-/// which rejects it) — `InvalidName("Windows reserved path component is not allowed: com1")`.
-/// The minimized reproducer is committed at
-/// `proptest-regressions/patch_replay/tests/proptest_round_trip.txt`. This is a real encode/decode
-/// asymmetry in the operation wire codec (affects every path-carrying kind: `CreateFile`,
-/// `DeleteNode`, `RenamePath`, `CreateSymlink`), not a decoder crash — `decode_patch_operations`
-/// still returns a clean `Err`, never panics, so NFR-SEC-04 holds. Fixing it means adding
-/// `RepoPath`-equivalent validation to the write-side `validate()` methods, which is a production
-/// change outside DC-41's scope (no production behavior change). Filtered here, not silently: the
-/// filter exists *because* the case was found and disclosed, not to avoid finding it — see the
-/// stage-4 evidence note for the corrective-RFC follow-up this requires.
+/// **DC-54 fixed the finding this exclusion used to guard against — filter retired.**
+/// (Formerly excluded Windows-reserved device names here, because encode did not validate paths
+/// and a generated `"com1"` would encode successfully but fail to decode. DC-54 added
+/// `RepoPath`-equivalent validation to the write-side `validate()` of every path-carrying
+/// operation kind, so encode now rejects exactly what decode rejects — see
+/// `patch_operations_round_trip` below for how the property handles that legitimate rejection.
+/// The original minimized reproducer remains committed at
+/// `proptest-regressions/patch_replay/tests/proptest_round_trip.txt` as a permanent regression
+/// guard: proptest replays it first on every run, and it now must fail at **encode**, not decode.)
 fn path_segment_strategy() -> impl Strategy<Value = String> {
-    "[a-z0-9]{1,8}".prop_filter(
-        "excludes Windows-reserved names; see doc comment above",
-        |segment| {
-            !matches!(
-                segment.as_str(),
-                "con"
-                    | "prn"
-                    | "aux"
-                    | "nul"
-                    | "com1"
-                    | "com2"
-                    | "com3"
-                    | "com4"
-                    | "com5"
-                    | "com6"
-                    | "com7"
-                    | "com8"
-                    | "com9"
-                    | "lpt1"
-                    | "lpt2"
-                    | "lpt3"
-                    | "lpt4"
-                    | "lpt5"
-                    | "lpt6"
-                    | "lpt7"
-                    | "lpt8"
-                    | "lpt9"
-            )
-        },
-    )
+    "[a-z0-9]{1,8}"
 }
 
 fn repo_path_strategy() -> impl Strategy<Value = String> {
@@ -342,8 +306,14 @@ proptest! {
             preconditions: Vec::new(),
             purpose: PatchPurpose::Normal,
         };
-        let bytes = payload.to_canonical_bytes()
-            .expect("generation invariants keep PatchPayload structurally valid");
+        // DC-54: encode now legitimately rejects an operation whose path violates the RepoPath
+        // grammar (reserved names, traversal, absolute, `.prikk`-prefixed) — generation is
+        // unrestricted (path_segment_strategy() can still produce e.g. "com1"), so that is an
+        // expected outcome, not a round-trip failure. There is nothing to decode in that case;
+        // skip it rather than assert round-trip on a value that was correctly never produced.
+        let Ok(bytes) = payload.to_canonical_bytes() else {
+            return Ok(());
+        };
         let decoded = decode_patch_operations(&bytes)
             .expect("bytes produced by the encoder must always decode");
         let expected: Vec<DecodedPatchOperation> = operations.iter().map(expected_decoded).collect();

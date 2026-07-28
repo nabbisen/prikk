@@ -1,4 +1,5 @@
 //! Patch replay/decode test modules.
+mod dc54_encode_decode_symmetry;
 mod framing;
 mod node_ops;
 mod proptest_round_trip;

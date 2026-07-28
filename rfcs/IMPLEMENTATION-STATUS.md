@@ -3,14 +3,15 @@
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-39, DC-40, DC-41, DC-45, DC-46, DC-47,
-and DC-48
-Current implementation increment: none (DC-35 through DC-40 implementation complete; DC-41 all four
-stages implemented and accepted)
-Current development increment: DC-54 design review pending, selected ahead of DC-51 per the project
-owner's sequencing. DC-54 closes a live correctness gap in production code (`CreateFile` is reachable
-through authoring today) found by DC-41 stage 4's campaign run — proposed at
-`rfcs/proposed/DC-54-OPERATION-PATH-VALIDATION-SYMMETRY.md`. Its own handoff states implementation may
-not begin before design acceptance; this is a production behaviour change (encode becomes stricter)
+DC-48, and DC-54
+Current implementation increment: DC-54 (operation path validation symmetry) implemented, pending
+implementation review. DC-35 through DC-40 implementation complete; DC-41 all four stages implemented
+and accepted
+Current development increment: DC-54, selected ahead of DC-51 per the project owner's sequencing.
+Accepted by the project owner 2026-07-28 after the author's design-completion self-critique resolved a
+blocking dependency-cycle defect in the original draft (see `rfcs/accepted/DC-54-…`'s Status field).
+Closes a live correctness gap in production code (`CreateFile` is reachable through authoring today)
+found by DC-41 stage 4's campaign run
 Current release activation: parked
 Current activated release target: none
 Current governance increment: none (no signer bootstrap or hold started)
