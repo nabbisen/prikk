@@ -8,6 +8,13 @@ design review and issued no verdict; this acceptance is the project owner's own 
 rather than via a separate architect review round. Opened by a defect discovered during DC-41 stage 4's
 property/fuzz campaign, per that RFC's discipline clause ("a discovered behavior defect opens a dedicated
 corrective RFC instead of being silently normalized into a test expectation").
+**Implementation.** Complete at `e8f780a`. Architect post-commit implementation review v1 (2026-07-28,
+`prikk-dc54-post-commit-implementation-review-v1.md`) accepted with no repair required — every scrutiny
+point from the review request independently re-verified against the working tree, including the
+crate-boundary move the design-completion self-critique had flagged as most deserving of independent
+review. One non-blocking hardening note (round-trip property's vacuity signalling) and one process
+concern (design and implementation both landed with no independent review before commit) recorded in the
+review; neither affects correctness of the committed state.
 **Target milestone.** M2 - post-correction assurance milestone.
 **Schedule position.** Independent; implementation authorized. Selected ahead of DC-51 because it closes a
 live correctness gap in production code rather than a process gap.

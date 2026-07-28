@@ -74,6 +74,11 @@ release boundary and may change only through an update to this file, `ROADMAP.md
 | Mixed release-policy tooling ownership and custom schema evaluator | Tooling debt | DC-45 | M2 |
 | Declared Rust 1.85 minimum does not pass the locked product workspace | Compatibility debt | DC-46 | M2 |
 | Backup/restore verification and migration exercises absent | Recovery capability gap | DC-44 | M3 |
+| Cross-platform evidence absent for portable logic | Assurance gap | DC-49 (descoped from DC-41) | M2, blocked on the M1 portability correction |
+| First-party SHA-256 maintenance ROI unanswered | Deferred decision | DC-50 | M2 |
+| No mechanical gate on product `[dependencies]` placement | Supply-chain risk | DC-51 (DC-41 finding B4) | M2 |
+| DC-45 retirement obligations tracked only in prose | Process debt | DC-52 | M2 |
+| Repository-wide AUTHOR trust unverified | Capability gap | DC-53 | Post-M2, unscheduled |
 
 ## M0 - Architecture ratification
 
@@ -178,6 +183,17 @@ gates.
 5. DC-46 Workspace Rust 1.85 Compatibility.
 6. DC-47 Stable Clippy Gate Alignment (complete at `ea95e92`; post-commit evidence accepted).
 7. DC-48 Legacy Clippy Production Retirement (complete at `383e503`; post-commit evidence accepted).
+8. DC-49 Portable-Logic Platform Matrix (blocked on the M1 portability-claim correction).
+9. DC-50 First-Party SHA-256 ROI Decision.
+10. DC-51 Product Dependency Placement Gate.
+11. DC-52 Python and Oracle Decommissioning.
+
+DC-49 through DC-52 were added on 2026-07-28 to give an owner to obligations that previously existed only
+in architect review prose. They are proposed, not scheduled; each requires individual design acceptance.
+DC-49 is the platform matrix descoped from DC-41 and is the only development increment blocked on a
+release-lane event. DC-53 (repository-wide AUTHOR trust verification) is recorded as a post-M2 capability
+gap and is deliberately not part of M2. The recommended sequence across all open work is in
+`rfcs/EXECUTION-ORDER.md`.
 
 DC-45 through DC-48 are preparatory M2 tooling and compatibility increments that landed before M1
 release. They are not the remaining post-0.18.0 execution sequence. DC-45's design was accepted after
