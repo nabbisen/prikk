@@ -35,12 +35,12 @@ These records are under design review. All proposed RFCs must respect the depend
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
 | DC-52 | [Python and Oracle Decommissioning](./proposed/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | M2 / 0.19.0 |
 | DC-53 | [Repository-Wide AUTHOR Trust Verification](./proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md) | Post-M2, unscheduled |
-| DC-55 | [First-Party SHA-256 Replacement](./proposed/DC-55-FIRST-PARTY-SHA256-REPLACEMENT.md) | M2 / 0.19.0 |
 
 DC-41 design review is accepted (below); its staged implementation does not require DC-42 or DC-43 to
-wait. The active M2 development order is DC-55, then DC-42, then DC-52, then DC-43, each still requiring
-individual design acceptance before implementation — see [`EXECUTION-ORDER.md`](./EXECUTION-ORDER.md) for
-what each is blocked on and why DC-55 precedes DC-42. DC-44 remains scheduled after M2 and DC-53 is
+wait. The active M2 development order is DC-55, then DC-42, then DC-52, then DC-43. **DC-55 is accepted
+and cleared to start**; the rest still require individual design acceptance before implementation — see
+[`EXECUTION-ORDER.md`](./EXECUTION-ORDER.md) for what each is blocked on and why DC-55 precedes DC-42.
+DC-44 remains scheduled after M2 and DC-53 is
 unscheduled; both have design briefs rather than implementation handoffs. DC-49 is proposed but cannot
 complete while the release lane is parked. DC-45 through DC-48 are accepted preparatory work already
 landed, not competing future increments in this sequence.
@@ -59,9 +59,10 @@ These reviewed designs may govern downstream work but have not yet released.
 | DC-39 | [Signature and Envelope Authority](./accepted/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md) | M1 / 0.18.0; complete at `8f565f2`, post-commit evidence accepted |
 | DC-40 | [State Merkle Root and Format Transition](./accepted/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md) | M1 / 0.18.0; complete at `70c3902`, post-commit evidence accepted |
 | DC-41 | [Integrity Evidence Campaign](./accepted/DC-41-INTEGRITY-EVIDENCE-CAMPAIGN.md) | M2 / 0.19.0; all four stages implemented and accepted (`fb4153c`, `d5bd096`, `540d4db`, `2824695`); descoped platform matrix tracked as DC-49 |
-| DC-50 | [First-Party SHA-256 ROI Decision](./accepted/DC-50-FIRST-PARTY-SHA256-ROI-DECISION.md) | M2; accepted by the project owner 2026-07-28 with the performance question and DC-51 allowlist collision folded in. Decision record pending |
-| DC-51 | [Product Dependency Placement Gate](./accepted/DC-51-PRODUCT-DEPENDENCY-PLACEMENT-GATE.md) | M2; accepted by the project owner 2026-07-28 after the author's re-examination folded in the `[target.*]` and dependency-renaming amendments. Implementation pending |
+| DC-50 | [First-Party SHA-256 ROI Decision](./accepted/DC-50-FIRST-PARTY-SHA256-ROI-DECISION.md) | M2; accepted by the project owner 2026-07-28 with the performance question and DC-51 allowlist collision folded in. **Closed at `4005efb` with a replace decision**; produces no code, so it stays here rather than moving to `done/`. Authorized DC-55 |
+| DC-51 | [Product Dependency Placement Gate](./accepted/DC-51-PRODUCT-DEPENDENCY-PLACEMENT-GATE.md) | M2; accepted by the project owner 2026-07-28 after the author's re-examination folded in the `[target.*]` and dependency-renaming amendments. Implementation complete at `d3e939b`, post-commit review accepted with one blocking finding, repaired at `4c8b7a3` |
 | DC-54 | [Operation Path Validation Symmetry](./accepted/DC-54-OPERATION-PATH-VALIDATION-SYMMETRY.md) | M2; accepted by the project owner 2026-07-28 after the author's design-completion self-critique. Implementation complete at `e8f780a`, architect post-commit review accepted 2026-07-28, no repair required. Opened by the DC-41 stage-4 campaign finding |
+| DC-55 | [First-Party SHA-256 Replacement](./accepted/DC-55-FIRST-PARTY-SHA256-REPLACEMENT.md) | M2; accepted by the project owner 2026-07-28 after design review v1's blocking finding and five notes were resolved in revision. Identity-bearing; design review was author re-examination and the RFC's Status field records that. Implementation pending |
 | DC-45 | [Release Policy Tooling Consolidation](./accepted/DC-45-RELEASE-POLICY-TOOLING-CONSOLIDATION.md) | M2 / 0.19.0; Rust command authoritative, later stability and Python retirement pending |
 | DC-46 | [Workspace Rust 1.85 Compatibility](./accepted/DC-46-WORKSPACE-RUST-1.85-COMPATIBILITY.md) | M2 / before 0.19.0 RC; complete at `0d221af`, post-commit evidence accepted |
 | DC-47 | [Stable Clippy Gate Alignment](./accepted/DC-47-STABLE-CLIPPY-GATE-ALIGNMENT.md) | M2 / before 0.19.0 RC; complete at `ea95e92`, post-commit evidence accepted |

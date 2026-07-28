@@ -1,10 +1,11 @@
 # DC-55 First-Party SHA-256 Replacement - Handoff
 
-**Not yet cleared to start.** DC-55 is at `rfcs/proposed/DC-55-FIRST-PARTY-SHA256-REPLACEMENT.md` and must
-move to `rfcs/accepted/` through its own design review first. This handoff removes every obstacle except
-that gate; preparing it is not authorization.
+**Cleared to start.** DC-55 was accepted by the project owner on 2026-07-28 and now lives at
+`rfcs/accepted/DC-55-FIRST-PARTY-SHA256-REPLACEMENT.md`. No gate remains — begin at Step 0.
 
-**Authored by** the architect (function-designer role).
+**Authored by** the architect (function-designer role). Design review v1 was an author re-examination,
+not an independent review; the RFC's Status field records why and what compensates for it. Review of your
+implementation *is* independent, which is why the evidence note matters more here than usual.
 **Size:** small in diff, high in consequence. Roughly one function body deleted, one manifest line moved,
 one allowlist entry, one test disposition.
 **Touches:** `crates/prikk-hash/`, root `Cargo.toml`, `tools/release-policy/src/boundary/placement.rs`.

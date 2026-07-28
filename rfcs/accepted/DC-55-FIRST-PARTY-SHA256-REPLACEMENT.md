@@ -1,6 +1,7 @@
-# RFC (proposed) - DC-55 First-Party SHA-256 Replacement
+# RFC (accepted) - DC-55 First-Party SHA-256 Replacement
 
-**Status.** Proposed. Requires owner acceptance before implementation may begin.
+**Status.** **Accepted by the project owner on 2026-07-28**, after design review v1 returned one blocking
+finding and five notes and all six were resolved in revision. Implementation may begin.
 
 **Independence of review — recorded deliberately, not silently.** This RFC was authored by the architect
 and reviewed by the architect. Design review v1

@@ -28,7 +28,7 @@ authority, the handoff is what they work from.
 
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
-| 1 | **DC-55** — first-party SHA-256 replacement | Proposed | design review | `handoffs/DC-55-first-party-sha256-replacement/implementation-handoff-v1.md` |
+| 1 | **DC-55** — first-party SHA-256 replacement | **Accepted 2026-07-28; ready for developers** | none — **cleared to start** | `handoffs/DC-55-first-party-sha256-replacement/implementation-handoff-v1.md` |
 | 2 | **DC-42** — performance and maintainability gates | Proposed | design review; **DC-55** (see below) | `handoffs/DC-42-performance-maintainability-gates/implementation-handoff-v1.md` |
 | 3 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
 | 4 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |

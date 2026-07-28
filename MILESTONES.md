@@ -188,12 +188,14 @@ gates.
    code and authorized exactly one successor, DC-55).
 10. DC-51 Product Dependency Placement Gate.
 11. DC-52 Python and Oracle Decommissioning.
-12. DC-55 First-Party SHA-256 Replacement (the implementation DC-50 authorized; identity-bearing).
+12. DC-55 First-Party SHA-256 Replacement (the implementation DC-50 authorized; identity-bearing;
+    **accepted by the project owner 2026-07-28 and cleared for implementation**).
 
 DC-49 through DC-52 were added on 2026-07-28 to give an owner to obligations that previously existed only
 in architect review prose. DC-55 was added the same day for the same reason — DC-50's replace decision
-would otherwise have been an authorization living only in a decision record. They are proposed, not
-scheduled; each requires individual design acceptance.
+would otherwise have been an authorization living only in a decision record. Of these five, DC-50 is
+accepted and closed, DC-51 is accepted and implemented at `d3e939b`, and **DC-55 is accepted and cleared
+for implementation**; DC-49 and DC-52 remain proposed and each requires individual design acceptance.
 DC-49 is the platform matrix descoped from DC-41 and is the only development increment blocked on a
 release-lane event. DC-53 (repository-wide AUTHOR trust verification) is recorded as a post-M2 capability
 gap and is deliberately not part of M2. The recommended sequence across all open work is in

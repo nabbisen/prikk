@@ -3,23 +3,26 @@
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-39, DC-40, DC-41, DC-45, DC-46, DC-47,
-DC-48, DC-50, DC-51, and DC-54
+DC-48, DC-50, DC-51, DC-54, and DC-55
 Current implementation increment: none in flight. DC-35 through DC-40 implementation complete; DC-41 all
 four stages implemented and accepted; DC-51 complete at `d3e939b`, post-commit review accepted with one
 blocking finding, reference-check repair at `4c8b7a3`; DC-54 (operation path validation symmetry) complete
 at `e8f780a`, architect post-commit implementation review v1 accepted 2026-07-28, no repair required.
-Current development increment: none in flight. DC-50 (first-party SHA-256 ROI decision) closed at
-`4005efb` with a **replace** decision; its record is at
-`rfcs/handoffs/DC-50-first-party-sha256-roi-decision/decision-record-v1.md`. DC-50 stays in
-`rfcs/accepted/` rather than `done/` because it ships nothing. It authorized one successor, DC-55
-(first-party SHA-256 replacement), now proposed and awaiting design review. Next increment per
-`rfcs/EXECUTION-ORDER.md` is DC-55, ahead of DC-42 so DC-42 measures NFR-PERF-01 against the primitive
-that will actually ship.
+Current development increment: **DC-55 (first-party SHA-256 replacement), accepted by the project owner
+2026-07-28 and cleared for developers.** Its handoff is at
+`rfcs/handoffs/DC-55-first-party-sha256-replacement/implementation-handoff-v1.md`. DC-55 implements the
+**replace** decision DC-50 closed with at `4005efb`; DC-50's record is at
+`rfcs/handoffs/DC-50-first-party-sha256-roi-decision/decision-record-v1.md`, and DC-50 stays in
+`rfcs/accepted/` rather than `done/` because it ships nothing. DC-55 is sequenced ahead of DC-42 so DC-42
+measures NFR-PERF-01 against the primitive that will actually ship.
 
 Standing process concern (not a defect), first recorded at DC-54: DC-54 reached `accepted/` and `main`
-with no independent review of any kind before commit — the review that would normally have examined its
-crate-boundary move beforehand happened only after. DC-55 is identity-bearing and should not repeat that
-pattern; its design review should be independent.
+with no independent review of any kind before commit. DC-55 is identity-bearing and its design review was
+likewise an author re-examination — design review v1 returned one blocking finding and five notes, all
+resolved by the same author who wrote the design, and the owner directed acceptance on that basis. The gap
+is recorded in the RFC's Status field rather than absorbed silently, and is compensated at the
+implementation axis: DC-55's acceptance criteria mark each item verifiable-from-repository or
+trusted-from-report, so the post-commit review carries real independent weight.
 Current release activation: parked
 Current activated release target: none
 Current governance increment: none (no signer bootstrap or hold started)
