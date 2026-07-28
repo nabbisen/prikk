@@ -1,8 +1,8 @@
 # DC-50 First-Party SHA-256 ROI Decision - Handoff
 
-**Prepared in advance.** Work may **not** begin until `rfcs/proposed/DC-50-…` moves to `rfcs/accepted/`
-through design review.
-**Authored by** the architect (function-designer role). Review remains independent.
+**Cleared to start.** DC-50 was accepted by the project owner on 2026-07-28 and now lives at
+`rfcs/accepted/DC-50-FIRST-PARTY-SHA256-ROI-DECISION.md`. No gate remains — begin the decision record.
+**Authored by** the architect (function-designer role). Review of the resulting record remains independent.
 **Size:** small — this produces a **decision record**, not code.
 **Touches:** one document. **No code, no dependency, no manifest, no CI.**
 
@@ -27,6 +27,18 @@ Total: **10,022 agreeing comparisons against two independent implementations.**
 
 State its limit honestly in the record: a fixed seed means 10,000 *specific* inputs, not 10,000
 independent samples of the space. This is strong evidence, not proof.
+
+## Two things added by the 2026-07-28 re-examination — read before starting
+
+1. **Performance is now a required sixth question, and it is material.** `prikk-hash` is a naive scalar
+   implementation; `sha2` has CPU-accelerated backends. Measured: **~5.8× throughput difference**
+   (64 B: 220 vs 1265 MB/s; 4 KB: 463 vs 2693; 1 MB: 470 vs 2732). SHA-256 is on the hot path for every
+   ObjectId, state root, ref-name path, and signature preimage, and it bears on DC-42's NFR-PERF-01 work.
+   Re-measure on your hardware; do not inherit these numbers.
+2. **A "replace" outcome collides with DC-51's live gate.** `boundary/placement.rs:7` grants `prikk-hash`
+   zero third-party dependencies, so adding `sha2` to its `[dependencies]` fails `boundary-check` closed.
+   The follow-up RFC must carry a reviewed `ALLOWED_THIRD_PARTY` amendment — a release-policy
+   control-surface change. Include that in the replace outcome's cost.
 
 ## The five questions to answer
 

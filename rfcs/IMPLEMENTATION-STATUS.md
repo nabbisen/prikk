@@ -7,7 +7,9 @@ DC-48, and DC-54
 Current implementation increment: DC-54 (operation path validation symmetry) complete at `e8f780a`.
 Architect post-commit implementation review v1 accepted 2026-07-28, no repair required. DC-35 through
 DC-40 implementation complete; DC-41 all four stages implemented and accepted
-Current development increment: DC-51 (product dependency placement gate), accepted by the project owner
+Current development increment: DC-50 (first-party SHA-256 ROI decision), accepted 2026-07-28;
+produces a decision record, not code. DC-51 complete at `d3e939b` with post-commit review accepted and
+its reference-check repair at `4c8b7a3`.
 2026-07-28 and handed to developers. DC-54 complete at `e8f780a` with post-commit review accepted.
 Accepted by the project owner 2026-07-28 after the author's design-completion self-critique resolved a
 blocking dependency-cycle defect in the original draft (see `rfcs/accepted/DC-54-…`'s Status field).

@@ -7,7 +7,7 @@ backlog narrative, `rfcs/IMPLEMENTATION-STATUS.md` the current-state snapshot, a
 authority. This file answers only one question the others do not: **what do I pick up next, and what is it
 waiting on?**
 
-Last reconciled: after DC-54 (`e8f780a`); DC-51 accepted and in flight.
+Last reconciled: after DC-51 repair (`4c8b7a3`); DC-50 accepted and in flight.
 
 ## The two lanes
 
@@ -27,11 +27,10 @@ authority, the handoff is what they work from.
 
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
-| 1 | **DC-51** — product dependency placement gate | **Accepted 2026-07-28; with developers** | none — **in flight** | `handoffs/DC-51-product-dependency-placement-gate/implementation-handoff-v1.md` |
-| 2 | **DC-50** — first-party SHA-256 ROI decision | Proposed | design review (evidence precondition met by DC-41 stage 3) | `handoffs/DC-50-first-party-sha256-roi-decision/implementation-handoff-v1.md` |
-| 3 | **DC-42** — performance and maintainability gates | Proposed | design review | `handoffs/DC-42-performance-maintainability-gates/implementation-handoff-v1.md` |
-| 4 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
-| 5 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
+| 1 | **DC-50** — first-party SHA-256 ROI decision | **Accepted 2026-07-28; with developers** | none — **in flight** | `handoffs/DC-50-first-party-sha256-roi-decision/implementation-handoff-v1.md` |
+| 2 | **DC-42** — performance and maintainability gates | Proposed | design review | `handoffs/DC-42-performance-maintainability-gates/implementation-handoff-v1.md` |
+| 3 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
+| 4 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.
@@ -43,13 +42,15 @@ not a DC-41 completion condition.
 **DC-54 is complete** — accepted, implemented at `e8f780a`, post-commit review accepted 2026-07-28. It
 closed the encode/decode path asymmetry found by DC-41 stage 4's campaign.
 
-**Why this order.** DC-51 leads because it is accepted and already with developers, and because its value
-rises with every development dependency added — stage 3 added `sha2`, stage 4 added `proptest` to two more
-crates, and all of them are currently protected by review discipline alone. DC-50 follows as a small
-decision record whose evidence input already exists. DC-42 is the next substantial increment and carries a
-real requirements decision (NFR-PERF-01 and NFR-PERF-02 must each end implemented **or** explicitly
-amended). DC-52 needs its stability precondition. DC-43 needs security review and is best consumed against
-a settled tooling gate.
+**DC-51 is complete** — accepted `d7d49c6`, implemented `d3e939b`, post-commit review accepted with one
+blocking finding, repaired `4c8b7a3`. Dependency placement is now mechanically enforced.
+
+**Why this order.** DC-50 leads because it is accepted and with developers, and it produces a decision
+record rather than code — its evidence input already exists from DC-41 stage 3. DC-42 is the next
+substantial increment and carries a real requirements decision (NFR-PERF-01 and NFR-PERF-02 must each end
+implemented **or** explicitly amended); note DC-50's measured ~5.8x hashing gap is a direct input to it.
+DC-52 needs its stability precondition. DC-43 needs security review and is best consumed against a
+settled tooling gate.
 
 ## 2. Blocked on a release-lane event
 
