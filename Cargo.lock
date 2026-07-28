@@ -792,6 +792,9 @@ version = "0.17.7"
 [[package]]
 name = "prikk-hash"
 version = "0.17.7"
+dependencies = [
+ "sha2",
+]
 
 [[package]]
 name = "prikk-object"

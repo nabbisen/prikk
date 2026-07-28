@@ -43,6 +43,10 @@ ed25519-dalek               = "2"
 getrandom                   = "0.2"
 rustix                      = { version = "1", features = ["fs"] }
 
+# Testing
+sha2                        = "0.10"
+
+
 [workspace.lints.rust]
 unsafe_code         = "forbid"
 missing_docs        = "warn"

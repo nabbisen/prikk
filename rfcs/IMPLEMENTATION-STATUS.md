@@ -4,9 +4,9 @@ Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-39, DC-40, DC-41, DC-45, DC-46, DC-47,
 and DC-48
-Current implementation increment: none (DC-35 through DC-40 implementation complete; DC-41 stages 1-2
-complete, stages 3-4 pending)
-Current development increment: DC-41 stage-3 implementation (hash differential) next
+Current implementation increment: none (DC-35 through DC-40 implementation complete; DC-41 stages 1-3
+complete, stage 4 pending)
+Current development increment: DC-41 stage-4 implementation (property/fuzz) next
 Current release activation: parked
 Current activated release target: none
 Current governance increment: none (no signer bootstrap or hold started)
