@@ -59,10 +59,15 @@ actually ship. DC-42 then carries its real requirements decision (NFR-PERF-01 an
 end implemented **or** explicitly amended). DC-52 needs its stability precondition. DC-43 needs security
 review and is best consumed against a settled tooling gate.
 
-**DC-55 warrants an independent design review specifically.** It is identity-bearing — every ObjectId,
-state root, ref-name path, and signature preimage derives from the function it replaces — and it is the
-category where a green test suite can mean "consistently changed" rather than "unchanged." See its RFC
-Risks section on the `PRIKK_REGEN=1` regeneration hazard.
+**DC-55's design review was an author re-examination, and that is on record.** It is identity-bearing —
+every ObjectId, state root, ref-name path, and signature preimage derives from the function it replaces —
+and it is the category where a green test suite can mean "consistently changed" rather than "unchanged."
+Design review v1 (`.git-exclude/reviewed/prikk-dc55-design-review-v1.md`) returned a blocking finding and
+five notes, all resolved by the same author who wrote the design; the owner directed on 2026-07-28 that
+revision proceed on that basis. The RFC's Status field records the gap rather than absorbing it into
+routing convention, and the acceptance criteria were rewritten so the identity claim is reproducible by a
+reviewer at **implementation** review, where independence is achievable. See also its RFC Risks section on
+the `PRIKK_REGEN=1` regeneration hazard.
 
 ## 2. Blocked on a release-lane event
 
