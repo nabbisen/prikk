@@ -18,18 +18,22 @@ stranger to this workspace's dependency graph.
 
 ## What changed
 
-1. Root `Cargo.toml`: added `sha2 = "0.10"` to `[workspace.dependencies]`, with a comment noting it is
-   dev-only and not part of the production dependency surface listed above it (`ed25519-dalek`,
-   `getrandom`, `rustix`). **Revision note:** the candidate originally declared `sha2 = "0.10"` directly in
-   `crates/prikk-hash/Cargo.toml`, matching this workspace's stated convention (dev-dependencies declared
-   per-crate; `[workspace.dependencies]` reserved for shared production dependencies) and the pre-existing
-   `tools/release-policy` precedent. That produced a real, if small, technical-debt concern: two
-   independent `"0.10"` declarations (`prikk-hash` and `tools/release-policy`) that could drift out of sync
-   under manual maintenance. Centralizing `prikk-hash`'s copy in `[workspace.dependencies]` fixes that for
-   this crate without touching `tools/release-policy`, which is a separate, already-shipped crate outside
-   this stage's scope — reducing two independent declarations to one real duplicate rather than eliminating
-   duplication entirely. `Cargo.lock`'s resolved `sha2 0.10.9` entry, hash, and package count are unchanged
-   by this revision (confirmed: rebuilt, all three identical to the pre-revision candidate).
+1. Root `Cargo.toml`: added `sha2 = "0.10"` to `[workspace.dependencies]` under a `# Testing` comment.
+   (An earlier revision of this candidate carried a longer comment asserting the entry was "not part of
+   the production dependency surface" — that claim isn't actually enforced by anything: a
+   `[workspace.dependencies]` entry doesn't distinguish dev from production, only where a member crate
+   references it (`[dependencies]` vs `[dev-dependencies]`) does. The comment was corrected to not assert
+   an invariant the table can't guarantee.) **Revision note:** the candidate originally declared
+   `sha2 = "0.10"` directly in `crates/prikk-hash/Cargo.toml`, matching this workspace's stated convention
+   (dev-dependencies declared per-crate; `[workspace.dependencies]` reserved for shared production
+   dependencies) and the pre-existing `tools/release-policy` precedent. That produced a real, if small,
+   technical-debt concern: two independent `"0.10"` declarations (`prikk-hash` and `tools/release-policy`)
+   that could drift out of sync under manual maintenance. Centralizing `prikk-hash`'s copy in
+   `[workspace.dependencies]` fixes that for this crate without touching `tools/release-policy`, which is a
+   separate, already-shipped crate outside this stage's scope — reducing two independent declarations to
+   one real duplicate rather than eliminating duplication entirely. `Cargo.lock`'s resolved `sha2 0.10.9`
+   entry, hash, and package count are unchanged by this revision (confirmed: rebuilt, all three identical
+   to the pre-revision candidate).
 2. `crates/prikk-hash/Cargo.toml`: added
    ```toml
    [dev-dependencies]
