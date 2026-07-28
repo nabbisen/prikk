@@ -13,5 +13,8 @@ repository.workspace    = true
 prikk-error                 = { workspace = true }
 prikk-hash                  = { workspace = true }
 
+[dev-dependencies]
+proptest                    = { workspace = true }
+
 [lints]
 workspace = true

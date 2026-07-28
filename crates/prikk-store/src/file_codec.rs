@@ -116,3 +116,6 @@ pub(crate) fn push_bytes_u64(out: &mut Vec<u8>, value: &[u8]) -> Result<()> {
     out.extend_from_slice(value);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,5 +1,7 @@
 //! Payload tests.
 
+mod proptest_decoders;
+
 use super::{
     AttestationPayload, AttestationStatus, BlobKind, BlobPayload, BlockKind, BlockPayload,
     EditText, MerkleRoot, Operation, OperationKind, PatchPayload, PatchPurpose, PluginResultEntry,

@@ -1,5 +1,7 @@
 //! WAL tests.
 
+mod proptest_framing;
+
 use crate::{RepositoryLayout, Wal};
 
 use crate::fsutil::{TestFailPoint, fail_once_for_test};

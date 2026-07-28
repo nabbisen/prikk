@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a02b241c1e55e5d16faf582f68da0db82bdc2bc6d6846f993baa3f184733ab63 # shrinks to operations = [Operation { op_seq: 1, op_id: None, preconditions: [], kind: RenamePath(RenamePath { node_id: NodeId([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]), old_path: "a", new_path: "com1" }) }]
