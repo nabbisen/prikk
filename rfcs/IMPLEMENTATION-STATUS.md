@@ -2,10 +2,11 @@
 
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none
-Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-39, DC-40, DC-45, DC-46, DC-47,
+Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-39, DC-40, DC-41, DC-45, DC-46, DC-47,
 and DC-48
-Current implementation increment: none (DC-35 through DC-40 implementation complete)
-Current development increment: DC-41 design review
+Current implementation increment: none (DC-35 through DC-40 implementation complete; DC-41 stage-1
+implementation pending)
+Current development increment: DC-41 stage-1 implementation (crash matrix)
 Current release activation: parked
 Current activated release target: none
 Current governance increment: none (no signer bootstrap or hold started)
@@ -54,11 +55,16 @@ repository-format stabilization, and public-preview readiness. The durable corre
   as `8f565f2`; architect post-commit evidence review v1 accepted independent no-hardlink checkout and
   deterministic-archive evidence on 2026-07-22. DC-39 implementation is complete but remains under
   `accepted/` until the 0.18.0 release. No release authority follows from this closure.
-- DC-41 through DC-43 are proposed M2 assurance/distribution RFCs and do not authorize implementation
-  before their individual design reviews are accepted. Their development order is DC-41, then DC-42,
-  then DC-43. DC-41's former DC-36-through-DC-40 implementation dependency is satisfied, so DC-41
-  design review is now active against the accepted committed corrective baseline. Release-specific
-  evidence must still be rerun when an RC is explicitly selected.
+- DC-41 is accepted after design review v1 (Needs changes: B1, B2, B3), design re-review v1 (Needs
+  changes: B4), and design re-review v2 (Accept) on 2026-07-23. It is four independently staged and
+  implementation-reviewed workstreams (crash-matrix audit, hash vectors, hash differential, property/fuzz),
+  all completable inside the parked development lane; no stage may be bundled with another, and none
+  discharges the M1 literal DC-38 reproduction, which is rerun when an RC is explicitly activated. A
+  fifth workstream (platform matrix) was descoped from DC-41's accepted scope into its own future
+  increment, recorded in the RFC's Follow-up section, triggered once the M1 portability-claim doc
+  correction ships. DC-42 and DC-43 remain proposed M2 assurance/distribution RFCs and do not authorize
+  implementation before their individual design reviews are accepted; their development order is DC-42,
+  then DC-43. Release-specific evidence must still be rerun when an RC is explicitly selected.
   DC-45 through DC-48 are preparatory work already landed before M1 release and do not displace that
   remaining sequence. DC-45 was accepted after architect design repair re-review v1 on 2026-07-16.
   Duplicate-name profile

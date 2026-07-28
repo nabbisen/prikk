@@ -20,9 +20,12 @@ the release lane is parked; see `MILESTONES.md` under Baseline and release postu
 
 ## Current Increment
 
-- **DC-41 - integrity evidence campaign (design review next).** The DC-36 through DC-40 corrective
-  implementation baseline is committed and accepted, so DC-41 may now complete design review against
-  those corrected contracts. This development selection does not activate 0.18.0 release preparation.
+- **DC-41 - integrity evidence campaign (accepted; stage-1 implementation next).** Design accepted
+  2026-07-23 after two repair rounds (B1-B4 closed). Four independently staged workstreams — crash-matrix
+  audit, hash vectors, hash differential, property/fuzz — each land as its own implementation review; no
+  stage may be bundled. All four are completable inside the parked development lane. A fifth workstream
+  (platform matrix) was descoped into its own future increment, gated on the M1 portability-claim doc
+  correction; it is recorded, not dropped. This acceptance does not activate 0.18.0 release preparation.
   Release-specific reproduction and gate evidence must still be rerun when an RC is explicitly selected.
 
 - **DC-40 - state Merkle root and format transition (complete at `70c3902`).** The accepted RFC and

@@ -29,16 +29,14 @@ These records are under design review. All proposed RFCs must respect the depend
 
 | ID | Title | Milestone |
 |---|---|---|
-| DC-41 | [Integrity Evidence Campaign](./proposed/DC-41-INTEGRITY-EVIDENCE-CAMPAIGN.md) | M2 / 0.19.0 |
 | DC-42 | [Performance and Maintainability Gates](./proposed/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md) | M2 / 0.19.0 |
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0 |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 
-The active M2 development order is DC-41, then DC-42, then DC-43. The corrective implementation
-baseline is complete, so DC-41 design review may proceed without activating release 0.18.0. That order
-does not make any proposed RFC implementation authority; each still requires individual design
-acceptance. DC-44 remains scheduled after M2. DC-45 through DC-48 are accepted preparatory work already
-landed, not competing future increments in this sequence.
+DC-41 design review is accepted (below); its staged implementation does not require DC-42 or DC-43 to
+wait. The remaining active M2 development order is DC-42, then DC-43, each still requiring individual
+design acceptance before implementation. DC-44 remains scheduled after M2. DC-45 through DC-48 are
+accepted preparatory work already landed, not competing future increments in this sequence.
 
 ## Accepted
 
@@ -53,6 +51,7 @@ These reviewed designs may govern downstream work but have not yet released.
 | DC-38 | [Ref Publication Crash Recovery](./accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) | M1 / 0.18.0; implementation accepted |
 | DC-39 | [Signature and Envelope Authority](./accepted/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md) | M1 / 0.18.0; complete at `8f565f2`, post-commit evidence accepted |
 | DC-40 | [State Merkle Root and Format Transition](./accepted/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md) | M1 / 0.18.0; complete at `70c3902`, post-commit evidence accepted |
+| DC-41 | [Integrity Evidence Campaign](./accepted/DC-41-INTEGRITY-EVIDENCE-CAMPAIGN.md) | M2 / 0.19.0; design accepted, staged implementation pending (stages 1-4); descoped platform matrix recorded as a future increment |
 | DC-45 | [Release Policy Tooling Consolidation](./accepted/DC-45-RELEASE-POLICY-TOOLING-CONSOLIDATION.md) | M2 / 0.19.0; Rust command authoritative, later stability and Python retirement pending |
 | DC-46 | [Workspace Rust 1.85 Compatibility](./accepted/DC-46-WORKSPACE-RUST-1.85-COMPATIBILITY.md) | M2 / before 0.19.0 RC; complete at `0d221af`, post-commit evidence accepted |
 | DC-47 | [Stable Clippy Gate Alignment](./accepted/DC-47-STABLE-CLIPPY-GATE-ALIGNMENT.md) | M2 / before 0.19.0 RC; complete at `ea95e92`, post-commit evidence accepted |

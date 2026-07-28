@@ -69,22 +69,66 @@ fn candidate_atomic_write_failures_are_cleaned_by_retry() -> prikk_error::Result
 }
 
 #[test]
-fn pointer_promotion_failures_retry_to_one_log_record() -> prikk_error::Result<()> {
-    for point in [
-        TestFailPoint::PromotionRename,
-        TestFailPoint::PromotionSourceSync,
-    ] {
-        let root = unique_temp_dir("dc38-pointer-promotion-retry");
-        let layout = RepositoryLayout::init(root.clone())?;
-        let publication = root_publication(&layout, "heads/main")?;
-        let store = RefStore::new(layout.clone());
-        fail_once_for_test(point);
-        assert!(store.publish(&publication).is_err());
-        store.finish_interrupted_publication_for_test(&publication)?;
-        store.finish_interrupted_publication_for_test(&publication)?;
-        assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
-        let _ = std::fs::remove_dir_all(root);
-    }
+fn pointer_rename_failure_leaves_unmoved_pointer_with_candidate_debris() -> prikk_error::Result<()>
+{
+    let root = unique_temp_dir("dc38-pointer-rename-retry");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let publication = root_publication(&layout, "heads/main")?;
+    let store = RefStore::new(layout.clone());
+    fail_once_for_test(TestFailPoint::PromotionRename);
+    assert!(store.publish(&publication).is_err());
+    assert_eq!(store.read_current_ref_state_id("heads/main")?, None);
+    assert!(
+        verify_repository(&layout)?
+            .ref_publication_issues
+            .iter()
+            .any(|issue| issue.code == "PRIKK-VERIFY-REF-CANDIDATE-DEBRIS" && !issue.blocking)
+    );
+    store.finish_interrupted_publication_for_test(&publication)?;
+    store.finish_interrupted_publication_for_test(&publication)?;
+    assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
+    assert_eq!(
+        store.read_current_ref_state_id("heads/main")?,
+        Some(publication.ref_state.object_id())
+    );
+    assert!(
+        verify_repository(&layout)?
+            .ref_publication_issues
+            .is_empty()
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+#[test]
+fn pointer_source_sync_failure_leaves_committed_pointer_ahead_of_log() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("dc38-pointer-source-sync-retry");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let publication = root_publication(&layout, "heads/main")?;
+    let state_id = publication.ref_state.object_id();
+    let store = RefStore::new(layout.clone());
+    fail_once_for_test(TestFailPoint::PromotionSourceSync);
+    assert!(store.publish(&publication).is_err());
+    assert_eq!(
+        store.read_current_ref_state_id("heads/main")?,
+        Some(state_id)
+    );
+    assert_eq!(store.replay_log("heads/main")?.records.len(), 0);
+    assert!(
+        verify_repository(&layout)?
+            .ref_publication_issues
+            .iter()
+            .any(|issue| issue.code == "PRIKK-VERIFY-REF-DIVERGENCE" && issue.blocking)
+    );
+    store.finish_interrupted_publication_for_test(&publication)?;
+    store.finish_interrupted_publication_for_test(&publication)?;
+    assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
+    assert_eq!(
+        store.read_current_ref_state_id("heads/main")?,
+        Some(state_id)
+    );
+    assert!(!verify_repository(&layout)?.has_blocking_ref_publication_issues());
+    let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
 
