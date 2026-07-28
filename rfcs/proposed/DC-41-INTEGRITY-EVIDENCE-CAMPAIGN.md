@@ -1,10 +1,11 @@
 # RFC (proposed) - DC-41 Integrity Evidence Campaign
 
 **Status.** Proposed; DC-36 through DC-40 implementation dependencies are complete. Individual design
-acceptance remains required, and implementation is scheduled after the 0.18.0/M1 release.
+acceptance remains required. Design review is active against the accepted committed corrective baseline;
+release 0.18.0 does not need to be activated or published first.
 **Target milestone.** M2 - post-correction assurance milestone.
-**Schedule position.** First remaining post-M1 increment; this scheduling note is not implementation
-authority.
+**Schedule position.** First active post-correction development increment; this scheduling note is not
+implementation authority. Release-specific evidence must be rerun when an RC is explicitly selected.
 **Tracks.** Architect review N4, N6, and missing-evidence items.
 **Touches.** Failpoint/property/fuzz test infrastructure, hash differential evidence, platform matrix,
 verification claims, and evidence records. Production behavior changes require separate RFCs.

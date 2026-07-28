@@ -5,8 +5,10 @@ Current release candidate: none
 Current accepted increments: DC-34, DC-35, DC-36, DC-37, DC-38, DC-39, DC-40, DC-45, DC-46, DC-47,
 and DC-48
 Current implementation increment: none (DC-35 through DC-40 implementation complete)
-Current governance increment: none (initial DC-35 signer bootstrap is next and separately gated)
-Current design-review increment: none
+Current development increment: DC-41 design review
+Current release activation: parked
+Current activated release target: none
+Current governance increment: none (no signer bootstrap or hold started)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below
 > the current-state lists are retained as historical record (PR-014 through PR-030).
@@ -33,11 +35,13 @@ repository-format stabilization, and public-preview readiness. The durable corre
   format-2 reads, anchored mutation admission, exact legacy cleanup authorization, and the full
   format-1 CLI matrix. Repair re-review v1 accepted it, committed as `70c3902`; post-commit evidence
   review v1 accepted independent checkout/archive and regression evidence on 2026-07-23. DC-40
-  implementation delivery is complete. The signer allowlist remains empty, so the next M1 action is a
-  separately reviewed DC-35 bootstrap governance transaction; it has not started and release work
-  remains blocked. After its public authority/evidence commit, the mandatory 72-hour hold, literal
-  DC-38 stale-pointer/ahead-log reproduction, DC-37-aligned tracked portability/requirements correction,
-  explicit hold-lift ruling, and combined adversarial RC review remain ordered 0.18.0 gates.
+  implementation delivery is complete. The signer allowlist remains empty and fail-closed. Release
+  activation is parked, so no bootstrap transaction or hold has started. If the project owner explicitly
+  selects 0.18.0 preparation, the DC-35 bootstrap, mandatory 72-hour hold, literal DC-38 stale-pointer/
+  ahead-log reproduction, DC-37-aligned tracked portability correction, explicit hold lift, and
+  adversarial RC review become the ordered release gates. Activation first requires one reviewed commit
+  that atomically changes the lane state and exact target in this file, `ROADMAP.md`, and
+  `MILESTONES.md`. A later first-shipping release inherits these gates while the M1 RFCs remain unshipped.
 - DC-39 is accepted after architect design re-review v1 on 2026-07-22. Architect review v1 required
   authority over the public canonical envelope serializer and algorithm-specific signature shape.
   The design repair now adds strict 64-byte
@@ -51,9 +55,10 @@ repository-format stabilization, and public-preview readiness. The durable corre
   deterministic-archive evidence on 2026-07-22. DC-39 implementation is complete but remains under
   `accepted/` until the 0.18.0 release. No release authority follows from this closure.
 - DC-41 through DC-43 are proposed M2 assurance/distribution RFCs and do not authorize implementation
-  before their individual design reviews are accepted. Their remaining post-0.18.0 order is DC-41,
-  then DC-42, then DC-43. DC-41's former DC-36-through-DC-40 implementation dependency is satisfied;
-  its execution still waits for M1 release so the campaign measures released corrected contracts.
+  before their individual design reviews are accepted. Their development order is DC-41, then DC-42,
+  then DC-43. DC-41's former DC-36-through-DC-40 implementation dependency is satisfied, so DC-41
+  design review is now active against the accepted committed corrective baseline. Release-specific
+  evidence must still be rerun when an RC is explicitly selected.
   DC-45 through DC-48 are preparatory work already landed before M1 release and do not displace that
   remaining sequence. DC-45 was accepted after architect design repair re-review v1 on 2026-07-16.
   Duplicate-name profile

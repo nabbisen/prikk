@@ -10,10 +10,45 @@ The reviewed 0.17.7 tree remains suitable for architecture experimentation and c
 It is not approved for production use, repository-format stabilization, or a public-preview readiness
 claim. Successful existing unit and integration gates do not close reproduced crash-state defects.
 
-Feature increments and unrelated documentation releases are frozen through M1. Design records,
-corrective implementation commits, and review packages may proceed during the freeze. The next release
-is prepared only after all M1 completion conditions are met; accepted RFCs are not individually treated
-as release readiness.
+The corrective implementation freeze ended when DC-35 through DC-40 implementation and evidence were
+accepted. Development priority and release readiness now use separate lanes: product/assurance work is
+selected by project value, while release work remains dormant until the project owner explicitly
+activates preparation for a named version. A completed implementation, target version, or listed next
+gate does not itself activate signer bootstrap, a hold, RC preparation, tagging, or publication.
+
+When release preparation is activated, all gates for that target remain binding and release assets must
+be current before publication. Accepted RFCs are not individually treated as release readiness.
+
+### Durable release-lane transition
+
+Release activation is an atomic reviewed planning/status commit, not a conversational instruction. That
+commit must update all three durable authorities with the same values:
+
+- `ROADMAP.md`, under **Release Candidate Increment**: lane state `active` and exact target version;
+- this file, under **Baseline and release posture**: lane state `active` and exact target version;
+- `rfcs/IMPLEMENTATION-STATUS.md`: `Current release activation: active` and
+  `Current activated release target: <exact version>`.
+
+The transition must land before any fingerprint is requested, bootstrap candidate is prepared, or other
+release-lane work begins. Discussion, implementation completion, target-version prose, review
+recommendations, and untracked messages are non-authoritative. While no bootstrap transaction or hold
+has begun, parking or retargeting uses the same reviewed three-authority transition. Once bootstrap
+begins, DC-35's governance, containment, hold, and lift rules govern closure; a planning edit cannot
+erase that state.
+
+Release conditions attach to unshipped accepted increments, not only to a version label. The first
+release that contains an accepted but unshipped increment inherits every release condition and
+lifecycle/status correction attached to that increment. Therefore, activating 0.19.0 while 0.18.0
+remains unpublished would carry forward all M1 gates in addition to applicable M2 gates. Retargeting
+also updates this file, `ROADMAP.md`, and every affected RFC target/status statement in the same reviewed
+change.
+
+If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
+reviewed commit restores agreement.
+
+**Current release lane:** `parked`.
+
+**Current activated release target:** none.
 
 Milestones below are dependency-ordered, not calendar promises. Target versions identify the intended
 release boundary and may change only through an update to this file, `ROADMAP.md`, and affected RFCs.
@@ -92,11 +127,12 @@ DC-38 and DC-40 designs, including the DC-40 companion state-root/format FDD, we
 read admission, anchored mutation authority, exact legacy cleanup authority, and the end-to-end
 format-1 command matrix. Architect repair re-review v1 accepted the repaired candidate, committed as
 `70c3902`; post-commit evidence review v1 accepted independent checkout/archive identity and focused
-plus full regression evidence on 2026-07-23. DC-40 implementation delivery is complete. The next
-separately gated M1 action is the initial DC-35 release-signer bootstrap governance transaction; no
-bootstrap or release action is authorized by this bookkeeping.
+plus full regression evidence on 2026-07-23. DC-40 implementation delivery is complete. Release
+activation is parked: no signer bootstrap, hold, or RC has started. If the project owner explicitly
+activates 0.18.0 preparation, the first release-lane action is the separately reviewed initial DC-35
+release-signer bootstrap governance transaction.
 
-**Remaining M1 gate order:**
+**Conditional M1 first-shipping-release activation order (currently labeled 0.18.0):**
 
 1. Prepare the initial DC-35 signer-bootstrap transaction as an isolated public governance change with
    the required non-secret proof, two distinct accountable approvals, and branch-governance evidence.
@@ -114,9 +150,11 @@ bootstrap or release action is authorized by this bookkeeping.
 6. Only then prepare the combined 0.18.0 RC, refresh all release assets before publication, run the full
    relevant gate and corrective failpoint matrix, and request adversarial RC review.
 
-The bootstrap transaction, hold-lift ruling, and RC are separate authority decisions. Evidence work and
-documentation correction during the hold do not shorten it. The cosmetic unknown/malformed-marker
-diagnostic remains optional and does not block the ordered sequence unless separately selected.
+This sequence is dormant until the reviewed tracked activation transition. It carries forward unchanged
+if a later target first ships the unshipped M1 increments. The bootstrap transaction, hold-lift ruling,
+and RC are separate authority decisions. Evidence work and documentation correction during the hold do
+not shorten it. The cosmetic unknown/malformed-marker diagnostic remains optional and does not block the
+ordered sequence unless separately selected.
 
 **Release condition:** all five blocking findings are closed by accepted implementation review; the
 reproduced ref failure no longer succeeds; the state-root and signature vectors are pinned; format-1/
@@ -126,7 +164,10 @@ review accepts the combined state. No production or public-preview claim follows
 
 ## M2 - Assurance and distribution baseline
 
-**Release target:** 0.19.0, subject to M1 release and design review.
+**Development status:** active at DC-41 design review against the accepted corrective baseline.
+
+**Eventual release target:** 0.19.0, subject to explicit release activation and all applicable release
+gates.
 
 **RFCs:**
 
@@ -178,16 +219,17 @@ deterministic archive, clean checkout/extraction, full gate, and committed-ident
 was accepted after final architect ruling v1 on 2026-07-21. The Rust command is governance-
 authoritative. Python and the frozen oracle remain required through the first Rust-gated 0.19.0 release
 and an accepted later-commit stability rerun.
-The remaining M2 execution order after the 0.18.0 release is DC-41, then DC-42, then DC-43. This is
+The remaining M2 development order is DC-41, then DC-42, then DC-43. This is
 program sequencing, not implementation authority: each remains proposed until its individual design
 review is accepted. DC-41's former DC-36-through-DC-40 implementation dependency is satisfied; it
-starts after M1 release so its evidence measures the released corrected contracts. DC-42 follows that
-evidence baseline; read-only measurement before then does not authorize optimization or broad source
-moves. DC-43 follows DC-42, requires security/architect design review, and must consume the stable Rust
-release-policy gate rather than extend the retained Python oracle. DC-43 completion remains required
-before any public-preview reconsideration. Separately authorized read-only DC-42 measurement or
-credential-free DC-43 policy drafting may be prepared earlier, but proposed RFCs never authorize
-implementation.
+may start now against the accepted committed baseline. Release-specific reproduction and gate evidence
+must be rerun when an RC is explicitly selected; development evidence does not silently become RC
+evidence. DC-42 follows that evidence baseline; read-only measurement before then does not authorize
+optimization or broad source moves. DC-43 follows DC-42, requires security/architect design review, and
+must consume the stable Rust release-policy gate rather than extend the retained Python oracle. DC-43
+completion remains required before any public-preview reconsideration. Separately authorized read-only
+DC-42 measurement or credential-free DC-43 policy drafting may be prepared earlier, but proposed RFCs
+never authorize implementation.
 DC-46 design selected restoration of the declared Rust 1.85 locked-workspace contract through three
 bounded source rewrites, focused trust regressions, and pinned locked CI gates. Architect design
 rereview v1 accepted it on 2026-07-21. Architect command-grammar amendment QA v1 then authorized five
@@ -242,10 +284,11 @@ retry fixtures, at least one migration rehearsal, and independent architecture a
 suitability remains no-go before M3 or a superseding reviewed decision; public-preview consideration
 after M2 remains a separate narrower ruling.
 
-## Deferred during the corrective program
+## Deferred until selected
 
 - Merge execution, branch lifecycle expansion, remotes/sync, rollback publication, plugins/audit, and
-  key lifecycle features remain frozen.
+  key lifecycle features are no longer frozen solely by release status. They remain unselected and
+  require design-first prioritization.
 - TASK-14 through TASK-16 documentation themes remain queued. TASK-13 is the narrow exception because
   compatibility and release rules are required for the corrective format transition.
 - Any newly discovered correctness or identity defect interrupts this sequence and receives its own

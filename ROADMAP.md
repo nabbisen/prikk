@@ -4,7 +4,26 @@ This repository follows the design-first Prikk roadmap. Change history is tracke
 the corrective release sequence is in `MILESTONES.md`, and current-state detail is in
 `rfcs/IMPLEMENTATION-STATUS.md`.
 
+Development priority and release readiness are separate planning lanes. The project owner selects the
+active development theme by product value. Release readiness remains dormant until the project owner
+explicitly activates preparation for a named version; implementation completion, a listed release gate,
+or the word "next" does not activate signer, hold, RC, tag, or publication work.
+
+Activation requires a reviewed tracked commit that atomically records `active` plus the exact version in
+this file, `MILESTONES.md`, and `rfcs/IMPLEMENTATION-STATUS.md`. Until that commit lands, discussion,
+review recommendations, roadmap targets, and untracked messages leave the lane parked and cannot trigger
+a fingerprint request. Before bootstrap begins, parking or retargeting uses the same reviewed three-file
+transition; after bootstrap begins, DC-35 governance and hold rules control closure. A later target cannot
+bypass an unpublished increment: the first release containing any still-unshipped accepted RFC inherits
+all of that RFC's release conditions and lifecycle/status corrections. If the three authorities disagree,
+the release lane is parked; see `MILESTONES.md` under Baseline and release posture.
+
 ## Current Increment
+
+- **DC-41 - integrity evidence campaign (design review next).** The DC-36 through DC-40 corrective
+  implementation baseline is committed and accepted, so DC-41 may now complete design review against
+  those corrected contracts. This development selection does not activate 0.18.0 release preparation.
+  Release-specific reproduction and gate evidence must still be rerun when an RC is explicitly selected.
 
 - **DC-40 - state Merkle root and format transition (complete at `70c3902`).** The accepted RFC and
   companion state-root/format FDD define the remaining M1 identity correction: a canonical clean-tree
@@ -155,21 +174,22 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
   Python and the frozen oracle through the first Rust-gated 0.19.0 release, obtain accepted later-commit
   stability evidence, and complete the separately reviewed Python/oracle retirement or consolidation
   events.
-- **M1 remains active.** DC-35 implementation is accepted and committed, but the signer allowlist
-  remains empty and fail-closed. DC-39 and DC-40 implementation and post-commit evidence are complete.
-  The remaining M1 sequence is: complete the separately reviewed initial release-signer bootstrap
-  governance transaction under DC-35; observe its mandatory public 72-hour hold; during that hold,
-  re-run the literal stale-pointer/ahead-log crash reproduction against DC-38 and correct the public
-  README and durable portability/requirements claims to match DC-37's Linux-only mutation boundary;
-  obtain an explicit
-  architect/security hold-lift ruling; then prepare and review the combined 0.18.0 release candidate.
-  None of those gates has been implied or authorized by DC-40 acceptance. The cosmetic
+- **M1 corrective implementation is complete; 0.18.0 release activation is parked.** The signer
+  allowlist remains empty and fail-closed. No bootstrap transaction, hold, or RC is active. If the
+  project owner explicitly activates 0.18.0 preparation, its conditional sequence is: complete the
+  separately reviewed DC-35 signer bootstrap; observe the mandatory public 72-hour hold; rerun the
+  literal DC-38 stale-pointer/ahead-log reproduction and correct durable portability claims; obtain an
+  explicit architect/security hold-lift ruling; then prepare and review the combined RC. None of those
+  gates blocks ordinary design-first development against the accepted corrective baseline. The cosmetic
   unknown/malformed-marker diagnostic (`unsupported format version: 0`) is a non-blocking pre-RC
   correction candidate, not a prerequisite unless selected.
 
 ## Release Candidate Increment
 
+- Release lane state: **parked**.
+- Activated release target: **none**.
 - No active release candidate is selected after the 0.17.7 release.
+- No signer bootstrap, hold clock, RC, tag, or publication action is selected.
 
 ## Last Released Increment
 
@@ -315,22 +335,23 @@ the corrective release sequence is in `MILESTONES.md`, and current-state detail 
 
 1. **M0 architecture ratification (complete):** DC-34 decided publication and signature identity
    authority as a no-release design gate.
-2. **M1 corrective storage and identity baseline (target 0.18.0):** DC-35 through DC-40 implementation
-   is complete but remains under `accepted/` until the combined release. The remaining work is the
-   DC-35 signer-bootstrap governance transaction and hold, literal DC-38 B1 crash reproduction,
-   DC-37-aligned durable portability claim correction, hold-lift ruling, and adversarial release-candidate
-   review. No intermediate feature or documentation release is planned.
-3. **M2 assurance and distribution baseline (target 0.19.0):** DC-45 through DC-48 preparatory tooling
-   and compatibility work landed before M1 release and is not the remaining M2 execution sequence.
-   After 0.18.0, proceed in order through DC-41 adversarial integrity evidence, DC-42 performance and
-   maintainability gates, and DC-43 release security and distribution controls. Each proposed RFC still
-   requires its own design acceptance before implementation. DC-43 remains required before any
-   public-preview reconsideration.
+2. **M1 corrective storage and identity baseline (implementation complete; 0.18.0 release parked):**
+   DC-35 through DC-40 remain under `accepted/` until they ship. Signer bootstrap, hold, literal DC-38
+   reproduction, portability correction, hold lift, and RC review are conditional release gates that
+   activate only through the reviewed tracked release-lane transition. If a later version is selected
+   before 0.18.0 ships, that first shipping release inherits every M1 gate and lifecycle correction.
+3. **M2 assurance and distribution baseline (development active; eventual target 0.19.0):** DC-45
+   through DC-48 preparatory tooling and compatibility work already landed. Proceed in order through
+   DC-41 adversarial integrity evidence, DC-42 performance and maintainability gates, and DC-43 release
+   security and distribution controls against the accepted corrective baseline. Each proposed RFC still
+   requires its own design acceptance before implementation. Release-specific evidence is rerun when an
+   RC is explicitly selected, and DC-43 remains required before any public-preview reconsideration.
 4. **M3 migration and recoverable backup (release target unassigned):** DC-44 owns NFR-REL-03,
    verifiable backup/restore, and migration exercises that are explicitly outside DC-40 and M2.
 5. Branch copy/fork, branch switching, tags/remotes, rollback refs, conflict/inverse evidence,
-   rollback authorization, audit/plugin, key lifecycle, sync, and unrelated documentation themes remain
-   frozen through M1.
+   rollback authorization, audit/plugin, key lifecycle, sync, and unrelated documentation themes are no
+   longer frozen solely by an unpublished M1 release. They remain unselected and require normal
+   design-first prioritization before implementation.
 
 Final feature scope remains governed by accepted RFCs, genuine gating FDDs when present, and the
 current-state reference docs.

@@ -125,6 +125,22 @@ differs from a fixture's expected outcome. It leaves the worktree unchanged.
 
 ## Required Release Workflow
 
+This workflow is dormant until the project owner explicitly activates preparation for a named release.
+Activation requires a reviewed tracked commit that atomically changes the release lane from `parked` to
+`active` and records the same exact target version in `ROADMAP.md`, `MILESTONES.md`, and
+`rfcs/IMPLEMENTATION-STATUS.md`. That commit must land before requesting a fingerprint or preparing a
+bootstrap candidate. Discussion, implementation completion, roadmap targets, review recommendations,
+and untracked messages do not activate release work. Before bootstrap begins, parking or retargeting
+uses the same reviewed three-file transition; after bootstrap begins, the governance and hold rules
+below control closure.
+
+Release conditions attach to unshipped accepted increments. If a later version first ships an increment,
+it inherits all release gates and lifecycle/status corrections assigned to that increment. Retargeting
+must update the three schedule/status authorities and affected RFC target/status text together. Ordinary
+design-first development may continue while the release lane is parked; once activated, every applicable
+step below remains binding. If the three authorities disagree, the release lane is parked; see
+`MILESTONES.md` under Baseline and release posture.
+
 1. Obtain design and implementation acceptance in isolated commits.
 2. Complete any signer bootstrap/change/recovery as an earlier isolated reviewed transaction. Confirm
    that no release hold remains active.
