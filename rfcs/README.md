@@ -29,7 +29,8 @@ These records are under design review. All proposed RFCs must respect the depend
 
 | ID | Title | Milestone |
 |---|---|---|
-| DC-56 | [Commit Full-Tree Scan Compliance](./proposed/DC-56-COMMIT-FULL-TREE-SCAN-COMPLIANCE.md) | Closes **missed product M1** gate NFR-PERF-01 |
+| DC-59 | [Commit Benchmark Harness](./proposed/DC-59-COMMIT-BENCHMARK-HARNESS.md) | Produces NFR-PERF-01's named evidence artifact; precondition for DC-56 |
+| DC-56 | [Commit Full-Tree Scan Compliance](./proposed/DC-56-COMMIT-FULL-TREE-SCAN-COMPLIANCE.md) | Closes **missed product M1** gate NFR-PERF-01; needs DC-59 |
 | DC-57 | [Active-Patch Thresholds](./proposed/DC-57-ACTIVE-PATCH-THRESHOLDS.md) | Closes **missed product M3** gate NFR-PERF-02 |
 | DC-58 | [Source-Structure Audit](./proposed/DC-58-SOURCE-STRUCTURE-AUDIT.md) | Corrective M2 maintainability |
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0 |
@@ -41,7 +42,7 @@ These records are under design review. All proposed RFCs must respect the depend
 DC-41 design review is accepted (below); its staged implementation does not require DC-42 or DC-43 to
 wait. **DC-55 is complete** (below). **DC-42 was superseded** on 2026-07-29 into DC-56, DC-57, and DC-58
 after design review found it bundled three unrelated increments; it is in `archive/`. The remaining
-development order is DC-56, DC-57, DC-58, then DC-52, then DC-43 — each still requiring individual design
+development order is DC-59, DC-56, DC-57, DC-58, then DC-52, then DC-43 — each still requiring individual design
 acceptance before implementation. See
 [`EXECUTION-ORDER.md`](./EXECUTION-ORDER.md) for what each is blocked on. DC-44 remains scheduled after M2
 and DC-53 is unscheduled; both have design briefs rather than implementation handoffs. DC-49 is proposed

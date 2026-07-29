@@ -15,8 +15,11 @@ implementation review v1 returned one blocking finding; repaired and accepted at
 the outgoing first-party implementation retained test-only as the differential's permanent independent
 reference. DC-55 implemented the **replace** decision DC-50 closed with at `4005efb`; DC-50's record is at
 `rfcs/handoffs/DC-50-first-party-sha256-roi-decision/decision-record-v1.md`, and DC-50 stays in
-`rfcs/accepted/` rather than `done/` because it ships nothing. Next increments per
-`rfcs/EXECUTION-ORDER.md` are DC-56 and DC-57, each gated on its design review. DC-42 was superseded on
+`rfcs/accepted/` rather than `done/` because it ships nothing. Next increment per
+`rfcs/EXECUTION-ORDER.md` is DC-59 (commit benchmark harness), split from DC-56 at design review because
+this workspace has no benchmark infrastructure and DC-56 cannot decide compliance without a cost curve.
+DC-56 then follows, gated additionally on an owner ruling over whether NFR-PERF-01 bounds steady-state
+commit cost or every commit — unsettled in the requirement text and in tension with NFR-PERF-04. DC-42 was superseded on
 2026-07-29 into DC-56, DC-57, and DC-58; its design review found it bundled three unrelated increments and
 that both performance requirements it carried are **missed product gates** rather than scheduled work —
 NFR-PERF-01 at product M1, NFR-PERF-02 at product M3. See `MILESTONES.md` § "Two milestone schemes"; the
@@ -88,7 +91,7 @@ repository-format stabilization, and public-preview readiness. The durable corre
   increment, recorded in the RFC's Follow-up section, triggered once the M1 portability-claim doc
   correction ships. DC-56, DC-57, DC-58 (superseding DC-42, archived 2026-07-29) and DC-43 remain proposed
   and do not authorize implementation before their individual design reviews are accepted; their
-  development order is DC-56, DC-57, DC-58, then DC-43. Release-specific evidence must still be rerun when an RC is explicitly selected.
+  development order is DC-59, DC-56, DC-57, DC-58, then DC-43. Release-specific evidence must still be rerun when an RC is explicitly selected.
   DC-45 through DC-48 are preparatory work already landed before M1 release and do not displace that
   remaining sequence. DC-45 was accepted after architect design repair re-review v1 on 2026-07-16.
   Duplicate-name profile

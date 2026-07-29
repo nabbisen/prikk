@@ -96,7 +96,7 @@ When citing a gate, name the scheme: "product M3" or "corrective M2", never a ba
 | Merge status docs contradict released CLI | Non-blocking | DC-35 | M1 |
 | Public portability claim exceeds Linux-only mutation support | Release-claim mismatch | DC-37 boundary plus tracked portability/requirements correction | M1 |
 | Crash/fuzz/platform and hash evidence incomplete | Assurance blocker | DC-41 | M2 |
-| Full-tree commit scan versus NFR-PERF-01 | **Missed product gate**, carried | DC-56 (was DC-42): implement or obtain explicit requirements amendment | Product **M1**; carried into corrective M2 |
+| Full-tree commit scan versus NFR-PERF-01 | **Missed product gate**, carried | DC-59 (evidence), then DC-56 (decision): implement, amend, or hand to a product RFC | Product **M1**; carried into corrective M2 |
 | Active-Patch warning 800 / hard bound 1000 from NFR-PERF-02 | **Missed product gate**, carried | DC-57 (was DC-42): implement or obtain explicit requirements amendment | Product **M3**; carried into corrective M2 |
 | Source/test structure gates absent | Maintainability risk | DC-58 (was DC-42) | Corrective M2 |
 | Vulnerability reporting, SBOM, provenance absent | Distribution risk | DC-43 | M2 |
@@ -206,8 +206,10 @@ gates.
 **RFCs:**
 
 1. DC-41 Integrity Evidence Campaign.
-2. DC-56 Commit Full-Tree Scan Compliance, DC-57 Active-Patch Thresholds, DC-58 Source-Structure Audit
-   (superseding DC-42, archived 2026-07-29). DC-56 and DC-57 close missed **product** gates.
+2. DC-59 Commit Benchmark Harness, DC-56 Commit Full-Tree Scan Compliance, DC-57 Active-Patch Thresholds,
+   DC-58 Source-Structure Audit (DC-56/57/58 superseding DC-42, archived 2026-07-29; DC-59 split from
+   DC-56 at design review). DC-56 and DC-57 close missed **product** gates; DC-59 produces NFR-PERF-01's
+   named evidence artifact.
 3. DC-43 Release Security and Distribution Controls.
 4. DC-45 Release Policy Tooling Consolidation.
 5. DC-46 Workspace Rust 1.85 Compatibility.
@@ -273,7 +275,7 @@ deterministic archive, clean checkout/extraction, full gate, and committed-ident
 was accepted after final architect ruling v1 on 2026-07-21. The Rust command is governance-
 authoritative. Python and the frozen oracle remain required through the first Rust-gated 0.19.0 release
 and an accepted later-commit stability rerun.
-The remaining M2 development order is DC-41, then DC-56/DC-57/DC-58, then DC-43. This is
+The remaining M2 development order is DC-41, then DC-59/DC-56/DC-57/DC-58, then DC-43. This is
 program sequencing, not implementation authority: each remains proposed until its individual design
 review is accepted. DC-41's former DC-36-through-DC-40 implementation dependency is satisfied; it
 may start now against the accepted committed baseline. Release-specific reproduction and gate evidence

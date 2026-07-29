@@ -29,11 +29,12 @@ from. DC-56, DC-57, and DC-58 are newly split from DC-42 and their handoffs foll
 
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
-| 1 | **DC-56** — commit full-tree scan compliance (NFR-PERF-01) | Proposed | design review | handoff pending design acceptance |
-| 2 | **DC-57** — active-Patch thresholds (NFR-PERF-02) | Proposed | design review | handoff pending design acceptance |
-| 3 | **DC-58** — source-structure audit | Proposed | design review | handoff pending design acceptance |
-| 4 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
-| 5 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
+| 1 | **DC-59** — commit benchmark harness | Proposed | design review | handoff pending design acceptance |
+| 2 | **DC-56** — commit full-tree scan compliance (NFR-PERF-01) | Proposed | design review; **DC-59's report**; **owner ruling on the NFR-PERF-01 reading** | handoff pending design acceptance |
+| 3 | **DC-57** — active-Patch thresholds (NFR-PERF-02) | Proposed | design review | handoff pending design acceptance |
+| 4 | **DC-58** — source-structure audit | Proposed | design review | handoff pending design acceptance |
+| 5 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
+| 6 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.
@@ -64,9 +65,18 @@ permanent independent reference.
 **DC-58** (source-structure audit). Design review found it bundled three unrelated increments against
 standing rule 2. Never implemented. See `rfcs/archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md`.
 
-**Why this order.** DC-56 and DC-57 lead because both close **missed product gates** — NFR-PERF-01 at
-product M1, NFR-PERF-02 at product M3 — not scheduled work. DC-55 having landed first means DC-56 measures
-against the hashing primitive that actually ships. DC-58 is mechanical and can run in parallel or after.
+**Why this order.** DC-59 leads because DC-56 cannot decide without its cost curve, and because it closes
+a standing gap of its own: this workspace has no benchmark infrastructure, so every performance figure
+produced so far — DC-50's and DC-55's included — is unreproducible from the repository. DC-56 and DC-57
+close **missed product gates** (NFR-PERF-01 at product M1, NFR-PERF-02 at product M3), not scheduled work.
+DC-55 having landed first means DC-59 measures against the hashing primitive that actually ships. DC-58 is
+mechanical and can run in parallel or after.
+
+**DC-56 carries an owner decision that must not be resolved by implementing.** NFR-PERF-01 forbids a
+full-tree scan; NFR-PERF-04 requires caches to be rebuildable and never authoritative. A rebuildable index
+must rebuild by scanning, so a cache-based design complies only warm. Whether the requirement bounds
+steady-state cost or every commit is unsettled in its text and is the owner's call, to be taken with
+DC-59's curve in hand. See DC-56 §2.
 DC-52 needs its stability precondition. DC-43 needs security review and is best consumed against a settled
 tooling gate.
 
