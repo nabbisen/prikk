@@ -53,6 +53,35 @@ reviewed commit restores agreement.
 Milestones below are dependency-ordered, not calendar promises. Target versions identify the intended
 release boundary and may change only through an update to this file, `ROADMAP.md`, and affected RFCs.
 
+## Two milestone schemes — resolve gate labels here first
+
+**This file's `M0`–`M3` are the corrective scheme. Requirement gate labels in
+`specs/prikk-non-functional-requirements-v1.1.md` are NOT.** They belong to the original product scheme in
+`specs/prikk-roadmap-milestones-v1.1.md`, which reuses the labels `M0`–`M3` with different meanings and
+continues to `M7`.
+
+Recorded 2026-07-29 by DC-42 design review v2 (finding B4). The collision had already caused a careful
+architect review to misread a requirement gate and conclude that overdue work was not yet due. Every one
+of the 38 NFR IDs carries such a label, so the error is available in both directions — it can make overdue
+work look scheduled, or scheduled work look overdue.
+
+| Label | Product scheme (what NFR gates mean) | Delivered? | Corrective scheme (this file) |
+|---|---|---|---|
+| M0 | Design Lock and Safe Scaffolding | yes | Architecture ratification |
+| M1 | Core Storage and Identity | capability yes — **but NFR-PERF-01 unmet** | Corrective storage and identity baseline |
+| M2 | Minimal Patch Engine | yes | Assurance and distribution baseline |
+| M3 | Block DAG and Checkout | capability yes — **but NFR-PERF-02 unmet** | Migration and recoverable backup |
+| M4 | WASM Plugin and Audit | no | — |
+| M5 | Sync and Quarantine | no | — |
+| M6 | Alpha Hardening | no | — |
+| M7 | Public Preview Readiness | no | — |
+
+The corrective scheme is a remediation track laid over the product scheme after the independent
+architecture review; it does not replace it. A requirement gated at product M1 is **overdue today**
+regardless of where the corrective track has reached.
+
+When citing a gate, name the scheme: "product M3" or "corrective M2", never a bare "M3".
+
 ## Finding ownership
 
 | Review subject | Severity | Owning RFC | Milestone |
@@ -67,9 +96,9 @@ release boundary and may change only through an update to this file, `ROADMAP.md
 | Merge status docs contradict released CLI | Non-blocking | DC-35 | M1 |
 | Public portability claim exceeds Linux-only mutation support | Release-claim mismatch | DC-37 boundary plus tracked portability/requirements correction | M1 |
 | Crash/fuzz/platform and hash evidence incomplete | Assurance blocker | DC-41 | M2 |
-| Full-tree commit scan versus NFR-PERF-01 | Requirement gap | DC-42: implement or obtain explicit requirements amendment | M2 |
-| Active-Patch warning 800 / hard bound 1000 from NFR-PERF-02 | Requirement gap | DC-42: implement or obtain explicit requirements amendment | M2 |
-| Source/test structure gates absent | Maintainability risk | DC-42 | M2 |
+| Full-tree commit scan versus NFR-PERF-01 | **Missed product gate**, carried | DC-56 (was DC-42): implement or obtain explicit requirements amendment | Product **M1**; carried into corrective M2 |
+| Active-Patch warning 800 / hard bound 1000 from NFR-PERF-02 | **Missed product gate**, carried | DC-57 (was DC-42): implement or obtain explicit requirements amendment | Product **M3**; carried into corrective M2 |
+| Source/test structure gates absent | Maintainability risk | DC-58 (was DC-42) | Corrective M2 |
 | Vulnerability reporting, SBOM, provenance absent | Distribution risk | DC-43 | M2 |
 | Mixed release-policy tooling ownership and custom schema evaluator | Tooling debt | DC-45 | M2 |
 | Declared Rust 1.85 minimum does not pass the locked product workspace | Compatibility debt | DC-46 | M2 |
@@ -177,7 +206,8 @@ gates.
 **RFCs:**
 
 1. DC-41 Integrity Evidence Campaign.
-2. DC-42 Performance and Maintainability Gates.
+2. DC-56 Commit Full-Tree Scan Compliance, DC-57 Active-Patch Thresholds, DC-58 Source-Structure Audit
+   (superseding DC-42, archived 2026-07-29). DC-56 and DC-57 close missed **product** gates.
 3. DC-43 Release Security and Distribution Controls.
 4. DC-45 Release Policy Tooling Consolidation.
 5. DC-46 Workspace Rust 1.85 Compatibility.
@@ -243,16 +273,16 @@ deterministic archive, clean checkout/extraction, full gate, and committed-ident
 was accepted after final architect ruling v1 on 2026-07-21. The Rust command is governance-
 authoritative. Python and the frozen oracle remain required through the first Rust-gated 0.19.0 release
 and an accepted later-commit stability rerun.
-The remaining M2 development order is DC-41, then DC-42, then DC-43. This is
+The remaining M2 development order is DC-41, then DC-56/DC-57/DC-58, then DC-43. This is
 program sequencing, not implementation authority: each remains proposed until its individual design
 review is accepted. DC-41's former DC-36-through-DC-40 implementation dependency is satisfied; it
 may start now against the accepted committed baseline. Release-specific reproduction and gate evidence
 must be rerun when an RC is explicitly selected; development evidence does not silently become RC
-evidence. DC-42 follows that evidence baseline; read-only measurement before then does not authorize
-optimization or broad source moves. DC-43 follows DC-42, requires security/architect design review, and
+evidence. DC-56 follows that evidence baseline; read-only measurement before then does not authorize
+optimization or broad source moves. DC-43 follows them, requires security/architect design review, and
 must consume the stable Rust release-policy gate rather than extend the retained Python oracle. DC-43
 completion remains required before any public-preview reconsideration. Separately authorized read-only
-DC-42 measurement or credential-free DC-43 policy drafting may be prepared earlier, but proposed RFCs
+DC-56 measurement or credential-free DC-43 policy drafting may be prepared earlier, but proposed RFCs
 never authorize implementation.
 DC-46 design selected restoration of the declared Rust 1.85 locked-workspace contract through three
 bounded source rewrites, focused trust regressions, and pinned locked CI gates. Architect design

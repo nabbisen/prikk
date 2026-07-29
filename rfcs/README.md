@@ -29,7 +29,9 @@ These records are under design review. All proposed RFCs must respect the depend
 
 | ID | Title | Milestone |
 |---|---|---|
-| DC-42 | [Performance and Maintainability Gates](./proposed/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md) | M2 / 0.19.0 |
+| DC-56 | [Commit Full-Tree Scan Compliance](./proposed/DC-56-COMMIT-FULL-TREE-SCAN-COMPLIANCE.md) | Closes **missed product M1** gate NFR-PERF-01 |
+| DC-57 | [Active-Patch Thresholds](./proposed/DC-57-ACTIVE-PATCH-THRESHOLDS.md) | Closes **missed product M3** gate NFR-PERF-02 |
+| DC-58 | [Source-Structure Audit](./proposed/DC-58-SOURCE-STRUCTURE-AUDIT.md) | Corrective M2 maintainability |
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0 |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
@@ -37,8 +39,10 @@ These records are under design review. All proposed RFCs must respect the depend
 | DC-53 | [Repository-Wide AUTHOR Trust Verification](./proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md) | Post-M2, unscheduled |
 
 DC-41 design review is accepted (below); its staged implementation does not require DC-42 or DC-43 to
-wait. **DC-55 is complete** (below), so the remaining M2 development order is DC-42, then DC-52, then
-DC-43 — each still requiring individual design acceptance before implementation. See
+wait. **DC-55 is complete** (below). **DC-42 was superseded** on 2026-07-29 into DC-56, DC-57, and DC-58
+after design review found it bundled three unrelated increments; it is in `archive/`. The remaining
+development order is DC-56, DC-57, DC-58, then DC-52, then DC-43 — each still requiring individual design
+acceptance before implementation. See
 [`EXECUTION-ORDER.md`](./EXECUTION-ORDER.md) for what each is blocked on. DC-44 remains scheduled after M2
 and DC-53 is unscheduled; both have design briefs rather than implementation handoffs. DC-49 is proposed
 but cannot complete while the release lane is parked. DC-45 through DC-48 are accepted preparatory work
@@ -139,6 +143,7 @@ These records currently live under `archive/`.
 | ID | Title | Status |
 |---|---|---|
 | DC-09 | [Phase 4 Node Model and Operation Application](./archive/DC-09-PHASE-4-NODE-MODEL.md) | Superseded / partially implemented historical umbrella. |
+| DC-42 | [Performance and Maintainability Gates](./archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md) | Superseded 2026-07-29 into DC-56, DC-57, DC-58. Never implemented; design review found it bundled three unrelated increments. |
 
 ## Handoffs
 

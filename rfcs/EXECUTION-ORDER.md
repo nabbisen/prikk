@@ -7,8 +7,9 @@ backlog narrative, `rfcs/IMPLEMENTATION-STATUS.md` the current-state snapshot, a
 authority. This file answers only one question the others do not: **what do I pick up next, and what is it
 waiting on?**
 
-Last reconciled: after DC-55 completion (`753ebab`), implementation re-review accepted 2026-07-29. Next
-increment is DC-42; the release-lane decision point sits after it per the owner's 2026-07-29 direction.
+Last reconciled: 2026-07-29, after DC-55 completion (`753ebab`) and the DC-42 design review, which
+superseded DC-42 into DC-56, DC-57, and DC-58. The release-lane decision point sits after the performance
+work per the owner's 2026-07-29 direction.
 
 ## The two lanes
 
@@ -23,14 +24,16 @@ architect recommendation is authoritative for it.
 Ordered by recommended sequence. The project owner may reorder by product value; the **Blocked by** column
 is what actually constrains order.
 
-Every handoff below is **already written**. Hand the developer the handoff, not the RFC — the RFC is scope
-authority, the handoff is what they work from.
+Hand the developer the handoff, not the RFC — the RFC is scope authority, the handoff is what they work
+from. DC-56, DC-57, and DC-58 are newly split from DC-42 and their handoffs follow design acceptance.
 
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
-| 1 | **DC-42** — performance and maintainability gates | Proposed | design review | `handoffs/DC-42-performance-maintainability-gates/implementation-handoff-v1.md` |
-| 2 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
-| 3 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
+| 1 | **DC-56** — commit full-tree scan compliance (NFR-PERF-01) | Proposed | design review | handoff pending design acceptance |
+| 2 | **DC-57** — active-Patch thresholds (NFR-PERF-02) | Proposed | design review | handoff pending design acceptance |
+| 3 | **DC-58** — source-structure audit | Proposed | design review | handoff pending design acceptance |
+| 4 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
+| 5 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.
@@ -57,11 +60,20 @@ at re-review v1 on 2026-07-29, verified by fresh clone with a negative control. 
 runs on `sha2`, with the outgoing first-party implementation retained test-only as the differential's
 permanent independent reference.
 
-**Why this order.** DC-42 now leads. It carries a real requirements decision — NFR-PERF-01 and NFR-PERF-02
-must each end implemented **or** explicitly amended — and DC-55 having landed first means it measures once,
-against the primitive that actually ships, rather than against a baseline already cleared for replacement.
+**DC-42 is superseded** — archived 2026-07-29 into **DC-56** (NFR-PERF-01), **DC-57** (NFR-PERF-02), and
+**DC-58** (source-structure audit). Design review found it bundled three unrelated increments against
+standing rule 2. Never implemented. See `rfcs/archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md`.
+
+**Why this order.** DC-56 and DC-57 lead because both close **missed product gates** — NFR-PERF-01 at
+product M1, NFR-PERF-02 at product M3 — not scheduled work. DC-55 having landed first means DC-56 measures
+against the hashing primitive that actually ships. DC-58 is mechanical and can run in parallel or after.
 DC-52 needs its stability precondition. DC-43 needs security review and is best consumed against a settled
 tooling gate.
+
+**Beware the milestone labels.** `MILESTONES.md` § "Two milestone schemes" is required reading before
+resolving any `M0`–`M3` gate label in the NFR matrix. The requirements use the product scheme; this file
+and `MILESTONES.md` use the corrective one. The collision already caused one architect review to conclude
+that overdue work was not yet due.
 
 **On DC-55's review independence.** Its design review was an author re-examination: this project has one
 architect, so independent design review is not achievable for a design the architect wrote. That is the

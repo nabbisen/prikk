@@ -15,8 +15,12 @@ implementation review v1 returned one blocking finding; repaired and accepted at
 the outgoing first-party implementation retained test-only as the differential's permanent independent
 reference. DC-55 implemented the **replace** decision DC-50 closed with at `4005efb`; DC-50's record is at
 `rfcs/handoffs/DC-50-first-party-sha256-roi-decision/decision-record-v1.md`, and DC-50 stays in
-`rfcs/accepted/` rather than `done/` because it ships nothing. Next increment per
-`rfcs/EXECUTION-ORDER.md` is DC-42, gated on its design review.
+`rfcs/accepted/` rather than `done/` because it ships nothing. Next increments per
+`rfcs/EXECUTION-ORDER.md` are DC-56 and DC-57, each gated on its design review. DC-42 was superseded on
+2026-07-29 into DC-56, DC-57, and DC-58; its design review found it bundled three unrelated increments and
+that both performance requirements it carried are **missed product gates** rather than scheduled work —
+NFR-PERF-01 at product M1, NFR-PERF-02 at product M3. See `MILESTONES.md` § "Two milestone schemes"; the
+requirements authorities are now tracked in `specs/`.
 
 Standing process note on review independence, first recorded at DC-54 and refined at DC-55: this project
 has one architect, so independent *design* review is not achievable for designs the architect authors.
@@ -82,9 +86,9 @@ repository-format stabilization, and public-preview readiness. The durable corre
   discharges the M1 literal DC-38 reproduction, which is rerun when an RC is explicitly activated. A
   fifth workstream (platform matrix) was descoped from DC-41's accepted scope into its own future
   increment, recorded in the RFC's Follow-up section, triggered once the M1 portability-claim doc
-  correction ships. DC-42 and DC-43 remain proposed M2 assurance/distribution RFCs and do not authorize
-  implementation before their individual design reviews are accepted; their development order is DC-42,
-  then DC-43. Release-specific evidence must still be rerun when an RC is explicitly selected.
+  correction ships. DC-56, DC-57, DC-58 (superseding DC-42, archived 2026-07-29) and DC-43 remain proposed
+  and do not authorize implementation before their individual design reviews are accepted; their
+  development order is DC-56, DC-57, DC-58, then DC-43. Release-specific evidence must still be rerun when an RC is explicitly selected.
   DC-45 through DC-48 are preparatory work already landed before M1 release and do not displace that
   remaining sequence. DC-45 was accepted after architect design repair re-review v1 on 2026-07-16.
   Duplicate-name profile

@@ -1,6 +1,34 @@
-# RFC (proposed) - DC-42 Performance and Maintainability Gates
+# RFC (archive - superseded) - DC-42 Performance and Maintainability Gates
 
-**Status.** Proposed; design review required.
+**Status.** **Superseded on 2026-07-29 by DC-56, DC-57, and DC-58.** Never implemented; no code was
+written against it.
+
+Design review v1 and v2 (`.git-exclude/reviewed/prikk-dc42-design-review-v1.md`, `…-v2.md`) returned
+*Design Revision Required*. The blocking reason was scoping, not technical judgement: DC-42 bundled three
+unrelated increments — a possible architecture change, a workspace-wide refactor, and a user-visible CLI
+feature — against the standing "one increment per candidate" rule. Each successor takes one:
+
+| Successor | Takes |
+|---|---|
+| **DC-56** | NFR-PERF-01 — commit must not scan the full worktree |
+| **DC-57** | NFR-PERF-02 — active-Patch warn/block thresholds |
+| **DC-58** | Source-structure and ELOC audit |
+
+**What DC-42 got right, and what the successors inherit:** that measurement alone does not close
+NFR-PERF-01; that compliance is the default outcome and deferral carries the burden; that optimisation
+changing traversal semantics, caching, or repository authority is a behaviour change needing its own
+design amendment; and that tests must not be weakened to satisfy line counts. All four survive in the
+successors.
+
+**What review corrected.** DC-42 presented both requirements as ordinary corrective-M2 scope. Both are in
+fact **missed product gates** — NFR-PERF-01 at product M1, NFR-PERF-02 at product M3 — a fact obscured by
+two milestone schemes sharing the labels M0–M3. See `MILESTONES.md` § "Two milestone schemes".
+
+Retained unedited below as the historical record.
+
+---
+
+**Status (original).** Proposed; design review required.
 **Target milestone.** M2 - post-correction assurance milestone.
 **Schedule position.** Second remaining post-M1 increment, after DC-41 establishes the released
 evidence baseline. This program order is not independent implementation authority.
