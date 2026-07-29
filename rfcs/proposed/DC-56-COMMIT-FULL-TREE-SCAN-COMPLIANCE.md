@@ -39,8 +39,30 @@ it as ordinary corrective-M2 scope.
 this decision rests on. Split out per design review v1 finding B2: the benchmark is a self-contained piece
 of work with its own design questions, and DC-56 had allocated it a sentence.
 
-DC-56 may not begin until DC-59's report exists. Deciding compliance without the curve is the failure mode
-both RFCs exist to prevent.
+**The report now exists** — DC-59 implemented at `a9c2fe0`, accepted 2026-07-29, report at
+`rfcs/handoffs/DC-59-commit-benchmark-harness/benchmark-report-v1.md`. This precondition is satisfied.
+
+**What it measured.** Axis A holds the change set at exactly one file and varies repository size:
+
+| Repository size | Median commit |
+|---:|---:|
+| 10 files | 4.22 ms |
+| 100 files | 8.86 ms |
+| 1,000 files | 58.20 ms |
+| 10,000 files | 516.46 ms |
+
+Asymptotically linear in repository size — 6.6× cost for 10× size between 100 and 1,000, 8.9× between
+1,000 and 10,000. Since the change set is fixed at one file throughout, neither patch construction nor
+signing explains the growth; both scale with the change set and appear in Axis B instead
+(1 → 1,000 changed files costs 57.77 → 1,682.98 ms). At 10,000 files, roughly **99% of commit cost is
+attributable to something other than the change being committed.**
+
+The full-tree scan is now measured rather than inferred.
+
+**One caveat before drawing conclusions.** The run is on **tmpfs**. That is a reasonable choice for
+isolating traversal cost — it removes fsync noise — and it does not affect Axis A's *shape*, which is the
+claim under test. But NFR-PERF-01's bound explicitly names fsync, so **absolute** cost figures need a
+journaling-filesystem run before this RFC relies on them for anything beyond the scan finding.
 
 ### 2. The requirement's meaning must be settled before the design is chosen
 

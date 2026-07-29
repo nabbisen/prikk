@@ -70,7 +70,7 @@ work look scheduled, or scheduled work look overdue.
 | M0 | Design Lock and Safe Scaffolding | yes | Architecture ratification |
 | M1 | Core Storage and Identity | capability yes — **but NFR-PERF-01 unmet** | Corrective storage and identity baseline |
 | M2 | Minimal Patch Engine | yes | Assurance and distribution baseline |
-| M3 | Block DAG and Checkout | capability yes — **but NFR-PERF-02 unmet** | Migration and recoverable backup |
+| M3 | Block DAG and Checkout | **partially** — checkout and block DAG shipped, but **multi-patch active blocks are not implemented**, leaving NFR-PERF-02 unreachable and NFR-PERF-03 vacuous | Migration and recoverable backup |
 | M4 | WASM Plugin and Audit | no | — |
 | M5 | Sync and Quarantine | no | — |
 | M6 | Alpha Hardening | no | — |
@@ -97,7 +97,9 @@ When citing a gate, name the scheme: "product M3" or "corrective M2", never a ba
 | Public portability claim exceeds Linux-only mutation support | Release-claim mismatch | DC-37 boundary plus tracked portability/requirements correction | M1 |
 | Crash/fuzz/platform and hash evidence incomplete | Assurance blocker | DC-41 | M2 |
 | Full-tree commit scan versus NFR-PERF-01 | **Missed product gate**, carried | DC-59 (evidence), then DC-56 (decision): implement, amend, or hand to a product RFC | Product **M1**; carried into corrective M2 |
-| Active-Patch warning 800 / hard bound 1000 from NFR-PERF-02 | **Missed product gate**, carried | DC-57 (was DC-42): implement or obtain explicit requirements amendment | Product **M3**; carried into corrective M2 |
+| Multi-patch active blocks not implemented — active WAL capped at one record | **Capability gap; blocks two NFRs** | Needs a queuing increment, or reviewed amendment of both NFRs. **Owner decision pending** | Product **M3** |
+| Active-Patch warning 800 / hard bound 1000 from NFR-PERF-02 | **Missed product gate** — blocked on the capability above, not merely unimplemented | DC-57 **HELD 2026-07-29**: thresholds are unreachable while an active block holds one patch | Product **M3**; carried into corrective M2 |
+| Merge scope bounded by active block size (NFR-PERF-03) | **Vacuously satisfied** — same root cause | Unowned; resolves with the capability above | Product **M3** |
 | Source/test structure gates absent | Maintainability risk | DC-58 (was DC-42) | Corrective M2 |
 | Vulnerability reporting, SBOM, provenance absent | Distribution risk | DC-43 | M2 |
 | Mixed release-policy tooling ownership and custom schema evaluator | Tooling debt | DC-45 | M2 |
@@ -206,10 +208,10 @@ gates.
 **RFCs:**
 
 1. DC-41 Integrity Evidence Campaign.
-2. DC-59 Commit Benchmark Harness, DC-56 Commit Full-Tree Scan Compliance, DC-57 Active-Patch Thresholds,
-   DC-58 Source-Structure Audit (DC-56/57/58 superseding DC-42, archived 2026-07-29; DC-59 split from
-   DC-56 at design review). DC-56 and DC-57 close missed **product** gates; DC-59 produces NFR-PERF-01's
-   named evidence artifact.
+2. DC-59 Commit Benchmark Harness (**implemented `a9c2fe0`**), DC-56 Commit Full-Tree Scan Compliance,
+   DC-57 Active-Patch Thresholds (**held** — see the capability gap above), DC-58 Source-Structure Audit
+   (batch 1 at `e1d0213`). DC-56/57/58 supersede DC-42, archived 2026-07-29; DC-59 was split from DC-56 at
+   design review and produces NFR-PERF-01's named evidence artifact.
 3. DC-43 Release Security and Distribution Controls.
 4. DC-45 Release Policy Tooling Consolidation.
 5. DC-46 Workspace Rust 1.85 Compatibility.

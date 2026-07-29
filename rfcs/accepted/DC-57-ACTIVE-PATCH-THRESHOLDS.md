@@ -1,6 +1,26 @@
 # RFC (proposed) - DC-57 Active-Patch Thresholds
 
-**Status.** **Accepted by the project owner on 2026-07-29.** Architect design review v1, performed after
+**Status.** **HELD 2026-07-29 — do not implement.** The dev team stopped at handoff Step 1 as instructed
+and reported that the RFC's premise is architecturally unreachable; architect verification confirmed it
+(`.git-exclude/reviewed/prikk-dc57-ruling-dc58-dc59-implementation-review-v1.md` Part 1).
+
+**The active WAL is structurally capped at one record repository-wide.** There is a single active-session
+slot (`layout.rs:149-158`, no ref parameterization), and all three append paths refuse on a non-empty WAL:
+`active.rs:55-77`, `node_authoring.rs:184-206`, `rollback_draft.rs:126-134`. So 800/1000 is unreachable by
+construction, and the required boundary tests cannot be built against a real repository.
+
+NFR-PERF-02 presupposes **multi-commit queued active sessions**, which
+`rfcs/IMPLEMENTATION-STATUS.md:464` already records as not implemented. That the specs mean patches rather
+than operations is settled by `specs/prikk-app-requirements-v1.2.md` §6.4 ("convert active WAL **patches**
+… into … **a block object**"), §6.3 ("unsealed patch count"), and §7.4 (thresholds stated in patches).
+
+**Blocked on:** an owner decision on whether multi-commit queuing is a scheduled capability, and if so a
+queuing increment. This RFC is not implementable until that lands. **Its implementation handoff is
+withdrawn.**
+
+---
+
+**Prior status.** Accepted by the project owner on 2026-07-29. Architect design review v1, performed after
 acceptance (`.git-exclude/reviewed/prikk-dc57-dc58-post-acceptance-review-v1.md`), returned one blocking
 finding: the RFC required configurable thresholds while no configuration mechanism existed. **Resolved
 2026-07-29** by owner decision — environment variables, no new dependency and no DC-51 amendment. See

@@ -1,5 +1,20 @@
 # DC-57 Active-Patch Thresholds - Handoff
 
+> # ⛔ WITHDRAWN 2026-07-29 — DO NOT WORK FROM THIS DOCUMENT
+>
+> The RFC's premise does not hold: the active WAL is structurally capped at **one record**
+> repository-wide, so the 800/1000 thresholds are unreachable and their boundary tests cannot be
+> constructed. NFR-PERF-02 presupposes multi-commit queued active sessions, which are not implemented.
+>
+> Found by the dev team stopping at Step 1 exactly as this handoff instructed — that instruction did its
+> job. See `rfcs/accepted/DC-57-ACTIVE-PATCH-THRESHOLDS.md` and
+> `.git-exclude/reviewed/prikk-dc57-ruling-dc58-dc59-implementation-review-v1.md` Part 1.
+>
+> A replacement handoff follows only after the queuing question is decided. Everything below is retained
+> as the record of what was asked for, and is **not** current instruction.
+
+---
+
 **Cleared to start.** Accepted by the project owner on 2026-07-29, at
 `rfcs/accepted/DC-57-ACTIVE-PATCH-THRESHOLDS.md`. Design review's one blocking finding — the RFC required
 configurable thresholds with no mechanism to configure them — was resolved by owner decision on

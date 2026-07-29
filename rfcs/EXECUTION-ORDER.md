@@ -30,12 +30,10 @@ from. DC-56, DC-57, and DC-58 are newly split from DC-42 and their handoffs foll
 
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
-| 1 | **DC-59** — commit benchmark harness | **Accepted 2026-07-29** | none — **cleared to start** | `handoffs/DC-59-commit-benchmark-harness/implementation-handoff-v1.md` |
-| 2 | **DC-56** — commit full-tree scan compliance (NFR-PERF-01) | Proposed | design review; **DC-59's report**; **owner ruling on the NFR-PERF-01 reading** | handoff pending design acceptance |
-| 3 | **DC-57** — active-Patch thresholds (NFR-PERF-02) | **Accepted 2026-07-29** | none — **cleared to start** | `handoffs/DC-57-active-patch-thresholds/implementation-handoff-v1.md` |
-| 4 | **DC-58** — source-structure audit | **Accepted 2026-07-29** | none — **cleared to start** | `handoffs/DC-58-source-structure-audit/implementation-handoff-v1.md` (defers `node_authoring.rs`) |
-| 5 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
-| 6 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
+| 1 | **DC-58** — source-structure audit | **In flight** — batch 1 accepted `e1d0213` | none | `handoffs/DC-58-source-structure-audit/implementation-handoff-v1.md` (batch 2 next) |
+| 2 | **DC-56** — commit full-tree scan compliance (NFR-PERF-01) | Proposed | design review; **owner ruling on the NFR-PERF-01 reading** (DC-59's report is now in hand) | handoff pending design acceptance |
+| 3 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
+| 4 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.
@@ -94,6 +92,17 @@ and DC-55 shows both sides of it: the author review found a genuine blocking def
 blocking defect survived into the implementation and was caught only because acceptance criteria had been
 written to be reproducible from the repository rather than trusted from a report. Keep that pattern for
 identity-bearing increments.
+
+**DC-59 is complete** — implemented `a9c2fe0`, accepted 2026-07-29. Its report measured the full-tree
+scan: 4.22 ms at 10 files rising to 516 ms at 10,000, with the change set fixed at one file throughout.
+The scan is now evidence rather than inference, and DC-56's precondition is satisfied.
+
+**DC-57 is HELD** — its premise does not hold and its handoff is **withdrawn**. The active WAL is
+structurally capped at one record repository-wide, so 800/1000 is unreachable and its boundary tests
+cannot be constructed. NFR-PERF-02 presupposes multi-commit queued active sessions, which
+`rfcs/IMPLEMENTATION-STATUS.md:464` records as not implemented. Found by the dev team stopping at handoff
+Step 1 as instructed. **Blocked on an owner decision** — see `MILESTONES.md` finding
+"Multi-patch active blocks not implemented".
 
 ## 2. Blocked on a release-lane event
 

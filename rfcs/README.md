@@ -68,9 +68,9 @@ These reviewed designs may govern downstream work but have not yet released.
 | DC-46 | [Workspace Rust 1.85 Compatibility](./accepted/DC-46-WORKSPACE-RUST-1.85-COMPATIBILITY.md) | M2 / before 0.19.0 RC; complete at `0d221af`, post-commit evidence accepted |
 | DC-47 | [Stable Clippy Gate Alignment](./accepted/DC-47-STABLE-CLIPPY-GATE-ALIGNMENT.md) | M2 / before 0.19.0 RC; complete at `ea95e92`, post-commit evidence accepted |
 | DC-48 | [Legacy Clippy Production Retirement](./accepted/DC-48-LEGACY-CLIPPY-PRODUCTION-RETIREMENT.md) | M2 / before 0.19.0 RC; complete at `383e503`, post-commit evidence accepted |
-| DC-57 | [Active-Patch Thresholds](./accepted/DC-57-ACTIVE-PATCH-THRESHOLDS.md) | Closes missed **product M3** gate NFR-PERF-02. Accepted 2026-07-29; design review's blocking finding (no configuration mechanism) resolved by owner decision — environment variables, no new dependency |
-| DC-58 | [Source-Structure Audit](./accepted/DC-58-SOURCE-STRUCTURE-AUDIT.md) | Corrective M2 maintainability. Accepted 2026-07-29, no blocking findings; defers `node_authoring.rs` until DC-56 |
-| DC-59 | [Commit Benchmark Harness](./accepted/DC-59-COMMIT-BENCHMARK-HARNESS.md) | Produces NFR-PERF-01's named evidence artifact; precondition for DC-56. Accepted 2026-07-29 after design review and revision |
+| DC-57 | [Active-Patch Thresholds](./accepted/DC-57-ACTIVE-PATCH-THRESHOLDS.md) | **HELD 2026-07-29, handoff withdrawn.** Its premise does not hold — the active WAL is capped at one record repository-wide, so 800/1000 is unreachable. NFR-PERF-02 presupposes multi-commit queued active sessions, not implemented. Blocked on an owner decision |
+| DC-58 | [Source-Structure Audit](./accepted/DC-58-SOURCE-STRUCTURE-AUDIT.md) | Corrective M2 maintainability. **Batch 1 complete at `e1d0213`**, review accepted; batches continue. Defers `node_authoring.rs` until DC-56 |
+| DC-59 | [Commit Benchmark Harness](./accepted/DC-59-COMMIT-BENCHMARK-HARNESS.md) | Produces NFR-PERF-01's named evidence artifact. **Complete at `a9c2fe0`**, implementation review accepted 2026-07-29 with no findings. Measured the full-tree scan: 4.22 ms at 10 files to 516 ms at 10,000, change set fixed at one |
 
 ## Done
 
