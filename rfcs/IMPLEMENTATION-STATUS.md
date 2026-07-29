@@ -16,13 +16,23 @@ the outgoing first-party implementation retained test-only as the differential's
 reference. DC-55 implemented the **replace** decision DC-50 closed with at `4005efb`; DC-50's record is at
 `rfcs/handoffs/DC-50-first-party-sha256-roi-decision/decision-record-v1.md`, and DC-50 stays in
 `rfcs/accepted/` rather than `done/` because it ships nothing. Next increment per
-`rfcs/EXECUTION-ORDER.md` is DC-59 (commit benchmark harness), **accepted 2026-07-29** after design review
-returned three blocking findings, all resolved at `f8d0938`. It was split from DC-56 because this
-workspace has no benchmark infrastructure and DC-56 cannot decide compliance without a cost curve.
-DC-58 is also accepted with no blocking findings. DC-57 is accepted; architect review after acceptance found the RFC
-required configurable thresholds while no repository configuration mechanism exists, resolved 2026-07-29
-by owner decision — environment variables, avoiding both a new `prikk-store` dependency and the DC-51
-allowlist amendment a TOML parser would have needed. All three handoffs are written.
+`rfcs/EXECUTION-ORDER.md` is DC-58 batch 2.
+
+**DC-59 is complete at `a9c2fe0`** — implementation review accepted 2026-07-29 with no findings. It was
+split from DC-56 because this workspace had no benchmark infrastructure. Its report measures the full-tree
+scan directly (4.22 ms at 10 files rising to 516 ms at 10,000, change set fixed at one file throughout)
+and satisfies DC-56's precondition.
+
+**DC-58 batch 1 is complete at `e1d0213`** — accepted; identity artifacts untouched and all test counts
+held. Batches continue.
+
+**DC-57 is HELD and its implementation handoff is withdrawn.** The dev team stopped at handoff Step 1 as
+instructed and reported that the active WAL is structurally capped at **one record repository-wide**;
+architect verification confirmed it at all three append paths. NFR-PERF-02's 800/1000 thresholds are
+therefore unreachable by construction and its boundary tests cannot be built. The requirement presupposes
+multi-commit queued active sessions, which **line 464 of this file already records as not implemented**.
+The same capability gap leaves NFR-PERF-03 vacuously satisfied. **This needs an owner decision** — whether
+multi-commit queuing is a scheduled capability, or whether both requirements need reviewed amendment.
 DC-56 then follows, gated additionally on an owner ruling over whether NFR-PERF-01 bounds steady-state
 commit cost or every commit — unsettled in the requirement text and in tension with NFR-PERF-04. DC-42 was superseded on
 2026-07-29 into DC-56, DC-57, and DC-58; its design review found it bundled three unrelated increments and
