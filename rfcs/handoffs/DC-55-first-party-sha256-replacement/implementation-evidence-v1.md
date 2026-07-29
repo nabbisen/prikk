@@ -9,6 +9,45 @@ for the end-to-end check are all in the tree. This is what compensates for the d
 independence gap the RFC's Status field records (see the RFC and `.git-exclude/reviewed/
 prikk-dc55-design-review-v1.md`).
 
+## B1 repair (2026-07-29, addendum after `.git-exclude/reviewed/prikk-dc55-implementation-review-v1.md`)
+
+**Finding:** `cargo test --workspace --locked` failed on the committed tree (`083d6c0`) —
+`dc55_sha256_identity_end_to_end` errored with `directory is absent: refs/tmp`. Root cause: six of
+`RepositoryLayout::required_directories()` are empty at rest in the fixture (`objects/tag`,
+`objects/attestation`, `refs/locks`, `refs/tmp`, `cache`, `quarantine`) and git cannot represent an
+empty directory, so they were silently absent from the commit despite being present wherever the
+fixture was originally created and tested.
+
+**Fix.** `copy_fixture` in `crates/prikk-cli/tests/dc55_sha256_identity_end_to_end.rs` now opens a
+`RepositoryLayout` on the copied fixture and `create_dir_all`s every entry from
+`layout.required_directories()` after copying — not a hardcoded list, so a future layout change
+cannot silently reintroduce the gap. A `.gitkeep`-style placeholder was considered and rejected: it
+was verified to make prikk's own integrity checking fail closed
+(`unexpected non-directory in object type directory`), confirmed by reproducing that exact error
+before settling on directory recreation instead. This is documented in the file's module doc so a
+future maintainer hitting `directory is absent` does not reach for `.gitkeep` first (review N2).
+
+**Verification — required for re-review, all three items:**
+
+1. **B1 fixed, root cause addressed generically.** `git diff` limited to `copy_fixture`'s body plus
+   an explanatory doc comment; no change to the fixture's committed bytes or the identity claim.
+2. **`cargo test --workspace --locked` passing on a fresh clone of the repaired commit, not the
+   working tree.** Verified by committing the fix in a disposable scratch clone (never the project
+   repository — no commit was made here), then cloning *that* scratch repository fresh a second time
+   and running the full workspace suite there: all crates pass, including
+   `dc55_sha256_identity_end_to_end`. Before applying the fix, the same two-hop-fresh-clone procedure
+   independently reproduced B1's exact failure (`directory is absent: refs/tmp`), confirming the
+   diagnosis rather than assuming it.
+3. **N2's comment is in place** — see the module doc addition above `copy_fixture` at the top of the
+   test file. N3 (whether any other fixture depends on empty directories) checked: `git ls-files | grep
+   '\.prikk/'` shows the DC-55 fixture is the only checked-in repository fixture in the tree, so
+   nothing else is exposed to this failure mode.
+
+All other gates re-run clean on the repaired working tree: `cargo fmt --all -- --check`,
+`cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
+`cargo +1.85.0 test --workspace --locked`, `git diff --check`, release-policy `check` (154/154),
+`boundary-check` (valid), `reference-check` (valid). Test counts unchanged from the original note.
+
 ## What did not change
 
 - No call site among the 11 production sites (`prikk-object`: `id.rs:122`, `payload/patch.rs:17`;
