@@ -7,10 +7,11 @@ backlog narrative, `rfcs/IMPLEMENTATION-STATUS.md` the current-state snapshot, a
 authority. This file answers only one question the others do not: **what do I pick up next, and what is it
 waiting on?**
 
-Last reconciled: 2026-07-29. DC-57, DC-58, DC-59 accepted by the owner; DC-59 after design review and
-revision, DC-57 and DC-58 with architect review performed after acceptance — DC-57's blocking finding (no configuration mechanism) was resolved 2026-07-29 by owner decision —
-environment variables. All three handoffs are written. The release-lane decision point sits after the performance work
-per the owner's 2026-07-29 direction.
+Last reconciled: 2026-07-30. **DC-59 complete** (`a9c2fe0`). **DC-58 both batches accepted**
+(`e1d0213`, `54a3037`), closure pending one report reframing. **DC-57 held** — its premise does not hold
+and its handoff is withdrawn. Two owner decisions are outstanding and are the only things blocking further
+performance work: the multi-patch queuing question (DC-57) and the NFR-PERF-01 reading (DC-56). The
+release-lane decision point sits after the performance work per the owner's 2026-07-29 direction.
 
 ## The two lanes
 
@@ -26,7 +27,7 @@ Ordered by recommended sequence. The project owner may reorder by product value;
 is what actually constrains order.
 
 Hand the developer the handoff, not the RFC — the RFC is scope authority, the handoff is what they work
-from. DC-56, DC-57, and DC-58 are newly split from DC-42 and their handoffs follow design acceptance.
+from. **DC-57's handoff is withdrawn — do not issue it.**
 
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
@@ -64,20 +65,17 @@ permanent independent reference.
 **DC-58** (source-structure audit). Design review found it bundled three unrelated increments against
 standing rule 2. Never implemented. See `rfcs/archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md`.
 
-**Why this order.** DC-59 leads because DC-56 cannot decide without its cost curve, and because it closes
-a standing gap of its own: this workspace has no benchmark infrastructure, so every performance figure
-produced so far — DC-50's and DC-55's included — is unreproducible from the repository. DC-56 and DC-57
-close **missed product gates** (NFR-PERF-01 at product M1, NFR-PERF-02 at product M3), not scheduled work.
-DC-55 having landed first means DC-59 measures against the hashing primitive that actually ships. DC-58 is
-mechanical and can run in parallel or after.
+**Why this order.** DC-58 leads only because it is nearly finished — one reporting correction remains.
+DC-56 is next in value but cannot proceed until the owner rules on the NFR-PERF-01 reading; its
+measurement precondition is already satisfied by DC-59's report. DC-52 then needs its stability
+precondition, and DC-43 needs security review and is best consumed against a settled tooling gate.
 
 **DC-56 carries an owner decision that must not be resolved by implementing.** NFR-PERF-01 forbids a
 full-tree scan; NFR-PERF-04 requires caches to be rebuildable and never authoritative. A rebuildable index
 must rebuild by scanning, so a cache-based design complies only warm. Whether the requirement bounds
 steady-state cost or every commit is unsettled in its text and is the owner's call, to be taken with
-DC-59's curve in hand. See DC-56 §2.
-DC-52 needs its stability precondition. DC-43 needs security review and is best consumed against a settled
-tooling gate.
+DC-59's curve in hand. See DC-56 §2. Building an index and declaring the warm curve compliant would
+*answer* that question silently, which is the specific route DC-56's revision closes.
 
 **Beware the milestone labels.** `MILESTONES.md` § "Two milestone schemes" is required reading before
 resolving any `M0`–`M3` gate label in the NFR matrix. The requirements use the product scheme; this file

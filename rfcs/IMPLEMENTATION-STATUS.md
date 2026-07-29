@@ -16,7 +16,8 @@ the outgoing first-party implementation retained test-only as the differential's
 reference. DC-55 implemented the **replace** decision DC-50 closed with at `4005efb`; DC-50's record is at
 `rfcs/handoffs/DC-50-first-party-sha256-roi-decision/decision-record-v1.md`, and DC-50 stays in
 `rfcs/accepted/` rather than `done/` because it ships nothing. Next increment per
-`rfcs/EXECUTION-ORDER.md` is DC-58 batch 2.
+`rfcs/EXECUTION-ORDER.md` is DC-58's closing report correction, after which the development lane is
+blocked on two owner decisions — see below.
 
 **DC-59 is complete at `a9c2fe0`** — implementation review accepted 2026-07-29 with no findings. It was
 split from DC-56 because this workspace had no benchmark infrastructure. Its report measures the full-tree
@@ -39,12 +40,15 @@ therefore unreachable by construction and its boundary tests cannot be built. Th
 multi-commit queued active sessions, which **line 464 of this file already records as not implemented**.
 The same capability gap leaves NFR-PERF-03 vacuously satisfied. **This needs an owner decision** — whether
 multi-commit queuing is a scheduled capability, or whether both requirements need reviewed amendment.
-DC-56 then follows, gated additionally on an owner ruling over whether NFR-PERF-01 bounds steady-state
-commit cost or every commit — unsettled in the requirement text and in tension with NFR-PERF-04. DC-42 was superseded on
-2026-07-29 into DC-56, DC-57, and DC-58; its design review found it bundled three unrelated increments and
-that both performance requirements it carried are **missed product gates** rather than scheduled work —
-NFR-PERF-01 at product M1, NFR-PERF-02 at product M3. See `MILESTONES.md` § "Two milestone schemes"; the
-requirements authorities are now tracked in `specs/`.
+
+**DC-56 is the other open owner decision**: whether NFR-PERF-01 bounds steady-state commit cost or every
+commit. Unsettled in the requirement text and in tension with NFR-PERF-04, which requires caches to be
+rebuildable — a rebuildable index rebuilds by scanning, so a cache-based design complies only warm.
+
+DC-42 was superseded 2026-07-29 into DC-56, DC-57, and DC-58; its design review found it bundled three
+unrelated increments and that both performance requirements it carried are **missed product gates** rather
+than scheduled work — NFR-PERF-01 at product M1, NFR-PERF-02 at product M3. See `MILESTONES.md`
+§ "Two milestone schemes"; the requirements authorities are now tracked in `specs/`.
 
 Standing process note on review independence, first recorded at DC-54 and refined at DC-55: this project
 has one architect, so independent *design* review is not achievable for designs the architect authors.
