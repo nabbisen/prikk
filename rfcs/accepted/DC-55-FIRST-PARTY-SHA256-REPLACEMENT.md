@@ -1,22 +1,31 @@
 # RFC (accepted) - DC-55 First-Party SHA-256 Replacement
 
 **Status.** **Accepted by the project owner on 2026-07-28**, after design review v1 returned one blocking
-finding and five notes and all six were resolved in revision. Implementation may begin.
+finding and five notes and all six were resolved in revision. **Implementation complete at `753ebab`**
+(swap `8c84bc4`, fixture fixups `083d6c0` and `753ebab`); architect implementation review v1 returned one
+blocking finding, repaired and accepted at re-review v1 on 2026-07-29.
 
-**Independence of review — recorded deliberately, not silently.** This RFC was authored by the architect
-and reviewed by the architect. Design review v1
-(`.git-exclude/reviewed/prikk-dc55-design-review-v1.md`) was an **author re-examination, not an
-independent review**; this project has one architect, so independent review is not an achievable state for
-a design the architect wrote. That review returned a blocking finding (B1) and five notes, all resolved in
-this revision by the same author. The prior calibration reserved identity-bearing increments for something
-stronger than author re-examination, and DC-55 is identity-bearing; the project owner directed on
-2026-07-28 that revision proceed on this basis regardless. It is named here so the gap is on record rather
-than absorbed by routing convention.
+**Independence of review — a known limitation, recorded deliberately.** This RFC was authored by the
+architect and reviewed by the architect. Design review v1
+(`.git-exclude/reviewed/prikk-dc55-design-review-v1.md`) was an **author re-examination**: this project has
+one architect, so independent review is not an achievable state for a design the architect wrote. That
+review returned a blocking finding (B1) and five notes, all resolved in this revision by the same author.
 
-The gap is deliberately compensated at the implementation axis, where independence *is* achievable — the
-architect does not write the implementation. Acceptance criteria below were reworked so that the identity
-claim is reproducible by a reviewer from the repository alone rather than trusted from the implementer's
-report. See criterion 5 in particular.
+This is the defined process, not a deviation from it. The organization document's Phase 2 approval gate
+assigns design review to the high-capability model and does not distinguish author review from independent
+review. The limitation is nonetheless real — B1 survived drafting *and* a self-critique pass that caught
+two other errors in the same documents — so it is recorded rather than left implicit.
+
+The limitation is deliberately compensated at the implementation axis, where independence *is* achievable:
+the architect does not write the implementation. Acceptance criteria below were reworked so that the
+identity claim is reproducible by a reviewer from the repository alone rather than trusted from the
+implementer's report. See criterion 5 in particular.
+
+**That compensation was load-bearing in practice.** Implementation review v1 found that the evidence note
+asserted `cargo test --workspace --locked` passed when it did not on the committed tree — a fixture
+depending on directories git cannot store. A review accepting self-reports would have closed DC-55 with a
+broken mandatory gate. The identity claim itself was correct throughout; only reproduction from the
+repository could have separated the two.
 
 **Target milestone.** M2 - post-correction assurance milestone.
 **Schedule position.** Recommended **ahead of DC-42**. DC-42 owns NFR-PERF-01; DC-50 measured a ~5.8x

@@ -8,21 +8,25 @@ Current implementation increment: none in flight. DC-35 through DC-40 implementa
 four stages implemented and accepted; DC-51 complete at `d3e939b`, post-commit review accepted with one
 blocking finding, reference-check repair at `4c8b7a3`; DC-54 (operation path validation symmetry) complete
 at `e8f780a`, architect post-commit implementation review v1 accepted 2026-07-28, no repair required.
-Current development increment: **DC-55 (first-party SHA-256 replacement), accepted by the project owner
-2026-07-28 and cleared for developers.** Its handoff is at
-`rfcs/handoffs/DC-55-first-party-sha256-replacement/implementation-handoff-v1.md`. DC-55 implements the
-**replace** decision DC-50 closed with at `4005efb`; DC-50's record is at
+Current development increment: none in flight. **DC-55 (first-party SHA-256 replacement) complete at
+`753ebab`** — accepted `a01e628`, swap `8c84bc4`, fixture repairs `083d6c0` and `753ebab`. Architect
+implementation review v1 returned one blocking finding; repaired and accepted at re-review v1 on
+2026-07-29, verified by fresh clone with a negative control. `prikk-hash::sha256` now runs on `sha2`, with
+the outgoing first-party implementation retained test-only as the differential's permanent independent
+reference. DC-55 implemented the **replace** decision DC-50 closed with at `4005efb`; DC-50's record is at
 `rfcs/handoffs/DC-50-first-party-sha256-roi-decision/decision-record-v1.md`, and DC-50 stays in
-`rfcs/accepted/` rather than `done/` because it ships nothing. DC-55 is sequenced ahead of DC-42 so DC-42
-measures NFR-PERF-01 against the primitive that will actually ship.
+`rfcs/accepted/` rather than `done/` because it ships nothing. Next increment per
+`rfcs/EXECUTION-ORDER.md` is DC-42, gated on its design review.
 
-Standing process concern (not a defect), first recorded at DC-54: DC-54 reached `accepted/` and `main`
-with no independent review of any kind before commit. DC-55 is identity-bearing and its design review was
-likewise an author re-examination — design review v1 returned one blocking finding and five notes, all
-resolved by the same author who wrote the design, and the owner directed acceptance on that basis. The gap
-is recorded in the RFC's Status field rather than absorbed silently, and is compensated at the
-implementation axis: DC-55's acceptance criteria mark each item verifiable-from-repository or
-trusted-from-report, so the post-commit review carries real independent weight.
+Standing process note on review independence, first recorded at DC-54 and refined at DC-55: this project
+has one architect, so independent *design* review is not achievable for designs the architect authors.
+That is the defined process — the organization document's Phase 2 gate assigns design review to the
+high-capability model — not a deviation from it. DC-55 demonstrated both sides of the limitation: author
+review found a genuine blocking defect, and a second blocking defect still survived into the
+implementation, caught only because DC-55's acceptance criteria had been written to be reproducible from
+the repository rather than trusted from the implementer's report. Retain that criteria pattern for
+identity-bearing increments; independent review remains achievable at the implementation axis and is where
+the weight belongs.
 Current release activation: parked
 Current activated release target: none
 Current governance increment: none (no signer bootstrap or hold started)

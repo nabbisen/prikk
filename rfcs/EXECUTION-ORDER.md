@@ -7,8 +7,8 @@ backlog narrative, `rfcs/IMPLEMENTATION-STATUS.md` the current-state snapshot, a
 authority. This file answers only one question the others do not: **what do I pick up next, and what is it
 waiting on?**
 
-Last reconciled: after DC-50 closure (`4005efb`); DC-55 drafted from its replace decision and awaiting
-design review.
+Last reconciled: after DC-55 completion (`753ebab`), implementation re-review accepted 2026-07-29. Next
+increment is DC-42; the release-lane decision point sits after it per the owner's 2026-07-29 direction.
 
 ## The two lanes
 
@@ -28,10 +28,9 @@ authority, the handoff is what they work from.
 
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
-| 1 | **DC-55** — first-party SHA-256 replacement | **Accepted 2026-07-28; ready for developers** | none — **cleared to start** | `handoffs/DC-55-first-party-sha256-replacement/implementation-handoff-v1.md` |
-| 2 | **DC-42** — performance and maintainability gates | Proposed | design review; **DC-55** (see below) | `handoffs/DC-42-performance-maintainability-gates/implementation-handoff-v1.md` |
-| 3 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
-| 4 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
+| 1 | **DC-42** — performance and maintainability gates | Proposed | design review | `handoffs/DC-42-performance-maintainability-gates/implementation-handoff-v1.md` |
+| 2 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
+| 3 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.
@@ -51,23 +50,27 @@ blocking finding, repaired `4c8b7a3`. Dependency placement is now mechanically e
 rather than `done/` because `done/` means shipped and DC-50 ships nothing; being a decision-only
 increment, it will never move. DC-50 produced no code and authorized exactly one successor: DC-55.
 
-**Why this order.** DC-55 leads because DC-50 authorized it and because of what it does to DC-42. DC-42
-owns NFR-PERF-01, and DC-50 measured a ~5.8x throughput gap on the SHA-256 primitive underneath it — so
-running DC-42 first would set performance requirements against a baseline DC-55 is already cleared to
-invalidate, forcing a re-measure. DC-55 first means DC-42 measures once, against the primitive that will
-actually ship. DC-42 then carries its real requirements decision (NFR-PERF-01 and NFR-PERF-02 must each
-end implemented **or** explicitly amended). DC-52 needs its stability precondition. DC-43 needs security
-review and is best consumed against a settled tooling gate.
+**DC-55 is complete** — accepted `a01e628`, swap implemented `8c84bc4`, fixture repairs `083d6c0` and
+`753ebab`. Implementation review v1 returned one blocking finding (a fixture depending on directories git
+cannot store, which broke `cargo test --workspace --locked` on the committed tree); repaired and accepted
+at re-review v1 on 2026-07-29, verified by fresh clone with a negative control. `prikk-hash::sha256` now
+runs on `sha2`, with the outgoing first-party implementation retained test-only as the differential's
+permanent independent reference.
 
-**DC-55's design review was an author re-examination, and that is on record.** It is identity-bearing —
-every ObjectId, state root, ref-name path, and signature preimage derives from the function it replaces —
-and it is the category where a green test suite can mean "consistently changed" rather than "unchanged."
-Design review v1 (`.git-exclude/reviewed/prikk-dc55-design-review-v1.md`) returned a blocking finding and
-five notes, all resolved by the same author who wrote the design; the owner directed on 2026-07-28 that
-revision proceed on that basis. The RFC's Status field records the gap rather than absorbing it into
-routing convention, and the acceptance criteria were rewritten so the identity claim is reproducible by a
-reviewer at **implementation** review, where independence is achievable. See also its RFC Risks section on
-the `PRIKK_REGEN=1` regeneration hazard.
+**Why this order.** DC-42 now leads. It carries a real requirements decision — NFR-PERF-01 and NFR-PERF-02
+must each end implemented **or** explicitly amended — and DC-55 having landed first means it measures once,
+against the primitive that actually ships, rather than against a baseline already cleared for replacement.
+DC-52 needs its stability precondition. DC-43 needs security review and is best consumed against a settled
+tooling gate.
+
+**On DC-55's review independence.** Its design review was an author re-examination: this project has one
+architect, so independent design review is not achievable for a design the architect wrote. That is the
+defined process — the organization document's Phase 2 gate assigns design review to the high-capability
+model without distinguishing the two — rather than a deviation from it. The limitation is real regardless,
+and DC-55 shows both sides of it: the author review found a genuine blocking defect, *and* a second
+blocking defect survived into the implementation and was caught only because acceptance criteria had been
+written to be reproducible from the repository rather than trusted from a report. Keep that pattern for
+identity-bearing increments.
 
 ## 2. Blocked on a release-lane event
 
