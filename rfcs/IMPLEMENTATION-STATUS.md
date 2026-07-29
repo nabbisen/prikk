@@ -23,8 +23,14 @@ split from DC-56 because this workspace had no benchmark infrastructure. Its rep
 scan directly (4.22 ms at 10 files rising to 516 ms at 10,000, change set fixed at one file throughout)
 and satisfies DC-56's precondition.
 
-**DC-58 batch 1 is complete at `e1d0213`** — accepted; identity artifacts untouched and all test counts
-held. Batches continue.
+**DC-58 batches 1 and 2 are accepted** — `e1d0213` and `54a3037`; identity artifacts untouched and all
+test counts held across both. Closure is pending a single reporting correction: `lifecycle_cache.rs` went
+from 974 to 117 implementation lines by moving 848 lines of already-test-only scaffolding behind a
+whole-module `#[cfg(test)]` gate, which was ruled in scope but must be recorded as a reclassification
+rather than folded into the same "split" language as the other three files. That review also surfaced a
+previously untracked capability gap — the moved scaffolding awaits blob-kind verification,
+provenance-vs-baseline staleness, and replay reconstruction/compare, and its governing RFC (DC-09) is
+archived; now recorded in `MILESTONES.md`.
 
 **DC-57 is HELD and its implementation handoff is withdrawn.** The dev team stopped at handoff Step 1 as
 instructed and reported that the active WAL is structurally capped at **one record repository-wide**;

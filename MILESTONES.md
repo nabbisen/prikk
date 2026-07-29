@@ -100,7 +100,7 @@ When citing a gate, name the scheme: "product M3" or "corrective M2", never a ba
 | Multi-patch active blocks not implemented — active WAL capped at one record | **Capability gap; blocks two NFRs** | Needs a queuing increment, or reviewed amendment of both NFRs. **Owner decision pending** | Product **M3** |
 | Active-Patch warning 800 / hard bound 1000 from NFR-PERF-02 | **Missed product gate** — blocked on the capability above, not merely unimplemented | DC-57 **HELD 2026-07-29**: thresholds are unreachable while an active block holds one patch | Product **M3**; carried into corrective M2 |
 | Merge scope bounded by active block size (NFR-PERF-03) | **Vacuously satisfied** — same root cause | Unowned; resolves with the capability above | Product **M3** |
-| Source/test structure gates absent | Maintainability risk | DC-58 (was DC-42) | Corrective M2 |
+| Source/test structure gates absent | Maintainability risk | DC-58 (was DC-42) — batches 1 (`e1d0213`) and 2 (`54a3037`) accepted; **closure pending one report reframing (N1)** | Corrective M2 |
 | Vulnerability reporting, SBOM, provenance absent | Distribution risk | DC-43 | M2 |
 | Mixed release-policy tooling ownership and custom schema evaluator | Tooling debt | DC-45 | M2 |
 | Declared Rust 1.85 minimum does not pass the locked product workspace | Compatibility debt | DC-46 | M2 |
@@ -110,6 +110,7 @@ When citing a gate, name the scheme: "product M3" or "corrective M2", never a ba
 | No mechanical gate on product `[dependencies]` placement | Supply-chain risk | DC-51 (DC-41 finding B4) | M2 |
 | DC-45 retirement obligations tracked only in prose | Process debt | DC-52 | M2 |
 | Repository-wide AUTHOR trust unverified | Capability gap | DC-53 | Post-M2, unscheduled |
+| Lifecycle-cache trust ladder built but unwired — 848 test-only lines await blob-kind verification, provenance-vs-baseline staleness, and replay reconstruction/compare | **Capability gap, previously untracked** — recorded 2026-07-30 from the DC-58 batch 2 review. Its governing RFC (DC-09 Phase 4.4-2b.1) is in `rfcs/archive/`, so the capability has no live owner | Unowned; needs an RFC or an explicit decision to drop the scaffolding | Unscheduled |
 
 ## M0 - Architecture ratification
 

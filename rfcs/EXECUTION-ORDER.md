@@ -30,7 +30,7 @@ from. DC-56, DC-57, and DC-58 are newly split from DC-42 and their handoffs foll
 
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
-| 1 | **DC-58** — source-structure audit | **In flight** — batch 1 accepted `e1d0213` | none | `handoffs/DC-58-source-structure-audit/implementation-handoff-v1.md` (batch 2 next) |
+| 1 | **DC-58** — source-structure audit | **Both batches accepted**; closure pending report reframing (N1) | with developers for N1 only | `handoffs/DC-58-source-structure-audit/implementation-handoff-v1.md` |
 | 2 | **DC-56** — commit full-tree scan compliance (NFR-PERF-01) | Proposed | design review; **owner ruling on the NFR-PERF-01 reading** (DC-59's report is now in hand) | handoff pending design acceptance |
 | 3 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
 | 4 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
@@ -92,6 +92,15 @@ and DC-55 shows both sides of it: the author review found a genuine blocking def
 blocking defect survived into the implementation and was caught only because acceptance criteria had been
 written to be reproducible from the repository rather than trusted from a report. Keep that pattern for
 identity-bearing increments.
+
+**DC-58 batches 1 and 2 are accepted** — `e1d0213` and `54a3037`, implementation reviews accepted with no
+blocking findings. All four remaining over-500 files were resolved: three split, and `lifecycle_cache.rs`
+reduced from 974 to 117 implementation lines by moving 848 lines of already-test-only trust-ladder
+scaffolding into a whole-module-gated `cache_ladder.rs`. That reclassification was ruled in scope — a
+non-test and a release build both still compile, proving nothing production-reachable moved behind the
+gate — but must be reported separately from the three genuine splits, which is the only item outstanding.
+Two permanent by-design exceptions stand: `node_authoring.rs` deferred while DC-56 is open, and
+`frozen_outgoing.rs` excluded as DC-55's immutable reference.
 
 **DC-59 is complete** — implemented `a9c2fe0`, accepted 2026-07-29. Its report measured the full-tree
 scan: 4.22 ms at 10 files rising to 516 ms at 10,000, with the change set fixed at one file throughout.
