@@ -48,14 +48,51 @@ since the dependency question is a placement-gate-adjacent decision under DC-51.
 The generator must be **reproducible**: given the same parameters it must produce byte-identical
 repositories, so a reviewer rebuilding the curve measures the same thing.
 
-Parameters: file count, directory breadth and depth, and file size. Content derived from a fixed seed —
-the `SplitMix64` used by `crates/prikk-hash/src/tests/hash_differential.rs` is already in the tree and
-already reviewed, and reusing it avoids introducing a second notion of determinism.
+**Content parameters:** file count, directory breadth and depth, and file size, with content derived from
+a fixed seed.
 
-Record the generator's parameters in the report. A curve whose inputs cannot be reconstructed is not
+**The PRNG is duplicated in the harness, deliberately** (per review v1 B2). An earlier draft proposed
+reusing the `SplitMix64` in `crates/prikk-hash/src/tests/hash_differential.rs`; that is not reachable —
+it is a private struct in a `#[cfg(test)]` module of a different crate. The alternatives are to promote it
+into shared test-support, which touches `prikk-hash` material DC-55 froze on purpose, or to carry a small
+local copy. Carry the copy, and say in the harness documentation that it is a deliberate duplicate of a
+reviewed generator rather than a second invented one.
+
+**Identity prerequisites — without these the measured command refuses to run** (per review v1 B3). Commit
+requires author signing: `crates/prikk-cli/src/main.rs:124` calls `author_signer_from_env()`, which fails
+closed unless both `PRIKK_AUTHOR_KEY_ID` and `PRIKK_AUTHOR_SEED` (64 hex characters) are set
+(`main.rs:431-443`). A usable repository also needs the trust material the DC-55 fixture carries:
+`.prikk/trust/policy.toml` and a maintainer public key under `.prikk/trust/keys/maintainer/`.
+
+Use a **fixed author key seed** across all runs so measurements are comparable and reproducible. Record it
+in the report; it is benchmark material, not a credential.
+
+Record every generator parameter in the report. A curve whose inputs cannot be reconstructed is not
 evidence.
 
-### 3. Two axes, because one cannot distinguish the hypotheses
+### 3. The measurement loop: one commit per generated repository
+
+**Commit cannot be run twice against the same repository** (per review v1 B1).
+`crates/prikk-store/src/worktree_patch/node_authoring.rs:202-207` fails closed once the active WAL is
+non-empty — "active WAL already contains patches for {ref}; run `prikk seal` before committing again". A
+naive repeated-trial loop errors on its second iteration.
+
+**Each timed commit runs against a freshly generated repository.** Variance comes from sampling several
+repositories at each size point, not from repeating commits within one. Rejected alternatives, recorded so
+they are not re-proposed:
+
+| Alternative | Why not |
+|---|---|
+| Seal between trials | Seal cost enters the loop. NFR-PERF-01 does not bound seal, so this measures the wrong thing |
+| Regenerate and re-time in one repository | Same as the chosen approach, but invites including generation cost in the timing window |
+
+**Generation happens outside the timing window.** Time the `commit` invocation only.
+
+State the sample count per size point in the report. This makes the run more expensive than a
+repeated-trial loop would be — generating many large repositories is the dominant cost of this increment,
+and that is expected rather than a surprise to discover during implementation.
+
+### 4. Two axes, because one cannot distinguish the hypotheses
 
 **Axis A — cost against repository size, at fixed change count.** Vary total file count across at least
 four points spanning two orders of magnitude (e.g. 10 / 100 / 1,000 / 10,000 files), changing exactly one
@@ -70,16 +107,28 @@ Axis A alone is insufficient: without B there is no baseline for what proportion
 a reviewer cannot tell a scan from expensive per-change work. Reporting a single latency number, or Axis A
 alone, is the failure mode this increment exists to prevent.
 
-### 4. Committed, reviewable report
+### 5. Committed, reviewable report
 
-Results land in a **committed report file** with: generator parameters, both curves as tables, machine and
-filesystem context, and the exact command that reproduces them. Not pasted into a review note — the point
-is that the next increment, and the next reviewer, can re-run it.
+Results land at **`rfcs/handoffs/DC-59-commit-benchmark-harness/benchmark-report-v1.md`** (per review v1
+N1 — an unnamed location invites two increments disagreeing), with: generator parameters including the
+fixed author seed, both curves as tables, sample count per point, machine and filesystem context, and the
+exact command that reproduces them. Not pasted into a review note — the point is that the next increment,
+and the next reviewer, can re-run it.
+
+**Say where signing cost sits.** NFR-PERF-01's bound explicitly includes *signature*, so Ed25519 signing
+is inside what the requirement permits — but a curve that cannot separate signing from traversal cannot
+answer DC-56's question. Axis B isolates it: signing scales with the change set, so its contribution shows
+up there and not in Axis A's growth. State this in the report rather than leaving the reader to infer it.
+
+**Record the process-spawn floor** (per review v1 N2). Driving `CARGO_BIN_EXE_prikk` through `Command`
+puts process startup inside every measurement — a roughly constant additive offset that does not hide
+Axis A's shape but may dominate at the small end. Time a trivial invocation and report it as the floor, so
+a reader comparing the 10-file and 100-file points knows what is baseline.
 
 State the filesystem, since commit cost includes fsync and NFR-PERF-01 names fsync in its bound. A number
 measured on tmpfs and a number measured on a journaling filesystem are different claims.
 
-### 5. Scope discipline
+### 6. Scope discipline
 
 The harness measures the commit path as it exists. It does not modify it, optimise it, or prepare it for
 modification.
@@ -99,9 +148,10 @@ modification.
 **Measuring the wrong thing.** If generation places all files in one directory, the curve may reflect
 directory-entry scaling rather than tree traversal. Vary breadth and depth, and record both.
 
-**Filesystem noise swamping the signal.** Commit includes fsync. Warm-up runs and repeated trials with a
-recorded median are needed, or run-to-run variance will exceed the effect being measured. Specify the
-trial count in the report.
+**Filesystem noise swamping the signal.** Commit includes fsync. Sampling several repositories per size
+point with a recorded median is needed, or run-to-run variance will exceed the effect being measured.
+Repeated commits within one repository are not available as a variance-reduction technique — see design
+§3.
 
 **The harness becoming a maintenance burden.** It is `#[ignore]`d and not in the gate set, so it can rot
 undetected. Accept this deliberately: it is a measurement instrument, run when a performance question is
@@ -109,18 +159,23 @@ open. Say so in its module documentation so a future reader does not mistake dor
 
 ## Acceptance criteria
 
-1. A committed benchmark harness exists, adds **no new production dependency**, and is excluded from the
-   default test run.
+1. A committed benchmark harness exists, is excluded from the default test run, and **adds no new
+   dev-dependency** — the constraint that actually binds (per review v1 N3; a test harness could not add a
+   production dependency in any case, so the original wording constrained nothing).
 2. Repository generation is deterministic and parameterised; the same parameters reproduce byte-identical
-   repositories.
-3. Axis A measured across at least four repository sizes spanning two orders of magnitude, at fixed change
+   repositories. Generation includes trust material and a fixed author key seed, so the measured command
+   runs.
+3. **Each timed commit runs against a freshly generated repository**, with generation outside the timing
+   window and sampling across repositories at each size point.
+4. Axis A measured across at least four repository sizes spanning two orders of magnitude, at fixed change
    count.
-4. Axis B measured across varying change counts at fixed repository size.
-5. A committed report records both curves, generator parameters, trial count, machine and **filesystem**
-   context, and the exact reproduction command.
-6. No production code changed — evidenced by the diff.
-7. Full gate set per `rfcs/EXECUTION-ORDER.md` §6 rule 9, plus test counts before and after per rule 10.
+5. Axis B measured across varying change counts at fixed repository size.
+6. The report at `rfcs/handoffs/DC-59-commit-benchmark-harness/benchmark-report-v1.md` records both
+   curves, generator parameters, the fixed seed, sample count per point, the process-spawn floor, machine
+   and **filesystem** context, where signing cost appears, and the exact reproduction command.
+7. No production code changed — evidenced by the diff.
+8. Full gate set per `rfcs/EXECUTION-ORDER.md` §6 rule 9, plus test counts before and after per rule 10.
 
-Criteria 1–4 and 6 are verifiable from the repository. Criterion 5's *numbers* are hardware-dependent and
-will differ per reviewer — but the **shape** of Axis A is the claim that matters, and that must reproduce.
-Say so in the report: a reviewer confirming the curve's shape has confirmed the finding.
+Criteria 1–5, 7 and 8 are verifiable from the repository. Criterion 6's *numbers* are hardware-dependent
+and will differ per reviewer — but the **shape** of Axis A is the claim that matters, and that must
+reproduce. Say so in the report: a reviewer confirming the curve's shape has confirmed the finding.
