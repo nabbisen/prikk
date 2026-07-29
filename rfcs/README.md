@@ -29,10 +29,7 @@ These records are under design review. All proposed RFCs must respect the depend
 
 | ID | Title | Milestone |
 |---|---|---|
-| DC-59 | [Commit Benchmark Harness](./proposed/DC-59-COMMIT-BENCHMARK-HARNESS.md) | Produces NFR-PERF-01's named evidence artifact; precondition for DC-56 |
 | DC-56 | [Commit Full-Tree Scan Compliance](./proposed/DC-56-COMMIT-FULL-TREE-SCAN-COMPLIANCE.md) | Closes **missed product M1** gate NFR-PERF-01; needs DC-59 |
-| DC-57 | [Active-Patch Thresholds](./proposed/DC-57-ACTIVE-PATCH-THRESHOLDS.md) | Closes **missed product M3** gate NFR-PERF-02 |
-| DC-58 | [Source-Structure Audit](./proposed/DC-58-SOURCE-STRUCTURE-AUDIT.md) | Corrective M2 maintainability |
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0 |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
@@ -42,7 +39,7 @@ These records are under design review. All proposed RFCs must respect the depend
 DC-41 design review is accepted (below); its staged implementation does not require DC-42 or DC-43 to
 wait. **DC-55 is complete** (below). **DC-42 was superseded** on 2026-07-29 into DC-56, DC-57, and DC-58
 after design review found it bundled three unrelated increments; it is in `archive/`. The remaining
-development order is DC-59, DC-56, DC-57, DC-58, then DC-52, then DC-43 — each still requiring individual design
+development order is DC-59, DC-56, DC-57, DC-58, then DC-52, then DC-43. DC-57, DC-58 and DC-59 are now accepted (below) — each still requiring individual design
 acceptance before implementation. See
 [`EXECUTION-ORDER.md`](./EXECUTION-ORDER.md) for what each is blocked on. DC-44 remains scheduled after M2
 and DC-53 is unscheduled; both have design briefs rather than implementation handoffs. DC-49 is proposed
@@ -71,6 +68,9 @@ These reviewed designs may govern downstream work but have not yet released.
 | DC-46 | [Workspace Rust 1.85 Compatibility](./accepted/DC-46-WORKSPACE-RUST-1.85-COMPATIBILITY.md) | M2 / before 0.19.0 RC; complete at `0d221af`, post-commit evidence accepted |
 | DC-47 | [Stable Clippy Gate Alignment](./accepted/DC-47-STABLE-CLIPPY-GATE-ALIGNMENT.md) | M2 / before 0.19.0 RC; complete at `ea95e92`, post-commit evidence accepted |
 | DC-48 | [Legacy Clippy Production Retirement](./accepted/DC-48-LEGACY-CLIPPY-PRODUCTION-RETIREMENT.md) | M2 / before 0.19.0 RC; complete at `383e503`, post-commit evidence accepted |
+| DC-57 | [Active-Patch Thresholds](./accepted/DC-57-ACTIVE-PATCH-THRESHOLDS.md) | Closes missed **product M3** gate NFR-PERF-02. Accepted 2026-07-29; **one open blocking finding** — configuration mechanism does not exist. Handoff held |
+| DC-58 | [Source-Structure Audit](./accepted/DC-58-SOURCE-STRUCTURE-AUDIT.md) | Corrective M2 maintainability. Accepted 2026-07-29, no blocking findings; defers `node_authoring.rs` until DC-56 |
+| DC-59 | [Commit Benchmark Harness](./accepted/DC-59-COMMIT-BENCHMARK-HARNESS.md) | Produces NFR-PERF-01's named evidence artifact; precondition for DC-56. Accepted 2026-07-29 after design review and revision |
 
 ## Done
 

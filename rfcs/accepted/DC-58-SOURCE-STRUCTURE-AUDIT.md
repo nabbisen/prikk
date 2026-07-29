@@ -1,6 +1,11 @@
 # RFC (proposed) - DC-58 Source-Structure Audit
 
-**Status.** Proposed. Requires design review before implementation may begin.
+**Status.** **Accepted by the project owner on 2026-07-29.** Architect design review v1 was performed
+after acceptance and returned no blocking findings
+(`.git-exclude/reviewed/prikk-dc57-dc58-post-acceptance-review-v1.md`). Implementation may begin, with
+one scheduling constraint: **`worktree_patch/node_authoring.rs` is deferred** until DC-56 records an
+outcome — it is 601 lines and therefore in scope here, but DC-56 may restructure it and DC-59 benchmarks
+the path through it.
 **Supersedes.** Item 2 of DC-42 (`rfcs/archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md`).
 **Requirement.** **NFR-MAINT-02** (module boundaries) and the project Rust development and testing rules.
 No milestone gate is missed here — this is corrective-M2 maintainability work, not a requirement gap.

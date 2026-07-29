@@ -1,6 +1,8 @@
 # RFC (proposed) - DC-59 Commit Benchmark Harness
 
-**Status.** Proposed. Requires design review before implementation may begin.
+**Status.** **Accepted by the project owner on 2026-07-29**, after design review v1 returned three
+blocking findings (measurement loop, unreachable PRNG, missing signing prerequisite) and all were resolved
+in revision at `f8d0938`. Implementation may begin.
 **Split from.** DC-56, per design review v1 finding B2 — the benchmark was one paragraph inside an RFC
 whose decision depends entirely on it.
 **Requirement.** Produces the evidence artifact **NFR-PERF-01** names:

@@ -1,6 +1,12 @@
 # RFC (proposed) - DC-57 Active-Patch Thresholds
 
-**Status.** Proposed. Requires design review before implementation may begin.
+**Status.** **Accepted by the project owner on 2026-07-29.** Architect design review v1 was performed
+after acceptance and returned **one open blocking finding**
+(`.git-exclude/reviewed/prikk-dc57-dc58-post-acceptance-review-v1.md` §B1): the RFC requires the
+thresholds to be configurable, but **no repository configuration mechanism exists** — `prikk-store` has no
+TOML dependency, `trust/policy.toml` is hand-parsed, and adding a parser would require a DC-51
+`ALLOWED_THIRD_PARTY` amendment. **No implementation handoff should be issued until the configuration
+route is chosen**, because it materially changes the increment's size.
 **Supersedes.** Item 3 of DC-42 (`rfcs/archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md`).
 **Requirement.** **NFR-PERF-02** — `specs/prikk-non-functional-requirements-v1.1.md` §4.5.
 **Gate status.** Product **M3** (Block DAG and Checkout). **Missed and carried** — see `MILESTONES.md`

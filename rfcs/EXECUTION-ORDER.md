@@ -7,9 +7,10 @@ backlog narrative, `rfcs/IMPLEMENTATION-STATUS.md` the current-state snapshot, a
 authority. This file answers only one question the others do not: **what do I pick up next, and what is it
 waiting on?**
 
-Last reconciled: 2026-07-29, after DC-55 completion (`753ebab`) and the DC-42 design review, which
-superseded DC-42 into DC-56, DC-57, and DC-58. The release-lane decision point sits after the performance
-work per the owner's 2026-07-29 direction.
+Last reconciled: 2026-07-29. DC-57, DC-58, DC-59 accepted by the owner; DC-59 after design review and
+revision, DC-57 and DC-58 with architect review performed after acceptance — DC-57 carries one open
+blocking finding and its handoff is held. The release-lane decision point sits after the performance work
+per the owner's 2026-07-29 direction.
 
 ## The two lanes
 
@@ -29,10 +30,10 @@ from. DC-56, DC-57, and DC-58 are newly split from DC-42 and their handoffs foll
 
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
-| 1 | **DC-59** — commit benchmark harness | Proposed | design review | handoff pending design acceptance |
+| 1 | **DC-59** — commit benchmark harness | **Accepted 2026-07-29** | none — **cleared**, handoff pending | handoff being written |
 | 2 | **DC-56** — commit full-tree scan compliance (NFR-PERF-01) | Proposed | design review; **DC-59's report**; **owner ruling on the NFR-PERF-01 reading** | handoff pending design acceptance |
-| 3 | **DC-57** — active-Patch thresholds (NFR-PERF-02) | Proposed | design review | handoff pending design acceptance |
-| 4 | **DC-58** — source-structure audit | Proposed | design review | handoff pending design acceptance |
+| 3 | **DC-57** — active-Patch thresholds (NFR-PERF-02) | **Accepted 2026-07-29**, one open finding | **configuration route undecided** — see RFC Status | **hold** — no handoff until B1 resolved |
+| 4 | **DC-58** — source-structure audit | **Accepted 2026-07-29** | none — **cleared**, handoff pending | handoff pending; defers `node_authoring.rs` |
 | 5 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
 | 6 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
 
