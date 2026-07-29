@@ -1,0 +1,206 @@
+//! Operation-application logic for patch replay: folding one decoded operation into the in-memory
+//! file/live-node state. Split out of `patch_replay.rs` (DC-58) — no behaviour change, all items
+//! moved verbatim.
+
+use std::collections::BTreeMap;
+
+use prikk_error::{PrikkError, Result};
+use prikk_object::{NodeId, NodeKind, text_span_hash};
+
+use crate::object_store::FileObjectStore;
+use crate::path::RepoPath;
+use crate::text_span;
+
+use super::PatchReplayDeletedFile;
+use super::decode::{
+    DecodedDeletePreimage, DecodedOperationKind, DecodedPatchOperation, ensure_apply_supported,
+};
+use super::read::read_blob_bytes_with_kind;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ReplayLiveNode {
+    pub(super) path: String,
+    pub(super) kind: NodeKind,
+}
+
+pub(super) fn apply_decoded_operation(
+    object_store: &FileObjectStore,
+    files: &mut BTreeMap<String, Vec<u8>>,
+    live_nodes: &mut BTreeMap<NodeId, ReplayLiveNode>,
+    deleted_files: &mut BTreeMap<String, PatchReplayDeletedFile>,
+    operation: DecodedPatchOperation,
+) -> Result<()> {
+    // Erratum P1: decode success does not imply applicability. The apply-supported
+    // subset is gated here as the single source of truth; the match below only needs
+    // to handle the kinds the gate admits.
+    ensure_apply_supported(&operation)?;
+    match operation.kind {
+        DecodedOperationKind::CreateFile {
+            path,
+            node_id,
+            blob_id,
+            mode: _,
+        } => {
+            if files.contains_key(&path) {
+                return Err(PrikkError::Integrity(format!(
+                    "CreateFile would overwrite existing path {path}"
+                )));
+            }
+            if live_nodes.contains_key(&node_id) {
+                return Err(PrikkError::Integrity(
+                    "CreateFile would introduce an already-live node_id".to_string(),
+                ));
+            }
+            let (kind, bytes) = read_blob_bytes_with_kind(object_store, blob_id)?;
+            deleted_files.remove(&path);
+            files.insert(path.clone(), bytes);
+            live_nodes.insert(node_id, ReplayLiveNode { path, kind });
+        }
+        DecodedOperationKind::DeleteNode {
+            path,
+            node_id,
+            preimage:
+                DecodedDeletePreimage::File {
+                    old_node_kind,
+                    old_blob_id,
+                    old_mode: _,
+                },
+        } => {
+            let old_bytes = files.get(&path).ok_or_else(|| {
+                PrikkError::Integrity(format!("DeleteNode path is absent: {path}"))
+            })?;
+            crate::blob_access::ensure_blob_matches_node_kind(
+                old_bytes,
+                old_blob_id,
+                old_node_kind,
+            )?;
+            let repo_path = RepoPath::parse(&path)?;
+            let deleted = PatchReplayDeletedFile {
+                path: repo_path,
+                old_blob_id,
+                old_bytes: old_bytes.clone(),
+            };
+            files.remove(&path);
+            if let Some(live) = live_nodes.remove(&node_id) {
+                if live.path != path {
+                    return Err(PrikkError::Integrity(format!(
+                        "DeleteNode path {path} does not match live node path {}",
+                        live.path
+                    )));
+                }
+                if live.kind != old_node_kind {
+                    return Err(PrikkError::Integrity(
+                        "DeleteNode old_node_kind does not match live node kind".to_string(),
+                    ));
+                }
+            }
+            deleted_files.insert(path, deleted);
+        }
+        DecodedOperationKind::EditText {
+            node_id,
+            span_id,
+            old_span_hash,
+            left_anchor_hash,
+            right_anchor_hash,
+            replacement_text,
+            old_span_text,
+        } => {
+            apply_edit_text(
+                files,
+                live_nodes,
+                node_id,
+                &span_id,
+                &old_span_hash,
+                &left_anchor_hash,
+                &right_anchor_hash,
+                &replacement_text,
+                &old_span_text,
+            )?;
+        }
+        _ => unreachable!(
+            "ensure_apply_supported admits only CreateFile, file-DeleteNode, and EditText for replay"
+        ),
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_edit_text(
+    files: &mut BTreeMap<String, Vec<u8>>,
+    live_nodes: &BTreeMap<NodeId, ReplayLiveNode>,
+    node_id: NodeId,
+    span_id: &[u8; 32],
+    old_span_hash: &[u8; 32],
+    left_anchor_hash: &[u8; 32],
+    right_anchor_hash: &[u8; 32],
+    replacement_text: &[u8],
+    old_span_text: &[u8],
+) -> Result<()> {
+    if text_span_hash(old_span_text) != *old_span_hash {
+        return Err(PrikkError::Integrity(format!(
+            "EditText hash verification failed before localization for node {} span {}",
+            hex32(node_id.as_bytes()),
+            hex32(span_id)
+        )));
+    }
+    let live = live_nodes.get(&node_id).ok_or_else(|| {
+        PrikkError::Integrity(format!(
+            "EditText failed before blob load: node {} is not live (span {})",
+            hex32(node_id.as_bytes()),
+            hex32(span_id)
+        ))
+    })?;
+    if live.kind != NodeKind::TextFile {
+        return Err(PrikkError::Integrity(format!(
+            "EditText failed before blob load: node {} is {:?}, not TextFile (span {})",
+            hex32(node_id.as_bytes()),
+            live.kind,
+            hex32(span_id)
+        )));
+    }
+    let current_text = files.get(&live.path).ok_or_else(|| {
+        PrikkError::Integrity(format!(
+            "EditText failed before blob load: live node {} path {} is absent (span {})",
+            hex32(node_id.as_bytes()),
+            live.path,
+            hex32(span_id)
+        ))
+    })?;
+    if core::str::from_utf8(current_text).is_err() {
+        return Err(PrikkError::Integrity(format!(
+            "EditText failed during UTF-8 validation for node {} span {}",
+            hex32(node_id.as_bytes()),
+            hex32(span_id)
+        )));
+    }
+    let (start, end) = text_span::locate_text_span(
+        current_text,
+        old_span_text,
+        left_anchor_hash,
+        right_anchor_hash,
+        span_id,
+        node_id,
+        old_span_hash,
+    )
+    .map_err(|reason| {
+        PrikkError::Integrity(format!(
+            "EditText failed during localization for node {} span {}: {reason}",
+            hex32(node_id.as_bytes()),
+            hex32(span_id)
+        ))
+    })?;
+    let new_text =
+        text_span::splice_text(current_text, start, end, replacement_text).map_err(|err| {
+            PrikkError::Integrity(format!(
+                "EditText failed during splice for node {} span {}: {err}",
+                hex32(node_id.as_bytes()),
+                hex32(span_id)
+            ))
+        })?;
+    files.insert(live.path.clone(), new_text);
+    Ok(())
+}
+
+fn hex32(bytes: &[u8; 32]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}

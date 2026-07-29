@@ -6,28 +6,33 @@
 //! records but their application is deferred to the node model (increment 4.4; `EditText` also
 //! needs FDD-01 §7.2.1 span anchoring); renames, chmod, symlinks, merge algebra, and conflict
 //! handling remain later increments.
+//!
+//! Split across three files (DC-58): this file keeps the public API and baseline resolution;
+//! `read.rs` holds object-store reading helpers (block-chain walking, blob/patch/snapshot
+//! loading); `apply.rs` holds the per-operation state-fold logic. `decode.rs` (pre-existing) is
+//! unchanged. No behaviour or public path changed by the split.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
+mod apply;
 pub(crate) mod decode;
+mod read;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{
-    BlobKind, BlobPayload, BlockPayload, NodeId, NodeKind, ObjectEnvelope, ObjectId, ObjectType,
-    RefStatePayload, text_span_hash,
-};
+use prikk_object::ObjectId;
 
 use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
 use crate::path::RepoPath;
 use crate::refs::RefStore;
-use crate::snapshot::{SnapshotEntry, SnapshotManifest};
-use crate::text_span;
+use crate::snapshot::SnapshotManifest;
 use crate::validate_local_branch_ref;
 
-use decode::{
-    DecodedDeletePreimage, DecodedOperationKind, DecodedPatchOperation, decode_patch_operations,
-    ensure_apply_supported,
+use apply::apply_decoded_operation;
+use decode::decode_patch_operations;
+use read::{
+    current_target_block, files_to_manifest, load_snapshot_files, read_block, read_patch,
+    single_parent_chain,
 };
 
 /// Read-only result of replaying supported patch operations to an in-memory snapshot.
@@ -234,303 +239,6 @@ pub(crate) fn resolve_worktree_baseline(
         )));
     }
     Ok(WorktreeBaseline::Genesis)
-}
-
-fn current_target_block(
-    layout: &RepositoryLayout,
-    object_store: &FileObjectStore,
-    ref_name: &str,
-) -> Result<ObjectId> {
-    let ref_store = RefStore::new(layout.clone());
-    let ref_state_id = ref_store
-        .read_current_ref_state_id(ref_name)?
-        .ok_or_else(|| PrikkError::Integrity(format!("ref {ref_name} is not published")))?;
-    let envelope = object_store
-        .read_typed(ref_state_id, ObjectType::RefState)?
-        .ok_or_else(|| {
-            PrikkError::Integrity(format!(
-                "ref {ref_name} points to missing RefState {ref_state_id}"
-            ))
-        })?;
-    let ref_state = RefStatePayload::decode_canonical(&envelope.canonical_payload)?;
-    if ref_state.ref_name != ref_name {
-        return Err(PrikkError::Integrity(format!(
-            "RefState name mismatch: expected {ref_name}, got {}",
-            ref_state.ref_name
-        )));
-    }
-    Ok(ref_state.target_object_id)
-}
-
-fn single_parent_chain(object_store: &FileObjectStore, target: ObjectId) -> Result<Vec<ObjectId>> {
-    let mut newest_first = Vec::new();
-    let mut seen = HashSet::new();
-    let mut current = Some(target);
-    while let Some(block_id) = current {
-        if !seen.insert(block_id) {
-            return Err(PrikkError::Integrity(format!(
-                "block parent chain contains a cycle at {block_id}"
-            )));
-        }
-        let block = read_block(object_store, block_id)?;
-        if block.parent_block_ids.len() > 1 {
-            return Err(PrikkError::UnsupportedObjectType(format!(
-                "patch replay supports only single-parent chains; block {block_id} has {} parents",
-                block.parent_block_ids.len()
-            )));
-        }
-        newest_first.push(block_id);
-        current = block.parent_block_ids.first().copied();
-    }
-    newest_first.reverse();
-    Ok(newest_first)
-}
-
-fn read_block(object_store: &FileObjectStore, block_id: ObjectId) -> Result<BlockPayload> {
-    let envelope = object_store
-        .read_typed(block_id, ObjectType::Block)?
-        .ok_or_else(|| PrikkError::Integrity(format!("missing Block {block_id}")))?;
-    BlockPayload::decode_canonical(&envelope.canonical_payload)
-}
-
-fn read_patch(object_store: &FileObjectStore, patch_id: ObjectId) -> Result<ObjectEnvelope> {
-    object_store
-        .read_typed(patch_id, ObjectType::Patch)?
-        .ok_or_else(|| PrikkError::Integrity(format!("missing Patch {patch_id}")))
-}
-
-fn load_snapshot_files(
-    object_store: &FileObjectStore,
-    snapshot_blob_ref: ObjectId,
-) -> Result<BTreeMap<String, Vec<u8>>> {
-    let envelope = object_store
-        .read_typed(snapshot_blob_ref, ObjectType::Blob)?
-        .ok_or_else(|| {
-            PrikkError::Integrity(format!("missing snapshot Blob {snapshot_blob_ref}"))
-        })?;
-    let snapshot_content = crate::blob_access::decode_snapshot_blob(&envelope.canonical_payload)?;
-    let manifest = SnapshotManifest::decode(&snapshot_content)?;
-    let mut files = BTreeMap::new();
-    for entry in manifest.files {
-        files.insert(entry.path.as_str().to_string(), entry.bytes);
-    }
-    Ok(files)
-}
-
-fn files_to_manifest(files: BTreeMap<String, Vec<u8>>) -> Result<SnapshotManifest> {
-    let mut entries = Vec::with_capacity(files.len());
-    for (path, bytes) in files {
-        entries.push(SnapshotEntry {
-            path: RepoPath::parse(&path)?,
-            bytes,
-        });
-    }
-    Ok(SnapshotManifest { files: entries })
-}
-
-fn apply_decoded_operation(
-    object_store: &FileObjectStore,
-    files: &mut BTreeMap<String, Vec<u8>>,
-    live_nodes: &mut BTreeMap<NodeId, ReplayLiveNode>,
-    deleted_files: &mut BTreeMap<String, PatchReplayDeletedFile>,
-    operation: DecodedPatchOperation,
-) -> Result<()> {
-    // Erratum P1: decode success does not imply applicability. The apply-supported
-    // subset is gated here as the single source of truth; the match below only needs
-    // to handle the kinds the gate admits.
-    ensure_apply_supported(&operation)?;
-    match operation.kind {
-        DecodedOperationKind::CreateFile {
-            path,
-            node_id,
-            blob_id,
-            mode: _,
-        } => {
-            if files.contains_key(&path) {
-                return Err(PrikkError::Integrity(format!(
-                    "CreateFile would overwrite existing path {path}"
-                )));
-            }
-            if live_nodes.contains_key(&node_id) {
-                return Err(PrikkError::Integrity(
-                    "CreateFile would introduce an already-live node_id".to_string(),
-                ));
-            }
-            let (kind, bytes) = read_blob_bytes_with_kind(object_store, blob_id)?;
-            deleted_files.remove(&path);
-            files.insert(path.clone(), bytes);
-            live_nodes.insert(node_id, ReplayLiveNode { path, kind });
-        }
-        DecodedOperationKind::DeleteNode {
-            path,
-            node_id,
-            preimage:
-                DecodedDeletePreimage::File {
-                    old_node_kind,
-                    old_blob_id,
-                    old_mode: _,
-                },
-        } => {
-            let old_bytes = files.get(&path).ok_or_else(|| {
-                PrikkError::Integrity(format!("DeleteNode path is absent: {path}"))
-            })?;
-            crate::blob_access::ensure_blob_matches_node_kind(
-                old_bytes,
-                old_blob_id,
-                old_node_kind,
-            )?;
-            let repo_path = RepoPath::parse(&path)?;
-            let deleted = PatchReplayDeletedFile {
-                path: repo_path,
-                old_blob_id,
-                old_bytes: old_bytes.clone(),
-            };
-            files.remove(&path);
-            if let Some(live) = live_nodes.remove(&node_id) {
-                if live.path != path {
-                    return Err(PrikkError::Integrity(format!(
-                        "DeleteNode path {path} does not match live node path {}",
-                        live.path
-                    )));
-                }
-                if live.kind != old_node_kind {
-                    return Err(PrikkError::Integrity(
-                        "DeleteNode old_node_kind does not match live node kind".to_string(),
-                    ));
-                }
-            }
-            deleted_files.insert(path, deleted);
-        }
-        DecodedOperationKind::EditText {
-            node_id,
-            span_id,
-            old_span_hash,
-            left_anchor_hash,
-            right_anchor_hash,
-            replacement_text,
-            old_span_text,
-        } => {
-            apply_edit_text(
-                files,
-                live_nodes,
-                node_id,
-                &span_id,
-                &old_span_hash,
-                &left_anchor_hash,
-                &right_anchor_hash,
-                &replacement_text,
-                &old_span_text,
-            )?;
-        }
-        _ => unreachable!(
-            "ensure_apply_supported admits only CreateFile, file-DeleteNode, and EditText for replay"
-        ),
-    }
-    Ok(())
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ReplayLiveNode {
-    path: String,
-    kind: NodeKind,
-}
-
-#[allow(clippy::too_many_arguments)]
-fn apply_edit_text(
-    files: &mut BTreeMap<String, Vec<u8>>,
-    live_nodes: &BTreeMap<NodeId, ReplayLiveNode>,
-    node_id: NodeId,
-    span_id: &[u8; 32],
-    old_span_hash: &[u8; 32],
-    left_anchor_hash: &[u8; 32],
-    right_anchor_hash: &[u8; 32],
-    replacement_text: &[u8],
-    old_span_text: &[u8],
-) -> Result<()> {
-    if text_span_hash(old_span_text) != *old_span_hash {
-        return Err(PrikkError::Integrity(format!(
-            "EditText hash verification failed before localization for node {} span {}",
-            hex32(node_id.as_bytes()),
-            hex32(span_id)
-        )));
-    }
-    let live = live_nodes.get(&node_id).ok_or_else(|| {
-        PrikkError::Integrity(format!(
-            "EditText failed before blob load: node {} is not live (span {})",
-            hex32(node_id.as_bytes()),
-            hex32(span_id)
-        ))
-    })?;
-    if live.kind != NodeKind::TextFile {
-        return Err(PrikkError::Integrity(format!(
-            "EditText failed before blob load: node {} is {:?}, not TextFile (span {})",
-            hex32(node_id.as_bytes()),
-            live.kind,
-            hex32(span_id)
-        )));
-    }
-    let current_text = files.get(&live.path).ok_or_else(|| {
-        PrikkError::Integrity(format!(
-            "EditText failed before blob load: live node {} path {} is absent (span {})",
-            hex32(node_id.as_bytes()),
-            live.path,
-            hex32(span_id)
-        ))
-    })?;
-    if core::str::from_utf8(current_text).is_err() {
-        return Err(PrikkError::Integrity(format!(
-            "EditText failed during UTF-8 validation for node {} span {}",
-            hex32(node_id.as_bytes()),
-            hex32(span_id)
-        )));
-    }
-    let (start, end) = text_span::locate_text_span(
-        current_text,
-        old_span_text,
-        left_anchor_hash,
-        right_anchor_hash,
-        span_id,
-        node_id,
-        old_span_hash,
-    )
-    .map_err(|reason| {
-        PrikkError::Integrity(format!(
-            "EditText failed during localization for node {} span {}: {reason}",
-            hex32(node_id.as_bytes()),
-            hex32(span_id)
-        ))
-    })?;
-    let new_text =
-        text_span::splice_text(current_text, start, end, replacement_text).map_err(|err| {
-            PrikkError::Integrity(format!(
-                "EditText failed during splice for node {} span {}: {err}",
-                hex32(node_id.as_bytes()),
-                hex32(span_id)
-            ))
-        })?;
-    files.insert(live.path.clone(), new_text);
-    Ok(())
-}
-
-fn read_blob_bytes_with_kind(
-    object_store: &FileObjectStore,
-    blob_id: ObjectId,
-) -> Result<(NodeKind, Vec<u8>)> {
-    let envelope = object_store
-        .read_typed(blob_id, ObjectType::Blob)?
-        .ok_or_else(|| PrikkError::Integrity(format!("missing Blob {blob_id}")))?;
-    let blob = BlobPayload::decode_canonical(&envelope.canonical_payload)?;
-    if blob.blob_kind == BlobKind::Snapshot {
-        return Err(PrikkError::Integrity(
-            "file content reference points to a SNAPSHOT blob".to_string(),
-        ));
-    }
-    let kind = NodeKind::from_file_blob_kind(blob.blob_kind)?;
-    Ok((kind, blob.content))
-}
-
-fn hex32(bytes: &[u8; 32]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 #[cfg(test)]
