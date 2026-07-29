@@ -1,12 +1,10 @@
 # RFC (proposed) - DC-57 Active-Patch Thresholds
 
-**Status.** **Accepted by the project owner on 2026-07-29.** Architect design review v1 was performed
-after acceptance and returned **one open blocking finding**
-(`.git-exclude/reviewed/prikk-dc57-dc58-post-acceptance-review-v1.md` §B1): the RFC requires the
-thresholds to be configurable, but **no repository configuration mechanism exists** — `prikk-store` has no
-TOML dependency, `trust/policy.toml` is hand-parsed, and adding a parser would require a DC-51
-`ALLOWED_THIRD_PARTY` amendment. **No implementation handoff should be issued until the configuration
-route is chosen**, because it materially changes the increment's size.
+**Status.** **Accepted by the project owner on 2026-07-29.** Architect design review v1, performed after
+acceptance (`.git-exclude/reviewed/prikk-dc57-dc58-post-acceptance-review-v1.md`), returned one blocking
+finding: the RFC required configurable thresholds while no configuration mechanism existed. **Resolved
+2026-07-29** by owner decision — environment variables, no new dependency and no DC-51 amendment. See
+design §2. Implementation may begin.
 **Supersedes.** Item 3 of DC-42 (`rfcs/archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md`).
 **Requirement.** **NFR-PERF-02** — `specs/prikk-non-functional-requirements-v1.1.md` §4.5.
 **Gate status.** Product **M3** (Block DAG and Checkout). **Missed and carried** — see `MILESTONES.md`
@@ -53,8 +51,29 @@ Record where the count is computed and make every path use that one function.
 
 - **Warn at 800.** Non-fatal. Per app-requirements §6.3, `status` recommends sealing.
 - **Hard block at 1000.** The operation fails with an actionable error naming `seal` as the remedy.
-- **Both configurable**, with these as defaults. An accepted configuration design may override them; the
-  defaults are what this RFC fixes.
+- **Both configurable via environment variables**, with these as defaults:
+  `PRIKK_ACTIVE_PATCH_WARN` and `PRIKK_ACTIVE_PATCH_LIMIT`.
+
+**Configuration route, resolved** (closes design review B1; owner decision 2026-07-29). The RFC previously
+said "configurable" without a mechanism, and none exists: no repository config file is read anywhere,
+`.prikk/trust/policy.toml` is hand-parsed line by line (`crates/prikk-store/src/trust.rs:184-187`), and
+`prikk-store` carries **no TOML dependency** — `toml = "1.1"` lives only in `tools/release-policy`.
+
+Environment variables were chosen over the alternatives:
+
+| Route | Why not chosen |
+|---|---|
+| TOML config file in `prikk-store` | Needs a parser dependency, which `placement.rs:11` rejects — `prikk-store` is allowed only `getrandom` and `rustix`. Would require a DC-51 `ALLOWED_THIRD_PARTY` amendment, a release-policy control-surface change, for a two-integer setting |
+| Hand-rolled config file | No new dependency, but establishes a **second** ad-hoc config format alongside `trust/policy.toml` |
+| Fixed defaults, no override | Leaves "unless configured" unimplemented and closes NFR-PERF-02 only partially |
+
+Environment variables add no dependency, no file format, and no parser, and they follow the precedent
+already set by `PRIKK_AUTHOR_KEY_ID` and `PRIKK_AUTHOR_SEED` (`crates/prikk-cli/src/main.rs:431-443`),
+including its fail-closed handling of malformed values.
+
+**Consequence to state plainly:** the setting is per-invocation, not persisted in the repository. That
+satisfies "unless configured" but does not give a repository a durable policy. If a persisted threshold is
+later wanted, it belongs with a general configuration increment, not here.
 
 The hard block must fail **closed and early** — before any WAL append or object write — so a blocked
 commit leaves no partial state.
@@ -65,8 +84,10 @@ Boundary tests at **799 / 800 / 999 / 1000 / 1001**, across **every** authoring 
 change the active-patch count. Enumerate those paths in the design; a threshold enforced on one path and
 not another is worse than none, because it implies a bound that does not hold.
 
-Configuration tests must cover: default values applied when unset, overrides honoured, and an invalid
-configuration rejected rather than silently falling back.
+Configuration tests must cover: defaults applied when both variables are unset, each override honoured
+independently, and **invalid values rejected rather than silently falling back to the default** — a
+non-numeric value, a warn threshold above the hard limit, and zero. Silent fallback would let a
+mistyped variable produce an unbounded repository while appearing configured.
 
 ## Non-goals
 
@@ -91,11 +112,13 @@ tuning knob.
 ## Acceptance criteria
 
 1. "Active patches" has one recorded definition and one computation site, and every path uses it.
-2. Warn at 800 and hard-block at 1000 are implemented as defaults, both configurable.
+2. Warn at 800 and hard-block at 1000 are implemented as defaults, overridable by
+   `PRIKK_ACTIVE_PATCH_WARN` and `PRIKK_ACTIVE_PATCH_LIMIT`. No new dependency, no config file, no parser.
 3. The hard block fails closed before any WAL append or object write.
 4. `seal` is verified to remain available at and above the hard bound.
 5. Boundary tests at 799/800/999/1000/1001 across every enumerated authoring and seal path.
-6. Configuration tests cover defaults, overrides, and invalid-configuration rejection.
+6. Configuration tests cover defaults, independent overrides, and rejection of invalid values
+   (non-numeric, warn above limit, zero) — rejection, never silent fallback.
 7. `status` behaviour reconciles with `specs/prikk-app-requirements-v1.2.md` §6.3.
 8. `MILESTONES.md`'s missed-gate row is updated to its resolved state.
 9. Full gate set per `rfcs/EXECUTION-ORDER.md` §6 rule 9, plus test counts before and after per rule 10.

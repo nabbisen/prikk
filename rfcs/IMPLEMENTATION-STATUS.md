@@ -19,9 +19,10 @@ reference. DC-55 implemented the **replace** decision DC-50 closed with at `4005
 `rfcs/EXECUTION-ORDER.md` is DC-59 (commit benchmark harness), **accepted 2026-07-29** after design review
 returned three blocking findings, all resolved at `f8d0938`. It was split from DC-56 because this
 workspace has no benchmark infrastructure and DC-56 cannot decide compliance without a cost curve.
-DC-58 is also accepted with no blocking findings. **DC-57 is accepted but its handoff is held**: architect
-review after acceptance found the RFC requires configurable thresholds while no repository configuration
-mechanism exists, and adding a parser to `prikk-store` would need a DC-51 allowlist amendment.
+DC-58 is also accepted with no blocking findings. DC-57 is accepted; architect review after acceptance found the RFC
+required configurable thresholds while no repository configuration mechanism exists, resolved 2026-07-29
+by owner decision — environment variables, avoiding both a new `prikk-store` dependency and the DC-51
+allowlist amendment a TOML parser would have needed. All three handoffs are written.
 DC-56 then follows, gated additionally on an owner ruling over whether NFR-PERF-01 bounds steady-state
 commit cost or every commit — unsettled in the requirement text and in tension with NFR-PERF-04. DC-42 was superseded on
 2026-07-29 into DC-56, DC-57, and DC-58; its design review found it bundled three unrelated increments and
