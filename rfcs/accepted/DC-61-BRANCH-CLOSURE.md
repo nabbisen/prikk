@@ -1,16 +1,18 @@
 # RFC (proposed) - DC-61 Branch Closure
 
 **Status.** **Accepted by the project owner on 2026-07-30.** All three §3 verification obligations were
-discharged at design review before acceptance — one surfaced an unnamed cost (schema-blind decoding, 10
-non-test call sites) now in scope. **Design revised 2026-07-30** after design review v1
+discharged at design review before acceptance — one surfaced an unnamed cost (schema-blind decoding, **18**
+non-test call sites; **corrected 2026-07-30 from 10**, see §3 obligation 1) now in scope. **Design revised
+2026-07-30** after design review v1
 (`.git-exclude/reviewed/prikk-dc61-design-review-v1.md`) rejected the original tombstone design. Owner
 approved the redirection to closure the same day.
 **Renamed.** Was "Branch Deletion and Ref-Log Tombstones." The tombstone approach is abandoned; see §1.
 **Split from.** DC-60, whose scope was amended 2026-07-30 to `list` and `create` only.
 **Requirement.** `specs/prikk-app-requirements-v1.2.md` §6.5, the deletion half.
-**Touches.** `RefStatePayload` (one new field, schema bump), **schema-aware decoding threaded through its 10
+**Touches.** `RefStatePayload` (one new field, schema bump), **schema-aware decoding threaded through its 18
 non-test call sites** (see §3 obligation 1), `branch` CLI (`close`, and `list` filtering), and
-format-transition handling. **Not** `verify`, **not** `publish`, **not** `doctor` — see §2.
+format-transition handling. `verify`, `publish`, and `doctor` change **behaviourally not at all** — though
+three of the decode call sites are inside `verify`, so it is mechanically touched. See §2 and criterion 4.
 
 ## 1. Why the tombstone design was abandoned
 
@@ -124,9 +126,16 @@ ordinary publication stays schema 1.
 **The cost DC-61 had not named:** `RefStatePayload::decode_canonical` takes **only bytes**
 (`payload/refs.rs:56`) — it is schema-blind, and rejects unknown field tags unconditionally. So a
 schema-gated field cannot simply be added; **schema awareness must be threaded into decoding**, which touches
-every caller. There are **10 non-test call sites** across `prikk-cli/src/seal/support.rs` (×2),
-`prikk-store/src/{rollback_draft, refs/publication, merge_evidence, history, checkout, refs, patch_inverse/read}.rs`,
-and `prikk-cli/src/branch.rs`; **22 including tests**.
+every caller.
+
+**Corrected 2026-07-30: there are 18 non-test call sites, not 10.** The original figure enumerated files from
+memory rather than counting them and omitted six sites in four files — `patch_replay/read.rs`,
+`refs/evidence.rs` (×2), `verify/ref_publication.rs` (×2), and `refs/verify/scan.rs`. DC-63 then added two
+more in `prikk-cli/src/tag.rs`. **29 including tests.** The enumerated list lives in
+`handoffs/DC-61-branch-closure/implementation-handoff-v2.md` §Step 2, re-derived by grep.
+
+**Consequence for criterion 4:** three of those sites are inside `verify`, so the mechanical signature change
+*must* touch it. See the criterion's corrected wording.
 
 That is real but bounded, and it is mechanical rather than architectural. **It must be in the handoff's scope
 statement**, not discovered during implementation.
@@ -185,8 +194,16 @@ starts to look like DC-40, stop and report rather than absorbing it.
 3. **Corruption detection is unchanged**: pointer-absent-log-present is still reported and still blocking, at
    every record count, tested by simulating pointer loss as
    `seal_rejects_missing_pointer_with_ref_log_history` does.
-4. `verify`, `publish`, `recoverable_missing_ref`, and `doctor` are **unmodified** — evidenced by the diff.
-   If any changed, criterion 3 and the design's justification both need re-examination.
+4. `verify`, `publish`, `recoverable_missing_ref`, and `doctor` are **behaviourally unchanged** — no new
+   branch, arm, classification, or outcome for any input — evidenced by the diff plus an explicit list of any
+   mechanical edits made to them. If what any of them *decides* changed, criterion 3 and the design's
+   justification both need re-examination.
+
+   **Corrected 2026-07-30.** This criterion originally read "**unmodified**", which is unsatisfiable: three
+   of the 18 decode call sites in obligation 1 are inside `verify` (`verify/ref_publication.rs:68`, `:109`,
+   `refs/verify/scan.rs:248`), so threading a schema parameter through `decode_canonical` necessarily edits
+   it. Obligation 2's finding was always about *behaviour*, and that finding stands unchanged; only the
+   criterion's wording was wrong. Mechanical signature propagation is expected and does not refute anything.
 5. `branch list` hides closed refs; `--all` shows them marked; both tested.
 6. Reopening a closed branch succeeds as an ordinary CAS update; `verify` passes afterward.
 7. `branch close` fails closed on a missing branch, an already-closed branch, and a branch owning a
@@ -199,5 +216,6 @@ starts to look like DC-40, stop and report rather than absorbing it.
 11. Full gate set per `rfcs/EXECUTION-ORDER.md` §6 rule 9, plus test counts before and after per rule 10.
 
 Criteria 2, 3, and 4 are load-bearing. **Criterion 4 is the design's own falsification test** — this RFC
-argues closure is cheap *because* those four are untouched, so a diff that touches them refutes the argument
-rather than merely complicating it.
+argues closure is cheap *because* those four functions decide nothing differently, so a diff that changes
+what any of them decides refutes the argument rather than merely complicating it. A diff that merely passes
+a schema argument through them does not.

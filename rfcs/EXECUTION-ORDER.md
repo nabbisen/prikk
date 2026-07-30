@@ -32,8 +32,8 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
 | 1 | **DC-58** — source-structure audit | **Both batches accepted**; closure pending report reframing (N1) | with developers for N1 only | `handoffs/DC-58-source-structure-audit/implementation-handoff-v1.md` |
-| 2 | **DC-56** — commit scan + memory compliance (NFR-PERF-01) | **Accepted 2026-07-30** | none — **DC-62 precondition satisfied** | `handoffs/DC-56-commit-full-tree-scan-compliance/implementation-handoff-v1.md` |
-| 3 | **DC-61** — branch closure (§6.5 deletion half) | **Accepted 2026-07-30**; all three verification obligations discharged | none — **cleared to start** | `handoffs/DC-61-branch-closure/implementation-handoff-v1.md` |
+| 2 | **DC-56** — commit scan + memory compliance (NFR-PERF-01) | **Accepted 2026-07-30** | none — **DC-62 precondition satisfied** | `handoffs/DC-56-commit-full-tree-scan-compliance/implementation-handoff-v2.md` — **v1 is superseded** |
+| 3 | **DC-61** — branch closure (§6.5 deletion half) | **Accepted 2026-07-30**; all three verification obligations discharged | none — **cleared to start** | `handoffs/DC-61-branch-closure/implementation-handoff-v2.md` — **v1 is superseded and must not be worked from** |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.
