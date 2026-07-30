@@ -1,6 +1,11 @@
 # DC-58 Source Structure Report v1
 
-**Date:** 2026-07-29 (batch 1), 2026-07-30 (batch 2, this update).
+**Date:** 2026-07-29 (batch 1), 2026-07-30 (batch 2), 2026-07-30 (N1 reframing, this update, per
+`.git-exclude/reviewed/prikk-dc58-batch2-implementation-review-v1.md` §1/§4: the
+`lifecycle_cache.rs` change reduced implementation ELOC by *reclassifying* test-only scaffolding,
+not by *dividing* implementation code the way the other three splits did. Filing both under "split"
+overstated how much production structure changed. This update separates the two and states the
+848/117 breakdown explicitly; no source file changed as part of this update).
 **Methodology.** ELOC = total line count (`wc -l`) per file. Verified against the RFC's own worked
 examples before trusting it: `lifecycle_cache.rs` 974, `patch_replay/decode.rs` 733,
 `payload/patch.rs` 652 — all three match `wc -l` exactly, confirming this is the intended metric
@@ -49,19 +54,29 @@ mechanical and not individually re-justified here beyond the blanket rule; the t
 called out because their names and content could otherwise look like production code to a future
 auditor running a naive sweep, which is exactly the trap this report exists to prevent.
 
-## Files over 500 ELOC (split, unless an accepted cohesion exception)
+## Files over 500 ELOC (split, unless reclassified or an accepted cohesion exception)
 
 | File | ELOC (before) | Decision | Status |
 |---|---:|---|---|
-| `crates/prikk-store/src/lifecycle_cache.rs` | 974 | Split | **Done, batch 2** |
+| `crates/prikk-store/src/lifecycle_cache.rs` | 974 | **Reclassified, not split** — see below | **Done, batch 2** |
 | `crates/prikk-store/src/patch_replay/decode.rs` | 733 | Split | **Done, batch 2** |
 | `crates/prikk-object/src/payload/patch.rs` | 652 | Split | **Done, batch 2** |
-| `crates/prikk-store/src/worktree_patch/node_authoring.rs` | 601 | **Deferred** — per handoff, until DC-56 records an outcome (DC-56 may restructure its traversal; DC-59 benchmarks the path through it as-is) | Not touched, by design |
+| `crates/prikk-store/src/worktree_patch/node_authoring.rs` | 601 | **Deferred — permanent-by-design exception**, until DC-56 records an outcome (DC-56 may restructure its traversal; DC-59 benchmarks the path through it as-is) | Not touched, by design |
 | `crates/prikk-store/src/text_span.rs` | 552 | Split | **Done, batch 2** |
 | `crates/prikk-store/src/patch_replay.rs` | 537 | Split | **Done, batch 1** |
 
-**All splittable over-500 files are now resolved.** Only `node_authoring.rs` remains over 500,
-deferred by explicit design, not oversight.
+**Four genuine splits** (`patch_replay.rs` batch 1; `patch_replay/decode.rs`, `payload/patch.rs`,
+`text_span.rs` batch 2) **divided** implementation code across files. `lifecycle_cache.rs` is
+different in kind, not degree: **848 lines were correctly reclassified as test-only scaffolding; 117
+lines of implementation remain** in the file. No implementation code was restructured — the file's
+own pre-existing item-by-item `#[cfg(test)]` gating was consolidated into one honest module boundary,
+which moved those 848 lines out of the implementation-ELOC count under this report's own methodology
+(§"Scope"). Counting it as a fifth "split" would overstate how much production structure this batch
+actually changed; see "`lifecycle_cache.rs`" below for the full reasoning.
+
+**All splittable and reclassifiable over-500 files are now resolved.** Only `node_authoring.rs`
+remains over 500 — a permanent-by-design exception, deferred by explicit design pending DC-56, not an
+oversight or incomplete work.
 
 ### `patch_replay.rs` — split, batch 1
 
@@ -118,9 +133,9 @@ Re-verified specifically: all 19 `text_span::*` tests pass, including every `fdd
 golden vector and the DC-12/DC-55-adjacent span-selection and inverse tests — not just the aggregate
 543-test count.
 
-### `lifecycle_cache.rs` — split, batch 2 (structural, not just line-count)
+### `lifecycle_cache.rs` — reclassified, batch 2 (not a split)
 
-This file was unusual: on inspection, roughly 850 of its 974 lines were already `#[cfg(test)]`-gated
+**Not counted among the four splits above.** This file was unusual: on inspection, roughly 850 of its 974 lines were already `#[cfg(test)]`-gated
 **item by item**, not as a whole module. Per the file's own doc comment, the entire
 `DecodedLifecycleCache` → `ValidatedLifecycleCache` → `ComparedLifecycleCache` trust ladder is
 scaffolding for blob-kind verification, provenance, and replay-compare — "later slices" not yet
@@ -139,10 +154,13 @@ existing compilation boundary:
   `lifecycle_cache::tests` and `lifecycle_cache/replay/tests.rs` keep resolving every `super::X` /
   `crate::lifecycle_cache::X` path unchanged.
 
-**This is not merely a line-count fix.** `cache_ladder.rs` is now reached only through a
-`#[cfg(test)]` edge, so this report's own module-graph walk correctly reclassifies it as test-support
-— the same category as `vectors/hard.rs`. 848 lines that were miscounted as "implementation" against
-this audit's own methodology are now counted correctly. Added to the exclusion list above.
+**This is not merely a line-count fix, and it is not a fifth split.** `cache_ladder.rs` is now reached
+only through a `#[cfg(test)]` edge, so this report's own module-graph walk correctly reclassifies it
+as test-support — the same category as `vectors/hard.rs`. **848 lines correctly reclassified as
+test-only scaffolding; 117 lines of implementation remain** in `lifecycle_cache.rs` itself. Those 848
+lines were miscounted as "implementation" against this audit's own methodology before this batch and
+are now counted correctly — a measurement correction, not a refactor of implementation code. Added to
+the exclusion list above.
 
 Required a handful of `pub(super)`/`pub(crate)` visibility widenings (`encode_unchecked`,
 `CACHE_SCHEMA_VERSION`, and re-exporting `certified_compared_cache` and `BlockParentResolver`) to
@@ -212,6 +230,6 @@ All three resolved as of batch 1; unchanged in batch 2.
 | Test-support exclusions enumerated with reasons | **Done** — 3 explicitly named (2 pre-existing, 1 discovered by the `lifecycle_cache.rs` split) |
 | `node_authoring.rs` recorded as deferred with reason | **Done** |
 | Every file over 300 has a recorded split decision | **Done** — every over-500 and every 300-500 file (23 total across both batches) has a recorded decision in this document |
-| Every file over 500 split or carrying an accepted cohesion exception | **Done** — 5 of 6 split (across both batches); 1 (`node_authoring.rs`) deferred by explicit design, not an unresolved item |
-| Inline `mod tests` blocks relocated | **2 of 3**, third excluded with reasoning recorded (permanent, not a gap) |
+| Every file over 500 split, reclassified, or carrying an accepted cohesion exception | **Done** — 4 of 6 split, 1 (`lifecycle_cache.rs`) reclassified as test-only scaffolding rather than split (848/117 breakdown above), across both batches; 1 (`node_authoring.rs`) is a permanent-by-design exception pending DC-56, not an unresolved item |
+| Inline `mod tests` blocks relocated | **2 of 3**, third (`frozen_outgoing.rs`) a permanent-by-design exception with reasoning recorded, not a gap |
 | Public module paths and observable behaviour unchanged | **Verified** — test counts identical after every split, all gates green, both toolchains |
