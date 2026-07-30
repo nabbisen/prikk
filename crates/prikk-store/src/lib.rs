@@ -104,6 +104,7 @@ pub use path::{RepoPath, validate_no_path_collisions, validate_repo_path};
 pub use refs::{
     RefLogRecord, RefLogReplay, RefPointerSummary, RefPublication, RefPublicationIssue,
     RefRecoveryCandidate, RefRecoveryRepair, RefStore, validate_local_branch_ref,
+    validate_local_tag_ref,
 };
 pub use rollback_draft::{RollbackDraftReport, append_rollback_draft};
 pub use rollback_preview::{

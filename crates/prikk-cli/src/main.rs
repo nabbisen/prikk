@@ -18,6 +18,7 @@ mod args;
 mod branch;
 mod output;
 mod seal;
+mod tag;
 
 use args::{
     CheckoutMode, MergeEvidenceTargetArg, current_dir, optional_path_or_current,
@@ -83,6 +84,7 @@ fn run() -> std::result::Result<(), String> {
         Some("commit") => run_commit(args.collect()),
         Some("seal") => run_seal(args.collect()),
         Some("branch") => run_branch(args.collect()),
+        Some("tag") => run_tag(args.collect()),
         Some("trust") => run_trust(args.collect()),
         Some("status") => run_status(),
         Some("log") => run_log(args.collect()),
@@ -161,6 +163,11 @@ fn run_seal(args: Vec<String>) -> std::result::Result<(), String> {
 fn run_branch(args: Vec<String>) -> std::result::Result<(), String> {
     let root = current_dir()?;
     branch::run_branch(root, args)
+}
+
+fn run_tag(args: Vec<String>) -> std::result::Result<(), String> {
+    let root = current_dir()?;
+    tag::run_tag(root, args)
 }
 
 fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {

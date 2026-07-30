@@ -22,6 +22,12 @@ pub(crate) fn print_help(version: &str) {
          not-yet-designed increment; every command resolves --ref explicitly in the meantime"
     );
     println!(
+        "  prikk tag [list]                          List tags deterministically (name, target block)"
+    );
+    println!(
+        "  prikk tag create <name> --target <ref|block> [-m <message>]  Publish a tag at a block"
+    );
+    println!(
         "  prikk log [path] [--limit N] [--ref REF]  Show sealed ref history including rollback blocks"
     );
     println!("  prikk checkout --plan-only [path] [--ref REF]      Show a safe checkout plan");

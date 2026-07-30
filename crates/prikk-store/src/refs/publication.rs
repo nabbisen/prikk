@@ -1,9 +1,12 @@
 //! Pointer-first ref publication and bounded retry state classification.
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{ObjectId, RefStatePayload, RefUpdatePayload};
+use prikk_object::{ObjectId, RefKind, RefStatePayload, RefUpdatePayload};
 
-use super::{RefPublication, RefStore, log, validate_publication};
+use super::{
+    RefPublication, RefStore, log, validate_local_branch_ref, validate_local_tag_ref,
+    validate_publication,
+};
 use crate::layout::RepositoryFormat;
 use crate::lock::RefLock;
 use crate::object_store::{FileObjectStore, ObjectReader, ObjectWriter};
@@ -132,6 +135,18 @@ fn validate_coherent_publication(publication: &RefPublication) -> Result<RefUpda
         return Err(PrikkError::Integrity(
             "publication ref names do not agree".to_string(),
         ));
+    }
+    // Kind-aware, now that the ref-state payload is decoded and its name is confirmed to agree
+    // with the publication. Makes namespace and kind mutually enforcing: a Tag-kind publication
+    // for `heads/...` and a Branch-kind publication for `tags/...` are both rejected here, neither
+    // of which the name-only check below did on its own.
+    match ref_state.kind {
+        RefKind::Branch => {
+            validate_local_branch_ref(&publication.ref_name)?;
+        }
+        RefKind::Tag => {
+            validate_local_tag_ref(&publication.ref_name)?;
+        }
     }
     if ref_state.previous_ref_state_id != publication.expected_previous_ref_state_id
         || update.old_ref_state_id != publication.expected_previous_ref_state_id

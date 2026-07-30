@@ -4,7 +4,9 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, RefUpdatePayload};
+use prikk_object::{
+    ObjectEnvelope, ObjectId, ObjectType, RefKind, RefStatePayload, RefUpdatePayload, TagPayload,
+};
 
 use crate::fsutil::{EntryKind, list_directory, read_file_required};
 use crate::layout::RepositoryLayout;
@@ -62,7 +64,12 @@ pub(super) fn read_pointers(
                 pointer.ref_state_id, pointer.ref_name
             )));
         }
-        ensure_block_exists(objects, payload.target_object_id, pointer.ref_state_id)?;
+        ensure_ref_target_valid(
+            objects,
+            payload.kind,
+            payload.target_object_id,
+            pointer.ref_state_id,
+        )?;
         if pointers
             .insert(
                 pointer.ref_name.clone(),
@@ -218,8 +225,9 @@ fn verify_update(objects: &FileObjectStore, update: &RefUpdatePayload) -> Result
             update.ref_name
         )));
     }
-    ensure_block_exists(
+    ensure_ref_target_valid(
         objects,
+        state.kind,
         update.new_target_object_id,
         update.new_ref_state_id,
     )
@@ -238,6 +246,34 @@ fn verified_ref_state_payload(
         )));
     }
     RefStatePayload::decode_canonical(&envelope.canonical_payload)
+}
+
+/// Kind-aware ref-target validation, shared by both the pointer scan (`read_pointers`) and the
+/// ref-log scan (`verify_update`), which must agree: `publication.rs`'s coherence check requires
+/// `RefUpdatePayload.new_target_object_id == RefStatePayload.target_object_id`, so a log record's
+/// target and its pointer's target are the identical value for the identical kind. `RefKind::Branch`
+/// must target a `Block` directly; `RefKind::Tag` must target a `Tag` object whose own
+/// `target_block_id` is a `Block` — the two-hop indirection §6.6 requires.
+fn ensure_ref_target_valid(
+    objects: &FileObjectStore,
+    kind: RefKind,
+    target_object_id: ObjectId,
+    owner: ObjectId,
+) -> Result<()> {
+    match kind {
+        RefKind::Branch => ensure_block_exists(objects, target_object_id, owner),
+        RefKind::Tag => {
+            let tag_envelope = objects
+                .read_typed(target_object_id, ObjectType::Tag)?
+                .ok_or_else(|| {
+                    PrikkError::Integrity(format!(
+                        "ref object {owner} targets missing tag {target_object_id}"
+                    ))
+                })?;
+            let tag_payload = TagPayload::decode_canonical(&tag_envelope.canonical_payload)?;
+            ensure_block_exists(objects, tag_payload.target_block_id, owner)
+        }
+    }
 }
 
 fn ensure_block_exists(

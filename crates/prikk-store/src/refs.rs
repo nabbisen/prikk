@@ -350,7 +350,6 @@ fn verified_ref_state_payload(
 }
 
 pub(crate) fn validate_publication(publication: &RefPublication) -> Result<()> {
-    validate_local_branch_ref(&publication.ref_name)?;
     require_signed_type(&publication.ref_state, ObjectType::RefState)?;
     require_signed_type(&publication.ref_update, ObjectType::RefUpdate)?;
     publication.ref_state.validate_strict()?;
@@ -418,6 +417,60 @@ pub fn validate_local_branch_ref(ref_name: &str) -> Result<String> {
     {
         return Err(PrikkError::InvalidName(format!(
             "branch ref {ref_name} contains a traversal component"
+        )));
+    }
+    Ok(ref_name.to_string())
+}
+
+/// Validate a local tag ref name and return its canonical identity string.
+///
+/// Mirrors `validate_local_branch_ref` with the prefix requirement inverted: `tags/` required,
+/// `heads/`/`remotes/`/`rollback/` reserved. Deliberately carries no case-collision rule —
+/// `validate_local_branch_ref` does not have one either (`tags/V1` and `tags/v1` both pass and
+/// coexist as distinct refs, same as branches), and a stricter rule for tags alone than branches
+/// would be arbitrary. That gap is real but is NFR-SEC-03's, unmet for both namespaces, and tracked
+/// separately rather than closed asymmetrically here.
+pub fn validate_local_tag_ref(ref_name: &str) -> Result<String> {
+    if ref_name.is_empty() {
+        return Err(PrikkError::InvalidName(
+            "ref name must not be empty".to_string(),
+        ));
+    }
+    if ref_name.starts_with("heads/")
+        || ref_name.starts_with("remotes/")
+        || ref_name.starts_with("rollback/")
+    {
+        return Err(PrikkError::InvalidName(format!(
+            "ref namespace is reserved: {ref_name}"
+        )));
+    }
+    if !ref_name.starts_with("tags/") {
+        return Err(PrikkError::InvalidName(format!(
+            "ref {ref_name} is not a local tag ref; expected tags/<name>"
+        )));
+    }
+    let tag = &ref_name["tags/".len()..];
+    if tag.is_empty() {
+        return Err(PrikkError::InvalidName(
+            "tag ref must include a name after tags/".to_string(),
+        ));
+    }
+    if ref_name.chars().any(|ch| ch == '\0' || ch.is_control()) {
+        return Err(PrikkError::InvalidName(format!(
+            "ref {ref_name} contains a forbidden control character"
+        )));
+    }
+    if tag.starts_with('/') || tag.ends_with('/') || tag.contains("//") {
+        return Err(PrikkError::InvalidName(format!(
+            "tag ref {ref_name} contains an empty path component"
+        )));
+    }
+    if tag
+        .split('/')
+        .any(|component| component == "." || component == "..")
+    {
+        return Err(PrikkError::InvalidName(format!(
+            "tag ref {ref_name} contains a traversal component"
         )));
     }
     Ok(ref_name.to_string())
