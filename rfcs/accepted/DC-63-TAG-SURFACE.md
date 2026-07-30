@@ -1,7 +1,11 @@
 # RFC (proposed) - DC-63 Tag Surface
 
-**Status.** **HELD 2026-07-30 — do not implement. Handoff withdrawn.** Accepted 2026-07-30, then held the
-same day when implementation found two structural blockers in `prikk-store::refs`, both confirmed
+**Status.** **Cleared to start 2026-07-30** via `handoffs/DC-63-tag-surface/implementation-handoff-v2.md`.
+Accepted 2026-07-30, held the same day when implementation found two structural blockers, then unheld once
+both fixes were specified and a fix design review corrected three errors in those specs
+(`.git-exclude/reviewed/prikk-dc63-fix-design-review-v1.md`). Handoff v1 is withdrawn; v2 supersedes it.
+
+The two blockers, both confirmed
 (`.git-exclude/reviewed/prikk-dc63-tag-blockers-ruling-v1.md`):
 
 1. **`publish` rejects every `tags/` name.** `validate_publication` (`refs.rs:352-353`) calls

@@ -14,6 +14,8 @@
 > See `rfcs/accepted/DC-63-TAG-SURFACE.md` §§1-5 and
 > `.git-exclude/reviewed/prikk-dc63-tag-blockers-ruling-v1.md`.
 >
+> **Superseded by `implementation-handoff-v2.md`, which is cleared to start.** Work from that.
+>
 > **Preserve `tag.rs`, the tests, and `TagPayload::decode_canonical`** — all of it carries over once the two
 > fixes land. Everything below is retained as the record of what was asked for and is **not** current
 > instruction.
