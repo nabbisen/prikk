@@ -1,14 +1,16 @@
 # RFC (proposed) - DC-61 Branch Closure
 
-**Status.** Proposed. **Design revised 2026-07-30** after design review v1
+**Status.** **Accepted by the project owner on 2026-07-30.** All three §3 verification obligations were
+discharged at design review before acceptance — one surfaced an unnamed cost (schema-blind decoding, 10
+non-test call sites) now in scope. **Design revised 2026-07-30** after design review v1
 (`.git-exclude/reviewed/prikk-dc61-design-review-v1.md`) rejected the original tombstone design. Owner
-approved the redirection to closure the same day. Requires design review of *this* design before
-implementation.
+approved the redirection to closure the same day.
 **Renamed.** Was "Branch Deletion and Ref-Log Tombstones." The tombstone approach is abandoned; see §1.
 **Split from.** DC-60, whose scope was amended 2026-07-30 to `list` and `create` only.
 **Requirement.** `specs/prikk-app-requirements-v1.2.md` §6.5, the deletion half.
-**Touches.** `RefStatePayload` (one new field, schema bump), `branch` CLI (`close`, and `list` filtering),
-and format-transition handling. **Not** `verify`, **not** `publish`, **not** `doctor` — see §2.
+**Touches.** `RefStatePayload` (one new field, schema bump), **schema-aware decoding threaded through its 10
+non-test call sites** (see §3 obligation 1), `branch` CLI (`close`, and `list` filtering), and
+format-transition handling. **Not** `verify`, **not** `publish`, **not** `doctor` — see §2.
 
 ## 1. Why the tombstone design was abandoned
 
@@ -103,18 +105,57 @@ reachable, so a repository whose only branch is closed is recoverable by reopeni
 **Output must state that nothing was reclaimed and the branch remains recoverable.** A user typing what they
 think is "delete" should learn immediately that it is not.
 
-## 3. Verification obligations — discharge before implementation
+## 3. Verification obligations — DISCHARGED at design review, 2026-07-30
 
-*Retained from v1's structure, re-scoped to this design. That section is what surfaced v1's defect.*
+*All three were discharged by the architect before acceptance, per v1's structure. Results below; the design
+survives, with one cost it had not named.*
 
-| Must verify | Why it could sink the design |
-|---|---|
-| The format transition for a new `RefStatePayload` field, against DC-40's format-1/format-2 rules | Both encodings are hard breaks; if the transition cannot be expressed under DC-40's machinery, closure needs a different carrier |
-| That `verify`, `publish`, `recoverable_missing_ref`, and `doctor` genuinely need **no** change | §2's table is the design's whole justification. If any of the four must change, the cost advantage over the tombstone shrinks and the choice should be revisited |
-| Whether any existing code assumes every ref in `by-id/` is live | `branch list` filtering is new; other readers may enumerate refs and would now see closed ones |
+### Obligation 1 — format transition: expressible, but the decoder is schema-blind
 
-The third is the one I would expect to bite. It is the same shape as the finding that killed v1 — an existing
-consumer of a state whose meaning is being changed.
+**Mixed schemas are structurally supported.** `schema_version` is a per-envelope `u32`
+(`prikk-object/src/envelope.rs:26`) and part of the ObjectId preimage (`envelope.rs:143`,
+`writer.field_u32(2, self.schema_version)`). Ref-state envelopes are built by the *caller* and handed to
+`publish` as `RefPublication.ref_state` (`refs.rs:354`), so `branch close` can emit schema 2 while every
+ordinary publication stays schema 1.
+
+**Existing identities are therefore untouched.** Only closed ref states carry the new field, so no existing
+`RefState` payload changes and no existing ObjectId moves.
+
+**The cost DC-61 had not named:** `RefStatePayload::decode_canonical` takes **only bytes**
+(`payload/refs.rs:56`) — it is schema-blind, and rejects unknown field tags unconditionally. So a
+schema-gated field cannot simply be added; **schema awareness must be threaded into decoding**, which touches
+every caller. There are **10 non-test call sites** across `prikk-cli/src/seal/support.rs` (×2),
+`prikk-store/src/{rollback_draft, refs/publication, merge_evidence, history, checkout, refs, patch_inverse/read}.rs`,
+and `prikk-cli/src/branch.rs`; **22 including tests**.
+
+That is real but bounded, and it is mechanical rather than architectural. **It must be in the handoff's scope
+statement**, not discovered during implementation.
+
+### Obligation 2 — `verify`, `publish`, `recoverable_missing_ref`, `doctor` need no change: CONFIRMED
+
+- **`verify`** enumerates pointers and validates each. A closed ref is a normal signed ref state with its
+  pointer present, so `classify_ref_state` takes its ordinary `(Some, Some)` arms.
+- **`publish`** treats closure as an ordinary CAS update — arm 1, `current == expected && tip == expected`.
+  **No same-target restriction exists** in `publication.rs`, so reusing the target object id is permitted.
+- **`recoverable_missing_ref`** returns `None` at `refs.rs:211-213` because the pointer is present.
+- **`doctor`** consumes `RefRecoveryRepair`, which only arises from the missing-pointer path. Nothing is
+  offered.
+
+Criterion 4 remains the falsification test: if a diff touches any of the four, this obligation's result was
+wrong and the design's cost advantage must be re-examined.
+
+### Obligation 3 — no existing code assumes refs in `by-id/` are live: CONFIRMED
+
+Only **two** consumers enumerate ref pointers: `refs/verify.rs:44` `read_pointers`, and `refs.rs:177`
+`list_ref_pointers` (added by DC-60). Every other path — checkout, log, status — resolves refs **by name**
+via `DEFAULT_CHECKOUT_REF`, never by enumeration.
+
+`verify` makes no liveness assumption. `list_ref_pointers` is the function this RFC already modifies. So the
+filter has exactly one place to live.
+
+**I predicted this obligation would bite and it did not.** Recorded because the prediction was wrong in a
+useful direction: the ref layer's consumers are narrower than they appear, and the "existing consumer of a
+changed state" risk that killed v1 does not recur here.
 
 ## Non-goals
 

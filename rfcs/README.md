@@ -31,7 +31,7 @@ These records are under design review. All proposed RFCs must respect the depend
 |---|---|---|
 | DC-56 | [Commit Full-Tree Scan Compliance](./proposed/DC-56-COMMIT-FULL-TREE-SCAN-COMPLIANCE.md) | Closes **missed product M1** gate NFR-PERF-01 and an untracked commit-memory defect; needs DC-62 |
 | DC-62 | [Commit Benchmark Memory Axis](./proposed/DC-62-COMMIT-BENCHMARK-MEMORY-AXIS.md) | Arises from DC-56 review v2; precondition for DC-56's implementation review |
-| DC-61 | [Branch Closure](./proposed/DC-61-BRANCH-CLOSURE.md) | Split from DC-60 2026-07-30; redesigned the same day from deletion-with-tombstones to **closure**, after review found the tombstone state is one `doctor` already has a repair path for. Still a format change (new `RefStatePayload` field) |
+
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0; **release-blocked** — inherits key lifecycle from DC-35, which needs amendment |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
@@ -79,6 +79,7 @@ These reviewed designs may govern downstream work but have not yet released.
 | DC-48 | [Legacy Clippy Production Retirement](./accepted/DC-48-LEGACY-CLIPPY-PRODUCTION-RETIREMENT.md) | M2 / before 0.19.0 RC; complete at `383e503`, post-commit evidence accepted |
 | DC-57 | [Active-Patch Thresholds](./accepted/DC-57-ACTIVE-PATCH-THRESHOLDS.md) | **HELD 2026-07-29, handoff withdrawn.** Its premise does not hold — the active WAL is capped at one record repository-wide, so 800/1000 is unreachable. NFR-PERF-02 presupposes multi-commit queued active sessions, not implemented. Blocked on an owner decision |
 | DC-58 | [Source-Structure Audit](./accepted/DC-58-SOURCE-STRUCTURE-AUDIT.md) | Corrective M2 maintainability. **Batches 1 (`e1d0213`) and 2 (`54a3037`) accepted**; closure pending one report reframing. Defers `node_authoring.rs` until DC-56 and excludes `frozen_outgoing.rs` — both permanent by design |
+| DC-61 | [Branch Closure](./accepted/DC-61-BRANCH-CLOSURE.md) | §6.5 deletion half, as **closure** — the pointer stays. Redesigned from tombstones 2026-07-30 after review found `doctor` would resurrect deleted branches. Accepted with all three verification obligations discharged; still a format change |
 | DC-60 | [Branch Management Surface](./accepted/DC-60-BRANCH-MANAGEMENT-SURFACE.md) | Closes the user-facing half of §6.5. Accepted 2026-07-30 after design review found a false problem statement (creation already ships via DC-13) and a deletion step that violated NFR-REL-01 |
 | DC-59 | [Commit Benchmark Harness](./accepted/DC-59-COMMIT-BENCHMARK-HARNESS.md) | Produces NFR-PERF-01's named evidence artifact. **Complete at `a9c2fe0`**, implementation review accepted 2026-07-29 with no findings. Measured the full-tree scan: 4.22 ms at 10 files to 516 ms at 10,000, change set fixed at one |
 
