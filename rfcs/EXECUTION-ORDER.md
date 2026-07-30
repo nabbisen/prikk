@@ -32,7 +32,7 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
 | 1 | **DC-58** — source-structure audit | **Both batches accepted**; closure pending report reframing (N1) | with developers for N1 only | `handoffs/DC-58-source-structure-audit/implementation-handoff-v1.md` |
-| 2 | **DC-56** — commit full-tree scan compliance (NFR-PERF-01) | Proposed | design review; **owner ruling on the NFR-PERF-01 reading** (DC-59's report is now in hand) | handoff pending design acceptance |
+| 2 | **DC-56** — commit full-tree scan compliance (NFR-PERF-01) | Proposed | design review only — **owner ruling received 2026-07-30** (steady-state), DC-59's report in hand | handoff pending design acceptance |
 | 3 | **DC-60** — branch list + create (§6.5) | **Accepted; scope amended 2026-07-30**; list+create implemented, awaiting review | none | `handoffs/DC-60-branch-management-surface/implementation-handoff-v1.md` (Step 3 void) |
 | 4 | **DC-61** — branch deletion and ref-log tombstones | Proposed | design review, incl. three format/compat verification obligations | handoff pending design acceptance |
 
@@ -71,12 +71,12 @@ measurement precondition is already satisfied by DC-59's report. **DC-60** (list
 and awaiting review; **DC-61** carries the deletion half and needs its format-compatibility obligations
 discharged at design review. DC-52 and DC-43 are **not** in this lane — both are release-blocked, see §2.
 
-**DC-56 carries an owner decision that must not be resolved by implementing.** NFR-PERF-01 forbids a
-full-tree scan; NFR-PERF-04 requires caches to be rebuildable and never authoritative. A rebuildable index
-must rebuild by scanning, so a cache-based design complies only warm. Whether the requirement bounds
-steady-state cost or every commit is unsettled in its text and is the owner's call, to be taken with
-DC-59's curve in hand. See DC-56 §2. Building an index and declaring the warm curve compliant would
-*answer* that question silently, which is the specific route DC-56's revision closes.
+**DC-56's owner decision is settled.** Ruled 2026-07-30: NFR-PERF-01 bounds **steady-state** commit cost,
+not every commit. That resolves its conflict with NFR-PERF-04 — which blesses rebuildable indexes while a
+strict reading would forbid building one — and selects a changed-path index. The ruling carries a binding
+obligation: **DC-56 must specify cache validity** (when the index is trusted, what invalidates it, what
+bounds rebuild frequency), because an unbounded cold path satisfies the letter and defeats the requirement.
+DC-56 is now blocked on design review only.
 
 **Beware the milestone labels.** `MILESTONES.md` § "Two milestone schemes" is required reading before
 resolving any `M0`–`M3` gate label in the NFR matrix. The requirements use the product scheme; this file

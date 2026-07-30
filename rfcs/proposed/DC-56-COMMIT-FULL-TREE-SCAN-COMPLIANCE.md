@@ -1,15 +1,18 @@
 # RFC (proposed) - DC-56 Commit Full-Tree Scan Compliance
 
 **Status.** Proposed. Requires design review before implementation may begin.
+**Owner ruling 2026-07-30:** NFR-PERF-01 bounds **steady-state** commit cost, not every commit. This
+resolves the RFC's central open question and selects route A (changed-path index). It carries a binding
+obligation — see §2's cache-validity requirement.
 **Supersedes.** Item 1 of DC-42 (`rfcs/archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md`).
 **Requirement.** **NFR-PERF-01** — `specs/prikk-non-functional-requirements-v1.1.md` §4.5, restated
 functionally in `specs/prikk-app-requirements-v1.2.md` §6.2.
 **Gate status.** Product **M1**. **Missed and carried** — see `MILESTONES.md` § "Two milestone schemes"
 before resolving that label; it is not this file's corrective M1.
-**Depends on.** **DC-59** (`rfcs/proposed/DC-59-COMMIT-BENCHMARK-HARNESS.md`) for the cost curve. DC-56
-may not begin until DC-59's report exists.
-**Touches.** `crates/prikk-store/src/worktree_patch/node_authoring/` and — only if the outcome is
-compliance-by-design under the reading settled in §2 — the commit path's traversal model.
+**Depends on.** DC-59 for the cost curve — **satisfied**; implemented `a9c2fe0`, report at
+`rfcs/handoffs/DC-59-commit-benchmark-harness/benchmark-report-v1.md`.
+**Touches.** `crates/prikk-store/src/worktree_patch/node_authoring/`, the commit path's traversal model,
+and a new changed-path index with its validity rules.
 
 ## Problem
 
@@ -64,53 +67,44 @@ isolating traversal cost — it removes fsync noise — and it does not affect A
 claim under test. But NFR-PERF-01's bound explicitly names fsync, so **absolute** cost figures need a
 journaling-filesystem run before this RFC relies on them for anything beyond the scan finding.
 
-### 2. The requirement's meaning must be settled before the design is chosen
+### 2. The requirement's meaning — RESOLVED by owner ruling 2026-07-30
 
-**This is DC-56's central unresolved question, and it is not the implementer's to answer.**
+**Ruling: NFR-PERF-01 bounds steady-state commit cost, not every commit including the first.**
 
-NFR-PERF-01 forbids a full-tree scan. NFR-PERF-04, in the same table, requires that "indexes and caches
-improve performance but are **rebuildable and never authoritative**," with cache deletion/rebuild tests as
-its evidence.
+The question was whether the requirement forbids a full-tree scan *ever*, or only as a recurring per-commit
+cost. It arose because NFR-PERF-04, in the same table, requires that "indexes and caches improve performance
+but are **rebuildable and never authoritative**," with cache deletion/rebuild tests as its evidence — and a
+rebuildable changed-path index must reconstruct itself by reading the worktree.
 
-These pull against each other. A rebuildable changed-path index must be reconstructible from the
-repository, and reconstructing it means reading the worktree — a full scan. So an index-based design
-complies **only in the warm case**. Cold start, invalidation, or the deliberate cache deletion NFR-PERF-04
-requires to be *tested* each fall back to the scan NFR-PERF-01 forbids.
+**Rationale, recorded because the reading is now load-bearing.** Under the strict reading the two
+requirements *contradict* each other: NFR-PERF-04 blesses indexes while NFR-PERF-01 would forbid the only
+way to build one. Nothing in the specs suggests the conflict was intended. Steady-state is the only reading
+under which both requirements are simultaneously satisfiable, which is why it was chosen — not because it is
+the cheaper route.
 
-Resolving this needs an answer to a question the requirement text does not settle:
+**The ruling is not a licence to scan.** A design that scans whenever the cache happens to be cold, with no
+bound on how often that is, satisfies the letter and defeats the requirement. So:
 
-> **Does NFR-PERF-01 bound steady-state commit cost, or every commit including the first?**
+> **DC-56 must specify cache validity — when the index is trusted, what invalidates it, and what bounds how
+> often a rebuild occurs.** An unbounded cold path is not compliance under the steady-state reading, and
+> this RFC may not be accepted without that specification.
 
-Both readings are defensible. Under the steady-state reading, an index complies and the cold-start scan is
-an accepted rebuild cost. Under the strict reading, no cache-based design complies and only §3's route B
-does.
+That obligation is the price of the ruling and is treated as a first-class requirement here, not a caveat.
 
-**This is an owner decision** where it resolves toward reinterpreting or amending a requirement. DC-56's
-design review must put it to the owner with DC-59's curve in hand — not resolve it silently, and not pass
-it to implementation.
+### 3. The design space, now narrowed
 
-### 3. The design space, stated honestly
+| Route | Status after the ruling |
+|---|---|
+| **A — changed-path index or cache** | **Selected.** Viable under the steady-state reading. Binds NFR-PERF-04's evidence obligation — cache deletion and rebuild must be tested — plus §2's cache-validity specification |
+| **B — explicit paths or a staging step** | **Not needed and out of scope.** It was only mandatory under the strict reading. `CommitArgs` (`crates/prikk-cli/src/args.rs:16-23`) accepts no paths today, and adding them is a user-visible workflow change — a product decision, not this RFC's |
+| **C — amend the requirement** | **Not needed.** The requirement is satisfiable as written under the ruling |
 
-| Route | Removes the scan? | Status |
-|---|---|---|
-| **A — changed-path index or cache** | Warm case only; cold start rebuilds by scanning | Viable **only** under the steady-state reading. Binds NFR-PERF-04's evidence obligation |
-| **B — explicit paths or a staging step** | Yes, unconditionally | **A user-visible CLI and workflow change.** `CommitArgs` (`crates/prikk-cli/src/args.rs:16-23`) carries only `message`, `ref_name`, and a compatibility `text_edits` flag — commit accepts no paths today. This is a product decision, not an architecture one |
-| **C — amend the requirement** | N/A | Reviewed commit against `specs/`, owner-approved |
+**Compliance remains the default and deferral carries the burden of argument.** Inherited from DC-42, which
+was right about this.
 
-**Route B is out of DC-56's scope to perform.** If the interpretation question resolves strictly and route
-B becomes the only compliant design, DC-56's outcome is to record that finding and hand off to a separate
-product RFC. DC-56 does not change the CLI surface.
-
-**Compliance remains the default and deferral carries the burden of argument.** Inherited from DC-42,
-which was right about this.
-
-An amendment is now an ordinary reviewed commit against `specs/` (DC-42 review v2 finding B2), so
-"amended" is an executable outcome rather than an untracked assertion. It requires an accepted RFC stating
-the rationale and the owner's approval, because requirement changes are a reserved decision.
-
-**An amendment must state what the requirement *should* say and why the original was mistaken** — not
-merely that compliance proved costly. A requirement is amended because it was wrong, not because it was
-inconvenient.
+Should implementation nevertheless find route A unachievable, the outcome is to report that rather than
+quietly widen scope into route B or reopen the amendment path — either would be a change to what the owner
+decided.
 
 ### 4. The plugin clause
 
@@ -162,12 +156,13 @@ mistaken requirement, not for an inconvenient one.
 ## Acceptance criteria
 
 1. **DC-59's report exists and is cited.** DC-56 does not build its own benchmark.
-2. **The interpretation question in design §2 is answered on the record** — steady-state or strict — by
-   the project owner, with DC-59's curve available. No design is chosen before this.
+2. **§2's cache-validity specification exists**: when the index is trusted, what invalidates it, and what
+   bounds rebuild frequency. The owner ruling of 2026-07-30 settled the reading; this criterion is what
+   stops that ruling becoming a loophole.
 3. The plugin clause is verified by the stated procedure and the finding recorded.
-4. NFR-PERF-01 ends in exactly one recorded state: **implemented and evidenced**, **amended** by a
-   reviewed commit against `specs/` with owner approval, or **handed to a product RFC** where the strict
-   reading makes route B the only compliant design.
+4. NFR-PERF-01 ends in exactly one recorded state: **implemented and evidenced**, or **reported as
+   unachievable under route A** — the amendment and product-RFC branches are closed by the 2026-07-30
+   ruling.
 5. If a cache or index is introduced: NFR-PERF-04's own evidence obligation is discharged — deletion and
    rebuild leave behaviour unchanged, tested.
 6. If the outcome is implementation, the same DC-59 harness re-run shows Axis A flattened — commit cost no

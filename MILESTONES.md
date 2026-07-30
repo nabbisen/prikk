@@ -96,7 +96,7 @@ When citing a gate, name the scheme: "product M3" or "corrective M2", never a ba
 | Merge status docs contradict released CLI | Non-blocking | DC-35 | M1 |
 | Public portability claim exceeds Linux-only mutation support | Release-claim mismatch | DC-37 boundary plus tracked portability/requirements correction | M1 |
 | Crash/fuzz/platform and hash evidence incomplete | Assurance blocker | DC-41 | M2 |
-| Full-tree commit scan versus NFR-PERF-01 | **Missed product gate**, carried | DC-59 (evidence), then DC-56 (decision): implement, amend, or hand to a product RFC | Product **M1**; carried into corrective M2 |
+| Full-tree commit scan versus NFR-PERF-01 | **Missed product gate**, carried; measured by DC-59 (4.22 ms at 10 files to 516 ms at 10,000, one file changed) | DC-59 evidence **complete** (`a9c2fe0`). DC-56 implements a changed-path index — **owner ruled 2026-07-30 that NFR-PERF-01 bounds steady-state cost, not every commit**, which resolves the NFR-PERF-04 conflict and obliges DC-56 to specify cache validity | Product **M1**; carried into corrective M2 |
 | Multi-patch active blocks not implemented — active WAL capped at one record | **Capability gap; blocks two NFRs** | Needs a queuing increment, or reviewed amendment of both NFRs. **Owner decision pending** | Product **M3** |
 | Active-Patch warning 800 / hard bound 1000 from NFR-PERF-02 | **Missed product gate** — blocked on the capability above, not merely unimplemented | DC-57 **HELD 2026-07-29**: thresholds are unreachable while an active block holds one patch | Product **M3**; carried into corrective M2 |
 | Merge scope bounded by active block size (NFR-PERF-03) | **Vacuously satisfied** — same root cause | Unowned; resolves with the capability above | Product **M3** |
