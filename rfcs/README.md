@@ -31,6 +31,7 @@ These records are under design review. All proposed RFCs must respect the depend
 |---|---|---|
 | DC-56 | [Commit Full-Tree Scan Compliance](./proposed/DC-56-COMMIT-FULL-TREE-SCAN-COMPLIANCE.md) | Closes **missed product M1** gate NFR-PERF-01 and an untracked commit-memory defect; needs DC-62 |
 | DC-62 | [Commit Benchmark Memory Axis](./proposed/DC-62-COMMIT-BENCHMARK-MEMORY-AXIS.md) | Arises from DC-56 review v2; precondition for DC-56's implementation review |
+| DC-63 | [Tag Surface](./proposed/DC-63-TAG-SURFACE.md) | Closes §6.6. Object model already exists and is identity-pinned; carries one owner-adjacent question on tag timestamps |
 
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0; **release-blocked** — inherits key lifecycle from DC-35, which needs amendment |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
