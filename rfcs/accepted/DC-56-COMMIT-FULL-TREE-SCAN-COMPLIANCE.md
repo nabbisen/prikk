@@ -1,6 +1,14 @@
 # RFC (proposed) - DC-56 Commit Full-Tree Scan Compliance
 
-**Status.** Proposed. Requires design review before implementation may begin.
+**Status.** **Accepted by the project owner on 2026-07-30**, after design review v2 returned two blocking
+findings — the scan reads file contents rather than only traversing, and the index would be authoritative for
+commit content with no way to detect being wrong — both resolved in revision at `38803f0`.
+
+**Sequencing.** Implementation may begin, but its **implementation review requires DC-62** (the memory axis)
+to have landed, because criterion 5 evidences memory against a harness that does not yet measure it.
+
+**Independence.** Authored and reviewed by the architect. Acceptance criteria are written to be reproducible
+from the repository, so the implementation review carries the independent weight.
 **Owner ruling 2026-07-30:** NFR-PERF-01 bounds **steady-state** commit cost, not every commit. This
 resolves the RFC's central open question and selects route A (changed-path index). It carries a binding
 obligation — see §2's cache-validity requirement.

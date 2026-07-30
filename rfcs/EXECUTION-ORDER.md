@@ -33,7 +33,7 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 |---|---|---|---|---|
 | 1 | **DC-58** — source-structure audit | **Both batches accepted**; closure pending report reframing (N1) | with developers for N1 only | `handoffs/DC-58-source-structure-audit/implementation-handoff-v1.md` |
 | 2 | **DC-62** — commit benchmark memory axis | **Accepted 2026-07-30** | none — **cleared to start** | `handoffs/DC-62-commit-benchmark-memory-axis/implementation-handoff-v1.md` |
-| 3 | **DC-56** — commit scan + memory compliance (NFR-PERF-01) | Proposed | design review; **DC-62** before its implementation review | handoff pending design acceptance |
+| 3 | **DC-56** — commit scan + memory compliance (NFR-PERF-01) | **Accepted 2026-07-30** | none to start; **DC-62** before its implementation review | `handoffs/DC-56-commit-full-tree-scan-compliance/implementation-handoff-v1.md` |
 
 | 5 | **DC-61** — branch closure (§6.5 deletion half) | **Accepted 2026-07-30**; all three verification obligations discharged | none — **cleared to start** | `handoffs/DC-61-branch-closure/implementation-handoff-v1.md` |
 | 6 | **DC-63** — tag surface (§6.6) | **Accepted 2026-07-30**; timestamp decision carried at acceptance (no-clock sentinel) | none — **cleared to start** | `handoffs/DC-63-tag-surface/implementation-handoff-v1.md` |
