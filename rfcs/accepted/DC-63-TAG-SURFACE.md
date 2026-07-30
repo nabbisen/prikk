@@ -1,8 +1,25 @@
 # RFC (proposed) - DC-63 Tag Surface
 
-**Status.** **Accepted by the project owner on 2026-07-30.** Acceptance carried the timestamp
-recommendation — **option A, write the no-clock sentinel** — since the RFC stated it would proceed on A
-absent an objection and none was raised. Criterion 1 is thereby discharged; see §"The timestamp decision".
+**Status.** **HELD 2026-07-30 — do not implement. Handoff withdrawn.** Accepted 2026-07-30, then held the
+same day when implementation found two structural blockers in `prikk-store::refs`, both confirmed
+(`.git-exclude/reviewed/prikk-dc63-tag-blockers-ruling-v1.md`):
+
+1. **`publish` rejects every `tags/` name.** `validate_publication` (`refs.rs:352-353`) calls
+   `validate_local_branch_ref` unconditionally, which reserves `tags/` outright and then requires `heads/`.
+2. **`verify` requires every ref target to be a Block.** `ensure_block_exists` runs unconditionally at
+   `refs/verify/scan.rs:65` and `:221`, and `read_typed(id, ObjectType::Block)` hard-errors on a `Tag`
+   target — which §6.6 *requires* a tag ref to have.
+
+**Root cause:** `grep RefKind::Tag` across `prikk-store/src` returns **zero production call sites**. Both
+validators assume "every ref is a branch pointing directly at a block," an assumption that held by
+construction because nothing had ever published or verified a tag.
+
+**Blocked on:** the two fixes in §2 and §3 below being designed and reviewed, plus the constraint in §4.
+There is no shippable slice — `tag create` cannot succeed and `tag list` would have nothing to list.
+
+**Independence.** Authored and reviewed by the architect. Design review missed both blockers by checking
+that `publish` *exists* rather than that it *accepts a tags/ name*; see §5.
+
 **Requirement.** `specs/prikk-app-requirements-v1.2.md` §6.6 (Tagging).
 **Gate.** Product **M1** owns the object model, which is complete. This RFC adds the missing surface. Tag
 creation is recorded as deferred at `rfcs/IMPLEMENTATION-STATUS.md:484` and `:557`, so it is a known gap
@@ -20,24 +37,23 @@ rather than an oversight.
 
 **The object model for all three already exists and is identity-pinned.** No command exposes any of it.
 
-## What this requires that does not exist yet
+## 1. What this requires — existence *and* admissibility
 
-*Mandatory section, per the pattern established across DC-56, DC-59, DC-60, DC-61.*
+*Revised 2026-07-30. The original table checked whether each mechanism existed. Both blockers passed that
+test and failed a question it did not ask: **does the mechanism accept what this RFC intends to put through
+it?** Every row now answers both.*
 
-| Needed | Exists? |
-|---|---|
-| A tag object type | **Yes** — `ObjectType::Tag`, code `0x05` pinned at `prikk-object/src/vectors/hard.rs:43` |
-| A tag payload | **Yes** — `TagPayload` (`payload/tag.rs:9`): `name`, `target_block_id`, `message: Option<String>`, `created_at`, `author_key_id`. Canonically encoded, exported at `payload.rs:26` |
-| A committed tag identity vector | **Yes** — one row in `vectors/snapshot.txt`, plus the type-code assertion in `hard.rs` |
-| Format allowlisting | **Yes** — `prikk-store/src/format.rs:25` includes `ObjectType::Tag` |
-| Persisted storage | **Yes** — `Tag` is in `persisted_object_types()` with directory `tag` |
-| A tag ref kind | **Yes** — `RefKind::Tag = 2` (`payload/refs.rs:15`) |
-| Ref publication with CAS | **Yes** — `refs.rs:101` `publish` |
-| **Any command that creates a tag** | **NO.** This RFC's entire content |
-
-**Unlike DC-60, nothing here already ships a creation path.** I checked `rfcs/done/` — there is no tag RFC,
-and `IMPLEMENTATION-STATUS.md:484` lists "tag or remote ref creation" among the not-implemented items. Unlike
-DC-61, no format change is needed: the payload exists and is already identity-pinned.
+| Needed | Exists? | Accepts a tag? |
+|---|---|---|
+| Tag object type | Yes — `ObjectType::Tag`, code `0x05` (`vectors/hard.rs:43`) | Yes |
+| `TagPayload` | Yes — `payload/tag.rs:9`, canonically encoded | Yes |
+| Committed tag identity vector | Yes — one row in `vectors/snapshot.txt` | Yes |
+| Format allowlisting | Yes — `format.rs:25` | Yes |
+| Persisted directory `tag` | Yes — `persisted_object_types()` | Yes |
+| `RefKind::Tag` | Yes — `payload/refs.rs:15` | **Zero production call sites.** Test fixtures only |
+| **Ref publication (`publish`)** | Yes — `refs.rs:101` | **NO — Blocker 1.** `validate_publication` rejects `tags/` unconditionally |
+| **Ref verification** | Yes — `verify_refs` | **NO — Blocker 2.** Every ref target is assumed to be a Block |
+| **A tag ref-name validator** | **NO** — `validate_local_branch_ref` is the only ref-name validator in `prikk-store` and is branch-specific by construction | n/a — must be written, see §3 |
 
 ## The timestamp decision — RESOLVED, option A
 
@@ -121,6 +137,89 @@ Record it as deferred with that reason, not as an oversight.
 Tag objects and tag ref states are both maintainer-signed, on the same terms as `seal`
 (`signature.rs:49-50`, `Maintainer = 2`). Reuse `maintainer_signer_from_env`; add no signing path.
 
+## 2. Blocker 1's fix — kind-aware validation, centrally
+
+`validate_publication` gains a `RefKind` branch: existing `validate_local_branch_ref` for
+`RefKind::Branch`, a new tag validator for `RefKind::Tag`.
+
+**The kind is derivable from the publication.** The implementation report suggested there is "nothing to
+branch on," which is the one part of its analysis to correct: `publication.rs:128` already does
+
+```rust
+let ref_state = RefStatePayload::decode_canonical(&publication.ref_state.canonical_payload)?;
+```
+
+so `RefStatePayload.kind` is available, and `validate_publication` already calls `validate_strict()` on that
+same envelope.
+
+**Rejected: moving ref-name validation out of `validate_publication` to its callers.** That converts one
+central fail-closed guard into N, and the first caller to forget it gets no error.
+
+`tags/` therefore stops being universally reserved and gains a parallel accepted-name rule. **`remotes/` and
+`rollback/` stay reserved** — they have no surface and no validator, and this RFC does not touch them.
+
+## 3. Blocker 2's fix — one extra hop, at both call sites
+
+The target-type check becomes kind-aware: for `RefKind::Branch` the target must be a `Block`; for
+`RefKind::Tag` the target must be a `Tag` object whose `target_block_id` is a `Block`.
+
+That is not a workaround — it is what §6.6 specifies. The current code predates any tag existing.
+
+**Both call sites must be handled:** `refs/verify/scan.rs:65` (pointers) and `:221` (ref-log records).
+Handling only the first leaves verification inconsistent between pointers and log records, which is worse
+than handling neither because it would pass the obvious test.
+
+This is `verify`'s integrity-classification core — the code DC-60's ruling called "the correctness core of
+every ref publication." It is specified here rather than left to implementation for that reason.
+
+## 3a. The tag ref-name validator
+
+Written under this RFC, not deferred. Mirror `validate_local_branch_ref` with the prefix requirement
+inverted — `tags/` required; `heads/`, `remotes/`, `rollback/` reserved — and **keep its control-character,
+traversal, reserved-name, and case-collision rules.**
+
+**Severity note, so the rules are calibrated rather than copied.** Ref names are hashed to filenames via
+`ref_name_storage_key` = `to_hex(sha256(ref_name))`, so a hostile ref name is **not** a filesystem-traversal
+vector the way a worktree path is. The real exposures are display, log content, and **uniqueness** —
+`tags/V1` and `tags/v1` hash differently and would coexist as distinct refs while a user reasonably treats
+them as one. That is why the case-collision rule carries over.
+
+A structural-only check (prefix present, suffix non-empty) is **not** acceptable as an interim: it would give
+the tag namespace weaker rules than branches for no reason but sequencing.
+
+## 4. Constraint — DC-61 touches the same decode site
+
+**DC-61 threads schema-aware decoding through 10 call sites, one of which is `publication.rs:128`** — the
+exact decode §2's fix builds on.
+
+The two increments touch that line for different reasons: DC-61 makes the decode schema-aware for its closed
+field; DC-63 makes `validate_publication` branch on the kind that decode yields. They are compatible but not
+independent.
+
+**This RFC does not resolve the interaction.** Whichever lands second must reconcile at that site, and its
+implementation must state how. DC-61 does *not* touch `validate_publication` or `verify` — its criterion 4
+requires them unmodified — so the collision is confined to this one decode call.
+
+Recorded as a constraint rather than resolved because resolving it would mean designing against DC-61's
+implementation before it exists, which is the error §5 describes.
+
+## 5. Why design review missed both
+
+Recorded because the fix is a method change, not just a code change.
+
+The original prerequisite table asked "does this mechanism exist." Both `publish` and `verify_refs` exist, so
+both rows read "Yes," and the RFC concluded tags were "surface work over proven internals." **The internals
+had never been proven for tags** — one grep for `RefKind::Tag` in production code would have shown zero
+call sites.
+
+This is the fifth variant of one failure in this program: prerequisites unverified (DC-56 v1, DC-59);
+capability already shipped (DC-60 v1); invariants violated by the created state (DC-60, DC-61 v1); cited code
+not read closely enough (DC-56 v2); and here, **mechanism confirmed present but never checked for
+admissibility.**
+
+§1's table now carries an "Accepts a tag?" column for exactly this reason, and future RFCs reusing existing
+machinery should ask the same question of every row.
+
 ## Non-goals
 
 - **No tag moving or deletion** — §3 above; each needs its own increment.
@@ -148,7 +247,18 @@ The doc fix must be comment-only.
 
 ## Acceptance criteria
 
-1. `created_at` is written as **zero** on every tag, and `TagPayload`'s doc comment is corrected — comment only, no encoding change. (The decision itself was discharged at acceptance; this criterion is now its implementation.)
+1. **Blocker 1 fixed:** `validate_publication` branches on `RefKind`; a `tags/` publication succeeds and a
+   malformed one fails closed. `remotes/` and `rollback/` remain reserved — tested.
+2. **Blocker 2 fixed at both call sites** — `scan.rs:65` and `:221`. A well-formed tag verifies clean; a tag
+   ref whose target is not a `Tag` object, and a tag object whose `target_block_id` is not a `Block`, both
+   fail closed — each tested.
+3. **The tag ref-name validator exists** per §3a, including the case-collision rule. A structural-only check
+   does not satisfy this.
+4. **The DC-61 interaction at `publication.rs:128` is reconciled and the reconciliation stated** — whichever
+   increment lands second says how.
+5. **The two evidence tests from the blocker report become permanent regression tests**, asserting the
+   blockers stay fixed rather than being deleted once they pass.
+6. `created_at` is written as **zero** on every tag, and `TagPayload`'s doc comment is corrected — comment only, no encoding change. (The decision itself was discharged at acceptance; this criterion is now its implementation.)
 2. `tag create` persists a signed `ObjectType::Tag` object and publishes a `RefKind::Tag` ref **pointing at
    the tag object, not the block**; `verify` passes afterward.
 3. `tag create` fails closed on an invalid name, an existing tag, and an unresolvable `--target` — each

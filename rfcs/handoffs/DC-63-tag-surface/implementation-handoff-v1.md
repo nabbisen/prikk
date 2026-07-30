@@ -1,5 +1,25 @@
 # DC-63 Tag Surface - Handoff
 
+> # ⛔ WITHDRAWN 2026-07-30 — DO NOT WORK FROM THIS DOCUMENT
+>
+> Two structural blockers in `prikk-store::refs` make this unimplementable as written, both confirmed:
+> `publish` rejects every `tags/` name (`validate_publication` → `validate_local_branch_ref`), and `verify`
+> requires every ref target to be a `Block` (`ensure_block_exists` at `scan.rs:65` and `:221`) — which a tag
+> ref cannot have, since §6.6 requires it to target a tag object.
+>
+> Found by the dev team following this document's own standing request: *"if something here contradicts a
+> shipped RFC, an accepted requirement, or an existing identity artifact, stop and report it."* It did, they
+> did, and it was right. **No shippable slice exists.**
+>
+> See `rfcs/accepted/DC-63-TAG-SURFACE.md` §§1-5 and
+> `.git-exclude/reviewed/prikk-dc63-tag-blockers-ruling-v1.md`.
+>
+> **Preserve `tag.rs`, the tests, and `TagPayload::decode_canonical`** — all of it carries over once the two
+> fixes land. Everything below is retained as the record of what was asked for and is **not** current
+> instruction.
+
+---
+
 **Cleared to start.** Accepted by the project owner on 2026-07-30, at
 `rfcs/accepted/DC-63-TAG-SURFACE.md`. The one open design question — tag timestamps — was decided at
 acceptance; see §1. No gate remains.
