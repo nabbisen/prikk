@@ -19,7 +19,7 @@ pub(crate) use log::{
 use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, RefUpdatePayload};
 
-use crate::fsutil::{ensure_directory_required, promote_file_required};
+use crate::fsutil::{EntryKind, ensure_directory_required, list_directory, promote_file_required};
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
 use crate::object_store::{FileObjectStore, ObjectReader};
@@ -52,6 +52,15 @@ pub struct RefRecoveryCandidate {
     pub target_object_id: ObjectId,
     /// Update sequence of the latest ref-log record.
     pub update_seq: u64,
+}
+
+/// One enumerated ref pointer, for deterministic listing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefPointerSummary {
+    /// Human-readable ref name recovered from the pointer file body.
+    pub ref_name: String,
+    /// Current RefState object ID selected by this pointer.
+    pub ref_state_id: ObjectId,
 }
 
 /// Compatibility result type retained for the now-refused format-1 reconstruction API.
@@ -161,6 +170,40 @@ impl RefStore {
     /// Replay the inline ref-update log for a ref name.
     pub fn replay_log(&self, ref_name: &str) -> Result<RefLogReplay> {
         log::replay_log(&self.layout, ref_name)
+    }
+
+    /// Enumerate every ref pointer under `by-id/`, sorted by name. `by-id/` is the complete set of
+    /// ref pointers; logs, locks, and tmp files live elsewhere and are not pointers.
+    pub fn list_ref_pointers(&self) -> Result<Vec<RefPointerSummary>> {
+        let by_id_dir = self.layout.refs_dir().join("by-id");
+        let relative = self.layout.repository_relative(&by_id_dir)?;
+        let entries = list_directory(self.layout.repository_mutation_root(), &relative)?;
+        let mut summaries = Vec::with_capacity(entries.len());
+        for entry in entries {
+            if entry.kind != EntryKind::Regular {
+                continue;
+            }
+            let Some(name) = entry.name.to_str() else {
+                return Err(PrikkError::Integrity(
+                    "ref pointer file name is not valid UTF-8".to_string(),
+                ));
+            };
+            if !name.ends_with(".ref") {
+                continue;
+            }
+            let path = by_id_dir.join(name);
+            let Some(pointer) = pointer::read_ref_pointer(&self.layout, &path)? else {
+                return Err(PrikkError::Integrity(format!(
+                    "ref pointer file disappeared during listing: {name}"
+                )));
+            };
+            summaries.push(RefPointerSummary {
+                ref_name: pointer.ref_name,
+                ref_state_id: pointer.ref_state_id,
+            });
+        }
+        summaries.sort_by(|left, right| left.ref_name.cmp(&right.ref_name));
+        Ok(summaries)
     }
 
     /// Return a diagnostic candidate when the pointer is missing but the format-1 log is valid.

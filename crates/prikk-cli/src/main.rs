@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 mod args;
+mod branch;
 mod output;
 mod seal;
 
@@ -45,7 +46,9 @@ use prikk_store::{
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-fn open_repository(root: impl Into<PathBuf>) -> std::result::Result<RepositoryLayout, String> {
+pub(crate) fn open_repository(
+    root: impl Into<PathBuf>,
+) -> std::result::Result<RepositoryLayout, String> {
     let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
     if layout.format() == RepositoryFormat::LegacyV1 {
         eprintln!(
@@ -79,6 +82,7 @@ fn run() -> std::result::Result<(), String> {
         Some("init") => run_init(args.next()),
         Some("commit") => run_commit(args.collect()),
         Some("seal") => run_seal(args.collect()),
+        Some("branch") => run_branch(args.collect()),
         Some("trust") => run_trust(args.collect()),
         Some("status") => run_status(),
         Some("log") => run_log(args.collect()),
@@ -152,6 +156,11 @@ fn run_seal(args: Vec<String>) -> std::result::Result<(), String> {
     println!("{} RefState: {}", result.ref_name, result.ref_state_id);
     println!("note: audit plugins and patch-based worktree materialization remain later PRs");
     Ok(())
+}
+
+fn run_branch(args: Vec<String>) -> std::result::Result<(), String> {
+    let root = current_dir()?;
+    branch::run_branch(root, args)
 }
 
 fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {
@@ -446,7 +455,7 @@ fn author_signer_from_env() -> Result<Ed25519AuthorSigner, String> {
 
 /// Build the MAINTAINER signer from caller-supplied key material in the environment, failing closed
 /// if none is configured.
-fn maintainer_signer_from_env() -> Result<Ed25519MaintainerSigner, String> {
+pub(crate) fn maintainer_signer_from_env() -> Result<Ed25519MaintainerSigner, String> {
     let key_id = std::env::var("PRIKK_MAINTAINER_KEY_ID").map_err(|_| {
         "maintainer signing is required: set PRIKK_MAINTAINER_KEY_ID (no signing key configured)"
             .to_string()
