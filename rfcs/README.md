@@ -31,7 +31,7 @@ These records are under design review. All proposed RFCs must respect the depend
 |---|---|---|
 | DC-56 | [Commit Full-Tree Scan Compliance](./proposed/DC-56-COMMIT-FULL-TREE-SCAN-COMPLIANCE.md) | Closes **missed product M1** gate NFR-PERF-01 and an untracked commit-memory defect; needs DC-62 |
 | DC-62 | [Commit Benchmark Memory Axis](./proposed/DC-62-COMMIT-BENCHMARK-MEMORY-AXIS.md) | Arises from DC-56 review v2; precondition for DC-56's implementation review |
-| DC-61 | [Branch Deletion and Ref-Log Tombstones](./proposed/DC-61-BRANCH-DELETION-AND-REF-LOG-TOMBSTONES.md) | Split from DC-60 2026-07-30. Design review found the tombstone route needs a new object type or payload schema bump; a cheaper closed-RefState design exists — **owner input pending on which** |
+| DC-61 | [Branch Closure](./proposed/DC-61-BRANCH-CLOSURE.md) | Split from DC-60 2026-07-30; redesigned the same day from deletion-with-tombstones to **closure**, after review found the tombstone state is one `doctor` already has a repair path for. Still a format change (new `RefStatePayload` field) |
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0; **release-blocked** — inherits key lifecycle from DC-35, which needs amendment |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
