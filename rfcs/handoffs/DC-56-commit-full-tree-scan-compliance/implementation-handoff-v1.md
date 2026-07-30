@@ -2,9 +2,16 @@
 
 **Cleared to start.** Accepted by the project owner on 2026-07-30, at
 `rfcs/accepted/DC-56-COMMIT-FULL-TREE-SCAN-COMPLIANCE.md`.
-**One sequencing constraint:** its **implementation review requires DC-62** (the memory axis) to have landed
-first, because criterion 5 evidences memory against a harness that does not yet measure it. You can build
-before DC-62 lands; you cannot be reviewed complete before it does.
+**DC-62 is complete** (`963caae`), so the memory axis exists and criterion 5's precondition is satisfied.
+
+**But take the memory baseline before you change anything.** DC-62's table reports absolute `VmHWM` with no
+baseline row, so its near-linear growth reads as only 2.58x where above the ~6.1 MB process floor it is
+9.84x. Without a baseline, criterion 5 cannot show you *eliminated* the content-proportional component
+rather than merely reducing it.
+
+Measure it on the **parent commit**, or with your index forced cold, and state which. A baseline taken after
+the change already contains the fix. Adding the baseline row or delta column to DC-62's report section is
+**in your scope here** — DC-62 is complete and is not being reopened for it.
 **Authored by** the architect. Design review v2 returned two blocking findings, both resolved at `38803f0`.
 **Size:** the largest increment currently open. A new cache with validity rules on the commit hot path.
 **Touches:** `crates/prikk-store/src/worktree_patch/node_authoring/`, the commit path's traversal **and

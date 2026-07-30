@@ -251,9 +251,21 @@ mistaken requirement, not for an inconvenient one.
    mtime, and content hash. A path-membership-only index fails this criterion.
 4. **Objective 1, latency:** commit cost no longer tracks repository size at fixed change count, shown by
    re-running DC-59's harness and reporting Axis A flattened.
-5. **Objective 2, memory:** commit no longer loads the whole worktree into memory, shown against a
-   **DC-59 memory axis** — which must be added first. DC-56 may not assert memory improvement against a
-   harness that measures only wall-clock.
+5. **Objective 2, memory:** commit no longer loads the whole worktree into memory, shown against **DC-62's
+   memory axis** — complete at `963caae`, so this precondition is satisfied.
+
+   **Establish a memory baseline first, and measure it against the unmodified commit path.** DC-62's
+   published table reports absolute `VmHWM` with no baseline row, so its near-linear growth reads as only
+   2.58x where above the ~6.1 MB process floor it is 9.84x (recorded in `MILESTONES.md` as DC-62's N1).
+   Without a baseline, this criterion cannot distinguish **eliminating** the content-proportional component
+   from merely reducing it — which is the whole claim.
+
+   **The sequencing is load-bearing:** the baseline must come from the commit path *before* this increment
+   changes it. Measuring it after, or with the index in place, yields a figure that already includes the
+   fix. Take it on the parent commit, or with the index forced cold, and say which.
+
+   Adding the baseline row or delta column to DC-62's report section is in DC-56's scope — DC-62 is complete
+   and is not reopened for it.
 6. **Index/worktree divergence is detectable and reported**, per §5. A design that cannot detect its own
    staleness does not satisfy this.
 7. NFR-PERF-04's evidence obligation is discharged — cache deletion and rebuild leave behaviour unchanged,
