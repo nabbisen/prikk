@@ -33,6 +33,30 @@
 //! (`node_authoring.rs`'s active-WAL guard). The one seal used here happens entirely inside setup,
 //! before the timing window opens, and is not "sealing between trials" in the sense the design
 //! forbids — there is exactly one timed trial per generated repository, never two.
+//!
+//! ## Peak-memory measurement (DC-62)
+//!
+//! Added as a **separate, third pass** after Axis A and Axis B, never interleaved with them:
+//! Axis A/B keep DC-59's exact `time_commit` (`.output()`, no polling), so their figures are
+//! produced by unmodified code and stay comparable to the original report. The memory pass reuses
+//! the same repository-generation methodology at Axis A's sizes (1 file changed) but times a
+//! `.spawn()`'d commit instead, polling `/proc/<pid>/status` for `VmHWM` — the kernel's own
+//! peak-RSS high-water mark — at a fixed interval while the child runs, keeping the maximum
+//! observed. This requires `.spawn()` rather than `.output()`, which is why it cannot share Axis
+//! A/B's timing loop and why it runs separately instead.
+//!
+//! **No new dependency.** `rustix` is workspace-declared with `features = ["fs"]` only — no
+//! `getrusage`/`wait4` — and `std` exposes neither, so `/proc` reading is the only route available
+//! without adding `libc` or widening `rustix`'s features (which would also touch DC-51's dependency
+//! placement surface). `/proc` is Linux-only; the memory pass is compiled and skipped cleanly on
+//! other platforms (a one-line notice, not a failure), consistent with DC-37's existing
+//! Linux-only-mutation-support boundary for this harness.
+//!
+//! **A missed sample is reported as "not measured," never as zero.** Sampling cannot catch the
+//! peak of a run shorter than the polling interval — at 10 files a commit takes on the order of a
+//! few milliseconds, so a sample may not land. That is expected and stated in the report per point,
+//! never silently defaulted to a number: a fabricated zero would make DC-56's later memory-fix
+//! evidence look like it improved from a baseline that was never actually measured.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::indexing_slicing)]
 
@@ -72,6 +96,12 @@ const AXIS_B_CHANGE_COUNTS: [usize; 4] = [1, 10, 100, 1_000];
 const AXIS_B_SAMPLES: usize = 5;
 
 const SPAWN_FLOOR_SAMPLES: usize = 10;
+
+/// Polling interval for the memory pass's `/proc/<pid>/status` reads. Deliberately fine-grained
+/// (sub-millisecond) to give the smallest, fastest commits the best available chance of landing at
+/// least one sample; still expected to miss entirely at the smallest repository sizes, which the
+/// report marks *not measured* rather than defaulting.
+const MEMORY_SAMPLE_INTERVAL: Duration = Duration::from_micros(500);
 
 struct SplitMix64(u64);
 
@@ -284,6 +314,136 @@ fn time_commit(root: &Path) -> Duration {
     elapsed
 }
 
+/// Outcome of one memory-measuring commit trial: the peak `VmHWM` observed (if any sample landed
+/// while the child was alive), and how many polling attempts succeeded versus were made. A missed
+/// sample is `peak_kb: None` — never zero.
+struct MemoryTrial {
+    peak_kb: Option<u64>,
+    attempts: usize,
+    successes: usize,
+}
+
+/// Aggregate of one or more `MemoryTrial`s at a fixed repository size: the maximum peak observed
+/// across trials (`None` only if every trial's every poll missed), and the total samples obtained
+/// versus attempted across all trials at this point.
+struct MemoryPoint {
+    label: String,
+    trials: usize,
+    peak_kb: Option<u64>,
+    samples_obtained: usize,
+    samples_attempted: usize,
+}
+
+#[cfg(target_os = "linux")]
+fn read_vm_hwm_kb(pid: u32) -> Option<u64> {
+    let text = std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("VmHWM:") {
+            let mut parts = rest.split_whitespace();
+            let number = parts
+                .next()
+                .unwrap_or_else(|| panic!("VmHWM line has no value: {line:?}"));
+            let unit = parts
+                .next()
+                .unwrap_or_else(|| panic!("VmHWM line has no unit: {line:?}"));
+            assert_eq!(unit, "kB", "unexpected VmHWM unit in line: {line:?}");
+            let kb: u64 = number
+                .parse()
+                .unwrap_or_else(|err| panic!("VmHWM value {number:?} is not an integer: {err}"));
+            return Some(kb);
+        }
+    }
+    None
+}
+
+/// Time and peak-memory-measure one commit against an already-baselined, already-mutated
+/// repository, via `.spawn()` and polling rather than `.output()` (see module docs for why this
+/// cannot share `time_commit`'s loop). The elapsed time here is not used for Axis A/B's tables —
+/// only the peak memory is retained by the caller.
+#[cfg(target_os = "linux")]
+fn measure_commit_memory(root: &Path, interval: Duration) -> MemoryTrial {
+    use std::process::Stdio;
+
+    let mut child = prikk(root)
+        .env("PRIKK_AUTHOR_KEY_ID", FIXED_AUTHOR_KEY_ID)
+        .env("PRIKK_AUTHOR_SEED", hex(&FIXED_AUTHOR_SEED))
+        .args(["commit", "-m", "dc59-bench: measured (memory pass)"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+
+    let mut peak_kb: Option<u64> = None;
+    let mut attempts = 0_usize;
+    let mut successes = 0_usize;
+    loop {
+        attempts += 1;
+        if let Some(kb) = read_vm_hwm_kb(pid) {
+            successes += 1;
+            peak_kb = Some(peak_kb.map_or(kb, |current| current.max(kb)));
+        }
+        if child.try_wait().unwrap().is_some() {
+            break;
+        }
+        std::thread::sleep(interval);
+    }
+    let output = child.wait_with_output().unwrap();
+    ok(&output, "measured commit (memory pass)");
+
+    MemoryTrial {
+        peak_kb,
+        attempts,
+        successes,
+    }
+}
+
+/// Run the memory axis (Axis A's repository sizes, 1 file changed) on Linux; skip cleanly with a
+/// notice on every other platform, since `/proc` is Linux-only.
+fn run_memory_axis() -> Option<Vec<MemoryPoint>> {
+    #[cfg(not(target_os = "linux"))]
+    {
+        eprintln!(
+            "skipping peak-memory measurement: /proc/<pid>/status is Linux-only (DC-62; see module docs)"
+        );
+        None
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let mut points = Vec::new();
+        for (size, sample_count) in AXIS_A_SIZES.into_iter().zip(AXIS_A_SAMPLES) {
+            let mut peak_kb: Option<u64> = None;
+            let mut samples_obtained = 0_usize;
+            let mut samples_attempted = 0_usize;
+            for sample_index in 0..sample_count {
+                let root = unique_dir(&format!("axis-a-mem-{size}-{sample_index}"));
+                let seed = CONTENT_SEED
+                    .wrapping_add(0x2000_0000)
+                    .wrapping_add(size as u64)
+                    .wrapping_add(sample_index as u64);
+                let files = setup_baseline_repository(&root, size, seed);
+                let mut rng = SplitMix64::new(seed ^ 0xFFFF_FFFF_0000_0000);
+                mutate_files(&root, &files, 1, &mut rng);
+                let trial = measure_commit_memory(&root, MEMORY_SAMPLE_INTERVAL);
+                samples_attempted += trial.attempts;
+                samples_obtained += trial.successes;
+                if let Some(kb) = trial.peak_kb {
+                    peak_kb = Some(peak_kb.map_or(kb, |current| current.max(kb)));
+                }
+                let _ = std::fs::remove_dir_all(&root);
+            }
+            points.push(MemoryPoint {
+                label: format!("{size} files"),
+                trials: sample_count,
+                peak_kb,
+                samples_obtained,
+                samples_attempted,
+            });
+        }
+        Some(points)
+    }
+}
+
 fn spawn_floor_sample() -> Duration {
     let start = Instant::now();
     let out = Command::new(env!("CARGO_BIN_EXE_prikk"))
@@ -318,6 +478,10 @@ impl Point {
 
 fn fmt_ms(duration: Duration) -> String {
     format!("{:.2}", duration.as_secs_f64() * 1000.0)
+}
+
+fn fmt_us(duration: Duration) -> String {
+    format!("{} \u{b5}s", duration.as_micros())
 }
 
 fn filesystem_kind(path: &Path) -> String {
@@ -408,7 +572,10 @@ fn commit_benchmark() {
         });
     }
 
-    let report = render_report(&spawn_floor_point, &axis_a, &axis_b);
+    // Separate pass, deliberately after Axis A/B and never interleaved with them — see module docs.
+    let memory_axis = run_memory_axis();
+
+    let report = render_report(&spawn_floor_point, &axis_a, &axis_b, memory_axis.as_deref());
     let report_path = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../rfcs/handoffs/DC-59-commit-benchmark-harness/benchmark-report-v1.md"
@@ -417,14 +584,20 @@ fn commit_benchmark() {
     eprintln!("report written to {report_path}");
 }
 
-fn render_report(spawn_floor: &Point, axis_a: &[Point], axis_b: &[Point]) -> String {
+fn render_report(
+    spawn_floor: &Point,
+    axis_a: &[Point],
+    axis_b: &[Point],
+    memory_axis: Option<&[MemoryPoint]>,
+) -> String {
     let mut out = String::new();
     out.push_str("# DC-59 Commit Benchmark Report v1\n\n");
     out.push_str("Generated by `cargo test -p prikk --locked --test dc59_commit_benchmark -- --ignored --nocapture commit_benchmark`.\n");
     out.push_str("Re-running that exact command regenerates this file. The *numbers* are hardware-dependent; the **shape** of Axis A is the claim under test.\n\n");
+    out.push_str("DC-62 added the peak-memory section below as a third, separate pass; Axis A and Axis B above it are produced by DC-59's original, unmodified timing code and are unaffected by it (see that section for why it runs separately).\n\n");
 
     out.push_str("## Scope\n\n");
-    out.push_str("This report states what was measured. It does not conclude whether `prikk commit` complies with NFR-PERF-01 — that determination belongs to DC-56.\n\n");
+    out.push_str("This report states what was measured. It does not conclude whether `prikk commit` complies with NFR-PERF-01 — that determination belongs to DC-56. The peak-memory section states what was measured; it does not conclude whether the footprint is acceptable — that determination also belongs to DC-56.\n\n");
 
     out.push_str("## Machine and filesystem context\n\n");
     out.push_str(&format!("- CPU: {}\n", cpu_model()));
@@ -492,6 +665,40 @@ fn render_report(spawn_floor: &Point, axis_a: &[Point], axis_b: &[Point]) -> Str
     }
     out.push('\n');
     out.push_str("This is the cost NFR-PERF-01 permits: patch construction and signing scale with the change set.\n\n");
+
+    out.push_str("## Peak memory (DC-62) — repository size, 1 file changed, separate pass\n\n");
+    out.push_str("Same repository sizes and change count as Axis A, but timed and measured by a **separate pass**: each trial `.spawn()`s the commit (rather than `.output()`, as Axis A/B use) and polls `/proc/<pid>/status` for `VmHWM` — the kernel's own peak-RSS high-water mark — ");
+    out.push_str(&format!(
+        "every {} while the child runs, keeping the maximum observed across all trials at a point. Axis A/B's own timing figures above are produced by the original, unmodified `.output()`-based code and are not affected by this pass.\n\n",
+        fmt_us(MEMORY_SAMPLE_INTERVAL)
+    ));
+    match memory_axis {
+        None => {
+            out.push_str("**Not measured on this platform.** `/proc/<pid>/status` is Linux-only; this run was on a non-Linux platform, so no peak-memory data is available. Re-run on Linux to populate this section.\n\n");
+        }
+        Some(points) => {
+            out.push_str("A missed sample is reported as **not measured**, never as zero: a run shorter than the polling interval may complete before any poll lands, which is expected at the smallest repository sizes and does not mean memory usage was zero.\n\n");
+            out.push_str(
+                "| Repository size | Trials | Samples obtained / attempted | Peak VmHWM (KB) |\n",
+            );
+            out.push_str("|---:|---:|---:|---:|\n");
+            for point in points {
+                let peak = point
+                    .peak_kb
+                    .map_or_else(|| "not measured".to_owned(), |kb| kb.to_string());
+                out.push_str(&format!(
+                    "| {} | {} | {} / {} | {} |\n",
+                    point.label,
+                    point.trials,
+                    point.samples_obtained,
+                    point.samples_attempted,
+                    peak,
+                ));
+            }
+            out.push('\n');
+            out.push_str("If peak memory grows roughly linearly with repository size here despite only 1 file changing, that is the O(total worktree bytes) full-tree-read DC-56 exists to flatten; this report states the measurement, not whether it is acceptable.\n\n");
+        }
+    }
 
     out.push_str("## Reproduction\n\n");
     out.push_str("```\ncargo test -p prikk --locked --test dc59_commit_benchmark -- --ignored --nocapture commit_benchmark\n```\n");
