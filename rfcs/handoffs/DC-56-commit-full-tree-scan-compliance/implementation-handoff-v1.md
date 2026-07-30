@@ -2,16 +2,18 @@
 
 **Cleared to start.** Accepted by the project owner on 2026-07-30, at
 `rfcs/accepted/DC-56-COMMIT-FULL-TREE-SCAN-COMPLIANCE.md`.
-**DC-62 is complete** (`963caae`), so the memory axis exists and criterion 5's precondition is satisfied.
+**DC-62 is complete** (`07b1fc8`), so the memory axis exists and criterion 5's precondition is satisfied.
 
-**But take the memory baseline before you change anything.** DC-62's table reports absolute `VmHWM` with no
-baseline row, so its near-linear growth reads as only 2.58x where above the ~6.1 MB process floor it is
-9.84x. Without a baseline, criterion 5 cannot show you *eliminated* the content-proportional component
-rather than merely reducing it.
+**The memory baseline is already taken — it is not your job.** An earlier version of this handoff put it in
+your scope and told you to measure it on the parent commit. Both were wrong, and the correction is DC-62's
+N1 repair at `07b1fc8`: the harness now measures a floor (a real `commit` against a 1-file repository) and
+reports each point's excess over it. Because that landed before this increment exists, the baseline is
+necessarily on the unmodified commit path already.
 
-Measure it on the **parent commit**, or with your index forced cold, and state which. A baseline taken after
-the change already contains the fix. Adding the baseline row or delta column to DC-62's report section is
-**in your scope here** — DC-62 is complete and is not being reopened for it.
+**What criterion 5 needs from you:** re-run the memory axis after your change and compare the **"Above
+floor"** column — not absolute `VmHWM` — against `07b1fc8`'s published figures (10 files 20 KB, 100 files
+152 KB, 1,000 files 1,336 KB, 10,000 files 13,256 KB). Absolute `VmHWM` hides the effect you are claiming:
+it grows only 2.58x across that range where above-floor grows 9.92x.
 **Authored by** the architect. Design review v2 returned two blocking findings, both resolved at `38803f0`.
 **Size:** the largest increment currently open. A new cache with validity rules on the commit hot path.
 **Touches:** `crates/prikk-store/src/worktree_patch/node_authoring/`, the commit path's traversal **and

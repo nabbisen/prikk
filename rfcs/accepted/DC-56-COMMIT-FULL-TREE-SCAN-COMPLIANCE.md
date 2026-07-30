@@ -4,8 +4,8 @@
 findings — the scan reads file contents rather than only traversing, and the index would be authoritative for
 commit content with no way to detect being wrong — both resolved in revision at `38803f0`.
 
-**Sequencing.** Implementation may begin, but its **implementation review requires DC-62** (the memory axis)
-to have landed, because criterion 5 evidences memory against a harness that does not yet measure it.
+**Sequencing.** Unblocked. Criterion 5's dependency on **DC-62** (the memory axis) is satisfied — DC-62 is
+complete at `07b1fc8`, including the floor and "Above floor" column criterion 5 compares against.
 
 **Independence.** Authored and reviewed by the architect. Acceptance criteria are written to be reproducible
 from the repository, so the implementation review carries the independent weight.
@@ -252,20 +252,18 @@ mistaken requirement, not for an inconvenient one.
 4. **Objective 1, latency:** commit cost no longer tracks repository size at fixed change count, shown by
    re-running DC-59's harness and reporting Axis A flattened.
 5. **Objective 2, memory:** commit no longer loads the whole worktree into memory, shown against **DC-62's
-   memory axis** — complete at `963caae`, so this precondition is satisfied.
+   memory axis** — complete at `07b1fc8`, so this precondition is satisfied.
 
-   **Establish a memory baseline first, and measure it against the unmodified commit path.** DC-62's
-   published table reports absolute `VmHWM` with no baseline row, so its near-linear growth reads as only
-   2.58x where above the ~6.1 MB process floor it is 9.84x (recorded in `MILESTONES.md` as DC-62's N1).
-   Without a baseline, this criterion cannot distinguish **eliminating** the content-proportional component
-   from merely reducing it — which is the whole claim.
+   **Compare against the "Above floor" column, not absolute `VmHWM`.** DC-62's memory axis measures a
+   floor (a real `commit` against a 1-file repository) and reports each point's excess over it, because
+   absolute `VmHWM` makes the content-proportional component read as only 2.58x growth where above the
+   6,144 KB floor it is 9.92x. Without that column this criterion cannot distinguish **eliminating** the
+   content-proportional component from merely reducing it — which is the whole claim.
 
-   **The sequencing is load-bearing:** the baseline must come from the commit path *before* this increment
-   changes it. Measuring it after, or with the index in place, yields a figure that already includes the
-   fix. Take it on the parent commit, or with the index forced cold, and say which.
-
-   Adding the baseline row or delta column to DC-62's report section is in DC-56's scope — DC-62 is complete
-   and is not reopened for it.
+   The floor and the pre-change points were both measured before this increment exists, so the baseline is
+   necessarily taken on the unmodified commit path. Nothing here needs measuring on a parent commit or with
+   a cold index: re-run the axis after the change and compare the "Above floor" column against `07b1fc8`'s
+   published figures (10 files 20 KB, 100 files 152 KB, 1,000 files 1,336 KB, 10,000 files 13,256 KB).
 6. **Index/worktree divergence is detectable and reported**, per §5. A design that cannot detect its own
    staleness does not satisfy this.
 7. NFR-PERF-04's evidence obligation is discharged — cache deletion and rebuild leave behaviour unchanged,
@@ -283,6 +281,7 @@ file would pass criterion 4 and fail the increment's purpose.
 
 ## Sequencing note
 
-Criterion 5 makes **DC-59 a second-time dependency**: its harness needs a memory axis before DC-56 can
-evidence objective 2. That amendment is small and independent — it can be prepared while DC-56's remaining
-design work proceeds, but it must land before DC-56's implementation review.
+Criterion 5 made **DC-59 a second-time dependency**: its harness needed a memory axis before DC-56 could
+evidence objective 2. **Discharged.** That amendment became DC-62, complete at `07b1fc8` including its N1
+repair (the floor and the "Above floor" column criterion 5 compares against). No harness work remains in
+DC-56's scope.

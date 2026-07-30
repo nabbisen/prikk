@@ -1,6 +1,14 @@
 # RFC (proposed) - DC-62 Commit Benchmark Memory Axis
 
-**Status.** **Accepted by the project owner on 2026-07-30.** Implementation may begin.
+**Status.** **Accepted by the project owner on 2026-07-30. Complete at `07b1fc8`** — implemented `963caae`,
+review accepted with one non-blocking note (N1: absolute `VmHWM` with no baseline), N1 repaired at `07b1fc8`
+and that repair reviewed and accepted with no findings. The harness now measures a floor and publishes an
+"Above floor" column. Awaits release only.
+
+**Note on N1's scope.** The architect had specified the N1 repair belonged to DC-56, on the "why a new
+increment rather than amending DC-59" reasoning below. **That was a misapplication of it.** That reasoning
+governs *new scope arising later*; a *review finding against this increment* is repaired under this
+increment. The developers did so and were right.
 
 **Independence.** Authored and reviewed by the architect; one architect, so design review here is author
 re-examination. Acceptance criteria are written to be reproducible from the repository, so the
@@ -21,6 +29,11 @@ Adding a criterion to it now would retroactively make a finished increment unfin
 requirements after implementation" pattern the operating instructions prohibit. The memory axis is **new
 scope arising from a later review**, not a DC-59 defect. So DC-59 stays closed and correct, and this is its
 own increment.
+
+**Where this reasoning stops.** It distinguishes *new scope* from *defects*, and applies only to the former.
+A review finding against an increment is a defect in that increment and is repaired under it — DC-55's
+fixture blocker, DC-51's `reference-check` break, and this increment's own N1 all took that route. Cite this
+section to open a new increment for work the old one never claimed; never to push a finding downstream.
 
 ## Problem
 

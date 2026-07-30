@@ -7,7 +7,7 @@ backlog narrative, `rfcs/IMPLEMENTATION-STATUS.md` the current-state snapshot, a
 authority. This file answers only one question the others do not: **what do I pick up next, and what is it
 waiting on?**
 
-Last reconciled: 2026-07-30, after DC-62 completion (`963caae`). **Complete:** DC-59, DC-60, DC-62, DC-63.
+Last reconciled: 2026-07-30, after DC-62's N1 repair (`07b1fc8`). **Complete:** DC-59, DC-60, DC-62, DC-63.
 **DC-58** both batches accepted, closure pending one report reframing. **Cleared and unstarted:** DC-56,
 DC-61. **DC-57 held** — its premise does not hold, handoff withdrawn, pending the multi-patch queuing
 decision, which is the **one outstanding owner decision** in the development lane. The release-lane decision
@@ -83,7 +83,8 @@ worktree into memory, O(total worktree bytes) regardless of change size. No requ
 recorded in `MILESTONES.md` as an untracked scalability defect. The same changed-path index fixes both
 objectives, but evidencing the memory one needed a memory axis, opened as **DC-62** rather than folded back
 into DC-59 — DC-59 was complete and its criteria all discharged, so adding one would have retroactively
-unfinished it. **DC-62 is now complete (`963caae`), so this precondition is satisfied.**
+unfinished it. **DC-62 is now complete (`07b1fc8`), so this precondition is satisfied** — including the
+floor and delta column DC-56's criterion 5 compares against, so no harness work remains in DC-56's scope.
 
 **Beware the milestone labels.** `MILESTONES.md` § "Two milestone schemes" is required reading before
 resolving any `M0`–`M3` gate label in the NFR matrix. The requirements use the product scheme; this file
@@ -99,12 +100,19 @@ blocking defect survived into the implementation and was caught only because acc
 written to be reproducible from the repository rather than trusted from a report. Keep that pattern for
 identity-bearing increments.
 
-**DC-62 is complete** — accepted `5ff2388`, implemented `963caae`. Implementation review v1 accepted with one
-non-blocking note. Peak-memory measurement added as a separate pass, no new dependency, no production code.
-**DC-56's precondition is satisfied.** The measurement confirms O(total worktree bytes): above the ~6.1 MB
-process floor, memory grows 9.84x for a 10x repository-size increase at fixed change count. N1 records that
-the published table shows absolute VmHWM without a baseline row, so that near-linear growth reads as only
-2.58x — which DC-56 must account for when evidencing its improvement.
+**DC-62 is complete** — accepted `5ff2388`, implemented `963caae`, **N1 repaired at `07b1fc8`** and that
+repair reviewed and accepted with no findings. Peak-memory measurement added as a separate pass, no new
+dependency, no production code. **DC-56's precondition is satisfied.** The measurement confirms O(total
+worktree bytes): above the measured 6,144 KB floor, memory grows **9.92x** for a 10x repository-size increase
+at fixed change count, where absolute VmHWM grows only 2.58x. The report now publishes an "Above floor"
+column, so that is the figure a reader sees and the one DC-56's criterion 5 compares against.
+
+**And N1 was repaired under DC-62, correctly, against my written instruction.** I had assigned the fix to
+DC-56's scope on the DC-59 → DC-62 precedent above ("adding a criterion would have retroactively unfinished
+it"). That precedent governs **new scope arising later**; it does not govern **a review finding against the
+increment itself**, which is repaired under that increment — as DC-55's fixture blocker and DC-51's
+`reference-check` break were. The developers did it under DC-62 and were right. **Rule:** the DC-59 → DC-62
+split applies to new scope, not to findings; a finding against an increment reopens that increment.
 
 **DC-63 is complete** — accepted `c7d1691`, held briefly on two `refs.rs` blockers, cleared via handoff v2,
 implemented `6b33a72`. Implementation review v1 accepted with no blocking findings; gates re-run by the
