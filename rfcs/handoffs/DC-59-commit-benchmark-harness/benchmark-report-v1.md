@@ -31,7 +31,7 @@ Signing cost: Ed25519 author signing happens inside every timed `commit` and sca
 
 ## Process-spawn floor
 
-`prikk --version`, 10 samples: median 0.35 ms, range 0.32-0.55 ms.
+`prikk --version`, 10 samples: median 0.33 ms, range 0.26-0.43 ms.
 Every measurement below drives the binary through `Command`, so this floor is included in every figure below as a roughly constant additive offset. It does not hide Axis A's shape but may dominate at the smallest repository size.
 
 ## Axis A — cost against repository size, 1 file changed
@@ -40,10 +40,10 @@ Repository size varies; exactly 1 of the baseline's files is modified before eac
 
 | Repository size | Samples | Median (ms) | Min (ms) | Max (ms) |
 |---:|---:|---:|---:|---:|
-| 10 files | 5 | 4.24 | 3.97 | 4.87 |
-| 100 files | 5 | 8.57 | 8.49 | 9.88 |
-| 1000 files | 5 | 58.34 | 57.99 | 59.55 |
-| 10000 files | 3 | 520.15 | 515.57 | 523.77 |
+| 10 files | 5 | 3.68 | 3.42 | 3.83 |
+| 100 files | 5 | 9.11 | 8.94 | 9.35 |
+| 1000 files | 5 | 61.62 | 60.51 | 72.58 |
+| 10000 files | 3 | 521.02 | 520.07 | 526.61 |
 
 If cost grows with repository size here despite the change set staying fixed at 1 file, that growth is not explained by patch construction or signing — both scale with the change set, not the baseline — and points at a full-tree scan.
 
@@ -53,10 +53,10 @@ Repository size is held fixed; the number of modified files varies before each t
 
 | Changed files | Samples | Median (ms) | Min (ms) | Max (ms) |
 |---:|---:|---:|---:|---:|
-| 1 changed | 5 | 58.06 | 57.85 | 60.19 |
-| 10 changed | 5 | 74.38 | 73.05 | 75.29 |
-| 100 changed | 5 | 219.85 | 218.55 | 225.25 |
-| 1000 changed | 5 | 1692.11 | 1680.53 | 1694.30 |
+| 1 changed | 5 | 59.89 | 57.90 | 61.95 |
+| 10 changed | 5 | 73.12 | 71.61 | 74.37 |
+| 100 changed | 5 | 213.04 | 211.22 | 213.20 |
+| 1000 changed | 5 | 1623.68 | 1616.15 | 1646.29 |
 
 This is the cost NFR-PERF-01 permits: patch construction and signing scale with the change set.
 
@@ -64,16 +64,18 @@ This is the cost NFR-PERF-01 permits: patch construction and signing scale with 
 
 Same repository sizes and change count as Axis A, but timed and measured by a **separate pass**: each trial `.spawn()`s the commit (rather than `.output()`, as Axis A/B use) and polls `/proc/<pid>/status` for `VmHWM` — the kernel's own peak-RSS high-water mark — every 500 µs while the child runs, keeping the maximum observed across all trials at a point. Axis A/B's own timing figures above are produced by the original, unmodified `.output()`-based code and are not affected by this pass.
 
+**Memory floor:** a real `commit` against a 1-file repository (negligible content, 256 bytes) — same code path as the measured points below, not `prikk --version` (tried first and rejected: it exits fast enough that `VmHWM` sampling mostly caught it before the resident set reached its natural size, understating the floor by two to three orders of magnitude). 5 trials, samples 26/31: peak VmHWM 6144 KB. This is the fixed process-and-minimal-commit cost folded into every figure below as a roughly constant additive offset, and the reference the **Above floor** column subtracts.
+
 A missed sample is reported as **not measured**, never as zero: a run shorter than the polling interval may complete before any poll lands, which is expected at the smallest repository sizes and does not mean memory usage was zero.
 
-| Repository size | Trials | Samples obtained / attempted | Peak VmHWM (KB) |
-|---:|---:|---:|---:|
-| 10 files | 5 | 33 / 38 | 6156 |
-| 100 files | 5 | 80 / 85 | 6272 |
-| 1000 files | 5 | 529 / 534 | 7500 |
-| 10000 files | 3 | 2833 / 2839 | 19384 |
+| Repository size | Trials | Samples obtained / attempted | Peak VmHWM (KB) | Above floor (KB) |
+|---:|---:|---:|---:|---:|
+| 10 files | 5 | 31 / 37 | 6164 | 20 |
+| 100 files | 5 | 79 / 84 | 6296 | 152 |
+| 1000 files | 5 | 544 / 549 | 7480 | 1336 |
+| 10000 files | 3 | 2864 / 2869 | 19400 | 13256 |
 
-If peak memory grows roughly linearly with repository size here despite only 1 file changing, that is the O(total worktree bytes) full-tree-read DC-56 exists to flatten; this report states the measurement, not whether it is acceptable.
+**Above floor is the content-proportional component — what DC-56 must flatten.** Read against raw peak VmHWM alone, growth from small to large repository sizes can look sub-linear, because the fixed process floor dominates at small sizes and shrinks in relative share as content grows; the delta against the floor removes that effect. If the **Above floor** column grows roughly linearly with repository size here despite only 1 file changing, that is the O(total worktree bytes) full-tree-read DC-56 exists to eliminate; this report states the measurement, not whether the resulting footprint is acceptable.
 
 ## Reproduction
 

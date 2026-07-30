@@ -57,6 +57,18 @@
 //! few milliseconds, so a sample may not land. That is expected and stated in the report per point,
 //! never silently defaulted to a number: a fabricated zero would make DC-56's later memory-fix
 //! evidence look like it improved from a baseline that was never actually measured.
+//!
+//! **The report also measures a memory floor** and reports each repository-size point's peak both
+//! raw and as a delta above it, so growth against repository size — the actual claim under test —
+//! is legible without a reader doing the subtraction themselves. Read raw, peak VmHWM can look
+//! dominated by a fixed process cost and understate how closely it tracks repository size; the
+//! floor-relative delta is the content-proportional figure DC-56 must actually flatten. The floor
+//! is a real `commit` against a `MEMORY_FLOOR_FILE_COUNT`-file repository — deliberately **not**
+//! `prikk --version` (the timing floor's basis): `--version` exits fast enough that `VmHWM`
+//! sampling mostly caught it before the resident set reached its natural size, understating the
+//! floor by two to three orders of magnitude and making it useless as a subtraction reference. A
+//! minimal real commit exercises the same code path as the measured points and gives a floor that
+//! actually represents the fixed cost folded into every other row.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::indexing_slicing)]
 
@@ -102,6 +114,16 @@ const SPAWN_FLOOR_SAMPLES: usize = 10;
 /// least one sample; still expected to miss entirely at the smallest repository sizes, which the
 /// report marks *not measured* rather than defaulting.
 const MEMORY_SAMPLE_INTERVAL: Duration = Duration::from_micros(500);
+
+/// Repository size and trial count for the memory pass's baseline reference. `prikk --version` was
+/// tried first and rejected: it exits fast enough (sub-100 µs) that `VmHWM` sampling mostly catches
+/// it before the process's resident set reaches its natural resting size, understating the floor by
+/// two to three orders of magnitude and making it useless as a subtraction reference. A real
+/// `commit` against a near-empty repository — same code path as the measured points, negligible
+/// content (256 bytes) — gives a floor that actually represents the fixed cost folded into every
+/// other row.
+const MEMORY_FLOOR_FILE_COUNT: usize = 1;
+const MEMORY_FLOOR_SAMPLES: usize = 5;
 
 struct SplitMix64(u64);
 
@@ -334,6 +356,14 @@ struct MemoryPoint {
     samples_attempted: usize,
 }
 
+/// The memory pass's full result: the process floor (`prikk --version`, no repository) and the
+/// per-repository-size points, both `MemoryPoint`s so they render with identical fields. Kept as
+/// one struct so `render_report` cannot receive one without the other.
+struct MemoryAxisResult {
+    floor: MemoryPoint,
+    points: Vec<MemoryPoint>,
+}
+
 #[cfg(target_os = "linux")]
 fn read_vm_hwm_kb(pid: u32) -> Option<u64> {
     let text = std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
@@ -356,18 +386,16 @@ fn read_vm_hwm_kb(pid: u32) -> Option<u64> {
     None
 }
 
-/// Time and peak-memory-measure one commit against an already-baselined, already-mutated
-/// repository, via `.spawn()` and polling rather than `.output()` (see module docs for why this
-/// cannot share `time_commit`'s loop). The elapsed time here is not used for Axis A/B's tables —
-/// only the peak memory is retained by the caller.
+/// Spawn `command`, poll `/proc/<pid>/status` for `VmHWM` at `interval` while it runs (sampling
+/// first, then checking whether it has exited, so a process that exits between iterations still
+/// gets one more attempt), then collect its output and assert success under `what`. Shared by
+/// `measure_commit_memory` and `measure_process_floor_memory` so both use identical polling logic
+/// rather than two independent copies.
 #[cfg(target_os = "linux")]
-fn measure_commit_memory(root: &Path, interval: Duration) -> MemoryTrial {
+fn measure_process_memory(mut command: Command, interval: Duration, what: &str) -> MemoryTrial {
     use std::process::Stdio;
 
-    let mut child = prikk(root)
-        .env("PRIKK_AUTHOR_KEY_ID", FIXED_AUTHOR_KEY_ID)
-        .env("PRIKK_AUTHOR_SEED", hex(&FIXED_AUTHOR_SEED))
-        .args(["commit", "-m", "dc59-bench: measured (memory pass)"])
+    let mut child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -389,7 +417,7 @@ fn measure_commit_memory(root: &Path, interval: Duration) -> MemoryTrial {
         std::thread::sleep(interval);
     }
     let output = child.wait_with_output().unwrap();
-    ok(&output, "measured commit (memory pass)");
+    ok(&output, what);
 
     MemoryTrial {
         peak_kb,
@@ -398,9 +426,23 @@ fn measure_commit_memory(root: &Path, interval: Duration) -> MemoryTrial {
     }
 }
 
-/// Run the memory axis (Axis A's repository sizes, 1 file changed) on Linux; skip cleanly with a
-/// notice on every other platform, since `/proc` is Linux-only.
-fn run_memory_axis() -> Option<Vec<MemoryPoint>> {
+/// Time and peak-memory-measure one commit against an already-baselined, already-mutated
+/// repository, via `.spawn()` and polling rather than `.output()` (see module docs for why this
+/// cannot share `time_commit`'s loop). The elapsed time here is not used for Axis A/B's tables —
+/// only the peak memory is retained by the caller.
+#[cfg(target_os = "linux")]
+fn measure_commit_memory(root: &Path, interval: Duration) -> MemoryTrial {
+    let mut command = prikk(root);
+    command
+        .env("PRIKK_AUTHOR_KEY_ID", FIXED_AUTHOR_KEY_ID)
+        .env("PRIKK_AUTHOR_SEED", hex(&FIXED_AUTHOR_SEED))
+        .args(["commit", "-m", "dc59-bench: measured (memory pass)"]);
+    measure_process_memory(command, interval, "measured commit (memory pass)")
+}
+
+/// Run the memory axis (a process floor, then Axis A's repository sizes at 1 file changed) on
+/// Linux; skip cleanly with a notice on every other platform, since `/proc` is Linux-only.
+fn run_memory_axis() -> Option<MemoryAxisResult> {
     #[cfg(not(target_os = "linux"))]
     {
         eprintln!(
@@ -410,6 +452,33 @@ fn run_memory_axis() -> Option<Vec<MemoryPoint>> {
     }
     #[cfg(target_os = "linux")]
     {
+        let mut floor_peak_kb: Option<u64> = None;
+        let mut floor_obtained = 0_usize;
+        let mut floor_attempted = 0_usize;
+        for sample_index in 0..MEMORY_FLOOR_SAMPLES {
+            let root = unique_dir(&format!("axis-a-mem-floor-{sample_index}"));
+            let seed = CONTENT_SEED
+                .wrapping_add(0x3000_0000)
+                .wrapping_add(sample_index as u64);
+            let files = setup_baseline_repository(&root, MEMORY_FLOOR_FILE_COUNT, seed);
+            let mut rng = SplitMix64::new(seed ^ 0xFFFF_FFFF_0000_0000);
+            mutate_files(&root, &files, 1, &mut rng);
+            let trial = measure_commit_memory(&root, MEMORY_SAMPLE_INTERVAL);
+            floor_attempted += trial.attempts;
+            floor_obtained += trial.successes;
+            if let Some(kb) = trial.peak_kb {
+                floor_peak_kb = Some(floor_peak_kb.map_or(kb, |current| current.max(kb)));
+            }
+            let _ = std::fs::remove_dir_all(&root);
+        }
+        let floor = MemoryPoint {
+            label: format!("floor ({MEMORY_FLOOR_FILE_COUNT} file, minimal content)"),
+            trials: MEMORY_FLOOR_SAMPLES,
+            peak_kb: floor_peak_kb,
+            samples_obtained: floor_obtained,
+            samples_attempted: floor_attempted,
+        };
+
         let mut points = Vec::new();
         for (size, sample_count) in AXIS_A_SIZES.into_iter().zip(AXIS_A_SAMPLES) {
             let mut peak_kb: Option<u64> = None;
@@ -440,7 +509,7 @@ fn run_memory_axis() -> Option<Vec<MemoryPoint>> {
                 samples_attempted,
             });
         }
-        Some(points)
+        Some(MemoryAxisResult { floor, points })
     }
 }
 
@@ -575,7 +644,7 @@ fn commit_benchmark() {
     // Separate pass, deliberately after Axis A/B and never interleaved with them — see module docs.
     let memory_axis = run_memory_axis();
 
-    let report = render_report(&spawn_floor_point, &axis_a, &axis_b, memory_axis.as_deref());
+    let report = render_report(&spawn_floor_point, &axis_a, &axis_b, memory_axis.as_ref());
     let report_path = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../rfcs/handoffs/DC-59-commit-benchmark-harness/benchmark-report-v1.md"
@@ -588,7 +657,7 @@ fn render_report(
     spawn_floor: &Point,
     axis_a: &[Point],
     axis_b: &[Point],
-    memory_axis: Option<&[MemoryPoint]>,
+    memory_axis: Option<&MemoryAxisResult>,
 ) -> String {
     let mut out = String::new();
     out.push_str("# DC-59 Commit Benchmark Report v1\n\n");
@@ -676,27 +745,43 @@ fn render_report(
         None => {
             out.push_str("**Not measured on this platform.** `/proc/<pid>/status` is Linux-only; this run was on a non-Linux platform, so no peak-memory data is available. Re-run on Linux to populate this section.\n\n");
         }
-        Some(points) => {
+        Some(result) => {
+            let floor_peak_str = result
+                .floor
+                .peak_kb
+                .map_or_else(|| "not measured".to_owned(), |kb| format!("{kb} KB"));
+            out.push_str(&format!(
+                "**Memory floor:** a real `commit` against a {MEMORY_FLOOR_FILE_COUNT}-file repository (negligible content, {FILE_SIZE_BYTES} bytes) — same code path as the measured points below, not `prikk --version` (tried first and rejected: it exits fast enough that `VmHWM` sampling mostly caught it before the resident set reached its natural size, understating the floor by two to three orders of magnitude). {} trials, samples {}/{}: peak VmHWM {}. This is the fixed process-and-minimal-commit cost folded into every figure below as a roughly constant additive offset, and the reference the **Above floor** column subtracts.\n\n",
+                result.floor.trials,
+                result.floor.samples_obtained,
+                result.floor.samples_attempted,
+                floor_peak_str,
+            ));
             out.push_str("A missed sample is reported as **not measured**, never as zero: a run shorter than the polling interval may complete before any poll lands, which is expected at the smallest repository sizes and does not mean memory usage was zero.\n\n");
             out.push_str(
-                "| Repository size | Trials | Samples obtained / attempted | Peak VmHWM (KB) |\n",
+                "| Repository size | Trials | Samples obtained / attempted | Peak VmHWM (KB) | Above floor (KB) |\n",
             );
-            out.push_str("|---:|---:|---:|---:|\n");
-            for point in points {
+            out.push_str("|---:|---:|---:|---:|---:|\n");
+            for point in &result.points {
                 let peak = point
                     .peak_kb
                     .map_or_else(|| "not measured".to_owned(), |kb| kb.to_string());
+                let above_floor = match (point.peak_kb, result.floor.peak_kb) {
+                    (Some(peak_kb), Some(floor_kb)) => peak_kb.saturating_sub(floor_kb).to_string(),
+                    _ => "n/a".to_owned(),
+                };
                 out.push_str(&format!(
-                    "| {} | {} | {} / {} | {} |\n",
+                    "| {} | {} | {} / {} | {} | {} |\n",
                     point.label,
                     point.trials,
                     point.samples_obtained,
                     point.samples_attempted,
                     peak,
+                    above_floor,
                 ));
             }
             out.push('\n');
-            out.push_str("If peak memory grows roughly linearly with repository size here despite only 1 file changing, that is the O(total worktree bytes) full-tree-read DC-56 exists to flatten; this report states the measurement, not whether it is acceptable.\n\n");
+            out.push_str("**Above floor is the content-proportional component — what DC-56 must flatten.** Read against raw peak VmHWM alone, growth from small to large repository sizes can look sub-linear, because the fixed process floor dominates at small sizes and shrinks in relative share as content grows; the delta against the floor removes that effect. If the **Above floor** column grows roughly linearly with repository size here despite only 1 file changing, that is the O(total worktree bytes) full-tree-read DC-56 exists to eliminate; this report states the measurement, not whether the resulting footprint is acceptable.\n\n");
         }
     }
 
