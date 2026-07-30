@@ -10,20 +10,32 @@ met; no command exposes them.
 
 ## Problem
 
-Every internal requirement in §6.5 is satisfied:
+**Branch creation already exists.** `rfcs/done/DC-13-NONDEFAULT-REF-GENESIS.md` shipped it:
+`commit --ref heads/topic` followed by `seal --ref heads/topic` creates and publishes an unborn branch as a
+signed Root block at update sequence 1 (`DC-13` design goals 1-2; implementation at
+`node_authoring.rs:212,221` — `WorktreeBaseline::Genesis` when the target ref has never been published).
+
+Design review v1 found that an earlier draft of this RFC claimed no branch creation existed. It was wrong.
+The actual gap is narrower:
+
+| Capability | State |
+|---|---|
+| Create a branch **by committing to it** | **Exists** — DC-13 |
+| Create a branch **at an existing target, without committing** | **Missing.** DC-13 requires content; there is no "branch off here" |
+| **List** branches | **Missing** |
+| **Delete** a branch | **Missing** |
+| Switch branches | Missing — deliberately out of scope, see Non-goals |
+
+Everything §6.5 requires *internally* is satisfied and shipped:
 
 - Branch heads are signed ref-state objects — `RefStatePayload` (`prikk-object/src/payload/refs.rs:39`)
 - Ref files point to ref-state objects — `refs.rs:147` `read_current_ref_state_id`
-- Ref updates use compare-and-swap — `refs.rs:101` `publish`, with `previous_ref_state_id`
-- Ref logs support rollback detection and recovery — DC-38, shipped
+- Ref updates use compare-and-swap — `refs.rs:101` `publish`, comparing `update_seq` at `:208`
+- Ref update logs support rollback detection and recovery — DC-38, shipped
 - Ref locks are path-safe — `validate_local_branch_ref`, DC-15
 
-**None of it is reachable from the CLI.** There is no `branch` command. Every command takes `--ref` and
-defaults to a string literal `"heads/main"` (`prikk-cli/src/args.rs:90,135`). A user cannot create a
-branch, list what branches exist, or remove one.
-
-This is the largest gap in the product that requires no new capability — only a surface over machinery
-that is already tested and shipped.
+**Listing is the largest genuine gap.** A user can create branches today but has no way to discover which
+exist — arguably worse than lacking creation, because the repository accumulates state the user cannot see.
 
 ## What this requires that does not exist yet
 
@@ -35,6 +47,7 @@ so that check is structural rather than remembered.*
 |---|---|
 | Create a ref-state object and publish it under a new name | **Yes** — `refs.rs:101` `publish` with CAS |
 | Recover branch names for listing | **Yes.** `.prikk/refs/by-id/<sha256(name)>.ref` filenames are one-way, but the pointer file body carries the plaintext name (magic `PREFPTR1`, then e.g. `heads/main`), and `RefStatePayload.ref_name` carries it too. **Verified against the DC-55 fixture.** No reverse-hashing and no new index needed |
+| Certainty that `by-id/` holds *every* ref pointer | **Yes — resolved at design review v1.** `layout.rs` `ref_pointer_path` is the only function producing a `.ref` path and it always joins `by-id`. Logs, locks, and tmp files go to `logs/`, `locks/`, `tmp/` respectively and are not pointers. One code path, one location |
 | Ref-name validation and path safety | **Yes** — `validate_local_branch_ref` |
 | **A persistent current-branch pointer ("HEAD")** | **NO.** Nothing stores which branch is current. `default_active_ref_name_path()` tracks which ref owns the single active-session slot — that is per-session bookkeeping, not a user-facing current branch |
 
@@ -52,27 +65,67 @@ Output must be deterministic — sort by name — so it is scriptable and testab
 ### 2. `prikk branch create <name> [--from <ref>]`
 
 Publish a new ref-state object for `<name>`, targeting the same block as `--from` (default: the current
-default ref). This is an ordinary CAS publication with `previous_ref_state_id = None`, since the branch is
-new.
+default ref).
+
+**This must produce the same ref-state shape DC-13's genesis produces**, so that a branch is
+indistinguishable afterward regardless of which path created it. Two creation paths yielding different
+shapes would be a real defect. Concretely, for a name with **no surviving log**: `update_seq = 1`,
+`previous_ref_state_id = None`, maintainer-signed, `kind` matching DC-13's branch genesis. `update_seq` is
+per-ref (compared at `refs.rs:208` for CAS), so sequence 1 is correct for a new ref regardless of how old
+its target block is.
+
+For a name whose log survives a previous deletion, sequence 1 is **not** correct — see §3's resolution.
+
+The only difference from DC-13 is the target: DC-13 seals a block it just created, while this points at a
+block that already exists. Nothing else about the published state may differ.
 
 Must fail closed when:
 
 - `<name>` fails `validate_local_branch_ref` — reuse the existing validator, do not write a second one
 - `<name>` already exists — creation is not a move
+- `<name>` has a surviving ref log from a previous deletion, unless `--continue-log` is given — see §3
 - `--from` does not resolve to a published ref
 
 ### 3. `prikk branch delete <name>`
 
-Remove the ref pointer and log for `<name>`. Must fail closed when:
+Remove the ref **pointer** for `<name>`. **The ref log is retained** — see below. Must fail closed when:
 
 - `<name>` does not exist
 - `<name>` is the ref that currently owns a **non-empty** active WAL. `require_active_ref_for_non_empty_wal`
-  already encodes this relationship; deleting under it would orphan an unsealed patch
+  already encodes this relationship, and **DC-13 design goal 4** already establishes the rule — "prevent a
+  queued active WAL from being sealed to a different ref than the ref it was authored for." Cite and reuse
+  it; do not restate it as a new invariant. Deleting under it would orphan an unsealed patch
 - `<name>` is the last remaining branch. A repository with no refs has no reachable history
 
-**Deletion does not delete objects.** Ref-state objects, blocks, and patches remain; only the ref pointer
-and its log are removed. Garbage collection is NFR-REL-02 and out of scope. Say so in the command's output
-so a user does not believe deletion reclaimed space.
+**Deletion removes the pointer only. It deletes no objects and no history.**
+
+Design review v1 found that an earlier draft deleted the ref log too, which violates two accepted
+requirements:
+
+- **NFR-REL-01** (`specs/prikk-non-functional-requirements-v1.1.md:108`): "On uncertainty, Prikk preserves
+  objects and reports manual repair rather than deleting data."
+- **§6.5**: "Ref update logs must support rollback detection and recovery" — the log's whole purpose.
+
+There is also an existing invariant it would have broken. `DC-13` design goal 3 records that "missing
+pointer plus non-empty log is **not** genesis." A log surviving without its pointer is a state the system
+already reasons about, and deleting the log destroys what that distinction depends on.
+
+**Consequence, resolved here rather than left to implementation.** Deleting `heads/topic` and later
+recreating it leaves a non-empty log from the previous incarnation. Under DC-13 goal 3 that state is *not*
+genesis, so publishing at `update_seq = 1` would contradict an existing invariant.
+
+**Resolution: `branch create` rejects a name with a surviving log, and names the remedy.** Continuation is
+available only through an explicit opt-in (`--continue-log`), which publishes at `last_seq + 1` with
+`previous_ref_state_id` set to the last ref-state recorded in that log — an ordinary CAS update, not a
+genesis.
+
+Rejecting by default follows **DC-13 goal 5** — "keep non-default genesis explicit; never infer" — and
+NFR-REL-01's preference for reporting over guessing. The alternative, silently continuing a deleted
+branch's history, would hand a user a branch carrying rollback-detectable history they did not ask for and
+cannot see. The alternative of silently restarting at sequence 1 would break DC-13 goal 3 outright.
+
+Garbage collection of now-unreferenced objects is NFR-REL-02 and out of scope. Say so in the command's
+output so a user does not believe deletion reclaimed space.
 
 ### 4. Signing
 
@@ -114,16 +167,18 @@ help must say so plainly rather than leaving a user to discover it.
    branch.
 2. `branch create` publishes a signed ref-state object; the new branch appears in listing; `verify` passes
    afterward.
-3. `branch create` fails closed on an invalid name, an existing name, and an unresolvable `--from` — each
-   tested.
-4. `branch delete` removes the pointer and log; objects are demonstrably retained; `verify` passes
-   afterward.
-5. `branch delete` fails closed on a missing branch, on a branch owning a non-empty active WAL, and on the
+3. `branch create` fails closed on an invalid name, an existing name, an unresolvable `--from`, and a name
+   with a surviving log absent `--continue-log` — each tested.
+4. Delete-then-recreate is tested both ways: rejected by default with an actionable message, and with
+   `--continue-log` publishing at `last_seq + 1` with the correct predecessor, after which `verify` passes.
+5. `branch delete` removes the pointer **only**; the ref log and all objects are demonstrably retained;
+   `verify` passes afterward.
+6. `branch delete` fails closed on a missing branch, on a branch owning a non-empty active WAL, and on the
    last remaining branch — each tested by constructing the state.
-6. No identity artifact changes: `vectors/snapshot.txt`, `vectors/hard.rs`,
+7. No identity artifact changes: `vectors/snapshot.txt`, `vectors/hard.rs`,
    `state_root/tests/vectors.rs`, `text_span/vectors.rs` all byte-identical.
-7. Command help states that switching is not supported and names the reason.
-8. Full gate set per `rfcs/EXECUTION-ORDER.md` §6 rule 9, plus test counts before and after per rule 10.
+8. Command help states that switching is not supported and names the reason.
+9. Full gate set per `rfcs/EXECUTION-ORDER.md` §6 rule 9, plus test counts before and after per rule 10.
 
-All eight are verifiable from the repository by a reviewer. None requires trusting the implementer's
+All nine are verifiable from the repository by a reviewer. None requires trusting the implementer's
 report.
