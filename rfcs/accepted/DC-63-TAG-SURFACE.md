@@ -137,60 +137,104 @@ Record it as deferred with that reason, not as an oversight.
 Tag objects and tag ref states are both maintainer-signed, on the same terms as `seal`
 (`signature.rs:49-50`, `Maintainer = 2`). Reuse `maintainer_signer_from_env`; add no signing path.
 
-## 2. Blocker 1's fix — kind-aware validation, centrally
+## 2. Blocker 1's fix — kind-aware validation, in `validate_coherent_publication`
 
-`validate_publication` gains a `RefKind` branch: existing `validate_local_branch_ref` for
-`RefKind::Branch`, a new tag validator for `RefKind::Tag`.
+**Placement corrected at fix design review** (`.git-exclude/reviewed/prikk-dc63-fix-design-review-v1.md` §1).
+An earlier revision put this in `validate_publication`; that is the wrong function.
 
-**The kind is derivable from the publication.** The implementation report suggested there is "nothing to
-branch on," which is the one part of its analysis to correct: `publication.rs:128` already does
+`publication.rs:127-135`:
 
 ```rust
-let ref_state = RefStatePayload::decode_canonical(&publication.ref_state.canonical_payload)?;
+fn validate_coherent_publication(publication: &RefPublication) -> Result<RefUpdatePayload> {
+    validate_publication(publication)?;                    // ← ref-name validation today
+    let ref_state = RefStatePayload::decode_canonical(&publication.ref_state.canonical_payload)?;
+    let update = RefUpdatePayload::decode_canonical(&publication.ref_update.canonical_payload)?;
+    let ref_state_id = publication.ref_state.object_id();
+    if ref_state.ref_name != publication.ref_name || update.ref_name != publication.ref_name {
+        return Err(PrikkError::Integrity("publication ref names do not agree".to_string()));
+    }
 ```
 
-so `RefStatePayload.kind` is available, and `validate_publication` already calls `validate_strict()` on that
-same envelope.
+`validate_publication` runs **before** the decode, so branching there would decode the ref-state payload a
+second time two lines early — and, more importantly, would validate `publication.ref_name` against a kind
+read from a payload **not yet known to describe the same ref**. That coherence check is at `:131`.
 
-**Rejected: moving ref-name validation out of `validate_publication` to its callers.** That converts one
-central fail-closed guard into N, and the first caller to forget it gets no error.
+**Move ref-name validation out of `validate_publication` and into `validate_coherent_publication`, after the
+`:131` check**, where both payloads are decoded and the names are known to agree. Branch on `ref_state.kind`
+there: existing `validate_local_branch_ref` for `RefKind::Branch`, the new tag validator (§3a) for
+`RefKind::Tag`.
 
-`tags/` therefore stops being universally reserved and gains a parallel accepted-name rule. **`remotes/` and
-`rollback/` stay reserved** — they have no surface and no validator, and this RFC does not touch them.
+**Safe, because there are no parallel callers.** `validate_publication` has exactly one caller —
+`publication.rs:127` — and `validate_coherent_publication` has exactly one, `publication.rs:35` in
+`publish_locked`. The move relocates a check inside a single chain rather than dropping it from other paths.
 
-## 3. Blocker 2's fix — one extra hop, at both call sites
+**State this property in the handoff, because it is a gain and not a side effect:** kind-aware validation
+makes namespace and kind **mutually enforcing**. `kind = Tag` with `ref_name = heads/main` is rejected, and so
+is `kind = Branch` with `ref_name = tags/v1`. Today the name is checked and the kind is ignored, so neither
+is caught.
+
+`tags/` stops being universally reserved and gains a parallel accepted-name rule. **`remotes/` and
+`rollback/` stay reserved** — no surface, no validator, untouched here.
+
+## 3. Blocker 2's fix — one extra hop, identically at both call sites
 
 The target-type check becomes kind-aware: for `RefKind::Branch` the target must be a `Block`; for
 `RefKind::Tag` the target must be a `Tag` object whose `target_block_id` is a `Block`.
 
-That is not a workaround — it is what §6.6 specifies. The current code predates any tag existing.
+That is what §6.6 specifies. The current code predates any tag existing.
 
-**Both call sites must be handled:** `refs/verify/scan.rs:65` (pointers) and `:221` (ref-log records).
-Handling only the first leaves verification inconsistent between pointers and log records, which is worse
-than handling neither because it would pass the obvious test.
+**Both call sites take the *identical* check — resolved at fix design review.** An earlier revision said both
+"must be handled" without saying how `refs/verify/scan.rs:221` (ref-log records) should behave, because it was
+unclear what a tag's `RefUpdatePayload.new_target_object_id` holds. `publication.rs:139` settles it:
+
+```rust
+update.new_target_object_id != ref_state.target_object_id   // → Err
+```
+
+They must be **equal**. So for a tag publication `new_target_object_id` *is* the Tag object id — the same
+value the ref state carries. `:221` is therefore validating the identical value as `:65` and needs the
+identical logic.
+
+**Implement it as one shared helper used by both sites.** §3's stated risk was that handling one and missing
+the other "would pass the obvious test"; a single helper removes the possibility rather than relying on care.
 
 This is `verify`'s integrity-classification core — the code DC-60's ruling called "the correctness core of
-every ref publication." It is specified here rather than left to implementation for that reason.
+every ref publication." Specified here rather than left to implementation for that reason.
 
 ## 3a. The tag ref-name validator
 
-Written under this RFC, not deferred. Mirror `validate_local_branch_ref` with the prefix requirement
-inverted — `tags/` required; `heads/`, `remotes/`, `rollback/` reserved — and **keep its control-character,
-traversal, reserved-name, and case-collision rules.**
+Written under this RFC, not deferred. **Mirror `validate_local_branch_ref`'s actual rules** with the prefix
+requirement inverted — `tags/` required; `heads/`, `remotes/`, `rollback/` reserved.
 
-**Severity note, so the rules are calibrated rather than copied.** Ref names are hashed to filenames via
+Its real rule set, read in full at fix design review:
+
+- ref name non-empty
+- reserved namespaces rejected
+- required prefix present, with a non-empty suffix after it
+- no `\0` and no control characters
+- no leading `/`, no trailing `/`, no `//`
+- no `.` or `..` path component
+
+**An earlier revision of this section also required a case-collision rule. That was an error — the branch
+validator has no such rule.** `heads/Main` and `heads/main` are both accepted today and coexist as distinct
+refs. Adding the rule to tags alone would make the tag namespace arbitrarily *stricter* than branches, which
+is as wrong as making it weaker.
+
+The underlying concern is real but is **not DC-63's to fix**: NFR-SEC-03 requires "case-insensitive
+collisions are rejected by repo policy," and that is unmet for branches today. Fixing it inside a tag
+validator would leave the requirement half-met and conceal the branch half. It is recorded as its own finding
+in `MILESTONES.md` covering both namespaces.
+
+**Severity calibration, so the rules are reasoned rather than copied.** Ref names are hashed to filenames via
 `ref_name_storage_key` = `to_hex(sha256(ref_name))`, so a hostile ref name is **not** a filesystem-traversal
-vector the way a worktree path is. The real exposures are display, log content, and **uniqueness** —
-`tags/V1` and `tags/v1` hash differently and would coexist as distinct refs while a user reasonably treats
-them as one. That is why the case-collision rule carries over.
+vector the way a worktree path is. The real exposures are display, log content, and uniqueness.
 
-A structural-only check (prefix present, suffix non-empty) is **not** acceptable as an interim: it would give
-the tag namespace weaker rules than branches for no reason but sequencing.
+A structural-only check (prefix present, suffix non-empty) is **not** acceptable as an interim.
 
 ## 4. Constraint — DC-61 touches the same decode site
 
 **DC-61 threads schema-aware decoding through 10 call sites, one of which is `publication.rs:128`** — the
-exact decode §2's fix builds on.
+decode immediately above where §2's kind branch now goes. Adjacent lines in the same function.
 
 The two increments touch that line for different reasons: DC-61 makes the decode schema-aware for its closed
 field; DC-63 makes `validate_publication` branch on the kind that decode yields. They are compatible but not
@@ -247,13 +291,16 @@ The doc fix must be comment-only.
 
 ## Acceptance criteria
 
-1. **Blocker 1 fixed:** `validate_publication` branches on `RefKind`; a `tags/` publication succeeds and a
-   malformed one fails closed. `remotes/` and `rollback/` remain reserved — tested.
-2. **Blocker 2 fixed at both call sites** — `scan.rs:65` and `:221`. A well-formed tag verifies clean; a tag
-   ref whose target is not a `Tag` object, and a tag object whose `target_block_id` is not a `Block`, both
-   fail closed — each tested.
-3. **The tag ref-name validator exists** per §3a, including the case-collision rule. A structural-only check
-   does not satisfy this.
+1. **Blocker 1 fixed in `validate_coherent_publication`, after the `:131` name-coherence check** — not in
+   `validate_publication`. A `tags/` publication succeeds; `remotes/` and `rollback/` remain reserved.
+   **Namespace/kind mutual enforcement tested both ways**: `kind = Tag` with a `heads/` name, and
+   `kind = Branch` with a `tags/` name, each fail closed.
+2. **Blocker 2 fixed at both call sites via one shared helper** — `scan.rs:65` and `:221`. A well-formed tag
+   verifies clean; a tag ref whose target is not a `Tag` object, and a tag object whose `target_block_id` is
+   not a `Block`, both fail closed — each tested. The shared helper is required, not just both sites passing.
+3. **The tag ref-name validator exists** per §3a, mirroring the branch validator's *actual* rules. It must
+   **not** add a case-collision rule — that is a separate NFR-SEC-03 finding covering both namespaces. A
+   structural-only check does not satisfy this either.
 4. **The DC-61 interaction at `publication.rs:128` is reconciled and the reconciliation stated** — whichever
    increment lands second says how.
 5. **The two evidence tests from the blocker report become permanent regression tests**, asserting the
