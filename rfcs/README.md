@@ -29,15 +29,14 @@ These records are under design review. All proposed RFCs must respect the depend
 
 | ID | Title | Milestone |
 |---|---|---|
-
-
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0; **release-blocked** — inherits key lifecycle from DC-35, which needs amendment |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
 | DC-52 | [Python and Oracle Decommissioning](./proposed/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | M2 / 0.19.0; **release-blocked** — `DC-45:419` forbids deletion before the first Rust-gated 0.19.0 release |
 | DC-53 | [Repository-Wide AUTHOR Trust Verification](./proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md) | Post-M2, unscheduled |
 
-**Only DC-56 is a live design-review candidate here.** The other five are blocked or unscheduled:
+**None of these five is a live design-review candidate.** All are blocked or unscheduled — DC-56, DC-60,
+DC-61, DC-62 and DC-63 have all moved to `accepted/`:
 
 - **DC-43** and **DC-52** cannot proceed while release stabilization is deferred. `DC-45:419` forbids
   Python deletion before the first Rust-gated 0.19.0 release; DC-43's scope *is* release security and it
@@ -48,8 +47,8 @@ These records are under design review. All proposed RFCs must respect the depend
 
 **DC-42 was superseded** on 2026-07-29 into DC-56, DC-57, and DC-58 after design review found it bundled
 three unrelated increments; it is in `archive/`. Of those, DC-58 is accepted and nearly complete, DC-57 is
-**held** on an unreachable premise, and DC-56 awaits an owner ruling. **DC-59** (split from DC-56) and
-**DC-60** are accepted; DC-59 is complete.
+**held** on an unreachable premise, and DC-56 is accepted and cleared. **DC-59** and **DC-62** (both split
+from DC-56) are complete, as are **DC-60** and **DC-63**.
 
 See [`EXECUTION-ORDER.md`](./EXECUTION-ORDER.md) for what each is blocked on and what to hand developers.
 DC-45 through DC-48 are accepted preparatory work already landed, not competing future increments.

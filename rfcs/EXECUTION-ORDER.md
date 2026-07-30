@@ -7,11 +7,11 @@ backlog narrative, `rfcs/IMPLEMENTATION-STATUS.md` the current-state snapshot, a
 authority. This file answers only one question the others do not: **what do I pick up next, and what is it
 waiting on?**
 
-Last reconciled: 2026-07-30. **DC-59 complete** (`a9c2fe0`). **DC-58 both batches accepted**
-(`e1d0213`, `54a3037`), closure pending one report reframing. **DC-57 held** — its premise does not hold
-and its handoff is withdrawn. Two owner decisions are outstanding and are the only things blocking further
-performance work: the multi-patch queuing question (DC-57) and the NFR-PERF-01 reading (DC-56). The
-release-lane decision point sits after the performance work per the owner's 2026-07-29 direction.
+Last reconciled: 2026-07-30, after DC-62 completion (`963caae`). **Complete:** DC-59, DC-60, DC-62, DC-63.
+**DC-58** both batches accepted, closure pending one report reframing. **Cleared and unstarted:** DC-56,
+DC-61. **DC-57 held** — its premise does not hold, handoff withdrawn, pending the multi-patch queuing
+decision, which is the **one outstanding owner decision** in the development lane. The release-lane decision
+point sits after the performance work per the owner's 2026-07-29 direction.
 
 ## The two lanes
 
@@ -32,11 +32,8 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
 | 1 | **DC-58** — source-structure audit | **Both batches accepted**; closure pending report reframing (N1) | with developers for N1 only | `handoffs/DC-58-source-structure-audit/implementation-handoff-v1.md` |
-
 | 2 | **DC-56** — commit scan + memory compliance (NFR-PERF-01) | **Accepted 2026-07-30** | none — **DC-62 precondition satisfied** | `handoffs/DC-56-commit-full-tree-scan-compliance/implementation-handoff-v1.md` |
-
-| 5 | **DC-61** — branch closure (§6.5 deletion half) | **Accepted 2026-07-30**; all three verification obligations discharged | none — **cleared to start** | `handoffs/DC-61-branch-closure/implementation-handoff-v1.md` |
-
+| 3 | **DC-61** — branch closure (§6.5 deletion half) | **Accepted 2026-07-30**; all three verification obligations discharged | none — **cleared to start** | `handoffs/DC-61-branch-closure/implementation-handoff-v1.md` |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.
@@ -68,25 +65,25 @@ permanent independent reference.
 standing rule 2. Never implemented. See `rfcs/archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md`.
 
 **Why this order.** DC-58 leads only because it is nearly finished — one reporting correction remains.
-DC-56 is next in value but cannot proceed until the owner rules on the NFR-PERF-01 reading; its
-measurement precondition is already satisfied by DC-59's report. **DC-60** (list + create) is implemented
-and awaiting review; **DC-61** carries the deletion half and needs its format-compatibility obligations
-discharged at design review. DC-52 and DC-43 are **not** in this lane — both are release-blocked, see §2.
+**DC-56 is next in value** and is now fully unblocked: the NFR-PERF-01 reading was ruled 2026-07-30, and
+DC-62 satisfied its measurement precondition. **DC-61** is independent and equally startable; it will need to
+reconcile with DC-63's kind branch at `publication.rs:128`, which landed first. DC-52 and DC-43 are **not**
+in this lane — both are release-blocked, see §2.
 
 **DC-56's owner decision is settled.** Ruled 2026-07-30: NFR-PERF-01 bounds **steady-state** commit cost,
 not every commit. That resolves its conflict with NFR-PERF-04 — which blesses rebuildable indexes while a
 strict reading would forbid building one — and selects a changed-path index. The ruling carries a binding
 obligation: **DC-56 must specify cache validity** (when the index is trusted, what invalidates it, what
 bounds rebuild frequency), because an unbounded cold path satisfies the letter and defeats the requirement.
-DC-56's remaining blockers are its own design review and one new dependency.
+DC-56 is accepted and has no remaining blockers.
 
 **DC-56 grew a second objective.** Design review v2 found the commit path does not merely *traverse* the
 worktree — `worktree_files.rs:11-14` stores `bytes: Vec<u8>` per file, so every commit reads the whole
 worktree into memory, O(total worktree bytes) regardless of change size. No requirement names that; it is
 recorded in `MILESTONES.md` as an untracked scalability defect. The same changed-path index fixes both
-objectives, but evidencing the memory one needs a memory axis, opened as **DC-62** rather than
-folded back into DC-59 — DC-59 is complete and its criteria were all discharged, so adding one now would
-retroactively unfinish it. DC-62 must land before DC-56's implementation review.
+objectives, but evidencing the memory one needed a memory axis, opened as **DC-62** rather than folded back
+into DC-59 — DC-59 was complete and its criteria all discharged, so adding one would have retroactively
+unfinished it. **DC-62 is now complete (`963caae`), so this precondition is satisfied.**
 
 **Beware the milestone labels.** `MILESTONES.md` § "Two milestone schemes" is required reading before
 resolving any `M0`–`M3` gate label in the NFR matrix. The requirements use the product scheme; this file
