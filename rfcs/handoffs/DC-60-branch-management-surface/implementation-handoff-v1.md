@@ -149,14 +149,13 @@ or delete is a partial surface; a user should learn that from `--help`, not by t
 ## Definition of done
 
 `branch` lists deterministically; `branch create` publishes a DC-13-shaped ref-state and fails closed on all
-four conditions; `branch delete` removes the pointer only, retains log and objects, fails closed on all
-three conditions, and says nothing was reclaimed; delete-then-recreate rejects by default and continues
-correctly under `--continue-log`; help states the switch limitation; no identity artifact changed.
+four conditions; help states the switch limitation and that deletion is not yet available; no identity
+artifact changed.
 
 ## Submit with
 
 The diff; test results for each fail-closed condition constructed as real state rather than asserted in
-isolation; evidence that delete-then-recreate was tested **both** ways; confirmation that
+isolation; the DC-13-genesis-shape equivalence assertion; confirmation that
 `vectors/snapshot.txt`, `vectors/hard.rs`, `state_root/tests/vectors.rs`, and `text_span/vectors.rs` are
 byte-identical; test counts per touched crate before and after; an explicit statement of what did not
 change; and the full gate set from `rfcs/EXECUTION-ORDER.md` §6 rule 9 including release-policy `check`,
