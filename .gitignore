@@ -28,4 +28,4 @@ target
 __pycache__/
 *.py[cod]
 /.git-exclude/
-/.claude/
+*.local.json
