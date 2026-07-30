@@ -36,7 +36,7 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 | 3 | **DC-56** — commit scan + memory compliance (NFR-PERF-01) | **Accepted 2026-07-30** | none to start; **DC-62** before its implementation review | `handoffs/DC-56-commit-full-tree-scan-compliance/implementation-handoff-v1.md` |
 
 | 5 | **DC-61** — branch closure (§6.5 deletion half) | **Accepted 2026-07-30**; all three verification obligations discharged | none — **cleared to start** | `handoffs/DC-61-branch-closure/implementation-handoff-v1.md` |
-| 6 | **DC-63** — tag surface (§6.6) | **Cleared 2026-07-30** after both `refs.rs` blockers were specified and fix-reviewed | none — **cleared to start** | `handoffs/DC-63-tag-surface/implementation-handoff-v2.md` (v1 withdrawn) |
+
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.
@@ -101,6 +101,13 @@ and DC-55 shows both sides of it: the author review found a genuine blocking def
 blocking defect survived into the implementation and was caught only because acceptance criteria had been
 written to be reproducible from the repository rather than trusted from a report. Keep that pattern for
 identity-bearing increments.
+
+**DC-63 is complete** — accepted `c7d1691`, held briefly on two `refs.rs` blockers, cleared via handoff v2,
+implemented `6b33a72`. Implementation review v1 accepted with no blocking findings; gates re-run by the
+architect in a detached worktree (790 tests, 0 failures). **Requirements §6.6 is closed**, and `RefKind::Tag`
+has production call sites for the first time since the ref model was built. Both blockers are fixed in the ref
+system's core: kind-aware ref-name validation in `validate_coherent_publication`, and one shared
+`ensure_ref_target_valid` helper resolving the tag indirection at both verification sites.
 
 **DC-60 is complete** — accepted `994bf32`, scope amended the same day to `list` + `create`, implemented
 `6c2b7a6`. Implementation review v1 accepted with no blocking findings; gates re-run by the architect in a
