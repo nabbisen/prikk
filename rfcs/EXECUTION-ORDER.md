@@ -33,7 +33,7 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 |---|---|---|---|---|
 | 1 | **DC-58** — source-structure audit | **Both batches accepted**; closure pending report reframing (N1) | with developers for N1 only | `handoffs/DC-58-source-structure-audit/implementation-handoff-v1.md` |
 | 2 | **DC-56** — commit full-tree scan compliance (NFR-PERF-01) | Proposed | design review; **owner ruling on the NFR-PERF-01 reading** (DC-59's report is now in hand) | handoff pending design acceptance |
-| 3 | **DC-60** — branch management surface (§6.5) | Proposed | design review | handoff pending design acceptance |
+| 3 | **DC-60** — branch management surface (§6.5) | **Accepted 2026-07-30** | none — **cleared to start** | `handoffs/DC-60-branch-management-surface/implementation-handoff-v1.md` |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.

@@ -1,6 +1,13 @@
-# RFC (proposed) - DC-60 Branch Management Surface
+# RFC (accepted) - DC-60 Branch Management Surface
 
-**Status.** Proposed. Requires design review before implementation may begin.
+**Status.** **Accepted by the project owner on 2026-07-30**, after design review v1 returned two blocking
+findings — a problem statement that claimed a shipped capability was absent, and a deletion step that would
+have violated NFR-REL-01 — both resolved in revision at `312fc5d`. Implementation may begin.
+
+**Independence.** Authored and reviewed by the architect; this project has one architect, so design review
+here is author re-examination. It found both blocking findings by consulting `rfcs/done/` and `specs/`
+rather than by re-reading the draft. Acceptance criteria are written to be reproducible from the
+repository, so the implementation review carries the independent weight.
 **Requirement.** `specs/prikk-app-requirements-v1.2.md` §6.5 (Branch and Ref Management).
 **Gate.** Product **M1** (Core Storage and Identity) owns the ref machinery, which is complete. This RFC
 adds the missing user-facing surface over it. Not a missed gate — §6.5's *internal* requirements are all
