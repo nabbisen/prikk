@@ -32,8 +32,8 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
 | 1 | **DC-58** — source-structure audit | **Both batches accepted**; closure pending report reframing (N1) | with developers for N1 only | `handoffs/DC-58-source-structure-audit/implementation-handoff-v1.md` |
-| 2 | **DC-62** — commit benchmark memory axis | **Accepted 2026-07-30** | none — **cleared to start** | `handoffs/DC-62-commit-benchmark-memory-axis/implementation-handoff-v1.md` |
-| 3 | **DC-56** — commit scan + memory compliance (NFR-PERF-01) | **Accepted 2026-07-30** | none to start; **DC-62** before its implementation review | `handoffs/DC-56-commit-full-tree-scan-compliance/implementation-handoff-v1.md` |
+
+| 2 | **DC-56** — commit scan + memory compliance (NFR-PERF-01) | **Accepted 2026-07-30** | none — **DC-62 precondition satisfied** | `handoffs/DC-56-commit-full-tree-scan-compliance/implementation-handoff-v1.md` |
 
 | 5 | **DC-61** — branch closure (§6.5 deletion half) | **Accepted 2026-07-30**; all three verification obligations discharged | none — **cleared to start** | `handoffs/DC-61-branch-closure/implementation-handoff-v1.md` |
 
@@ -101,6 +101,13 @@ and DC-55 shows both sides of it: the author review found a genuine blocking def
 blocking defect survived into the implementation and was caught only because acceptance criteria had been
 written to be reproducible from the repository rather than trusted from a report. Keep that pattern for
 identity-bearing increments.
+
+**DC-62 is complete** — accepted `5ff2388`, implemented `963caae`. Implementation review v1 accepted with one
+non-blocking note. Peak-memory measurement added as a separate pass, no new dependency, no production code.
+**DC-56's precondition is satisfied.** The measurement confirms O(total worktree bytes): above the ~6.1 MB
+process floor, memory grows 9.84x for a 10x repository-size increase at fixed change count. N1 records that
+the published table shows absolute VmHWM without a baseline row, so that near-linear growth reads as only
+2.58x — which DC-56 must account for when evidencing its improvement.
 
 **DC-63 is complete** — accepted `c7d1691`, held briefly on two `refs.rs` blockers, cleared via handoff v2,
 implemented `6b33a72`. Implementation review v1 accepted with no blocking findings; gates re-run by the
