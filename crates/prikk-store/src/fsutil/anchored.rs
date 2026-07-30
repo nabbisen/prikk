@@ -19,8 +19,8 @@ pub(crate) use directory::{MutationRoot, ensure_directory_required, sync_directo
 use directory::{open_existing_directory_required, prepare_directory_required};
 pub(crate) use immutable::publish_immutable_file;
 pub(crate) use read::{
-    EntryKind, inspect_entry, list_directory, read_file_if_exists, read_file_required,
-    read_file_state_if_exists,
+    EntryKind, RootFileStat, inspect_entry, list_directory, read_file_if_exists,
+    read_file_required, stat_file_state_if_exists,
 };
 #[cfg(target_os = "linux")]
 use regular::{

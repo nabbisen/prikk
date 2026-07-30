@@ -391,6 +391,8 @@ fn run_verify(path: Option<String>) -> std::result::Result<(), String> {
         Err("repository has interrupted or divergent ref publication state".to_string())
     } else if report.has_publication_trust_issues() {
         Err("repository has publication-trust issues".to_string())
+    } else if report.has_commit_index_divergence() {
+        Err("commit-index cache disagrees with the worktree for at least one path".to_string())
     } else {
         Ok(())
     }

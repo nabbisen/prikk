@@ -21,6 +21,7 @@ mod blob_access;
 mod block_state;
 mod byte_cursor;
 mod checkout;
+mod commit_index;
 mod doctor;
 mod file_codec;
 mod format;
@@ -76,6 +77,7 @@ pub use checkout::{
     CheckoutMaterialization, CheckoutPlan, DEFAULT_CHECKOUT_REF, SnapshotCheckoutPlan,
     prepare_checkout_plan, prepare_snapshot_checkout_plan,
 };
+pub use commit_index::CommitIndexDivergence;
 pub use doctor::{
     DoctorIssue, DoctorRepairOptions, DoctorRepairReport, DoctorReport, DoctorSeverity,
     doctor_repository, repair_repository,

@@ -12,12 +12,13 @@ mod caller_tests;
 mod tests;
 
 pub(crate) use anchored::{
-    EntryKind, MutationRoot, append_file_required, create_new_file_required,
+    EntryKind, MutationRoot, RootFileStat, append_file_required, create_new_file_required,
     ensure_directory_required, inspect_entry, list_directory, promote_file_required,
-    publish_immutable_file, read_file_if_exists, read_file_required, read_file_state_if_exists,
+    publish_immutable_file, read_file_if_exists, read_file_required,
     remove_file_cleanup_best_effort, remove_file_if_present_required,
-    remove_worktree_file_required, sync_directory_required, truncate_existing_file_required,
-    truncate_file_empty_required, write_file_atomically, write_worktree_file_atomically,
+    remove_worktree_file_required, stat_file_state_if_exists, sync_directory_required,
+    truncate_existing_file_required, truncate_file_empty_required, write_file_atomically,
+    write_worktree_file_atomically,
 };
 
 #[cfg(test)]

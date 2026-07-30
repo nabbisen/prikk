@@ -1,4 +1,8 @@
 //! Root-relative worktree enumeration for node authoring.
+//!
+//! DC-56: this walk is metadata-only — it lists directories and stats regular files (size, mtime,
+//! mode) but never opens or reads their content. `author_inner` consults the commit-index cache
+//! against this metadata to decide, per path, whether a content read can be skipped entirely.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -6,16 +10,19 @@ use std::path::{Path, PathBuf};
 use prikk_error::PrikkError;
 
 use super::{AuthorError, EXECUTABLE_FILE_MODE, REGULAR_FILE_MODE, RepoPath, RepositoryLayout};
-use crate::fsutil::{EntryKind, list_directory, read_file_state_if_exists};
+use crate::fsutil::{EntryKind, RootFileStat, list_directory, stat_file_state_if_exists};
 
-pub(super) struct WorktreeFile {
-    pub(super) bytes: Vec<u8>,
+/// A worktree regular file's metadata, gathered without reading its content.
+pub(super) struct WorktreeFileMeta {
+    pub(super) size: u64,
+    pub(super) mtime_secs: i64,
+    pub(super) mtime_nanos: u32,
     pub(super) mode: u32,
 }
 
 pub(super) fn enumerate_worktree_files(
     layout: &RepositoryLayout,
-) -> std::result::Result<BTreeMap<String, WorktreeFile>, AuthorError> {
+) -> std::result::Result<BTreeMap<String, WorktreeFileMeta>, AuthorError> {
     let mut out = BTreeMap::new();
     walk_dir(layout, Path::new(""), &mut out)?;
     Ok(out)
@@ -24,7 +31,7 @@ pub(super) fn enumerate_worktree_files(
 fn walk_dir(
     layout: &RepositoryLayout,
     dir: &Path,
-    out: &mut BTreeMap<String, WorktreeFile>,
+    out: &mut BTreeMap<String, WorktreeFileMeta>,
 ) -> std::result::Result<(), AuthorError> {
     let entries =
         list_directory(layout.worktree_mutation_root(), dir).map_err(AuthorError::Store)?;
@@ -61,7 +68,7 @@ fn walk_dir(
 fn insert_regular_file(
     layout: &RepositoryLayout,
     path: &Path,
-    out: &mut BTreeMap<String, WorktreeFile>,
+    out: &mut BTreeMap<String, WorktreeFileMeta>,
 ) -> std::result::Result<(), AuthorError> {
     let rel = path.to_str().ok_or_else(|| {
         AuthorError::Store(PrikkError::InvalidName(format!(
@@ -70,7 +77,7 @@ fn insert_regular_file(
         )))
     })?;
     let repo_path = RepoPath::parse(rel).map_err(AuthorError::Store)?;
-    let file = read_file_state_if_exists(layout.worktree_mutation_root(), path)
+    let stat: RootFileStat = stat_file_state_if_exists(layout.worktree_mutation_root(), path)
         .map_err(AuthorError::Store)?
         .ok_or_else(|| {
             AuthorError::Store(PrikkError::Io(format!(
@@ -80,9 +87,11 @@ fn insert_regular_file(
         })?;
     out.insert(
         repo_path.as_str().to_string(),
-        WorktreeFile {
-            bytes: file.bytes,
-            mode: normalize_file_mode(file.mode),
+        WorktreeFileMeta {
+            size: stat.size,
+            mtime_secs: stat.mtime_secs,
+            mtime_nanos: stat.mtime_nanos,
+            mode: normalize_file_mode(stat.mode),
         },
     );
     Ok(())

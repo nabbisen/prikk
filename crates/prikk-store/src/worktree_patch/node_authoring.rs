@@ -12,8 +12,9 @@
 //! Out of scope (unchanged): rename inference (moves author as delete+create) and symlink authoring
 //! (fails closed until FDD-04 §5.4a).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::path::Path;
 
 mod worktree_files;
 
@@ -26,6 +27,8 @@ use prikk_object::{
 
 use crate::active::{prepare_empty_active_ref_for_append, require_active_ref_for_non_empty_wal};
 use crate::author_signing::AuthorSigner;
+use crate::commit_index::{self, CommitIndex, CommitIndexEntry};
+use crate::fsutil::{RootFileStat, read_file_if_exists};
 use crate::layout::RepositoryLayout;
 use crate::lifecycle_cache::replay_derived_state;
 use crate::lock::ActiveLock;
@@ -45,7 +48,7 @@ use crate::{
     validate_local_branch_ref,
 };
 
-use worktree_files::enumerate_worktree_files;
+use worktree_files::{WorktreeFileMeta, enumerate_worktree_files};
 
 /// Canonical mode recorded for a created regular file with no executable bit, and the default on
 /// platforms without an executable-bit source (4.4a-2aR, ratified rule).
@@ -262,8 +265,16 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
         }
     }
 
-    // Worktree view: path -> bytes for regular files (symlinks/non-regular fail closed).
+    // Worktree view: path -> metadata for regular files (symlinks/non-regular fail closed). Content
+    // is read on demand (below) so an unchanged file is never opened — DC-56.
     let worktree = enumerate_worktree_files(layout)?;
+
+    // DC-56 changed-path index: per-path (size, mtime, mode) -> last-known content hash, so an
+    // unchanged file's content read can be skipped. Rebuildable and never authoritative (NFR-PERF-04)
+    // — a missing or corrupt index loads as empty and simply costs one full read per path, exactly as
+    // the first commit against a repository already does. See the cache-validity specification at
+    // `rfcs/handoffs/DC-56-commit-full-tree-scan-compliance/cache-validity-specification-v1.md`.
+    let mut commit_index = CommitIndex::load(layout).map_err(AuthorError::Store)?;
 
     // Working state for same-session duplicate prevention (E1): clone the baseline; each fresh node
     // is inserted immediately after minting so the next mint sees it via contains_seen_node_id.
@@ -275,26 +286,40 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     // assignment is independent of worktree traversal order. Each carries its normalized mode.
     let mut create_candidates: Vec<(String, Vec<u8>, u32)> = Vec::new();
 
-    for (path, file) in &worktree {
-        let bytes = &file.bytes;
+    for (path, meta) in &worktree {
         if let Some(base) = baseline_files.get(path) {
             // Existing node: kind is authoritative (E4); compare in that kind, never reclassify.
             match base.kind {
                 NodeKind::TextFile => {
-                    if std::str::from_utf8(bytes).is_err() {
-                        return Err(AuthorError::UnsupportedKindTransition(format!(
-                            "{path}: existing TextFile cannot accept non-UTF-8 content"
-                        )));
-                    }
-                    let new_blob = text_span::text_blob_id(bytes)?;
-                    if new_blob != base.blob_id {
-                        planned.push(plan_edit_text(&object_store, base, bytes, path)?);
+                    let resolved = resolve_existing_file(
+                        layout,
+                        &mut commit_index,
+                        path,
+                        meta,
+                        BlobKind::Text,
+                    )?;
+                    if resolved.content_hash != base.blob_id {
+                        let bytes = match resolved.bytes {
+                            Some(bytes) => bytes,
+                            None => read_existing_file_bytes(layout, path, BlobKind::Text)?,
+                        };
+                        planned.push(plan_edit_text(&object_store, base, &bytes, path)?);
                     }
                 }
                 NodeKind::BinaryFile => {
-                    let new_blob = binary_blob_id(bytes)?;
-                    if new_blob != base.blob_id {
-                        planned.push(plan_replace_binary(&object_store, base, bytes, path)?);
+                    let resolved = resolve_existing_file(
+                        layout,
+                        &mut commit_index,
+                        path,
+                        meta,
+                        BlobKind::Binary,
+                    )?;
+                    if resolved.content_hash != base.blob_id {
+                        let bytes = match resolved.bytes {
+                            Some(bytes) => bytes,
+                            None => read_existing_file_bytes(layout, path, BlobKind::Binary)?,
+                        };
+                        planned.push(plan_replace_binary(&object_store, base, &bytes, path)?);
                     }
                 }
                 NodeKind::Symlink => {
@@ -308,15 +333,33 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
             // is normalized through the same `normalize_file_mode` rule as `CreateFile` (N2). If the
             // canonical mode differs from the replay-derived baseline mode, emit one `ChangePerm`;
             // the canonical operation sort places it before any `ReplaceBinary`/`EditText` content op.
-            if file.mode != base.mode {
-                planned.push(plan_change_perm(base, file.mode, path));
+            if meta.mode != base.mode {
+                planned.push(plan_change_perm(base, meta.mode, path));
             }
         } else if baseline_symlinks.contains_key(path) {
             return Err(AuthorError::UnsupportedSymlinkAuthoring(format!(
                 "{path}: symlink node modification is out of scope"
             )));
         } else {
-            create_candidates.push((path.clone(), bytes.clone(), file.mode));
+            // A path with no baseline node is genuinely new; there is nothing a cache could have
+            // recorded for it yet, so it is always read. The read is cached anyway so an unchanged
+            // re-commit of the same content (once this path is itself a baseline node) can skip it.
+            let bytes = read_worktree_file_bytes(layout, path)?;
+            let (blob_kind, _node_kind) = classify_new(&bytes);
+            let content_hash =
+                commit_index::content_hash(blob_kind, &bytes).map_err(AuthorError::Store)?;
+            commit_index.record(
+                path.clone(),
+                CommitIndexEntry {
+                    size: meta.size,
+                    mtime_secs: meta.mtime_secs,
+                    mtime_nanos: meta.mtime_nanos,
+                    mode: meta.mode,
+                    kind: blob_kind,
+                    content_hash,
+                },
+            );
+            create_candidates.push((path.clone(), bytes, meta.mode));
         }
     }
 
@@ -333,6 +376,14 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
             )));
         }
     }
+
+    // Persist the refreshed index: prune paths no longer in the worktree (so a future unrelated file
+    // reusing the same path can never inherit a stale entry), then write through durably. Done
+    // regardless of whether this commit finds any change to make (`planned` may still be empty below)
+    // — the scan already paid for whatever reads happened, so the cache should keep the benefit.
+    let live_paths: BTreeSet<String> = worktree.keys().cloned().collect();
+    commit_index.retain_paths(&live_paths);
+    commit_index.save(layout).map_err(AuthorError::Store)?;
 
     // E1: mint fresh ids in canonical path order, inserting into the working state immediately.
     create_candidates.sort_by(|a, b| a.0.cmp(&b.0));
@@ -562,14 +613,86 @@ fn plan_delete(base: &BaselineFile, path: &str) -> PlannedOp {
     }
 }
 
-fn binary_blob_id(bytes: &[u8]) -> std::result::Result<ObjectId, AuthorError> {
-    let payload = BlobPayload::new(BlobKind::Binary, bytes.to_vec());
-    let canonical = payload.to_canonical_bytes().map_err(AuthorError::Store)?;
-    Ok(ObjectId::from_canonical_payload(
-        ObjectType::Blob,
-        1,
-        &canonical,
-    ))
+/// An existing node's resolved current content hash (DC-56). `bytes` is `Some` only when a real
+/// read happened to produce it — a cache hit that still matches the baseline (the common,
+/// unchanged case) never populates it.
+struct ExistingFileResolution {
+    content_hash: ObjectId,
+    bytes: Option<Vec<u8>>,
+}
+
+/// Resolve an existing node's current content hash against the commit-index cache, reading the file
+/// only when the cache cannot vouch for it unread. See the cache-validity specification for the
+/// trust condition this implements (`CommitIndexEntry::matches_stat`).
+fn resolve_existing_file(
+    layout: &RepositoryLayout,
+    commit_index: &mut CommitIndex,
+    path: &str,
+    meta: &WorktreeFileMeta,
+    blob_kind: BlobKind,
+) -> std::result::Result<ExistingFileResolution, AuthorError> {
+    let stat = RootFileStat {
+        size: meta.size,
+        mtime_secs: meta.mtime_secs,
+        mtime_nanos: meta.mtime_nanos,
+        mode: meta.mode,
+    };
+    if let Some(cached) = commit_index.get(path) {
+        if cached.kind == blob_kind && cached.matches_stat(&stat) {
+            return Ok(ExistingFileResolution {
+                content_hash: cached.content_hash,
+                bytes: None,
+            });
+        }
+    }
+    let bytes = read_existing_file_bytes(layout, path, blob_kind)?;
+    let content_hash = commit_index::content_hash(blob_kind, &bytes).map_err(AuthorError::Store)?;
+    commit_index.record(
+        path.to_string(),
+        CommitIndexEntry {
+            size: meta.size,
+            mtime_secs: meta.mtime_secs,
+            mtime_nanos: meta.mtime_nanos,
+            mode: meta.mode,
+            kind: blob_kind,
+            content_hash,
+        },
+    );
+    Ok(ExistingFileResolution {
+        content_hash,
+        bytes: Some(bytes),
+    })
+}
+
+/// Read an existing node's current worktree bytes, enforcing the same rule the content comparison
+/// always assumed: an existing `TextFile` node must remain valid UTF-8 (E4, existing-node kind is
+/// authoritative, never reclassified).
+fn read_existing_file_bytes(
+    layout: &RepositoryLayout,
+    path: &str,
+    blob_kind: BlobKind,
+) -> std::result::Result<Vec<u8>, AuthorError> {
+    let bytes = read_worktree_file_bytes(layout, path)?;
+    if matches!(blob_kind, BlobKind::Text) && std::str::from_utf8(&bytes).is_err() {
+        return Err(AuthorError::UnsupportedKindTransition(format!(
+            "{path}: existing TextFile cannot accept non-UTF-8 content"
+        )));
+    }
+    Ok(bytes)
+}
+
+/// Read a worktree regular file's current bytes.
+fn read_worktree_file_bytes(
+    layout: &RepositoryLayout,
+    path: &str,
+) -> std::result::Result<Vec<u8>, AuthorError> {
+    read_file_if_exists(layout.worktree_mutation_root(), Path::new(path))
+        .map_err(AuthorError::Store)?
+        .ok_or_else(|| {
+            AuthorError::Store(PrikkError::Io(format!(
+                "worktree entry disappeared: {path}"
+            )))
+        })
 }
 
 fn write_content_blob(

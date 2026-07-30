@@ -14,6 +14,7 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::{BlockPayload, ObjectId, ObjectType};
 
 use crate::active::{ActiveRefMetadata, read_active_ref_metadata};
+use crate::commit_index::{CommitIndexDivergence, verify_divergence};
 use crate::layout::{RepositoryFormat, RepositoryLayout};
 use crate::object_store::FileObjectStore;
 use crate::refs::verify_refs;
@@ -77,6 +78,10 @@ pub struct RepositoryVerification {
     pub trailing_partial_wal_bytes: usize,
     /// Active-WAL ref metadata status relative to the replayed WAL.
     pub active_wal_metadata_status: ActiveWalMetadataStatus,
+    /// DC-56 commit-index entries whose recorded content hash disagrees with the worktree's actual
+    /// current content despite a matching stat — a stale-but-trusted cache entry, reported per the
+    /// cache-validity specification §6 rather than silently trusted by a future commit.
+    pub commit_index_divergences: Vec<CommitIndexDivergence>,
 }
 
 impl RepositoryVerification {
@@ -116,6 +121,12 @@ impl RepositoryVerification {
     #[must_use]
     pub const fn has_active_wal_metadata_warning(&self) -> bool {
         self.active_wal_metadata_status.has_local_debris_warning()
+    }
+
+    /// Return true when the commit-index cache disagrees with the worktree for at least one path.
+    #[must_use]
+    pub fn has_commit_index_divergence(&self) -> bool {
+        !self.commit_index_divergences.is_empty()
     }
 }
 
@@ -204,6 +215,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
         trust_verifier.issues.is_empty(),
         &mut ref_publication_issues,
     )?;
+    let commit_index_divergences = verify_divergence(layout)?;
     Ok(RepositoryVerification {
         legacy_state_roots_unverifiable: layout.format() == RepositoryFormat::LegacyV1,
         checked_objects: object_summary.object_count,
@@ -222,6 +234,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
         object_temp_paths: object_summary.temp_paths,
         trailing_partial_wal_bytes: replay.trailing_partial_bytes,
         active_wal_metadata_status,
+        commit_index_divergences,
     })
 }
 

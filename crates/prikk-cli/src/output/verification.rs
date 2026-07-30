@@ -93,6 +93,16 @@ pub(crate) fn print_verify_report(
         println!("warning: active WAL contains an incomplete trailing record");
     }
     print_active_wal_metadata_status(&report.active_wal_metadata_status);
+    println!(
+        "commit-index divergences: {}",
+        report.commit_index_divergences.len()
+    );
+    for divergence in &report.commit_index_divergences {
+        println!(
+            "commit-index [divergence] {}: recorded {} but worktree content hashes to {}",
+            divergence.path, divergence.recorded_hash, divergence.actual_hash
+        );
+    }
 }
 
 fn print_active_wal_metadata_status(status: &ActiveWalMetadataStatus) {
