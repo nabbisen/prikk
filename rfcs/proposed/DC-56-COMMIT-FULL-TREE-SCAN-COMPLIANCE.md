@@ -11,8 +11,9 @@ functionally in `specs/prikk-app-requirements-v1.2.md` §6.2.
 before resolving that label; it is not this file's corrective M1.
 **Depends on.** DC-59 for the cost curve — **satisfied**; implemented `a9c2fe0`, report at
 `rfcs/handoffs/DC-59-commit-benchmark-harness/benchmark-report-v1.md`.
-**Touches.** `crates/prikk-store/src/worktree_patch/node_authoring/`, the commit path's traversal model,
-and a new changed-path index with its validity rules.
+**Touches.** `crates/prikk-store/src/worktree_patch/node_authoring/`, the commit path's traversal **and
+content-read** model, and a new changed-path index under `cache_dir()` with its validity and
+divergence-detection rules.
 
 ## Problem
 
@@ -24,11 +25,28 @@ The requirement is explicit and has two clauses:
 `specs/prikk-app-requirements-v1.2.md` §6.2 states it as product behaviour: "Commit must not run audit
 plugins or scan the full worktree."
 
-**The full-tree clause is violated in production code today.** Verified during DC-42 design review v1:
-`worktree_patch/node_authoring.rs:266` calls `enumerate_worktree_files(layout)`, which resolves to
-`walk_dir` in `worktree_patch/node_authoring/worktree_files.rs:24`. That function recurses through
-`list_directory` over the entire worktree mutation root, unconditionally, on every commit. Cost therefore
-scales with repository size rather than with change size, which is precisely what the requirement forbids.
+**The full-tree clause is violated in production code today, and more severely than a traversal cost.**
+`worktree_patch/node_authoring.rs:266` calls `enumerate_worktree_files(layout)`, resolving to `walk_dir` in
+`worktree_patch/node_authoring/worktree_files.rs:24`, which recurses `list_directory` over the entire
+worktree mutation root on every commit.
+
+**It also reads every file's full contents.** `worktree_files.rs:11-14`:
+
+```rust
+pub(super) struct WorktreeFile {
+    pub(super) bytes: Vec<u8>,
+    pub(super) mode: u32,
+}
+```
+
+`insert_regular_file` calls `read_file_state_if_exists` and stores `file.bytes` for every regular file, into
+a `BTreeMap` that `enumerate_worktree_files` returns whole and `author_inner` holds across authoring. So
+commit cost is dominated by **content reads**, not directory walking — and commit memory is O(total worktree
+bytes) regardless of change size.
+
+Design review v2 found that earlier drafts of this RFC described only the traversal, having cited
+`worktree_files.rs` by line number without reading what it stores. That framing would have permitted an
+index that still read every file.
 
 This is a **missed gate**, not scheduled work. The gate is product M1; product M1's capabilities shipped
 long ago and the project has released through 0.17.7 without meeting it. DC-42 obscured this by presenting
@@ -91,7 +109,32 @@ bound on how often that is, satisfies the letter and defeats the requirement. So
 
 That obligation is the price of the ruling and is treated as a first-class requirement here, not a caveat.
 
-### 3. The design space, now narrowed
+### 3. Two objectives, not one
+
+The ruling settles latency. The content reads add a second objective that the same fix addresses but that
+needs its own evidence.
+
+**Objective 1 — latency.** Commit cost must stop tracking repository size at fixed change size. Evidenced
+by DC-59's Axis A flattening.
+
+**Objective 2 — memory.** Commit must stop loading the whole worktree into memory. A 1 GB worktree currently
+allocates 1 GB whether one byte changed or none.
+
+**Objective 2 is not covered by any requirement.** NFR-PERF-01 bounds cost in a latency sense; nothing names
+the memory footprint. It is in scope here because the same index fixes it and excluding it would be
+artificial — but it is a **previously untracked scalability defect**, recorded as such in `MILESTONES.md`
+rather than absorbed silently into a performance increment.
+
+**Consequence for the index's contents.** To satisfy objective 2 the index must carry enough per-file state
+to *skip the read* for an unchanged file — at minimum size, mtime, and content hash. A path-membership index
+alone satisfies neither objective: it would still read every file. State this explicitly; it is the
+difference between moving the curve and appearing to.
+
+**Consequence for evidence.** DC-59's harness measures wall-clock only. Objective 2 needs a memory axis,
+which is a **DC-59 amendment** — DC-56 cannot assert memory improvement against a harness that does not
+measure it.
+
+### 4. The design space, now narrowed
 
 | Route | Status after the ruling |
 |---|---|
@@ -106,22 +149,58 @@ Should implementation nevertheless find route A unachievable, the outcome is to 
 quietly widen scope into route B or reopen the amendment path — either would be a change to what the owner
 decided.
 
-### 4. The plugin clause
+### 5. The index must not be able to be silently wrong
+
+DC-56's earlier drafts said caches are "bound by NFR-PERF-04: rebuildable, never authoritative," as though
+that settled the question. It does not.
+
+**A changed-path index determines what a commit contains.** If it wrongly reports a file unchanged — mtime
+granularity, clock skew, a filesystem that misreports — the commit silently omits a real change and the
+patch is wrong.
+
+**Why an index is permissible at all.** `specs/prikk-non-functional-requirements-v1.1.md:48`, the §3
+traceability row for "Performance and caching," glosses NFR-PERF-04 as **"Caches are rebuildable and never
+roots of trust."** Root of trust in this project means identity and signature authority — the trust store,
+signed objects, state roots. A changed-path index is none of those, so NFR-PERF-01 and NFR-PERF-04 do not
+conflict here. Cite that gloss; do not rely on the shorter "never authoritative" phrasing, which reads as
+prohibiting this and does not.
+
+**Permissible is not safe, and this is the price of using one:**
+
+> **Index/worktree divergence must be detectable.** `verify` — or an equivalent explicit check — must be
+> able to report that the index disagrees with the worktree, so a stale or wrong index is a *reported
+> condition* rather than a silently incorrect commit. A design that cannot detect its own staleness may not
+> be accepted.
+
+Silence is the specific harm. NFR-REL-01 forbids silent data loss on uncertainty; an undetected omission
+from a commit is a quieter form of the same thing.
+
+### 6. The plugin clause
+
+**Discharged at design review v2 — no implementation work required.**
 
 The requirement forbids plugin scans as well as full-tree scans. `PluginResultEntry` exists in the data
-model (`crates/prikk-object/src/payload/attestation.rs`) but no commit-path plugin execution appears to
-exist. The clause is very likely vacuous today, but half a requirement must not go unmentioned.
+model (`crates/prikk-object/src/payload/attestation.rs`), so the clause is not vacuous by construction and
+had to be checked rather than assumed.
 
-**State the verification procedure, do not leave it to judgement** (per review v1 N2): trace every call
-reachable from `author_worktree_patch` and confirm none dispatches to plugin execution or attestation
-evaluation; record the method and the result. If a plugin scan does reach the commit path, it is in scope
-here.
+**Method and result:** searched the entire commit path for `plugin`, `attestation`, and `audit` references —
+`worktree_patch.rs`, `worktree_patch/node_authoring.rs`, `worktree_patch/node_authoring/worktree_files.rs`,
+`active.rs`, `wal.rs`, `refs.rs`. **Zero matches.** `required_attestation_ids` exists on `RefStatePayload`
+but is not referenced from the commit path. No plugin execution is reachable from `author_worktree_patch`.
 
-### 5. Traversal semantics are a behaviour change
+**The plugin clause of NFR-PERF-01 is already satisfied.** Recorded here so the implementer does not
+re-derive it, and so a later reader knows it was checked rather than waved through.
+
+### 7. Traversal semantics are a behaviour change
 
 If the chosen design alters traversal semantics, caching, or repository authority, it is a **production
 behaviour change** and requires a focused design amendment reviewed before coding — not a performance PR.
-Caches introduced here are bound by **NFR-PERF-04**: rebuildable, never authoritative — and inherit its
+**Place the index under `cache_dir()`.** `layout.rs:185` already defines it, it is in
+`required_directories()`, and `ObjectType::BlockSummaryCache` maps to `"block-summary-cache-rebuildable"` —
+so the layout already has a sanctioned home for rebuildable caches and a naming convention that encodes the
+property. Do not invent a new location.
+
+Caches introduced here are bound by **NFR-PERF-04**: rebuildable, never a root of trust — and inherit its
 stated evidence obligation, "cache deletion/rebuild tests"
 (`specs/prikk-non-functional-requirements-v1.1.md` §4.5). That evidence is required, not optional, and
 must not be re-derived at implementation time.
@@ -133,6 +212,7 @@ This is the boundary DC-42 drew correctly in advance and it is retained verbatim
 - **No benchmark construction — that is DC-59.** DC-56 consumes its report.
 - **No CLI or workflow change.** Route B (explicit paths or staging) is recorded and handed off, never
   performed here.
+- No plugin-scan work — the clause is already satisfied and was verified at design review (§6).
 - No ELOC or source-structure work — that is DC-58.
 - No active-Patch threshold work — that is DC-57.
 - No benchmark marketing claim, public API redesign, or unrelated refactor.
@@ -159,18 +239,30 @@ mistaken requirement, not for an inconvenient one.
 2. **§2's cache-validity specification exists**: when the index is trusted, what invalidates it, and what
    bounds rebuild frequency. The owner ruling of 2026-07-30 settled the reading; this criterion is what
    stops that ruling becoming a loophole.
-3. The plugin clause is verified by the stated procedure and the finding recorded.
-4. NFR-PERF-01 ends in exactly one recorded state: **implemented and evidenced**, or **reported as
+3. **The index carries per-file state sufficient to skip reads** for unchanged files — at minimum size,
+   mtime, and content hash. A path-membership-only index fails this criterion.
+4. **Objective 1, latency:** commit cost no longer tracks repository size at fixed change count, shown by
+   re-running DC-59's harness and reporting Axis A flattened.
+5. **Objective 2, memory:** commit no longer loads the whole worktree into memory, shown against a
+   **DC-59 memory axis** — which must be added first. DC-56 may not assert memory improvement against a
+   harness that measures only wall-clock.
+6. **Index/worktree divergence is detectable and reported**, per §5. A design that cannot detect its own
+   staleness does not satisfy this.
+7. NFR-PERF-04's evidence obligation is discharged — cache deletion and rebuild leave behaviour unchanged,
+   tested. The index lives under `cache_dir()`.
+8. NFR-PERF-01 ends in exactly one recorded state: **implemented and evidenced**, or **reported as
    unachievable under route A** — the amendment and product-RFC branches are closed by the 2026-07-30
    ruling.
-5. If a cache or index is introduced: NFR-PERF-04's own evidence obligation is discharged — deletion and
-   rebuild leave behaviour unchanged, tested.
-6. If the outcome is implementation, the same DC-59 harness re-run shows Axis A flattened — commit cost no
-   longer tracking repository size at fixed change count. *Conditional on outcome 4; this criterion does
-   not presume compliance was achieved.*
-7. `MILESTONES.md`'s missed-gate row is updated to its resolved state.
-8. Full gate set per `rfcs/EXECUTION-ORDER.md` §6 rule 9, plus test counts before and after per rule 10.
+9. `MILESTONES.md`'s missed-gate row is updated to its resolved state, and the memory finding recorded
+   there is closed or carried explicitly.
+10. Full gate set per `rfcs/EXECUTION-ORDER.md` §6 rule 9, plus test counts before and after per rule 10.
 
-Criteria 1, 3, 5, 6, 7 are verifiable from the repository. Criterion 2 is verifiable as a recorded owner
-decision and criterion 4 as a commit. **No criterion here requires trusting the implementer's report** —
-the pattern DC-55's implementation review proved out.
+All ten are verifiable from the repository. Criteria 3, 5, and 6 are the ones added by design review v2 and
+are the ones most easily satisfied in appearance only: an index that indexes paths but still reads every
+file would pass criterion 4 and fail the increment's purpose.
+
+## Sequencing note
+
+Criterion 5 makes **DC-59 a second-time dependency**: its harness needs a memory axis before DC-56 can
+evidence objective 2. That amendment is small and independent — it can be prepared while DC-56's remaining
+design work proceeds, but it must land before DC-56's implementation review.

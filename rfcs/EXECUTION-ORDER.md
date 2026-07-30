@@ -32,7 +32,7 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
 | 1 | **DC-58** — source-structure audit | **Both batches accepted**; closure pending report reframing (N1) | with developers for N1 only | `handoffs/DC-58-source-structure-audit/implementation-handoff-v1.md` |
-| 2 | **DC-56** — commit full-tree scan compliance (NFR-PERF-01) | Proposed | design review only — **owner ruling received 2026-07-30** (steady-state), DC-59's report in hand | handoff pending design acceptance |
+| 2 | **DC-56** — commit scan + memory compliance (NFR-PERF-01) | Proposed | design review; **a DC-59 memory axis** before its implementation review | handoff pending design acceptance |
 | 3 | **DC-60** — branch list + create (§6.5) | **Accepted; scope amended 2026-07-30**; list+create implemented, awaiting review | none | `handoffs/DC-60-branch-management-surface/implementation-handoff-v1.md` (Step 3 void) |
 | 4 | **DC-61** — branch deletion and ref-log tombstones | Proposed | design review, incl. three format/compat verification obligations | handoff pending design acceptance |
 
@@ -76,7 +76,14 @@ not every commit. That resolves its conflict with NFR-PERF-04 — which blesses 
 strict reading would forbid building one — and selects a changed-path index. The ruling carries a binding
 obligation: **DC-56 must specify cache validity** (when the index is trusted, what invalidates it, what
 bounds rebuild frequency), because an unbounded cold path satisfies the letter and defeats the requirement.
-DC-56 is now blocked on design review only.
+DC-56's remaining blockers are its own design review and one new dependency.
+
+**DC-56 grew a second objective.** Design review v2 found the commit path does not merely *traverse* the
+worktree — `worktree_files.rs:11-14` stores `bytes: Vec<u8>` per file, so every commit reads the whole
+worktree into memory, O(total worktree bytes) regardless of change size. No requirement names that; it is
+recorded in `MILESTONES.md` as an untracked scalability defect. The same changed-path index fixes both
+objectives, but evidencing the memory one needs a **memory axis added to DC-59's harness** — a small
+amendment that must land before DC-56's implementation review.
 
 **Beware the milestone labels.** `MILESTONES.md` § "Two milestone schemes" is required reading before
 resolving any `M0`–`M3` gate label in the NFR matrix. The requirements use the product scheme; this file

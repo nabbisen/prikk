@@ -110,6 +110,7 @@ When citing a gate, name the scheme: "product M3" or "corrective M2", never a ba
 | No mechanical gate on product `[dependencies]` placement | Supply-chain risk | DC-51 (DC-41 finding B4) | M2 |
 | DC-45 retirement obligations tracked only in prose | Process debt | DC-52 | M2 |
 | Repository-wide AUTHOR trust unverified | Capability gap | DC-53 | Post-M2, unscheduled |
+| Commit loads the entire worktree into memory — `WorktreeFile { bytes: Vec<u8> }` per file, O(total worktree bytes) regardless of change size | **Scalability defect, previously untracked and unnamed by any requirement** — recorded 2026-07-30 from the DC-56 design review. NFR-PERF-01 bounds latency only | DC-56 (in scope alongside the latency objective; the same index fixes both). Needs a DC-59 memory axis to evidence | Product **M1**, alongside NFR-PERF-01 |
 | Lifecycle-cache trust ladder built but unwired — 848 test-only lines await blob-kind verification, provenance-vs-baseline staleness, and replay reconstruction/compare | **Capability gap, previously untracked** — recorded 2026-07-30 from the DC-58 batch 2 review. Its governing RFC (DC-09 Phase 4.4-2b.1) is in `rfcs/archive/`, so the capability has no live owner | Unowned; needs an RFC or an explicit decision to drop the scaffolding | Unscheduled |
 
 ## M0 - Architecture ratification
