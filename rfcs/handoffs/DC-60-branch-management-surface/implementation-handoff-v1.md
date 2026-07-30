@@ -1,5 +1,20 @@
 # DC-60 Branch Management Surface - Handoff
 
+> ## ⚠ SCOPE AMENDED 2026-07-30 — `delete` and `--continue-log` removed
+>
+> Your report was accepted in full. `branch delete` as specified bricks repository-wide commits at **every**
+> record count — the single-record case also blocks mutation via `publication_issues`, which your report
+> understated. And `--continue-log` is not expressible in `publish`'s CAS model.
+>
+> **DC-60 is now `branch list` + `branch create` only.** Both ship as submitted. Deletion and log
+> continuation moved to **DC-61**, which needs a ref-log tombstone — a format change DC-60 excluded.
+>
+> **Submit the working slice as its own review request**, and remove the deliberately-failing test with it;
+> its finding is recorded in `.git-exclude/reviewed/prikk-dc60-delete-divergence-ruling-v1.md` and in
+> DC-61, which are the durable places for it.
+>
+> Steps 1 and 2 below stand. **Step 3 is void.** The delete-then-recreate decision is void.
+
 **Cleared to start.** Accepted by the project owner on 2026-07-30, at
 `rfcs/accepted/DC-60-BRANCH-MANAGEMENT-SURFACE.md`. Design review v1 returned two blocking findings, both
 resolved at `312fc5d` — the RFC you are working from is the revised one.
@@ -71,7 +86,11 @@ Reuse what exists — do not write new versions of any of these:
 
 That last one is the subtle case — see Step 3.
 
-## Step 3 — `prikk branch delete <name>`
+## Step 3 — VOID, moved to DC-61
+
+*Retained below only as the record of what was asked for. Do not implement it.*
+
+### (void) `prikk branch delete <name>`
 
 **Remove the pointer only. Do not delete the ref log. Do not delete objects.**
 

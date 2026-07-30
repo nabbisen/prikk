@@ -1,6 +1,22 @@
 # RFC (accepted) - DC-60 Branch Management Surface
 
-**Status.** **Accepted by the project owner on 2026-07-30**, after design review v1 returned two blocking
+**Status.** **Accepted 2026-07-30; scope amended 2026-07-30** to `branch list` and `branch create` only.
+`branch delete` and `branch create --continue-log` were **removed** and moved to **DC-61**.
+
+**Why amended.** Implementation surfaced two defects in this RFC's own design review resolution
+(`.git-exclude/reviewed/prikk-dc60-delete-divergence-ruling-v1.md`). Retaining the ref log on deletion —
+required here on NFR-REL-01 grounds — produces "pointer absent, log present", which the shipped system
+classifies as **corruption**. `verify.rs:145` recognises that state only for `record_count == 1`, and
+`ensure_no_incomplete_publication` (`refs.rs:31-42`, called from every mutation path) blocks commits
+**repository-wide** in both branches: `Integrity` for multi-record, `LockConflict` for single-record. There
+is no record count at which deletion as specified leaves a working repository. Separately,
+`publish`'s CAS model cannot represent an absent pointer with an advanced log, so `--continue-log` was
+unimplementable.
+
+The correct fix is a typed deletion record in the ref log — a **format change** this RFC's non-goals
+exclude. Hence DC-61 rather than a repair here.
+
+Original acceptance follows, after design review v1 returned two blocking
 findings — a problem statement that claimed a shipped capability was absent, and a deletion step that would
 have violated NFR-REL-01 — both resolved in revision at `312fc5d`. Implementation may begin.
 
@@ -81,7 +97,8 @@ shapes would be a real defect. Concretely, for a name with **no surviving log**:
 per-ref (compared at `refs.rs:208` for CAS), so sequence 1 is correct for a new ref regardless of how old
 its target block is.
 
-For a name whose log survives a previous deletion, sequence 1 is **not** correct — see §3's resolution.
+For a name whose log survives without a pointer, sequence 1 is **not** correct and creation is refused —
+resuming such a log is DC-61's problem, not this RFC's.
 
 The only difference from DC-13 is the target: DC-13 seals a block it just created, while this points at a
 block that already exists. Nothing else about the published state may differ.
@@ -90,55 +107,21 @@ Must fail closed when:
 
 - `<name>` fails `validate_local_branch_ref` — reuse the existing validator, do not write a second one
 - `<name>` already exists — creation is not a move
-- `<name>` has a surviving ref log from a previous deletion, unless `--continue-log` is given — see §3
+- `<name>` has a **surviving ref log** with no live pointer. Fail closed with a message pointing at DC-61.
+  This guard must stay even though DC-60 no longer deletes anything: such a log can survive an interrupted
+  publication, and creating over it would produce the corrupt state described in the Status note.
+  `publish` would refuse anyway, but a clear early error beats a generic classification failure
 - `--from` does not resolve to a published ref
 
-### 3. `prikk branch delete <name>`
+### 3. Deletion — removed from this RFC
 
-Remove the ref **pointer** for `<name>`. **The ref log is retained** — see below. Must fail closed when:
-
-- `<name>` does not exist
-- `<name>` is the ref that currently owns a **non-empty** active WAL. `require_active_ref_for_non_empty_wal`
-  already encodes this relationship, and **DC-13 design goal 4** already establishes the rule — "prevent a
-  queued active WAL from being sealed to a different ref than the ref it was authored for." Cite and reuse
-  it; do not restate it as a new invariant. Deleting under it would orphan an unsealed patch
-- `<name>` is the last remaining branch. A repository with no refs has no reachable history
-
-**Deletion removes the pointer only. It deletes no objects and no history.**
-
-Design review v1 found that an earlier draft deleted the ref log too, which violates two accepted
-requirements:
-
-- **NFR-REL-01** (`specs/prikk-non-functional-requirements-v1.1.md:108`): "On uncertainty, Prikk preserves
-  objects and reports manual repair rather than deleting data."
-- **§6.5**: "Ref update logs must support rollback detection and recovery" — the log's whole purpose.
-
-There is also an existing invariant it would have broken. `DC-13` design goal 3 records that "missing
-pointer plus non-empty log is **not** genesis." A log surviving without its pointer is a state the system
-already reasons about, and deleting the log destroys what that distinction depends on.
-
-**Consequence, resolved here rather than left to implementation.** Deleting `heads/topic` and later
-recreating it leaves a non-empty log from the previous incarnation. Under DC-13 goal 3 that state is *not*
-genesis, so publishing at `update_seq = 1` would contradict an existing invariant.
-
-**Resolution: `branch create` rejects a name with a surviving log, and names the remedy.** Continuation is
-available only through an explicit opt-in (`--continue-log`), which publishes at `last_seq + 1` with
-`previous_ref_state_id` set to the last ref-state recorded in that log — an ordinary CAS update, not a
-genesis.
-
-Rejecting by default follows **DC-13 goal 5** — "keep non-default genesis explicit; never infer" — and
-NFR-REL-01's preference for reporting over guessing. The alternative, silently continuing a deleted
-branch's history, would hand a user a branch carrying rollback-detectable history they did not ask for and
-cannot see. The alternative of silently restarting at sequence 1 would break DC-13 goal 3 outright.
-
-Garbage collection of now-unreferenced objects is NFR-REL-02 and out of scope. Say so in the command's
-output so a user does not believe deletion reclaimed space.
+`branch delete` is **DC-61**. See the Status note for why it could not ship here.
 
 ### 4. Signing
 
 Branch creation publishes a signed ref-state object, so it requires MAINTAINER signing on the same terms
 as `seal`. Follow `maintainer_signer_from_env` (`prikk-cli/src/main.rs:147`); do not introduce a second
-signing path. Deletion removes a pointer and does not create a signed object.
+signing path. Deletion is out of scope — see §3.
 
 ## Non-goals
 
@@ -148,6 +131,7 @@ signing path. Deletion removes a pointer and does not create a signed object.
   another ref has no defined behaviour today. That deserves its own RFC, and it is better designed after
   the multi-patch queuing decision — which may replace the single slot with per-ref active WALs and change
   the answer entirely.
+- **No deletion.** `branch delete` is DC-61, which must also settle the ref-log tombstone format question.
 - No tagging — §6.6, its own increment.
 - No remote or tracking branches — §6.11, product M5.
 - No garbage collection of unreferenced objects — NFR-REL-02.
@@ -175,17 +159,11 @@ help must say so plainly rather than leaving a user to discover it.
 2. `branch create` publishes a signed ref-state object; the new branch appears in listing; `verify` passes
    afterward.
 3. `branch create` fails closed on an invalid name, an existing name, an unresolvable `--from`, and a name
-   with a surviving log absent `--continue-log` — each tested.
-4. Delete-then-recreate is tested both ways: rejected by default with an actionable message, and with
-   `--continue-log` publishing at `last_seq + 1` with the correct predecessor, after which `verify` passes.
-5. `branch delete` removes the pointer **only**; the ref log and all objects are demonstrably retained;
-   `verify` passes afterward.
-6. `branch delete` fails closed on a missing branch, on a branch owning a non-empty active WAL, and on the
-   last remaining branch — each tested by constructing the state.
-7. No identity artifact changes: `vectors/snapshot.txt`, `vectors/hard.rs`,
+   with a surviving log and no live pointer — each tested against constructed state.
+4. No identity artifact changes: `vectors/snapshot.txt`, `vectors/hard.rs`,
    `state_root/tests/vectors.rs`, `text_span/vectors.rs` all byte-identical.
-8. Command help states that switching is not supported and names the reason.
-9. Full gate set per `rfcs/EXECUTION-ORDER.md` §6 rule 9, plus test counts before and after per rule 10.
+5. Command help states that switching is not supported and names the reason.
+6. Full gate set per `rfcs/EXECUTION-ORDER.md` §6 rule 9, plus test counts before and after per rule 10.
 
-All nine are verifiable from the repository by a reviewer. None requires trusting the implementer's
+All six are verifiable from the repository by a reviewer. None requires trusting the implementer's
 report.
