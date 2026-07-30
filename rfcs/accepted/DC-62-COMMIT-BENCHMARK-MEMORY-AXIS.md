@@ -1,6 +1,10 @@
 # RFC (proposed) - DC-62 Commit Benchmark Memory Axis
 
-**Status.** Proposed. Requires design review before implementation may begin.
+**Status.** **Accepted by the project owner on 2026-07-30.** Implementation may begin.
+
+**Independence.** Authored and reviewed by the architect; one architect, so design review here is author
+re-examination. Acceptance criteria are written to be reproducible from the repository, so the
+implementation review carries the independent weight.
 **Size:** small. One axis added to an existing harness, plus a report section.
 **Arises from.** DC-56 design review v2, which found that commit reads every file's contents into memory
 (`worktree_files.rs:11-14`, `bytes: Vec<u8>` per file) — a scalability defect no requirement names. DC-56's

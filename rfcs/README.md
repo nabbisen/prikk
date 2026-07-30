@@ -30,7 +30,6 @@ These records are under design review. All proposed RFCs must respect the depend
 | ID | Title | Milestone |
 |---|---|---|
 | DC-56 | [Commit Full-Tree Scan Compliance](./proposed/DC-56-COMMIT-FULL-TREE-SCAN-COMPLIANCE.md) | Closes **missed product M1** gate NFR-PERF-01 and an untracked commit-memory defect; needs DC-62 |
-| DC-62 | [Commit Benchmark Memory Axis](./proposed/DC-62-COMMIT-BENCHMARK-MEMORY-AXIS.md) | Arises from DC-56 review v2; precondition for DC-56's implementation review |
 
 
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0; **release-blocked** — inherits key lifecycle from DC-35, which needs amendment |
@@ -80,6 +79,7 @@ These reviewed designs may govern downstream work but have not yet released.
 | DC-48 | [Legacy Clippy Production Retirement](./accepted/DC-48-LEGACY-CLIPPY-PRODUCTION-RETIREMENT.md) | M2 / before 0.19.0 RC; complete at `383e503`, post-commit evidence accepted |
 | DC-57 | [Active-Patch Thresholds](./accepted/DC-57-ACTIVE-PATCH-THRESHOLDS.md) | **HELD 2026-07-29, handoff withdrawn.** Its premise does not hold — the active WAL is capped at one record repository-wide, so 800/1000 is unreachable. NFR-PERF-02 presupposes multi-commit queued active sessions, not implemented. Blocked on an owner decision |
 | DC-58 | [Source-Structure Audit](./accepted/DC-58-SOURCE-STRUCTURE-AUDIT.md) | Corrective M2 maintainability. **Batches 1 (`e1d0213`) and 2 (`54a3037`) accepted**; closure pending one report reframing. Defers `node_authoring.rs` until DC-56 and excludes `frozen_outgoing.rs` — both permanent by design |
+| DC-62 | [Commit Benchmark Memory Axis](./accepted/DC-62-COMMIT-BENCHMARK-MEMORY-AXIS.md) | Precondition for DC-56's implementation review. Accepted 2026-07-30; measures peak commit memory with no new dependency, by sampling `/proc/<pid>/status` `VmHWM` |
 | DC-63 | [Tag Surface](./accepted/DC-63-TAG-SURFACE.md) | Closes §6.6. Object model already existed and is identity-pinned, so no format change. Accepted 2026-07-30; tag `created_at` writes the no-clock sentinel per DC-34, and `TagPayload`'s contradicting doc comment is corrected |
 | DC-61 | [Branch Closure](./accepted/DC-61-BRANCH-CLOSURE.md) | §6.5 deletion half, as **closure** — the pointer stays. Redesigned from tombstones 2026-07-30 after review found `doctor` would resurrect deleted branches. Accepted with all three verification obligations discharged; still a format change |
 | DC-60 | [Branch Management Surface](./accepted/DC-60-BRANCH-MANAGEMENT-SURFACE.md) | §6.5 list + create. Accepted 2026-07-30; **scope amended the same day** — deletion moved to DC-61 after implementation proved it blocks repository-wide commits at every record count. **Complete at `6c2b7a6`**, implementation review accepted with one non-blocking note |

@@ -32,7 +32,7 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
 | 1 | **DC-58** — source-structure audit | **Both batches accepted**; closure pending report reframing (N1) | with developers for N1 only | `handoffs/DC-58-source-structure-audit/implementation-handoff-v1.md` |
-| 2 | **DC-62** — commit benchmark memory axis | Proposed | design review | handoff pending design acceptance |
+| 2 | **DC-62** — commit benchmark memory axis | **Accepted 2026-07-30** | none — **cleared to start** | `handoffs/DC-62-commit-benchmark-memory-axis/implementation-handoff-v1.md` |
 | 3 | **DC-56** — commit scan + memory compliance (NFR-PERF-01) | Proposed | design review; **DC-62** before its implementation review | handoff pending design acceptance |
 
 | 5 | **DC-61** — branch closure (§6.5 deletion half) | **Accepted 2026-07-30**; all three verification obligations discharged | none — **cleared to start** | `handoffs/DC-61-branch-closure/implementation-handoff-v1.md` |
