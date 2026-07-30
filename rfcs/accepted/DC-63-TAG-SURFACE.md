@@ -1,6 +1,8 @@
 # RFC (proposed) - DC-63 Tag Surface
 
-**Status.** Proposed. Requires design review before implementation may begin.
+**Status.** **Accepted by the project owner on 2026-07-30.** Acceptance carried the timestamp
+recommendation — **option A, write the no-clock sentinel** — since the RFC stated it would proceed on A
+absent an objection and none was raised. Criterion 1 is thereby discharged; see §"The timestamp decision".
 **Requirement.** `specs/prikk-app-requirements-v1.2.md` §6.6 (Tagging).
 **Gate.** Product **M1** owns the object model, which is complete. This RFC adds the missing surface. Tag
 creation is recorded as deferred at `rfcs/IMPLEMENTATION-STATUS.md:484` and `:557`, so it is a known gap
@@ -37,7 +39,7 @@ rather than an oversight.
 and `IMPLEMENTATION-STATUS.md:484` lists "tag or remote ref creation" among the not-implemented items. Unlike
 DC-61, no format change is needed: the payload exists and is already identity-pinned.
 
-## The one design question, and it is not small
+## The timestamp decision — RESOLVED, option A
 
 ### `TagPayload.created_at` is documented as authoritative, and this project has ruled it cannot be
 
@@ -69,13 +71,17 @@ it.
 | B — write client-asserted time, documented as untrusted | Gives users a timestamp, but stores an unverifiable claim inside an identity-bearing object, and contradicts the field's own doc comment either way |
 | C — design clock authority | Out of scope by an order of magnitude. DC-34 explicitly defers it to "a versioned schema and a persistence design" |
 
-**Recommendation: A.** Write zero, correct `TagPayload`'s doc comment to describe it as a no-clock sentinel,
-and record that authoritative tag time follows whenever clock authority does. Option B's cost is subtle and
-lasting: a timestamp inside a signed, content-addressed object reads as attested even when documentation says
-otherwise, and this project has already paid once for a field that looked authoritative and was not.
+**Decision: A, accepted 2026-07-30.** `tag create` writes `created_at = 0`. `TagPayload`'s doc comment is
+corrected to describe it as a no-clock sentinel, matching DC-34's language for `RefUpdate`. Authoritative tag
+time follows whenever clock authority does, and not before.
 
-**This is an owner-adjacent call**, because it removes a user-visible capability people expect from tags. But
-the recommendation is strong enough that I would proceed on A absent an objection.
+Rationale recorded because the field's name will keep inviting the opposite: a timestamp inside a signed,
+content-addressed object reads as attested even when documentation says otherwise, and this project has
+already paid once for a field that looked authoritative and was not (`MILESTONES.md:95`, the RefUpdate
+timestamp erratum).
+
+**The doc-comment correction must be comment-only.** `Tag`'s type code and a payload row are already pinned
+(`vectors/hard.rs:43`, `vectors/snapshot.txt`); touching encoding would move a committed ObjectId.
 
 ## Design
 
@@ -127,10 +133,10 @@ Tag objects and tag ref states are both maintainer-signed, on the same terms as 
 
 ## Risks
 
-**The timestamp decision leaking into implementation.** If §"The one design question" is unresolved when the
-handoff is written, an implementer will write `SystemTime::now()` because the field is named `created_at` and
-documented as authoritative. That is the single most likely defect here, and it would put an unverifiable
-claim inside an identity-bearing object.
+**`SystemTime::now()` written anyway.** The decision is settled, but the field is *named* `created_at` and —
+until the comment is fixed — *documented* as authoritative. An implementer following the type rather than the
+RFC will reach for a real clock. Still the single most likely defect here, which is why the handoff leads with
+it and why the comment correction is part of the same increment rather than a follow-up.
 
 **Tag ref-name validation reusing branch validation.** `validate_local_branch_ref` is branch-specific by
 name. If it encodes `heads/` assumptions, reusing it for `tags/` would either wrongly reject valid tag names
@@ -142,7 +148,7 @@ The doc fix must be comment-only.
 
 ## Acceptance criteria
 
-1. The `created_at` decision is recorded in this RFC before acceptance, with its rationale.
+1. `created_at` is written as **zero** on every tag, and `TagPayload`'s doc comment is corrected — comment only, no encoding change. (The decision itself was discharged at acceptance; this criterion is now its implementation.)
 2. `tag create` persists a signed `ObjectType::Tag` object and publishes a `RefKind::Tag` ref **pointing at
    the tag object, not the block**; `verify` passes afterward.
 3. `tag create` fails closed on an invalid name, an existing tag, and an unresolvable `--target` — each

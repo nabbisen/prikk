@@ -36,7 +36,7 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 | 3 | **DC-56** — commit scan + memory compliance (NFR-PERF-01) | Proposed | design review; **DC-62** before its implementation review | handoff pending design acceptance |
 | 4 | **DC-60** — branch list + create (§6.5) | **Accepted; scope amended 2026-07-30**; list+create implemented, awaiting review | none | `handoffs/DC-60-branch-management-surface/implementation-handoff-v1.md` (Step 3 void) |
 | 5 | **DC-61** — branch closure (§6.5 deletion half) | **Accepted 2026-07-30**; all three verification obligations discharged | none — **cleared to start** | `handoffs/DC-61-branch-closure/implementation-handoff-v1.md` |
-| 6 | **DC-63** — tag surface (§6.6) | Proposed | design review; **owner-adjacent call on tag timestamps** | handoff pending design acceptance |
+| 6 | **DC-63** — tag surface (§6.6) | **Accepted 2026-07-30**; timestamp decision carried at acceptance (no-clock sentinel) | none — **cleared to start** | `handoffs/DC-63-tag-surface/implementation-handoff-v1.md` |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.
