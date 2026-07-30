@@ -67,8 +67,9 @@ standing rule 2. Never implemented. See `rfcs/archive/DC-42-PERFORMANCE-MAINTAIN
 
 **Why this order.** DC-58 leads only because it is nearly finished — one reporting correction remains.
 DC-56 is next in value but cannot proceed until the owner rules on the NFR-PERF-01 reading; its
-measurement precondition is already satisfied by DC-59's report. DC-52 then needs its stability
-precondition, and DC-43 needs security review and is best consumed against a settled tooling gate.
+measurement precondition is already satisfied by DC-59's report. **DC-60** (list + create) is implemented
+and awaiting review; **DC-61** carries the deletion half and needs its format-compatibility obligations
+discharged at design review. DC-52 and DC-43 are **not** in this lane — both are release-blocked, see §2.
 
 **DC-56 carries an owner decision that must not be resolved by implementing.** NFR-PERF-01 forbids a
 full-tree scan; NFR-PERF-04 requires caches to be rebuildable and never authoritative. A rebuildable index

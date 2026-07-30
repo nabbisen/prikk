@@ -19,14 +19,14 @@
 `rfcs/accepted/DC-60-BRANCH-MANAGEMENT-SURFACE.md`. Design review v1 returned two blocking findings, both
 resolved at `312fc5d` — the RFC you are working from is the revised one.
 **Authored by** the architect.
-**Size:** medium. One new CLI command with three subcommands, plus read-only enumeration.
+**Size:** medium. One new CLI command with **two** subcommands (list, create), plus read-only enumeration.
 **Touches:** `crates/prikk-cli` and read-only enumeration in `crates/prikk-store`. **No new object type, no
 format change, no persisted byte change.**
 
 ## What this is
 
-`prikk branch` — list, create, delete. Closing the user-facing half of requirements §6.5, whose internal
-half already ships.
+`prikk branch` — **list and create**. Part of the user-facing half of requirements §6.5, whose internal half
+already ships. Deletion is DC-61.
 
 ## Read this first: creation already exists
 
@@ -64,7 +64,7 @@ is the only function producing a `.ref` path and it always joins `by-id`. Logs, 
 
 Sort by name. Deterministic output is what makes this testable and scriptable.
 
-## Step 2 — `prikk branch create <name> [--from <ref>] [--continue-log]`
+## Step 2 — `prikk branch create <name> [--from <ref>]`
 
 Publish a new ref-state object for `<name>` targeting `--from`'s block (default: the current default ref).
 Shape as stated above.
@@ -82,9 +82,9 @@ Reuse what exists — do not write new versions of any of these:
 - `<name>` fails `validate_local_branch_ref`
 - `<name>` already exists — creation is not a move
 - `--from` does not resolve to a published ref
-- `<name>` has a **surviving ref log** from a previous deletion, unless `--continue-log` is given
-
-That last one is the subtle case — see Step 3.
+- `<name>` has a **surviving ref log** with no live pointer — fail closed, no escape flag. Such a log can
+  survive an interrupted publication, and creating over it produces the corrupt state DC-61 exists to
+  resolve. `publish` would refuse anyway, but a clear early error beats a generic classification failure.
 
 ## Step 3 — VOID, moved to DC-61
 
@@ -130,17 +130,17 @@ rollback-detectable history they cannot see; the second breaks DC-13 goal 3.
   every command takes `--ref` defaulting to a literal `"heads/main"` (`args.rs:90,135`). Adding one changes
   default ref resolution for every existing command and collides with the single repository-wide active
   slot. Separate increment, better designed after the multi-patch queuing decision.
+- **No deletion** — DC-61.
 - No tagging (§6.6), no remote or tracking branches (§6.11), no garbage collection (NFR-REL-02).
 - No change to how existing commands resolve `--ref`.
 
-**Command help must state that switching is unsupported and why.** Shipping create/list/delete without
-switch is a partial surface; a user should learn that from `--help`, not by trying.
+**Command help must state that switching is unsupported and why.** Shipping list and create without switch
+or delete is a partial surface; a user should learn that from `--help`, not by trying.
 
 ## Traps
 
 - **Building a second creation path** instead of matching DC-13's shape. The most likely mistake here.
-- **Deleting the ref log.** Covered above; it looks like cleanup and is data loss.
-- **Restarting at sequence 1 on recreate**, or continuing silently.
+- **Implementing anything from the void Step 3.** Deletion is DC-61's, and its design is not settled.
 - **Searching for ref pointers outside `by-id/`.** There are none, and looking invites finding logs or
   locks and treating them as refs.
 - **Writing a second name validator or signing path.** Both exist.
