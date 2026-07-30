@@ -33,8 +33,7 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 |---|---|---|---|---|
 | 1 | **DC-58** — source-structure audit | **Both batches accepted**; closure pending report reframing (N1) | with developers for N1 only | `handoffs/DC-58-source-structure-audit/implementation-handoff-v1.md` |
 | 2 | **DC-56** — commit full-tree scan compliance (NFR-PERF-01) | Proposed | design review; **owner ruling on the NFR-PERF-01 reading** (DC-59's report is now in hand) | handoff pending design acceptance |
-| 3 | **DC-52** — Python and oracle decommissioning | Proposed | design review; later-commit stability evidence | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
-| 4 | **DC-43** — release security and distribution controls | Proposed | design review; security review | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
+| 3 | **DC-60** — branch management surface (§6.5) | Proposed | design review | handoff pending design acceptance |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.
@@ -116,8 +115,14 @@ Step 1 as instructed. **Blocked on an owner decision** — see `MILESTONES.md` f
 | Increment | Blocked by | Handoff (written, marked BLOCKED) |
 |---|---|---|
 | **DC-49** — portable-logic platform matrix | The M1 public portability-claim correction, which `MILESTONES.md` places inside the mandatory hold of an **activated** release. Cannot complete while the lane is parked. | `handoffs/DC-49-portable-logic-platform-matrix/implementation-handoff-v1.md` |
+| **DC-52** — Python and oracle decommissioning | `DC-45:419` and `:545` forbid Python deletion "before the first Rust-gated 0.19.0 release and its accepted post-release stability rerun." No release has shipped since 0.17.7. **Moved here 2026-07-30** — it was previously listed as available now, which was wrong. | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
+| **DC-43** — release security and distribution controls | Its scope *is* release security and distribution, and `DC-35:255-257` hands it key custody, rotation, expiry/revocation monitoring, attestations, and SBOMs. DC-35 needs a fitness amendment, so designing DC-43 now designs against a foundation about to change. **Moved here 2026-07-30.** | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
 
-This is the one place where a development increment depends on a release-lane event. It was descoped from
+Release stabilization is deferred by owner direction 2026-07-30, so everything in this section is
+dormant. Note that **three** increments sit here, not one — DC-52 and DC-43 were previously listed in §1 as
+available now, which understated how much of the backlog is release-gated.
+
+This was the one place where a development increment depends on a release-lane event. It was descoped from
 DC-41 for exactly that reason. If the owner would rather unblock it sooner, the alternative is a reviewed
 decision to move the documentation correction into the development lane — that is an owner decision, not
 an implementation one.
