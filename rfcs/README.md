@@ -30,21 +30,28 @@ These records are under design review. All proposed RFCs must respect the depend
 | ID | Title | Milestone |
 |---|---|---|
 | DC-56 | [Commit Full-Tree Scan Compliance](./proposed/DC-56-COMMIT-FULL-TREE-SCAN-COMPLIANCE.md) | Closes **missed product M1** gate NFR-PERF-01; needs DC-59 |
-| DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0 |
+| DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / 0.19.0; **release-blocked** — inherits key lifecycle from DC-35, which needs amendment |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
-| DC-52 | [Python and Oracle Decommissioning](./proposed/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | M2 / 0.19.0 |
+| DC-52 | [Python and Oracle Decommissioning](./proposed/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | M2 / 0.19.0; **release-blocked** — `DC-45:419` forbids deletion before the first Rust-gated 0.19.0 release |
 | DC-53 | [Repository-Wide AUTHOR Trust Verification](./proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md) | Post-M2, unscheduled |
 
-DC-41 design review is accepted (below); its staged implementation does not require DC-42 or DC-43 to
-wait. **DC-55 is complete** (below). **DC-42 was superseded** on 2026-07-29 into DC-56, DC-57, and DC-58
-after design review found it bundled three unrelated increments; it is in `archive/`. The remaining
-development order is DC-59, DC-56, DC-57, DC-58, then DC-52, then DC-43. DC-57, DC-58 and DC-59 are now accepted (below) — each still requiring individual design
-acceptance before implementation. See
-[`EXECUTION-ORDER.md`](./EXECUTION-ORDER.md) for what each is blocked on. DC-44 remains scheduled after M2
-and DC-53 is unscheduled; both have design briefs rather than implementation handoffs. DC-49 is proposed
-but cannot complete while the release lane is parked. DC-45 through DC-48 are accepted preparatory work
-already landed, not competing future increments in this sequence.
+**Only DC-56 is a live design-review candidate here.** The other five are blocked or unscheduled:
+
+- **DC-43** and **DC-52** cannot proceed while release stabilization is deferred. `DC-45:419` forbids
+  Python deletion before the first Rust-gated 0.19.0 release; DC-43's scope *is* release security and it
+  inherits key-lifecycle obligations from DC-35, which needs a fitness amendment. Both were moved to
+  `EXECUTION-ORDER.md` §2 on 2026-07-30 — they had been listed as available, which was wrong.
+- **DC-49** cannot complete while the release lane is parked.
+- **DC-44** and **DC-53** have design briefs but no designs, and are scheduled after M2 / unscheduled.
+
+**DC-42 was superseded** on 2026-07-29 into DC-56, DC-57, and DC-58 after design review found it bundled
+three unrelated increments; it is in `archive/`. Of those, DC-58 is accepted and nearly complete, DC-57 is
+**held** on an unreachable premise, and DC-56 awaits an owner ruling. **DC-59** (split from DC-56) and
+**DC-60** are accepted; DC-59 is complete.
+
+See [`EXECUTION-ORDER.md`](./EXECUTION-ORDER.md) for what each is blocked on and what to hand developers.
+DC-45 through DC-48 are accepted preparatory work already landed, not competing future increments.
 
 ## Accepted
 
@@ -69,7 +76,7 @@ These reviewed designs may govern downstream work but have not yet released.
 | DC-47 | [Stable Clippy Gate Alignment](./accepted/DC-47-STABLE-CLIPPY-GATE-ALIGNMENT.md) | M2 / before 0.19.0 RC; complete at `ea95e92`, post-commit evidence accepted |
 | DC-48 | [Legacy Clippy Production Retirement](./accepted/DC-48-LEGACY-CLIPPY-PRODUCTION-RETIREMENT.md) | M2 / before 0.19.0 RC; complete at `383e503`, post-commit evidence accepted |
 | DC-57 | [Active-Patch Thresholds](./accepted/DC-57-ACTIVE-PATCH-THRESHOLDS.md) | **HELD 2026-07-29, handoff withdrawn.** Its premise does not hold — the active WAL is capped at one record repository-wide, so 800/1000 is unreachable. NFR-PERF-02 presupposes multi-commit queued active sessions, not implemented. Blocked on an owner decision |
-| DC-58 | [Source-Structure Audit](./accepted/DC-58-SOURCE-STRUCTURE-AUDIT.md) | Corrective M2 maintainability. **Batch 1 complete at `e1d0213`**, review accepted; batches continue. Defers `node_authoring.rs` until DC-56 |
+| DC-58 | [Source-Structure Audit](./accepted/DC-58-SOURCE-STRUCTURE-AUDIT.md) | Corrective M2 maintainability. **Batches 1 (`e1d0213`) and 2 (`54a3037`) accepted**; closure pending one report reframing. Defers `node_authoring.rs` until DC-56 and excludes `frozen_outgoing.rs` — both permanent by design |
 | DC-60 | [Branch Management Surface](./accepted/DC-60-BRANCH-MANAGEMENT-SURFACE.md) | Closes the user-facing half of §6.5. Accepted 2026-07-30 after design review found a false problem statement (creation already ships via DC-13) and a deletion step that violated NFR-REL-01 |
 | DC-59 | [Commit Benchmark Harness](./accepted/DC-59-COMMIT-BENCHMARK-HARNESS.md) | Produces NFR-PERF-01's named evidence artifact. **Complete at `a9c2fe0`**, implementation review accepted 2026-07-29 with no findings. Measured the full-tree scan: 4.22 ms at 10 files to 516 ms at 10,000, change set fixed at one |
 
