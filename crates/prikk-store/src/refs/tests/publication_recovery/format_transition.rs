@@ -58,6 +58,7 @@ fn genuine_format1_ahead_log_promotes_without_identity_rewrite() -> prikk_error:
         update_seq: 1,
         previous_ref_state_id: None,
         required_attestation_ids: Vec::new(),
+        closed: false,
     };
     let ref_state = sign_legacy_publication(
         ObjectType::RefState,

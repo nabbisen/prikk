@@ -180,7 +180,13 @@ fn publication(
                         "fixture previous RefState is missing".to_string(),
                     )
                 })?;
-            Some(RefStatePayload::decode_canonical(&envelope.canonical_payload)?.target_object_id)
+            Some(
+                RefStatePayload::decode_canonical(
+                    &envelope.canonical_payload,
+                    envelope.schema_version,
+                )?
+                .target_object_id,
+            )
         }
         None => None,
     };
@@ -208,6 +214,7 @@ fn publication(
         update_seq: sequence,
         previous_ref_state_id: previous,
         required_attestation_ids: Vec::new(),
+        closed: false,
     };
     let ref_state = signed_publication(
         ObjectType::RefState,

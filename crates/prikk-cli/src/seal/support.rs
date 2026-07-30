@@ -99,8 +99,9 @@ pub(super) fn current_ref_state(
         .ok_or_else(|| {
             format!("current ref {ref_name} points to missing RefState {ref_state_id}")
         })?;
-    let payload = RefStatePayload::decode_canonical(&envelope.canonical_payload)
-        .map_err(|err| err.to_string())?;
+    let payload =
+        RefStatePayload::decode_canonical(&envelope.canonical_payload, envelope.schema_version)
+            .map_err(|err| err.to_string())?;
     if payload.ref_name != ref_name {
         return Err(format!(
             "current RefState name mismatch: expected {ref_name}, got {}",
@@ -163,8 +164,9 @@ pub(super) fn legacy_interrupted_ref_state(
                 update.new_ref_state_id
             )
         })?;
-    let payload = RefStatePayload::decode_canonical(&envelope.canonical_payload)
-        .map_err(|err| err.to_string())?;
+    let payload =
+        RefStatePayload::decode_canonical(&envelope.canonical_payload, envelope.schema_version)
+            .map_err(|err| err.to_string())?;
     if payload.ref_name != ref_name
         || payload.previous_ref_state_id != pointer
         || payload.target_object_id != update.new_target_object_id

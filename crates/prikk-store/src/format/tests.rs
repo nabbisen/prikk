@@ -45,6 +45,9 @@ fn format2_allowlist_covers_every_registered_type() {
         (ObjectType::Patch, 1, true),
         (ObjectType::Block, 2, true),
         (ObjectType::RefState, 1, true),
+        // DC-61: RefState is the only type with more than one live format-2 schema — schema 2
+        // carries the `closed` field (tag 7). Both must be accepted.
+        (ObjectType::RefState, 2, true),
         (ObjectType::RefUpdate, 1, true),
         (ObjectType::Tag, 1, true),
         (ObjectType::Attestation, 1, true),
@@ -69,12 +72,14 @@ fn format2_rejects_wrong_schema_for_every_allowed_type() {
         ObjectType::Attestation,
         ObjectType::Blob,
     ] {
-        let required = if object_type == ObjectType::Block {
-            2
-        } else {
-            1
+        // RefState alone accepts two schemas (1 and REF_STATE_CLOSED_SCHEMA = 2, DC-61), so a
+        // single "required + 1" probe is not wrong for it the way it is for every other type;
+        // schema 3 is outside every type's accepted set, including RefState's.
+        let wrong = match object_type {
+            ObjectType::Block | ObjectType::RefState => 3,
+            _ => 2,
         };
-        let envelope = ObjectEnvelope::unsigned(object_type, required + 1, Vec::new());
+        let envelope = ObjectEnvelope::unsigned(object_type, wrong, Vec::new());
         assert!(validate_format2_schema(&envelope).is_err());
     }
 }

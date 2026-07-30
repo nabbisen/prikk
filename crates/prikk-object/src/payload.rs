@@ -22,5 +22,5 @@ pub use patch::{
     OperationKind, PatchPayload, PatchPurpose, RenamePath, ReplaceBinary, TEXT_SPAN_HASH_BYTES,
     text_span_hash, validate_text_anchor_id,
 };
-pub use refs::{RefKind, RefStatePayload, RefUpdatePayload};
+pub use refs::{REF_STATE_CLOSED_SCHEMA, RefKind, RefStatePayload, RefUpdatePayload};
 pub use tag::TagPayload;

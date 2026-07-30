@@ -65,7 +65,8 @@ fn add_incomplete_cleanup_issue(
     let state = objects
         .read_typed(state_id, ObjectType::RefState)?
         .ok_or_else(|| PrikkError::Integrity(format!("missing RefState object: {state_id}")))?;
-    let target = RefStatePayload::decode_canonical(&state.canonical_payload)?.target_object_id;
+    let target = RefStatePayload::decode_canonical(&state.canonical_payload, state.schema_version)?
+        .target_object_id;
     if block_matches_wal(layout, target, records)? {
         issues.push(RefPublicationIssue {
             code: "PRIKK-VERIFY-REF-ACTIVE-CLEANUP-PENDING",
@@ -106,7 +107,10 @@ fn interrupted_target(
     let state = objects
         .read_typed(state_id, ObjectType::RefState)?
         .ok_or_else(|| PrikkError::Integrity(format!("missing RefState object: {state_id}")))?;
-    Ok(RefStatePayload::decode_canonical(&state.canonical_payload)?.target_object_id)
+    Ok(
+        RefStatePayload::decode_canonical(&state.canonical_payload, state.schema_version)?
+            .target_object_id,
+    )
 }
 
 fn block_matches_wal(

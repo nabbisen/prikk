@@ -57,9 +57,11 @@ fn run_list(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String>
                     entry.ref_name, entry.ref_state_id
                 )
             })?;
-        let ref_state_payload =
-            RefStatePayload::decode_canonical(&ref_state_envelope.canonical_payload)
-                .map_err(|err| err.to_string())?;
+        let ref_state_payload = RefStatePayload::decode_canonical(
+            &ref_state_envelope.canonical_payload,
+            ref_state_envelope.schema_version,
+        )
+        .map_err(|err| err.to_string())?;
         if ref_state_payload.kind != RefKind::Tag {
             continue;
         }
@@ -130,6 +132,7 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
         update_seq: 1,
         previous_ref_state_id: None,
         required_attestation_ids: Vec::new(),
+        closed: false,
     };
     let ref_state_envelope = signed_envelope(
         ObjectType::RefState,
@@ -198,8 +201,11 @@ fn resolve_target_block(
         .ok_or_else(|| {
             format!("--target ref {target} RefState {target_ref_state_id} is missing")
         })?;
-    let target_payload = RefStatePayload::decode_canonical(&target_envelope.canonical_payload)
-        .map_err(|err| err.to_string())?;
+    let target_payload = RefStatePayload::decode_canonical(
+        &target_envelope.canonical_payload,
+        target_envelope.schema_version,
+    )
+    .map_err(|err| err.to_string())?;
     if target_payload.ref_name != target {
         return Err(format!(
             "--target RefState name mismatch: expected {target}, got {}",

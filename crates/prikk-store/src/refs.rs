@@ -323,7 +323,8 @@ fn verified_ref_state_payload(
             "RefState {ref_state_id} is unsigned"
         )));
     }
-    let payload = RefStatePayload::decode_canonical(&envelope.canonical_payload)?;
+    let payload =
+        RefStatePayload::decode_canonical(&envelope.canonical_payload, envelope.schema_version)?;
     if payload.ref_name != ref_name {
         return Err(PrikkError::Integrity(format!(
             "RefState {ref_state_id} name mismatch: expected {ref_name}, got {}",

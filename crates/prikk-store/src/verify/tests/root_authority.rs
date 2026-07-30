@@ -52,6 +52,7 @@ fn full_verification_retains_wal_objects_trust_and_recovery_diagnosis_after_root
         update_seq: 1,
         previous_ref_state_id: None,
         required_attestation_ids: Vec::new(),
+        closed: false,
     };
     let ref_state = signed_publication(
         ObjectType::RefState,

@@ -123,7 +123,8 @@ fn read_ref_state(
             envelope.object_type
         )));
     }
-    let payload = RefStatePayload::decode_canonical(&envelope.canonical_payload)?;
+    let payload =
+        RefStatePayload::decode_canonical(&envelope.canonical_payload, envelope.schema_version)?;
     if payload.ref_name != ref_name {
         return Err(PrikkError::Integrity(format!(
             "history RefState {ref_state_id} name mismatch: expected {ref_name}, got {}",

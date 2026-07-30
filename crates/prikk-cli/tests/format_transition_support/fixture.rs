@@ -277,6 +277,7 @@ fn write_main_ref(
         update_seq: 1,
         previous_ref_state_id: None,
         required_attestation_ids: Vec::new(),
+        closed: false,
     };
     let state_id = write_maintainer_envelope(
         layout,

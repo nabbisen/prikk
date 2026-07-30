@@ -13,13 +13,16 @@ pub(crate) fn print_help(version: &str) {
     println!("  prikk status                              Check repository and active WAL status");
     println!("  prikk seal --allow-no-audit [--ref REF] Seal active WAL into a branch ref");
     println!(
-        "  prikk branch [list]                       List branches deterministically (name, RefState id)"
+        "  prikk branch [list] [--all]                List branches deterministically (name, RefState id); --all also shows closed branches, marked"
     );
     println!("  prikk branch create <name> [--from REF]   Publish a branch at an existing target");
     println!(
-        "  note: there is no `branch delete` and no `branch switch` yet, and no current-branch \
-         pointer; deletion needs a ref-log format change (DC-61) and switching needs a separate, \
-         not-yet-designed increment; every command resolves --ref explicitly in the meantime"
+        "  prikk branch close <name>                 Close a branch (not delete — pointer, history, and objects stay; reclaims nothing)"
+    );
+    println!(
+        "  note: there is no `branch switch` yet, and no current-branch pointer; switching needs \
+         a separate, not-yet-designed increment; every command resolves --ref explicitly in the \
+         meantime"
     );
     println!(
         "  prikk tag [list]                          List tags deterministically (name, target block)"

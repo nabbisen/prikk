@@ -84,6 +84,7 @@ fn ref_state_payload_strategy() -> impl Strategy<Value = RefStatePayload> {
         any::<u64>(),
         proptest::option::of(object_id_strategy()),
         sorted_unique_object_ids(3),
+        any::<bool>(),
     )
         .prop_map(
             |(
@@ -93,6 +94,7 @@ fn ref_state_payload_strategy() -> impl Strategy<Value = RefStatePayload> {
                 update_seq,
                 previous_ref_state_id,
                 required_attestation_ids,
+                closed,
             )| RefStatePayload {
                 ref_name,
                 kind,
@@ -100,6 +102,7 @@ fn ref_state_payload_strategy() -> impl Strategy<Value = RefStatePayload> {
                 update_seq,
                 previous_ref_state_id,
                 required_attestation_ids,
+                closed,
             },
         )
 }
@@ -172,16 +175,24 @@ proptest! {
     fn ref_state_payload_round_trips(payload in ref_state_payload_strategy()) {
         let bytes = payload.to_canonical_bytes()
             .expect("generation invariants keep RefStatePayload structurally valid");
-        let decoded = RefStatePayload::decode_canonical(&bytes)
-            .expect("bytes produced by the encoder must always decode");
+        // DC-61: `closed` is only legal at schema >= REF_STATE_CLOSED_SCHEMA, so the round-trip
+        // must decode at the schema that matches what was generated, not a fixed constant.
+        let schema_version = if payload.closed {
+            crate::payload::refs::REF_STATE_CLOSED_SCHEMA
+        } else {
+            1
+        };
+        let decoded = RefStatePayload::decode_canonical(&bytes, schema_version)
+            .expect("bytes produced by the encoder must always decode at the matching schema");
         prop_assert_eq!(decoded, payload);
     }
 
     #[test]
     fn ref_state_payload_decode_never_panics_on_arbitrary_bytes(
-        bytes in proptest::collection::vec(any::<u8>(), 0..512)
+        bytes in proptest::collection::vec(any::<u8>(), 0..512),
+        schema_version in any::<u32>(),
     ) {
-        let _ = RefStatePayload::decode_canonical(&bytes);
+        let _ = RefStatePayload::decode_canonical(&bytes, schema_version);
     }
 
     #[test]

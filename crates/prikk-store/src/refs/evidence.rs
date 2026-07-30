@@ -26,7 +26,8 @@ pub(super) fn has_incomplete_active_cleanup(layout: &RepositoryLayout) -> Result
     let state = objects
         .read_typed(state_id, ObjectType::RefState)?
         .ok_or_else(|| PrikkError::Integrity(format!("missing RefState object: {state_id}")))?;
-    let target = RefStatePayload::decode_canonical(&state.canonical_payload)?.target_object_id;
+    let target = RefStatePayload::decode_canonical(&state.canonical_payload, state.schema_version)?
+        .target_object_id;
     let block = objects
         .read_typed(target, ObjectType::Block)?
         .ok_or_else(|| PrikkError::Integrity(format!("missing Block object: {target}")))?;
@@ -58,7 +59,10 @@ pub(super) fn validate_signer_backed_recovery(
             "signer-backed ref recovery requires a complete non-empty active WAL".to_string(),
         ));
     }
-    let state = RefStatePayload::decode_canonical(&publication.ref_state.canonical_payload)?;
+    let state = RefStatePayload::decode_canonical(
+        &publication.ref_state.canonical_payload,
+        publication.ref_state.schema_version,
+    )?;
     let objects = FileObjectStore::new(layout.clone());
     let block = objects
         .read_typed(state.target_object_id, ObjectType::Block)?

@@ -237,7 +237,11 @@ fn branch_create_at_existing_target_matches_dc13_genesis_shape() {
         .read_typed(main_ref_state_id, ObjectType::RefState)
         .unwrap()
         .unwrap();
-    let main_payload = RefStatePayload::decode_canonical(&main_envelope.canonical_payload).unwrap();
+    let main_payload = RefStatePayload::decode_canonical(
+        &main_envelope.canonical_payload,
+        main_envelope.schema_version,
+    )
+    .unwrap();
 
     let topic_ref_state_id = ref_store
         .read_current_ref_state_id("heads/topic")
@@ -251,8 +255,11 @@ fn branch_create_at_existing_target_matches_dc13_genesis_shape() {
         !topic_envelope.signatures.is_empty(),
         "RefState must be signed"
     );
-    let topic_payload =
-        RefStatePayload::decode_canonical(&topic_envelope.canonical_payload).unwrap();
+    let topic_payload = RefStatePayload::decode_canonical(
+        &topic_envelope.canonical_payload,
+        topic_envelope.schema_version,
+    )
+    .unwrap();
 
     // DC-13 genesis shape: update_seq = 1, previous_ref_state_id = None, kind = Branch.
     assert_eq!(topic_payload.update_seq, 1);
@@ -316,8 +323,11 @@ fn branch_create_fails_closed_on_surviving_log_with_no_live_pointer() {
     let _ = std::fs::remove_dir_all(&repo);
 }
 
+// DC-61 supersedes this test's original name and its "no `branch delete`" assertion: deletion
+// became closure (`branch close`), which does exist now. Renamed and updated rather than left
+// asserting a claim DC-61 made false.
 #[test]
-fn branch_help_states_no_switch_or_delete_support() {
+fn branch_help_states_no_switch_support() {
     let out = Command::new(env!("CARGO_BIN_EXE_prikk"))
         .arg("--help")
         .output()
@@ -334,7 +344,7 @@ fn branch_help_states_no_switch_or_delete_support() {
         "help must state switching is unsupported: {stdout}"
     );
     assert!(
-        lower.contains("no `branch delete`"),
-        "help must state deletion is not yet available: {stdout}"
+        lower.contains("branch close"),
+        "help must mention branch close (DC-61): {stdout}"
     );
 }

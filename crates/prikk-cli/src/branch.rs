@@ -1,4 +1,4 @@
-//! `prikk branch` — list and create local branch refs.
+//! `prikk branch` — list, create, and close local branch refs.
 //!
 //! Branch creation already exists: `commit --ref heads/topic` followed by `seal --ref heads/topic`
 //! creates an unborn branch as a signed Root block at `update_seq = 1` (DC-13 Non-Default Ref
@@ -9,9 +9,25 @@
 //! difference is the target: DC-13 seals a block it just created; this points at a block that
 //! already exists.
 //!
-//! No `branch delete` and no current-branch pointer/`switch`: see the module-level non-goals in
-//! the accepted RFC (DC-60). Deletion moved to DC-61, which needs a ref-log tombstone — a format
-//! change DC-60's non-goals exclude. Every command still resolves `--ref` exactly as before.
+//! **`branch close` (DC-61) is closure, not deletion.** Nothing is removed: the pointer, its
+//! history, and every object stay. Closure publishes a final ref state carrying the `closed`
+//! field (`RefStatePayload` tag 7, schema 2). DC-60 tried deletion (removing the pointer while
+//! keeping the log); that produced "pointer absent, log present," a state the system does not
+//! merely classify as corruption but has a *repair function* for
+//! (`RefStore::recoverable_missing_ref` / `doctor`'s `reconstruct_missing_ref_from_log`), so
+//! `doctor` would have offered to resurrect every deleted branch, and it also bricked
+//! repository-wide commits at every record count
+//! (`.git-exclude/reviewed/prikk-dc60-delete-divergence-ruling-v1.md`). Closure leaves the pointer
+//! present, so `verify`, `publish`, `recoverable_missing_ref`, and `doctor` all take their ordinary
+//! paths — no new state, no new arm, nothing to repair.
+//!
+//! **Reopening a closed branch is an ordinary CAS update** (publish a new ref state without the
+//! `closed` field) and is permitted, but this increment does not add a `branch reopen` CLI verb —
+//! the command surface DC-61 specifies is `close` and `list --all` only. The capability is
+//! exercised directly against `RefStore::publish` in the test suite.
+//!
+//! No current-branch pointer/`switch`: see the module-level non-goal in the accepted RFC (DC-60).
+//! Every command still resolves `--ref` exactly as before.
 
 use std::path::PathBuf;
 
@@ -20,37 +36,77 @@ use prikk_object::{
     RefUpdatePayload,
 };
 use prikk_store::{
-    DEFAULT_CHECKOUT_REF, FileObjectStore, MaintainerSigner, RefPublication, RefStore,
-    maintainer_signature, validate_local_branch_ref,
+    DEFAULT_CHECKOUT_REF, FileObjectStore, MaintainerSigner, RefPublication, RefStore, Wal,
+    maintainer_signature, require_active_ref_for_non_empty_wal, validate_local_branch_ref,
 };
 
-/// Dispatch `prikk branch [list|create]`.
+/// Envelope schema version for a `RefState` carrying no `closed` field (every ordinary
+/// publication: create, seal-genesis, and reopening alike).
+const REF_STATE_SCHEMA_OPEN: u32 = 1;
+/// Envelope schema version for a `RefState` whose `closed` field is present (DC-61).
+const REF_STATE_SCHEMA_CLOSED: u32 = 2;
+
+/// Dispatch `prikk branch [list|create|close]`.
 pub fn run_branch(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
     let mut iter = args.into_iter();
-    match iter.next().as_deref() {
+    let first = iter.next();
+    match first.as_deref() {
         None | Some("list") => run_list(root, iter.collect()),
         Some("create") => run_create(root, iter.collect()),
+        Some("close") => run_close(root, iter.collect()),
+        // No explicit subcommand keyword: a leading flag (e.g. bare `prikk branch --all`) is an
+        // argument to the implicit default, `list` — the same default `None` above already takes.
+        Some(flag) if flag.starts_with('-') => {
+            let mut rest = vec![flag.to_string()];
+            rest.extend(iter);
+            run_list(root, rest)
+        }
         Some(other) => Err(format!(
-            "unknown branch subcommand: {other} (expected list or create)"
+            "unknown branch subcommand: {other} (expected list, create, or close)"
         )),
     }
 }
 
 fn run_list(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
-    if let Some(arg) = args.into_iter().next() {
-        return Err(format!("unknown branch list argument: {arg}"));
+    let mut show_all = false;
+    for arg in args {
+        match arg.as_str() {
+            "--all" => show_all = true,
+            other => return Err(format!("unknown branch list argument: {other}")),
+        }
     }
     let layout = crate::open_repository(root)?;
-    let ref_store = RefStore::new(layout);
+    let ref_store = RefStore::new(layout.clone());
+    let object_store = FileObjectStore::new(layout);
     let entries = ref_store
         .list_ref_pointers()
         .map_err(|err| err.to_string())?;
-    if entries.is_empty() {
-        println!("no branches");
-    } else {
-        for entry in entries {
+    let mut printed_any = false;
+    for entry in entries {
+        let envelope = object_store
+            .read_typed(entry.ref_state_id, ObjectType::RefState)
+            .map_err(|err| err.to_string())?
+            .ok_or_else(|| {
+                format!(
+                    "ref {} RefState {} is missing",
+                    entry.ref_name, entry.ref_state_id
+                )
+            })?;
+        let payload =
+            RefStatePayload::decode_canonical(&envelope.canonical_payload, envelope.schema_version)
+                .map_err(|err| err.to_string())?;
+        if payload.closed && !show_all {
+            continue;
+        }
+        if payload.closed {
+            println!("{} {} (closed)", entry.ref_name, entry.ref_state_id);
+        } else {
             println!("{} {}", entry.ref_name, entry.ref_state_id);
         }
+        printed_any = true;
+    }
+    if !printed_any {
+        println!("no branches");
     }
     Ok(())
 }
@@ -101,10 +157,11 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
         update_seq: 1,
         previous_ref_state_id: None,
         required_attestation_ids: Vec::new(),
+        closed: false,
     };
     let ref_state_envelope = signed_envelope(
         ObjectType::RefState,
-        1,
+        REF_STATE_SCHEMA_OPEN,
         ref_state_payload
             .to_canonical_bytes()
             .map_err(|err| err.to_string())?,
@@ -145,6 +202,117 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
     Ok(())
 }
 
+fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+    let mut name = None;
+    for arg in args {
+        if name.is_some() {
+            return Err(format!(
+                "branch close accepts at most one name, got extra: {arg}"
+            ));
+        }
+        name = Some(arg);
+    }
+    let Some(name) = name else {
+        return Err("branch close requires <name>".to_string());
+    };
+
+    let layout = crate::open_repository(root)?;
+    layout
+        .require_current_format()
+        .map_err(|err| err.to_string())?;
+    let canonical = validate_local_branch_ref(&name).map_err(|err| err.to_string())?;
+    let ref_store = RefStore::new(layout.clone());
+    let object_store = FileObjectStore::new(layout.clone());
+
+    let Some(current_ref_state_id) = ref_store
+        .read_current_ref_state_id(&canonical)
+        .map_err(|err| err.to_string())?
+    else {
+        return Err(format!("branch {canonical} does not exist"));
+    };
+    let current_envelope = object_store
+        .read_typed(current_ref_state_id, ObjectType::RefState)
+        .map_err(|err| err.to_string())?
+        .ok_or_else(|| format!("branch {canonical} RefState {current_ref_state_id} is missing"))?;
+    let current_payload = RefStatePayload::decode_canonical(
+        &current_envelope.canonical_payload,
+        current_envelope.schema_version,
+    )
+    .map_err(|err| err.to_string())?;
+    if current_payload.closed {
+        return Err(format!("branch {canonical} is already closed"));
+    }
+
+    let replay = Wal::for_layout(&layout)
+        .replay()
+        .map_err(|err| err.to_string())?;
+    if !replay.records.is_empty()
+        && require_active_ref_for_non_empty_wal(&layout, &canonical).is_ok()
+    {
+        return Err(format!(
+            "cannot close {canonical}: it owns a non-empty active WAL; seal it before closing"
+        ));
+    }
+
+    let next_seq = current_payload
+        .update_seq
+        .checked_add(1)
+        .ok_or_else(|| "ref-state update sequence overflow".to_string())?;
+
+    let signer = crate::maintainer_signer_from_env()?;
+    let ref_state_payload = RefStatePayload {
+        ref_name: canonical.clone(),
+        kind: current_payload.kind,
+        target_object_id: current_payload.target_object_id,
+        update_seq: next_seq,
+        previous_ref_state_id: Some(current_ref_state_id),
+        required_attestation_ids: current_payload.required_attestation_ids.clone(),
+        closed: true,
+    };
+    let ref_state_envelope = signed_envelope(
+        ObjectType::RefState,
+        REF_STATE_SCHEMA_CLOSED,
+        ref_state_payload
+            .to_canonical_bytes()
+            .map_err(|err| err.to_string())?,
+        &signer,
+    )?;
+    let ref_state_id = ref_state_envelope.object_id();
+    let ref_update_payload = RefUpdatePayload {
+        ref_name: canonical.clone(),
+        old_ref_state_id: Some(current_ref_state_id),
+        new_ref_state_id: ref_state_id,
+        new_target_object_id: current_payload.target_object_id,
+        update_seq: next_seq,
+        created_at: 0,
+        author_key_id: signer.key_id().to_string(),
+    };
+    let ref_update_envelope = signed_envelope(
+        ObjectType::RefUpdate,
+        1,
+        ref_update_payload
+            .to_canonical_bytes()
+            .map_err(|err| err.to_string())?,
+        &signer,
+    )?;
+    let publication = RefPublication {
+        ref_name: canonical.clone(),
+        expected_previous_ref_state_id: Some(current_ref_state_id),
+        ref_state: ref_state_envelope,
+        ref_update: ref_update_envelope,
+    };
+    let published_ref_state_id = ref_store
+        .publish(&publication)
+        .map_err(|err| err.to_string())?;
+
+    println!("closed branch {canonical}");
+    println!("RefState: {published_ref_state_id}");
+    println!(
+        "nothing was reclaimed; the pointer, its history, and every object remain, and the branch is recoverable"
+    );
+    Ok(())
+}
+
 /// Resolve `--from`'s target block, requiring it to be a currently published ref.
 fn resolve_published_target(
     ref_store: &RefStore,
@@ -159,8 +327,11 @@ fn resolve_published_target(
         .read_typed(from_ref_state_id, ObjectType::RefState)
         .map_err(|err| err.to_string())?
         .ok_or_else(|| format!("--from ref {from_ref} RefState {from_ref_state_id} is missing"))?;
-    let from_payload = RefStatePayload::decode_canonical(&from_envelope.canonical_payload)
-        .map_err(|err| err.to_string())?;
+    let from_payload = RefStatePayload::decode_canonical(
+        &from_envelope.canonical_payload,
+        from_envelope.schema_version,
+    )
+    .map_err(|err| err.to_string())?;
     if from_payload.ref_name != from_ref {
         return Err(format!(
             "--from RefState name mismatch: expected {from_ref}, got {}",

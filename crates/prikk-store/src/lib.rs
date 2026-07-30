@@ -67,7 +67,8 @@ mod test_support;
 pub use active::{
     ActiveCommitResult, ActiveRefMetadata, ActiveSession, LegacyActiveCleanupAuthorization,
     finish_active_publication_cleanup, finish_legacy_active_publication_cleanup,
-    read_active_ref_metadata, remove_active_ref_metadata, write_active_ref_metadata,
+    read_active_ref_metadata, remove_active_ref_metadata, require_active_ref_for_non_empty_wal,
+    write_active_ref_metadata,
 };
 pub use author_signing::{AuthorSigner, Ed25519AuthorSigner, author_signature};
 pub use block_state::{derive_next_state_root, validate_block_v2_shape};

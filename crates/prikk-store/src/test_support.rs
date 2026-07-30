@@ -109,6 +109,7 @@ pub(crate) fn signed_ref_state_envelope(
         update_seq,
         previous_ref_state_id,
         required_attestation_ids: Vec::new(),
+        closed: false,
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());

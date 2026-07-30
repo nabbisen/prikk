@@ -6,9 +6,10 @@ mod proptest_decoders;
 use super::{
     AttestationPayload, AttestationStatus, BlobKind, BlobPayload, BlockKind, BlockPayload,
     EditText, MerkleRoot, Operation, OperationKind, PatchPayload, PatchPurpose, PluginResultEntry,
-    RefKind, RefStatePayload, RefUpdatePayload, text_span_hash, validate_text_anchor_id,
+    REF_STATE_CLOSED_SCHEMA, RefKind, RefStatePayload, RefUpdatePayload, text_span_hash,
+    validate_text_anchor_id,
 };
-use crate::{CanonicalEncode, ObjectId, ObjectType};
+use crate::{CanonicalEncode, ObjectId, ObjectType, WireType};
 
 #[test]
 fn text_anchor_ids_are_validated() {
@@ -95,13 +96,124 @@ fn ref_state_payload_decodes_its_canonical_bytes() {
         update_seq: 2,
         previous_ref_state_id: Some(previous),
         required_attestation_ids: Vec::new(),
+        closed: false,
     };
     let bytes = payload.to_canonical_bytes();
     assert!(bytes.is_ok());
     if let Ok(bytes) = bytes {
-        let decoded = RefStatePayload::decode_canonical(&bytes);
+        let decoded = RefStatePayload::decode_canonical(&bytes, 1);
         assert_eq!(decoded, Ok(payload));
     }
+}
+
+/// DC-61 identity claim: an ordinary (open) RefState's canonical bytes carry no trace of field 7
+/// at all, structurally — not merely "round-trips," which would also pass for an accidentally
+/// emitted `false`. Tag 7 as a big-endian `u16` never appears in the byte stream.
+#[allow(clippy::expect_used)]
+#[test]
+fn ref_state_payload_open_encoding_carries_no_field_seven() {
+    let target = ObjectId::from_canonical_payload(ObjectType::Block, 1, b"block");
+    let payload = RefStatePayload {
+        ref_name: "heads/main".to_string(),
+        kind: RefKind::Branch,
+        target_object_id: target,
+        update_seq: 2,
+        previous_ref_state_id: None,
+        required_attestation_ids: Vec::new(),
+        closed: false,
+    };
+    let bytes = payload.to_canonical_bytes().expect("open payload encodes");
+    let tag_seven = 7_u16.to_be_bytes();
+    assert!(
+        !bytes.windows(2).any(|window| window == tag_seven),
+        "open RefState bytes must not contain a field-7 tag anywhere: {bytes:02x?}"
+    );
+}
+
+/// The closed counterpart: field 7 is present and its wire-encoded value is exactly `true` (byte
+/// `0x01`), never emitted as an explicit `false`.
+#[allow(clippy::expect_used)]
+#[test]
+fn ref_state_payload_closed_encoding_carries_field_seven_true() {
+    let target = ObjectId::from_canonical_payload(ObjectType::Block, 1, b"block");
+    let payload = RefStatePayload {
+        ref_name: "heads/main".to_string(),
+        kind: RefKind::Branch,
+        target_object_id: target,
+        update_seq: 2,
+        previous_ref_state_id: None,
+        required_attestation_ids: Vec::new(),
+        closed: true,
+    };
+    let bytes = payload
+        .to_canonical_bytes()
+        .expect("closed payload encodes");
+    // tag(2) + wire_type(1) + len(8) + value(1) = 12 trailing bytes: 00 07 01 00..00 01 01
+    let mut expected_tail = Vec::new();
+    expected_tail.extend_from_slice(&7_u16.to_be_bytes());
+    expected_tail.push(WireType::Bool as u8);
+    expected_tail.extend_from_slice(&1_u64.to_be_bytes());
+    expected_tail.push(1); // true
+    assert!(
+        bytes.ends_with(&expected_tail),
+        "closed RefState bytes must end with an explicit tag-7 true field: {bytes:02x?}"
+    );
+
+    let schema_2 = RefStatePayload::decode_canonical(&bytes, REF_STATE_CLOSED_SCHEMA);
+    assert_eq!(schema_2, Ok(payload));
+}
+
+/// Field 7 is schema-gated: legal only at `REF_STATE_CLOSED_SCHEMA` and above. A schema-1 reader
+/// encountering it — the format-transition claim DC-61 makes — must reject it outright.
+#[allow(clippy::expect_used)]
+#[test]
+fn ref_state_payload_rejects_closed_field_at_schema_one() {
+    let target = ObjectId::from_canonical_payload(ObjectType::Block, 1, b"block");
+    let payload = RefStatePayload {
+        ref_name: "heads/main".to_string(),
+        kind: RefKind::Branch,
+        target_object_id: target,
+        update_seq: 2,
+        previous_ref_state_id: None,
+        required_attestation_ids: Vec::new(),
+        closed: true,
+    };
+    let bytes = payload
+        .to_canonical_bytes()
+        .expect("closed payload encodes");
+    assert!(
+        RefStatePayload::decode_canonical(&bytes, 1).is_err(),
+        "a schema-1 reader must reject a payload carrying field 7"
+    );
+}
+
+/// Canonical encoding must have exactly one representation of "closed": absent, never an explicit
+/// `false`. A hand-crafted payload spelling "not closed" via `tag 7 = false` must be rejected even
+/// at schema 2, the same discipline `patch_purpose_explicit_normal_is_rejected` applies to
+/// `PatchPurpose`.
+#[allow(clippy::expect_used)]
+#[test]
+fn ref_state_payload_rejects_explicit_false_closed_field() {
+    let target = ObjectId::from_canonical_payload(ObjectType::Block, 1, b"block");
+    let open = RefStatePayload {
+        ref_name: "heads/main".to_string(),
+        kind: RefKind::Branch,
+        target_object_id: target,
+        update_seq: 2,
+        previous_ref_state_id: None,
+        required_attestation_ids: Vec::new(),
+        closed: false,
+    };
+    let mut bytes = open.to_canonical_bytes().expect("open payload encodes");
+    // Hand-append an explicit tag-7 false field after the legitimate open encoding.
+    bytes.extend_from_slice(&7_u16.to_be_bytes());
+    bytes.push(WireType::Bool as u8);
+    bytes.extend_from_slice(&1_u64.to_be_bytes());
+    bytes.push(0); // false
+    assert!(
+        RefStatePayload::decode_canonical(&bytes, REF_STATE_CLOSED_SCHEMA).is_err(),
+        "an explicit tag-7 false must be rejected, not accepted as a second spelling of open"
+    );
 }
 
 #[test]

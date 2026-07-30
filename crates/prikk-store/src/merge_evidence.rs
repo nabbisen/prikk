@@ -106,7 +106,10 @@ fn resolve_target(
                 .ok_or_else(|| {
                     PrikkError::Integrity(format!("ref {ref_name} points to missing RefState"))
                 })?;
-            let ref_state = RefStatePayload::decode_canonical(&envelope.canonical_payload)?;
+            let ref_state = RefStatePayload::decode_canonical(
+                &envelope.canonical_payload,
+                envelope.schema_version,
+            )?;
             if ref_state.ref_name != ref_name {
                 return Err(PrikkError::Integrity(format!(
                     "RefState name mismatch: expected {ref_name}, got {}",

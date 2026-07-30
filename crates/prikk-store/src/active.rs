@@ -177,7 +177,7 @@ pub(crate) fn prepare_empty_active_ref_for_append(
 }
 
 /// Validate active ref metadata for a non-empty active WAL.
-pub(crate) fn require_active_ref_for_non_empty_wal(
+pub fn require_active_ref_for_non_empty_wal(
     layout: &RepositoryLayout,
     ref_name: &str,
 ) -> Result<String> {

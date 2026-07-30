@@ -34,6 +34,10 @@ impl RefKind {
     }
 }
 
+/// RefState schema version at which the `closed` field (tag 7) is meaningful. A schema-1 payload
+/// carrying tag 7 is malformed — see `decode_canonical`.
+pub const REF_STATE_CLOSED_SCHEMA: u32 = 2;
+
 /// RefState payload stored as a content-addressed object.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RefStatePayload {
@@ -49,11 +53,20 @@ pub struct RefStatePayload {
     pub previous_ref_state_id: Option<ObjectId>,
     /// Required attestation IDs that justified this state.
     pub required_attestation_ids: Vec<ObjectId>,
+    /// Whether this ref state closes the ref (DC-61). Tag 7. **Encoded only when `true`** — an
+    /// open ref state must remain byte-identical to the pre-DC-61 six-field encoding, so this must
+    /// never be emitted as an explicit `false`. Schema-2 only; a schema-1 payload carrying tag 7 at
+    /// all (`true` or `false`) is malformed. Closure carries no other information: the pointer,
+    /// target, and history are unchanged, so reopening is an ordinary CAS update to a new state
+    /// with this field simply absent again.
+    pub closed: bool,
 }
 
 impl RefStatePayload {
-    /// Decode a RefState payload from Prikk canonical TLV bytes.
-    pub fn decode_canonical(bytes: &[u8]) -> Result<Self> {
+    /// Decode a RefState payload from Prikk canonical TLV bytes. `schema_version` comes from the
+    /// object envelope carrying these bytes — decoding is schema-aware because tag 7 is legal only
+    /// at `REF_STATE_CLOSED_SCHEMA` and above.
+    pub fn decode_canonical(bytes: &[u8], schema_version: u32) -> Result<Self> {
         let mut cursor = CanonicalCursor::new(bytes);
         let mut ref_name = None;
         let mut kind = None;
@@ -61,6 +74,7 @@ impl RefStatePayload {
         let mut update_seq = None;
         let mut previous_ref_state_id = None;
         let mut required_attestation_ids = Vec::new();
+        let mut closed = false;
         while let Some(field) = cursor.next_field()? {
             match field.tag {
                 1 => ref_name = Some(field.read_string()?),
@@ -69,6 +83,23 @@ impl RefStatePayload {
                 4 => previous_ref_state_id = Some(field.read_object_id()?),
                 5 => required_attestation_ids.push(field.read_object_id()?),
                 6 => kind = Some(RefKind::from_code(u32::from(field.read_enum_u16()?))?),
+                7 => {
+                    if schema_version < REF_STATE_CLOSED_SCHEMA {
+                        return Err(PrikkError::MalformedData(format!(
+                            "RefState schema {schema_version} must not carry a closed field; \
+                             requires schema {REF_STATE_CLOSED_SCHEMA}"
+                        )));
+                    }
+                    let value = field.read_bool()?;
+                    if !value {
+                        return Err(PrikkError::MalformedData(
+                            "RefState closed field must be absent when open, never encoded as \
+                             false"
+                                .to_string(),
+                        ));
+                    }
+                    closed = true;
+                }
                 other => {
                     return Err(PrikkError::MalformedData(format!(
                         "unknown RefState field tag: {other}"
@@ -90,6 +121,7 @@ impl RefStatePayload {
             })?,
             previous_ref_state_id,
             required_attestation_ids,
+            closed,
         };
         if !is_strictly_sorted(&payload.required_attestation_ids) {
             return Err(PrikkError::MalformedData(
@@ -115,6 +147,9 @@ impl CanonicalEncode for RefStatePayload {
         }
         writer.repeated_object_id(5, &self.required_attestation_ids)?;
         writer.field_enum_u16(6, self.kind.code())?;
+        if self.closed {
+            writer.field_bool(7, true)?;
+        }
         Ok(())
     }
 }
@@ -308,6 +343,18 @@ impl<'a> CanonicalField<'a> {
     fn read_enum_u16(&self) -> Result<u16> {
         self.require_wire(WireType::EnumU16)?;
         Ok(u16::from_be_bytes(self.read_array::<2>()?))
+    }
+
+    fn read_bool(&self) -> Result<bool> {
+        self.require_wire(WireType::Bool)?;
+        match self.read_array::<1>()?[0] {
+            0 => Ok(false),
+            1 => Ok(true),
+            other => Err(PrikkError::MalformedData(format!(
+                "field {} has invalid bool byte: {other}",
+                self.tag
+            ))),
+        }
     }
 
     fn require_wire(&self, expected: WireType) -> Result<()> {

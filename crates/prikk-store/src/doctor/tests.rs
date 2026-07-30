@@ -224,6 +224,7 @@ fn doctor_refuses_missing_main_ref_pointer_reconstruction() {
             update_seq: 1,
             previous_ref_state_id: None,
             required_attestation_ids: Vec::new(),
+            closed: false,
         };
         let ref_state = signed_publication_envelope(
             ObjectType::RefState,

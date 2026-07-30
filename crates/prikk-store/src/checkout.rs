@@ -162,7 +162,8 @@ fn load_ref_state(
             "checkout ref {ref_name} points to missing RefState {ref_state_id}"
         )));
     };
-    let payload = RefStatePayload::decode_canonical(&envelope.canonical_payload)?;
+    let payload =
+        RefStatePayload::decode_canonical(&envelope.canonical_payload, envelope.schema_version)?;
     if payload.ref_name != ref_name {
         return Err(PrikkError::Integrity(format!(
             "checkout RefState name mismatch: expected {ref_name}, got {}",

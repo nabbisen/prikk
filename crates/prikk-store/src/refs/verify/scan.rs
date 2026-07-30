@@ -245,7 +245,7 @@ fn verified_ref_state_payload(
             "RefState {ref_state_id} is unsigned"
         )));
     }
-    RefStatePayload::decode_canonical(&envelope.canonical_payload)
+    RefStatePayload::decode_canonical(&envelope.canonical_payload, envelope.schema_version)
 }
 
 /// Kind-aware ref-target validation, shared by both the pointer scan (`read_pointers`) and the

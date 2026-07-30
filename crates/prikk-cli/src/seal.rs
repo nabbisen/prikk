@@ -189,6 +189,7 @@ fn seal_active_no_audit(
         update_seq,
         previous_ref_state_id,
         required_attestation_ids: Vec::new(),
+        closed: false,
     };
     let ref_state_envelope = signed_envelope(
         ObjectType::RefState,

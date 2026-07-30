@@ -190,8 +190,30 @@ pub(crate) fn refs_populated_payload() -> Vec<u8> {
         update_seq: 7,
         previous_ref_state_id: Some(ObjectId::from_bytes([0x77; 32])),
         required_attestation_ids: vec![ObjectId::from_bytes([0x88; 32])],
+        closed: false,
     };
     refstate.to_canonical_bytes().expect("refstate encodes")
+}
+
+/// Populated, **closed** RefState payload (DC-61): the same case as
+/// `refs_populated_payload`, plus the closed marker (tag 7, `bool`). New pinned identity for the
+/// schema-2 wire shape, alongside the existing schema-1 `refs_populated` vector — the schema bump's
+/// one accounted-for identity addition (see `handoffs/DC-61-branch-closure/`).
+// infallible: sorted unique attestation ids, valid kind.
+#[allow(clippy::expect_used)]
+pub(crate) fn refs_closed_payload() -> Vec<u8> {
+    let refstate = crate::RefStatePayload {
+        ref_name: "heads/main".to_string(),
+        kind: crate::RefKind::Branch,
+        target_object_id: ObjectId::from_bytes([0x66; 32]),
+        update_seq: 7,
+        previous_ref_state_id: Some(ObjectId::from_bytes([0x77; 32])),
+        required_attestation_ids: vec![ObjectId::from_bytes([0x88; 32])],
+        closed: true,
+    };
+    refstate
+        .to_canonical_bytes()
+        .expect("closed refstate encodes")
 }
 
 /// Populated Attestation payload exercising FDD-03 §9.9 field tags: `object_id`
@@ -273,6 +295,14 @@ pub(crate) fn generate_snapshot() -> String {
         ObjectType::RefState.code(),
         to_hex(&refs_p),
         refs_id.to_hex(),
+    ));
+    let refs_closed_p = refs_closed_payload();
+    let refs_closed_id = ObjectId::from_canonical_payload(ObjectType::RefState, 2, &refs_closed_p);
+    out.push_str(&format!(
+        "refs_closed|{}|2|{}|{}\n",
+        ObjectType::RefState.code(),
+        to_hex(&refs_closed_p),
+        refs_closed_id.to_hex(),
     ));
     let att_p = attestation_populated_payload();
     let att_id = ObjectId::from_canonical_payload(ObjectType::Attestation, 1, &att_p);

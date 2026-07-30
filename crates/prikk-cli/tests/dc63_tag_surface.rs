@@ -174,6 +174,7 @@ fn publish_raw(
         update_seq: 1,
         previous_ref_state_id: None,
         required_attestation_ids: Vec::new(),
+        closed: false,
     };
     let ref_state_envelope = signed_envelope(
         ObjectType::RefState,
@@ -249,7 +250,11 @@ fn tag_create_resolves_two_hops_ref_to_tag_object_to_block() {
         .read_typed(main_ref_state_id, ObjectType::RefState)
         .unwrap()
         .unwrap();
-    let main_payload = RefStatePayload::decode_canonical(&main_envelope.canonical_payload).unwrap();
+    let main_payload = RefStatePayload::decode_canonical(
+        &main_envelope.canonical_payload,
+        main_envelope.schema_version,
+    )
+    .unwrap();
     let block_id = main_payload.target_object_id;
 
     ok(
@@ -265,8 +270,11 @@ fn tag_create_resolves_two_hops_ref_to_tag_object_to_block() {
         .read_typed(tag_ref_state_id, ObjectType::RefState)
         .unwrap()
         .unwrap();
-    let tag_ref_state_payload =
-        RefStatePayload::decode_canonical(&tag_ref_state_envelope.canonical_payload).unwrap();
+    let tag_ref_state_payload = RefStatePayload::decode_canonical(
+        &tag_ref_state_envelope.canonical_payload,
+        tag_ref_state_envelope.schema_version,
+    )
+    .unwrap();
     assert_eq!(tag_ref_state_payload.kind, RefKind::Tag);
     assert_ne!(
         tag_ref_state_payload.target_object_id, block_id,
@@ -315,8 +323,11 @@ fn tag_create_writes_created_at_zero() {
         .read_typed(tag_ref_state_id, ObjectType::RefState)
         .unwrap()
         .unwrap();
-    let tag_ref_state_payload =
-        RefStatePayload::decode_canonical(&tag_ref_state_envelope.canonical_payload).unwrap();
+    let tag_ref_state_payload = RefStatePayload::decode_canonical(
+        &tag_ref_state_envelope.canonical_payload,
+        tag_ref_state_envelope.schema_version,
+    )
+    .unwrap();
     let tag_envelope = object_store
         .read_typed(tag_ref_state_payload.target_object_id, ObjectType::Tag)
         .unwrap()
@@ -425,7 +436,11 @@ fn publish_rejects_tag_kind_under_branch_shaped_name() {
         .read_typed(main_ref_state_id, ObjectType::RefState)
         .unwrap()
         .unwrap();
-    let main_payload = RefStatePayload::decode_canonical(&main_envelope.canonical_payload).unwrap();
+    let main_payload = RefStatePayload::decode_canonical(
+        &main_envelope.canonical_payload,
+        main_envelope.schema_version,
+    )
+    .unwrap();
 
     let result = publish_raw(
         &ref_store,
@@ -464,7 +479,11 @@ fn publish_rejects_branch_kind_under_tag_shaped_name() {
         .read_typed(main_ref_state_id, ObjectType::RefState)
         .unwrap()
         .unwrap();
-    let main_payload = RefStatePayload::decode_canonical(&main_envelope.canonical_payload).unwrap();
+    let main_payload = RefStatePayload::decode_canonical(
+        &main_envelope.canonical_payload,
+        main_envelope.schema_version,
+    )
+    .unwrap();
 
     let result = publish_raw(
         &ref_store,

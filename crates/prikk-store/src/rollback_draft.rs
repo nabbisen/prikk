@@ -184,7 +184,8 @@ fn read_target_tip(layout: &RepositoryLayout, ref_name: &str) -> Result<Rollback
                 "published ref {ref_name} points to missing RefState"
             ))
         })?;
-    let payload = RefStatePayload::decode_canonical(&envelope.canonical_payload)?;
+    let payload =
+        RefStatePayload::decode_canonical(&envelope.canonical_payload, envelope.schema_version)?;
     if payload.ref_name != ref_name {
         return Err(PrikkError::Integrity(format!(
             "published RefState name mismatch: expected {ref_name}, got {}",

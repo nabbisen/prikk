@@ -128,7 +128,10 @@ fn publish_locked(
 
 fn validate_coherent_publication(publication: &RefPublication) -> Result<RefUpdatePayload> {
     validate_publication(publication)?;
-    let ref_state = RefStatePayload::decode_canonical(&publication.ref_state.canonical_payload)?;
+    let ref_state = RefStatePayload::decode_canonical(
+        &publication.ref_state.canonical_payload,
+        publication.ref_state.schema_version,
+    )?;
     let update = RefUpdatePayload::decode_canonical(&publication.ref_update.canonical_payload)?;
     let ref_state_id = publication.ref_state.object_id();
     if ref_state.ref_name != publication.ref_name || update.ref_name != publication.ref_name {

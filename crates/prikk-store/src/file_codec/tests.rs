@@ -109,8 +109,12 @@ proptest! {
         };
         let expected_ok = match object_type {
             ObjectType::Block => schema_version == 2,
+            // DC-61: RefState alone accepts two schemas — 1 (open) and REF_STATE_CLOSED_SCHEMA
+            // (closed, carries the tag-7 `closed` field).
+            ObjectType::RefState => {
+                schema_version == 1 || schema_version == prikk_object::REF_STATE_CLOSED_SCHEMA
+            }
             ObjectType::Patch
-            | ObjectType::RefState
             | ObjectType::RefUpdate
             | ObjectType::Tag
             | ObjectType::Attestation

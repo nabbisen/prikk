@@ -31,7 +31,8 @@ pub(super) fn current_target_block(
                 "ref {ref_name} points to missing RefState {ref_state_id}"
             ))
         })?;
-    let ref_state = RefStatePayload::decode_canonical(&envelope.canonical_payload)?;
+    let ref_state =
+        RefStatePayload::decode_canonical(&envelope.canonical_payload, envelope.schema_version)?;
     if ref_state.ref_name != ref_name {
         return Err(PrikkError::Integrity(format!(
             "RefState name mismatch: expected {ref_name}, got {}",
