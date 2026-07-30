@@ -13,6 +13,10 @@
 > its finding is recorded in `.git-exclude/reviewed/prikk-dc60-delete-divergence-ruling-v1.md` and in
 > DC-61, which are the durable places for it.
 >
+>
+> **Exact instructions for submitting the slice — including what to strip and one visibility revert — are in
+> `slice-submission-instruction-v1.md` alongside this file. Read that and the ruling before committing.**
+>
 > Steps 1 and 2 below stand. **Step 3 is void.** The delete-then-recreate decision is void.
 
 **Cleared to start.** Accepted by the project owner on 2026-07-30, at
