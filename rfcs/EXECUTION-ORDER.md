@@ -10,7 +10,8 @@ waiting on?**
 Last reconciled: 2026-07-31, after DC-56's scope finding (`8748f00`). **Complete:** DC-59, DC-60, DC-62,
 DC-63. **Implemented, awaiting architect review:** DC-58's N1 (`6f53da3`), DC-61 (`ca4c044`).
 **DC-56 closes partial** — its index works, but NFR-PERF-01's dominant violator was misidentified in its
-RFC and is carried to **DC-64** (**accepted 2026-07-31, cleared to start**). **DC-57 held** — its premise does not hold, handoff withdrawn, pending the multi-patch queuing
+RFC and is carried to **DC-64**, which **also closes partial** (implemented; eliminates the O(operations
+replayed) cost but not the O(live node count) remainder — see §1 row 4). **DC-57 held** — its premise does not hold, handoff withdrawn, pending the multi-patch queuing
 decision, which is the **one outstanding owner decision** in the development lane. The release-lane decision
 point sits after the performance work per the owner's 2026-07-29 direction.
 
@@ -35,7 +36,7 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 | 1 | **DC-58** — source-structure audit | **Complete.** N1 reframing `6f53da3`, reviewed and accepted 2026-07-31 | nothing | — |
 | 2 | **DC-61** — branch closure (§6.5 deletion half) | **Complete.** Implemented `ca4c044`, reviewed 2026-07-31 (accepted with one non-blocking finding), **N1 repaired `2394f1b`** | nothing | — |
 | 3 | **DC-56** — commit scan + memory compliance | Implemented `8748f00`. **Closes partial** — criteria 1,2,3,6,7 met; 4 and 5 re-scoped and carried. **NFR-PERF-01 not closed** | ruling applied 2026-07-31; nothing outstanding on the developers | — |
-| 4 | **DC-64** — baseline reconstruction cost (NFR-PERF-01, carried) | **Accepted 2026-07-31** after design review discharged its measurements and eliminated its own leading design option | none — **cleared to start** | `handoffs/DC-64-baseline-reconstruction-cost/implementation-handoff-v1.md` |
+| 4 | **DC-64** — baseline reconstruction cost (NFR-PERF-01, carried) | Implemented; **closes partial** — the O(operations replayed) full-lineage-replay cost (97.6% of the phase) is eliminated on the warm path, but `load`/`persist`/`from_replay`, each a binding condition of the trust-ladder ruling, remain O(live node count), so Axis A is not fully flat. **NFR-PERF-01 remains missed**, on a lower curve. See the design document §9 | none | — |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.

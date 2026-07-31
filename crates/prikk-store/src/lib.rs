@@ -84,6 +84,7 @@ pub use doctor::{
 };
 pub use history::{DEFAULT_HISTORY_LIMIT, HistoryEntry, RefHistory, load_ref_history};
 pub use layout::{RepositoryFormat, RepositoryLayout};
+pub use lifecycle_cache::incremental::LifecycleCacheDivergence;
 pub use lock::{ActiveLock, RefLock};
 pub use maintainer_signing::{Ed25519MaintainerSigner, MaintainerSigner, maintainer_signature};
 pub use memory_store::MemoryObjectStore;

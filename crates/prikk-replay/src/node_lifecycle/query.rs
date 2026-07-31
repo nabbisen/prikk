@@ -34,6 +34,13 @@ impl NodeLifecycleState {
         self.latest_tombstone_by_id.get(node_id)
     }
 
+    /// Iterate every tombstoned node as `(node_id, tombstone)`. Used to persist a lifecycle
+    /// state's complete deletion history (DC-64's incremental baseline cache), which — per
+    /// `create_node`/`delete_node`'s invariants — is exactly `seen_ids` minus the live set.
+    pub fn tombstones(&self) -> impl Iterator<Item = (&NodeId, &Tombstone)> {
+        self.latest_tombstone_by_id.iter()
+    }
+
     /// Number of live nodes in the reconstructed clean tree.
     pub fn live_count(&self) -> usize {
         self.live_by_id.len()

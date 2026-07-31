@@ -63,6 +63,9 @@ pub(crate) use store_resolvers::StoreBackedResolver;
 /// Authoritative lifecycle replay: lineage walker + dispatch skeleton (4.4-2c-2a).
 pub(crate) mod replay;
 
+/// Incremental baseline lifecycle-state cache, scoped to the commit path (DC-64).
+pub(crate) mod incremental;
+
 /// Authoritative replay-derived lifecycle state for a specific baseline (rung 3). It must be
 /// produced **only** by authoritative replay over the actual walked single-parent chain; the
 /// real producer is the threading slice. This type is the reference truth a cache is compared

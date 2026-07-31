@@ -139,8 +139,10 @@ impl From<LifecycleReplayError> for PrikkError {
 }
 
 /// Read a `Block` payload, distinguishing absence from unreadability so the walk can fail closed
-/// with the correct structured class.
-fn read_block(
+/// with the correct structured class. `pub(crate)`: DC-64's incremental baseline cache
+/// (`lifecycle_cache/incremental.rs`) reads a single candidate block directly, without walking the
+/// full lineage, to decide whether it is a single-parent child of a cached predecessor.
+pub(crate) fn read_block(
     reader: &impl ObjectReader,
     block_id: ObjectId,
 ) -> Result<BlockPayload, LifecycleReplayError> {
@@ -291,6 +293,35 @@ pub(crate) fn replay_lineage(
 ) -> Result<NodeLifecycleState, LifecycleReplayError> {
     let chain = walk_lineage(reader, baseline, horizon)?;
     replay_chain_with_appended_patches(reader, &chain, &[], false)
+}
+
+/// Apply exactly one already-read block's patches to an existing lifecycle state (DC-64
+/// incremental baseline reconstruction). Calls the *identical* `apply_patch_ids`/
+/// `apply_state_effect` functions full replay uses — a `TextCache` is created fresh, which is safe
+/// because it is a same-pass memoization only (`TextCache`'s doc comment): a miss always falls back
+/// to reading the node's actual current blob content, so an empty cache changes nothing about
+/// correctness. This is not a second implementation of the fold; it is the same fold's tail,
+/// executed in a separate process invocation from the rest of the lineage.
+pub(crate) fn apply_one_block(
+    reader: &impl ObjectReader,
+    block: &BlockPayload,
+    state: &mut NodeLifecycleState,
+    require_schema_one: bool,
+) -> Result<(), LifecycleReplayError> {
+    let blob_resolver = if require_schema_one {
+        StoreBackedResolver::new_format2(reader)
+    } else {
+        StoreBackedResolver::new(reader)
+    };
+    let mut text_cache = TextCache::new();
+    apply_patch_ids(
+        reader,
+        &block.patch_ids,
+        &blob_resolver,
+        state,
+        &mut text_cache,
+        require_schema_one,
+    )
 }
 
 pub(crate) fn replay_with_appended_patches(

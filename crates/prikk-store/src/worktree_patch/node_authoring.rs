@@ -30,7 +30,7 @@ use crate::author_signing::AuthorSigner;
 use crate::commit_index::{self, CommitIndex, CommitIndexEntry};
 use crate::fsutil::{RootFileStat, read_file_if_exists};
 use crate::layout::RepositoryLayout;
-use crate::lifecycle_cache::replay_derived_state;
+use crate::lifecycle_cache::incremental::resolve_baseline_state;
 use crate::lock::ActiveLock;
 use crate::node_id_gen::{NodeIdEntropySource, NodeIdGenerator};
 use crate::node_lifecycle::{LiveNode, NodeContent, NodeLifecycleState};
@@ -212,13 +212,16 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     let object_store = FileObjectStore::new(layout.clone());
 
     // Baseline node lifecycle state from authoritative replay only (E3), or an empty genesis
-    // baseline (4.4b) when the target ref has never been published.
+    // baseline (4.4b) when the target ref has never been published. DC-64: `resolve_baseline_state`
+    // applies an incremental step from a cached predecessor when eligible, falling back to an
+    // unmodified full replay otherwise — see
+    // `rfcs/handoffs/DC-64-baseline-reconstruction-cost/incremental-baseline-cache-design-v1.md`.
     let baseline = resolve_worktree_baseline(layout, ref_name)?;
     let baseline_state: NodeLifecycleState = match &baseline {
         WorktreeBaseline::Published {
             baseline_block,
             horizon,
-        } => replay_derived_state(&object_store, *baseline_block, *horizon)?
+        } => resolve_baseline_state(layout, &object_store, *baseline_block, *horizon)?
             .state()
             .clone(),
         WorktreeBaseline::Genesis => NodeLifecycleState::new(),

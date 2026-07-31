@@ -103,6 +103,16 @@ pub(crate) fn print_verify_report(
             divergence.path, divergence.recorded_hash, divergence.actual_hash
         );
     }
+    println!(
+        "lifecycle-cache divergences: {}",
+        report.lifecycle_cache_divergences.len()
+    );
+    for divergence in &report.lifecycle_cache_divergences {
+        println!(
+            "lifecycle-cache [divergence] block {}: {}",
+            divergence.baseline_block_id, divergence.detail
+        );
+    }
 }
 
 fn print_active_wal_metadata_status(status: &ActiveWalMetadataStatus) {

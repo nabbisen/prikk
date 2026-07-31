@@ -107,6 +107,17 @@ const AXIS_B_REPO_SIZE: usize = 1_000;
 const AXIS_B_CHANGE_COUNTS: [usize; 4] = [1, 10, 100, 1_000];
 const AXIS_B_SAMPLES: usize = 5;
 
+/// Axis C (DC-64): repository size varies, but each sample repository is carried through several
+/// consecutive commit+seal cycles instead of a single prepared commit. Axis A's single-commit
+/// methodology cannot show the incremental baseline cache's effect at all: the one commit it times
+/// is always the *second* commit against a fresh ref, which is unconditionally a cold-cache full
+/// replay (the incremental cache has nothing to be warm from yet). Only cycle 2 onward exercises the
+/// warm, incremental path. Fewer samples than Axis A per point — each sample now costs
+/// `CYCLE_COUNT` timed commits plus that many untimed seals, not one.
+const CYCLE_AXIS_SIZES: [usize; 4] = [10, 100, 1_000, 10_000];
+const CYCLE_AXIS_SAMPLES: [usize; 4] = [3, 3, 3, 2];
+const CYCLE_COUNT: usize = 5;
+
 const SPAWN_FLOOR_SAMPLES: usize = 10;
 
 /// Polling interval for the memory pass's `/proc/<pid>/status` reads. Deliberately fine-grained
@@ -295,15 +306,22 @@ fn setup_baseline_repository(root: &Path, file_count: usize, seed: u64) -> Vec<P
         .unwrap();
     ok(&out, "trust maintainer add");
 
+    seal_active_wal(root);
+
+    files
+}
+
+/// Seal the active WAL using the fixed maintainer key `setup_baseline_repository` already trusted.
+/// Shared by the untimed baseline seal and DC-64's consecutive commit+seal cycle axis, which seals
+/// after every timed commit (untimed, like the baseline seal) to make the next commit legal.
+fn seal_active_wal(root: &Path) {
     let out = prikk(root)
         .env("PRIKK_MAINTAINER_KEY_ID", FIXED_MAINTAINER_KEY_ID)
         .env("PRIKK_MAINTAINER_SEED", hex(&FIXED_MAINTAINER_SEED))
         .args(["seal", "--allow-no-audit"])
         .output()
         .unwrap();
-    ok(&out, "baseline seal");
-
-    files
+    ok(&out, "seal");
 }
 
 /// Mutate the content of the first `count` files in `files` (deterministically, via `rng`),
@@ -334,6 +352,53 @@ fn time_commit(root: &Path) -> Duration {
     let elapsed = start.elapsed();
     ok(&out, "measured commit");
     elapsed
+}
+
+/// Axis C (DC-64): for each repository size, run `CYCLE_COUNT` consecutive mutate+commit+seal
+/// cycles against the *same* sample repository, timing each commit separately. Returns, per
+/// repository size, one `Point` per cycle number (so `points[size_index][cycle_index].samples` holds
+/// that cycle's duration across all samples at that size) — the shape needed to show cycle 1 (cold)
+/// against cycles 2+ (warm, incremental) both within one size and across sizes.
+///
+/// Each cycle mutates a **different** file (`files[cycle_index]`, never `files[0]` repeatedly):
+/// editing the *same* text file twice across two separate commits currently fails
+/// (`baseline content Blob ... is missing` — a pre-existing defect this axis's development
+/// surfaced, reported independently and out of DC-64's scope; see the review-request package).
+/// Distinct target files per cycle avoids it while still measuring exactly what Axis A measures —
+/// one file changed per timed commit — repeated across a warming cache instead of a fresh repository
+/// each time.
+fn run_cycle_axis() -> Vec<(usize, Vec<Point>)> {
+    let mut by_size = Vec::new();
+    for (size, sample_count) in CYCLE_AXIS_SIZES.into_iter().zip(CYCLE_AXIS_SAMPLES) {
+        assert!(
+            size >= CYCLE_COUNT,
+            "repository size must be at least CYCLE_COUNT so each cycle can target a distinct file"
+        );
+        let mut cycles: Vec<Point> = (0..CYCLE_COUNT)
+            .map(|cycle| Point {
+                label: format!("cycle {}", cycle + 1),
+                samples: Vec::with_capacity(sample_count),
+            })
+            .collect();
+        for sample_index in 0..sample_count {
+            let root = unique_dir(&format!("axis-c-{size}-{sample_index}"));
+            let seed = CONTENT_SEED
+                .wrapping_add(0x4000_0000)
+                .wrapping_add(size as u64)
+                .wrapping_add(sample_index as u64);
+            let files = setup_baseline_repository(&root, size, seed);
+            let mut rng = SplitMix64::new(seed ^ 0xFFFF_FFFF_0000_0000);
+            for (cycle_index, cycle_point) in cycles.iter_mut().enumerate() {
+                mutate_files(&root, &files[cycle_index..], 1, &mut rng);
+                let elapsed = time_commit(&root);
+                cycle_point.samples.push(elapsed);
+                seal_active_wal(&root);
+            }
+            let _ = std::fs::remove_dir_all(&root);
+        }
+        by_size.push((size, cycles));
+    }
+    by_size
 }
 
 /// Outcome of one memory-measuring commit trial: the peak `VmHWM` observed (if any sample landed
@@ -641,10 +706,20 @@ fn commit_benchmark() {
         });
     }
 
+    // Axis C (DC-64): consecutive commit+seal cycles, separate from Axis A/B's single-commit
+    // methodology since it needs its own repeated-cycle repositories.
+    let cycle_axis = run_cycle_axis();
+
     // Separate pass, deliberately after Axis A/B and never interleaved with them — see module docs.
     let memory_axis = run_memory_axis();
 
-    let report = render_report(&spawn_floor_point, &axis_a, &axis_b, memory_axis.as_ref());
+    let report = render_report(
+        &spawn_floor_point,
+        &axis_a,
+        &axis_b,
+        &cycle_axis,
+        memory_axis.as_ref(),
+    );
     let report_path = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../rfcs/handoffs/DC-59-commit-benchmark-harness/benchmark-report-v1.md"
@@ -657,13 +732,14 @@ fn render_report(
     spawn_floor: &Point,
     axis_a: &[Point],
     axis_b: &[Point],
+    cycle_axis: &[(usize, Vec<Point>)],
     memory_axis: Option<&MemoryAxisResult>,
 ) -> String {
     let mut out = String::new();
     out.push_str("# DC-59 Commit Benchmark Report v1\n\n");
     out.push_str("Generated by `cargo test -p prikk --locked --test dc59_commit_benchmark -- --ignored --nocapture commit_benchmark`.\n");
     out.push_str("Re-running that exact command regenerates this file. The *numbers* are hardware-dependent; the **shape** of Axis A is the claim under test.\n\n");
-    out.push_str("DC-62 added the peak-memory section below as a third, separate pass; Axis A and Axis B above it are produced by DC-59's original, unmodified timing code and are unaffected by it (see that section for why it runs separately).\n\n");
+    out.push_str("DC-62 added the peak-memory section below as a third, separate pass; DC-64 added Axis C (consecutive commit+seal cycles). Axis A and Axis B above them are produced by DC-59's original, unmodified timing code and are unaffected by either addition.\n\n");
 
     out.push_str("## Scope\n\n");
     out.push_str("This report states what was measured. It does not conclude whether `prikk commit` complies with NFR-PERF-01 — that determination belongs to DC-56. The peak-memory section states what was measured; it does not conclude whether the footprint is acceptable — that determination also belongs to DC-56.\n\n");
@@ -734,6 +810,45 @@ fn render_report(
     }
     out.push('\n');
     out.push_str("This is the cost NFR-PERF-01 permits: patch construction and signing scale with the change set.\n\n");
+
+    out.push_str("## Axis C (DC-64) — cost across consecutive commit+seal cycles\n\n");
+    out.push_str("Axis A's single-commit methodology cannot show DC-64's incremental baseline cache at all: the one commit it times is always the *second* commit against a fresh ref, which is unconditionally a cold-cache full replay — the cache has nothing to be warm from yet. This axis instead carries each sample repository through several consecutive mutate+commit+seal cycles, timing every commit separately, so cycle 1 (cold) and cycles 2+ (warm, incremental) are both visible.\n\n");
+    for (size, cycles) in cycle_axis {
+        out.push_str(&format!("### {size} files\n\n"));
+        out.push_str("| Cycle | Samples | Median (ms) | Min (ms) | Max (ms) |\n");
+        out.push_str("|---:|---:|---:|---:|---:|\n");
+        for point in cycles {
+            out.push_str(&format!(
+                "| {} | {} | {} | {} | {} |\n",
+                point.label,
+                point.samples.len(),
+                fmt_ms(point.median()),
+                fmt_ms(point.min()),
+                fmt_ms(point.max()),
+            ));
+        }
+        out.push('\n');
+    }
+    out.push_str("**Summary — cycle 1 (cold) vs cycles 2+ (warm), median of medians:**\n\n");
+    out.push_str("| Repository size | Cycle 1 (ms) | Cycles 2+ median (ms) |\n");
+    out.push_str("|---:|---:|---:|\n");
+    for (size, cycles) in cycle_axis {
+        let cycle_one = cycles
+            .first()
+            .map_or(0.0, |point| point.median().as_secs_f64() * 1000.0);
+        let mut warm: Vec<f64> = cycles
+            .iter()
+            .skip(1)
+            .map(|point| point.median().as_secs_f64() * 1000.0)
+            .collect();
+        warm.sort_by(f64::total_cmp);
+        let warm_median = warm.get(warm.len() / 2).copied().unwrap_or(0.0);
+        out.push_str(&format!(
+            "| {size} files | {cycle_one:.2} | {warm_median:.2} |\n"
+        ));
+    }
+    out.push('\n');
+    out.push_str("**If cycles 2+ stop tracking repository size while cycle 1 still does, the incremental cache is doing its job.** If cycles 2+ still grow with repository size at a rate comparable to cycle 1, the incremental path is either not engaging (falling back to full replay every cycle) or not helping.\n\n");
 
     out.push_str("## Peak memory (DC-62) — repository size, 1 file changed, separate pass\n\n");
     out.push_str("Same repository sizes and change count as Axis A, but timed and measured by a **separate pass**: each trial `.spawn()`s the commit (rather than `.output()`, as Axis A/B use) and polls `/proc/<pid>/status` for `VmHWM` — the kernel's own peak-RSS high-water mark — ");

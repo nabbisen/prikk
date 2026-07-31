@@ -16,6 +16,9 @@ use prikk_object::{BlockPayload, ObjectId, ObjectType};
 use crate::active::{ActiveRefMetadata, read_active_ref_metadata};
 use crate::commit_index::{CommitIndexDivergence, verify_divergence};
 use crate::layout::{RepositoryFormat, RepositoryLayout};
+use crate::lifecycle_cache::incremental::{
+    LifecycleCacheDivergence, verify_divergence as verify_lifecycle_cache_divergence,
+};
 use crate::object_store::FileObjectStore;
 use crate::refs::verify_refs;
 use crate::rollback_verify::{verify_rollback_draft_wal_records, verify_rollback_patch_envelope};
@@ -82,6 +85,10 @@ pub struct RepositoryVerification {
     /// current content despite a matching stat — a stale-but-trusted cache entry, reported per the
     /// cache-validity specification §6 rather than silently trusted by a future commit.
     pub commit_index_divergences: Vec<CommitIndexDivergence>,
+    /// DC-64 incremental lifecycle-state cache entries whose contents disagree with an independent
+    /// full replay of the block they claim to represent — reported per the design document §6
+    /// rather than silently trusted by a future commit.
+    pub lifecycle_cache_divergences: Vec<LifecycleCacheDivergence>,
 }
 
 impl RepositoryVerification {
@@ -127,6 +134,12 @@ impl RepositoryVerification {
     #[must_use]
     pub fn has_commit_index_divergence(&self) -> bool {
         !self.commit_index_divergences.is_empty()
+    }
+
+    /// Return true when the incremental lifecycle-state cache disagrees with an independent replay.
+    #[must_use]
+    pub fn has_lifecycle_cache_divergence(&self) -> bool {
+        !self.lifecycle_cache_divergences.is_empty()
     }
 }
 
@@ -216,6 +229,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
         &mut ref_publication_issues,
     )?;
     let commit_index_divergences = verify_divergence(layout)?;
+    let lifecycle_cache_divergences = verify_lifecycle_cache_divergence(&object_store, layout);
     Ok(RepositoryVerification {
         legacy_state_roots_unverifiable: layout.format() == RepositoryFormat::LegacyV1,
         checked_objects: object_summary.object_count,
@@ -235,6 +249,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
         trailing_partial_wal_bytes: replay.trailing_partial_bytes,
         active_wal_metadata_status,
         commit_index_divergences,
+        lifecycle_cache_divergences,
     })
 }
 
