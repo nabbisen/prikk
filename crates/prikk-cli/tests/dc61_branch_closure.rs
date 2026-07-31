@@ -20,7 +20,7 @@ use prikk_object::{
 };
 use prikk_store::{
     Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, RefPublication, RefStore,
-    RepositoryLayout, maintainer_signature,
+    RepositoryLayout, maintainer_signature, remove_active_ref_metadata,
 };
 
 fn prikk(repo: &Path) -> Command {
@@ -349,6 +349,39 @@ fn branch_close_fails_closed_on_non_empty_active_wal() {
     ok(
         &out,
         "branch close of the non-owning branch should still succeed",
+    );
+
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+/// N1 (`prikk-dc61-implementation-review-v1.md`): a non-empty active WAL whose ownership metadata is
+/// missing must refuse to close, not proceed. The pre-repair code tested `.is_ok()` on
+/// `require_active_ref_for_non_empty_wal`, which collapsed "owned by a different ref" (proceed,
+/// correct) and "ownership unknown due to an integrity error" (proceed, wrong) into the same
+/// `Err` branch. `node_authoring.rs`'s commit path propagates this same error via `?`; `branch close`
+/// must fail closed identically rather than treat unknown ownership as evidence it is uninvolved.
+#[test]
+fn branch_close_fails_closed_on_missing_active_ref_metadata() {
+    let (repo, layout) = seeded_repo("close-missing-active-ref-metadata");
+    std::fs::write(repo.join("readme.txt"), b"unsealed change\n").unwrap();
+    ok(
+        &commit(&repo, "heads/main", "unsealed change"),
+        "commit onto heads/main, unsealed",
+    );
+
+    // Simulate an integrity condition: a non-empty active WAL whose ownership metadata is absent.
+    let removed = remove_active_ref_metadata(&layout);
+    assert!(removed.is_ok());
+
+    let out = branch_close(&repo, "heads/main");
+    fail(
+        &out,
+        "branch close must not proceed when active-ref ownership is unknown",
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("active ref metadata is missing"),
+        "unexpected stderr: {stderr}"
     );
 
     let _ = std::fs::remove_dir_all(&repo);

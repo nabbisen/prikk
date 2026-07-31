@@ -786,6 +786,7 @@ dependencies = [
 name = "prikk"
 version = "0.17.7"
 dependencies = [
+ "prikk-error",
  "prikk-hash",
  "prikk-object",
  "prikk-store",

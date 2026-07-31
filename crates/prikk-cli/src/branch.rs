@@ -31,6 +31,7 @@
 
 use std::path::PathBuf;
 
+use prikk_error::PrikkError;
 use prikk_object::{
     CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, RefKind, RefStatePayload,
     RefUpdatePayload,
@@ -246,12 +247,22 @@ fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
     let replay = Wal::for_layout(&layout)
         .replay()
         .map_err(|err| err.to_string())?;
-    if !replay.records.is_empty()
-        && require_active_ref_for_non_empty_wal(&layout, &canonical).is_ok()
-    {
-        return Err(format!(
-            "cannot close {canonical}: it owns a non-empty active WAL; seal it before closing"
-        ));
+    if !replay.records.is_empty() {
+        match require_active_ref_for_non_empty_wal(&layout, &canonical) {
+            Ok(_) => {
+                return Err(format!(
+                    "cannot close {canonical}: it owns a non-empty active WAL; seal it before closing"
+                ));
+            }
+            // Owned by a different ref: this branch's own active WAL is not implicated, so closing
+            // it may proceed.
+            Err(PrikkError::LockConflict(_)) => {}
+            // Missing or malformed active-ref metadata on a non-empty WAL is an integrity condition,
+            // not evidence this branch is uninvolved — fail closed like every other publisher
+            // (`node_authoring.rs` propagates the same error via `?`) rather than treat "unknown
+            // owner" as "not this branch."
+            Err(err) => return Err(err.to_string()),
+        }
     }
 
     let next_seq = current_payload
