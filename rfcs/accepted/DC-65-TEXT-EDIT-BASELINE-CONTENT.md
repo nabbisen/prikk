@@ -1,8 +1,9 @@
-# RFC (proposed) - DC-65 Text-Edit Baseline Content Availability
+# RFC (accepted) - DC-65 Text-Edit Baseline Content Availability
 
-**Status.** **Proposed 2026-07-31.** Opened on a confirmed, reproduced, severe correctness defect.
-**Awaits owner acceptance.** Recommended as the **top of the development lane**, ahead of all performance
-work.
+**Status.** **Accepted by the project owner on 2026-07-31**, on a confirmed, reproduced, severe correctness
+defect. **Placed at the top of the development lane**, ahead of all remaining performance work.
+**Implementation may begin**; handoff at
+`handoffs/DC-65-text-edit-baseline-content/implementation-handoff-v1.md`.
 **Authored by** the architect.
 **Found by** the DC-64 implementation, incidentally, while building DC-59's Axis C. Reported rather than
 fixed in place — correctly.
