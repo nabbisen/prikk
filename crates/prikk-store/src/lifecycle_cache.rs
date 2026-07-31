@@ -116,5 +116,25 @@ pub(crate) fn replay_derived_state(
     ReplayDerivedLifecycleState::from_replay(baseline_block_id, state)
 }
 
+/// Materialize a `TextFile` node's current bytes by full replay (DC-65). A `TextFile` node's
+/// `blob_id` after any `EditText` is a content identity, not necessarily a stored `Blob` object —
+/// see `rfcs/handoffs/DC-65-text-edit-baseline-content/prerequisite-questions-v1.md` for the
+/// invariant this implements. Returns `Ok(None)` if the node was never edited (nothing was
+/// materialized for it — callers should already have a real stored blob to fall back to in that
+/// case, since only `EditText` produces an unstored identity).
+pub(crate) fn materialize_edited_text(
+    reader: &impl ObjectReader,
+    baseline_block_id: ObjectId,
+    lineage_horizon_id: ObjectId,
+    node_id: prikk_object::NodeId,
+) -> Result<Option<Vec<u8>>> {
+    let (_state, text_cache) = replay::replay_lineage_with_materialized_text(
+        reader,
+        baseline_block_id,
+        lineage_horizon_id,
+    )?;
+    Ok(text_cache.get(&node_id).cloned())
+}
+
 #[cfg(test)]
 mod tests;

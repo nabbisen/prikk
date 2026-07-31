@@ -109,11 +109,19 @@ pub(crate) fn resolve_baseline_state(
     Ok(result)
 }
 
-/// Attempt the incremental step. `Ok(None)` means "not eligible" — one of the four listed fallback
-/// triggers (parent mismatch, multi-parent, or the new block could not be read, which the full-replay
-/// path will re-derive with its own proper error class). A genuine application failure once the step
-/// is attempted propagates as `Err`, deliberately not folded into the fallback path — see the design
-/// document §3.
+/// Attempt the incremental step. `Ok(None)` means "not eligible" — parent mismatch, multi-parent, the
+/// new block could not be read (the full-replay path re-derives it with its own proper error class),
+/// or — DC-65 — the block's operations need a `TextFile` node's materialized content that this
+/// step's fresh, single-block text cache cannot supply. That last case is not a cache-trust failure:
+/// applying one block's operations against a cached predecessor uses the identical
+/// `apply_state_effect` fold full replay uses, but a fold that spans only one block cannot
+/// materialize a node whose current content is itself an *earlier*, already-cached-away block's
+/// `EditText` result — full replay's `TextCache` accumulates across the whole lineage and never has
+/// this gap. Structurally falling back to full replay for this one commit is the correct, general
+/// fix (rather than a narrower per-node fallback), consistent with the DC-65 invariant that any
+/// consumer needing a `TextFile` node's actual bytes must be able to materialize them, never assume
+/// a stored object. See the design document §9a. A genuine application failure of any other class
+/// propagates as `Err`, still not folded into the fallback path — see §3.
 fn try_incremental_step(
     reader: &impl ObjectReader,
     cached: &IncrementalCache,
@@ -126,8 +134,11 @@ fn try_incremental_step(
         return Ok(None);
     }
     let mut state = cached.state.clone();
-    replay::apply_one_block(reader, &block, &mut state, false)?;
-    Ok(Some(state))
+    match replay::apply_one_block(reader, &block, &mut state, false) {
+        Ok(()) => Ok(Some(state)),
+        Err(replay::LifecycleReplayError::MissingBlobForLifecycleEffect { .. }) => Ok(None),
+        Err(other) => Err(other.into()),
+    }
 }
 
 /// Persist the refreshed cache. Best-effort: a save failure does not fail the commit that just

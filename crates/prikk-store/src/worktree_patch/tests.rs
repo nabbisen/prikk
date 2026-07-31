@@ -9,7 +9,7 @@
 use prikk_object::{
     BlobKind, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile, MerkleRoot,
     NodeId, ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind, PatchPayload,
-    PatchPurpose, SignatureAlgorithm, SignerRole,
+    PatchPurpose, RefStatePayload, SignatureAlgorithm, SignerRole,
 };
 
 use crate::node_id_gen::{NodeIdGenerator, SequenceEntropySource};
@@ -19,9 +19,9 @@ use crate::test_support::{
 };
 use crate::worktree_patch::commit_worktree_changes_with_generator;
 use crate::{
-    ActiveRefMetadata, Ed25519AuthorSigner, FileObjectStore, ObjectWriter, RefPublication,
-    RefStore, RepoPath, RepositoryLayout, Wal, WorktreePatchCommitOptions,
-    WorktreePatchOperationKind, read_active_ref_metadata,
+    ActiveLock, ActiveRefMetadata, Ed25519AuthorSigner, FileObjectStore, ObjectWriter,
+    RefPublication, RefStore, RepoPath, RepositoryLayout, Wal, WorktreePatchCommitOptions,
+    WorktreePatchOperationKind, finish_active_publication_cleanup, read_active_ref_metadata,
 };
 
 /// Deterministic Ed25519 AUTHOR signer for reproducible authoring (real signing, fixed seed).
@@ -104,6 +104,69 @@ fn publish_node_baseline(layout: &RepositoryLayout, files: &[(&str, &[u8], BlobK
             ref_update,
         })
         .unwrap();
+    block_id
+}
+
+/// Seal the active WAL's single patch record into a new block and publish the ref forward — the
+/// store-level equivalent of `prikk seal --allow-no-audit`, for tests (DC-65) that need several real
+/// sealed generations in sequence without driving the CLI binary. Returns the new block id.
+fn seal_active_patch(layout: &RepositoryLayout, ref_name: &str) -> ObjectId {
+    let wal = Wal::for_layout(layout);
+    let replay = wal.replay().unwrap();
+    assert_eq!(replay.records.len(), 1, "expected exactly one active patch");
+    let patch_envelope = replay.records[0].envelope.clone();
+    let patch_id = patch_envelope.object_id();
+
+    let mut object_store = FileObjectStore::new(layout.clone());
+    object_store.write_object(&patch_envelope).unwrap();
+
+    let ref_store = RefStore::new(layout.clone());
+    let current_ref_state_id = ref_store
+        .read_current_ref_state_id(ref_name)
+        .unwrap()
+        .unwrap();
+    let current_envelope = object_store
+        .read_typed(current_ref_state_id, ObjectType::RefState)
+        .unwrap()
+        .unwrap();
+    let current_payload = RefStatePayload::decode_canonical(
+        &current_envelope.canonical_payload,
+        current_envelope.schema_version,
+    )
+    .unwrap();
+    let parent_block_id = current_payload.target_object_id;
+
+    let block = signed_block(
+        BlockKind::Normal,
+        vec![parent_block_id],
+        vec![patch_id],
+        None,
+    );
+    let block_id = block.object_id();
+    object_store.write_object(&block).unwrap();
+
+    let next_seq = current_payload.update_seq + 1;
+    let ref_state =
+        signed_ref_state_envelope(ref_name, Some(current_ref_state_id), block_id, next_seq);
+    let ref_state_id = ref_state.object_id();
+    let ref_update = signed_ref_update_envelope(
+        ref_name,
+        Some(current_ref_state_id),
+        ref_state_id,
+        block_id,
+        next_seq,
+    );
+    ref_store
+        .publish(&RefPublication {
+            ref_name: ref_name.to_string(),
+            expected_previous_ref_state_id: Some(current_ref_state_id),
+            ref_state,
+            ref_update,
+        })
+        .unwrap();
+
+    let active_lock = ActiveLock::acquire(layout).unwrap();
+    finish_active_publication_cleanup(layout, &active_lock).unwrap();
     block_id
 }
 
@@ -209,6 +272,126 @@ fn text_baseline_modified_file_authors_edit_text() {
         report.changes[0].operation,
         WorktreePatchOperationKind::EditText
     );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// DC-65: editing the same text file across N >= 3 separate sealed commits must succeed. Two was the
+/// boundary that was missed (a node's `blob_id` after its *first* `EditText` is a content identity,
+/// not a stored object — `plan_edit_text` assumed otherwise; `EditText`'s wire shape is a diff, and
+/// nothing writes the derived text as a `Blob`). Four consecutive edits here, each sealed before the
+/// next, exercises the boundary with margin, and also crosses DC-64's incremental-cache reanchor
+/// (the second and later commits are eligible for `resolve_baseline_state`'s incremental path, so
+/// this also proves the fix holds under both full-replay and incremental baseline resolution).
+#[test]
+fn text_file_edited_across_four_sealed_commits_succeeds() {
+    let root = unique_temp_dir("wt-four-sealed-edits");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    publish_node_baseline(&layout, &[("notes.txt", b"version 0", BlobKind::Text)]);
+
+    let mut generator = deterministic_generator();
+    let contents = ["version 1", "version 2", "version 3", "version 4"];
+    for content in contents {
+        std::fs::write(root.join("notes.txt"), content).unwrap();
+        let report = commit_worktree_changes_with_generator(
+            &layout,
+            "heads/main",
+            "edit notes",
+            WorktreePatchCommitOptions::prefer_text_edits(),
+            &mut generator,
+            &test_signer(),
+        )
+        .unwrap_or_else(|err| panic!("commit for {content:?} failed: {err}"));
+        assert_eq!(
+            report.text_edit_count, 1,
+            "expected an EditText for {content:?}"
+        );
+        assert_eq!(
+            report.changes[0].operation,
+            WorktreePatchOperationKind::EditText
+        );
+        seal_active_patch(&layout, "heads/main");
+    }
+
+    // Ground truth: an independent full replay from genesis must reconstruct the final text
+    // exactly, proving the chain of diffs — not just each individual commit — is consistent.
+    let object_store = FileObjectStore::new(layout.clone());
+    let ref_store = RefStore::new(layout.clone());
+    let final_ref_state_id = ref_store
+        .read_current_ref_state_id("heads/main")
+        .unwrap()
+        .unwrap();
+    let final_envelope = object_store
+        .read_typed(final_ref_state_id, ObjectType::RefState)
+        .unwrap()
+        .unwrap();
+    let final_payload = RefStatePayload::decode_canonical(
+        &final_envelope.canonical_payload,
+        final_envelope.schema_version,
+    )
+    .unwrap();
+    let plan = crate::patch_replay::prepare_patch_replay_plan(&layout, "heads/main").unwrap();
+    assert_eq!(plan.target_block_id, final_payload.target_object_id);
+    assert_eq!(plan.file_count, 1);
+    assert_eq!(plan.total_content_bytes, "version 4".len() as u64);
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// DC-65 criterion 4: the `ReplaceBinary` equivalent, confirming binary files were never affected —
+/// every `ReplaceBinary` writes its new content as a real stored `Blob` (`plan_replace_binary` always
+/// calls `write_content_blob`), so a node's `blob_id` after any number of binary edits always names a
+/// stored object.
+#[test]
+fn binary_file_replaced_across_four_sealed_commits_succeeds() {
+    let root = unique_temp_dir("wt-four-sealed-binary-edits");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    publish_node_baseline(&layout, &[("data.bin", &[0x00], BlobKind::Binary)]);
+
+    let mut generator = deterministic_generator();
+    let contents: [&[u8]; 4] = [&[0x01], &[0x02], &[0x03], &[0x04]];
+    for content in contents {
+        std::fs::write(root.join("data.bin"), content).unwrap();
+        let report = commit_worktree_changes_with_generator(
+            &layout,
+            "heads/main",
+            "replace binary",
+            WorktreePatchCommitOptions::file_level(),
+            &mut generator,
+            &test_signer(),
+        )
+        .unwrap_or_else(|err| panic!("commit for {content:?} failed: {err}"));
+        assert_eq!(
+            report.changes[0].operation,
+            WorktreePatchOperationKind::ReplaceBinary
+        );
+        seal_active_patch(&layout, "heads/main");
+    }
+
+    // `patch_replay::prepare_patch_replay_plan` (checkout) does not yet support `ReplaceBinary`
+    // replay at all — a pre-existing, documented scope limit (`patch_replay.rs`'s module doc:
+    // "EditText and ReplaceBinary ... application is deferred to the node model"), unrelated to
+    // DC-65. The commit-side authoring loop above, which four consecutive successful
+    // `ReplaceBinary` commits already exercised, is what this test verifies.
+    let object_store = FileObjectStore::new(layout.clone());
+    let ref_store = RefStore::new(layout.clone());
+    let final_ref_state_id = ref_store
+        .read_current_ref_state_id("heads/main")
+        .unwrap()
+        .unwrap();
+    let final_envelope = object_store
+        .read_typed(final_ref_state_id, ObjectType::RefState)
+        .unwrap()
+        .unwrap();
+    let final_payload = RefStatePayload::decode_canonical(
+        &final_envelope.canonical_payload,
+        final_envelope.schema_version,
+    )
+    .unwrap();
+    assert_eq!(
+        final_payload.update_seq, 5,
+        "genesis plus four sealed edits"
+    );
+
     let _ = std::fs::remove_dir_all(root);
 }
 

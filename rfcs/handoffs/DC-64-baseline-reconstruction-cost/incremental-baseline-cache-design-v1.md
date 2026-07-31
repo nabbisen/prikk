@@ -72,11 +72,15 @@ On each commit against a `Published` baseline, given target `baseline_block_id` 
      parent**, and that parent **equals** the cache's `baseline_block_id`.
 3. If eligible: apply **only that one block's** patch operations to a clone of the cached state,
    through `replay::apply_one_block` — which calls the *exact same* `apply_patch_ids`/
-   `apply_state_effect` functions full replay uses, with a fresh, empty `TextCache`. `TextCache` is
-   documented as a performance memoization only (`replay.rs:31-33`): on a miss it always falls back
-   to reading the node's actual current blob content, so an empty cache changes nothing about
-   correctness, only how many redundant blob reads a single step might do if it edits the same node
-   twice (which authoring never produces — one op per node per patch).
+   `apply_state_effect` functions full replay uses, with a fresh, empty `TextCache`.
+
+   **Erratum, found by DC-65.** This document originally claimed a fresh `TextCache` "changes
+   nothing about correctness, only how many redundant blob reads a single step might do," on the
+   premise that a miss always falls back to reading the node's real stored blob. **That premise was
+   wrong.** DC-65 established that a `TextFile` node's `blob_id` after any `EditText` is a content
+   identity, not necessarily a stored object — so a single-block step's fresh cache *can* miss on a
+   node whose current content is itself an earlier, already-cached-away block's unstored `EditText`
+   result, and the blob-content fallback then fails for real. §3a below is the fix.
 4. The result is wrapped through `ReplayDerivedLifecycleState::from_replay` — **unchanged, not
    bypassed** (binding condition 3) — which runs `validate_internal_consistency` before the state may
    be used. This is exactly the same validation a full replay's result receives; incremental
@@ -91,12 +95,33 @@ entry of its own walked chain, so falling through produces the identical, proper
 not a masked or narrowed condition, just the one path that already handles it correctly.
 
 **If eligibility succeeds but application itself fails** (`apply_one_block` or `from_replay` returns
-an error): this propagates as a genuine error, it is **not** silently retried via full replay. Binding
-condition 4's fallback list is exhaustive — cache absent, corrupt, wrong horizon, parent mismatch,
-multi-parent, reanchor bound reached — and "the attempted step itself failed" is deliberately not on
-it. A full replay of the same lineage would encounter the identical malformed data and fail the same
-way; masking that by silently falling back would hide a real problem behind a slower success instead
-of surfacing it.
+an error): this propagates as a genuine error — **with one exception, added by DC-65 (§3a)** — it is
+otherwise not silently retried via full replay.
+
+**Erratum, found by DC-65.** This document originally claimed "a full replay of the same lineage
+would encounter the identical malformed data and fail the same way," as the reason no application
+failure needed a fallback path. **That claim was false for exactly the `TextCache` gap above**: a
+full replay's `TextCache` accumulates across the *entire* lineage from the true start, so it never
+has the single-block gap an incremental step's fresh cache does. Full replay of the identical lineage
+succeeds where the incremental step fails — they are not equivalent for this case. §3a corrects this.
+
+### 3a. Fifth fallback trigger (DC-65): a `MissingBlobForLifecycleEffect` during application
+
+If `apply_one_block` fails specifically with `LifecycleReplayError::MissingBlobForLifecycleEffect`,
+`try_incremental_step` returns `Ok(None)` — eligibility is retroactively withdrawn for this commit,
+and `resolve_baseline_state` falls through to the unmodified full-replay path, exactly as if one of
+the four original checks had failed up front. This is not a narrowing of binding condition 4's
+"fallback stays total" list in the sense the ruling meant to close off (it does not weaken *when the
+cache is trusted*); it is a correctness fix for the *application step itself*, discovered because
+DC-65 made a class of patch (a text file's second-or-later edit) sealable for the first time. Any
+`LifecycleReplayError` variant *other than* `MissingBlobForLifecycleEffect` from `apply_one_block`
+still propagates as a hard error, unchanged from the original design — this trigger is scoped to
+exactly the one failure class full replay is structurally guaranteed not to share.
+
+**Why this cannot mask real corruption.** If the missing blob reflects genuine repository corruption
+(not the `TextCache` gap), the full-replay fallback reads the identical missing blob and fails with
+the same error, now surfaced normally through `resolve_baseline_state`'s bottom path. The fallback
+costs one wasted replay attempt in that case; it never suppresses the failure.
 
 ## 4. Why incremental application does not weaken the trust bar (the ruling's §3 correction)
 

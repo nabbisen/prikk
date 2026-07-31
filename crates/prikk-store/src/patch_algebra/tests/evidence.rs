@@ -45,16 +45,26 @@ fn missing_sealed_baseline_text_blob_is_evidence_error() {
     let left = change_perm(1, node(1), MODE_REGULAR, MODE_EXECUTABLE);
     let right = edit_text(2, node(1), b"alpha beta", b"alpha BETA");
 
-    assert_evidence_error(
-        classify_pair_with_text_resolver_result(
-            evidence.baseline_state(),
-            &evidence,
-            &left,
-            &right,
-        ),
-        EvidenceScope::SealedBaselineRequired,
-        EvidenceFact::BaselineText,
-    );
+    // DC-65: a missing baseline text blob is no longer terminal by itself — `baseline_text` falls
+    // back to replay-based materialization first (a `TextFile` node's `blob_id` after an `EditText`
+    // is a content identity, not necessarily a stored object). This fixture's baseline/horizon ids
+    // (`blob(0xb0)`/`blob(0xa0)`) are synthetic markers with no real `Block` behind them, so the
+    // fallback's lineage walk itself fails — correctly reported as `Unreadable` (the replay context
+    // is unavailable), a more precise class than the old blanket `Missing` now that the two causes
+    // are actually distinguished.
+    match classify_pair_with_text_resolver_result(
+        evidence.baseline_state(),
+        &evidence,
+        &left,
+        &right,
+    ) {
+        Err(EvidenceError::Unreadable {
+            scope: EvidenceScope::SealedBaselineRequired,
+            fact: EvidenceFact::BaselineText,
+            ..
+        }) => {}
+        other => panic!("expected unreadable baseline-text evidence error, got {other:?}"),
+    }
 }
 
 #[test]

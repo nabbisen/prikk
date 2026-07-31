@@ -30,7 +30,7 @@ use crate::text_span::{self, TextSpanResolutionFailure};
 
 /// Replay-local materialized text for edited text nodes, keyed by `node_id`. Transient to a replay
 /// pass; never part of the persisted lifecycle index (which stores only `blob_id` + `mode`).
-type TextCache = BTreeMap<NodeId, Vec<u8>>;
+pub(crate) type TextCache = BTreeMap<NodeId, Vec<u8>>;
 
 /// Structured lifecycle-replay error taxonomy (carry-forward P2-3).
 ///
@@ -292,6 +292,21 @@ pub(crate) fn replay_lineage(
     horizon: ObjectId,
 ) -> Result<NodeLifecycleState, LifecycleReplayError> {
     let chain = walk_lineage(reader, baseline, horizon)?;
+    let (state, _text_cache) = replay_chain_with_appended_patches(reader, &chain, &[], false)?;
+    Ok(state)
+}
+
+/// Full replay of the lineage, additionally returning the materialized-text cache accumulated along
+/// the way (DC-65). A `TextFile` node's `blob_id` after any `EditText` is a content identity, not
+/// necessarily a stored object (see the DC-65 invariant document); a caller that needs the node's
+/// actual current bytes materializes them here, from the diff chain, exactly as this replay pass
+/// already does internally to apply later `EditText` operations against the same node.
+pub(crate) fn replay_lineage_with_materialized_text(
+    reader: &impl ObjectReader,
+    baseline: ObjectId,
+    horizon: ObjectId,
+) -> Result<(NodeLifecycleState, TextCache), LifecycleReplayError> {
+    let chain = walk_lineage(reader, baseline, horizon)?;
     replay_chain_with_appended_patches(reader, &chain, &[], false)
 }
 
@@ -333,7 +348,8 @@ pub(crate) fn replay_with_appended_patches(
         Some(parent) => walk_lineage_to_genesis(reader, parent)?,
         None => Vec::new(),
     };
-    replay_chain_with_appended_patches(reader, &chain, patch_ids, true)
+    let (state, _text_cache) = replay_chain_with_appended_patches(reader, &chain, patch_ids, true)?;
+    Ok(state)
 }
 
 fn replay_chain_with_appended_patches(
@@ -341,7 +357,7 @@ fn replay_chain_with_appended_patches(
     chain: &[WalkedBlock],
     appended_patch_ids: &[ObjectId],
     require_schema_one: bool,
-) -> Result<NodeLifecycleState, LifecycleReplayError> {
+) -> Result<(NodeLifecycleState, TextCache), LifecycleReplayError> {
     let blob_resolver = if require_schema_one {
         StoreBackedResolver::new_format2(reader)
     } else {
@@ -367,7 +383,7 @@ fn replay_chain_with_appended_patches(
         &mut text_cache,
         require_schema_one,
     )?;
-    Ok(state)
+    Ok((state, text_cache))
 }
 
 fn apply_patch_ids<R: BlobKindResolver + BlobContentResolver>(

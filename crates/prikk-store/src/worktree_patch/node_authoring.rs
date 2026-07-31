@@ -217,6 +217,17 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     // unmodified full replay otherwise — see
     // `rfcs/handoffs/DC-64-baseline-reconstruction-cost/incremental-baseline-cache-design-v1.md`.
     let baseline = resolve_worktree_baseline(layout, ref_name)?;
+    // DC-65: `plan_edit_text` needs these to materialize a text node's current bytes when its
+    // baseline `blob_id` is a content identity rather than a stored object (any node whose most
+    // recent operation was an `EditText`). Only ever consulted when `baseline_files` is non-empty,
+    // which implies `Published` — see `plan_edit_text`'s own fail-closed check on the `None` case.
+    let (lineage_baseline_block_id, lineage_horizon_id) = match &baseline {
+        WorktreeBaseline::Published {
+            baseline_block,
+            horizon,
+        } => (Some(*baseline_block), Some(*horizon)),
+        WorktreeBaseline::Genesis => (None, None),
+    };
     let baseline_state: NodeLifecycleState = match &baseline {
         WorktreeBaseline::Published {
             baseline_block,
@@ -306,7 +317,14 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
                             Some(bytes) => bytes,
                             None => read_existing_file_bytes(layout, path, BlobKind::Text)?,
                         };
-                        planned.push(plan_edit_text(&object_store, base, &bytes, path)?);
+                        planned.push(plan_edit_text(
+                            &object_store,
+                            base,
+                            &bytes,
+                            path,
+                            lineage_baseline_block_id,
+                            lineage_horizon_id,
+                        )?);
                     }
                 }
                 NodeKind::BinaryFile => {
@@ -533,8 +551,16 @@ fn plan_edit_text(
     base: &BaselineFile,
     new_bytes: &[u8],
     path: &str,
+    lineage_baseline_block_id: Option<ObjectId>,
+    lineage_horizon_id: Option<ObjectId>,
 ) -> std::result::Result<PlannedOp, AuthorError> {
-    let old_text = read_file_blob_bytes(object_store, base.blob_id)?;
+    let old_text = current_text_for_node(
+        object_store,
+        base,
+        path,
+        lineage_baseline_block_id,
+        lineage_horizon_id,
+    )?;
     let span = text_span::plan_authored_text_span(&old_text, new_bytes, base.node_id)
         .map_err(|err| AuthorError::Store(PrikkError::Integrity(format!("EditText: {err}"))))?
         .ok_or_else(|| {
@@ -710,18 +736,62 @@ fn write_content_blob(
     store.write_object(&envelope).map_err(AuthorError::Store)
 }
 
-fn read_file_blob_bytes(
+/// Read a text node's baseline content from a directly-stored `Blob`, when one exists. `Ok(None)`
+/// means no such object is stored — expected whenever the node's most recent operation was an
+/// `EditText` (DC-65: its `blob_id` is a content identity, never a stored object), not an error by
+/// itself; the caller falls back to replay-based materialization.
+fn read_file_blob_bytes_if_present(
     object_store: &FileObjectStore,
     blob_id: ObjectId,
-) -> std::result::Result<Vec<u8>, AuthorError> {
-    let envelope = object_store
+) -> std::result::Result<Option<Vec<u8>>, AuthorError> {
+    let Some(envelope) = object_store
         .read_object(blob_id)
         .map_err(AuthorError::Store)?
-        .ok_or_else(|| {
-            AuthorError::Store(PrikkError::Integrity(format!(
-                "baseline content Blob {blob_id} is missing"
-            )))
-        })?;
+    else {
+        return Ok(None);
+    };
     crate::blob_access::decode_file_content_blob(&envelope.canonical_payload)
         .map_err(AuthorError::Store)
+        .map(Some)
+}
+
+/// Materialize a `TextFile` node's current baseline bytes (DC-65). Tries the stored blob first —
+/// correct and cheap for a node that has never been edited, since `CreateFile` always writes a real
+/// `Blob`. Falling through to replay-based materialization is expected, not exceptional, for any
+/// node whose most recent operation was an `EditText`; see the invariant document at
+/// `rfcs/handoffs/DC-65-text-edit-baseline-content/prerequisite-questions-v1.md`.
+fn current_text_for_node(
+    object_store: &FileObjectStore,
+    base: &BaselineFile,
+    path: &str,
+    lineage_baseline_block_id: Option<ObjectId>,
+    lineage_horizon_id: Option<ObjectId>,
+) -> std::result::Result<Vec<u8>, AuthorError> {
+    if let Some(bytes) = read_file_blob_bytes_if_present(object_store, base.blob_id)? {
+        return Ok(bytes);
+    }
+    let (baseline_block_id, horizon_id) = match (lineage_baseline_block_id, lineage_horizon_id) {
+        (Some(baseline_block_id), Some(horizon_id)) => (baseline_block_id, horizon_id),
+        _ => {
+            return Err(AuthorError::Store(PrikkError::Integrity(format!(
+                "{path}: text node baseline blob {} is missing and no lineage is available to \
+                 materialize it (an existing node implies a published baseline)",
+                base.blob_id
+            ))));
+        }
+    };
+    crate::lifecycle_cache::materialize_edited_text(
+        object_store,
+        baseline_block_id,
+        horizon_id,
+        base.node_id,
+    )
+    .map_err(AuthorError::Store)?
+    .ok_or_else(|| {
+        AuthorError::Store(PrikkError::Integrity(format!(
+            "{path}: text node baseline blob {} is missing and could not be materialized from \
+             its edit history",
+            base.blob_id
+        )))
+    })
 }

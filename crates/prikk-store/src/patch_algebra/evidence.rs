@@ -3,18 +3,19 @@ use prikk_object::{BlobKind, BlobPayload, NodeId, ObjectId, ObjectType};
 use super::evidence_types::{
     Evidence, EvidenceError, EvidenceFact, EvidenceScope, PatchAlgebraEvidence,
 };
-use crate::lifecycle_cache::ReplayDerivedLifecycleState;
 #[cfg(test)]
 use crate::lifecycle_cache::replay_derived_state;
+use crate::lifecycle_cache::{ReplayDerivedLifecycleState, materialize_edited_text};
 use crate::node_lifecycle::{NodeContent, NodeLifecycleState};
 use crate::object_store::ObjectReader;
 
 #[derive(Debug)]
 pub(crate) struct StorePatchAlgebraEvidence<'a, R: ObjectReader> {
     reader: &'a R,
-    #[cfg(test)]
     baseline_block_id: ObjectId,
-    #[cfg(test)]
+    // DC-65: retained in every build (not only `#[cfg(test)]`) — `baseline_text`'s fallback
+    // materialization needs it to replay a `TextFile` node's edit history when its `blob_id` is a
+    // content identity rather than a stored object.
     lineage_horizon_id: ObjectId,
     baseline_state: NodeLifecycleState,
 }
@@ -43,8 +44,6 @@ impl<'a, R: ObjectReader> StorePatchAlgebraEvidence<'a, R> {
         lineage_horizon_id: ObjectId,
         replay: ReplayDerivedLifecycleState,
     ) -> Result<Self, EvidenceError> {
-        #[cfg(not(test))]
-        let _ = lineage_horizon_id;
         let baseline_state = replay.state().clone();
         baseline_state
             .validate_internal_consistency()
@@ -56,9 +55,7 @@ impl<'a, R: ObjectReader> StorePatchAlgebraEvidence<'a, R> {
             })?;
         Ok(Self {
             reader,
-            #[cfg(test)]
             baseline_block_id: replay.baseline_block_id(),
-            #[cfg(test)]
             lineage_horizon_id,
             baseline_state,
         })
@@ -173,12 +170,31 @@ impl<R: ObjectReader> PatchAlgebraEvidence for StorePatchAlgebraEvidence<'_, R> 
                 fact,
                 object_id,
                 ..
-            } => Evidence::Missing {
-                scope,
-                fact,
-                object_id,
-                node_id: Some(node_id),
-            },
+            } => {
+                // DC-65: a `TextFile` node's `blob_id` after any `EditText` is a content identity,
+                // not necessarily a stored object — materialize it from the diff chain (the same
+                // pattern `patch_replay`/`lifecycle_cache::replay` already use) before giving up.
+                match materialize_edited_text(
+                    self.reader,
+                    self.baseline_block_id,
+                    self.lineage_horizon_id,
+                    node_id,
+                ) {
+                    Ok(Some(text)) => Evidence::Known(text),
+                    Ok(None) => Evidence::Missing {
+                        scope,
+                        fact,
+                        object_id,
+                        node_id: Some(node_id),
+                    },
+                    Err(err) => Evidence::Unreadable {
+                        scope,
+                        fact,
+                        object_id,
+                        reason: err.to_string(),
+                    },
+                }
+            }
             Evidence::WrongObjectType {
                 scope,
                 object_id,
