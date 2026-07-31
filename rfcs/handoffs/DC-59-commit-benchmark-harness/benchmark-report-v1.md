@@ -77,6 +77,34 @@ A missed sample is reported as **not measured**, never as zero: a run shorter th
 
 **Above floor is the content-proportional component — what DC-56 must flatten.** Read against raw peak VmHWM alone, growth from small to large repository sizes can look sub-linear, because the fixed process floor dominates at small sizes and shrinks in relative share as content grows; the delta against the floor removes that effect. If the **Above floor** column grows roughly linearly with repository size here despite only 1 file changing, that is the O(total worktree bytes) full-tree-read DC-56 exists to eliminate; this report states the measurement, not whether the resulting footprint is acceptable.
 
+## Addendum 2026-07-31 — phase breakdown (new evidence, not a correction)
+
+**Nothing above is retracted.** This report's hypothesis — that Axis A's growth "points at a full-tree
+scan" (§Axis A) — was correctly hedged. DC-56's RFC hardened it into a claim it did not support; that
+error belongs to `DC-56-COMMIT-FULL-TREE-SCAN-COMPLIANCE.md`, not here. This addendum records what the
+phases actually cost, so no future reader re-derives the incomplete attribution.
+
+Measured at N=10,000, 1 file changed, debug build, on `8748f00` and parent `ca4c044`, with `Instant`
+probes placed independently by the developers and the architect (agreeing to 2.7%):
+
+| Phase | parent `ca4c044` | with DC-56's index (`8748f00`) |
+|---|---:|---:|
+| **baseline reconstruction** (`resolve_worktree_baseline` + `replay_derived_state` + `live_nodes` projection) | 374.0 ms | 375.1 ms |
+| **scan and plan** (the phase DC-56 rewrote) | 159.1 ms | 127.5 ms |
+| whole-process wall | 548.1 ms | 519.0 ms |
+
+**Baseline reconstruction is ~72% of commit cost**, is linear in repository size (41.0 ms at N=1,000 →
+375.1 ms at N=10,000), and is untouched by DC-56.
+
+**The memory column needs the same qualification.** "Above floor is the content-proportional component"
+above is not right: at N=10,000 the worktree's entire content is ~2.5 MB against ~13 MB above floor. The
+dominant resident term is replayed node state. Measured peak `VmHWM` at N=10,000 was 19,464 / 19,548 KB
+before DC-56 and 20,652 / 20,600 KB after — **memory rose ~1.1 MB**, the resident index costing more than
+the removed contents saved.
+
+Successor increment: **DC-64**. Full analysis:
+`.git-exclude/reviewed/prikk-dc56-scope-finding-ruling-v1.md`.
+
 ## Reproduction
 
 ```

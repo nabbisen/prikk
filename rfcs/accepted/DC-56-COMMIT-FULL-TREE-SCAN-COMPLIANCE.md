@@ -48,9 +48,17 @@ pub(super) struct WorktreeFile {
 ```
 
 `insert_regular_file` calls `read_file_state_if_exists` and stores `file.bytes` for every regular file, into
-a `BTreeMap` that `enumerate_worktree_files` returns whole and `author_inner` holds across authoring. So
-commit cost is dominated by **content reads**, not directory walking — and commit memory is O(total worktree
-bytes) regardless of change size.
+a `BTreeMap` that `enumerate_worktree_files` returns whole and `author_inner` holds across authoring. So the
+scan reads content rather than only walking directories, and holds it all resident.
+
+> **Corrected 2026-07-31 by the DC-56 implementation's scope finding
+> (`.git-exclude/reviewed/prikk-dc56-scope-finding-ruling-v1.md`).** The sentence that stood here claimed
+> "commit cost is dominated by **content reads**" and that commit memory is "O(total worktree bytes)". The
+> data-structure facts above are accurate; **the claim that they dominate is not**, and both objectives were
+> scoped against it. Measured at 10,000 files: the content-read phase is ~29% of commit wall time and the
+> worktree content ~2.5 MB of a ~13 MB above-floor footprint. **Baseline reconstruction dominates both** —
+> see §"What it measured" below. DC-56 removes the content reads; that is real and worth having, and it is
+> not sufficient for either objective.
 
 Design review v2 found that earlier drafts of this RFC described only the traversal, having cited
 `worktree_files.rs` by line number without reading what it stores. That framing would have permitted an
@@ -86,7 +94,31 @@ signing explains the growth; both scale with the change set and appear in Axis B
 (1 → 1,000 changed files costs 57.77 → 1,682.98 ms). At 10,000 files, roughly **99% of commit cost is
 attributable to something other than the change being committed.**
 
-The full-tree scan is now measured rather than inferred.
+~~The full-tree scan is now measured rather than inferred.~~
+
+> **Struck 2026-07-31. This sentence was the RFC's central reasoning defect.** Axis A holds the change set
+> fixed and varies repository size, so it measures **cost proportional to repository size** — not the scan.
+> The paragraph above correctly rules out *change-set*-proportional causes (patch construction, signing,
+> both visible in Axis B), and then names the full-tree scan as though that were the only remaining
+> candidate. It was not. **`resolve_worktree_baseline` / `replay_derived_state` is equally proportional to
+> repository size, sits on the same commit path, and was never considered.**
+>
+> Measured on `8748f00` against parent `ca4c044`, N=10,000, two probes placed by the architect
+> independently of the developers':
+>
+> | Phase | parent | with DC-56's index |
+> |---|---:|---:|
+> | baseline reconstruction | 374.0 ms | 375.1 ms |
+> | scan and plan | 159.1 ms | 127.5 ms |
+> | whole-process wall | 548.1 ms | 519.0 ms |
+>
+> **Baseline reconstruction is 72% of commit cost and is untouched by this increment.** Peak `VmHWM` over
+> two runs each: 19,464 / 19,548 KB before, 20,652 / 20,600 KB after — memory **regressed ~1.1 MB**,
+> because the resident index costs more than the removed contents saved.
+>
+> **DC-59's report did not make this error** — `benchmark-report-v1.md:48` says the growth "points at a
+> full-tree scan," a properly hedged hypothesis. This RFC hardened that hedge into a measurement claim and
+> then wrote acceptance criteria against it. The successor increment is **DC-64**.
 
 **One caveat before drawing conclusions.** The run is on **tmpfs**. That is a reasonable choice for
 isolating traversal cost — it removes fsync noise — and it does not affect Axis A's *shape*, which is the
@@ -249,30 +281,36 @@ mistaken requirement, not for an inconvenient one.
    stops that ruling becoming a loophole.
 3. **The index carries per-file state sufficient to skip reads** for unchanged files — at minimum size,
    mtime, and content hash. A path-membership-only index fails this criterion.
-4. **Objective 1, latency:** commit cost no longer tracks repository size at fixed change count, shown by
-   re-running DC-59's harness and reporting Axis A flattened.
-5. **Objective 2, memory:** commit no longer loads the whole worktree into memory, shown against **DC-62's
-   memory axis** — complete at `07b1fc8`, so this precondition is satisfied.
+4. ~~**Objective 1, latency:** commit cost no longer tracks repository size at fixed change count, shown by
+   re-running DC-59's harness and reporting Axis A flattened.~~
+5. ~~**Objective 2, memory:** commit no longer loads the whole worktree into memory, shown against DC-62's
+   memory axis.~~
 
-   **Compare against the "Above floor" column, not absolute `VmHWM`.** DC-62's memory axis measures a
-   floor (a real `commit` against a 1-file repository) and reports each point's excess over it, because
-   absolute `VmHWM` makes the content-proportional component read as only 2.58x growth where above the
-   6,144 KB floor it is 9.92x. Without that column this criterion cannot distinguish **eliminating** the
-   content-proportional component from merely reducing it — which is the whole claim.
-
-   The floor and the pre-change points were both measured before this increment exists, so the baseline is
-   necessarily taken on the unmodified commit path. Nothing here needs measuring on a parent commit or with
-   a cold index: re-run the axis after the change and compare the "Above floor" column against `07b1fc8`'s
-   published figures (10 files 20 KB, 100 files 152 KB, 1,000 files 1,336 KB, 10,000 files 13,256 KB).
+   > **Criteria 4 and 5 re-scoped 2026-07-31 and carried to DC-64.** Both were written against the struck
+   > attribution above and are **unreachable within this increment's touch surface** — the phase that
+   > dominates both is `replay_derived_state`, which this increment does not touch and cannot touch without
+   > designing a second, differently-validated cache.
+   >
+   > **As re-scoped, DC-56 must show no material regression on either axis**, and record the measured
+   > position so DC-64 inherits a real baseline:
+   >
+   > - **Latency:** the content-read phase measurably cheaper (measured: 159.1 → 127.5 ms at N=10,000,
+   >   −20%), with total commit cost not worse. Axis A stays un-flattened; that is DC-64's criterion.
+   > - **Memory:** the ~1.1 MB increase from the resident index is **accepted as a known cost**
+   >   (19,464 → 20,652 KB peak `VmHWM` at N=10,000). It is small in absolute terms, it buys the read
+   >   skipping, and DC-64 may make it moot. It must be **stated**, not discovered later.
+   >
+   > **NFR-PERF-01 is not closed by this increment.** See criterion 8.
 6. **Index/worktree divergence is detectable and reported**, per §5. A design that cannot detect its own
    staleness does not satisfy this.
 7. NFR-PERF-04's evidence obligation is discharged — cache deletion and rebuild leave behaviour unchanged,
    tested. The index lives under `cache_dir()`.
-8. NFR-PERF-01 ends in exactly one recorded state: **implemented and evidenced**, or **reported as
-   unachievable under route A** — the amendment and product-RFC branches are closed by the 2026-07-30
-   ruling.
-9. `MILESTONES.md`'s missed-gate row is updated to its resolved state, and the memory finding recorded
-   there is closed or carried explicitly.
+8. NFR-PERF-01 ends in exactly one recorded state. **Recorded 2026-07-31: still missed, now with a measured
+   cause, and carried to DC-64.** Route A (a changed-path index) was implemented and is not sufficient —
+   not because the index fails, but because the requirement's dominant violator was misidentified when this
+   RFC was written. This is the one state; it is not "partially implemented" and not "unachievable."
+9. `MILESTONES.md`'s missed-gate row is updated to reflect that carry, and the memory finding recorded there
+   is updated with the measured cause rather than closed.
 10. Full gate set per `rfcs/EXECUTION-ORDER.md` §6 rule 9, plus test counts before and after per rule 10.
 
 All ten are verifiable from the repository. Criteria 3, 5, and 6 are the ones added by design review v2 and

@@ -7,9 +7,11 @@ backlog narrative, `rfcs/IMPLEMENTATION-STATUS.md` the current-state snapshot, a
 authority. This file answers only one question the others do not: **what do I pick up next, and what is it
 waiting on?**
 
-Last reconciled: 2026-07-30, after DC-62's N1 repair (`07b1fc8`). **Complete:** DC-59, DC-60, DC-62, DC-63.
-**DC-58** both batches accepted, closure pending one report reframing. **Cleared and unstarted:** DC-56,
-DC-61. **DC-57 held** — its premise does not hold, handoff withdrawn, pending the multi-patch queuing
+Last reconciled: 2026-07-31, after DC-56's scope finding (`8748f00`). **Complete:** DC-59, DC-60, DC-62,
+DC-63. **Implemented, awaiting architect review:** DC-58's N1 (`6f53da3`), DC-61 (`ca4c044`).
+**DC-56 closes partial** — its index works, but NFR-PERF-01's dominant violator was misidentified in its
+RFC and is carried to **DC-64** (proposed, owner-authorized 2026-07-31, scheduled behind DC-58/DC-61
+closure). **DC-57 held** — its premise does not hold, handoff withdrawn, pending the multi-patch queuing
 decision, which is the **one outstanding owner decision** in the development lane. The release-lane decision
 point sits after the performance work per the owner's 2026-07-29 direction.
 
@@ -31,9 +33,10 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
-| 1 | **DC-58** — source-structure audit | **Both batches accepted**; closure pending report reframing (N1) | with developers for N1 only | `handoffs/DC-58-source-structure-audit/implementation-handoff-v1.md` |
-| 2 | **DC-56** — commit scan + memory compliance (NFR-PERF-01) | **Accepted 2026-07-30** | none — **DC-62 precondition satisfied** | `handoffs/DC-56-commit-full-tree-scan-compliance/implementation-handoff-v2.md` — **v1 is superseded** |
-| 3 | **DC-61** — branch closure (§6.5 deletion half) | **Accepted 2026-07-30**; all three verification obligations discharged | none — **cleared to start** | `handoffs/DC-61-branch-closure/implementation-handoff-v2.md` — **v1 is superseded and must not be worked from** |
+| 1 | **DC-58** — source-structure audit | N1 reframing implemented `6f53da3`; **awaiting architect review to close** | with the architect | — |
+| 2 | **DC-61** — branch closure (§6.5 deletion half) | Implemented `ca4c044`; **awaiting architect review to close** | with the architect | — |
+| 3 | **DC-56** — commit scan + memory compliance | Implemented `8748f00`. **Closes partial** — criteria 1,2,3,6,7 met; 4 and 5 re-scoped and carried. **NFR-PERF-01 not closed** | ruling applied 2026-07-31; nothing outstanding on the developers | — |
+| 4 | **DC-64** — baseline reconstruction cost (NFR-PERF-01, carried) | **Proposed**; owner-authorized 2026-07-31, **scheduled behind DC-58 and DC-61 closure** | design review, then acceptance | not yet written — RFC must be accepted first |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.
