@@ -33,8 +33,8 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
-| 1 | **DC-58** — source-structure audit | N1 reframing implemented `6f53da3`; **awaiting architect review to close** | with the architect | — |
-| 2 | **DC-61** — branch closure (§6.5 deletion half) | Implemented `ca4c044`; **awaiting architect review to close** | with the architect | — |
+| 1 | **DC-58** — source-structure audit | **Complete.** N1 reframing `6f53da3`, reviewed and accepted 2026-07-31 | nothing | — |
+| 2 | **DC-61** — branch closure (§6.5 deletion half) | Implemented `ca4c044`, reviewed 2026-07-31: **accepted with one non-blocking finding**. Closes once **N1** — a fail-open in `branch close`'s WAL guard — is repaired | with developers for N1 only | `.git-exclude/reviewed/prikk-dc61-implementation-review-v1.md` §2 |
 | 3 | **DC-56** — commit scan + memory compliance | Implemented `8748f00`. **Closes partial** — criteria 1,2,3,6,7 met; 4 and 5 re-scoped and carried. **NFR-PERF-01 not closed** | ruling applied 2026-07-31; nothing outstanding on the developers | — |
 | 4 | **DC-64** — baseline reconstruction cost (NFR-PERF-01, carried) | **Proposed**; owner-authorized 2026-07-31, **scheduled behind DC-58 and DC-61 closure** | design review, then acceptance | not yet written — RFC must be accepted first |
 
