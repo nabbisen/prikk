@@ -1,7 +1,14 @@
 # RFC (proposed) - DC-64 Baseline Reconstruction Cost on the Commit Path
 
-**Status.** **Proposed.** Authorized by the project owner on 2026-07-31, **scheduled behind DC-61 and
-DC-58 closure**. Implementation may not begin until this RFC is accepted.
+**Status.** **Proposed, revised at design review v1 (2026-07-31).** Authorized by the project owner on
+2026-07-31; **unblocked** — DC-58 and DC-61 are both complete. Implementation may not begin until this RFC
+is accepted; **it awaits owner acceptance, not further design work.**
+
+Design review v1 (`.git-exclude/reviewed/prikk-dc64-design-review-v1.md`) discharged the blocking
+prerequisites by measurement and returned one blocking finding: the RFC's leading design option — a cache
+keyed on `(baseline_block, horizon)` — **cannot hit at all**, because the one-record active-WAL cap forces a
+seal between commits and every seal changes that key. §3.1 is rewritten around the route the measurements
+do support. Recorded rather than quietly amended, because the RFC exists to correct exactly this failure.
 **Authored by** the architect.
 **Independence.** Authored and reviewed by the architect — the standing ceiling. But unusually, this RFC's
 *problem statement* is not the architect's: it was established by the DC-56 implementation's scope finding
@@ -29,6 +36,30 @@ probes placed independently by the architect and by the developers (agreeing to 
 | whole-process wall | 548.1 ms | 519.0 ms | — |
 
 **Linear in repository size**: 41.0 ms at N=1,000 → 375.1 ms at N=10,000 (9.15× for 10×).
+
+### 1.1 Where inside the phase the cost is — §4's prerequisites, discharged 2026-07-31
+
+Measured at `5b16b54` with sub-phase probes; full detail in the design review.
+
+| Sub-phase | 1,000 files | 10,000 files |
+|---|---:|---:|
+| `resolve_worktree_baseline` | 0.074 ms | 0.075 ms |
+| **`replay_derived_state`** | **38.1 ms** | **370.6 ms** |
+| `.state().clone()` | 0.19 ms | 1.87 ms |
+| `live_nodes()` projection | 0.36 ms | 4.77 ms |
+| `working_state.clone()` | 0.17 ms | 2.43 ms |
+
+**Replay is 97.6% of the phase.** Projection and both clones are 2.4% combined — **caching the projection
+saves nothing.**
+
+**And the cost is per *operation*, not per patch.** At a fixed 1,000 files, 50 extra sealed one-operation
+patches cost 2.9 ms; but 20 patches carrying 100 operations each cost **121.2 ms against 37.5 ms** for the
+same 20 patches carrying one. That is **~40 µs per operation**, consistent with the genesis baseline
+(1,000 files ≈ 1,000 `CreateFile` ops ≈ 36 ms). Repository size dominates only because genesis contributes
+one operation per file.
+
+**This is the number a design must move**, and it supersedes §4's original "file count *or* patch count"
+framing.
 
 **Memory follows the same shape.** Peak `VmHWM` at N=10,000 is ~19.5 MB against DC-62's 6,144 KB floor —
 ~13 MB above floor — while the worktree's entire content is ~2.5 MB. **The resident cost is replayed node
@@ -63,13 +94,38 @@ The `lifecycle_cache.rs` doc comment already names `replay_derived_state` as "th
 obtain a `ReplayDerivedLifecycleState`," validated through `from_replay` before use. **Any design that
 lets a cached state bypass that validation is rejected in advance.**
 
-**Open design question, to be answered before acceptance:** is the sound form of this
-(a) a **verified cache** — store the derived state keyed by `(baseline_block, horizon)`, and cheaply
-*verify* rather than *trust* it, or (b) an **incremental replay** — replay only the delta since the cached
-point, or (c) **neither**, if the honest answer is that reconstruction cost is inherent to a replay-based
-model and NFR-PERF-01 needs amending instead. **(c) is a permitted outcome of this RFC**, and stating it
-with evidence would close NFR-PERF-01 as legitimately as code would. DC-56 has already shown what happens
-when a route is assumed rather than established.
+### 3.1 The route — settled by measurement, not preference
+
+Design review v1 (`.git-exclude/reviewed/prikk-dc64-design-review-v1.md`) put three routes to the
+measurements in §1.1. One is now **eliminated**:
+
+> **A cache keyed on `(baseline_block, horizon)` alone can never hit.** The active WAL is capped at one
+> record, so `commit` refuses to run twice without an intervening `seal`; every seal advances the ref to a
+> new block; so **every commit presents a `baseline_block` no previous commit has seen.** Such a cache
+> misses 100% of the time and adds a write to every commit for nothing. This was the RFC's own leading
+> proposal in its first draft, and it was wrong — the one-record cap is the same fact that put DC-57 on
+> hold.
+
+**The route is incremental replay from a cached predecessor state.** Between consecutive commits the
+lineage grows by exactly one patch — a handful of operations at ~40 µs each, against a full replay of every
+operation ever made. That is three to four orders of magnitude, and it is the only route the measurements
+support. A keyed cache survives **only as the storage layer** for the predecessor state, never as the
+mechanism itself.
+
+**Route (c) — reporting NFR-PERF-01 as inherent — remains permitted and is now sharper:** if incremental
+replay cannot be made safe without verification costing as much as the replay it replaces, that is the
+finding, and stating it with evidence closes the requirement as legitimately as code would.
+
+### 3.2 Incremental application makes the trust problem harder, not easier
+
+A full replay is self-correcting: every commit reconstructs from the horizon, so an error cannot persist.
+An incrementally-maintained state has no such property — **errors compound silently across cycles.** The
+design must therefore state:
+
+- how a cached predecessor state is **validated before use**, given `from_replay` is currently the only
+  sanctioned constructor of a `ReplayDerivedLifecycleState`;
+- what happens when the incremental result and an authoritative replay **disagree**, and which wins;
+- how often, if ever, a full replay is forced to re-anchor the chain.
 
 ## 4. What this requires that does not exist yet
 
@@ -80,15 +136,23 @@ not been checked; this section exists so it does not happen a fourth time.
 |---|---|---|
 | A live governing RFC for `lifecycle_cache.rs` | **Absent.** DC-09 Phase 4.4-2b.1 is in `rfcs/archive/` | Design changes there have no owner and no current invariant statement |
 | A statement of what the 848 unwired trust-ladder lines are for | **Partial** — a source comment only; `MILESTONES.md` records it as unowned | This increment may need exactly that machinery, or may duplicate it |
-| Whether `replay_derived_state`'s cost is replay or projection | **Unmeasured.** The 375 ms is not yet split between replaying patches and projecting `live_nodes` into maps | A cache aimed at the wrong half saves nothing — DC-56's exact failure |
-| Whether cost scales with patch count as well as file count | **Unmeasured.** Every measurement so far varies file count at a fixed short lineage | A design tuned to one may be defeated by the other |
+| Whether `replay_derived_state`'s cost is replay or projection | **DISCHARGED 2026-07-31 — replay, 97.6%.** See §1.1 | A cache aimed at the wrong half saves nothing — DC-56's exact failure |
+| Whether cost scales with patch count as well as file count | **DISCHARGED 2026-07-31 — neither: it scales with *operations*, ~40 µs each.** See §1.1 | A design tuned to one may be defeated by the other |
+| Whether a `(baseline_block, horizon)` cache can hit at all | **DISCHARGED 2026-07-31 — it cannot**, one-record WAL cap; see §3.1 | An entire increment spent on a cache with a 0% hit rate |
 
-**The third and fourth rows are blocking.** They are two more `Instant` probes and one benchmark axis —
-the same cheap instrumentation that found this defect. **Measure before designing.**
+**The three measured rows were blocking and are now discharged** (§1.1, §3.1), by the architect at design
+review rather than handed to the implementer — they were prerequisites for *designing*, not for building.
+They cost three probes and four runs, and they eliminated the RFC's own leading design proposal. **Measure
+before designing.**
+
+The first two rows remain open and are **not** blocking for this increment: they are ownership gaps in
+`lifecycle_cache.rs`, recorded in `MILESTONES.md`, that DC-64 may or may not need to resolve. If the design
+finds it needs the trust ladder's unbuilt slices, that is a finding to report, not scope to absorb.
 
 ## 5. Acceptance criteria
 
-1. The two blocking prerequisites in §4 are measured and reported **before** a design is proposed.
+1. ~~The two blocking prerequisites in §4 are measured and reported before a design is proposed.~~
+   **Discharged at design review, 2026-07-31** — §1.1 and §3.1. Nothing carries to the implementer.
 2. The design states, explicitly, how a cached baseline is prevented from becoming a root of trust —
    including what happens when cache and replay disagree, and which one wins.
 3. `from_replay` validation is not bypassed, or the design explains what replaces it.
@@ -96,7 +160,10 @@ the same cheap instrumentation that found this defect. **Measure before designin
    DC-56 pattern.
 5. Cache deletion and rebuild leave commit outcome byte-identical, tested — the NFR-PERF-04 obligation, on
    DC-56's `deleting_the_index_does_not_change_commit_outcome` pattern.
-6. **Axis A flattened**, shown by re-running DC-59's harness — the criterion DC-56 could not meet.
+6. **Axis A flattened**, shown by re-running DC-59's harness — the criterion DC-56 could not meet. **The
+   improvement must be shown to survive consecutive commit+seal cycles**, not one commit against a freshly
+   prepared repository. That distinction is what exposes a cache whose key changes every cycle; a design
+   measured only on a prepared repository can post a flat Axis A and still miss on every real commit.
 7. **Memory above DC-62's floor no longer tracks repository size**, and DC-56's accepted ~1.1 MB index cost
    is either absorbed or restated.
 8. **NFR-PERF-01 ends in exactly one recorded state**: implemented and evidenced, or **reported as
