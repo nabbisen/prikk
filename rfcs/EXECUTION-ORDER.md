@@ -10,8 +10,7 @@ waiting on?**
 Last reconciled: 2026-07-31, after DC-56's scope finding (`8748f00`). **Complete:** DC-59, DC-60, DC-62,
 DC-63. **Implemented, awaiting architect review:** DC-58's N1 (`6f53da3`), DC-61 (`ca4c044`).
 **DC-56 closes partial** — its index works, but NFR-PERF-01's dominant violator was misidentified in its
-RFC and is carried to **DC-64** (proposed, owner-authorized 2026-07-31, scheduled behind DC-58/DC-61
-closure). **DC-57 held** — its premise does not hold, handoff withdrawn, pending the multi-patch queuing
+RFC and is carried to **DC-64** (**accepted 2026-07-31, cleared to start**). **DC-57 held** — its premise does not hold, handoff withdrawn, pending the multi-patch queuing
 decision, which is the **one outstanding owner decision** in the development lane. The release-lane decision
 point sits after the performance work per the owner's 2026-07-29 direction.
 
@@ -36,7 +35,7 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 | 1 | **DC-58** — source-structure audit | **Complete.** N1 reframing `6f53da3`, reviewed and accepted 2026-07-31 | nothing | — |
 | 2 | **DC-61** — branch closure (§6.5 deletion half) | **Complete.** Implemented `ca4c044`, reviewed 2026-07-31 (accepted with one non-blocking finding), **N1 repaired `2394f1b`** | nothing | — |
 | 3 | **DC-56** — commit scan + memory compliance | Implemented `8748f00`. **Closes partial** — criteria 1,2,3,6,7 met; 4 and 5 re-scoped and carried. **NFR-PERF-01 not closed** | ruling applied 2026-07-31; nothing outstanding on the developers | — |
-| 4 | **DC-64** — baseline reconstruction cost (NFR-PERF-01, carried) | **Proposed**; owner-authorized 2026-07-31, **unblocked** — DC-58 and DC-61 are both complete | design review, then acceptance | not yet written — RFC must be accepted first |
+| 4 | **DC-64** — baseline reconstruction cost (NFR-PERF-01, carried) | **Accepted 2026-07-31** after design review discharged its measurements and eliminated its own leading design option | none — **cleared to start** | `handoffs/DC-64-baseline-reconstruction-cost/implementation-handoff-v1.md` |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.
@@ -70,8 +69,10 @@ standing rule 2. Never implemented. See `rfcs/archive/DC-42-PERFORMANCE-MAINTAIN
 **Why this order.** Rows 1–3 are history now: DC-58, DC-61, and DC-56 are all landed, and the reconciliation
 DC-61 needed with DC-63's kind branch was carried out as part of its 18-call-site schema threading.
 **DC-64 is the only live development candidate**, and it is where NFR-PERF-01 — a missed product-M1 gate,
-outstanding since before 0.17.7 — actually gets closed or is reported as inherent. It needs design review
-before any handoff exists. DC-52 and DC-43 are **not** in this lane — both are release-blocked, see §2.
+outstanding since before 0.17.7 — actually gets closed or is reported as inherent. **Accepted 2026-07-31
+and cleared to start.** Design review measured its target to the operation (~40 µs each, 97.6% of the phase
+in `replay_lineage`) and eliminated a keyed-cache route that could never have hit, given the one-record WAL
+cap. Reporting the cost as inherent is a permitted outcome. DC-52 and DC-43 are **not** in this lane — both are release-blocked, see §2.
 
 **DC-56's owner decision is settled.** Ruled 2026-07-30: NFR-PERF-01 bounds **steady-state** commit cost,
 not every commit. That resolves its conflict with NFR-PERF-04 — which blesses rebuildable indexes while a

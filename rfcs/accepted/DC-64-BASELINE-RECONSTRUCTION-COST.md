@@ -1,8 +1,9 @@
-# RFC (proposed) - DC-64 Baseline Reconstruction Cost on the Commit Path
+# RFC (accepted) - DC-64 Baseline Reconstruction Cost on the Commit Path
 
-**Status.** **Proposed, revised at design review v1 (2026-07-31).** Authorized by the project owner on
-2026-07-31; **unblocked** — DC-58 and DC-61 are both complete. Implementation may not begin until this RFC
-is accepted; **it awaits owner acceptance, not further design work.**
+**Status.** **Accepted by the project owner on 2026-07-31**, after design review v1 discharged the blocking
+prerequisites by measurement and eliminated the RFC's own leading design option. **Implementation may
+begin**; handoff at `handoffs/DC-64-baseline-reconstruction-cost/implementation-handoff-v1.md`.
+**Unblocked** — DC-58 and DC-61 are both complete.
 
 Design review v1 (`.git-exclude/reviewed/prikk-dc64-design-review-v1.md`) discharged the blocking
 prerequisites by measurement and returned one blocking finding: the RFC's leading design option — a cache
