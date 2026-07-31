@@ -117,7 +117,37 @@ mechanism itself.
 replay cannot be made safe without verification costing as much as the replay it replaces, that is the
 finding, and stating it with evidence closes the requirement as legitimately as code would.
 
-### 3.2 Incremental application makes the trust problem harder, not easier
+### 3.2 The trust-ladder question — ruled 2026-07-31
+
+Before writing code, the implementer found `lifecycle_cache.rs`'s rung-4 `certified_compared_cache`, which
+runs a **full replay** as its final certification step and is documented as the only cache-derived rung
+permitted to accelerate identity decisions — apparently foreclosing this increment. **Escalated rather than
+routed around; the report was accurate.**
+
+**Ruled: the precedent does not bind DC-64.** Rung 4 gates `node_id` **reuse** and
+**restoration-equivalence**, and both are consumed by `patch_algebra` from the **merge** path
+(`merge_evidence.rs`), never by commit. The commit path builds `baseline_files` from `live_nodes()` only,
+so it never resurrects a node id — deleted-then-recreated paths always mint fresh. Its one history-wide
+dependency is the mint collision guard at `node_id_gen.rs:124`.
+
+**Binding conditions on the design:**
+
+1. **`seen_ids` persisted complete, never truncated** — it is the mint guard's only input.
+2. **Scoped to the commit path.** If `patch_algebra` or `merge_evidence` ever consumes this cache, rung 4's
+   full-replay certification applies and that is a new design question.
+3. **`from_replay` stays in the path, unmodified.**
+4. **Fallback stays total** — cache absent, corrupt, wrong horizon, parent mismatch, multi-parent, or
+   reanchor bound reached ⇒ unmodified full replay. The reanchor bound must be stated with a reason.
+
+**Note on §3.3's self-correction argument, corrected by the same ruling:** full replay is self-correcting
+against *state-persistence* faults, **not** against *computation* faults — it recomputes the identical fold
+with the identical functions, so a bug in `apply_state_effect` corrupts it equally. Incremental application
+adds exposure to persistence and serialization faults only, which the checksum, retained `from_replay`,
+bounded reanchor, and `verify` comparison are proportionate to. This holds **only** because the design
+reuses the existing application functions; a parallel incremental implementation of the fold would be a
+different and much weaker proposition.
+
+### 3.3 Incremental application makes the trust problem harder, not easier
 
 A full replay is self-correcting: every commit reconstructs from the horizon, so an error cannot persist.
 An incrementally-maintained state has no such property — **errors compound silently across cycles.** The
@@ -165,8 +195,16 @@ finds it needs the trust ladder's unbuilt slices, that is a finding to report, n
    improvement must be shown to survive consecutive commit+seal cycles**, not one commit against a freshly
    prepared repository. That distinction is what exposes a cache whose key changes every cycle; a design
    measured only on a prepared repository can post a flat Axis A and still miss on every real commit.
-7. **Memory above DC-62's floor no longer tracks repository size**, and DC-56's accepted ~1.1 MB index cost
-   is either absorbed or restated.
+7. **Memory above DC-62's floor no longer tracks worktree content or the live node set on the hot path**,
+   and DC-56's accepted ~1.1 MB index cost is either absorbed or restated.
+
+   > **Amended 2026-07-31** (`.git-exclude/reviewed/prikk-dc64-trust-ladder-ruling-v1.md` §5). This read
+   > "no longer tracks repository size", which was wrong in the same way DC-56's criteria were.
+   > `NodeLifecycleState` carries `latest_tombstone_by_id` and `seen_ids`, accumulating **every node ever
+   > created or deleted** — state proportional to cumulative history is inherent to a replay-based identity
+   > model and is not this increment's to eliminate. **Measure and report the history-proportional
+   > component separately.** If it dominates, that is the next finding, and it belongs to the unowned
+   > tombstone/`seen_ids` retention question.
 8. **NFR-PERF-01 ends in exactly one recorded state**: implemented and evidenced, or **reported as
    inherent** with the evidence that makes that a finding rather than a concession.
 9. `MILESTONES.md`'s missed-gate row and both `lifecycle_cache.rs` rows updated.

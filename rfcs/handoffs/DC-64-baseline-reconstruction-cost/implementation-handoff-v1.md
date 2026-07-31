@@ -46,6 +46,54 @@ recorded rather than quietly removed so nobody re-proposes it.
 by one patch — a handful of operations at ~40 µs each, against replaying every operation ever made. A keyed
 cache is legitimate **only as the storage layer** for that predecessor, never as the mechanism.
 
+## 2a. The trust-ladder question — asked, ruled, and settled 2026-07-31
+
+You escalated before writing code, having found rung-4 `certified_compared_cache` running a full replay as
+its certification step. **The report was accurate and the escalation was right.** Ruling in full at
+`.git-exclude/reviewed/prikk-dc64-trust-ladder-ruling-v1.md`; the short version:
+
+**The precedent does not bind this increment.** Rung 4 gates `node_id` **reuse** and
+**restoration-equivalence**. Both are consumed by `patch_algebra` from the **merge** path
+(`merge_evidence.rs`) — never by commit. The commit path builds `baseline_files` from `live_nodes()` only,
+so it never resurrects a node id; deleted-then-recreated paths always mint fresh.
+
+**Also, your argument against yourself was stronger than it needed to be.** Full replay is self-correcting
+against *state-persistence* faults, not against *computation* faults — it recomputes the identical fold
+with the identical functions, so a latent `apply_state_effect` bug corrupts it just as thoroughly. What
+incremental application adds is exposure to persistence and serialization faults, which your checksum,
+retained `from_replay`, bounded reanchor, and `verify` comparison are proportionate to. **This holds only
+because you reuse the existing application functions** — a parallel implementation of the fold would have
+been ruled the other way.
+
+**Build your §3 design, under four binding conditions:**
+
+1. **`seen_ids` persisted complete, never truncated.** It is the sole input to the commit path's mint
+   collision guard (`node_id_gen.rs:124`) and the one thing that grows with cumulative history. If size
+   pressure makes truncation tempting, **that is a finding to report** — it would be a change of safety
+   posture disguised as an optimisation.
+2. **Scoped to the commit path.** If `patch_algebra` or `merge_evidence` ever consumes this cache, rung 4's
+   full-replay certification applies and that is a new design question, not an extension. State this in
+   your design document.
+3. **`from_replay` stays in the path, unmodified.**
+4. **Fallback stays total** — cache absent, corrupt, wrong horizon, parent mismatch, multi-parent, or
+   reanchor bound reached ⇒ unmodified full replay, cache reset. **State the reanchor bound with a reason**;
+   it is the only control on how long a fault that survives checksum-and-structure can live.
+
+**Route (c) is not triggered.** NFR-PERF-01 is not inherent on this evidence.
+
+## 2b. Criterion 7 is amended — your §5 finding was right
+
+You noted `latest_tombstone_by_id` and `seen_ids` accumulate every node ever created or deleted, so
+resident state is bounded by cumulative history rather than repository size. Correct, and it made
+criterion 7 unachievable as written.
+
+**Amended:** memory must no longer track **worktree content or the live node set on the hot path**.
+History-proportional state is inherent to a replay-based identity model and is not yours to eliminate.
+**Measure and report the history-proportional component separately.** If it dominates, that is the next
+finding and it belongs to the unowned tombstone/`seen_ids` retention question — not to you.
+
+That criterion was mine and was wrong in the same way DC-56's were. Amended now rather than at your review.
+
 ## 3. The part that will actually be hard
 
 **A full replay is self-correcting. Yours will not be.**
