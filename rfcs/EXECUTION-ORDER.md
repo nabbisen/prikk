@@ -67,11 +67,11 @@ permanent independent reference.
 **DC-58** (source-structure audit). Design review found it bundled three unrelated increments against
 standing rule 2. Never implemented. See `rfcs/archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md`.
 
-**Why this order.** DC-58 leads only because it is nearly finished — one reporting correction remains.
-**DC-56 is next in value** and is now fully unblocked: the NFR-PERF-01 reading was ruled 2026-07-30, and
-DC-62 satisfied its measurement precondition. **DC-61** is independent and equally startable; it will need to
-reconcile with DC-63's kind branch at `publication.rs:128`, which landed first. DC-52 and DC-43 are **not**
-in this lane — both are release-blocked, see §2.
+**Why this order.** Rows 1–3 are history now: DC-58, DC-61, and DC-56 are all landed, and the reconciliation
+DC-61 needed with DC-63's kind branch was carried out as part of its 18-call-site schema threading.
+**DC-64 is the only live development candidate**, and it is where NFR-PERF-01 — a missed product-M1 gate,
+outstanding since before 0.17.7 — actually gets closed or is reported as inherent. It needs design review
+before any handoff exists. DC-52 and DC-43 are **not** in this lane — both are release-blocked, see §2.
 
 **DC-56's owner decision is settled.** Ruled 2026-07-30: NFR-PERF-01 bounds **steady-state** commit cost,
 not every commit. That resolves its conflict with NFR-PERF-04 — which blesses rebuildable indexes while a
