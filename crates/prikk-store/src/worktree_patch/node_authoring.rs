@@ -156,7 +156,7 @@ pub(crate) fn author_worktree_patch<S: NodeIdEntropySource, A: AuthorSigner>(
     layout: &RepositoryLayout,
     ref_name: &str,
     message: &str,
-    _options: WorktreePatchCommitOptions,
+    options: WorktreePatchCommitOptions,
     generator: &mut NodeIdGenerator<S>,
     signer: &A,
 ) -> Result<WorktreePatchCommitReport> {
@@ -165,13 +165,22 @@ pub(crate) fn author_worktree_patch<S: NodeIdEntropySource, A: AuthorSigner>(
             "commit message must not be empty".to_string(),
         ));
     }
-    author_inner(layout, ref_name, message, generator, signer).map_err(PrikkError::from)
+    author_inner(
+        layout,
+        ref_name,
+        message,
+        options.active_patch_limit,
+        generator,
+        signer,
+    )
+    .map_err(PrikkError::from)
 }
 
 fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     layout: &RepositoryLayout,
     ref_name: &str,
     _message: &str,
+    active_patch_limit: usize,
     generator: &mut NodeIdGenerator<S>,
     signer: &A,
 ) -> std::result::Result<WorktreePatchCommitReport, AuthorError> {
@@ -192,6 +201,21 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
             "active WAL has {} trailing partial bytes; run `prikk doctor --repair-wal-tail` \
              before committing",
             active_replay.trailing_partial_bytes
+        ))));
+    }
+    // DC-57 (NFR-PERF-02): the hard block fires here — before any ref-metadata write, baseline
+    // resolution, blob write, or WAL append below. "Active patches" has exactly one definition and
+    // computation site: the active WAL's record count, read once above. `>=` (not `>`) is deliberate:
+    // once the queue already holds `active_patch_limit` patches, no more may be added; the boundary
+    // tests are 799/800/999/1000/1001 against the count *before* this commit's own patch.
+    if crate::worktree_patch::active_patch_limit_exceeded(
+        active_replay.records.len(),
+        active_patch_limit,
+    ) {
+        return Err(AuthorError::Store(PrikkError::LockConflict(format!(
+            "active WAL has {} queued patches, at or above the configured limit ({active_patch_limit}); \
+             run `prikk seal` before committing again",
+            active_replay.records.len()
         ))));
     }
     if active_replay.records.is_empty() {

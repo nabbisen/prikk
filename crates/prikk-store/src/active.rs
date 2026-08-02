@@ -51,8 +51,15 @@ impl ActiveSession {
         Self { layout }
     }
 
-    /// Append one signed patch envelope while holding the active-session lock.
-    pub fn append_patch(&self, envelope: &ObjectEnvelope) -> Result<ActiveCommitResult> {
+    /// Append one signed patch envelope while holding the active-session lock. `active_patch_limit`
+    /// is DC-57's hard block (NFR-PERF-02): once the active WAL already holds this many patches, no
+    /// more may be appended — see `node_authoring.rs::author_inner`'s identical check, the one other
+    /// authoring path this definition must also hold for.
+    pub fn append_patch(
+        &self,
+        envelope: &ObjectEnvelope,
+        active_patch_limit: usize,
+    ) -> Result<ActiveCommitResult> {
         self.layout.require_current_format()?;
         let _lock = ActiveLock::acquire(&self.layout)?;
         ensure_no_incomplete_publication(&self.layout)?;
@@ -62,6 +69,16 @@ impl ActiveSession {
             return Err(PrikkError::Integrity(format!(
                 "active WAL has {} trailing partial bytes; run doctor before appending",
                 replay.trailing_partial_bytes
+            )));
+        }
+        if crate::worktree_patch::active_patch_limit_exceeded(
+            replay.records.len(),
+            active_patch_limit,
+        ) {
+            return Err(PrikkError::LockConflict(format!(
+                "active WAL has {} queued patches, at or above the configured limit \
+                 ({active_patch_limit}); run doctor or seal before appending again",
+                replay.records.len()
             )));
         }
         if replay.records.is_empty() {

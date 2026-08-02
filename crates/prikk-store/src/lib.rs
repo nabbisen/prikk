@@ -131,8 +131,8 @@ pub use verify::{
 pub use wal::{Wal, WalRecord, WalRepair, WalReplay};
 pub use worktree::{SnapshotMaterializationReport, materialize_snapshot_checkout};
 pub use worktree_patch::{
-    WorktreePatchCommitOptions, WorktreePatchCommitReport, WorktreePatchOperationKind,
-    WorktreePatchOperationSummary, commit_worktree_changes_signed,
+    DEFAULT_ACTIVE_PATCH_LIMIT, WorktreePatchCommitOptions, WorktreePatchCommitReport,
+    WorktreePatchOperationKind, WorktreePatchOperationSummary, commit_worktree_changes_signed,
 };
 pub use worktree_status::{
     WorktreeChange, WorktreeChangeKind, WorktreeStatusReport, worktree_status,

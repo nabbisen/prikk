@@ -520,6 +520,175 @@ fn crash_during_seal_with_a_queued_pair_preserves_both_and_completes_on_retry() 
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// DC-57 (NFR-PERF-02): the hard block, wired into the real authoring path. Uses a scaled-down limit
+/// (2, not the default 1000) so the boundary is exercised with real, ordinary commits rather than a
+/// synthetic queue — the pure arithmetic at the RFC's literal 799/800/999/1000/1001 is proven
+/// separately in `worktree_patch::threshold_tests::boundary_values_match_the_rfc`; this test proves
+/// the *wiring*: the check fires before any WAL append or object write, and leaves no partial state.
+#[test]
+fn active_patch_hard_block_fires_before_any_write_and_leaves_no_partial_state() {
+    let root = unique_temp_dir("wt-active-patch-hard-block");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    publish_node_baseline(&layout, &[("seed.txt", b"seed", BlobKind::Text)]);
+    let limited = WorktreePatchCommitOptions::file_level().with_active_patch_limit(2);
+
+    let mut generator = deterministic_generator();
+    std::fs::write(root.join("a.txt"), b"alpha").unwrap();
+    commit_worktree_changes_with_generator(
+        &layout,
+        "heads/main",
+        "a",
+        limited,
+        &mut generator,
+        &test_signer(),
+    )
+    .unwrap();
+    std::fs::write(root.join("b.txt"), b"beta").unwrap();
+    commit_worktree_changes_with_generator(
+        &layout,
+        "heads/main",
+        "b",
+        limited,
+        &mut generator,
+        &test_signer(),
+    )
+    .unwrap();
+
+    let replay_before = Wal::for_layout(&layout).replay().unwrap();
+    assert_eq!(replay_before.records.len(), 2, "queue is now at the limit");
+    let objects_before = count_object_files(&layout);
+
+    // A third commit must be refused: 2 queued patches already meets the limit of 2.
+    std::fs::write(root.join("c.txt"), b"gamma").unwrap();
+    let err = commit_worktree_changes_with_generator(
+        &layout,
+        "heads/main",
+        "c",
+        limited,
+        &mut generator,
+        &test_signer(),
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().contains("at or above the configured limit"),
+        "unexpected error: {err}"
+    );
+
+    // No partial state: the WAL is byte-identical to before the blocked attempt, and no new object
+    // (blob or patch) was written for the refused commit's content.
+    let replay_after = Wal::for_layout(&layout).replay().unwrap();
+    assert_eq!(replay_after, replay_before);
+    let objects_after = count_object_files(&layout);
+    assert_eq!(
+        objects_after, objects_before,
+        "a blocked commit must not write any object"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// Count persisted object files under the layout's object store, recursively — used instead of
+/// `verify_repository` (whose state-root check does not accept `publish_node_baseline`'s placeholder
+/// root) purely to prove a blocked commit wrote nothing new.
+fn count_object_files(layout: &RepositoryLayout) -> usize {
+    fn walk(dir: &std::path::Path, count: &mut usize) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, count);
+            } else {
+                *count += 1;
+            }
+        }
+    }
+    let mut count = 0;
+    walk(&layout.objects_dir(), &mut count);
+    count
+}
+
+/// DC-57 criterion 4: `seal` must remain available at and above the hard bound — a block on
+/// committing must never become a block on the one command that relieves it.
+#[test]
+fn seal_remains_available_at_and_above_the_hard_bound() {
+    let root = unique_temp_dir("wt-active-patch-seal-above-bound");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    publish_node_baseline(&layout, &[("seed.txt", b"seed", BlobKind::Text)]);
+    let limited = WorktreePatchCommitOptions::file_level().with_active_patch_limit(2);
+
+    let mut generator = deterministic_generator();
+    std::fs::write(root.join("a.txt"), b"alpha").unwrap();
+    commit_worktree_changes_with_generator(
+        &layout,
+        "heads/main",
+        "a",
+        limited,
+        &mut generator,
+        &test_signer(),
+    )
+    .unwrap();
+    std::fs::write(root.join("b.txt"), b"beta").unwrap();
+    commit_worktree_changes_with_generator(
+        &layout,
+        "heads/main",
+        "b",
+        limited,
+        &mut generator,
+        &test_signer(),
+    )
+    .unwrap();
+
+    // The queue is now at the configured limit — further commits are blocked (proven above), but
+    // `seal` itself takes no `WorktreePatchCommitOptions` and consults no active-patch limit at all;
+    // it only drains the queue it is given.
+    let block_id = seal_active_patch(&layout, "heads/main");
+    let replay = Wal::for_layout(&layout).replay().unwrap();
+    assert_eq!(replay.records.len(), 0, "seal must fully drain the queue");
+
+    let ref_store = RefStore::new(layout.clone());
+    let target = ref_store
+        .read_current_ref_state_id("heads/main")
+        .unwrap()
+        .unwrap();
+    let envelope = FileObjectStore::new(layout.clone())
+        .read_typed(target, ObjectType::RefState)
+        .unwrap()
+        .unwrap();
+    let payload =
+        RefStatePayload::decode_canonical(&envelope.canonical_payload, envelope.schema_version)
+            .unwrap();
+    assert_eq!(payload.target_object_id, block_id);
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// DC-57: `ActiveSession::append_patch`'s own limit enforcement (the second authoring path the RFC's
+/// "active patches has one definition" requires) — mirrors the `author_inner` proof at the same
+/// scaled-down limit.
+#[test]
+fn active_session_append_patch_enforces_its_own_limit() {
+    let root = unique_temp_dir("active-session-hard-block");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    let session = crate::ActiveSession::new(layout.clone());
+    session
+        .append_patch(&crate::test_support::signed_patch_envelope(), 1)
+        .unwrap();
+
+    let err = session
+        .append_patch(&crate::test_support::rollback_patch_envelope(), 1)
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("at or above the configured limit"),
+        "unexpected error: {err}"
+    );
+    let replay = Wal::for_layout(&layout).replay().unwrap();
+    assert_eq!(replay.records.len(), 1, "the blocked append must not land");
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
 /// DC-65 criterion 4: the `ReplaceBinary` equivalent, confirming binary files were never affected —
 /// every `ReplaceBinary` writes its new content as a real stored `Blob` (`plan_replace_binary` always
 /// calls `write_content_blob`), so a node's `blob_id` after any number of binary edits always names a

@@ -34,9 +34,9 @@ use output::{
     print_snapshot_materialization_report, print_verify_report, print_worktree_status,
 };
 use prikk_store::{
-    ActiveRefMetadata, DoctorRepairOptions, Ed25519AuthorSigner, Ed25519MaintainerSigner,
-    MergeEvidenceTarget, RefStore, RepositoryFormat, RepositoryLayout, Wal,
-    WorktreePatchCommitOptions, add_trusted_maintainer, append_rollback_draft,
+    ActiveRefMetadata, DEFAULT_ACTIVE_PATCH_LIMIT, DoctorRepairOptions, Ed25519AuthorSigner,
+    Ed25519MaintainerSigner, MergeEvidenceTarget, RefStore, RepositoryFormat, RepositoryLayout,
+    Wal, WorktreePatchCommitOptions, add_trusted_maintainer, append_rollback_draft,
     commit_worktree_changes_signed, doctor_repository, load_ref_history,
     materialize_patch_checkout, materialize_patch_checkout_with_deletions,
     materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan,
@@ -123,11 +123,13 @@ fn run_commit(args: Vec<String>) -> std::result::Result<(), String> {
     layout
         .require_current_format()
         .map_err(|err| err.to_string())?;
+    let thresholds = ActivePatchThresholds::from_env()?;
     let options = if args.text_edits {
         WorktreePatchCommitOptions::prefer_text_edits()
     } else {
         WorktreePatchCommitOptions::file_level()
-    };
+    }
+    .with_active_patch_limit(thresholds.limit);
     let signer = author_signer_from_env()?;
     let report =
         commit_worktree_changes_signed(&layout, &args.ref_name, &args.message, options, &signer)
@@ -246,12 +248,83 @@ fn run_status() -> std::result::Result<(), String> {
             "queued patches: {} targeting {target}",
             replay.records.len()
         );
+        // DC-57 (NFR-PERF-02): extends DC-66's existing queue report rather than inventing a second
+        // reporting path, per app-requirements §6.3 ("status must recommend sealing").
+        let thresholds = ActivePatchThresholds::from_env()?;
+        if replay.records.len() >= thresholds.limit {
+            println!(
+                "warning: active patches ({}) at or above the configured hard limit ({}); \
+                 commit is blocked until you run `prikk seal`",
+                replay.records.len(),
+                thresholds.limit
+            );
+        } else if replay.records.len() >= thresholds.warn {
+            println!(
+                "warning: active patches ({}) at or above the recommended threshold ({}); \
+                 consider running `prikk seal`",
+                replay.records.len(),
+                thresholds.warn
+            );
+        }
     }
     println!(
         "status: multi-operation text diff minimization, plugins, and sync not \
          yet implemented"
     );
     Ok(())
+}
+
+/// DC-57 (NFR-PERF-02): active-patch warn/hard-block thresholds, read once from the environment and
+/// validated together — a warn threshold above the hard limit, a non-numeric value, or zero for
+/// either is rejected rather than silently kept at the default (the same fail-closed precedent as
+/// `PRIKK_AUTHOR_KEY_ID`/`PRIKK_AUTHOR_SEED`). Per-invocation only; never persisted in the
+/// repository — a durable policy belongs to a future general configuration increment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ActivePatchThresholds {
+    warn: usize,
+    limit: usize,
+}
+
+/// NFR-PERF-02's default warn threshold. The hard-block default,
+/// [`prikk_store::DEFAULT_ACTIVE_PATCH_LIMIT`], is owned by `prikk-store` since it is also the
+/// fallback baked into `WorktreePatchCommitOptions::file_level`/`prefer_text_edits`; this constant
+/// has no store-side counterpart to share, since only the CLI's `status` output ever consults it.
+const DEFAULT_ACTIVE_PATCH_WARN: usize = 800;
+
+impl ActivePatchThresholds {
+    fn from_env() -> std::result::Result<Self, String> {
+        let warn =
+            parse_active_patch_threshold_env("PRIKK_ACTIVE_PATCH_WARN", DEFAULT_ACTIVE_PATCH_WARN)?;
+        let limit = parse_active_patch_threshold_env(
+            "PRIKK_ACTIVE_PATCH_LIMIT",
+            DEFAULT_ACTIVE_PATCH_LIMIT,
+        )?;
+        if warn > limit {
+            return Err(format!(
+                "PRIKK_ACTIVE_PATCH_WARN ({warn}) must not exceed PRIKK_ACTIVE_PATCH_LIMIT ({limit})"
+            ));
+        }
+        Ok(Self { warn, limit })
+    }
+}
+
+/// Parse one active-patch threshold environment variable, failing closed (never silently defaulting)
+/// on anything present but malformed: non-numeric, or zero.
+fn parse_active_patch_threshold_env(
+    name: &str,
+    default: usize,
+) -> std::result::Result<usize, String> {
+    let Ok(raw) = std::env::var(name) else {
+        return Ok(default);
+    };
+    let trimmed = raw.trim();
+    let value: usize = trimmed
+        .parse()
+        .map_err(|_| format!("{name} must be a positive integer, got {raw:?}"))?;
+    if value == 0 {
+        return Err(format!("{name} must be greater than zero, got 0"));
+    }
+    Ok(value)
 }
 
 fn run_log(args: Vec<String>) -> std::result::Result<(), String> {

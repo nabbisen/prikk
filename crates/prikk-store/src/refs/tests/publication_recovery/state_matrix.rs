@@ -3,8 +3,9 @@
 mod fixture;
 
 use crate::{
-    ActiveLock, ActiveRefMetadata, ActiveSession, DoctorSeverity, RefStore, Wal, doctor_repository,
-    finish_active_publication_cleanup, read_active_ref_metadata, verify_repository,
+    ActiveLock, ActiveRefMetadata, ActiveSession, DEFAULT_ACTIVE_PATCH_LIMIT, DoctorSeverity,
+    RefStore, Wal, doctor_repository, finish_active_publication_cleanup, read_active_ref_metadata,
+    verify_repository,
 };
 use fixture::{Fixture, PersistedState};
 
@@ -199,8 +200,10 @@ fn every_state_has_explicit_representative_command_mutation_outcome() -> prikk_e
     for case in CASES {
         let fixture = Fixture::new(case.state)?;
         let before = fixture.state_bytes()?;
-        let result = ActiveSession::new(fixture.layout.clone())
-            .append_patch(&crate::test_support::signed_patch_envelope());
+        let result = ActiveSession::new(fixture.layout.clone()).append_patch(
+            &crate::test_support::signed_patch_envelope(),
+            DEFAULT_ACTIVE_PATCH_LIMIT,
+        );
         assert_eq!(result.is_ok(), case.mutation_succeeds);
         if case.mutation_succeeds {
             assert_eq!(Wal::for_layout(&fixture.layout).replay()?.records.len(), 1);

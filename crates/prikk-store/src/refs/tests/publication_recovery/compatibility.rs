@@ -5,7 +5,9 @@ use prikk_object::{CanonicalEncode, ObjectEnvelope, ObjectType, RefUpdatePayload
 use super::root_publication;
 use crate::refs::log;
 use crate::test_support::{maintainer_signature, signed_patch_envelope, unique_temp_dir};
-use crate::{ActiveSession, RefStore, RepositoryLayout, verify_repository};
+use crate::{
+    ActiveSession, DEFAULT_ACTIVE_PATCH_LIMIT, RefStore, RepositoryLayout, verify_repository,
+};
 
 #[test]
 fn format2_legacy_timestamp_is_not_normalized_and_blocks_mutation() -> prikk_error::Result<()> {
@@ -28,7 +30,7 @@ fn format2_legacy_timestamp_is_not_normalized_and_blocks_mutation() -> prikk_err
     assert!(verify_repository(&layout).is_err());
     assert!(
         ActiveSession::new(layout.clone())
-            .append_patch(&signed_patch_envelope())
+            .append_patch(&signed_patch_envelope(), DEFAULT_ACTIVE_PATCH_LIMIT)
             .is_err()
     );
     let _ = std::fs::remove_dir_all(root);

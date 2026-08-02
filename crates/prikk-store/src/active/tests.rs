@@ -3,8 +3,8 @@
 #![allow(clippy::unwrap_used)]
 
 use crate::{
-    ActiveLock, ActiveRefMetadata, ActiveSession, RepositoryLayout, Wal,
-    finish_active_publication_cleanup, read_active_ref_metadata, remove_active_ref_metadata,
+    ActiveLock, ActiveRefMetadata, ActiveSession, DEFAULT_ACTIVE_PATCH_LIMIT, RepositoryLayout,
+    Wal, finish_active_publication_cleanup, read_active_ref_metadata, remove_active_ref_metadata,
     write_active_ref_metadata,
 };
 
@@ -38,7 +38,7 @@ fn active_session_appends_signed_patch_under_lock() {
     if let Ok(layout) = layout {
         let session = ActiveSession::new(layout.clone());
         let envelope = signed_patch_envelope();
-        let result = session.append_patch(&envelope);
+        let result = session.append_patch(&envelope, DEFAULT_ACTIVE_PATCH_LIMIT);
         assert!(result.is_ok());
         if let Ok(result) = result {
             assert_eq!(result.wal_sequence, 1);
@@ -71,10 +71,14 @@ fn active_session_append_queues_distinct_patch_onto_non_empty_wal() {
     let root = unique_temp_dir("active-session-nonempty");
     let layout = RepositoryLayout::init(root.clone()).unwrap();
     let session = ActiveSession::new(layout.clone());
-    let first = session.append_patch(&signed_patch_envelope()).unwrap();
+    let first = session
+        .append_patch(&signed_patch_envelope(), DEFAULT_ACTIVE_PATCH_LIMIT)
+        .unwrap();
     assert_eq!(first.wal_sequence, 1);
 
-    let second = session.append_patch(&rollback_patch_envelope()).unwrap();
+    let second = session
+        .append_patch(&rollback_patch_envelope(), DEFAULT_ACTIVE_PATCH_LIMIT)
+        .unwrap();
     assert_eq!(second.wal_sequence, 2);
 
     let replay = Wal::for_layout(&layout).replay().unwrap();
@@ -94,7 +98,9 @@ fn active_session_append_rejects_trailing_partial_wal() {
     std::fs::write(layout.default_queue_wal_path(), b"partial").unwrap();
     let session = ActiveSession::new(layout.clone());
 
-    let err = session.append_patch(&signed_patch_envelope()).unwrap_err();
+    let err = session
+        .append_patch(&signed_patch_envelope(), DEFAULT_ACTIVE_PATCH_LIMIT)
+        .unwrap_err();
     assert!(
         err.to_string().contains("trailing partial bytes"),
         "unexpected error: {err}"
@@ -117,7 +123,9 @@ fn active_session_append_does_not_overwrite_other_ref_metadata() {
         .unwrap();
     let session = ActiveSession::new(layout.clone());
 
-    let err = session.append_patch(&signed_patch_envelope()).unwrap_err();
+    let err = session
+        .append_patch(&signed_patch_envelope(), DEFAULT_ACTIVE_PATCH_LIMIT)
+        .unwrap_err();
     assert!(
         err.to_string()
             .contains("active WAL is owned by heads/topic"),

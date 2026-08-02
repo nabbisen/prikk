@@ -16,9 +16,9 @@ use crate::test_support::{
     signed_ref_update_envelope, unique_temp_dir,
 };
 use crate::{
-    ActiveSession, DoctorRepairOptions, FileObjectStore, ObjectWriter, RefPublication, RefStore,
-    RepositoryLayout, add_trusted_maintainer, doctor_repository, repair_repository,
-    verify_repository,
+    ActiveSession, DEFAULT_ACTIVE_PATCH_LIMIT, DoctorRepairOptions, FileObjectStore, ObjectWriter,
+    RefPublication, RefStore, RepositoryLayout, add_trusted_maintainer, doctor_repository,
+    repair_repository, verify_repository,
 };
 
 fn root_publication(
@@ -91,7 +91,7 @@ fn candidate_failure_warns_and_retry_publishes_once() -> prikk_error::Result<()>
     );
     assert!(
         ActiveSession::new(layout.clone())
-            .append_patch(&signed_patch_envelope())
+            .append_patch(&signed_patch_envelope(), DEFAULT_ACTIVE_PATCH_LIMIT)
             .is_err()
     );
     assert!(

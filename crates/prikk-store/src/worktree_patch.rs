@@ -74,6 +74,41 @@ impl WorktreePatchOperationKind {
     }
 }
 
+/// DC-57 default hard block on active (queued, unsealed) patches — NFR-PERF-02's default 1000,
+/// overridable per invocation via `PRIKK_ACTIVE_PATCH_LIMIT` at the CLI boundary, never persisted.
+pub const DEFAULT_ACTIVE_PATCH_LIMIT: usize = 1000;
+
+/// DC-57 (NFR-PERF-02): true when the active WAL already holds `active_patch_limit` or more queued
+/// patches, so appending one more must be refused. "Active patches" has exactly one definition — the
+/// active WAL's record count — and this is the one comparison every authoring path
+/// (`node_authoring.rs::author_inner`, `active.rs::ActiveSession::append_patch`) calls, rather than
+/// each reimplementing it. `>=`, not `>`: once the queue already holds the limit, no more may join it.
+#[must_use]
+pub(crate) const fn active_patch_limit_exceeded(
+    current_count: usize,
+    active_patch_limit: usize,
+) -> bool {
+    current_count >= active_patch_limit
+}
+
+#[cfg(test)]
+mod threshold_tests {
+    use super::active_patch_limit_exceeded;
+
+    /// DC-57 criterion 5: the literal boundary values named in the RFC, tested directly against the
+    /// one shared comparison — this is the pure-arithmetic half of the boundary proof; the
+    /// integration half (proving it is actually wired into `author_inner` before any write, with a
+    /// small scaled limit) lives in `worktree_patch/tests.rs`.
+    #[test]
+    fn boundary_values_match_the_rfc() {
+        assert!(!active_patch_limit_exceeded(799, 800));
+        assert!(active_patch_limit_exceeded(800, 800));
+        assert!(!active_patch_limit_exceeded(999, 1000));
+        assert!(active_patch_limit_exceeded(1000, 1000));
+        assert!(active_patch_limit_exceeded(1001, 1000));
+    }
+}
+
 /// Options for authoring a node-addressed patch from worktree changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WorktreePatchCommitOptions {
@@ -81,6 +116,12 @@ pub struct WorktreePatchCommitOptions {
     /// modified-file mapping (text files author `EditText`, binary files author `ReplaceBinary`),
     /// so this flag no longer drives kind selection and is a no-op.
     pub prefer_text_edits: bool,
+    /// DC-57 (NFR-PERF-02): the active-patch count — the active WAL's record count, the one
+    /// definition every authoring path uses — must be strictly less than this before `author_inner`
+    /// does anything else. Defaults to [`DEFAULT_ACTIVE_PATCH_LIMIT`]; the CLI overrides it from
+    /// `PRIKK_ACTIVE_PATCH_LIMIT`, failing closed on a malformed value rather than silently keeping
+    /// the default.
+    pub active_patch_limit: usize,
 }
 
 impl WorktreePatchCommitOptions {
@@ -89,6 +130,7 @@ impl WorktreePatchCommitOptions {
     pub const fn file_level() -> Self {
         Self {
             prefer_text_edits: false,
+            active_patch_limit: DEFAULT_ACTIVE_PATCH_LIMIT,
         }
     }
 
@@ -97,7 +139,16 @@ impl WorktreePatchCommitOptions {
     pub const fn prefer_text_edits() -> Self {
         Self {
             prefer_text_edits: true,
+            active_patch_limit: DEFAULT_ACTIVE_PATCH_LIMIT,
         }
+    }
+
+    /// Override the active-patch hard-block limit (DC-57). The CLI calls this with a value parsed
+    /// from `PRIKK_ACTIVE_PATCH_LIMIT`; everything else keeps the default.
+    #[must_use]
+    pub const fn with_active_patch_limit(mut self, limit: usize) -> Self {
+        self.active_patch_limit = limit;
+        self
     }
 }
 
