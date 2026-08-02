@@ -9,7 +9,7 @@ use crate::{
 };
 
 use crate::fsutil::{TestFailPoint, fail_once_for_test};
-use crate::test_support::{signed_patch_envelope, unique_temp_dir};
+use crate::test_support::{rollback_patch_envelope, signed_patch_envelope, unique_temp_dir};
 
 mod format_transition;
 
@@ -61,20 +61,28 @@ fn active_session_appends_signed_patch_under_lock() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+// DC-66: a non-empty active WAL now queues a distinct patch rather than refusing it — this test
+// previously asserted the pre-DC-66 reject behavior; updated per the RFC's raised cap (1 -> N).
+// Ref-ownership-mismatch coverage for a non-empty queue lives at the production `worktree_patch`
+// layer (`node_authoring.rs`'s `author_inner`), which this narrow, currently uncalled-in-production
+// helper mirrors but does not itself need to re-cover.
 #[test]
-fn active_session_append_rejects_non_empty_wal() {
+fn active_session_append_queues_distinct_patch_onto_non_empty_wal() {
     let root = unique_temp_dir("active-session-nonempty");
     let layout = RepositoryLayout::init(root.clone()).unwrap();
     let session = ActiveSession::new(layout.clone());
-    session.append_patch(&signed_patch_envelope()).unwrap();
+    let first = session.append_patch(&signed_patch_envelope()).unwrap();
+    assert_eq!(first.wal_sequence, 1);
 
-    let err = session.append_patch(&signed_patch_envelope()).unwrap_err();
-    assert!(
-        err.to_string().contains("already contains patches"),
-        "unexpected error: {err}"
-    );
+    let second = session.append_patch(&rollback_patch_envelope()).unwrap();
+    assert_eq!(second.wal_sequence, 2);
+
     let replay = Wal::for_layout(&layout).replay().unwrap();
-    assert_eq!(replay.records.len(), 1);
+    assert_eq!(replay.records.len(), 2);
+    assert_eq!(
+        read_active_ref_metadata(&layout).unwrap(),
+        ActiveRefMetadata::Valid("heads/main".to_string())
+    );
 
     let _ = std::fs::remove_dir_all(root);
 }

@@ -7,13 +7,15 @@ use prikk_object::{
     BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType,
 };
 
+use crate::wal::{WalRecord, encode_record_for_test};
 use crate::{
     ActiveWalMetadataStatus, FileObjectStore, ObjectWriter, RepositoryLayout, Wal,
     verify_repository, write_active_ref_metadata,
 };
 
 use crate::test_support::{
-    dummy_signature, maintainer_signature, sample_object_id, signed_patch_envelope, unique_temp_dir,
+    dummy_signature, maintainer_signature, rollback_patch_envelope, sample_object_id,
+    signed_patch_envelope, unique_temp_dir,
 };
 
 #[test]
@@ -73,6 +75,59 @@ fn verify_repository_counts_objects_and_wal_records() {
                 ActiveWalMetadataStatus::ValidForNonEmptyWal {
                     ref_name: "heads/main".to_string()
                 }
+            );
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// DC-66 criterion 6: `verify` reports queue ordering explicitly. Reachable only by direct file
+/// tampering — `Wal::append_patch` always assigns `previous.seq + 1` — but a queue of N gives
+/// "ordering" a meaning worth verifying rather than assuming from successful structural decode.
+#[test]
+fn verify_repository_reports_active_wal_ordering_violation() {
+    let root = unique_temp_dir("verify-wal-ordering");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let wal = Wal::for_layout(&layout);
+        // Ensure the WAL file and its parent directory exist, then overwrite with two hand-crafted
+        // records sharing sequence 1 — an ordering violation no append path can produce.
+        assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
+        let first = WalRecord {
+            seq: 1,
+            envelope: signed_patch_envelope(),
+        };
+        let second = WalRecord {
+            seq: 1,
+            envelope: rollback_patch_envelope(),
+        };
+        let mut bytes = Vec::new();
+        let first_encoded = encode_record_for_test(&first);
+        assert!(first_encoded.is_ok());
+        if let Ok(first_encoded) = first_encoded {
+            bytes.extend(first_encoded);
+        }
+        let second_encoded = encode_record_for_test(&second);
+        assert!(second_encoded.is_ok());
+        if let Ok(second_encoded) = second_encoded {
+            bytes.extend(second_encoded);
+        }
+        assert!(std::fs::write(wal.path(), &bytes).is_ok());
+        assert!(write_active_ref_metadata(&layout, "heads/main").is_ok());
+
+        let report = verify_repository(&layout);
+        assert!(report.is_ok());
+        if let Ok(report) = report {
+            assert_eq!(report.checked_wal_records, 2);
+            assert!(report.has_active_wal_ordering_issue());
+            assert_eq!(
+                report.active_wal_ordering_issues,
+                vec![crate::ActiveWalOrderingIssue {
+                    index: 1,
+                    previous_seq: 1,
+                    seq: 1,
+                }]
             );
         }
     }

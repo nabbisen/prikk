@@ -5,7 +5,7 @@ mod proptest_framing;
 use crate::{RepositoryLayout, Wal};
 
 use crate::fsutil::{TestFailPoint, fail_once_for_test};
-use crate::test_support::{signed_patch_envelope, unique_temp_dir};
+use crate::test_support::{rollback_patch_envelope, signed_patch_envelope, unique_temp_dir};
 
 #[test]
 fn wal_roundtrips_signed_patch_envelope() {
@@ -109,6 +109,53 @@ fn wal_truncate_failure_retains_partial_tail_and_retry_repairs_it() -> prikk_err
     let replay = wal.replay()?;
     assert_eq!(replay.records.len(), 1);
     assert_eq!(replay.trailing_partial_bytes, 0);
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-66 criterion 5: a torn queue of N > 1 must preserve every complete record and say *which*
+/// patches survived, not just how many. `decode_records`/`truncate_trailing_partial` already looped
+/// generically before DC-66 (nothing above them ever produced N > 1 to prove it against); this is the
+/// first test to actually exercise that generality end to end, and the first to check the newly
+/// reported `preserved_patch_ids`.
+#[test]
+fn wal_truncate_preserves_all_complete_records_in_a_torn_queue_and_reports_their_ids()
+-> prikk_error::Result<()> {
+    use std::io::Write;
+
+    let root = unique_temp_dir("wal-torn-queue");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let wal = Wal::for_layout(&layout);
+    let first = signed_patch_envelope();
+    let second = rollback_patch_envelope();
+    assert_eq!(wal.append_patch(&first)?, 1);
+    assert_eq!(wal.append_patch(&second)?, 2);
+
+    let mut file = std::fs::OpenOptions::new().append(true).open(wal.path())?;
+    file.write_all(b"partial")?;
+    drop(file);
+
+    assert_eq!(wal.replay()?.trailing_partial_bytes, 7);
+    let repair = wal.truncate_trailing_partial()?;
+    assert_eq!(repair.preserved_records, 2);
+    assert_eq!(repair.truncated_bytes, 7);
+    assert_eq!(
+        repair.preserved_patch_ids,
+        vec![first.object_id(), second.object_id()],
+        "both complete queued patches must be identified, in append order"
+    );
+
+    let replay = wal.replay()?;
+    assert_eq!(replay.trailing_partial_bytes, 0);
+    assert_eq!(
+        replay
+            .records
+            .iter()
+            .map(|record| &record.envelope)
+            .collect::<Vec<_>>(),
+        vec![&first, &second]
+    );
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

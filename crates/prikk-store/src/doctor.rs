@@ -308,6 +308,7 @@ pub fn repair_repository(
         WalRepair {
             preserved_records: 0,
             truncated_bytes: 0,
+            preserved_patch_ids: Vec::new(),
         }
     };
     let ref_repair = None;

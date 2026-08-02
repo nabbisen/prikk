@@ -113,6 +113,17 @@ pub(crate) fn print_verify_report(
             divergence.baseline_block_id, divergence.detail
         );
     }
+    println!(
+        "active WAL ordering issues: {}",
+        report.active_wal_ordering_issues.len()
+    );
+    for issue in &report.active_wal_ordering_issues {
+        println!(
+            "active-wal-ordering [violation] record {} has sequence {} not greater than \
+             preceding sequence {}",
+            issue.index, issue.seq, issue.previous_seq
+        );
+    }
 }
 
 fn print_active_wal_metadata_status(status: &ActiveWalMetadataStatus) {

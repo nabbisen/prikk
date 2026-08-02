@@ -339,6 +339,96 @@ pub(crate) fn apply_one_block(
     )
 }
 
+/// Fold a sequence of not-yet-sealed queued patch envelopes (DC-66) onto an already-resolved
+/// lifecycle state, using the same [`apply_state_effect`] fold every other replay path uses.
+///
+/// Unlike [`apply_patch_ids`], the envelopes are supplied directly from `crate::wal::WalRecord`
+/// rather than read from the object store by id — `persist_wal_patches`
+/// (`crates/prikk-cli/src/seal/support.rs`) only writes queued patches as durable objects at `seal`
+/// time, so a WAL record sitting in an unsealed queue has no object to read yet.
+///
+/// `text_cache` starts empty for this fold, exactly like [`apply_one_block`]'s per-block cache
+/// (DC-64/DC-65 §9a). Unlike DC-64's incremental step, there is no "fall back to full replay" escape
+/// available here — the unsealed portion of a queue has no independent replay path of its own to fall
+/// back to. Instead, on `MissingBlobForLifecycleEffect` for an `EditText` operation, the target node's
+/// *sealed* content is materialized once via `materialize_edited_text` (the same DC-65 mechanism
+/// `plan_edit_text` already uses to resolve an unstored `EditText` result) to seed the cache, and the
+/// operation is retried exactly once. `apply_edit_text` only mutates `state`/`text_cache` after it has
+/// successfully resolved the current text, so a failed first attempt leaves both untouched and the
+/// retry is safe. `sealed_lineage` is `None` for a `Genesis` baseline — reachable only when every node
+/// in this queue was created within the queue itself (there is no sealed history to consult), so the
+/// fallback is never exercised in that case; if it somehow were, failing closed is correct.
+pub(crate) fn apply_queued_patch_envelopes(
+    reader: &impl ObjectReader,
+    records: &[crate::wal::WalRecord],
+    state: &mut NodeLifecycleState,
+    text_cache: &mut TextCache,
+    sealed_lineage: Option<(ObjectId, ObjectId)>,
+) -> prikk_error::Result<()> {
+    let blob_resolver = StoreBackedResolver::new(reader);
+    for record in records {
+        let patch_id = record.envelope.object_id();
+        let operations = read_patch_operations_from_envelope(&record.envelope, patch_id)?;
+        for operation in &operations {
+            match apply_state_effect(state, text_cache, &operation.kind, &blob_resolver) {
+                Ok(()) => {}
+                Err(LifecycleReplayError::MissingBlobForLifecycleEffect { blob_id }) => {
+                    let DecodedOperationKind::EditText { node_id, .. } = &operation.kind else {
+                        return Err(LifecycleReplayError::MissingBlobForLifecycleEffect {
+                            blob_id,
+                        }
+                        .into());
+                    };
+                    let Some((baseline_block_id, horizon_id)) = sealed_lineage else {
+                        return Err(PrikkError::Integrity(format!(
+                            "queued patch {patch_id} edits node {node_id:?} whose content blob \
+                             {blob_id} is missing, and no sealed lineage exists to materialize it \
+                             from"
+                        )));
+                    };
+                    let text = super::materialize_edited_text(
+                        reader,
+                        baseline_block_id,
+                        horizon_id,
+                        *node_id,
+                    )?
+                    .ok_or_else(|| {
+                        PrikkError::Integrity(format!(
+                            "queued patch {patch_id} edits node {node_id:?} whose content blob \
+                             {blob_id} is missing and could not be materialized from sealed history"
+                        ))
+                    })?;
+                    text_cache.insert(*node_id, text);
+                    apply_state_effect(state, text_cache, &operation.kind, &blob_resolver)?;
+                }
+                Err(other) => return Err(other.into()),
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Read and decode a patch's operations directly from an in-memory envelope, mapping every failure to
+/// `MalformedPatchInLineage`. Unlike [`read_patch_operations`], no object-store read is involved —
+/// used for queued WAL records, which are not yet durable objects.
+fn read_patch_operations_from_envelope(
+    envelope: &prikk_object::ObjectEnvelope,
+    patch_id: ObjectId,
+) -> Result<Vec<crate::patch_replay::decode::DecodedPatchOperation>, LifecycleReplayError> {
+    if envelope.object_type != ObjectType::Patch {
+        return Err(LifecycleReplayError::MalformedPatchInLineage {
+            patch_id,
+            detail: format!("object is not a Patch ({} found)", envelope.object_type),
+        });
+    }
+    decode_patch_operations(&envelope.canonical_payload).map_err(|e| {
+        LifecycleReplayError::MalformedPatchInLineage {
+            patch_id,
+            detail: e.to_string(),
+        }
+    })
+}
+
 pub(crate) fn replay_with_appended_patches(
     reader: &impl ObjectReader,
     parent: Option<ObjectId>,

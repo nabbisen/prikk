@@ -202,11 +202,13 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
             }
         }
     } else {
+        // DC-66: a non-empty active WAL no longer refuses outright — it queues. Ownership must still
+        // be unambiguous: every queued patch belongs to exactly one ref, and this guard's semantics
+        // are unchanged by N (see `rfcs/handoffs/DC-66-multi-commit-queuing/prerequisite-questions-v1.md`
+        // §2). A mismatch, or missing/malformed metadata, still fails closed exactly as before this
+        // increment; only a *matching* queue now falls through to author against it instead of
+        // rejecting.
         require_active_ref_for_non_empty_wal(layout, &canonical_ref).map_err(AuthorError::Store)?;
-        return Err(AuthorError::Store(PrikkError::LockConflict(format!(
-            "active WAL already contains patches for {canonical_ref}; run `prikk seal --ref \
-             {canonical_ref}` before committing again"
-        ))));
     }
 
     let object_store = FileObjectStore::new(layout.clone());
@@ -228,7 +230,7 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
         } => (Some(*baseline_block), Some(*horizon)),
         WorktreeBaseline::Genesis => (None, None),
     };
-    let baseline_state: NodeLifecycleState = match &baseline {
+    let mut baseline_state: NodeLifecycleState = match &baseline {
         WorktreeBaseline::Published {
             baseline_block,
             horizon,
@@ -237,6 +239,27 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
             .clone(),
         WorktreeBaseline::Genesis => NodeLifecycleState::new(),
     };
+    // DC-66: queuing is a chain — fold any already-queued (unsealed) patches on top of the sealed
+    // baseline before this commit authors against it, so a path created or edited earlier in the same
+    // queue is seen as existing rather than minted again. `resolve_baseline_state` above is entirely
+    // unmodified; folding only happens when a queue actually exists. See
+    // `rfcs/handoffs/DC-66-multi-commit-queuing/queuing-baseline-design-v1.md`.
+    let mut queue_text_cache = crate::lifecycle_cache::replay::TextCache::new();
+    if !active_replay.records.is_empty() {
+        crate::lifecycle_cache::replay::apply_queued_patch_envelopes(
+            &object_store,
+            &active_replay.records,
+            &mut baseline_state,
+            &mut queue_text_cache,
+            match &baseline {
+                WorktreeBaseline::Published {
+                    baseline_block,
+                    horizon,
+                } => Some((*baseline_block, *horizon)),
+                WorktreeBaseline::Genesis => None,
+            },
+        )?;
+    }
 
     // Baseline file view: path -> (node_id, kind, blob_id, mode). Symlink nodes are tracked so a
     // change touching one can fail closed.
@@ -324,6 +347,7 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
                             path,
                             lineage_baseline_block_id,
                             lineage_horizon_id,
+                            &queue_text_cache,
                         )?);
                     }
                 }
@@ -553,6 +577,7 @@ fn plan_edit_text(
     path: &str,
     lineage_baseline_block_id: Option<ObjectId>,
     lineage_horizon_id: Option<ObjectId>,
+    queue_text_cache: &crate::lifecycle_cache::replay::TextCache,
 ) -> std::result::Result<PlannedOp, AuthorError> {
     let old_text = current_text_for_node(
         object_store,
@@ -560,6 +585,7 @@ fn plan_edit_text(
         path,
         lineage_baseline_block_id,
         lineage_horizon_id,
+        queue_text_cache,
     )?;
     let span = text_span::plan_authored_text_span(&old_text, new_bytes, base.node_id)
         .map_err(|err| AuthorError::Store(PrikkError::Integrity(format!("EditText: {err}"))))?
@@ -755,18 +781,26 @@ fn read_file_blob_bytes_if_present(
         .map(Some)
 }
 
-/// Materialize a `TextFile` node's current baseline bytes (DC-65). Tries the stored blob first —
-/// correct and cheap for a node that has never been edited, since `CreateFile` always writes a real
-/// `Blob`. Falling through to replay-based materialization is expected, not exceptional, for any
-/// node whose most recent operation was an `EditText`; see the invariant document at
-/// `rfcs/handoffs/DC-65-text-edit-baseline-content/prerequisite-questions-v1.md`.
+/// Materialize a `TextFile` node's current baseline bytes (DC-65, extended by DC-66). Checks the
+/// queue's own text cache first — a node created or edited earlier in the same not-yet-sealed queue
+/// has its true current text there, not in a stored blob or in sealed lineage (see
+/// `rfcs/handoffs/DC-66-multi-commit-queuing/queuing-baseline-design-v1.md`). Empty when no queue
+/// exists, so this check always misses and behaviour is unchanged from before DC-66. Otherwise tries
+/// the stored blob — correct and cheap for a node that has never been edited, since `CreateFile`
+/// always writes a real `Blob`. Falling through to replay-based materialization is expected, not
+/// exceptional, for any node whose most recent *sealed* operation was an `EditText`; see the invariant
+/// document at `rfcs/handoffs/DC-65-text-edit-baseline-content/prerequisite-questions-v1.md`.
 fn current_text_for_node(
     object_store: &FileObjectStore,
     base: &BaselineFile,
     path: &str,
     lineage_baseline_block_id: Option<ObjectId>,
     lineage_horizon_id: Option<ObjectId>,
+    queue_text_cache: &crate::lifecycle_cache::replay::TextCache,
 ) -> std::result::Result<Vec<u8>, AuthorError> {
+    if let Some(text) = queue_text_cache.get(&base.node_id) {
+        return Ok(text.clone());
+    }
     if let Some(bytes) = read_file_blob_bytes_if_present(object_store, base.blob_id)? {
         return Ok(bytes);
     }

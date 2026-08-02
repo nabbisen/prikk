@@ -133,6 +133,11 @@ pub fn append_rollback_draft(
             replay.trailing_partial_bytes
         )));
     }
+    // DC-66: deliberately unchanged. Composing a correct inverse against a queue's chained,
+    // not-yet-sealed baseline is an unaddressed correctness question this increment's acceptance
+    // criteria never ask it to answer — see
+    // `rfcs/handoffs/DC-66-multi-commit-queuing/queuing-baseline-design-v1.md` §5. A user who wants a
+    // rollback draft seals the queue first.
     if !replay.records.is_empty() {
         return Err(PrikkError::LockConflict(
             "rollback-draft requires an empty active WAL".to_string(),

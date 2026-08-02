@@ -107,18 +107,27 @@ fn publish_node_baseline(layout: &RepositoryLayout, files: &[(&str, &[u8], BlobK
     block_id
 }
 
-/// Seal the active WAL's single patch record into a new block and publish the ref forward — the
-/// store-level equivalent of `prikk seal --allow-no-audit`, for tests (DC-65) that need several real
-/// sealed generations in sequence without driving the CLI binary. Returns the new block id.
+/// Seal the active WAL's queued patch record(s) into a new block and publish the ref forward — the
+/// store-level equivalent of `prikk seal --allow-no-audit`, for tests that need several real sealed
+/// generations in sequence without driving the CLI binary. Batches however many records are queued
+/// (DC-65 introduced this at N = 1; DC-66 requires it to handle N > 1 — seal was already written as a
+/// loop, see `crates/prikk-cli/src/seal/support.rs`, so this mirrors that rather than assuming exactly
+/// one). Returns the new block id. Requires `ref_name` to already have a published tip (use
+/// `publish_node_baseline` first); does not cover sealing a queue chained straight from `Genesis`.
 fn seal_active_patch(layout: &RepositoryLayout, ref_name: &str) -> ObjectId {
     let wal = Wal::for_layout(layout);
     let replay = wal.replay().unwrap();
-    assert_eq!(replay.records.len(), 1, "expected exactly one active patch");
-    let patch_envelope = replay.records[0].envelope.clone();
-    let patch_id = patch_envelope.object_id();
+    assert!(
+        !replay.records.is_empty(),
+        "expected at least one queued patch"
+    );
 
     let mut object_store = FileObjectStore::new(layout.clone());
-    object_store.write_object(&patch_envelope).unwrap();
+    let patch_ids: Vec<ObjectId> = replay
+        .records
+        .iter()
+        .map(|record| object_store.write_object(&record.envelope).unwrap())
+        .collect();
 
     let ref_store = RefStore::new(layout.clone());
     let current_ref_state_id = ref_store
@@ -136,12 +145,7 @@ fn seal_active_patch(layout: &RepositoryLayout, ref_name: &str) -> ObjectId {
     .unwrap();
     let parent_block_id = current_payload.target_object_id;
 
-    let block = signed_block(
-        BlockKind::Normal,
-        vec![parent_block_id],
-        vec![patch_id],
-        None,
-    );
+    let block = signed_block(BlockKind::Normal, vec![parent_block_id], patch_ids, None);
     let block_id = block.object_id();
     object_store.write_object(&block).unwrap();
 
@@ -333,6 +337,185 @@ fn text_file_edited_across_four_sealed_commits_succeeds() {
     assert_eq!(plan.target_block_id, final_payload.target_object_id);
     assert_eq!(plan.file_count, 1);
     assert_eq!(plan.total_content_bytes, "version 4".len() as u64);
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// DC-66 criterion 8 (load-bearing): DC-64's incremental cache and DC-65's text materialization both
+/// tested across a queue, not assumed from the fact that they work at N = 1.
+///
+/// Sequence: `doc.txt` created, edited once and sealed (so the sealed lineage's *last* operation is
+/// itself an `EditText` — the DC-65 shape), then edited **twice more with no seal in between** (a real
+/// queue), then sealed together as one two-patch block, then edited a fourth time.
+///
+/// - The first queued edit (v1 -> v2) folds onto a baseline whose current content descends from a
+///   *sealed* `EditText`. The queue fold's `text_cache` starts empty, so this must hit
+///   `MissingBlobForLifecycleEffect` and recover via `materialize_edited_text` over sealed lineage —
+///   exactly the new fallback `queuing-baseline-design-v1.md` §3 describes, not the pre-existing
+///   DC-65 single-commit path (which only ever runs when the queue is empty).
+/// - The second queued edit (v2 -> v3) targets a node the fold just wrote to `text_cache` in the same
+///   pass — the fast path, no materialize call needed.
+/// - This commit's *own* diff (v2 -> v3) must read v2's text from `current_text_for_node`'s
+///   queue-cache-first check, not the stale sealed v1 text a lineage-only fallback would return.
+/// - Sealing both queued patches together produces one block with two patch ids, exercising DC-64's
+///   `apply_one_block`/`apply_patch_ids` loop at N = 2 for the first time in this suite.
+/// - A fifth commit (v3 -> v4) against that two-patch sealed block forces `resolve_baseline_state` to
+///   attempt DC-64's incremental step, hit the same `MissingBlobForLifecycleEffect` at the *sealed*
+///   layer this time, and fall back to full replay — the pre-existing DC-65 fifth-fallback-trigger,
+///   now proven to still fire correctly once a block can carry more than one patch.
+#[test]
+fn text_file_edited_across_a_queue_then_sealed_together_succeeds() {
+    let root = unique_temp_dir("wt-queue-text-edits");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    publish_node_baseline(&layout, &[("doc.txt", b"v0", BlobKind::Text)]);
+
+    let mut generator = deterministic_generator();
+    let commit_edit = |generator: &mut NodeIdGenerator<SequenceEntropySource>, content: &str| {
+        std::fs::write(root.join("doc.txt"), content).unwrap();
+        commit_worktree_changes_with_generator(
+            &layout,
+            "heads/main",
+            "edit doc",
+            WorktreePatchCommitOptions::prefer_text_edits(),
+            generator,
+            &test_signer(),
+        )
+        .unwrap_or_else(|err| panic!("commit for {content:?} failed: {err}"))
+    };
+
+    // v0 -> v1, sealed alone: the sealed lineage's last operation is an EditText (unstored identity).
+    let v1 = commit_edit(&mut generator, "v1");
+    assert_eq!(v1.text_edit_count, 1);
+    seal_active_patch(&layout, "heads/main");
+
+    // v1 -> v2, queued (not sealed): folds onto a baseline descending from a *sealed* EditText.
+    let v2 = commit_edit(&mut generator, "v2");
+    assert_eq!(v2.text_edit_count, 1);
+
+    // v2 -> v3, still queued: this commit's own diff must be read from the queue's own text cache,
+    // and folding v2 (needed to compute v3's baseline) must resolve from the SAME cache, not miss.
+    let v3 = commit_edit(&mut generator, "v3");
+    assert_eq!(v3.text_edit_count, 1);
+    assert_ne!(v2.patch_id, v3.patch_id);
+
+    let replay = Wal::for_layout(&layout).replay().unwrap();
+    assert_eq!(replay.records.len(), 2, "v2 and v3 both queued, unsealed");
+
+    // Seal both together: one block, two patch ids — DC-64's apply_one_block/apply_patch_ids loop at
+    // N = 2 for the first time.
+    seal_active_patch(&layout, "heads/main");
+
+    // v3 -> v4 against the two-patch sealed block: forces DC-64's incremental-step eligibility check
+    // to engage, hit the sealed-layer MissingBlobForLifecycleEffect, and fall back to full replay.
+    let v4 = commit_edit(&mut generator, "v4");
+    assert_eq!(v4.text_edit_count, 1);
+    seal_active_patch(&layout, "heads/main");
+
+    // Ground truth: an independent full replay from genesis reconstructs "v4" exactly, proving the
+    // whole chain — sealed, queued, and re-sealed — is consistent end to end.
+    let object_store = FileObjectStore::new(layout.clone());
+    let (baseline_block, horizon) =
+        crate::patch_replay::resolve_node_lineage_bounds(&layout, "heads/main").unwrap();
+    let state =
+        crate::lifecycle_cache::replay_derived_state(&object_store, baseline_block, horizon)
+            .unwrap();
+    let (node_id, _) = state
+        .state()
+        .live_nodes()
+        .find(|(_, node)| node.path.as_str() == "doc.txt")
+        .expect("doc.txt must still be live");
+    let final_text = crate::lifecycle_cache::materialize_edited_text(
+        &object_store,
+        baseline_block,
+        horizon,
+        *node_id,
+    )
+    .unwrap()
+    .expect("doc.txt was edited, so its text must be materializable");
+    assert_eq!(final_text, b"v4");
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// DC-66 criterion 5: crash during seal, with a queue of N, does not lose any queued patch. Simulates
+/// the crash point between "patch objects durably written" and "ref publication completes" — the WAL
+/// is untouched until `finish_active_publication_cleanup` runs at the very end of a *successful*
+/// seal, so both queued records must still be present and replayable after the simulated crash, and
+/// completing the publication (the retry path DC-38's crash-recovery machinery already covers,
+/// exercised here with N = 2 for the first time) must still produce the correct two-patch block.
+#[test]
+fn crash_during_seal_with_a_queued_pair_preserves_both_and_completes_on_retry() {
+    let root = unique_temp_dir("wt-queue-crash-during-seal");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    publish_node_baseline(&layout, &[("seed.txt", b"seed", BlobKind::Text)]);
+
+    let mut generator = deterministic_generator();
+    std::fs::write(root.join("a.txt"), b"alpha").unwrap();
+    commit_worktree_changes_with_generator(
+        &layout,
+        "heads/main",
+        "a",
+        WorktreePatchCommitOptions::file_level(),
+        &mut generator,
+        &test_signer(),
+    )
+    .unwrap();
+    std::fs::write(root.join("b.txt"), b"beta").unwrap();
+    commit_worktree_changes_with_generator(
+        &layout,
+        "heads/main",
+        "b",
+        WorktreePatchCommitOptions::file_level(),
+        &mut generator,
+        &test_signer(),
+    )
+    .unwrap();
+
+    let wal = Wal::for_layout(&layout);
+    let replay_before = wal.replay().unwrap();
+    assert_eq!(replay_before.records.len(), 2);
+
+    // Simulate the crash: durably write both queued patches (as seal's `persist_wal_patches` would),
+    // then stop before any ref publication happens.
+    let mut object_store = FileObjectStore::new(layout.clone());
+    let patch_ids: Vec<ObjectId> = replay_before
+        .records
+        .iter()
+        .map(|record| object_store.write_object(&record.envelope).unwrap())
+        .collect();
+    assert_eq!(patch_ids.len(), 2);
+
+    let replay_after_partial_seal = wal.replay().unwrap();
+    assert_eq!(
+        replay_after_partial_seal, replay_before,
+        "writing patch objects durably must not touch the WAL; only a completed publication cleans \
+         it up, so both queued records must still be exactly as they were"
+    );
+
+    // Retry (complete) the seal from here.
+    seal_active_patch(&layout, "heads/main");
+
+    let final_replay = wal.replay().unwrap();
+    assert_eq!(
+        final_replay.records.len(),
+        0,
+        "a completed seal must clear the queue"
+    );
+
+    // Ground truth: both queued patches ended up in the sealed lineage, nothing lost.
+    let object_store = FileObjectStore::new(layout.clone());
+    let (baseline_block, horizon) =
+        crate::patch_replay::resolve_node_lineage_bounds(&layout, "heads/main").unwrap();
+    let state =
+        crate::lifecycle_cache::replay_derived_state(&object_store, baseline_block, horizon)
+            .unwrap();
+    let mut paths: Vec<&str> = state
+        .state()
+        .live_nodes()
+        .map(|(_, node)| node.path.as_str())
+        .collect();
+    paths.sort_unstable();
+    assert_eq!(paths, vec!["a.txt", "b.txt", "seed.txt"]);
 
     let _ = std::fs::remove_dir_all(root);
 }
@@ -1253,13 +1436,13 @@ fn genesis_empty_worktree_fails_closed() {
 /// Genesis E1 guard: a second commit before the first seal fails closed rather than authoring a
 /// duplicate genesis patch (review E1, acceptance 7).
 #[test]
-fn genesis_second_commit_before_seal_fails_closed() {
+fn genesis_second_commit_before_seal_queues() {
     let root = unique_temp_dir("wt-genesis-double");
     let layout = RepositoryLayout::init(root.clone()).unwrap();
     std::fs::write(root.join("a.txt"), b"one\n").unwrap();
 
     let mut generator = deterministic_generator();
-    commit_worktree_changes_with_generator(
+    let first = commit_worktree_changes_with_generator(
         &layout,
         "heads/main",
         "genesis",
@@ -1269,10 +1452,13 @@ fn genesis_second_commit_before_seal_fails_closed() {
     )
     .unwrap();
 
-    // Second commit before seal: active WAL already has the genesis patch.
+    // DC-66: a second commit before seal now queues rather than refusing — the active WAL already
+    // has the genesis patch, chained from `Genesis` (no sealed lineage exists yet). This is the
+    // "unreachable by construction" branch `queuing-baseline-design-v1.md` §3 describes: every node
+    // this queue can see was created within the queue itself.
     std::fs::write(root.join("b.txt"), b"two\n").unwrap();
     let mut generator2 = deterministic_generator();
-    let err = commit_worktree_changes_with_generator(
+    let second = commit_worktree_changes_with_generator(
         &layout,
         "heads/main",
         "again",
@@ -1280,12 +1466,98 @@ fn genesis_second_commit_before_seal_fails_closed() {
         &mut generator2,
         &test_signer(),
     )
-    .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("active WAL already contains patches"),
-        "unexpected error: {err}"
+    .unwrap();
+
+    assert_ne!(first.patch_id, second.patch_id);
+    assert_eq!(second.wal_sequence, 2);
+    // The second commit's baseline correctly folded the first (queued, unsealed) commit's own
+    // CreateFile: only b.txt is new. If the fold were missing, a.txt would appear "no baseline node"
+    // and be re-created with a fresh id — the exact node-identity violation criterion 3 forbids.
+    assert_eq!(second.changes.len(), 1);
+    assert_eq!(second.changes[0].path, "b.txt");
+    assert_eq!(
+        second.changes[0].operation,
+        WorktreePatchOperationKind::CreateFile
     );
+
+    let replay = Wal::for_layout(&layout).replay().unwrap();
+    assert_eq!(replay.records.len(), 2);
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// DC-66 criterion 3: node identity is safe across a queue — no two queued patches can mint the same
+/// `node_id`, tested against constructed state. A file created by the first queued commit is
+/// correctly seen as existing by the second (proving the chain fold, not just non-collision by luck),
+/// and a pre-existing *sealed* file stays untouched by the queue's own creates.
+#[test]
+fn queued_commits_mint_distinct_node_ids_and_see_each_others_creates() {
+    let root = unique_temp_dir("wt-queue-node-identity");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    publish_node_baseline(&layout, &[("seed.txt", b"seed", BlobKind::Text)]);
+
+    let mut generator = deterministic_generator();
+    std::fs::write(root.join("a.txt"), b"alpha").unwrap();
+    let first = commit_worktree_changes_with_generator(
+        &layout,
+        "heads/main",
+        "queue a.txt",
+        WorktreePatchCommitOptions::file_level(),
+        &mut generator,
+        &test_signer(),
+    )
+    .unwrap();
+
+    std::fs::write(root.join("b.txt"), b"beta").unwrap();
+    let second = commit_worktree_changes_with_generator(
+        &layout,
+        "heads/main",
+        "queue b.txt",
+        WorktreePatchCommitOptions::file_level(),
+        &mut generator,
+        &test_signer(),
+    )
+    .unwrap();
+
+    // The second commit must see a.txt as already existing (folded from the first queued patch) —
+    // only b.txt is new. If the fold were missing, a.txt would appear "no baseline node" and be
+    // re-created with a fresh id, exactly the violation this criterion forbids.
+    assert_eq!(second.changes.len(), 1);
+    assert_eq!(second.changes[0].path, "b.txt");
+    assert_ne!(first.patch_id, second.patch_id);
+
+    let replay = Wal::for_layout(&layout).replay().unwrap();
+    assert_eq!(replay.records.len(), 2);
+
+    seal_active_patch(&layout, "heads/main");
+
+    // Ground truth: an independent full replay (not the incremental cache, not the commit path's own
+    // view) of the sealed batch must show exactly three live nodes with three pairwise-distinct node
+    // ids and the correct paths.
+    let object_store = FileObjectStore::new(layout.clone());
+    let (baseline_block, horizon) =
+        crate::patch_replay::resolve_node_lineage_bounds(&layout, "heads/main").unwrap();
+    let state =
+        crate::lifecycle_cache::replay_derived_state(&object_store, baseline_block, horizon)
+            .unwrap();
+    let mut paths_and_ids: Vec<(String, NodeId)> = state
+        .state()
+        .live_nodes()
+        .map(|(node_id, node)| (node.path.as_str().to_string(), *node_id))
+        .collect();
+    paths_and_ids.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        paths_and_ids
+            .iter()
+            .map(|(path, _)| path.as_str())
+            .collect::<Vec<_>>(),
+        vec!["a.txt", "b.txt", "seed.txt"]
+    );
+    let mut ids: Vec<NodeId> = paths_and_ids.iter().map(|(_, id)| *id).collect();
+    ids.sort();
+    ids.dedup();
+    assert_eq!(ids.len(), 3, "node ids must be pairwise distinct");
+
     let _ = std::fs::remove_dir_all(root);
 }
 

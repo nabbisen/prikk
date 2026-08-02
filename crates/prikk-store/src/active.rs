@@ -64,14 +64,13 @@ impl ActiveSession {
                 replay.trailing_partial_bytes
             )));
         }
-        if !replay.records.is_empty() {
+        if replay.records.is_empty() {
+            prepare_empty_active_ref_for_append(&self.layout, "heads/main")?;
+        } else {
+            // DC-66: a non-empty active WAL now queues rather than refusing outright; ownership must
+            // still be unambiguous — see `node_authoring.rs::author_inner`'s identical guard change.
             require_active_ref_for_non_empty_wal(&self.layout, "heads/main")?;
-            return Err(PrikkError::LockConflict(
-                "active WAL already contains patches for heads/main; seal before appending again"
-                    .to_string(),
-            ));
         }
-        prepare_empty_active_ref_for_append(&self.layout, "heads/main")?;
         let wal_sequence = wal.append_patch(envelope)?;
         Ok(ActiveCommitResult { wal_sequence })
     }

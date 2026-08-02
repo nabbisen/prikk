@@ -89,6 +89,22 @@ pub struct RepositoryVerification {
     /// full replay of the block they claim to represent — reported per the design document §6
     /// rather than silently trusted by a future commit.
     pub lifecycle_cache_divergences: Vec<LifecycleCacheDivergence>,
+    /// DC-66: active WAL queue-ordering violations — a record whose sequence does not strictly
+    /// increase over its predecessor. Adversarial-only under normal operation (`Wal::append_patch`
+    /// always assigns the next sequence), but a queue of N gives ordering a meaning ("patches seal in
+    /// append order") worth verifying explicitly rather than assuming from decode success alone.
+    pub active_wal_ordering_issues: Vec<ActiveWalOrderingIssue>,
+}
+
+/// One active-WAL record whose sequence did not strictly increase over the previous record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActiveWalOrderingIssue {
+    /// Zero-based position of the offending record within the replayed WAL.
+    pub index: usize,
+    /// Sequence of the previous record.
+    pub previous_seq: u64,
+    /// Sequence of the offending record (not greater than `previous_seq`).
+    pub seq: u64,
 }
 
 impl RepositoryVerification {
@@ -140,6 +156,12 @@ impl RepositoryVerification {
     #[must_use]
     pub fn has_lifecycle_cache_divergence(&self) -> bool {
         !self.lifecycle_cache_divergences.is_empty()
+    }
+
+    /// Return true when the active WAL contains an out-of-order or duplicate sequence.
+    #[must_use]
+    pub fn has_active_wal_ordering_issue(&self) -> bool {
+        !self.active_wal_ordering_issues.is_empty()
     }
 }
 
@@ -230,6 +252,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
     )?;
     let commit_index_divergences = verify_divergence(layout)?;
     let lifecycle_cache_divergences = verify_lifecycle_cache_divergence(&object_store, layout);
+    let active_wal_ordering_issues = check_active_wal_ordering(&replay.records);
     Ok(RepositoryVerification {
         legacy_state_roots_unverifiable: layout.format() == RepositoryFormat::LegacyV1,
         checked_objects: object_summary.object_count,
@@ -250,7 +273,26 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
         active_wal_metadata_status,
         commit_index_divergences,
         lifecycle_cache_divergences,
+        active_wal_ordering_issues,
     })
+}
+
+/// Check that active WAL record sequences strictly increase in replay (append) order. Reachable only
+/// under direct file tampering — `Wal::append_patch` always assigns `previous.seq + 1` — but a queue
+/// of N gives "ordering" its own meaning worth verifying explicitly (RFC criterion 6), not merely
+/// assumed from successful structural decode.
+fn check_active_wal_ordering(records: &[crate::wal::WalRecord]) -> Vec<ActiveWalOrderingIssue> {
+    records
+        .iter()
+        .zip(records.iter().skip(1))
+        .enumerate()
+        .filter(|(_, (previous, current))| current.seq <= previous.seq)
+        .map(|(index, (previous, current))| ActiveWalOrderingIssue {
+            index: index + 1,
+            previous_seq: previous.seq,
+            seq: current.seq,
+        })
+        .collect()
 }
 
 fn classify_active_wal_metadata(

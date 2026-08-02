@@ -125,7 +125,8 @@ pub use trust::{
     load_maintainer_trust_policy, verify_signer_trusted, verify_trusted_publication_envelope,
 };
 pub use verify::{
-    ActiveWalMetadataStatus, ObjectVerification, RepositoryVerification, verify_repository,
+    ActiveWalMetadataStatus, ActiveWalOrderingIssue, ObjectVerification, RepositoryVerification,
+    verify_repository,
 };
 pub use wal::{Wal, WalRecord, WalRepair, WalReplay};
 pub use worktree::{SnapshotMaterializationReport, materialize_snapshot_checkout};

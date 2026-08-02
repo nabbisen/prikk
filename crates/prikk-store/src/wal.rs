@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;
-use prikk_object::{ObjectEnvelope, ObjectType};
+use prikk_object::{ObjectEnvelope, ObjectId, ObjectType};
 
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_u16, push_u64};
@@ -44,6 +44,10 @@ pub struct WalRepair {
     pub preserved_records: usize,
     /// Number of trailing partial bytes truncated.
     pub truncated_bytes: usize,
+    /// Patch object ids of the preserved records, in WAL order. DC-66 criterion 5: a repair against a
+    /// queue of N must say *which* authors' work survived, not just how many records — "3 records
+    /// preserved" does not answer that for N > 1 the way it unambiguously did for N = 1.
+    pub preserved_patch_ids: Vec<ObjectId>,
 }
 
 /// File-backed active-session WAL.
@@ -166,13 +170,20 @@ impl Wal {
             return Ok(WalRepair {
                 preserved_records: 0,
                 truncated_bytes: 0,
+                preserved_patch_ids: Vec::new(),
             });
         };
         let replay = decode_records(&bytes)?;
+        let preserved_patch_ids: Vec<ObjectId> = replay
+            .records
+            .iter()
+            .map(|record| record.envelope.object_id())
+            .collect();
         if replay.trailing_partial_bytes == 0 {
             return Ok(WalRepair {
                 preserved_records: replay.records.len(),
                 truncated_bytes: 0,
+                preserved_patch_ids,
             });
         }
         let current_len = u64::try_from(bytes.len())
@@ -188,6 +199,7 @@ impl Wal {
         Ok(WalRepair {
             preserved_records: replay.records.len(),
             truncated_bytes: replay.trailing_partial_bytes,
+            preserved_patch_ids,
         })
     }
 

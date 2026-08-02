@@ -34,15 +34,16 @@ use output::{
     print_snapshot_materialization_report, print_verify_report, print_worktree_status,
 };
 use prikk_store::{
-    DoctorRepairOptions, Ed25519AuthorSigner, Ed25519MaintainerSigner, MergeEvidenceTarget,
-    RefStore, RepositoryFormat, RepositoryLayout, Wal, WorktreePatchCommitOptions,
-    add_trusted_maintainer, append_rollback_draft, commit_worktree_changes_signed,
-    doctor_repository, load_ref_history, materialize_patch_checkout,
-    materialize_patch_checkout_with_deletions, materialize_snapshot_checkout,
-    plan_patch_checkout_deletions, prepare_checkout_plan, prepare_merge_evidence,
-    prepare_merge_plan, prepare_patch_inverse_plan, prepare_patch_replay_plan,
-    prepare_rollback_preview, prepare_snapshot_checkout_plan, repair_repository,
-    verify_active_rollback_draft, verify_repository, worktree_status,
+    ActiveRefMetadata, DoctorRepairOptions, Ed25519AuthorSigner, Ed25519MaintainerSigner,
+    MergeEvidenceTarget, RefStore, RepositoryFormat, RepositoryLayout, Wal,
+    WorktreePatchCommitOptions, add_trusted_maintainer, append_rollback_draft,
+    commit_worktree_changes_signed, doctor_repository, load_ref_history,
+    materialize_patch_checkout, materialize_patch_checkout_with_deletions,
+    materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan,
+    prepare_merge_evidence, prepare_merge_plan, prepare_patch_inverse_plan,
+    prepare_patch_replay_plan, prepare_rollback_preview, prepare_snapshot_checkout_plan,
+    read_active_ref_metadata, repair_repository, verify_active_rollback_draft, verify_repository,
+    worktree_status,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -230,6 +231,22 @@ fn run_status() -> std::result::Result<(), String> {
         Some(id) => println!("heads/main RefState: {id}"),
         None => println!("heads/main RefState: <not published>"),
     }
+    // DC-66 criterion 7: report the queued patch count and the ref the queue targets, distinct from
+    // `replay.records.len()` (a raw count with no ownership) and `heads/main RefState` (the last
+    // *sealed* state, not what an active queue is targeting).
+    if replay.records.is_empty() {
+        println!("queued patches: 0");
+    } else {
+        let target = match read_active_ref_metadata(&layout).map_err(|err| err.to_string())? {
+            ActiveRefMetadata::Valid(ref_name) => ref_name,
+            ActiveRefMetadata::Missing => "<missing metadata>".to_string(),
+            ActiveRefMetadata::Invalid(_) => "<malformed metadata>".to_string(),
+        };
+        println!(
+            "queued patches: {} targeting {target}",
+            replay.records.len()
+        );
+    }
     println!(
         "status: multi-operation text diff minimization, plugins, and sync not \
          yet implemented"
@@ -395,6 +412,8 @@ fn run_verify(path: Option<String>) -> std::result::Result<(), String> {
         Err("commit-index cache disagrees with the worktree for at least one path".to_string())
     } else if report.has_lifecycle_cache_divergence() {
         Err("lifecycle-state cache disagrees with an independent replay".to_string())
+    } else if report.has_active_wal_ordering_issue() {
+        Err("active WAL contains an out-of-order or duplicate queued patch sequence".to_string())
     } else {
         Ok(())
     }
@@ -414,6 +433,11 @@ fn run_doctor(args: Vec<String>) -> std::result::Result<(), String> {
             "repair: truncated {} trailing WAL byte(s); preserved {} record(s)",
             repair.wal_repair.truncated_bytes, repair.wal_repair.preserved_records
         );
+        // DC-66 criterion 5: a repair against a queue of N must say *which* patches survived, not
+        // just how many — "3 records preserved" does not identify them for N > 1.
+        for patch_id in &repair.wal_repair.preserved_patch_ids {
+            println!("repair: preserved queued patch {patch_id}");
+        }
         if let Some(ref_repair) = &repair.ref_repair {
             println!(
                 "repair: {} heads/main pointer for RefState {}",
