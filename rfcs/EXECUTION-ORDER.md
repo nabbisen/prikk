@@ -40,6 +40,7 @@ from. **DC-57's handoff v1 is withdrawn — issue v2 only.**
 | 6 | **DC-66** — multi-commit queuing | **Complete at `45af36f`** — reviewed and accepted 2026-08-02, all eleven criteria met, one non-blocking note (rollback-draft still rejects on a non-empty WAL, deliberately). Architect independently rebuilt a four-deep queued edit chain from sealed history and got byte-correct content | nothing | — |
 | 7 | **DC-57** — active-patch thresholds (NFR-PERF-02) | **Complete at `caa2fc2`** — reviewed and accepted 2026-08-02, no findings. Hard block fires before any write; `>=` semantics documented; config fails closed on all four bad inputs. **NFR-PERF-02 implemented** | nothing | — |
 | 8 | **DC-67** — ordinary-use conformance suite | **Complete at `d87a542`** — reviewed and accepted 2026-08-02. **The prediction held**: two findings reported, neither fixed here — (1) `checkout --patch-materialize` cannot replay `ReplaceBinary`/`ChangePerm`, (2) no working-directory branch-switch. Both now unowned | nothing | — |
+| 9 | **DC-68** — preview release authority class | **Accepted 2026-08-02, release-blocking.** Prerequisites discharged by the architect; amendment text is the remaining work | none — **cleared to start** | handoff pending, being written now |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.
