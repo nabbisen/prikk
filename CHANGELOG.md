@@ -49,11 +49,25 @@ also adds new command surface and a new envelope schema.
   axis the existing adversarial and structural coverage did not reach.
 - **DC-59, DC-62: commit benchmark**, with wall-clock, memory, and consecutive-cycle axes.
 
+**Release authority — read before relying on this release**
+
+- **This release does not pass the DC-35 signer-authority audit, and does not claim to.** The committed
+  release-signer set (`release-signers.toml`) is empty and fail-closed, so no release currently satisfies
+  that gate. The tag is unsigned, on the same footing as every release through 0.17.7 — but unlike those,
+  0.18.0 does not predate the policy, so it is stated here explicitly rather than covered by the
+  pre-policy exemption in `docs/src/reference/release-compatibility.md`.
+- No authority transaction was performed. Populating the signer set requires two distinct natural persons
+  (`DC-35:219`) and remains outstanding.
+- The default branch was not under observed branch-protection controls when this release was prepared.
+- Accordingly: **verify what you obtain by content, not by release authority.** The repository's own
+  object identity and `prikk verify` are the checkable properties here; the release channel is not.
+
 **Known gaps**
 
 - `checkout --patch-materialize` cannot replay `ReplaceBinary` or `ChangePerm`.
 - No working-directory branch switch; every command resolves `--ref` explicitly.
 - Repository format remains unstable. No compatibility is promised.
+- NFR-PERF-01 (commit cost bounded independently of repository size) remains unmet — see Performance.
 
 ## 0.17.7 — 2026-07-13
 

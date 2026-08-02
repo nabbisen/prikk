@@ -16,7 +16,12 @@ identity-bearing objects, see the [data model](./data-model.md). For persistence
 - The workspace version alone does not identify an official release.
 - Current release checks are partly manual. `cargo audit` and `cargo deny` are not configured gates.
 - The committed release-signer set is empty, so no release currently satisfies the DC-35 signer gate.
-- Tags through 0.17.7 predate this policy and must not be reported as passing its signer-authority audit.
+- Tags through 0.17.7 predate this policy and must not be reported as passing its signer-authority
+  audit.
+- 0.18.0 does **not** predate the policy. It was released with an unsigned tag and no authority
+  transaction, and its changelog states so explicitly. It must not be reported as passing the
+  signer-authority audit either. Releases made while the signer set is empty state this in their own
+  release notes rather than relying on the pre-policy exemption above.
 - DC-35 does not provide SBOMs, provenance attestations, mature key custody/rotation/revocation, or
   production-readiness evidence. Those remain later DC-43 work.
 
