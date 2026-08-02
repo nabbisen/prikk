@@ -28,7 +28,7 @@ Ordered by recommended sequence. The project owner may reorder by product value;
 is what actually constrains order.
 
 Hand the developer the handoff, not the RFC — the RFC is scope authority, the handoff is what they work
-from. **DC-57's handoff is withdrawn — do not issue it.**
+from. **DC-57's handoff v1 is withdrawn — issue v2 only.**
 
 | # | Increment | State | Blocked by | **Handoff to give developers** |
 |---|---|---|---|---|
@@ -38,6 +38,7 @@ from. **DC-57's handoff is withdrawn — do not issue it.**
 | 4 | **DC-64** — baseline reconstruction cost (NFR-PERF-01, carried) | Implemented; **closes partial** — the O(operations replayed) full-lineage-replay cost (97.6% of the phase) is eliminated on the warm path, but `load`/`persist`/`from_replay`, each a binding condition of the trust-ladder ruling, remain O(live node count), so Axis A is not fully flat. **NFR-PERF-01 remains missed**, on a lower curve. See the design document §9 | none | — |
 | 5 | **DC-65** — text-edit baseline content | **Complete at `250ad54`** — reviewed and accepted 2026-07-31, verified independently at N=6 sealed edits, one non-blocking process note (reported gate commands did not match §6 rule 9; architect re-ran the canonical set, all pass). §1's four questions answered before design (`prerequisite-questions-v1.md`); invariant stated and both `plan_edit_text` and `patch_algebra::baseline_text` conform; a fifth site (DC-64's incremental step) found and fixed once the first three unblocked it; N=4/5 sealed-edit tests at store and CLI level; `ReplaceBinary` confirmed unaffected with a regression test; coverage finding recorded | none | — |
 | 6 | **DC-66** — multi-commit queuing | **Complete at `45af36f`** — reviewed and accepted 2026-08-02, all eleven criteria met, one non-blocking note (rollback-draft still rejects on a non-empty WAL, deliberately). Architect independently rebuilt a four-deep queued edit chain from sealed history and got byte-correct content | nothing | — |
+| 7 | **DC-57** — active-patch thresholds (NFR-PERF-02) | **HOLD LIFTED 2026-08-02.** DC-66 made 800/1000 reachable; design re-verified against queuing before issuing | none — **cleared to start** | `handoffs/DC-57-active-patch-thresholds/implementation-handoff-v2.md` — **v1 withdrawn** |
 
 Each handoff for a *proposed* RFC states at its head that implementation may not begin until that RFC is
 accepted. Preparing the handoff is not authorization; it removes everything except the design gate.

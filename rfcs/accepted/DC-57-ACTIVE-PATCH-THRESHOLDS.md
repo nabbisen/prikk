@@ -1,6 +1,13 @@
 # RFC (proposed) - DC-57 Active-Patch Thresholds
 
-**Status.** **HELD 2026-07-29 — do not implement.** The dev team stopped at handoff Step 1 as instructed
+**Status.** **HOLD LIFTED 2026-08-02 — cleared to start**, handoff at
+`handoffs/DC-57-active-patch-thresholds/implementation-handoff-v2.md` (**v1 is withdrawn**). DC-66 is
+complete at `45af36f`, so the active WAL holds N unsealed patches and 800/1000 is reachable and testable.
+The design below was re-verified against the queuing capability before the handoff was issued: the
+environment-variable mechanism and its rationale are unaffected, and `status` reporting now **extends**
+DC-66's existing queue output rather than inventing a surface.
+
+**Prior status.** **HELD 2026-07-29 — did not implement.** The dev team stopped at handoff Step 1 as instructed
 and reported that the RFC's premise is architecturally unreachable; architect verification confirmed it
 (`.git-exclude/reviewed/prikk-dc57-ruling-dc58-dc59-implementation-review-v1.md` Part 1).
 
