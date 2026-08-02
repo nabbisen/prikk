@@ -1,6 +1,7 @@
-# RFC (proposed) - DC-69 Lifecycle-State Retention
+# RFC (accepted) - DC-69 Lifecycle-State Retention
 
-**Status.** **Proposed 2026-08-03.** Awaits owner acceptance.
+**Status.** **Accepted by the project owner on 2026-08-03.** Implementation may begin; handoff at
+`handoffs/DC-69-lifecycle-state-retention/implementation-handoff-v1.md`. **§3.1 and §3.2 were discharged by the architect at acceptance** — see the handoff §2.
 **Authored by** the architect.
 **Independence.** Author-reviewed — the standing ceiling. Compensated by §3's prerequisites being
 answerable from the repository and by §2 permitting "no change" as an outcome.
