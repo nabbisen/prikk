@@ -1,6 +1,7 @@
-# RFC (proposed) - DC-66 Multi-Commit Queuing
+# RFC (accepted) - DC-66 Multi-Commit Queuing
 
-**Status.** **Proposed 2026-08-02.** Awaits owner acceptance.
+**Status.** **Accepted by the project owner on 2026-08-02.** Implementation may begin; handoff at
+`handoffs/DC-66-multi-commit-queuing/implementation-handoff-v1.md`.
 **Authored by** the architect.
 **Independence.** Authored and reviewed by the architect — the standing ceiling
 ([[prikk-author-review-independence-ceiling]]). Compensated as usual by acceptance criteria written to be
