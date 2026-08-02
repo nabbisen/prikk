@@ -904,3 +904,159 @@ fn render_report(
     out.push_str("```\ncargo test -p prikk --locked --test dc59_commit_benchmark -- --ignored --nocapture commit_benchmark\n```\n");
     out
 }
+
+// ---------------------------------------------------------------------------------------------
+// DC-69 §3.4: Axis D — long history, small tree.
+//
+// A separate, self-contained pass, deliberately never interleaved with `commit_benchmark`'s
+// Axis A/B/C or the memory pass above (same precedent as DC-62's memory pass: a distinct question
+// gets a distinct trial, not a modification to code another increment's report depends on).
+// `commit_benchmark`, `render_report`, and Axis A/B/C above are untouched by this addition.
+//
+// Every prior axis in this file varies **file count** (repository size) at a short lineage — at
+// most `CYCLE_COUNT = 5` sealed generations (Axis C). None isolates **cumulative history** from
+// tree size: a repository that has existed for a long time but always stayed small. DC-69 asks
+// exactly this question, because `NodeLifecycleState::seen_ids`/`latest_tombstone_by_id` grow with
+// total operations ever performed, never with the current tree's size — so if their cost is real,
+// it should appear here even though Axis A/B/C's own repositories never grow large enough or live
+// long enough to show it.
+//
+// **Churn, not edits.** `mutate_files` (Axis A/B/C) only edits existing content, which never mints
+// or tombstones a node id — `seen_ids` and `latest_tombstone_by_id` would stay flat under it
+// regardless of cycle count, proving nothing about this axis's question. Each Axis D generation
+// instead deletes the oldest tracked file and creates a new one at a fresh path: live tree size
+// stays fixed at `AXIS_D_TREE_SIZE` every generation, while `seen_ids` grows by one and
+// `latest_tombstone_by_id` grows by one, per generation, forever.
+
+/// Tree size held fixed across every point on this axis — the variable under test is history
+/// length, not repository size, which is exactly what distinguishes this from Axis A/B/C.
+const AXIS_D_TREE_SIZE: usize = 20;
+/// History depth (sealed generations before the timed commit) at each point.
+const AXIS_D_GENERATION_DEPTHS: [usize; 4] = [10, 50, 100, 200];
+const AXIS_D_SAMPLES: usize = 3;
+
+/// One churn generation: delete the oldest tracked file, create a new one at a fresh path, commit,
+/// seal. Untimed — used for every generation except the last at each depth, which
+/// `run_axis_d` times separately via `time_commit`.
+fn churn_generation(
+    root: &Path,
+    files: &mut Vec<PathBuf>,
+    next_index: &mut usize,
+    rng: &mut SplitMix64,
+) {
+    let (path, content) = prepare_churn_step(root, files, next_index, rng);
+    std::fs::write(root.join(&path), &content).unwrap();
+    let out = prikk(root)
+        .env("PRIKK_AUTHOR_KEY_ID", FIXED_AUTHOR_KEY_ID)
+        .env("PRIKK_AUTHOR_SEED", hex(&FIXED_AUTHOR_SEED))
+        .args(["commit", "-m", "dc69-bench: churn"])
+        .output()
+        .unwrap();
+    ok(&out, "churn commit");
+    seal_active_wal(root);
+}
+
+/// Shared step for both the untimed churn loop and the final, timed generation: delete the oldest
+/// tracked file from disk and the tracking list, choose a fresh path for its replacement, write its
+/// content, and return that path so the caller decides how to time the commit. Keeps live tree size
+/// at exactly `files.len()` before and after every call.
+fn prepare_churn_step(
+    root: &Path,
+    files: &mut Vec<PathBuf>,
+    next_index: &mut usize,
+    rng: &mut SplitMix64,
+) -> (PathBuf, Vec<u8>) {
+    let victim = files.remove(0);
+    std::fs::remove_file(root.join(&victim)).unwrap();
+    let new_path = PathBuf::from(format!("churn-{next_index}.txt"));
+    *next_index += 1;
+    let mut content = vec![0_u8; FILE_SIZE_BYTES];
+    rng.fill_bytes(&mut content);
+    for byte in &mut content {
+        *byte = b'a' + (*byte % 26);
+    }
+    files.push(new_path.clone());
+    (new_path, content)
+}
+
+/// For each history depth, run `AXIS_D_SAMPLES` independent repositories through `depth - 1`
+/// untimed churn generations, then time exactly the final (depth-th) commit. Comparing that timed
+/// commit's cost **across depths**, with tree size fixed at `AXIS_D_TREE_SIZE` throughout, is what
+/// isolates cumulative-history cost from repository-size cost.
+fn run_axis_d() -> Vec<Point> {
+    let mut points = Vec::with_capacity(AXIS_D_GENERATION_DEPTHS.len());
+    for &depth in &AXIS_D_GENERATION_DEPTHS {
+        let mut samples = Vec::with_capacity(AXIS_D_SAMPLES);
+        for sample_index in 0..AXIS_D_SAMPLES {
+            let root = unique_dir(&format!("axis-d-{depth}-{sample_index}"));
+            let seed = CONTENT_SEED
+                .wrapping_add(0x6000_0000)
+                .wrapping_add(depth as u64)
+                .wrapping_add(sample_index as u64);
+            let mut files = setup_baseline_repository(&root, AXIS_D_TREE_SIZE, seed);
+            let mut rng = SplitMix64::new(seed ^ 0xFFFF_FFFF_0000_0000);
+            let mut next_index = AXIS_D_TREE_SIZE;
+            for _ in 0..depth.saturating_sub(1) {
+                churn_generation(&root, &mut files, &mut next_index, &mut rng);
+            }
+            let (path, content) = prepare_churn_step(&root, &mut files, &mut next_index, &mut rng);
+            std::fs::write(root.join(&path), &content).unwrap();
+            samples.push(time_commit(&root));
+            let _ = std::fs::remove_dir_all(&root);
+        }
+        points.push(Point {
+            label: format!("{depth} generations"),
+            samples,
+        });
+    }
+    points
+}
+
+fn render_axis_d_report(points: &[Point]) -> String {
+    let mut out = String::new();
+    out.push_str("# DC-69 §3.4 — Axis D: Cost at Long History, Small Tree\n\n");
+    out.push_str(&format!(
+        "Tree size held fixed at **{AXIS_D_TREE_SIZE} files** across every point. The varying \
+         quantity is history depth: the number of sealed churn generations (delete oldest tracked \
+         file, create one new file at a fresh path — net live tree size unchanged) before the \
+         timed commit. `{AXIS_D_SAMPLES}` independent repositories per depth. See \
+         `crates/prikk-cli/tests/dc59_commit_benchmark.rs`'s DC-69 section for the full method and \
+         why churn (not edits) is required to exercise `seen_ids`/`latest_tombstone_by_id` growth.\n\n",
+    ));
+    out.push_str("| History depth | Live tree size | Median | Min | Max |\n");
+    out.push_str("|---:|---:|---:|---:|---:|\n");
+    for point in points {
+        out.push_str(&format!(
+            "| {} | {AXIS_D_TREE_SIZE} files | {} ms | {} ms | {} ms |\n",
+            point.label,
+            fmt_ms(point.median()),
+            fmt_ms(point.min()),
+            fmt_ms(point.max()),
+        ));
+    }
+    out.push('\n');
+    out.push_str(
+        "**Reading this table:** if the timed commit's cost at depth 200 is materially higher \
+         than at depth 10, with live tree size identical (20 files) at every row, that cost is \
+         attributable to cumulative history — `seen_ids`/`latest_tombstone_by_id`'s unbounded \
+         growth — not to repository size, which no prior DC-59/62/64 axis isolates.\n\n",
+    );
+    out.push_str("## Reproduction\n\n");
+    out.push_str(
+        "```\ncargo test -p prikk --locked --test dc59_commit_benchmark -- --ignored --nocapture axis_d_long_history_small_tree\n```\n",
+    );
+    out
+}
+
+#[test]
+#[ignore = "long-running measurement instrument; run deliberately, see module docs"]
+fn axis_d_long_history_small_tree() {
+    let points = run_axis_d();
+    let report = render_axis_d_report(&points);
+    let report_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../rfcs/handoffs/DC-69-lifecycle-state-retention/axis-d-benchmark-report-v1.md"
+    );
+    std::fs::write(report_path, report).unwrap();
+    eprintln!("report written to {report_path}");
+}
