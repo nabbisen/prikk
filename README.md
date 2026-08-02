@@ -41,7 +41,7 @@ Prikk is designed to be:
 
 ## Current Status
 
-Latest released implementation: **0.17.7**, adding the concurrency and locking reference.
+Latest released implementation: **0.18.0**, adding branch and tag surfaces, multi-commit queuing, commit-path caching, and a correctness fix for repeated text edits.
 
 Next increment candidates are tracked in `ROADMAP.md`.
 

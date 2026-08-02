@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.18.0 — 2026-08-03
+
+First release since 0.17.7 (129 commits). **Cut because 0.17.7 cannot edit the same text file twice** — a
+long-standing defect in the core workflow, fixed here by DC-65. Minor rather than patch because the release
+also adds new command surface and a new envelope schema.
+
+**Correctness**
+
+- **DC-65: repeated text edits.** Editing the same text file across two or more sealed commits failed with
+  `baseline content Blob ... is missing`. `plan_edit_text` read a node's `blob_id` as a stored object, but
+  `EditText` records a diff and never writes its derived content as a blob. Establishes the invariant that a
+  node's `blob_id` is a **content identity, not necessarily a stored object**, and materializes on demand
+  through replay — matching what the replay side always did. Verified across six sealed generations.
+- **DC-61 N1: `branch close` fail-open.** A non-empty active WAL with missing or malformed ownership
+  metadata permitted closure where every other publisher stops on the same integrity error.
+
+**New surface**
+
+- **DC-60, DC-61: branches.** `prikk branch create`, `prikk branch close`, and `prikk branch list --all`.
+  Closure is not deletion — the pointer, history, and objects all stay, and reopening is an ordinary CAS
+  update. Adds `RefState` envelope **schema 2** carrying a `closed` marker, emitted only when set so every
+  existing ref-state ObjectId is unchanged.
+- **DC-63: tags.** `prikk tag create` and `prikk tag list`, with kind-aware ref publication and verification.
+- **DC-66: multi-commit queuing.** The active session holds N unsealed patches; `commit` no longer refuses
+  on a non-empty WAL; `seal` batches the queue into one block. Queued commits chain — each authors against
+  the previous one's state — so node identity holds across a queue.
+- **DC-57: active-patch thresholds.** Warns at 800 queued patches and blocks at 1000, configurable via
+  `PRIKK_ACTIVE_PATCH_WARN` and `PRIKK_ACTIVE_PATCH_LIMIT`. The block fires before any write, so a blocked
+  commit leaves no partial state.
+
+**Performance**
+
+- **DC-56: changed-path index.** Commit no longer reads every file's contents; a cache under `cache_dir()`
+  records per-path stat and content hash so unchanged files are skipped. Content-read cost fell ~20%.
+- **DC-64: incremental baseline cache.** Commit no longer replays the whole lineage; it applies one block
+  onto a cached predecessor, cutting the dominant cost (~370 ms to ~2.6 ms at 10,000 files). Both caches are
+  rebuildable, never authoritative, and `verify` reports divergence for either.
+- **NFR-PERF-01 is still not met.** Commit cost no longer tracks operations replayed, but `load`, `persist`,
+  and `from_replay` remain proportional to live node count, so cost still grows with repository size.
+
+**Assurance**
+
+- **DC-55: SHA-256.** The first-party implementation is replaced by `sha2`, with the outgoing implementation
+  retained test-only as a permanent differential reference.
+- **DC-67: ordinary-use conformance suite.** Sequences of ordinary operations at N ≥ 3 through the compiled
+  binary, each ending by rebuilding the worktree from sealed history and asserting byte-exact content — the
+  axis the existing adversarial and structural coverage did not reach.
+- **DC-59, DC-62: commit benchmark**, with wall-clock, memory, and consecutive-cycle axes.
+
+**Known gaps**
+
+- `checkout --patch-materialize` cannot replay `ReplaceBinary` or `ChangePerm`.
+- No working-directory branch switch; every command resolves `--ref` explicitly.
+- Repository format remains unstable. No compatibility is promised.
+
 ## 0.17.7 — 2026-07-13
 
 DC-33: concurrency and locking reference.
