@@ -18,8 +18,9 @@ identity-bearing objects, see the [data model](./data-model.md). For persistence
 - The committed release-signer set is empty, so no release currently satisfies the DC-35 signer gate.
 - Tags through 0.17.7 predate this policy and must not be reported as passing its signer-authority
   audit.
-- 0.18.0 does **not** predate the policy. It was released with an unsigned tag and no authority
-  transaction, and its changelog states so explicitly. It must not be reported as passing the
+- 0.18.0 does **not** predate the policy. Its tag carries the maintainer's ordinary OpenPGP signature
+  but no allowlisted release-signer authority, and no authority transaction was performed; its changelog
+  states so explicitly. It must not be reported as passing the
   signer-authority audit either. Releases made while the signer set is empty state this in their own
   release notes rather than relying on the pre-policy exemption above.
 - DC-35 does not provide SBOMs, provenance attestations, mature key custody/rotation/revocation, or

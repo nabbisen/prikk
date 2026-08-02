@@ -53,9 +53,10 @@ also adds new command surface and a new envelope schema.
 
 - **This release does not pass the DC-35 signer-authority audit, and does not claim to.** The committed
   release-signer set (`release-signers.toml`) is empty and fail-closed, so no release currently satisfies
-  that gate. The tag is unsigned, on the same footing as every release through 0.17.7 — but unlike those,
-  0.18.0 does not predate the policy, so it is stated here explicitly rather than covered by the
-  pre-policy exemption in `docs/src/reference/release-compatibility.md`.
+  that gate. The tag carries the maintainer's ordinary OpenPGP signature, as tags through 0.17.7 do, but
+  **that key is not an allowlisted release signer** — signature presence is not signer authority. Unlike
+  those tags, 0.18.0 does not predate the policy, so this is stated here explicitly rather than covered by
+  the pre-policy exemption in `docs/src/reference/release-compatibility.md`.
 - No authority transaction was performed. Populating the signer set requires two distinct natural persons
   (`DC-35:219`) and remains outstanding.
 - The default branch was not under observed branch-protection controls when this release was prepared.
