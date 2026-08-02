@@ -34,6 +34,7 @@ These records are under design review. All proposed RFCs must respect the depend
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
 | DC-52 | [Python and Oracle Decommissioning](./proposed/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | M2 / 0.19.0; **release-blocked** — `DC-45:419` forbids deletion before the first Rust-gated 0.19.0 release |
 | DC-53 | [Repository-Wide AUTHOR Trust Verification](./proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md) | Post-M2, unscheduled |
+| DC-66 | [Multi-Commit Queuing](./proposed/DC-66-MULTI-COMMIT-QUEUING.md) | Product **M3**. Opened 2026-08-02 on the owner's decision that queuing is a scheduled capability. Unblocks **DC-57** and makes NFR-PERF-02/03 meetable. **Most of the surface already supports N** — the cap is three guards — so the increment is crash recovery, `verify`, and ordering, not the append path; awaits owner acceptance |
 
 **None of these five is a live design-review candidate.** All are blocked or unscheduled — DC-56, DC-60,
 DC-61, DC-62 and DC-63 have all moved to `accepted/`:
