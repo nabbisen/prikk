@@ -189,10 +189,15 @@ the release lane is parked; see `MILESTONES.md` under Baseline and release postu
 
 ## Release Candidate Increment
 
-- Release lane state: **parked**.
-- Activated release target: **none**.
-- No active release candidate is selected after the 0.17.7 release.
-- No signer bootstrap, hold clock, RC, tag, or publication action is selected.
+- Release lane state: **active**.
+- Activated release target: **0.18.0**.
+- Activated 2026-08-02 by the architect under the owner's delegation of minor/patch release scheduling.
+- **Why now:** 0.17.7 is the published release and cannot edit the same text file twice (DC-65). That is a
+  defect in a shipped artifact, not accumulated scope. 129 commits stand behind it.
+- **Why minor, not patch:** DC-61 added `RefState` envelope schema 2; DC-60 and DC-63 added `branch
+  create/close` and `tag create/list`. New surface plus a format change is a minor bump.
+- Signer bootstrap, hold clock, RC finalization, tag, and publication remain **not** selected — DC-35's
+  authority preconditions are unmet (see MILESTONES.md).
 
 ## Last Released Increment
 

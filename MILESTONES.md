@@ -46,9 +46,24 @@ change.
 If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
 reviewed commit restores agreement.
 
-**Current release lane:** `parked`.
+**Current release lane:** `active`.
 
-**Current activated release target:** none.
+**Current activated release target:** 0.18.0.
+
+Activated 2026-08-02 by the architect under the owner's delegation of minor/patch release scheduling and
+cycle management. **This activates preparation only.** Two DC-35 authority preconditions are unmet and
+both block RC finalization, tagging, and publication:
+
+1. `release-signers.toml` is `authorized_primary_fingerprints = []`, fail-closed. Populating it is an
+   authority transaction requiring **two distinct natural persons** (`DC-35:219`), with automation barred
+   from either identity.
+2. `main` is **not protected** — verified 2026-08-02 via the GitHub protection API (404, "Branch not
+   protected"). DC-35 requires observed branch-protection controls or a reviewed equivalent before
+   release.
+
+Neither is amended. Blocker 2 is closable by configuration — block force pushes and deletions on `main`
+with administrators included, which makes any bypass a visible administrator-override incident, the
+alternative DC-35 itself names. Blocker 1 needs a second natural person or an owner ruling.
 
 Milestones below are dependency-ordered, not calendar promises. Target versions identify the intended
 release boundary and may change only through an update to this file, `ROADMAP.md`, and affected RFCs.
