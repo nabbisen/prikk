@@ -36,8 +36,8 @@ These records are under design review. All proposed RFCs must respect the depend
 | DC-53 | [Repository-Wide AUTHOR Trust Verification](./proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md) | Post-M2, unscheduled |
 | DC-66 | [Multi-Commit Queuing](./proposed/DC-66-MULTI-COMMIT-QUEUING.md) | Product **M3**. Opened 2026-08-02 on the owner's decision that queuing is a scheduled capability. Unblocks **DC-57** and makes NFR-PERF-02/03 meetable. **Most of the surface already supports N** — the cap is three guards — so the increment is crash recovery, `verify`, and ordering, not the append path; awaits owner acceptance |
 
-**None of these five is a live design-review candidate.** All are blocked or unscheduled — DC-56, DC-60,
-DC-61, DC-62 and DC-63 have all moved to `accepted/`:
+**DC-66 is the only live design-review candidate here**; the other five are blocked or unscheduled.
+DC-56, DC-60, DC-61, DC-62 and DC-63 have all moved to `accepted/`:
 
 - **DC-43** and **DC-52** cannot proceed while release stabilization is deferred. `DC-45:419` forbids
   Python deletion before the first Rust-gated 0.19.0 release; DC-43's scope *is* release security and it
@@ -76,7 +76,7 @@ These reviewed designs may govern downstream work but have not yet released.
 | DC-46 | [Workspace Rust 1.85 Compatibility](./accepted/DC-46-WORKSPACE-RUST-1.85-COMPATIBILITY.md) | M2 / before 0.19.0 RC; complete at `0d221af`, post-commit evidence accepted |
 | DC-47 | [Stable Clippy Gate Alignment](./accepted/DC-47-STABLE-CLIPPY-GATE-ALIGNMENT.md) | M2 / before 0.19.0 RC; complete at `ea95e92`, post-commit evidence accepted |
 | DC-48 | [Legacy Clippy Production Retirement](./accepted/DC-48-LEGACY-CLIPPY-PRODUCTION-RETIREMENT.md) | M2 / before 0.19.0 RC; complete at `383e503`, post-commit evidence accepted |
-| DC-57 | [Active-Patch Thresholds](./accepted/DC-57-ACTIVE-PATCH-THRESHOLDS.md) | **HELD 2026-07-29, handoff withdrawn.** Its premise does not hold — the active WAL is capped at one record repository-wide, so 800/1000 is unreachable. NFR-PERF-02 presupposes multi-commit queued active sessions, not implemented. Blocked on an owner decision |
+| DC-57 | [Active-Patch Thresholds](./accepted/DC-57-ACTIVE-PATCH-THRESHOLDS.md) | **HELD 2026-07-29, handoff withdrawn.** Its premise does not hold — the active WAL is capped at one record repository-wide, so 800/1000 is unreachable. NFR-PERF-02 presupposes multi-commit queued active sessions. **The owner decided 2026-08-02 that queuing is a scheduled capability**, so DC-57 is now blocked on **DC-66**, not on a decision, and NFR-PERF-02 needs no amendment |
 | DC-58 | [Source-Structure Audit](./accepted/DC-58-SOURCE-STRUCTURE-AUDIT.md) | Corrective M2 maintainability. **Complete** — batches 1 (`e1d0213`) and 2 (`54a3037`) accepted, N1 report reframing `6f53da3` accepted 2026-07-31. Excludes `frozen_outgoing.rs` by design; its `node_authoring.rs` deferral was pending DC-56, which has now recorded an outcome, so that exception needs re-examining |
 | DC-56 | [Commit Scan and Memory Compliance](./accepted/DC-56-COMMIT-FULL-TREE-SCAN-COMPLIANCE.md) | Closes **missed product M1** gate NFR-PERF-01 plus an untracked commit-memory defect. Implemented `8748f00` and **closes partial**: the changed-path index works (content-read phase −20%), but its RFC misidentified NFR-PERF-01's dominant violator. Criteria 1,2,3,6,7 met; 4 and 5 re-scoped and carried to **DC-64**. **NFR-PERF-01 remains missed** |
 | DC-62 | [Commit Benchmark Memory Axis](./accepted/DC-62-COMMIT-BENCHMARK-MEMORY-AXIS.md) | **Complete at `07b1fc8`** — implemented `963caae`, N1 repaired at `07b1fc8`, both reviews accepted. Measures peak commit memory with no new dependency by sampling `/proc/<pid>/status` `VmHWM`, against a measured 6,144 KB floor. Confirms O(worktree bytes): **9.92x** above-floor growth for 10x repository size where absolute VmHWM shows 2.58x. DC-56's precondition satisfied |
