@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.18.1 — 2026-08-03
+
+Packaging fix. **0.18.0 was tagged but never published to crates.io**; this is the version that ships.
+
+- **Internal crate dependencies are now pinned.** `[workspace.dependencies]` declared each sibling crate as
+  `version = "0"`, which `^0` resolves — so a published `prikk 0.18.0` would have accepted `prikk-store`
+  **0.17.7**, allowing a 0.18 CLI to be assembled against a 0.17 store. Found by a `cargo publish --dry-run`
+  pass before first publication: verification strips `path` and was compiling 0.18.0 sources against the
+  previously published 0.17.7 crates, producing unresolved-import errors for symbols that exist locally.
+- Sibling dependencies now pin `0.18.1` exactly. No source change; no behaviour change from 0.18.0.
+- Pre-existing since the workspace was split — 0.17.x published the same way. It becomes consequential at
+  0.18, the first release where the crates genuinely diverge (`RefState` schema 2, new store and object
+  APIs).
+
+The 0.18.0 tag is left in place and points at the release it described. It was never published.
+
 ## 0.18.0 — 2026-08-03
 
 First release since 0.17.7 (129 commits). **Cut because 0.17.7 cannot edit the same text file twice** — a
