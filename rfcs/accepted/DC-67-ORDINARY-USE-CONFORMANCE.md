@@ -1,6 +1,7 @@
-# RFC (proposed) - DC-67 Ordinary-Use Conformance Suite
+# RFC (accepted) - DC-67 Ordinary-Use Conformance Suite
 
-**Status.** **Proposed 2026-08-02.** Awaits owner acceptance.
+**Status.** **Accepted by the project owner on 2026-08-02.** Implementation may begin; handoff at
+`handoffs/DC-67-ordinary-use-conformance/implementation-handoff-v1.md`.
 **Authored by** the architect.
 **Independence.** Authored and reviewed by the architect — the standing ceiling. Compensated by §5's
 criteria being reproducible from the repository, and by §2's prediction being falsifiable.
