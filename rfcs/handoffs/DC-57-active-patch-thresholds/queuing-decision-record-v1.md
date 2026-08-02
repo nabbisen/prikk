@@ -54,15 +54,30 @@ DC-38's recovery work covers. An ordered, partially-sealed queue does not, and `
 scopes this as "let the WAL hold N records" is wrong** — the increment is mostly recovery, `verify`, and
 ordering semantics.
 
-## Sequencing — measurement first
+## Sequencing — measurement done 2026-08-02, and it refuted this section's own premise
 
-The next step is **not** the queuing increment.
+**This section originally said** the next step was to re-measure DC-64's residual O(live node count) cost
+under batching, because "batched commits share one baseline, so that cost may amortize across a batch."
 
-**DC-64's residual O(live node count) cost must be re-measured under batching first.** The one-record cap is
-what forced every commit to present an unseen baseline; batched commits share one, so that cost may
-amortize across a batch. If it largely does, the unowned residual-cost finding closes without separate work
-and the queuing increment's performance obligations shrink. If it does not, that is worth knowing before
-scoping.
+**That was wrong, and the correction is recorded rather than quietly removed.**
 
-One measurement, before designing — the pattern that caught DC-56's misattribution, DC-64's unhittable
-cache key, and DC-65's invariant question. The architect discharges it at design review, as with DC-64.
+`resolve_baseline_state` — which contains `load`, `from_replay`, and `persist` — is called once per
+`author_inner` (`node_authoring.rs:235`), i.e. **once per `prikk commit` process invocation**. Batching does
+not reduce the number of invocations; it removes the mandatory `prikk seal` between them. So the residual
+cost (~93 ms at 10,000 files: `load` ~58, `persist` ~29, `from_replay` ~5.4) is **paid on every commit
+whether or not commits are batched.**
+
+The only term batching touches is `apply_one_block` (~2.6 ms), the smallest of the four — and within a
+batch the baseline block does not change, so even that is often a no-op.
+
+**Consequences:**
+
+- **Batching saves seal cost, not commit cost.** That is still a real user-facing gain — one seal per batch
+  instead of one per commit, and one maintainer signature instead of N — but it is not a performance route
+  for NFR-PERF-01.
+- **The queuing increment inherits no performance benefit** and must not be scoped as though it did.
+- **DC-64's residual O(live node count) finding stays open and unowned**, unaffected by this decision. It
+  needs its own increment if it is to be closed, and reducing it means changing the persisted representation
+  and therefore the trust argument.
+- **No measurement blocks the queuing increment.** It can be scoped now, on its own merits — the
+  author/maintainer separation of §2, not performance.
