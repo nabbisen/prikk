@@ -14,9 +14,12 @@ NFR-PERF-02 presupposes **multi-commit queued active sessions**, which
 than operations is settled by `specs/prikk-app-requirements-v1.2.md` §6.4 ("convert active WAL **patches**
 … into … **a block object**"), §6.3 ("unsealed patch count"), and §7.4 (thresholds stated in patches).
 
-**Blocked on:** an owner decision on whether multi-commit queuing is a scheduled capability, and if so a
-queuing increment. This RFC is not implementable until that lands. **Its implementation handoff is
-withdrawn.**
+**Blocked on:** the queuing increment. **The owner decided 2026-08-02 that multi-commit queuing IS a
+scheduled capability** (`handoffs/DC-57-active-patch-thresholds/queuing-decision-record-v1.md`), so this
+RFC's premise is now scheduled rather than architecturally unreachable — and **NFR-PERF-02 needs no
+amendment**. DC-57 remains held until queuing lands; its 800/1000 thresholds become testable at that point,
+and whether they are the right numbers is this RFC's own question. **Its implementation handoff stays
+withdrawn** until then.
 
 ---
 

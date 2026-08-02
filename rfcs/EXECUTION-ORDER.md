@@ -11,8 +11,7 @@ Last reconciled: 2026-07-31, after DC-56's scope finding (`8748f00`). **Complete
 DC-63. **Implemented, awaiting architect review:** DC-58's N1 (`6f53da3`), DC-61 (`ca4c044`).
 **DC-56 closes partial** — its index works, but NFR-PERF-01's dominant violator was misidentified in its
 RFC and is carried to **DC-64**, which **also closes partial** (implemented; eliminates the O(operations
-replayed) cost but not the O(live node count) remainder — see §1 row 4). **DC-57 held** — its premise does not hold, handoff withdrawn, pending the multi-patch queuing
-decision, which is the **one outstanding owner decision** in the development lane. The release-lane decision
+replayed) cost but not the O(live node count) remainder — see §1 row 4). **DC-57 held** — handoff withdrawn. Its premise is no longer unreachable: the owner **decided 2026-08-02 that multi-commit queuing is a scheduled capability**, so DC-57 is blocked on that increment rather than on a decision. **There is now no outstanding owner decision** in the development lane. The release-lane decision
 point sits after the performance work per the owner's 2026-07-29 direction.
 
 ## The two lanes
