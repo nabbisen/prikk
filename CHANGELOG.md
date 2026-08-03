@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.18.2 — 2026-08-03
+
+Packaging and documentation. No CLI behaviour, no library API change.
+
+**Fixed**
+
+- **The Quick Start failed at its first command.** `prikk init <path>` does not create the target
+  directory, so the documented first-run sequence errored immediately with `i/o error: No such file or
+  directory` and produced nothing. Corrected to `mkdir -p ./sample-repo && cd ./sample-repo` then
+  `prikk init .`, and the whole sequence — commit, seal, log, verify, doctor — is now executed end to end
+  rather than proofread. `prikk init`'s own behaviour is unchanged and tracked as a separate finding.
+
+**Added**
+
+- **Install without cloning.** `cargo install prikk` is now the documented install path; building from a
+  clone is documented as the path for working *on* prikk.
+- **Prebuilt Linux binaries** (DC-70). A tag-triggered workflow builds `x86_64-unknown-linux-gnu` and
+  `aarch64-unknown-linux-gnu`, attaching a checksummed tarball plus a `.build-info.txt` per target
+  recording the exact `rustc -vV`, commit, tag, and build command for third-party reproduction.
+- **`cargo binstall prikk`** support via `[package.metadata.binstall]`.
+
+**Release authority — unchanged from 0.18.1**
+
+- This release does **not** pass the DC-35 signer-authority audit and does not claim to.
+  `release-signers.toml` remains empty; no authority transaction was performed. The tag carries the
+  maintainer's ordinary OpenPGP signature, which is **not** allowlisted signer authority.
+- **Release evidence does not yet describe the published binaries.** The evidence schema models a single
+  archive; extending it to N artifacts is blocked behind DC-45's frozen differential baseline until the
+  0.19.0 cutover. Verify binaries by their published checksums and `.build-info.txt`.
+- Both published targets are Linux. Repository *mutation* is Linux-only (DC-37).
+
+**Known gaps** — unchanged from 0.18.1, plus:
+
+- `x86_64-pc-windows-gnu` does not compile, contradicting DC-37's stated intent.
+- The release workflow above runs for the first time with this tag.
+
 ## 0.18.1 — 2026-08-03
 
 Packaging fix. **0.18.0 was tagged but never published to crates.io**; this is the version that ships.
