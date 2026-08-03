@@ -30,3 +30,89 @@ jobs:
         run: cargo test --workspace --locked
       - name: Build
         run: cargo build --workspace --locked
+
+  # DC-71: repository mutation is Linux-only, but read-only commands (see
+  # docs/src/reference/platform-support.md for the full, traced list) must build and run on other
+  # platforms. This job is the property that stops that boundary rotting silently again — nothing
+  # built a non-Linux target before DC-71, which is how the prior defect shipped undetected.
+  non-linux-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    name: non-linux build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Build
+        run: cargo build --workspace --locked
+
+  # A fixture repository is authored on Linux (repository mutation is Linux-only) and handed to the
+  # non-linux-verify job below, which proves the read-only command set actually runs elsewhere —
+  # criterion 2 asks for this demonstrated, not merely a successful compile.
+  fixture:
+    name: build read-only fixture repository
+    runs-on: ubuntu-latest
+    env:
+      PRIKK_AUTHOR_KEY_ID: dev-author
+      PRIKK_AUTHOR_SEED: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+      PRIKK_MAINTAINER_KEY_ID: dev-maintainer
+      PRIKK_MAINTAINER_SEED: "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build -p prikk --locked
+      - name: Author the fixture repository
+        run: |
+          mkdir -p fixture-repo
+          target/debug/prikk init fixture-repo
+          cd fixture-repo
+          ../target/debug/prikk trust maintainer add \
+            --key-id "$PRIKK_MAINTAINER_KEY_ID" \
+            --public-key a00899dfd3357aee69729405913f9324dfc033cec04a2215239eda64ae6d9d91
+          echo "hello prikk" > readme.txt
+          ../target/debug/prikk commit -m genesis
+          ../target/debug/prikk seal --allow-no-audit
+      - uses: actions/upload-artifact@v7
+        with:
+          name: read-only-fixture-repo
+          path: fixture-repo
+          include-hidden-files: true
+          if-no-files-found: error
+
+  non-linux-verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    name: non-linux read-only conformance (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: fixture
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build -p prikk --locked
+      - uses: actions/download-artifact@v8
+        with:
+          name: read-only-fixture-repo
+          path: fixture-repo
+      # worktree-status is excluded here, not because it mutates, but because it currently
+      # requires snapshot-block state that no CLI command can produce against an ordinary
+      # patch/WAL-authored repository (see docs/src/reference/platform-support.md) — the fixture
+      # below is genesis-and-seal, exactly what `prikk commit`/`prikk seal` actually produce.
+      - name: Run the read-only command set against the fixture
+        shell: bash
+        run: |
+          cd fixture-repo
+          ../target/debug/prikk log
+          ../target/debug/prikk status
+          ../target/debug/prikk verify
+          ../target/debug/prikk doctor
+          ../target/debug/prikk branch list
+          ../target/debug/prikk tag list
+          ../target/debug/prikk checkout --plan-only

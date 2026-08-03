@@ -106,6 +106,13 @@ durability boundary has one documented owner.
 | macOS | Read-only/diagnostic use only for 0.18.0 unless the same required primitive and crash tests pass before RC review. |
 | Windows | Read-only/diagnostic use only for 0.18.0 unless a reviewed equivalent primitive and the same tests pass before RC review. |
 
+**Read-only/diagnostic use is now an established, CI-verified property, not an aspiration.** DC-71
+(2026-08-04) found `prikk-store` failed to compile at all off Linux — this table's own intent was
+unmet — repaired the cfg-gating and added a CI job that builds and actually runs the read-only
+command set on `windows-latest`/`macos-latest`. This table's *mutation* row remains unchanged; DC-71
+did not reopen it. See [platform support](https://github.com/nabbisen/prikk/blob/main/docs/src/reference/platform-support.md)
+for the exact command boundary.
+
 Platform name alone is not proof of filesystem capability. The release docs must state the actually
 observed environments and keep untested targets unsupported for mutation.
 

@@ -20,8 +20,9 @@ For physical repository layout and `.prikk/` authority boundaries, see
 - Symlink authoring and symlink materialization are deferred.
 - Current materialization safety is check-then-write. It is not an `openat`/`O_NOFOLLOW` design, not a
   canonical realpath proof, and not a race-free guarantee under concurrent worktree modification.
-- Linux is the only platform exercised by the current project gates; full cross-platform filesystem
-  semantics remain design targets.
+- Repository *mutation* is exercised by project gates on Linux only; full cross-platform filesystem
+  semantics for mutation remain design targets. Read-only commands are CI-gated on macOS and Windows
+  too — see [platform support](./platform-support.md).
 - Stable path-format policy, path-policy configuration, Git path compatibility, stable
   repository-format migration, and complete checkout semantics remain deferred.
 

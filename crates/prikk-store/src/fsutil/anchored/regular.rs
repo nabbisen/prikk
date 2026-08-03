@@ -1,9 +1,12 @@
 //! Nonblocking final-entry opens and same-handle validation.
 
+#[cfg(target_os = "linux")]
 use std::path::Path;
 
+#[cfg(target_os = "linux")]
 use prikk_error::{PrikkError, Result};
 
+#[cfg(target_os = "linux")]
 use super::{failpoints, io_error};
 
 #[cfg(target_os = "linux")]
@@ -11,11 +14,13 @@ use rustix::fd::{AsFd, OwnedFd};
 #[cfg(target_os = "linux")]
 use rustix::fs::{self, FileType, Mode, OFlags};
 
+#[cfg(target_os = "linux")]
 pub(super) fn required_parent(path: &Path) -> Result<&Path> {
     path.parent()
         .ok_or_else(|| PrikkError::Io("relative mutation path has no parent".to_string()))
 }
 
+#[cfg(target_os = "linux")]
 pub(super) fn required_file_name(path: &Path) -> Result<&std::ffi::OsStr> {
     path.file_name()
         .ok_or_else(|| PrikkError::Io("relative mutation path has no file name".to_string()))

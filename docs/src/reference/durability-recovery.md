@@ -18,7 +18,9 @@ Release-transaction durability, artifact identity, and evidence limits are docum
   completed crash-matrix or fuzzing campaign.
 - Repository mutation currently requires Linux anchored relative no-follow operations, strict regular
   file and directory sync, atomic rename, and the required install primitives. macOS, Windows, and
-  filesystems without those proved capabilities remain read-only/diagnostic targets.
+  filesystems without those proved capabilities remain read-only/diagnostic targets — see
+  [platform support](./platform-support.md) for exactly which commands that covers and how it is
+  CI-verified.
 - `.prikk/` is not a stable repository format and there is no stable migration policy yet.
 - Ref pointer files are mutable convenience pointers, not roots of trust.
 - `doctor` repairs are opt-in and narrow; they do not synthesize missing objects, signatures, trust

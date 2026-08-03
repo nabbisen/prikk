@@ -337,3 +337,43 @@ fn dc70_tar_rustc_gh_require_exact_procedure_match_not_blanket_inertness() {
         );
     }
 }
+
+#[test]
+fn recognizes_dc71_non_linux_fixture_build_procedure() {
+    for command in ["cargo build -p prikk --locked"] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+            assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+
+    for command in [
+        "cargo build -p prikk --locked --release",
+        "cargo build -p other-crate --locked",
+        "cargo build --locked -p prikk --features audit-plugins",
+    ] {
+        assert!(!scan_shell(command).errors.is_empty(), "{command}");
+        assert!(
+            !scan_yaml(&format!("- run: {command}")).errors.is_empty(),
+            "{command}"
+        );
+    }
+}
+
+/// `prikk` itself has no subprocess-execution capability anywhere in the workspace (verified by
+/// `grep -rn "std::process::Command" crates/` returning nothing) — unlike `tar`/`rustc`/`gh`, it
+/// tolerates any arguments the same way `cd`/`mkdir`/`cp`/`sha256sum` do.
+#[test]
+fn dc71_prikk_binary_is_inert_with_any_arguments() {
+    for command in [
+        "target/debug/prikk log",
+        "../target/debug/prikk verify",
+        "../target/debug/prikk checkout --plan-only --ref \"$REF\"",
+        "target/debug/prikk trust maintainer add --key-id \"$KEY\" --public-key deadbeef",
+    ] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+            assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+}

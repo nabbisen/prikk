@@ -1,14 +1,19 @@
 //! Root-scoped filesystem mutation primitives.
 
-use std::fs::File;
-use std::io::Write;
 use std::path::Path;
 
 use prikk_error::{PrikkError, Result};
 
+#[cfg(target_os = "linux")]
+use std::fs::File;
+#[cfg(target_os = "linux")]
+use std::io::Write;
+
+#[cfg(target_os = "linux")]
 use super::temporary_path;
 
 mod directory;
+#[cfg(target_os = "linux")]
 mod failpoints;
 mod immutable;
 mod read;
@@ -26,9 +31,10 @@ pub(crate) use read::{
 use regular::{
     open_append_regular, open_existing_or_create_regular, open_existing_regular, open_new_regular,
 };
+#[cfg(target_os = "linux")]
 use regular::{required_file_name, required_parent};
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 pub(crate) use failpoints::{
     Point as TestFailPoint, fail_after as fail_after_for_test, fail_once as fail_once_for_test,
     set_directory_create_barrier as set_directory_create_barrier_for_test,

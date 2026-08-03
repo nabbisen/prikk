@@ -26,6 +26,7 @@
 # Reference
 
 - [Release, Versioning, and Compatibility](reference/release-compatibility.md)
+- [Platform Support](reference/platform-support.md)
 - [Repository Layout and Authority](reference/repository-layout.md)
 - [Concurrency and Locking](reference/concurrency-locking.md)
 - [Path and Worktree Safety](reference/path-safety.md)

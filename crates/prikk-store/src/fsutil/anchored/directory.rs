@@ -11,6 +11,7 @@ use rustix::fd::OwnedFd;
 #[cfg(target_os = "linux")]
 use rustix::fs::{self, Mode, OFlags};
 
+#[cfg(target_os = "linux")]
 use super::failpoints;
 #[cfg(target_os = "linux")]
 use super::io_error;

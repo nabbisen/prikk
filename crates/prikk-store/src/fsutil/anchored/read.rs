@@ -1,9 +1,12 @@
 //! Root-relative reads used by mutation-authorizing workflows.
 
 use std::ffi::OsString;
-use std::fs::File;
-use std::io::Read;
 use std::path::{Path, PathBuf};
+
+#[cfg(target_os = "linux")]
+use std::fs::File;
+#[cfg(target_os = "linux")]
+use std::io::Read;
 
 use prikk_error::{PrikkError, Result};
 

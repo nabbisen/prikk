@@ -40,6 +40,12 @@ pub(super) fn inert_head(token: &str) -> bool {
             | "mkdir"
             | "cp"
             | "sha256sum"
+            // DC-71: prikk itself. Verified, not assumed — `grep -rn "std::process::Command"
+            // crates/` returns no matches anywhere in the workspace, so the binary this CI job
+            // exercises against a read-only fixture has no capability to execute another program
+            // (the README's own text names "audit plugins" — the one feature that would add
+            // this — as not yet implemented).
+            | "prikk"
     )
 }
 

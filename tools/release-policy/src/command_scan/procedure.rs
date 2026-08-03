@@ -130,6 +130,9 @@ fn cargo(command: &str, arguments: &[String]) -> bool {
                         "aarch64-unknown-linux-gnu",
                         "--locked",
                     ]
+                // DC-71: ci.yml's read-only-fixture jobs build only the prikk binary, debug
+                // profile, on whichever platform the job runs.
+                || arguments == ["-p", "prikk", "--locked"]
         }
         "install" => {
             arguments

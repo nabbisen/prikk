@@ -1,16 +1,25 @@
 //! Immutable no-clobber file publication.
 
-use std::fs::File;
-use std::io::{Read, Write};
 use std::path::Path;
 
 use prikk_error::{PrikkError, Result};
 
-use super::directory::{MutationRoot, prepare_directory_required};
+use super::directory::MutationRoot;
+
+#[cfg(target_os = "linux")]
+use std::fs::File;
+#[cfg(target_os = "linux")]
+use std::io::{Read, Write};
+
+#[cfg(target_os = "linux")]
+use super::directory::prepare_directory_required;
+#[cfg(target_os = "linux")]
 use super::regular::{
     open_existing_regular_if_exists, open_new_regular, required_file_name, required_parent,
 };
+#[cfg(target_os = "linux")]
 use super::{failpoints, io_error};
+#[cfg(target_os = "linux")]
 use crate::fsutil::temporary_path;
 
 #[cfg(target_os = "linux")]

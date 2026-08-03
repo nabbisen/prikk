@@ -118,12 +118,17 @@ From crates.io, requires a Rust toolchain:
 cargo install prikk
 ```
 
-**prikk is Linux-only today — not merely for mutation.** DC-37's design intends Linux-only *mutation*
-with read-only commands portable, but that intent is not met: `prikk-store` **does not compile at all**
-off Linux, because `fsutil/anchored/{immutable,regular,read}.rs` unconditionally import helpers that are
-themselves `#[cfg(target_os = "linux")]`-gated at their definition sites. Verified by trial build for
-`x86_64-pc-windows-gnu` on 2026-08-03; macOS is untested and expected to fail for the same reason.
-That is a tracked defect, not a design decision, and it is why no non-Linux binaries are published.
+**Repository *mutation* is Linux-only; read-only commands build and run on macOS and Windows too**
+(`verify`, `log`, `status`, `doctor`, `checkout --plan-only`/`--snapshot-plan`/`--patch-plan`/
+`--patch-delete-plan`, `merge-evidence`, `merge-plan`, `inverse-plan`, `rollback-preview`,
+`rollback-draft-verify`, `branch [list]`, `tag [list]` — the full, durable list, including one
+capability-gap caveat, is in the [platform support
+reference](./docs/src/reference/platform-support.md)). This closes a defect fixed by DC-71:
+`prikk-store` previously failed to compile at all off Linux due to inconsistently
+`#[cfg(target_os = "linux")]`-gated imports; CI now builds and actually *runs* the read-only command
+set against a real repository on GitHub's `windows-latest` and `macos-latest` runners on every
+change, so this cannot silently rot again. **Prebuilt binaries remain Linux-only** (§ Install above)
+— that is a separate, unstarted increment.
 
 To build from a clone instead — the path to use when working on prikk itself:
 
