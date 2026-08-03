@@ -35,7 +35,29 @@ fn cargo(command: &str, arguments: &[String]) -> bool {
                 ]
         }
         "check" => arguments == ["--workspace", "--all-targets", "--locked"],
-        "build" => arguments == ["--workspace", "--locked"],
+        "build" => {
+            arguments == ["--workspace", "--locked"]
+                // DC-70: release.yml's two per-target release-binary builds, spelled out in
+                // full rather than templated, so each is an exact, reviewable entry.
+                || arguments
+                    == [
+                        "-p",
+                        "prikk",
+                        "--release",
+                        "--target",
+                        "x86_64-unknown-linux-gnu",
+                        "--locked",
+                    ]
+                || arguments
+                    == [
+                        "-p",
+                        "prikk",
+                        "--release",
+                        "--target",
+                        "aarch64-unknown-linux-gnu",
+                        "--locked",
+                    ]
+        }
         "install" => {
             arguments
                 == [

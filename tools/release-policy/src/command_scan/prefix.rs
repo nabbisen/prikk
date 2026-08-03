@@ -25,7 +25,22 @@ pub(super) fn command_head(tokens: &[String]) -> Result<Option<(usize, &String)>
 pub(super) fn inert_head(token: &str) -> bool {
     matches!(
         token.rsplit('/').next().unwrap_or(token),
-        "echo" | "false" | "printf" | "test" | "true" | "url"
+        "echo"
+            | "false"
+            | "printf"
+            | "test"
+            | "true"
+            | "url"
+            // DC-70: none of these can themselves execute arbitrary code or wrap another
+            // interpreter, so — like the six above — they are safe with any arguments,
+            // including dynamic ones, without needing an exact-match procedure entry.
+            | "cd"
+            | "mkdir"
+            | "cp"
+            | "tar"
+            | "sha256sum"
+            | "rustc"
+            | "gh"
     )
 }
 

@@ -121,3 +121,36 @@ successor) states the signer-authority gap under the heading *"Release authority
 relying on this release."* Every download surface this increment adds (README install section,
 release-page body, `cargo binstall` success path) states the same position in the same terms —
 binaries carry no more signer authority than the source tarball already carries none of.
+
+## Also — a fifth constraint §2 did not name, found by running the gates, fixed here (not escalated)
+
+`cargo test --workspace --locked` failed after `.github/workflows/release.yml` was first added:
+`tools/release-policy/src/boundary/publication.rs` scans every file under `.github/`, `scripts/`,
+and `release/` for shell commands and, for `.sh`/`.yml`/`.yaml` files, fails closed on anything not
+on a narrow, exact-match allowlist (`command_scan/prefix.rs`'s `inert_head` — six commands, any
+arguments — and `command_scan/procedure.rs`'s per-subcommand exact-argument-list matches for
+`cargo`/`python`/`mdbook`). This exists to keep "what can reach `cargo publish`/`package` near
+these directories" small enough to audit by reading a short list (DC-38/DC-51 territory); no
+`.sh` file and only `ci.yml`/`docs.yml` existed before this increment, so this had never needed a
+real packaging script's worth of shell before.
+
+**Why fixed directly rather than escalated, unlike §1:** this is a live, ordinary Rust check
+(`boundary::tests::workspace_and_product_boundaries_hold` scans the actual current repository, not
+a fixture-based differential case) with no declared-frozen status anywhere — unlike `release/oracle`,
+nothing states changing it needs its own review. Extended narrowly and in the file's own idiom:
+`prefix.rs` gained seven new inert heads (`cd`, `mkdir`, `cp`, `tar`, `sha256sum`, `rustc`, `gh` —
+each incapable of itself executing arbitrary code or wrapping another interpreter, the same property
+the existing six already have), and `procedure.rs` gained two new exact-argument-list `cargo build`
+entries (one per released target, spelled out in full — see §3 above) rather than a template. Two new
+tests (`recognizes_dc70_release_binary_build_procedures`,
+`dc70_inert_heads_tolerate_any_arguments_including_dynamic_ones`) cover both additions the same way
+existing entries are covered. `release.yml` itself was also restructured to keep the actual `cargo
+build` line 100% static per target (no `${{ matrix.target }}` inside it) precisely so it could be
+matched exactly rather than trusted as a template, and its release-notes body was moved to a static
+`.github/release-notes-template.md` file rather than synthesized via an inline heredoc, since the
+scanner has no way to distinguish prose being written to a file from commands being executed and was
+misreading the heredoc's own markdown prose as malformed shell.
+
+This widens what the boundary scanner accepts, in a security-relevant file, and is exactly the kind
+of change worth a close look on review — flagged here plainly rather than folded silently into the
+workflow diff.

@@ -256,3 +256,47 @@ fn rejects_near_miss_locked_workspace_procedures() {
         );
     }
 }
+
+#[test]
+fn recognizes_dc70_release_binary_build_procedures() {
+    for command in [
+        "cargo build -p prikk --release --target x86_64-unknown-linux-gnu --locked",
+        "cargo build -p prikk --release --target aarch64-unknown-linux-gnu --locked",
+    ] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+            assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+
+    for command in [
+        "cargo build -p prikk --release --target ${{ matrix.target }} --locked",
+        "cargo build -p prikk --release --target x86_64-unknown-linux-musl --locked",
+        "cargo build -p prikk --release --target aarch64-unknown-linux-gnu --locked --offline",
+        "cargo build --release --target x86_64-unknown-linux-gnu --locked -p prikk",
+    ] {
+        assert!(!scan_shell(command).errors.is_empty(), "{command}");
+        assert!(
+            !scan_yaml(&format!("- run: {command}")).errors.is_empty(),
+            "{command}"
+        );
+    }
+}
+
+#[test]
+fn dc70_inert_heads_tolerate_any_arguments_including_dynamic_ones() {
+    for command in [
+        "cd dist",
+        "mkdir -p stage dist",
+        "cp \"$bin\" stage/prikk",
+        "tar -C stage -czf \"dist/${asset}.tar.gz\" prikk LICENSE",
+        "sha256sum \"${asset}.tar.gz\" > \"${asset}.tar.gz.sha256\"",
+        "rustc -vV",
+        "gh release create \"$TAG\" dist/*.tar.gz --repo \"${{ github.repository }}\"",
+    ] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+            assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+}
