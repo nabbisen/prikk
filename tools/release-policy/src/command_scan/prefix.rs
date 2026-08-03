@@ -31,16 +31,15 @@ pub(super) fn inert_head(token: &str) -> bool {
             | "test"
             | "true"
             | "url"
-            // DC-70: none of these can themselves execute arbitrary code or wrap another
-            // interpreter, so — like the six above — they are safe with any arguments,
-            // including dynamic ones, without needing an exact-match procedure entry.
+            // DC-70, repaired per architect review (B1): only commands that cannot themselves
+            // execute another program belong here. `tar` (--to-command/-I), `rustc` (proc
+            // macros/build scripts), and `gh` (a general-purpose API client, and the exact
+            // command that publishes a release) all can, so they are NOT inert — see the
+            // exact-match entries in procedure.rs instead.
             | "cd"
             | "mkdir"
             | "cp"
-            | "tar"
             | "sha256sum"
-            | "rustc"
-            | "gh"
     )
 }
 

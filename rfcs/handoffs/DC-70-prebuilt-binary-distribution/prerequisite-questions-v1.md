@@ -122,7 +122,8 @@ relying on this release."* Every download surface this increment adds (README in
 release-page body, `cargo binstall` success path) states the same position in the same terms —
 binaries carry no more signer authority than the source tarball already carries none of.
 
-## Also — a fifth constraint §2 did not name, found by running the gates, fixed here (not escalated)
+## Also — a fifth constraint §2 did not name, found by running the gates, fixed here (repaired
+## once on review — see B1 below)
 
 `cargo test --workspace --locked` failed after `.github/workflows/release.yml` was first added:
 `tools/release-policy/src/boundary/publication.rs` scans every file under `.github/`, `scripts/`,
@@ -134,23 +135,41 @@ these directories" small enough to audit by reading a short list (DC-38/DC-51 te
 `.sh` file and only `ci.yml`/`docs.yml` existed before this increment, so this had never needed a
 real packaging script's worth of shell before.
 
-**Why fixed directly rather than escalated, unlike §1:** this is a live, ordinary Rust check
-(`boundary::tests::workspace_and_product_boundaries_hold` scans the actual current repository, not
-a fixture-based differential case) with no declared-frozen status anywhere — unlike `release/oracle`,
-nothing states changing it needs its own review. Extended narrowly and in the file's own idiom:
-`prefix.rs` gained seven new inert heads (`cd`, `mkdir`, `cp`, `tar`, `sha256sum`, `rustc`, `gh` —
-each incapable of itself executing arbitrary code or wrapping another interpreter, the same property
-the existing six already have), and `procedure.rs` gained two new exact-argument-list `cargo build`
-entries (one per released target, spelled out in full — see §3 above) rather than a template. Two new
-tests (`recognizes_dc70_release_binary_build_procedures`,
-`dc70_inert_heads_tolerate_any_arguments_including_dynamic_ones`) cover both additions the same way
-existing entries are covered. `release.yml` itself was also restructured to keep the actual `cargo
-build` line 100% static per target (no `${{ matrix.target }}` inside it) precisely so it could be
-matched exactly rather than trusted as a template, and its release-notes body was moved to a static
-`.github/release-notes-template.md` file rather than synthesized via an inline heredoc, since the
-scanner has no way to distinguish prose being written to a file from commands being executed and was
-misreading the heredoc's own markdown prose as malformed shell.
+**First attempt was wrong, and review caught it (finding B1).** `inert_head` initially gained seven
+new heads including `tar`, `rustc`, and `gh`, justified as "cannot themselves execute arbitrary code
+or wrap another interpreter" — false for three of the seven: `tar --to-command`/`-I` executes an
+arbitrary program, `rustc` runs proc macros and build scripts at compile time, and `gh` can `api`/
+`workflow run` arbitrarily and is itself the exact command this workflow uses to publish. Marking
+`gh` inert with any arguments told the *publication-boundary* scanner to stop looking at the command
+that publishes — the disclosure of the widening was right; the safety justification was not.
 
-This widens what the boundary scanner accepts, in a security-relevant file, and is exactly the kind
-of change worth a close look on review — flagged here plainly rather than folded silently into the
-workflow diff.
+**Repaired:** `tar`, `rustc`, and `gh` removed from `inert_head` — only `cd`, `mkdir`, `cp`,
+`sha256sum` remain (none of the four can themselves execute another program). `procedure.rs` gained
+exact-match entries instead: two `tar -C stage -czf <fixed-asset-name> prikk LICENSE` and two
+`rustc -vV >> <fixed-build-info-path>` (one pair per target, spelled out in full, matching the two
+`cargo build` entries' own pattern), plus a shape-checked `gh_release_create` matcher — every token
+fixed except the release tag itself, which cannot be enumerated the way a target triple can, so it is
+instead required to be the *identical* token in both places it appears (`$TAG` as the release
+identifier and again after `--title`), rather than trusted freely. `release.yml`'s packaging step was
+also split into two fully static per-target steps (no shell variables at all) so every `tar`/`rustc`
+invocation is a literal match, not a template — the same reasoning that already applied to the two
+`cargo build` steps.
+
+One more repair was needed underneath this: a command that matches an exact/shape-verified procedure
+entry was still independently flagged by the scanner's separate dynamic-argument heuristic (which
+exists to catch commands *not* otherwise reviewed), because that heuristic ran unconditionally rather
+than deferring to the procedure check. `command_scan.rs`'s `scan_command` now computes the procedure
+match once and skips the dynamic-argument flag only when it passes — this does not change what
+`allowed()` accepts, only removes a redundant, cruder re-flag of something already exactly verified;
+`cargo publish`/`package` protection is unaffected, since that path is checked separately by
+`scan_procedure_files`'s exact-argv comparison against the reviewed publication inventory, not by
+this heuristic.
+
+Old tests exercising `tar`/`rustc`/`gh` as blanket-inert were replaced with
+`dc70_tar_rustc_gh_require_exact_procedure_match_not_blanket_inertness`, which asserts both that the
+exact commands `release.yml` uses pass and that near-miss/dynamic/malicious variants (`tar -I 'sh -c
+...'`, `gh api ... --method DELETE`, a mismatched `$TAG`/`--title` pair) are rejected.
+
+This still widens what the boundary scanner accepts, in a security-relevant file, and is exactly the
+kind of change worth a close look on review — flagged here plainly a second time, with the first
+attempt's error stated rather than smoothed over.

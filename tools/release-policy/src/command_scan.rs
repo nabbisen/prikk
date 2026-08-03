@@ -54,11 +54,19 @@ fn scan_command(tokens: &[String], strict: bool, result: &mut Scan) {
     let mut found_publication = false;
     match command_head(tokens) {
         Ok(Some((index, token))) => {
+            // DC-70: a command already verified by the strict exact/shape procedure allowlist
+            // (below) has had every one of its tokens, dynamic or not, individually reviewed —
+            // re-flagging it here would only penalize the one thing the allowlist mechanism
+            // exists to permit: a reviewed command with a bounded, necessarily-varying slot
+            // (e.g. a release tag), which cannot be enumerated the way a target triple can.
+            // This does not touch the check for anything the allowlist does NOT match.
+            let procedure_verified = strict && procedure_command(tokens, index, token);
             if dynamic(token) {
                 result.errors.push("unsupported-dynamic-command-head");
             } else if opaque_execution(tokens, index, token) {
                 result.errors.push("unsupported-opaque-shell-command");
-            } else if !inert_head(token)
+            } else if !procedure_verified
+                && !inert_head(token)
                 && tokens
                     .get(index + 1..)
                     .unwrap_or_default()
@@ -67,7 +75,7 @@ fn scan_command(tokens: &[String], strict: bool, result: &mut Scan) {
             {
                 result.errors.push("unclassified-dynamic-command");
             }
-            if strict && !procedure_command(tokens, index, token) {
+            if strict && !procedure_verified {
                 result.errors.push("unclassified-procedure-command");
             }
         }

@@ -14,8 +14,81 @@ pub(super) fn allowed(tokens: &[String], index: usize, head: &str) -> bool {
                     .is_some_and(|(command, arguments)| cargo(command, arguments))
         }
         "mdbook" => tail == ["build"],
+        // DC-70, added per architect review (B1): `tar`, `rustc`, and `gh` can each execute
+        // another program (tar via --to-command/-I, rustc via proc macros and build scripts,
+        // gh as a general-purpose API client), so — unlike the inert set — they need an
+        // exact-match entry, not blanket approval with any arguments.
+        "tar" => tar(tail),
+        "rustc" => {
+            tail == [
+                "-vV",
+                ">>",
+                "dist/prikk-x86_64-unknown-linux-gnu.build-info.txt",
+            ] || tail
+                == [
+                    "-vV",
+                    ">>",
+                    "dist/prikk-aarch64-unknown-linux-gnu.build-info.txt",
+                ]
+        }
+        "gh" => gh_release_create(tail),
         _ => inert_head(head),
     }
+}
+
+fn tar(tail: &[String]) -> bool {
+    tail == [
+        "-C",
+        "stage",
+        "-czf",
+        "dist/prikk-x86_64-unknown-linux-gnu.tar.gz",
+        "prikk",
+        "LICENSE",
+    ] || tail
+        == [
+            "-C",
+            "stage",
+            "-czf",
+            "dist/prikk-aarch64-unknown-linux-gnu.tar.gz",
+            "prikk",
+            "LICENSE",
+        ]
+}
+
+/// `gh release create $TAG <assets...> --repo nabbisen/prikk --title $TAG --notes-file <path>`.
+/// The release tag cannot be enumerated in advance the way `cargo build`'s two targets are, so
+/// this matches on shape instead: every other token is a fixed literal, and the two `$TAG`
+/// positions (the release identifier and its title) must be the identical token, whatever it is.
+fn gh_release_create(tail: &[String]) -> bool {
+    let [
+        action,
+        subcommand,
+        tag,
+        assets @ ..,
+        repo_flag,
+        repo,
+        title_flag,
+        title,
+        notes_flag,
+        notes,
+    ] = tail
+    else {
+        return false;
+    };
+    action == "release"
+        && subcommand == "create"
+        && assets
+            == [
+                "dist/*.tar.gz",
+                "dist/*.tar.gz.sha256",
+                "dist/*.build-info.txt",
+            ]
+        && repo_flag == "--repo"
+        && repo == "nabbisen/prikk"
+        && title_flag == "--title"
+        && title == tag
+        && notes_flag == "--notes-file"
+        && notes == ".github/release-notes-template.md"
 }
 
 fn cargo(command: &str, arguments: &[String]) -> bool {

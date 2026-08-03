@@ -284,19 +284,56 @@ fn recognizes_dc70_release_binary_build_procedures() {
 }
 
 #[test]
-fn dc70_inert_heads_tolerate_any_arguments_including_dynamic_ones() {
+fn dc70_file_utility_inert_heads_tolerate_any_arguments_including_dynamic_ones() {
     for command in [
         "cd dist",
         "mkdir -p stage dist",
         "cp \"$bin\" stage/prikk",
-        "tar -C stage -czf \"dist/${asset}.tar.gz\" prikk LICENSE",
         "sha256sum \"${asset}.tar.gz\" > \"${asset}.tar.gz.sha256\"",
-        "rustc -vV",
-        "gh release create \"$TAG\" dist/*.tar.gz --repo \"${{ github.repository }}\"",
     ] {
         for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
             assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
             assert!(scan.invocations.is_empty(), "{command}");
         }
+    }
+}
+
+/// Architect review B1 (2026-08-03): `tar`, `rustc`, and `gh` can each execute another program
+/// (tar via `--to-command`/`-I`, rustc via proc macros and build scripts, gh as a general-purpose
+/// API client), so — unlike the file utilities above — they must NOT tolerate arbitrary
+/// arguments. Only the exact commands `release.yml` actually uses are accepted; anything else
+/// with the same head, dynamic or not, is rejected the same way an unregistered cargo build
+/// would be.
+#[test]
+fn dc70_tar_rustc_gh_require_exact_procedure_match_not_blanket_inertness() {
+    for command in [
+        "tar -C stage -czf dist/prikk-x86_64-unknown-linux-gnu.tar.gz prikk LICENSE",
+        "tar -C stage -czf dist/prikk-aarch64-unknown-linux-gnu.tar.gz prikk LICENSE",
+        "rustc -vV >> dist/prikk-x86_64-unknown-linux-gnu.build-info.txt",
+        "rustc -vV >> dist/prikk-aarch64-unknown-linux-gnu.build-info.txt",
+        "gh release create \"$TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title \"$TAG\" --notes-file .github/release-notes-template.md",
+    ] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+            assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+
+    for command in [
+        "tar -C stage -czf \"dist/${asset}.tar.gz\" prikk LICENSE",
+        "tar --to-command=sh -C stage -czf dist/prikk-x86_64-unknown-linux-gnu.tar.gz prikk",
+        "tar -I 'sh -c \"cargo publish\"' -cf out.tar prikk",
+        "rustc -vV",
+        "rustc evil.rs -o /tmp/evil",
+        "gh api repos/nabbisen/prikk --method DELETE",
+        "gh workflow run publish.yml",
+        "gh release create \"$OTHER_TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title \"$TAG\" --notes-file .github/release-notes-template.md",
+        "gh release create \"$TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo other/repo --title \"$TAG\" --notes-file .github/release-notes-template.md",
+    ] {
+        assert!(!scan_shell(command).errors.is_empty(), "{command}");
+        assert!(
+            !scan_yaml(&format!("- run: {command}")).errors.is_empty(),
+            "{command}"
+        );
     }
 }

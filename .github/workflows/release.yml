@@ -26,9 +26,10 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      # Each target's build command is written out in full, rather than interpolating
-      # matrix.target, so `tools/release-policy`'s publication-boundary scanner can verify it
-      # by exact match (see procedure.rs's cargo() allowlist) instead of trusting a template.
+      # Every command below is written out per target in full, rather than interpolating
+      # matrix.target, so `tools/release-policy`'s publication-boundary scanner can verify each
+      # by exact match (procedure.rs) instead of trusting a template — required for cargo, tar,
+      # and rustc, which are not in the scanner's dynamic-argument-tolerant inert set.
       - name: Build (x86_64-unknown-linux-gnu)
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: cargo build -p prikk --release --target x86_64-unknown-linux-gnu --locked
@@ -38,23 +39,32 @@ jobs:
 
       # Repository mutation is Linux-only (DC-37); both matrix targets are Linux, so no
       # download-surface mutation-limit statement is needed for these artifacts.
-      - name: Package
+      - name: Package (x86_64-unknown-linux-gnu)
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
-          target="${{ matrix.target }}"
-          asset="prikk-${target}"
-          bin="target/${target}/release/prikk"
-
           mkdir -p stage dist
-          cp "$bin" stage/prikk
+          cp target/x86_64-unknown-linux-gnu/release/prikk stage/prikk
           cp LICENSE stage/LICENSE
-          tar -C stage -czf "dist/${asset}.tar.gz" prikk LICENSE
-          ( cd dist && sha256sum "${asset}.tar.gz" > "${asset}.tar.gz.sha256" )
-
-          echo "target: ${target}" > "dist/${asset}.build-info.txt"
-          echo "commit: ${GITHUB_SHA}" >> "dist/${asset}.build-info.txt"
-          echo "tag: ${GITHUB_REF_NAME}" >> "dist/${asset}.build-info.txt"
-          echo "build: cargo build -p prikk --release --target <target, above> --locked" >> "dist/${asset}.build-info.txt"
-          rustc -vV >> "dist/${asset}.build-info.txt"
+          tar -C stage -czf dist/prikk-x86_64-unknown-linux-gnu.tar.gz prikk LICENSE
+          ( cd dist && sha256sum prikk-x86_64-unknown-linux-gnu.tar.gz > prikk-x86_64-unknown-linux-gnu.tar.gz.sha256 )
+          echo "target: x86_64-unknown-linux-gnu" > dist/prikk-x86_64-unknown-linux-gnu.build-info.txt
+          echo "commit: ${GITHUB_SHA}" >> dist/prikk-x86_64-unknown-linux-gnu.build-info.txt
+          echo "tag: ${GITHUB_REF_NAME}" >> dist/prikk-x86_64-unknown-linux-gnu.build-info.txt
+          echo "build: cargo build -p prikk --release --target x86_64-unknown-linux-gnu --locked" >> dist/prikk-x86_64-unknown-linux-gnu.build-info.txt
+          rustc -vV >> dist/prikk-x86_64-unknown-linux-gnu.build-info.txt
+      - name: Package (aarch64-unknown-linux-gnu)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          mkdir -p stage dist
+          cp target/aarch64-unknown-linux-gnu/release/prikk stage/prikk
+          cp LICENSE stage/LICENSE
+          tar -C stage -czf dist/prikk-aarch64-unknown-linux-gnu.tar.gz prikk LICENSE
+          ( cd dist && sha256sum prikk-aarch64-unknown-linux-gnu.tar.gz > prikk-aarch64-unknown-linux-gnu.tar.gz.sha256 )
+          echo "target: aarch64-unknown-linux-gnu" > dist/prikk-aarch64-unknown-linux-gnu.build-info.txt
+          echo "commit: ${GITHUB_SHA}" >> dist/prikk-aarch64-unknown-linux-gnu.build-info.txt
+          echo "tag: ${GITHUB_REF_NAME}" >> dist/prikk-aarch64-unknown-linux-gnu.build-info.txt
+          echo "build: cargo build -p prikk --release --target aarch64-unknown-linux-gnu --locked" >> dist/prikk-aarch64-unknown-linux-gnu.build-info.txt
+          rustc -vV >> dist/prikk-aarch64-unknown-linux-gnu.build-info.txt
 
       - uses: actions/upload-artifact@v4
         with:
@@ -75,8 +85,13 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # $TAG and the repository slug are written out as the literal tokens the scanner sees
+      # (procedure.rs's gh() match), not templated — the tag itself cannot be enumerated in
+      # advance the way the two build targets above are, so the match is on shape: a fixed
+      # `release create`, the fixed asset globs, and the fixed --repo/--notes-file values, with
+      # $TAG free to vary but required identical in both places it appears.
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo "${{ github.repository }}" --title "$TAG" --notes-file .github/release-notes-template.md
+        run: gh release create "$TAG" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title "$TAG" --notes-file .github/release-notes-template.md
