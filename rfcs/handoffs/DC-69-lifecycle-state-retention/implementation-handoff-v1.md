@@ -52,6 +52,34 @@ up after two draws. Weigh that.
 control than remembering every id ever minted.** That reframing is the most valuable thing this increment
 could produce.
 
+## 2a. §3.2's discharge is WITHDRAWN — ruled 2026-08-03
+
+**Your trace is correct and I confirmed every link.** `create_node` (`mutation.rs:37-46`) requires
+`latest_tombstone_by_id` for any `seen_ids` hit; `apply_state_effect` (`effect.rs:34,49`) calls it on the
+ordinary commit path; `patch_inverse.rs:245-253` reuses the original `node_id`, which is the producer that
+reaches that branch. Production-reachable.
+
+**How I got it wrong:** I grepped for `latest_tombstone` consumers and explicitly filtered out
+`mutation.rs`, then reported the narrowed search as the complete consumer set. Full ruling:
+`.git-exclude/reviewed/prikk-dc69-tombstone-ruling-v1.md`.
+
+**It narrows rather than destroys.** Three facts bound it, and they change §3.3:
+
+1. **Tombstones are consumed, not accumulated.** `create_node` removes the tombstone on successful
+   restoration, so `latest_tombstone_by_id` grows only with deletions **never** restored — unlike
+   `seen_ids`, which only grows. **The two need separate answers; the RFC's pairing of them was mine and
+   was wrong.**
+2. The requirement is on **replay**, not storage: the tombstone must exist when the restoring create is
+   applied, meaning the earlier `DeleteNode` must be replayable before it.
+3. A DC-64 cache anchored **after** a restoration carries no dependency on the old tombstone.
+
+**The invariant §3.3 must preserve:**
+
+> **A horizon may not sever a `DeleteNode` from a later restoring `CreateFile` of the same node id.**
+
+Checkable, not a vague hazard. Any boundary mechanism must keep enough to replay such pairs, or refuse to
+place a boundary that splits one.
+
 ## 3. What remains for you
 
 **§3.3 — can a horizon become a boundary of obligation?** `lineage_horizon_id` is already threaded
