@@ -118,8 +118,12 @@ From crates.io, requires a Rust toolchain:
 cargo install prikk
 ```
 
-Repository *mutation* is Linux-only (DC-37); other platforms can build and run read-only commands —
-which is also why no non-Linux binaries are published yet, not only why they wouldn't mutate.
+**prikk is Linux-only today — not merely for mutation.** DC-37's design intends Linux-only *mutation*
+with read-only commands portable, but that intent is not met: `prikk-store` **does not compile at all**
+off Linux, because `fsutil/anchored/{immutable,regular,read}.rs` unconditionally import helpers that are
+themselves `#[cfg(target_os = "linux")]`-gated at their definition sites. Verified by trial build for
+`x86_64-pc-windows-gnu` on 2026-08-03; macOS is untested and expected to fail for the same reason.
+That is a tracked defect, not a design decision, and it is why no non-Linux binaries are published.
 
 To build from a clone instead — the path to use when working on prikk itself:
 
