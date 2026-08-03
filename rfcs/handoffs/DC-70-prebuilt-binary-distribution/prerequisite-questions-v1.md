@@ -101,14 +101,18 @@ merely configured (criterion 4).
 
 ## Also — the standing bug report (handoff §6), confirmed, not fixed
 
-`prikk init <path>` fails at its first command when `<path>` does not exist, exactly as reported:
+`prikk init <path>` fails at its first command when `<path>` does not exist, exactly as reported —
+and already recorded in `MILESTONES.md` (line 118) by the architect at `2ecd15f`, before this handoff
+reached implementation, with the Quick Start already corrected at `7a512fd`. Re-traced independently
+here rather than taken on faith, since the handoff asked for confirmation, not just a citation:
 `crates/prikk-cli/src/main.rs`'s `run_init` calls `RepositoryLayout::init(root.clone())`
 (`crates/prikk-store/src/layout.rs:63-67`), whose first substantive line is
 `MutationRoot::open(&root)?` — `open`, not a creating call. On Linux this reaches
 `AnchoredDirectory::open` (`crates/prikk-store/src/fsutil/anchored/directory.rs:117-126`), which
 opens the path `O_DIRECTORY | O_NOFOLLOW` with no `O_CREAT`; a nonexistent path returns `ENOENT`,
 mapped to an error and propagated straight back to the CLI. `.prikk/` itself would be created later
-by `ensure_root`, but that point is never reached. Recorded in `MILESTONES.md`.
+by `ensure_root`, but that point is never reached. No second `MILESTONES.md` row added — the
+existing one already covers it.
 
 ## Also — the exact release-authority wording to reuse verbatim
 
