@@ -1,6 +1,17 @@
 # RFC (proposed) - DC-71 Non-Linux Build Conformance
 
-**Status.** **Proposed 2026-08-04.** Awaits owner acceptance.
+**Status.** **Accepted by the project owner on 2026-08-04**, together with the §3 ruling below.
+Implementation may begin; handoff at
+`handoffs/DC-71-non-linux-build-conformance/implementation-handoff-v1.md`.
+
+> **Owner ruling, 2026-08-04 — §3 question 1: portable read-only is a REQUIREMENT, not an aspiration.**
+> Asked as *"should a macOS or Windows user be able to verify a prikk repository?"*; answered **"Yes.
+> Cross platform support is required."**
+>
+> **Reading applied, stated so it can be corrected:** this settles **read-only portability**, which is
+> what was asked. **DC-37's Linux-only *mutation* boundary is left standing** — it exists for filesystem
+> durability guarantees, and reopening it is a materially larger question than this increment. If the
+> owner meant cross-platform *mutation* as well, that is a separate ruling and a separate increment.
 **Authored by** the architect.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** DC-70's trial builds (2026-08-03), which found `x86_64-pc-windows-gnu` does not compile.
