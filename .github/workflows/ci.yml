@@ -9,7 +9,7 @@ jobs:
     name: stable
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Format
         run: cargo fmt --all -- --check
@@ -22,7 +22,7 @@ jobs:
     name: msrv-1.85.0
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.85.0
       - name: Check
         run: cargo check --workspace --all-targets --locked
