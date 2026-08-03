@@ -18,5 +18,10 @@ prikk-hash                  = { workspace = true }
 prikk-object                = { workspace = true }
 prikk-store                 = { workspace = true }
 
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/{ version }/prikk-{ target }.tar.gz"
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
 [lints]
 workspace = true

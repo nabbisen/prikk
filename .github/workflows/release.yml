@@ -1,0 +1,117 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build -p prikk --release --target ${{ matrix.target }} --locked
+
+      # Repository mutation is Linux-only (DC-37); both matrix targets are Linux, so no
+      # download-surface mutation-limit statement is needed for these artifacts.
+      - name: Package
+        run: |
+          set -euo pipefail
+          target="${{ matrix.target }}"
+          asset="prikk-${target}"
+          bin="target/${target}/release/prikk"
+
+          mkdir -p dist
+          cp "$bin" dist/prikk
+          cp LICENSE dist/LICENSE
+          tar -C dist -czf "dist/${asset}.tar.gz" prikk LICENSE
+          rm dist/prikk dist/LICENSE
+
+          ( cd dist && sha256sum "${asset}.tar.gz" > "${asset}.tar.gz.sha256" )
+
+          {
+            echo "target: ${target}"
+            echo "commit: ${GITHUB_SHA}"
+            echo "tag: ${GITHUB_REF_NAME}"
+            echo "build: cargo build -p prikk --release --target ${target} --locked"
+            echo
+            rustc -vV
+          } > "dist/${asset}.build-info.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prikk-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: publish release assets
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Write release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          cat > notes.md <<EOF
+          ## Prebuilt binaries
+
+          Linux only (\`x86_64\`/\`aarch64\`); repository *mutation* is Linux-only project-wide
+          (DC-37), so this is not an artifact-specific limitation. Each archive contains the
+          \`prikk\` binary, \`LICENSE\`, and a sibling \`.sha256\` checksum plus \`.build-info.txt\`
+          recording the exact toolchain and command used to build it — reproduce with:
+
+          \`\`\`sh
+          git checkout ${TAG} && cargo build -p prikk --release --target <triple> --locked
+          \`\`\`
+
+          \`cargo install prikk\` remains the toolchain-based install path; these binaries are an
+          additional option, not a replacement.
+
+          ## Release authority — read before relying on this release
+
+          **This release does not pass the DC-35 signer-authority audit, and does not claim to.**
+          The committed release-signer set (\`release-signers.toml\`) is empty and fail-closed, so no
+          release currently satisfies that gate. A checksum published beside a binary on this page
+          proves integrity of transport, not authority of origin. Verify what you obtain by content,
+          not by release authority — see \`prikk verify\` and this project's
+          [release-compatibility reference](https://nabbisen.github.io/prikk/reference/release-compatibility.html).
+          EOF
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          assets=(dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt)
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${assets[@]}" --repo "${{ github.repository }}" --clobber
+          else
+            gh release create "$TAG" "${assets[@]}" --repo "${{ github.repository }}" \
+              --title "$TAG" --notes-file notes.md
+          fi

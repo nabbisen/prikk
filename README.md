@@ -95,13 +95,31 @@ Prikk is not yet the right tool if you need:
 
 ## Install
 
+Prebuilt binary, no Rust toolchain required — Linux (`x86_64`/`aarch64`) only for now:
+
+```sh
+cargo binstall prikk
+```
+
+Or download directly from the [release page](https://github.com/nabbisen/prikk/releases), verify the
+attached `.sha256` checksum, and extract. Both target archives contain the `prikk` binary, `LICENSE`,
+and a `.build-info.txt` recording the exact toolchain and command used to build it — reproducible from
+the tag with `cargo build -p prikk --release --target <triple> --locked`.
+
+**Release authority.** Prebuilt binaries carry no more signer authority than the source tarball already
+carries none of — `release-signers.toml` is empty and fail-closed, so no release, including its
+attached binaries, passes the DC-35 signer-authority audit yet. A checksum proves integrity of
+transport, not authority of origin; see the [release-compatibility
+reference](./docs/src/reference/release-compatibility.md).
+
+From crates.io, requires a Rust toolchain:
+
 ```sh
 cargo install prikk
 ```
 
-Installs the `prikk` command from crates.io. Requires a Rust toolchain; **prebuilt binaries are not
-published yet**, so a Rust toolchain is currently the only supported install path. Repository *mutation*
-is Linux-only (DC-37); other platforms can build and run read-only commands.
+Repository *mutation* is Linux-only (DC-37); other platforms can build and run read-only commands —
+which is also why no non-Linux binaries are published yet, not only why they wouldn't mutate.
 
 To build from a clone instead — the path to use when working on prikk itself:
 
