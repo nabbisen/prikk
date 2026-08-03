@@ -1,6 +1,7 @@
-# RFC (proposed) - DC-70 Prebuilt Binary Distribution
+# RFC (accepted) - DC-70 Prebuilt Binary Distribution
 
-**Status.** **Proposed 2026-08-03.** Awaits owner acceptance.
+**Status.** **Accepted by the project owner on 2026-08-03.** Implementation may begin; handoff at
+`handoffs/DC-70-prebuilt-binary-distribution/implementation-handoff-v1.md`.
 **Authored by** the architect, who holds minor/patch release scheduling by owner delegation.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** The owner's 2026-08-03 direction that installation should not require a Rust toolchain.
