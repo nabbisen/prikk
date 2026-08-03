@@ -93,31 +93,44 @@ Prikk is not yet the right tool if you need:
   [path and worktree safety reference](./docs/src/reference/path-safety.md).
 - **Attestation**: future audit/policy evidence targeting blocks without defining block identity.
 
+## Install
+
+```sh
+cargo install prikk
+```
+
+Installs the `prikk` command from crates.io. Requires a Rust toolchain; **prebuilt binaries are not
+published yet**, so a Rust toolchain is currently the only supported install path. Repository *mutation*
+is Linux-only (DC-37); other platforms can build and run read-only commands.
+
+To build from a clone instead — the path to use when working on prikk itself:
+
+```sh
+cargo build -p prikk && export PATH="$PWD/target/debug:$PATH"
+```
+
 ## Quick Start
 
 ```sh
-cargo build -p prikk
-export PRIKK="$PWD/target/debug/prikk"
-
-$PRIKK init ./sample-repo
+mkdir -p ./sample-repo && cd ./sample-repo
+prikk init .
 
 export PRIKK_AUTHOR_KEY_ID="dev-author"
 export PRIKK_AUTHOR_SEED="00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 export PRIKK_MAINTAINER_KEY_ID="dev-maintainer"
 export PRIKK_MAINTAINER_SEED="111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
 
-(cd ./sample-repo && "$PRIKK" trust maintainer add \
+prikk trust maintainer add \
   --key-id "$PRIKK_MAINTAINER_KEY_ID" \
-  --public-key "a00899dfd3357aee69729405913f9324dfc033cec04a2215239eda64ae6d9d91")
+  --public-key "a00899dfd3357aee69729405913f9324dfc033cec04a2215239eda64ae6d9d91"
 
-echo "hello prikk" > ./sample-repo/readme.txt
-(cd ./sample-repo && "$PRIKK" commit -m "genesis")
-(cd ./sample-repo && "$PRIKK" seal --allow-no-audit)
+echo "hello prikk" > readme.txt
+prikk commit -m "genesis"
+prikk seal --allow-no-audit
 
-$PRIKK log ./sample-repo
-$PRIKK worktree-status ./sample-repo
-$PRIKK verify ./sample-repo
-$PRIKK doctor ./sample-repo
+prikk log
+prikk verify
+prikk doctor
 ```
 
 For a fresh repository, the first `commit` authors a genesis patch set and the first `seal` publishes a
