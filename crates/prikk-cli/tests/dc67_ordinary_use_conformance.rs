@@ -62,6 +62,8 @@
 
 mod support;
 
+// DC-71: used only by sequence_05's Unix permission-bit assertions, below.
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
 use support::{
@@ -187,6 +189,8 @@ fn sequence_04_create_edit_delete_then_recreate_different_file_same_path() {
 
 /// §3.5: change a file's mode across generations, both independent of and combined with content
 /// changes.
+// DC-71: Windows has no Unix permission-bit model.
+#[cfg(unix)]
 #[test]
 fn sequence_05_mode_changes_with_and_without_content_changes() {
     let repo = unique_repo("seq05-mode-changes");

@@ -7,9 +7,12 @@ use prikk_error::{PrikkError, Result};
 
 mod anchored;
 
-#[cfg(test)]
+// DC-71: every test in both modules (including caller_tests' matrix submodules) sets up its
+// scenario via real repository mutation, which is Linux-only; neither module ever compiles a
+// non-Linux-meaningful test.
+#[cfg(all(test, target_os = "linux"))]
 mod caller_tests;
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 mod tests;
 
 pub(crate) use anchored::{
@@ -22,7 +25,7 @@ pub(crate) use anchored::{
     write_worktree_file_atomically,
 };
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 pub(crate) use anchored::remove_file_required;
 
 #[cfg(all(test, target_os = "linux"))]

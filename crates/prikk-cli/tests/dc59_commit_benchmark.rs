@@ -134,6 +134,8 @@ const MEMORY_SAMPLE_INTERVAL: Duration = Duration::from_micros(500);
 /// content (256 bytes) — gives a floor that actually represents the fixed cost folded into every
 /// other row.
 const MEMORY_FLOOR_FILE_COUNT: usize = 1;
+// DC-71: only used by the Linux-only /proc-based sampling loop below.
+#[cfg(target_os = "linux")]
 const MEMORY_FLOOR_SAMPLES: usize = 5;
 
 struct SplitMix64(u64);
@@ -404,6 +406,8 @@ fn run_cycle_axis() -> Vec<(usize, Vec<Point>)> {
 /// Outcome of one memory-measuring commit trial: the peak `VmHWM` observed (if any sample landed
 /// while the child was alive), and how many polling attempts succeeded versus were made. A missed
 /// sample is `peak_kb: None` — never zero.
+// DC-71: only constructed by the Linux-only /proc-based sampling functions below.
+#[cfg(target_os = "linux")]
 struct MemoryTrial {
     peak_kb: Option<u64>,
     attempts: usize,

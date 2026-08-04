@@ -1204,7 +1204,9 @@ fn mixed_operations_follow_canonical_op_seq_order() {
     let _ = std::fs::remove_dir_all(root);
 }
 
-/// Decode the WAL patch and return the `(old_mode, new_mode)` of every `ChangePerm` op.
+/// Decode the WAL patch and return the `(old_mode, new_mode)` of every `ChangePerm` op. Used only
+/// by the `#[cfg(unix)]` mode-change tests below — Windows has no equivalent permission-bit model.
+#[cfg(unix)]
 fn change_perm_modes(layout: &RepositoryLayout) -> Vec<(u32, u32)> {
     let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
     let ops = crate::patch_replay::decode::decode_patch_operations(

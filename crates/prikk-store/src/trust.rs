@@ -273,5 +273,7 @@ fn hex_value(byte: u8) -> Result<u8> {
     }
 }
 
-#[cfg(test)]
+// DC-71: every test here sets up its scenario via real repository mutation (RepositoryLayout::init
+// or equivalent), which is Linux-only; the module never compiles a non-Linux-meaningful test.
+#[cfg(all(test, target_os = "linux"))]
 mod tests;

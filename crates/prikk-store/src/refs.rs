@@ -144,7 +144,7 @@ impl RefStore {
         Ok((ref_state_id, authorization))
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "linux"))]
     pub(crate) fn finish_interrupted_publication_for_test(
         &self,
         publication: &RefPublication,
@@ -477,5 +477,8 @@ pub fn validate_local_tag_ref(ref_name: &str) -> Result<String> {
     Ok(ref_name.to_string())
 }
 
-#[cfg(test)]
+// DC-71: every test here (including the nested publication_recovery/state_matrix trees) sets up
+// its scenario via real repository mutation, which is Linux-only; the module never compiles a
+// non-Linux-meaningful test.
+#[cfg(all(test, target_os = "linux"))]
 mod tests;
