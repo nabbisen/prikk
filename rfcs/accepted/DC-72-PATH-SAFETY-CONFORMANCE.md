@@ -1,6 +1,7 @@
 # RFC (proposed) - DC-72 Path-Safety Conformance (NFR-SEC-03)
 
-**Status.** **Proposed 2026-08-04.** Awaits owner acceptance.
+**Status.** **Accepted by the project owner on 2026-08-04.** Implementation may begin; handoff at
+`handoffs/DC-72-path-safety-conformance/implementation-handoff-v1.md`.
 **Authored by** the architect. **Independence.** Author-reviewed — the standing ceiling.
 **Requirement.** **NFR-SEC-03**, `specs/prikk-non-functional-requirements-v1.1.md:89`:
 
