@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{NodeId, NodeKind, text_span_hash};
+use prikk_object::{NodeId, NodeKind, ObjectId, text_span_hash};
 
 use crate::object_store::FileObjectStore;
 use crate::path::RepoPath;
@@ -21,6 +21,11 @@ use super::read::read_blob_bytes_with_kind;
 pub(super) struct ReplayLiveNode {
     pub(super) path: String,
     pub(super) kind: NodeKind,
+    /// Current mode bits, as recorded by the operation that most recently set them
+    /// (`CreateFile`, then any `ChangePerm`) — DC-73. Threaded into materialization so a
+    /// checked-out file's permission bits match what was authored, not the anchored write
+    /// primitive's create-time default.
+    pub(super) mode: u32,
 }
 
 pub(super) fn apply_decoded_operation(
@@ -39,7 +44,7 @@ pub(super) fn apply_decoded_operation(
             path,
             node_id,
             blob_id,
-            mode: _,
+            mode,
         } => {
             if files.contains_key(&path) {
                 return Err(PrikkError::Integrity(format!(
@@ -54,7 +59,7 @@ pub(super) fn apply_decoded_operation(
             let (kind, bytes) = read_blob_bytes_with_kind(object_store, blob_id)?;
             deleted_files.remove(&path);
             files.insert(path.clone(), bytes);
-            live_nodes.insert(node_id, ReplayLiveNode { path, kind });
+            live_nodes.insert(node_id, ReplayLiveNode { path, kind, mode });
         }
         DecodedOperationKind::DeleteNode {
             path,
@@ -117,10 +122,98 @@ pub(super) fn apply_decoded_operation(
                 &old_span_text,
             )?;
         }
+        DecodedOperationKind::ReplaceBinary {
+            node_id,
+            old_blob_id,
+            new_blob_id,
+        } => {
+            apply_replace_binary(
+                object_store,
+                files,
+                live_nodes,
+                node_id,
+                old_blob_id,
+                new_blob_id,
+            )?;
+        }
+        DecodedOperationKind::ChangePerm {
+            node_id,
+            old_mode,
+            new_mode,
+        } => {
+            apply_change_perm(live_nodes, node_id, old_mode, new_mode)?;
+        }
         _ => unreachable!(
-            "ensure_apply_supported admits only CreateFile, file-DeleteNode, and EditText for replay"
+            "ensure_apply_supported admits only CreateFile, file-DeleteNode, EditText, \
+             ReplaceBinary, and ChangePerm for replay"
         ),
     }
+    Ok(())
+}
+
+/// Apply a `ReplaceBinary` operation (DC-73): fold the node's content forward from `old_blob_id` to
+/// `new_blob_id`. Node-addressed with no path field — `live_nodes` supplies the current path.
+fn apply_replace_binary(
+    object_store: &FileObjectStore,
+    files: &mut BTreeMap<String, Vec<u8>>,
+    live_nodes: &BTreeMap<NodeId, ReplayLiveNode>,
+    node_id: NodeId,
+    old_blob_id: ObjectId,
+    new_blob_id: ObjectId,
+) -> Result<()> {
+    let live = live_nodes.get(&node_id).ok_or_else(|| {
+        PrikkError::Integrity(format!(
+            "ReplaceBinary target node {} is not live",
+            hex32(node_id.as_bytes())
+        ))
+    })?;
+    if live.kind != NodeKind::BinaryFile {
+        return Err(PrikkError::Integrity(format!(
+            "ReplaceBinary target node {} is {:?}, not BinaryFile",
+            hex32(node_id.as_bytes()),
+            live.kind
+        )));
+    }
+    let current_bytes = files.get(&live.path).ok_or_else(|| {
+        PrikkError::Integrity(format!(
+            "ReplaceBinary target path {} is absent for live node {}",
+            live.path,
+            hex32(node_id.as_bytes())
+        ))
+    })?;
+    crate::blob_access::ensure_blob_matches_node_kind(current_bytes, old_blob_id, live.kind)?;
+    let (new_kind, new_bytes) = read_blob_bytes_with_kind(object_store, new_blob_id)?;
+    if new_kind != NodeKind::BinaryFile {
+        return Err(PrikkError::Integrity(format!(
+            "ReplaceBinary new blob {new_blob_id} is not a binary-file blob"
+        )));
+    }
+    files.insert(live.path.clone(), new_bytes);
+    Ok(())
+}
+
+/// Apply a `ChangePerm` operation (DC-73): fold the node's mode forward from `old_mode` to
+/// `new_mode`. Node-addressed with no path field or content change — only `live_nodes`' recorded
+/// mode is affected; materialization reads it from there.
+fn apply_change_perm(
+    live_nodes: &mut BTreeMap<NodeId, ReplayLiveNode>,
+    node_id: NodeId,
+    old_mode: u32,
+    new_mode: u32,
+) -> Result<()> {
+    let live = live_nodes.get_mut(&node_id).ok_or_else(|| {
+        PrikkError::Integrity(format!(
+            "ChangePerm target node {} is not live",
+            hex32(node_id.as_bytes())
+        ))
+    })?;
+    if live.mode != old_mode {
+        return Err(PrikkError::Integrity(format!(
+            "ChangePerm old_mode does not match live node {}'s current mode",
+            hex32(node_id.as_bytes())
+        )));
+    }
+    live.mode = new_mode;
     Ok(())
 }
 

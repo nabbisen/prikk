@@ -52,13 +52,18 @@ Supported inverse operation subset:
 
 - `CreateFile` -> `DeleteFile`
 - `DeleteFile` -> `CreateFile`
+- deterministic arbitrary-span `EditText` -> `EditText`
+- `ReplaceBinary` -> `ReplaceBinary` (old/new blob swapped; DC-73)
+- `ChangePerm` -> `ChangePerm` (old/new mode swapped; DC-73)
 
 Deferred:
 
+- `RenamePath` and `CreateSymlink` inverse — not a node-model gap, an authoring one: `commit` never
+  produces `RenamePath` (renames become delete+create) and symlink authoring is refused outright, so
+  there is nothing in ordinary history for either inverse to act on (DC-73)
 - rollback-specific ref publication policy
 - authorization and audit policy for rollback
 - rollback branch/reflog semantics
 - worktree rollback materialization policy
-- arbitrary-span text rollback
 - commutation, confluence, and conflict witnesses
 - plugin execution and remote sync

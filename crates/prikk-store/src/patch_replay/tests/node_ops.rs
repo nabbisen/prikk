@@ -430,22 +430,16 @@ fn valid_replace_binary_record() -> Vec<u8> {
 }
 
 #[test]
-fn decode_valid_replace_binary_is_validated_then_unsupported() {
-    // §9.3 ReplaceBinary is node-addressed; its record is reconciled and validated
-    // on read, but apply is deferred to the node model (increment 4.4), so a valid
-    // record decodes to UnsupportedObjectType, not a replayable op or a malformed
-    // error.
+fn decode_valid_replace_binary_is_apply_supported() {
+    // §9.3 ReplaceBinary is node-addressed; DC-73 wired its apply, so a valid record is both
+    // decoded and admitted by `ensure_apply_supported`, not deferred.
     let bytes = patch_with_raw_replace_binary(&valid_replace_binary_record());
     let ops = decode_patch_operations(&bytes).expect("decodes");
-    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
-    assert!(
-        matches!(err, PrikkError::UnsupportedObjectType(_)),
-        "valid ReplaceBinary should defer as unsupported, got {err:?}"
-    );
+    ensure_apply_supported(ops.first().expect("one operation")).expect("DC-73 apply-supported");
 }
 
 #[test]
-fn decode_replace_binary_via_object_encoder_is_unsupported() {
+fn decode_replace_binary_via_object_encoder_is_apply_supported() {
     // End-to-end through the real §9.3 object writer (encoder/decoder agree on wire).
     let bytes = patch_bytes(OperationKind::ReplaceBinary(ReplaceBinary {
         node_id: NodeId::from_bytes([0x22; 32]),
@@ -465,11 +459,7 @@ fn decode_replace_binary_via_object_encoder_is_unsupported() {
         }
         other => panic!("expected ReplaceBinary, got {other:?}"),
     }
-    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
-    assert!(
-        matches!(err, PrikkError::UnsupportedObjectType(_)),
-        "{err:?}"
-    );
+    ensure_apply_supported(ops.first().expect("one operation")).expect("DC-73 apply-supported");
 }
 
 #[test]
@@ -563,18 +553,14 @@ fn decode_rename_path_via_object_encoder_is_unsupported() {
 // ---- ChangePerm (tag 14) §9.3 read-side ----
 
 #[test]
-fn decode_valid_change_perm_is_validated_then_unsupported() {
+fn decode_valid_change_perm_is_apply_supported() {
     let mut record = Vec::new();
     tlv(&mut record, 1, 0x11, &[0x22; 32]);
     tlv(&mut record, 2, 0x03, &0o100_644_u32.to_be_bytes());
     tlv(&mut record, 3, 0x03, &0o100_755_u32.to_be_bytes());
     let bytes = patch_with_raw_op(14, &record);
     let ops = decode_patch_operations(&bytes).expect("decodes");
-    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
-    assert!(
-        matches!(err, PrikkError::UnsupportedObjectType(_)),
-        "{err:?}"
-    );
+    ensure_apply_supported(ops.first().expect("one operation")).expect("DC-73 apply-supported");
 }
 
 #[test]
@@ -589,7 +575,7 @@ fn decode_rejects_change_perm_all_zero_node_id() {
 }
 
 #[test]
-fn decode_change_perm_via_object_encoder_is_unsupported() {
+fn decode_change_perm_via_object_encoder_is_apply_supported() {
     let bytes = patch_bytes(OperationKind::ChangePerm(ChangePerm {
         node_id: NodeId::from_bytes([0x22; 32]),
         old_mode: 0o100_644,
@@ -608,11 +594,7 @@ fn decode_change_perm_via_object_encoder_is_unsupported() {
         }
         other => panic!("expected ChangePerm, got {other:?}"),
     }
-    let err = ensure_apply_supported(ops.first().expect("one operation")).expect_err("deferred");
-    assert!(
-        matches!(err, PrikkError::UnsupportedObjectType(_)),
-        "{err:?}"
-    );
+    ensure_apply_supported(ops.first().expect("one operation")).expect("DC-73 apply-supported");
 }
 
 // ---- CreateSymlink (tag 15) §9.3 read-side ----

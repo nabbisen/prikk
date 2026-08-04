@@ -136,6 +136,31 @@ pub(crate) fn truncate_existing_file_required(
     }
 }
 
+/// Set an existing regular file's mode bits (DC-73: worktree materialization needs to write the
+/// mode a `CreateFile`/`ChangePerm` operation recorded, not whatever the anchored create primitive
+/// defaults new files to). No-follow, matching every other anchored open — a symlink at the final
+/// component is refused rather than chmod'd through.
+pub(crate) fn set_regular_file_mode_required(
+    root: &MutationRoot,
+    relative: &Path,
+    mode: u32,
+) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        let directory = open_existing_directory_required(root, required_parent(relative)?)?;
+        let fd =
+            open_existing_regular(&directory.fd, required_file_name(relative)?, OFlags::RDONLY)?;
+        // Permission bits only (0o7777): a recorded mode carries the S_IFREG file-type bits
+        // (e.g. `0o100_755`), which `fchmod` does not accept.
+        fs::fchmod(&fd, fs::Mode::from_raw_mode(mode & 0o7777)).map_err(io_error)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (root, relative, mode);
+        unsupported_mutation()
+    }
+}
+
 /// Create or truncate a regular file, then sync it and its retained parent.
 pub(crate) fn truncate_file_empty_required(root: &MutationRoot, relative: &Path) -> Result<()> {
     #[cfg(target_os = "linux")]

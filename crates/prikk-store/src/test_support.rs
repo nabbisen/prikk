@@ -1,9 +1,10 @@
 //! Shared test fixtures and cross-module test harnesses.
 
 use prikk_object::{
-    BlockKind, BlockPayload, CanonicalEncode, ChangePerm, CreateFile, EditText, MerkleRoot, NodeId,
+    BlockKind, BlockPayload, CanonicalEncode, CreateFile, EditText, MerkleRoot, NodeId,
     ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind, PatchPayload, PatchPurpose,
-    RefKind, RefStatePayload, RefUpdatePayload, Signature, SignatureAlgorithm, SignerRole,
+    RefKind, RefStatePayload, RefUpdatePayload, RenamePath, Signature, SignatureAlgorithm,
+    SignerRole,
 };
 
 use crate::{FileObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout};
@@ -282,7 +283,7 @@ pub(crate) fn publish_text_create_then_edit_block(
     Ok(())
 }
 
-pub(crate) fn publish_text_edit_then_unsupported_change_perm_block(
+pub(crate) fn publish_text_edit_then_unsupported_rename_path_block(
     layout: &RepositoryLayout,
 ) -> prikk_error::Result<()> {
     let mut object_store = FileObjectStore::new(layout.clone());
@@ -327,10 +328,10 @@ pub(crate) fn publish_text_edit_then_unsupported_change_perm_block(
                 op_seq: 3,
                 op_id: None,
                 preconditions: Vec::new(),
-                kind: OperationKind::ChangePerm(ChangePerm {
+                kind: OperationKind::RenamePath(RenamePath {
                     node_id,
-                    old_mode: 0o100644,
-                    new_mode: 0o100755,
+                    old_path: "README.md".to_string(),
+                    new_path: "README2.md".to_string(),
                 }),
             },
         ],

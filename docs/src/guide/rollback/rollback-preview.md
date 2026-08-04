@@ -25,6 +25,8 @@ Supported operation subset:
 - `CreateFile`
 - `DeleteFile`
 - deterministic arbitrary-span `EditText`
+- `ReplaceBinary` (DC-73)
+- `ChangePerm` (DC-73)
 
 Deferred:
 

@@ -9,8 +9,9 @@ use std::collections::BTreeMap;
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    CanonicalEncode, CreateFile, DeleteNode, DeleteNodePreimage, NodeId, NodeKind, ObjectEnvelope,
-    ObjectId, ObjectType, Operation, OperationKind, PatchPayload, PatchPurpose,
+    CanonicalEncode, ChangePerm, CreateFile, DeleteNode, DeleteNodePreimage, NodeId, NodeKind,
+    ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind, PatchPayload, PatchPurpose,
+    ReplaceBinary,
 };
 
 use crate::layout::RepositoryLayout;
@@ -75,6 +76,8 @@ pub enum PatchInverseOperationKind {
     ReplaceBinary,
     /// Inverse operation performs a text edit.
     EditText,
+    /// Inverse operation changes a node's mode bits (DC-73).
+    ChangePerm,
 }
 
 impl PatchInverseOperationKind {
@@ -86,6 +89,7 @@ impl PatchInverseOperationKind {
             Self::DeleteFile => "delete-file",
             Self::ReplaceBinary => "replace-binary",
             Self::EditText => "edit-text",
+            Self::ChangePerm => "change-perm",
         }
     }
 }
@@ -301,11 +305,81 @@ fn derive_inverse_operation(
         } => Err(PrikkError::UnsupportedObjectType(
             "inverse planning for symlink DeleteNode is deferred".to_string(),
         )),
-        DecodedOperationKind::ReplaceBinary { .. }
-        | DecodedOperationKind::RenamePath { .. }
-        | DecodedOperationKind::ChangePerm { .. }
-        | DecodedOperationKind::CreateSymlink { .. } => Err(PrikkError::UnsupportedObjectType(
-            "inverse planning for this node-addressed operation is deferred".to_string(),
+        DecodedOperationKind::ReplaceBinary {
+            node_id,
+            old_blob_id,
+            new_blob_id,
+        } => {
+            let live = live_nodes.get(&node_id).ok_or_else(|| {
+                PrikkError::Integrity("ReplaceBinary inverse target node is not live".to_string())
+            })?;
+            if live.kind != NodeKind::BinaryFile {
+                return Err(PrikkError::Integrity(
+                    "ReplaceBinary inverse target node is not BinaryFile".to_string(),
+                ));
+            }
+            let path = live.path.clone();
+            // `files` holds forward (original-history) state at this point in the walk — the
+            // bytes *before* this original ReplaceBinary took effect, which must match its
+            // `old_blob_id`, not `new_blob_id`.
+            let current_bytes = files.get(&path).ok_or_else(|| {
+                PrikkError::Integrity(format!(
+                    "ReplaceBinary inverse target path {path} is absent"
+                ))
+            })?;
+            crate::blob_access::ensure_blob_matches_node_kind(
+                current_bytes,
+                old_blob_id,
+                live.kind,
+            )?;
+            let (new_kind, new_bytes) = read_blob_bytes_with_kind(object_store, new_blob_id)?;
+            if new_kind != NodeKind::BinaryFile {
+                return Err(PrikkError::Integrity(format!(
+                    "ReplaceBinary new blob {new_blob_id} is not a binary-file blob"
+                )));
+            }
+            // Advance `files` to this original operation's forward result, so a later operation
+            // in the same walk sees correct "current" state.
+            files.insert(path.clone(), new_bytes);
+            Ok(Operation {
+                op_seq: 0,
+                op_id: Some(format!("inverse-replace-binary-{path}")),
+                preconditions: Vec::new(),
+                kind: OperationKind::ReplaceBinary(ReplaceBinary {
+                    node_id,
+                    old_blob_id: new_blob_id,
+                    new_blob_id: old_blob_id,
+                }),
+            })
+        }
+        DecodedOperationKind::ChangePerm {
+            node_id,
+            old_mode,
+            new_mode,
+        } => {
+            let live = live_nodes.get(&node_id).ok_or_else(|| {
+                PrikkError::Integrity("ChangePerm inverse target node is not live".to_string())
+            })?;
+            let path = live.path.clone();
+            Ok(Operation {
+                op_seq: 0,
+                op_id: Some(format!("inverse-change-perm-{path}")),
+                preconditions: Vec::new(),
+                kind: OperationKind::ChangePerm(ChangePerm {
+                    node_id,
+                    old_mode: new_mode,
+                    new_mode: old_mode,
+                }),
+            })
+        }
+        // DC-73: unreachable in practice — nothing authors either kind (renames become
+        // delete+create; symlink authoring is refused), so inverse stays deferred pending an
+        // authoring path, not the node model.
+        DecodedOperationKind::RenamePath { .. } => Err(PrikkError::UnsupportedObjectType(
+            "inverse planning for RenamePath awaits a rename authoring path".to_string(),
+        )),
+        DecodedOperationKind::CreateSymlink { .. } => Err(PrikkError::UnsupportedObjectType(
+            "inverse planning for CreateSymlink awaits a symlink authoring path".to_string(),
         )),
     }
 }
@@ -342,10 +416,25 @@ fn summarize_operations(operations: &[Operation]) -> Vec<PatchInverseOperationSu
                         .unwrap_or("<unknown>")
                         .to_string(),
                 ),
-                OperationKind::ReplaceBinary(_)
-                | OperationKind::RenamePath(_)
-                | OperationKind::ChangePerm(_)
-                | OperationKind::CreateSymlink(_) => {
+                OperationKind::ReplaceBinary(_) => (
+                    PatchInverseOperationKind::ReplaceBinary,
+                    operation
+                        .op_id
+                        .as_deref()
+                        .and_then(|value| value.strip_prefix("inverse-replace-binary-"))
+                        .unwrap_or("<unknown>")
+                        .to_string(),
+                ),
+                OperationKind::ChangePerm(_) => (
+                    PatchInverseOperationKind::ChangePerm,
+                    operation
+                        .op_id
+                        .as_deref()
+                        .and_then(|value| value.strip_prefix("inverse-change-perm-"))
+                        .unwrap_or("<unknown>")
+                        .to_string(),
+                ),
+                OperationKind::RenamePath(_) | OperationKind::CreateSymlink(_) => {
                     unreachable!("inverse plan contains unsupported operation kind")
                 }
             };

@@ -1,11 +1,12 @@
 //! Minimal patch replay planning for supported file-level operations.
 //!
 //! PR-024 keeps a deliberately narrow replay boundary. It can reconstruct an in-memory snapshot
-//! manifest by walking a single-parent block chain and applying `CreateFile` and `DeleteNode`
-//! operations. `EditText` and `ReplaceBinary` are reconciled to the FDD-03 §9.3 node-addressed
-//! records but their application is deferred to the node model (increment 4.4; `EditText` also
-//! needs FDD-01 §7.2.1 span anchoring); renames, chmod, symlinks, merge algebra, and conflict
-//! handling remain later increments.
+//! manifest by walking a single-parent block chain and applying `CreateFile`, `DeleteNode`,
+//! `EditText`, `ReplaceBinary`, and `ChangePerm` operations (DC-73 wired the last two — see
+//! `apply.rs` and `decode.rs::ensure_apply_supported`). Renames and symlinks remain unauthored
+//! (`node_authoring.rs` never produces `RenamePath`; symlink authoring is refused outright), so
+//! their apply paths stay deferred pending an authoring path, not the node model; merge algebra and
+//! conflict handling remain later increments.
 //!
 //! Split across three files (DC-58): this file keeps the public API and baseline resolution;
 //! `read.rs` holds object-store reading helpers (block-chain walking, blob/patch/snapshot
@@ -31,8 +32,8 @@ use crate::validate_local_branch_ref;
 use apply::apply_decoded_operation;
 use decode::decode_patch_operations;
 use read::{
-    current_target_block, files_to_manifest, load_snapshot_files, read_block, read_patch,
-    single_parent_chain,
+    current_target_block, files_to_manifest, files_to_replay_manifest, load_snapshot_files,
+    read_block, read_patch, single_parent_chain,
 };
 
 /// Read-only result of replaying supported patch operations to an in-memory snapshot.
@@ -80,6 +81,39 @@ pub fn prepare_patch_replay_plan(
     })
 }
 
+/// One file entry in a replay-derived manifest, carrying the mode bits `CreateFile`/`ChangePerm`
+/// recorded (DC-73). Deliberately **not** `crate::snapshot::SnapshotEntry`: that type is also what
+/// `SnapshotManifest::decode` reads from a stored snapshot Blob's wire bytes, which have no mode
+/// field of their own — adding one to the shared type would force a default on the decode side for
+/// a value the stored bytes never contained. This type exists only in memory, built by replaying
+/// operations, and never crosses the object-format boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReplayManifestEntry {
+    /// Validated repository-relative path.
+    pub(crate) path: RepoPath,
+    /// File content bytes.
+    pub(crate) bytes: Vec<u8>,
+    /// Mode bits, as recorded by the most recent `CreateFile`/`ChangePerm` for this node.
+    pub(crate) mode: u32,
+}
+
+/// Replay-derived manifest, sorted by path. See [`ReplayManifestEntry`] for why this is not
+/// `crate::snapshot::SnapshotManifest`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReplayManifest {
+    /// File entries, sorted by path.
+    pub(crate) files: Vec<ReplayManifestEntry>,
+}
+
+impl ReplayManifest {
+    pub(crate) fn total_content_bytes(&self) -> u64 {
+        self.files
+            .iter()
+            .map(|entry| entry.bytes.len() as u64)
+            .sum()
+    }
+}
+
 /// In-memory replay result used by patch checkout materialization.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PatchReplaySnapshot {
@@ -93,12 +127,13 @@ pub(crate) struct PatchReplaySnapshot {
     pub(crate) patch_count: usize,
     /// Number of supported operations applied.
     pub(crate) applied_operation_count: usize,
-    /// Resulting file manifest.
-    pub(crate) manifest: SnapshotManifest,
+    /// Resulting file manifest, mode-aware (DC-73).
+    pub(crate) manifest: ReplayManifest,
     /// Files explicitly removed by replayed patches and still absent in the final manifest.
     pub(crate) deleted_files: Vec<PatchReplayDeletedFile>,
     /// Latest snapshot baseline used as the rollback-preview target for the supported replay
-    /// window.
+    /// window. Mode-unaware like the wire-decoded snapshot format it is seeded from — the
+    /// rollback-preview consumer compares paths and bytes only.
     pub(crate) baseline_manifest: SnapshotManifest,
 }
 
@@ -159,7 +194,7 @@ pub(crate) fn replay_supported_patch_chain(
         block_count: block_ids.len(),
         patch_count,
         applied_operation_count,
-        manifest: files_to_manifest(files)?,
+        manifest: files_to_replay_manifest(files, &live_nodes)?,
         deleted_files: deleted_files.into_values().collect(),
         baseline_manifest: files_to_manifest(baseline_files)?,
     })

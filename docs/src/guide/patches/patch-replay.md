@@ -17,13 +17,13 @@ Supported operations:
 - `CreateFile`
 - `DeleteFile`
 - `EditText` for deterministic content-anchored arbitrary spans
+- `ReplaceBinary` (DC-73)
+- `ChangePerm` (DC-73)
 
 Unsupported operations still fail the plan clearly:
 
-- `ReplaceBinary`
-- `RenamePath`
-- `ChangePerm`
-- `CreateSymlink`
+- `RenamePath` — not a node-model gap: `commit` never authors it, renames become delete+create
+- `CreateSymlink` — not a node-model gap: symlink authoring is refused outright
 - merge/conflict algebra
 
 This command does not write the worktree. It only proves that the current sealed history can be

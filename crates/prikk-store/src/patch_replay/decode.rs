@@ -113,8 +113,8 @@ pub(crate) enum DecodedDeletePreimage {
 /// Apply-time support gate (review erratum P1). Decoding a kind says nothing about
 /// whether replay/apply can execute it; this is the *single* source of truth for the
 /// apply-supported subset. Returns `Ok(())` only for the kinds whose application is
-/// wired today (`CreateFile`, file-`DeleteNode`, and `EditText`); node-addressed kinds whose
-/// application is still deferred return
+/// wired today (`CreateFile`, file-`DeleteNode`, `EditText`, `ReplaceBinary`, and `ChangePerm` —
+/// DC-73); node-addressed kinds whose application is still deferred return
 /// `UnsupportedObjectType`. Per review erratum P4, Phase 4 cannot be marked
 /// implementation-reconciled while any kind still returns unsupported here.
 pub(crate) fn ensure_apply_supported(operation: &DecodedPatchOperation) -> Result<()> {
@@ -124,22 +124,21 @@ pub(crate) fn ensure_apply_supported(operation: &DecodedPatchOperation) -> Resul
             preimage: DecodedDeletePreimage::File { .. },
             ..
         }
-        | DecodedOperationKind::EditText { .. } => Ok(()),
+        | DecodedOperationKind::EditText { .. }
+        | DecodedOperationKind::ReplaceBinary { .. }
+        | DecodedOperationKind::ChangePerm { .. } => Ok(()),
         DecodedOperationKind::DeleteNode {
             preimage: DecodedDeletePreimage::Symlink { .. },
             ..
         } => Err(unsupported_operation("DeleteNode(symlink)")),
-        DecodedOperationKind::ReplaceBinary { .. } => Err(unsupported_operation(
-            "ReplaceBinary (node-addressed apply pending node model, increment 4.4)",
-        )),
+        // DC-73: unreachable in practice — `commit` never authors either kind (renames become
+        // delete+create; symlink authoring is refused outright), so these apply paths stay
+        // deferred pending an authoring path, not the node model.
         DecodedOperationKind::RenamePath { .. } => Err(unsupported_operation(
-            "RenamePath (node-addressed apply pending node model, increment 4.4)",
-        )),
-        DecodedOperationKind::ChangePerm { .. } => Err(unsupported_operation(
-            "ChangePerm (node-addressed apply pending node model, increment 4.4)",
+            "RenamePath (node-addressed apply pending a rename authoring path)",
         )),
         DecodedOperationKind::CreateSymlink { .. } => Err(unsupported_operation(
-            "CreateSymlink (apply pending node model, increment 4.4)",
+            "CreateSymlink (apply pending a symlink authoring path)",
         )),
     }
 }

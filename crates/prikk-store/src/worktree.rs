@@ -11,11 +11,12 @@ use prikk_object::ObjectType;
 
 use crate::checkout::prepare_snapshot_checkout_plan;
 use crate::fsutil::{
-    ensure_directory_required, read_file_if_exists, sync_directory_required,
-    write_worktree_file_atomically,
+    ensure_directory_required, read_file_if_exists, set_regular_file_mode_required,
+    stat_file_state_if_exists, sync_directory_required, write_worktree_file_atomically,
 };
 use crate::layout::RepositoryLayout;
 use crate::object_store::{FileObjectStore, ObjectReader};
+use crate::patch_replay::{ReplayManifest, ReplayManifestEntry};
 use crate::path::join_repo_path_to_root;
 use crate::snapshot::{SnapshotEntry, SnapshotManifest};
 
@@ -93,6 +94,59 @@ pub(crate) fn materialize_manifest_entries(
         written_files,
         unchanged_files,
     })
+}
+
+/// Materialize a mode-aware replay manifest without deleting extra files (DC-73). Otherwise
+/// identical to [`materialize_manifest_entries`] — kept as a separate function rather than a
+/// generic one because the two manifest types are deliberately not unified (see
+/// `ReplayManifestEntry`'s doc comment).
+pub(crate) fn materialize_replay_manifest_entries(
+    layout: &RepositoryLayout,
+    manifest: &ReplayManifest,
+) -> Result<ManifestMaterializationReport> {
+    let mut written_files = 0_usize;
+    let mut unchanged_files = 0_usize;
+    for entry in &manifest.files {
+        match materialize_replay_entry(layout, entry)? {
+            EntryWriteOutcome::Written => written_files += 1,
+            EntryWriteOutcome::Unchanged => unchanged_files += 1,
+        }
+    }
+    Ok(ManifestMaterializationReport {
+        written_files,
+        unchanged_files,
+    })
+}
+
+fn materialize_replay_entry(
+    layout: &RepositoryLayout,
+    entry: &ReplayManifestEntry,
+) -> Result<EntryWriteOutcome> {
+    let root = layout.root();
+    let target = join_repo_path_to_root(&entry.path, root);
+    ensure_target_is_inside_root(root, &target)?;
+    ensure_parent_directory(layout, entry.path.as_str())?;
+    let relative = Path::new(entry.path.as_str());
+    if let Some(current) = read_file_if_exists(layout.worktree_mutation_root(), relative)? {
+        if current != entry.bytes {
+            return Err(PrikkError::Integrity(format!(
+                "refusing to overwrite existing file with different content: {}",
+                target.display()
+            )));
+        }
+        let current_mode = stat_file_state_if_exists(layout.worktree_mutation_root(), relative)?
+            .map(|stat| stat.mode & 0o7777);
+        if current_mode == Some(entry.mode & 0o7777) {
+            let parent = relative.parent().unwrap_or_else(|| Path::new(""));
+            sync_directory_required(layout.worktree_mutation_root(), parent)?;
+            return Ok(EntryWriteOutcome::Unchanged);
+        }
+        set_regular_file_mode_required(layout.worktree_mutation_root(), relative, entry.mode)?;
+        return Ok(EntryWriteOutcome::Written);
+    }
+    write_worktree_file_atomically(layout.worktree_mutation_root(), relative, &entry.bytes)?;
+    set_regular_file_mode_required(layout.worktree_mutation_root(), relative, entry.mode)?;
+    Ok(EntryWriteOutcome::Written)
 }
 
 fn load_snapshot_manifest(

@@ -12,7 +12,7 @@ use crate::fsutil::{EntryKind, inspect_entry, read_file_required, remove_worktre
 use crate::layout::RepositoryLayout;
 use crate::patch_replay::{PatchReplayDeletedFile, replay_supported_patch_chain};
 use crate::path::join_repo_path_to_root;
-use crate::worktree::materialize_manifest_entries;
+use crate::worktree::materialize_replay_manifest_entries;
 
 /// Result of an opt-in patch replay materialization.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,7 +142,7 @@ fn materialize_patch_checkout_inner(
         )));
     }
 
-    let write_report = materialize_manifest_entries(layout, &snapshot.manifest)?;
+    let write_report = materialize_replay_manifest_entries(layout, &snapshot.manifest)?;
     let deleted_files = if delete_removed {
         apply_deletions(
             layout,
