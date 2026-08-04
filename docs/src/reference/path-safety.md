@@ -17,6 +17,23 @@ For physical repository layout and `.prikk/` authority boundaries, see
 - Unicode NFC normalization is not implemented; non-ASCII repository paths are rejected.
 - Cross-platform conservative checks are enforced even on Unix, including Windows reserved names and
   case-insensitive collision rejection.
+- The collision-rejection rule is ASCII case-folding only (`to_ascii_lowercase`), applied uniformly
+  to repository paths, branch ref names, tag ref names, and maintainer trust key ids (DC-72). It is
+  **not** Unicode normalization: an NFC-composed and NFD-decomposed spelling of the same visible name
+  are different byte sequences and are not folded together. Repository paths cannot reach this case
+  today because non-ASCII repository paths are rejected outright (previous bullet); branch and tag ref
+  names have no such ASCII restriction, so an NFC/NFD pair there is a live, recorded, un-rejected
+  collision. Locale-dependent case rules (Turkish `İ`/`i`, German `ß`/`SS`) are outside ASCII folding
+  for the same reason. Closing this needs a normalization dependency prikk-store's dependency
+  allowlist does not currently permit (`tools/release-policy/src/boundary/placement.rs`).
+- Repository-path collisions are rejected at `seal`, not at `commit` (DC-72) — `commit` records a
+  case-colliding pair into the active WAL without error; `seal` computes the full state root over all
+  live paths and rejects there. Nothing enters sealed, verifiable history either way, but the
+  rejection surfaces later than the action that introduced it. Recorded as a known ergonomic gap, not
+  fixed — moving the check earlier is a separate change to the commit path.
+- Branch and tag ref-name collisions, and maintainer trust key id collisions, are rejected only when
+  the name is first created (no prior published state for that exact name) — an ordinary pointer
+  update to an already-published ref does not re-scan every other ref.
 - Symlink authoring and symlink materialization are deferred.
 - Current materialization safety is check-then-write. It is not an `openat`/`O_NOFOLLOW` design, not a
   canonical realpath proof, and not a race-free guarantee under concurrent worktree modification.
@@ -134,6 +151,37 @@ The current authoring path:
 Worktree authoring does not infer renames. A move is represented as a deletion plus a creation in the
 current supported authoring model.
 
+## Ref and Tag Name Safety
+
+`prikk branch create`, `prikk tag create`, and a branch's first `seal` (the moment that publishes a
+ref with no prior published state) reject a new ref name that ASCII-case-folds to an existing ref
+name other than itself. An ordinary pointer update to an already-published ref does not re-run this
+check.
+
+Branch names (`heads/...`) and tag names (`tags/...`) are folded and compared only within their own
+namespace: `validate_local_branch_ref`/`validate_local_tag_ref` require the exact, case-sensitive
+`heads/`/`tags/` prefix, so the two namespaces never fold into each other. `heads/Main` colliding with
+`heads/main` is rejected; `tags/Main` alongside `heads/main` is not a collision.
+
+Ref names have no non-ASCII restriction — unlike repository paths, a branch or tag literally named
+`café` is accepted. Because the fold is ASCII-only, an NFC-composed and an NFD-decomposed spelling of
+the same name are not recognized as colliding; see the ASCII-folding caveat above.
+
+## Maintainer Trust Key Id Safety
+
+A maintainer key id becomes a literal filesystem path component (`{key_id}.pub` under
+`.prikk/trust/keys/maintainer/`), the same hazard class as a repository path, so it is checked
+similarly:
+
+- storage-safe character allowlist (ASCII alphanumeric, `-`, `_`);
+- Windows reserved device stem rejected regardless of host OS (`CON`, `PRN`, `AUX`, `NUL`, `COM1`
+  through `COM9`, `LPT1` through `LPT9`) — this is the same check `RepoPath` uses, shared rather than
+  duplicated;
+- case-insensitive collision against every other currently-stored key id is rejected.
+
+`trust maintainer add` is add-or-replace for the exact same id: re-adding an unchanged `key_id` is not
+treated as colliding with itself.
+
 ## Deferred and Not Promised
 
 Still deferred: Unicode NFC normalization, non-ASCII repository paths, symlink authoring, symlink
@@ -158,6 +206,9 @@ Current checks are deliberately strict so future path policy can expand from a c
 | Patch deletion is opt-in, deletes only explicit replay deletions, and requires current bytes to match old Blob precondition bytes. | [`patch_checkout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/patch_checkout.rs), [patch deletions guide](../guide/patches/patch-deletions.md) |
 | Worktree authoring skips top-level `.prikk/`, rejects symlinks/non-regular entries, rejects non-UTF-8 paths, validates through `RepoPath`, and rejects snapshot-only baselines. | [`node_authoring.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/worktree_patch/node_authoring.rs), [worktree patch guide](../guide/patches/worktree-patch.md) |
 | Current trust/threat docs treat `.prikk` private paths and absolute host paths as sensitive diagnostics material. | [trust and threat model](./trust-threat-model.md), [patch algebra reference](./patch-algebra.md) |
+| Repository-path collisions are rejected at `seal` (state-root derivation), not at `commit`. | [`state_root.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/state_root.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs) |
+| Branch and tag ref names reject a case-insensitive collision against another ref in the same namespace, checked only at first publication. | [`refs/publication.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/publication.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`dc72_path_safety_collisions.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/tests/dc72_path_safety_collisions.rs) |
+| Maintainer trust key ids reject a Windows-reserved stem and a case-insensitive collision against another stored key id. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [`dc72_path_safety_collisions.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/tests/dc72_path_safety_collisions.rs) |
 
 ## Provenance
 
@@ -165,3 +216,8 @@ This reference implements DC-32 as a documentation-only extension of the current
 It adds no code, schema, CLI behavior, checkout behavior, materialization behavior, worktree authoring
 behavior, repository behavior, trust behavior, verification behavior, release semantics, or stable path
 policy guarantee.
+
+DC-72 (NFR-SEC-03 path-safety conformance) added the ref/tag-name and maintainer-key-id collision and
+reserved-name checks this page now documents, and the ASCII-folding/seal-timing caveats above. That
+work was code, not documentation-only; this page's provenance note is scoped to what DC-32 originally
+contributed, not to every later increment that changed the behavior it describes.

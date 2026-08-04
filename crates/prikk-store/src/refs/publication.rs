@@ -36,6 +36,13 @@ fn publish_locked(
     allow_partial_tail_repair: bool,
 ) -> Result<ObjectId> {
     let update = validate_coherent_publication(publication)?;
+    // DC-72: `expected_previous_ref_state_id: None` is this publication's own CAS signal for "no
+    // current state" — the same signal `branch create`/`tag create`/first `seal` already use to mean
+    // "this ref does not exist yet" (branch.rs, tag.rs, seal.rs). Checked only here, not on every
+    // ordinary pointer-update publication, so an existing ref's routine seal never re-scans every ref.
+    if publication.expected_previous_ref_state_id.is_none() {
+        validate_no_ref_name_collision(store, &publication.ref_name)?;
+    }
     let ref_state_id = publication.ref_state.object_id();
     let ref_lock = RefLock::acquire(&store.layout, &publication.ref_name)?;
     super::pointer::remove_candidate_write_temps(&store.layout, &publication.ref_name)?;
@@ -124,6 +131,26 @@ fn publish_locked(
     ensure_agreement(store, publication, &update)?;
     drop(ref_lock);
     Ok(ref_state_id)
+}
+
+/// Reject a new ref whose ASCII-folded name collides with an existing ref other than itself
+/// (DC-72). Branch and tag namespaces never collide with each other here: every valid ref name
+/// begins with the exact literal `heads/` or `tags/` (`validate_local_branch_ref`/
+/// `validate_local_tag_ref` require the case-sensitive prefix), so folding the full name keeps the
+/// two prefixes apart. ASCII-only, matching `RepoPath`'s collision rule and its recorded
+/// limitation — an NFC/NFD-equivalent or locale-cased name pair is not folded (see
+/// `docs/src/reference/path-safety.md`).
+fn validate_no_ref_name_collision(store: &RefStore, ref_name: &str) -> Result<()> {
+    let folded = ref_name.to_ascii_lowercase();
+    for existing in store.list_ref_pointers()? {
+        if existing.ref_name != ref_name && existing.ref_name.to_ascii_lowercase() == folded {
+            return Err(PrikkError::InvalidName(format!(
+                "case-insensitive ref-name collision involving: {}",
+                existing.ref_name
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn validate_coherent_publication(publication: &RefPublication) -> Result<RefUpdatePayload> {

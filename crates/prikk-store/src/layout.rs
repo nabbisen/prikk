@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use prikk_error::{PrikkError, Result};
 use prikk_hash::{sha256, to_hex};
-use prikk_object::{ObjectId, ObjectType};
+use prikk_object::{ObjectId, ObjectType, is_windows_reserved_name};
 
 use crate::fsutil::{
     MutationRoot, ensure_directory_required, read_file_if_exists, read_file_required,
@@ -315,6 +315,14 @@ impl RepositoryLayout {
             return Err(PrikkError::InvalidName(
                 "maintainer key id is not storage-safe".to_string(),
             ));
+        }
+        // DC-72: the allowlist above is character-shape only and does not exclude Windows-reserved
+        // device stems (`CON`, `PRN`, ...) — `CON` is all ASCII-alphanumeric and would otherwise
+        // pass. Checked regardless of host OS, matching `RepoPath`'s equivalent rule.
+        if is_windows_reserved_name(key_id) {
+            return Err(PrikkError::InvalidName(format!(
+                "maintainer key id is a Windows reserved device name: {key_id}"
+            )));
         }
         Ok(self
             .maintainer_trust_keys_dir()

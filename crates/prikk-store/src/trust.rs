@@ -8,7 +8,9 @@ use prikk_error::{PrikkError, Result};
 use prikk_hash::to_hex;
 use prikk_object::{ObjectEnvelope, Signature, SignatureAlgorithm, SignerRole};
 
-use crate::fsutil::{ensure_directory_required, read_file_required, write_file_atomically};
+use crate::fsutil::{
+    EntryKind, ensure_directory_required, list_directory, read_file_required, write_file_atomically,
+};
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
 use crate::maintainer_signing::MaintainerSigner;
@@ -55,6 +57,7 @@ pub fn add_trusted_maintainer(
     let public_key = decode_public_key_hex(public_key_hex)?;
     let keys_dir = layout.repository_relative(&layout.maintainer_trust_keys_dir())?;
     ensure_directory_required(layout.repository_mutation_root(), &keys_dir)?;
+    validate_no_maintainer_key_id_collision(layout, &keys_dir, key_id)?;
     let key_path = layout.maintainer_trust_key_path(key_id)?;
     let key_relative = layout.repository_relative(&key_path)?;
     let public_key_text = format!("{}\n", to_hex(&public_key));
@@ -74,6 +77,36 @@ pub fn add_trusted_maintainer(
         key_id: key_id.to_string(),
         public_key,
     })
+}
+
+/// Reject a maintainer key id whose ASCII-folded form collides with an existing key file other than
+/// itself (DC-72). `add_trusted_maintainer` is add-or-replace for the exact same id — re-adding
+/// `key_id` unchanged is not a collision with itself. ASCII-only, matching `RepoPath`'s collision
+/// rule and its recorded limitation: NFC/NFD-equivalent or locale-cased key ids are not folded (see
+/// `docs/src/reference/path-safety.md`).
+fn validate_no_maintainer_key_id_collision(
+    layout: &RepositoryLayout,
+    keys_dir_relative: &std::path::Path,
+    key_id: &str,
+) -> Result<()> {
+    let folded = key_id.to_ascii_lowercase();
+    for entry in list_directory(layout.repository_mutation_root(), keys_dir_relative)? {
+        if entry.kind != EntryKind::Regular {
+            continue;
+        }
+        let Some(name) = entry.name.to_str() else {
+            continue;
+        };
+        let Some(existing_id) = name.strip_suffix(".pub") else {
+            continue;
+        };
+        if existing_id != key_id && existing_id.to_ascii_lowercase() == folded {
+            return Err(PrikkError::InvalidName(format!(
+                "case-insensitive maintainer key id collision involving: {existing_id}"
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Load and validate the repository-local MAINTAINER trust policy.

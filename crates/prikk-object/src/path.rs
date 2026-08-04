@@ -77,7 +77,12 @@ fn validate_component(component: &str) -> Result<()> {
     Ok(())
 }
 
-fn is_windows_reserved_name(component: &str) -> bool {
+/// Whether a path component's basename (before the first `.`) is a Windows-reserved device name
+/// (`CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, `LPT1`-`LPT9`), checked case-insensitively and
+/// regardless of host OS. Exposed for other storage surfaces that build a literal filesystem path
+/// component from user-supplied text outside the `RepoPath` grammar (DC-72).
+#[must_use]
+pub fn is_windows_reserved_name(component: &str) -> bool {
     let base = component
         .split('.')
         .next()
