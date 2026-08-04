@@ -86,7 +86,21 @@ without a dependency change, that is a finding to report, not to route around.
 component stem, host-OS-independently. **Apply that same function** to trust key ids. A second reserved-name
 list would be a second thing to maintain and a second thing to be wrong.
 
-### The check belongs at each surface's existing validation entry point
+### The check belongs at each surface's creation site — CORRECTED 2026-08-04
+
+> **This section originally said "at each surface's existing validation entry point," naming
+> `validate_repo_path`, `validate_local_branch_ref`, `validate_local_tag_ref`, and
+> `maintainer_trust_key_path`. That was wrong and is corrected here rather than quietly amended.**
+> Those functions are pure string grammar and pure path arithmetic — none has repository access, so none
+> can enumerate existing names. `validate_local_branch_ref` is referenced from 11 files, mostly read
+> paths, which would each have paid a full ref-listing scan for a property that only means anything at
+> creation.
+>
+> **The principle stands: one definition, no parallel enforcement path.** The correct placement is the
+> creation-specific call site immediately above each validator — `publish_locked` gated on
+> `expected_previous_ref_state_id.is_none()`, and `add_trusted_maintainer`.
+
+### Original wording, superseded
 
 Not at a new choke point. Each surface already has one — `validate_repo_path`, `validate_local_branch_ref`,
 `validate_local_tag_ref`, `maintainer_trust_key_path` — and adding the call there keeps the rejection where
