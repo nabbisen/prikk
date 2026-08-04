@@ -34,6 +34,7 @@ These records are under design review. All proposed RFCs must respect the depend
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
 | DC-52 | [Python and Oracle Decommissioning](./proposed/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | M2 / 0.19.0; **release-blocked** — `DC-45:419` forbids deletion before the first Rust-gated 0.19.0 release |
 | DC-53 | [Repository-Wide AUTHOR Trust Verification](./proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md) | Post-M2, unscheduled |
+| DC-73 | [Node-Model Operation Apply](./proposed/DC-73-NODE-MODEL-APPLY.md) | **First forward increment after the corrective program** — roadmap item A, accepted 2026-08-04. Closes three user-visible failures: rollback refusing `ReplaceBinary`/`ChangePerm` spans, and `checkout --patch-materialize` unable to replay `ChangePerm`. Lifecycle-state apply is already complete for all seven operations; the gap is materialization and inverse. Awaits acceptance |
 
 **None of these five is a live design-review candidate** — all are blocked or unscheduled. DC-66 was accepted 2026-08-02 and has moved to `accepted/`.
 DC-56, DC-60, DC-61, DC-62 and DC-63 have all moved to `accepted/`:
