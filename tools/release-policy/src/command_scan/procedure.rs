@@ -53,6 +53,14 @@ fn tar(tail: &[String]) -> bool {
             "prikk",
             "LICENSE",
         ]
+        // DC-71 B2 ruling: the CI fixture round-trip through tar, not the artifact zip, which
+        // does not preserve empty directories — create on the fixture job, extract on the
+        // conformance job. The lexer's sentence-trailing-period trim (normalize_token) reduces
+        // tar's literal "." (current directory) argument to an empty, dropped token, so the
+        // create form's tail is four elements, not five — confirmed against the tokenizer, not
+        // assumed from the shell source.
+        || tail == ["-czf", "fixture-repo.tar.gz", "-C", "fixture-repo"]
+        || tail == ["-xzf", "fixture-repo.tar.gz", "-C", "fixture-repo"]
 }
 
 /// `gh release create $TAG <assets...> --repo nabbisen/prikk --title $TAG --notes-file <path>`.

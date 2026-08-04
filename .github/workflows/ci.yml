@@ -91,11 +91,18 @@ jobs:
           echo "hello prikk" > readme.txt
           ../target/debug/prikk commit -m genesis
           ../target/debug/prikk seal --allow-no-audit
+      # DC-71 B2 ruling: actions/upload-artifact's zip does not preserve empty directories (e.g.
+      # refs/tmp, a required-but-empty directory — layout.rs), so the conformance job downloaded a
+      # silently corrupted repository and never tested a valid one. tar preserves them; the zip
+      # transport does not. Confirmed by a negative control: removing refs/tmp from a valid
+      # fixture on Linux reproduces the exact "directory is absent: refs/tmp" error the
+      # conformance job reported.
+      - name: Package the fixture repository
+        run: tar -czf fixture-repo.tar.gz -C fixture-repo .
       - uses: actions/upload-artifact@v7
         with:
           name: read-only-fixture-repo
-          path: fixture-repo
-          include-hidden-files: true
+          path: fixture-repo.tar.gz
           if-no-files-found: error
 
   non-linux-verify:
@@ -114,7 +121,14 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: read-only-fixture-repo
-          path: fixture-repo
+      # tar, not the artifact zip, is what preserves the fixture's required-but-empty directories
+      # (see the fixture job's Package step) — extracted with bash/tar on every runner, including
+      # Windows, where GH-hosted runners ship a bsdtar-compatible tar.exe.
+      - name: Unpack the fixture repository
+        shell: bash
+        run: |
+          mkdir -p fixture-repo
+          tar -xzf fixture-repo.tar.gz -C fixture-repo
       # worktree-status is excluded here, not because it mutates, but because it currently
       # requires snapshot-block state that no CLI command can produce against an ordinary
       # patch/WAL-authored repository (see docs/src/reference/platform-support.md) — the fixture

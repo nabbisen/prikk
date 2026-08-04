@@ -403,3 +403,37 @@ fn recognizes_ci_hermeticity_fetch_procedure() {
         );
     }
 }
+
+/// DC-71 B2 ruling: the CI fixture round-trips through tar (not the artifact zip, which drops
+/// empty directories) between the fixture and non-linux-verify jobs. The create form's literal
+/// `.` (current directory) argument is trimmed to nothing by the lexer's sentence-trailing-period
+/// normalization, so its accepted tail is four tokens, not five — asserted here so a future lexer
+/// change that stops trimming `.` cannot silently make this entry permissive of an extra argument.
+#[test]
+fn recognizes_dc71_ci_fixture_tar_round_trip() {
+    for command in [
+        "tar -czf fixture-repo.tar.gz -C fixture-repo .",
+        // Tokenizes identically to the line above — the lexer cannot see the trailing "." either
+        // way, so this is not a distinguishable near-miss, it is the same accepted procedure.
+        "tar -czf fixture-repo.tar.gz -C fixture-repo",
+        "tar -xzf fixture-repo.tar.gz -C fixture-repo",
+    ] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+            assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+
+    for command in [
+        "tar -czf other.tar.gz -C fixture-repo .",
+        "tar -czf fixture-repo.tar.gz -C other-dir .",
+        "tar -xzf fixture-repo.tar.gz -C other-dir",
+        "tar --to-command=sh -czf fixture-repo.tar.gz -C fixture-repo .",
+    ] {
+        assert!(!scan_shell(command).errors.is_empty(), "{command}");
+        assert!(
+            !scan_yaml(&format!("- run: {command}")).errors.is_empty(),
+            "{command}"
+        );
+    }
+}
