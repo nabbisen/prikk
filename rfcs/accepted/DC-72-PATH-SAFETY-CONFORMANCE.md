@@ -60,6 +60,44 @@ named one, and §1 shows that record was already too narrow.
 > increment small.
 
 
+## 3.5 Design ruling — the shape of the fix (architect, 2026-08-04)
+
+The §2 table is discharged; these are the design decisions that follow from it, made here rather than left
+to implementation. **What remains for the implementer is placement and mechanics, reported for review.**
+
+### One folding definition, four call sites
+
+There must be **exactly one** definition of "these two names collide," cited by every surface. Four
+surfaces are in scope — repository paths, branch refs, tag refs, maintainer trust key ids — and four
+independent implementations of ASCII folding would be four things to drift.
+
+`prikk-replay::path::validate_no_path_collisions` (`path.rs:38`) already folds ASCII for repository paths
+and is the existing prior art. **But it is in `prikk-replay`, and `prikk-object` does not depend on it** —
+the dependency runs the other way (`prikk-replay/Cargo.toml:15`). Trust key ids live in `prikk-store`.
+
+**So the primitive's home is a reading question, not a preference**: establish where it can live such that
+all four surfaces reach it without inverting a dependency, and **report that placement before writing it**.
+`prikk-object` is the lowest crate and the likely answer; confirm rather than assume. If no placement works
+without a dependency change, that is a finding to report, not to route around.
+
+### Reserved names on trust key ids: reuse, do not reimplement
+
+`prikk-object::path::is_windows_reserved_name` already checks CON/PRN/AUX/NUL/COM1-9/LPT1-9 against a
+component stem, host-OS-independently. **Apply that same function** to trust key ids. A second reserved-name
+list would be a second thing to maintain and a second thing to be wrong.
+
+### The check belongs at each surface's existing validation entry point
+
+Not at a new choke point. Each surface already has one — `validate_repo_path`, `validate_local_branch_ref`,
+`validate_local_tag_ref`, `maintainer_trust_key_path` — and adding the call there keeps the rejection where
+every existing caller already passes.
+
+### Collision scope is per namespace, not global
+
+Two names collide only within the same surface. `heads/main` and a repository path `main` are unrelated.
+Refs and tags are **separate namespaces** (`heads/` and `tags/` cannot collide with each other by prefix),
+so fold within each, not across.
+
 ## 4. Acceptance criteria
 
 1. §3's four questions answered and reported **before** a fix is designed, including the per-clause,
