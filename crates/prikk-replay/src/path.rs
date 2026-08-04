@@ -14,6 +14,7 @@ use std::collections::BTreeSet;
 
 use prikk_error::{PrikkError, Result};
 
+use prikk_object::ascii_fold;
 pub use prikk_object::validate_repo_path;
 
 /// A validated repository-relative path.
@@ -45,7 +46,7 @@ pub fn validate_no_path_collisions(paths: &[RepoPath]) -> Result<()> {
                 "duplicate repository path: {exact_value}"
             )));
         }
-        let folded_value = exact_value.to_ascii_lowercase();
+        let folded_value = ascii_fold(exact_value);
         if !folded.insert(folded_value) {
             return Err(PrikkError::InvalidName(format!(
                 "case-insensitive path collision involving: {exact_value}"

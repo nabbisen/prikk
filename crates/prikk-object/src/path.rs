@@ -9,6 +9,20 @@
 
 use prikk_error::{PrikkError, Result};
 
+/// The single case-folding definition every case-insensitive-collision check across repository
+/// paths, branch ref names, tag ref names, and maintainer trust key ids folds through (DC-72 design
+/// ruling: "one folding definition, four call sites" — `rfcs/accepted/DC-72-PATH-SAFETY-CONFORMANCE.md`
+/// §3.5). `prikk-object` is the lowest crate every surface's crate already depends on, directly or
+/// transitively, so this is the one place a fifth surface's collision check would also reach.
+///
+/// Deliberately ASCII-only, not Unicode normalization: an NFC-composed and NFD-decomposed spelling
+/// of the same visible name are different byte sequences and are not folded together here. Recorded
+/// as a known limitation, not an oversight, at `docs/src/reference/path-safety.md`.
+#[must_use]
+pub fn ascii_fold(name: &str) -> String {
+    name.to_ascii_lowercase()
+}
+
 /// Validate that a path is safe as a repository-relative path.
 pub fn validate_repo_path(value: &str) -> Result<()> {
     if value.is_empty() {

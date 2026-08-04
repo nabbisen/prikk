@@ -6,7 +6,7 @@
 use prikk_crypto::{ED25519_KEY_LEN, verify_ed25519};
 use prikk_error::{PrikkError, Result};
 use prikk_hash::to_hex;
-use prikk_object::{ObjectEnvelope, Signature, SignatureAlgorithm, SignerRole};
+use prikk_object::{ObjectEnvelope, Signature, SignatureAlgorithm, SignerRole, ascii_fold};
 
 use crate::fsutil::{
     EntryKind, ensure_directory_required, list_directory, read_file_required, write_file_atomically,
@@ -81,15 +81,16 @@ pub fn add_trusted_maintainer(
 
 /// Reject a maintainer key id whose ASCII-folded form collides with an existing key file other than
 /// itself (DC-72). `add_trusted_maintainer` is add-or-replace for the exact same id — re-adding
-/// `key_id` unchanged is not a collision with itself. ASCII-only, matching `RepoPath`'s collision
-/// rule and its recorded limitation: NFC/NFD-equivalent or locale-cased key ids are not folded (see
-/// `docs/src/reference/path-safety.md`).
+/// `key_id` unchanged is not a collision with itself. Folds through `prikk_object::ascii_fold`, the
+/// one shared folding definition (DC-72 design ruling,
+/// `rfcs/accepted/DC-72-PATH-SAFETY-CONFORMANCE.md` §3.5) — see its doc comment for the recorded
+/// NFC/NFD limitation this inherits.
 fn validate_no_maintainer_key_id_collision(
     layout: &RepositoryLayout,
     keys_dir_relative: &std::path::Path,
     key_id: &str,
 ) -> Result<()> {
-    let folded = key_id.to_ascii_lowercase();
+    let folded = ascii_fold(key_id);
     for entry in list_directory(layout.repository_mutation_root(), keys_dir_relative)? {
         if entry.kind != EntryKind::Regular {
             continue;
@@ -100,7 +101,7 @@ fn validate_no_maintainer_key_id_collision(
         let Some(existing_id) = name.strip_suffix(".pub") else {
             continue;
         };
-        if existing_id != key_id && existing_id.to_ascii_lowercase() == folded {
+        if existing_id != key_id && ascii_fold(existing_id) == folded {
             return Err(PrikkError::InvalidName(format!(
                 "case-insensitive maintainer key id collision involving: {existing_id}"
             )));

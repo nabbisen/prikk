@@ -1,7 +1,7 @@
 //! Pointer-first ref publication and bounded retry state classification.
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{ObjectId, RefKind, RefStatePayload, RefUpdatePayload};
+use prikk_object::{ObjectId, RefKind, RefStatePayload, RefUpdatePayload, ascii_fold};
 
 use super::{
     RefPublication, RefStore, log, validate_local_branch_ref, validate_local_tag_ref,
@@ -137,13 +137,13 @@ fn publish_locked(
 /// (DC-72). Branch and tag namespaces never collide with each other here: every valid ref name
 /// begins with the exact literal `heads/` or `tags/` (`validate_local_branch_ref`/
 /// `validate_local_tag_ref` require the case-sensitive prefix), so folding the full name keeps the
-/// two prefixes apart. ASCII-only, matching `RepoPath`'s collision rule and its recorded
-/// limitation — an NFC/NFD-equivalent or locale-cased name pair is not folded (see
-/// `docs/src/reference/path-safety.md`).
+/// two prefixes apart. Folds through `prikk_object::ascii_fold`, the one shared folding definition
+/// (DC-72 design ruling, `rfcs/accepted/DC-72-PATH-SAFETY-CONFORMANCE.md` §3.5) — see its doc comment
+/// for the recorded NFC/NFD limitation this inherits.
 fn validate_no_ref_name_collision(store: &RefStore, ref_name: &str) -> Result<()> {
-    let folded = ref_name.to_ascii_lowercase();
+    let folded = ascii_fold(ref_name);
     for existing in store.list_ref_pointers()? {
-        if existing.ref_name != ref_name && existing.ref_name.to_ascii_lowercase() == folded {
+        if existing.ref_name != ref_name && ascii_fold(&existing.ref_name) == folded {
             return Err(PrikkError::InvalidName(format!(
                 "case-insensitive ref-name collision involving: {}",
                 existing.ref_name
