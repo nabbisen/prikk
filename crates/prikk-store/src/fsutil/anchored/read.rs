@@ -80,7 +80,7 @@ pub(crate) fn read_file_if_exists(root: &MutationRoot, relative: &Path) -> Resul
         match std::fs::read(&path) {
             Ok(bytes) => Ok(Some(bytes)),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(error.into()),
+            Err(error) => Err(fallback_io_error(&path, "read", error)),
         }
     }
 }
@@ -146,7 +146,7 @@ pub(crate) fn stat_file_state_if_exists(
                 }))
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(error.into()),
+            Err(error) => Err(fallback_io_error(&path, "stat", error)),
         }
     }
 }
@@ -179,9 +179,19 @@ pub(crate) fn list_directory(root: &MutationRoot, relative: &Path) -> Result<Vec
     #[cfg(not(target_os = "linux"))]
     {
         let path = root.fallback_path(relative)?;
+        let reader = match std::fs::read_dir(&path) {
+            Ok(reader) => reader,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err(PrikkError::Io(format!(
+                    "directory is absent: {}",
+                    relative.display()
+                )));
+            }
+            Err(error) => return Err(fallback_io_error(&path, "open directory", error)),
+        };
         let mut entries = Vec::new();
-        for entry in std::fs::read_dir(path)? {
-            let entry = entry?;
+        for entry in reader {
+            let entry = entry.map_err(|error| fallback_io_error(&path, "read directory", error))?;
             let name = entry.file_name();
             let child = join_relative(relative, &name);
             let kind = inspect_entry(root, &child)?.ok_or_else(|| {
@@ -225,10 +235,10 @@ pub(crate) fn inspect_entry(root: &MutationRoot, relative: &Path) -> Result<Opti
     #[cfg(not(target_os = "linux"))]
     {
         let path = root.fallback_path(relative)?;
-        let metadata = match std::fs::symlink_metadata(path) {
+        let metadata = match std::fs::symlink_metadata(&path) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error.into()),
+            Err(error) => return Err(fallback_io_error(&path, "stat", error)),
         };
         let kind = if metadata.file_type().is_symlink() {
             EntryKind::Symlink
@@ -255,6 +265,15 @@ fn classify(file_type: FileType) -> EntryKind {
         | FileType::BlockDevice
         | FileType::Unknown => EntryKind::Other,
     }
+}
+
+/// DC-71 B2: the fallback read path's raw `std::io::Error` carries no path, which is exactly the
+/// gap that made an "i/o error: No such file or directory" report unisolable to one of several
+/// commands in a sequence — every fallback I/O failure now names the absolute path it was
+/// attempting, not just the OS errno.
+#[cfg(not(target_os = "linux"))]
+fn fallback_io_error(path: &Path, action: &str, error: std::io::Error) -> PrikkError {
+    PrikkError::Io(format!("failed to {action} {}: {error}", path.display()))
 }
 
 fn join_relative(parent: &Path, name: &std::ffi::OsStr) -> PathBuf {

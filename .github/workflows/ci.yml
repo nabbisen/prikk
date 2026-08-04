@@ -105,14 +105,26 @@ jobs:
       # requires snapshot-block state that no CLI command can produce against an ordinary
       # patch/WAL-authored repository (see docs/src/reference/platform-support.md) — the fixture
       # below is genesis-and-seal, exactly what `prikk commit`/`prikk seal` actually produce.
+      #
+      # DC-71 B2: each command is echoed and separately checked (rather than one bash -e block)
+      # so a failure names the exact command that failed, not just "something in this sequence" —
+      # the ambiguity that made the first B2 report unable to isolate which of these three failed.
       - name: Run the read-only command set against the fixture
         shell: bash
         run: |
           cd fixture-repo
+          echo "=== prikk log ==="
           ../target/debug/prikk log
+          echo "=== prikk status ==="
           ../target/debug/prikk status
+          echo "=== prikk verify ==="
           ../target/debug/prikk verify
+          echo "=== prikk doctor ==="
           ../target/debug/prikk doctor
+          echo "=== prikk branch list ==="
           ../target/debug/prikk branch list
+          echo "=== prikk tag list ==="
           ../target/debug/prikk tag list
+          echo "=== prikk checkout --plan-only ==="
           ../target/debug/prikk checkout --plan-only
+          echo "=== all read-only commands succeeded ==="
