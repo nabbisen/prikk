@@ -1,6 +1,7 @@
 # Prikk
 
 ![Status](https://img.shields.io/badge/status-early--implementation-orange)
+[![CI](https://github.com/nabbisen/prikk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nabbisen/prikk/actions/workflows/ci.yml)
 [![license](https://img.shields.io/crates/l/prikk.svg)](LICENSE)
 [![crates.io](https://img.shields.io/crates/v/prikk.svg?label=prikk)](https://crates.io/crates/prikk)
 [![docs.rs](https://img.shields.io/docsrs/prikk?version=latest)](https://docs.rs/prikk)
@@ -160,6 +161,26 @@ prikk verify
 prikk doctor
 ```
 
+### Ref names are fully qualified
+
+`branch create`, `branch close`, and `tag create` take a **fully-qualified** ref — `heads/topic`, not
+`topic`; `tags/v1`, not `v1`. A bare name is rejected: `invalid name: ref topic is not a local branch ref;
+expected heads/<name>`. There is no current-branch pointer and no `branch switch`, so every command that
+targets a ref resolves `--ref` explicitly.
+
+### Committing more than once before sealing
+
+`commit` may run repeatedly without an intervening `seal`; the active session queues the patches and
+`seal` batches them into one block. `status` reports the queue — `queued patches: 2 targeting heads/main`.
+Committing and sealing one-for-one still works exactly as before; nothing forces accumulation.
+
+Two environment variables bound the queue, both fail-closed on a malformed value:
+
+- `PRIKK_ACTIVE_PATCH_WARN` — warn at this many queued patches (default 800)
+- `PRIKK_ACTIVE_PATCH_LIMIT` — refuse further commits at this many (default 1000)
+
+The limit is checked before any write, so a refused commit leaves no partial state.
+
 For a fresh repository, the first `commit` authors a genesis patch set and the first `seal` publishes a
 Root block on `heads/main`. The current key-input mechanism is intentionally minimal: seeds are passed
 through environment variables for local experimentation, not as a complete key-management system. The
@@ -188,6 +209,12 @@ prikk inverse-plan [path] [--ref REF]
 prikk rollback-preview [path] [--ref REF]
 prikk rollback-draft --append-inverse [path] [--ref REF] -m <message>
 prikk rollback-draft-verify [path] [--ref REF]
+
+prikk branch [list] [--all]
+prikk branch create heads/<name> [--from REF]
+prikk branch close heads/<name>
+prikk tag [list]
+prikk tag create tags/<name> --target <ref|block> [-m <message>]
 prikk worktree-status [path] [--ref REF]
 prikk verify [path]
 prikk doctor [path]
