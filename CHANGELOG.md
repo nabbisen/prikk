@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.18.3 — 2026-08-04
+
+Portability, CI conformance, and documentation. No CLI behaviour change.
+
+**prikk now runs off Linux — verified, not asserted**
+
+- **Read-only commands execute on macOS and Windows** (DC-71). `verify`, `log`, `doctor`, `status`,
+  `branch list`, `tag list`, and `checkout --plan-only` are exercised on both platforms by CI against a
+  real repository, every push. `prikk-store` previously did not compile off Linux at all — inconsistent
+  `#[cfg(target_os = "linux")]` gating on imports whose definitions were gated — contradicting DC-37's own
+  design. 0.18.2's README claimed the opposite of what worked; that claim is now true.
+- **Repository mutation remains Linux-only** (DC-37, unchanged). The full traced command set — 25 commands,
+  15 read-only — is published at `docs/src/reference/platform-support.md`.
+- Non-Linux I/O errors now name the path they were attempting, instead of a bare errno.
+
+**Documentation**
+
+- `branch create/close`, `tag create/list`, and multi-commit queuing are documented in the README for the
+  first time, having shipped across DC-60, DC-61, DC-63, and DC-66.
+- **`PRIKK_ACTIVE_PATCH_WARN` and `PRIKK_ACTIVE_PATCH_LIMIT`** (DC-57) are documented for the first time
+  anywhere user-facing.
+- Seven reference pages and DC-37 itself carried a "Linux is the only platform exercised by project gates"
+  claim that was about mutation but read as blanket; all corrected.
+- Every documented command in this release was verified by running it.
+
+**Known gaps**
+
+- `--help` documents `branch create <name>` and `tag create <name>`, but both require a **fully-qualified**
+  ref (`heads/topic`, `tags/v1`). A bare name is rejected.
+- `worktree-status` cannot run against an ordinarily-authored repository — it requires snapshot state no
+  CLI command produces.
+- Prebuilt binaries remain Linux-only (`x86_64`, `aarch64`); `x86_64-pc-windows-gnu` does not compile.
+- NFR-PERF-01 remains unmet; commit cost still grows with repository size.
+
+**Release authority — unchanged from 0.18.1/0.18.2**
+
+- Does **not** pass the DC-35 signer-authority audit and does not claim to. `release-signers.toml` is
+  empty; no authority transaction was performed. The tag's OpenPGP signature is the maintainer's ordinary
+  key, not allowlisted signer authority.
+- Release evidence still does not describe the published binaries — blocked behind DC-45's frozen baseline
+  until the 0.19.0 cutover. Verify binaries by their published checksums and `.build-info.txt`.
+
 ## 0.18.2 — 2026-08-03
 
 Packaging and documentation. No CLI behaviour, no library API change.
