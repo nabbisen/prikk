@@ -1,6 +1,7 @@
 # RFC (proposed) - DC-73 Node-Model Operation Apply
 
-**Status.** **Proposed 2026-08-04.** Awaits owner acceptance.
+**Status.** **Accepted by the project owner on 2026-08-04.** Implementation may begin; handoff at
+`handoffs/DC-73-node-model-apply/implementation-handoff-v1.md`.
 **Authored by** the architect. **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** The forward-roadmap proposal accepted 2026-08-04, item A.
 **Requirement.** None names it. It closes three user-visible failures against capabilities the object
