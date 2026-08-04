@@ -11,13 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - name: Fetch dependencies for every target
-        # release-policy's boundary check runs `cargo metadata --locked --offline`, which resolves
-        # the graph for ALL targets — including deps a host-only build never fetches (e.g. bumpalo,
-        # reached through a non-host target). `cargo fetch` without `--target` fetches every target's
-        # dependencies, so `--offline` is satisfiable. Keeping `--offline` in the gate is deliberate:
-        # it is a hermeticity property, and the environment should meet it rather than the gate relax.
-        run: cargo fetch --locked
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
@@ -31,13 +24,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.85.0
-      - name: Fetch dependencies for every target
-        # release-policy's boundary check runs `cargo metadata --locked --offline`, which resolves
-        # the graph for ALL targets — including deps a host-only build never fetches (e.g. bumpalo,
-        # reached through a non-host target). `cargo fetch` without `--target` fetches every target's
-        # dependencies, so `--offline` is satisfiable. Keeping `--offline` in the gate is deliberate:
-        # it is a hermeticity property, and the environment should meet it rather than the gate relax.
-        run: cargo fetch --locked
       - name: Check
         run: cargo check --workspace --all-targets --locked
       - name: Test
