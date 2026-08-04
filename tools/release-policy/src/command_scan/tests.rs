@@ -377,3 +377,29 @@ fn dc71_prikk_binary_is_inert_with_any_arguments() {
         }
     }
 }
+
+/// CI hermeticity increment: `cargo fetch --locked` populates every target's dependencies before
+/// the boundary check's `cargo metadata --locked --offline`. `fetch` cannot publish or package, so
+/// this is an exact-match procedure entry on the same DC-70 B1 pattern, not an `inert_head` grant.
+#[test]
+fn recognizes_ci_hermeticity_fetch_procedure() {
+    for command in ["cargo fetch --locked"] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+            assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+
+    for command in [
+        "cargo fetch",
+        "cargo fetch --target x86_64-unknown-linux-gnu --locked",
+        "cargo fetch --locked --target x86_64-unknown-linux-gnu",
+        "$CARGO fetch --locked",
+    ] {
+        assert!(!scan_shell(command).errors.is_empty(), "{command}");
+        assert!(
+            !scan_yaml(&format!("- run: {command}")).errors.is_empty(),
+            "{command}"
+        );
+    }
+}

@@ -107,6 +107,9 @@ fn cargo(command: &str, arguments: &[String]) -> bool {
                     "warnings",
                 ]
         }
+        // DC-71: CI must populate the cache for every target before the boundary check runs
+        // `cargo metadata --locked --offline`. `fetch` downloads only; it cannot publish.
+        "fetch" => arguments == ["--locked"],
         "check" => arguments == ["--workspace", "--all-targets", "--locked"],
         "build" => {
             arguments == ["--workspace", "--locked"]
