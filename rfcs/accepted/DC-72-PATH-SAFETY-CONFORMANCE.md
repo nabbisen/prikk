@@ -44,7 +44,21 @@ named one, and §1 shows that record was already too narrow.
 | **What is the collision rule?** ASCII case-folding, Unicode case-folding, or NFC/NFD normalisation too? | `á` and `á` collide on macOS. **Choosing ASCII-only is defensible but must be a stated decision, not an accident** |
 | **What happens to repositories that already contain a collision?** | A new rule that makes existing history unverifiable is a format break, not a fix. It must fail closed at *creation* without retroactively condemning what exists — or that consequence is stated |
 
-**The last two are the design.** The first two are reading.
+~~**The last two are the design.**~~ **Both are now ruled — see above.** The first two remain, and are reading.
+
+> **Both design questions were ruled by the project owner on 2026-08-04.**
+>
+> **Collision rule: ASCII case-folding, by constraint.** `tools/release-policy/src/boundary/placement.rs:11`
+> permits `prikk-store` only `getrandom` and `rustix`; Unicode folding or NFC/NFD normalisation needs a
+> crate, i.e. a DC-51 amendment for a path-comparison rule. **The Unicode cases — NFC/NFD equivalence and
+> locale case rules — become a stated, recorded limitation, not an oversight.** Verify the constraint still
+> holds; report if correct folding is achievable without a new dependency.
+>
+> **Existing repositories: reject at creation only, no retroactive validation.** No production use, pre-1.0
+> with an explicitly unstable format and no migration promise, not self-hosted, five days on crates.io.
+> **Record the decision** so nobody later assumes the check was always there. This is what makes the
+> increment small.
+
 
 ## 4. Acceptance criteria
 
