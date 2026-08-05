@@ -365,6 +365,93 @@ the release lane is parked; see `MILESTONES.md` under Baseline and release postu
 Final feature scope remains governed by accepted RFCs, genuine gating FDDs when present, and the
 current-state reference docs.
 
+## Future Themes
+
+Recorded 2026-08-04 so they are findable rather than conversational. **None is scheduled**; each names its
+own prerequisite. Ordering against the accepted roadmap items (node-model apply → merge execution → M4
+attestation slice) is not implied.
+
+### Sync — recorded independently, prerequisite is a threat model
+
+M5 bundles "Sync and Quarantine." **They are separable, and sync alone is at least three distinct
+questions** — bundling them under one label would repeat the "increment 4.4" error, where one marker
+covered two unrelated blockers and produced a wrong roadmap framing:
+
+- **Transport** — what moves objects between repositories, and whether prikk owns that at all.
+- **Peer trust** — what a remote is permitted to assert. All trust is local today
+  (`trust maintainer add`); a peer claiming a ref advanced is a new authority question.
+- **Quarantine policy** — what happens to objects that arrive untrusted. `.prikk/quarantine` already
+  exists in the layout, so the original design anticipated this.
+
+**Prerequisite, per the owner's 2026-08-04 direction ("security is strongly prioritized to function;
+secure by default; we should not be in a hurry"): a threat model before any sync code exists.** Sync is
+the first capability that gives prikk an attack surface it does not have today — verified: zero networking
+crates in `Cargo.lock`, no networked verb in the CLI.
+
+**Dependency note.** An async runtime in `prikk-store` would need a DC-51 amendment
+(`placement.rs:11` permits only `getrandom` and `rustix`). That is part of the sync design, not a
+discovery to be made during it.
+
+### Repository layout when sync arrives — decided 2026-08-04, applied later
+
+**Nested directories under one workspace**, not multiple workspaces:
+`crates/{shared,client,server}/…`, with today's seven crates moving to `crates/shared/` at that point.
+
+**Why not multiple workspaces:** DC-51's placement gate runs `MetadataCommand` against the root
+`Cargo.toml` (`boundary.rs:48-51`) and sees **one** workspace. Splitting would require four invocations
+and reconciliation logic, plus four `Cargo.lock` files — so `--locked` would stop meaning what it means
+today — and four `rust-version` declarations to keep aligned.
+
+**Cargo does not care about directory depth**, so nesting needs no mechanism, only longer `members` paths.
+
+**Not applied now**, deliberately: eight flat members are not messy, and moving them would churn every
+path in `Cargo.toml`, the placement allowlist, and every `use` in the tree for a problem that does not yet
+exist. **Apply it once, when sync lands, informed by what sync actually needs** — which may be far smaller
+than a tier, since a sync endpoint might be a dumb object store with a trust boundary rather than an
+application server.
+
+Separately: **crate names are global on crates.io and nesting does not change them.** Naming discipline is
+its own decision.
+
+### Structured output for tooling — prerequisite for the M4 slice
+
+`prikk` has **no `--format json`** and no machine-readable output of any kind; every command prints prose
+(verified 2026-08-04). The CI-publication-gate scenario requires `verify` to emit something a job can
+assert on — grepping prose breaks the moment wording changes, and `verify`'s output changed twice in the
+week of 2026-08-04 alone.
+
+**Should land with or just before the M4 attestation slice**: a policy-gated publication whose result can
+only be read by a human is half a gate. `release-policy`'s existing `--format json` is the precedent.
+
+### Editor, IDE, and file-manager integration — blocked on model gaps, not on API work
+
+Deferred, and the reasons are the point: **no current-branch pointer** (an IDE status bar has nothing to
+show — every command resolves `--ref` explicitly), **`worktree-status` cannot run** against any repository
+the CLI produces, and **there is no `diff` command**. An integration API today would expose those gaps as
+the product.
+
+`diff` itself, when scheduled: **first-party, reusing `text_span`'s authoring computation** — not a
+display-only crate. The spans `plan_authored_text_span` produces are identity-bearing and signed; a
+display diff computed differently would show the user something other than what gets committed, which is
+the wrong failure to design into a tool whose claim is that the repository is the evidence.
+
+### Cross-platform mutation — open question, not scheduled
+
+Read-only commands run on macOS and Windows as of DC-71; **mutation is Linux-only**, so prikk cannot be
+*used* off Linux, only inspected — and both roles of the two-role model need mutation.
+
+The cost is smaller than "three implementations": the logic is shared, and what differs is a handful of
+primitives (anchored `NOFOLLOW` opens, directory fsync). **macOS is a port; Windows is a rewrite.** The
+question to settle first is whether the durability guarantee stays platform-uniform, which is an owner
+decision, not a technical preference.
+
+### MSRV policy — to write before packaging is attempted
+
+`rust-version = "1.85"` is the edition-2024 floor, so it cannot go lower. Nothing declares when it may
+*rise*. Proposed: **MSRV rises only when a dependency or language requirement forces it, never for
+convenience, and a rise is a minor-version event naming the requirement that forced it.** Dependency
+pressure (RustCrypto, `rustix`) will force it before "too old" does.
+
 ## Corrective Program After 0.17.7
 
 The independent architecture review of 0.17.7 found a critical ref-publication interruption state and
