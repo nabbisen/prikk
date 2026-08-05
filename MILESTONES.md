@@ -46,15 +46,14 @@ change.
 If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
 reviewed commit restores agreement.
 
-**Current release lane:** `active`.
+**Current release lane:** `parked`.
 
-**Current activated release target:** 0.18.4.
+**Current activated release target:** none.
 
-Activated 2026-08-04 by the architect under the owner's delegation, **before any preparation began** —
-the correction recorded below after 0.18.2 and 0.18.3 both shipped without an activation commit.
-**Why now:** 0.18.3 rebuilds every file from sealed history at mode `0600` regardless of its authored
-mode (DC-73's finding) — a defect in a published release. **Why patch:** no CLI surface, no library API,
-no format change.
+**0.18.4 released 2026-08-04** — seven crates published, tag signed, release workflow green with six
+assets. **This is the first release since 0.18.0 to follow the transition rule**: activated at `4378643`
+before any preparation began, and parked here on completion. The two releases that skipped it are
+recorded below.
 
 **Process finding, recorded 2026-08-04 by the architect, about the architect.** 0.18.2 and 0.18.3 were
 both prepared, published, and tagged while this lane read `parked`. **No three-authority activation
