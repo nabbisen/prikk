@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.18.4 — 2026-08-04
+
+Correctness. No CLI surface change, no library API change, no format change.
+
+**Fixed**
+
+- **Every file rebuilt from sealed history came back at mode `0600`**, regardless of the mode it was
+  authored with. `patch_replay`'s materialization pipeline carried no mode field at all — `apply.rs`
+  discarded it outright and every write landed at `open_new_regular`'s hardcoded default. Long-standing;
+  found by DC-73 while wiring `ChangePerm`, and fixed for `CreateFile` as a prerequisite rather than as
+  adjacent cleanup, since both share one write path.
+- **`checkout --patch-materialize` now replays `ReplaceBinary` and `ChangePerm`**, and **`rollback-draft`
+  now inverts them.** Both were rejected outright before, so any rollback spanning a binary replacement or
+  a mode change refused, and binary edits could not be reconstructed by independent replay.
+- **Case-insensitive name collisions are rejected at creation** on branch refs, tag refs, and maintainer
+  trust key ids (NFR-SEC-03). The trust-key case is the sharpest: on a case-insensitive filesystem,
+  `Dev-Maintainer.pub` and `dev-maintainer.pub` collided, so a `required=N` maintainer threshold could
+  silently drop to N-1 with no error anywhere.
+- **Windows reserved names are rejected for maintainer trust key ids** — `CON`, `PRN`, `AUX`, `NUL`,
+  `COM1`-`9`, `LPT1`-`9`.
+
+**Recorded limitations**
+
+- Collision folding is **ASCII-only**. Unicode NFC/NFD equivalence and locale-dependent case rules are
+  **not** covered — `café` in two encodings still collides on macOS without being rejected. No Unicode
+  dependency is permitted in `prikk-store` under DC-51's placement gate.
+- Pre-existing collisions are **not** retroactively detected; the check applies at creation.
+- Repository-path collisions are rejected at `seal`, not at `commit`, so a colliding `commit` appears to
+  succeed and is refused later.
+- `RenamePath` and `CreateSymlink` remain unimplemented — because **nothing authors them**, not because of
+  the node model. Their deferral markers now say so.
+
+**Release authority — unchanged from 0.18.1 through 0.18.3**
+
+- Does **not** pass the DC-35 signer-authority audit and does not claim to. `release-signers.toml` is
+  empty; no authority transaction was performed. The tag's OpenPGP signature is the maintainer's ordinary
+  key, not allowlisted signer authority.
+- Release evidence still does not describe the published binaries. Verify them by their published
+  checksums and `.build-info.txt`.
+- Prebuilt binaries remain Linux-only; mutation remains Linux-only (DC-37). Read-only commands are
+  CI-verified on macOS and Windows.
+
 ## 0.18.3 — 2026-08-04
 
 Portability, CI conformance, and documentation. No CLI behaviour change.

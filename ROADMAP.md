@@ -413,6 +413,21 @@ application server.
 Separately: **crate names are global on crates.io and nesting does not change them.** Naming discipline is
 its own decision.
 
+**Executable structure is a separate question, raised 2026-08-04 and not decided.** One binary with a
+`prikk serve` subcommand, or separate `prikk` and `prikk-server` binaries?
+
+**The security argument favours separate binaries**, and it follows the project's own "secure by default"
+posture: a single binary means every user who only commits locally still ships and links network-capable
+code they never run. DC-51's placement gate is **per crate**, so a server crate could legitimately take an
+async runtime the client crates cannot — but if the *binary* is one, the client links it anyway. Separate
+binaries keep the gate's benefit at the executable level, not only the crate level.
+
+**Against:** two artifacts per target in DC-70's release workflow, two install paths to document, and a
+version-skew surface between client and server that a single binary makes impossible by construction.
+
+**Decide with the sync threat model**, not before — it depends on whether the server is an application or
+a dumb object store with a trust boundary.
+
 ### Structured output for tooling — prerequisite for the M4 slice
 
 `prikk` has **no `--format json`** and no machine-readable output of any kind; every command prints prose
