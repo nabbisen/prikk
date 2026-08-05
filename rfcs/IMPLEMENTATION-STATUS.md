@@ -59,8 +59,8 @@ implementation, caught only because DC-55's acceptance criteria had been written
 the repository rather than trusted from the implementer's report. Retain that criteria pattern for
 identity-bearing increments; independent review remains achievable at the implementation axis and is where
 the weight belongs.
-Current release activation: parked
-Current activated release target: none
+Current release activation: active
+Current activated release target: 0.18.4
 Current governance increment: none (no signer bootstrap or hold started)
 
 > Change history is tracked in `CHANGELOG.md`; this file is a status snapshot. The per-PR notes below

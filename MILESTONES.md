@@ -46,9 +46,15 @@ change.
 If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
 reviewed commit restores agreement.
 
-**Current release lane:** `parked`.
+**Current release lane:** `active`.
 
-**Current activated release target:** none.
+**Current activated release target:** 0.18.4.
+
+Activated 2026-08-04 by the architect under the owner's delegation, **before any preparation began** —
+the correction recorded below after 0.18.2 and 0.18.3 both shipped without an activation commit.
+**Why now:** 0.18.3 rebuilds every file from sealed history at mode `0600` regardless of its authored
+mode (DC-73's finding) — a defect in a published release. **Why patch:** no CLI surface, no library API,
+no format change.
 
 **Process finding, recorded 2026-08-04 by the architect, about the architect.** 0.18.2 and 0.18.3 were
 both prepared, published, and tagged while this lane read `parked`. **No three-authority activation
