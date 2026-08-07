@@ -429,6 +429,51 @@ version-skew surface between client and server that a single binary makes imposs
 **Decide with the sync threat model**, not before — it depends on whether the server is an application or
 a dumb object store with a trust boundary.
 
+### Merge execution — CONFIRMED as the next accepted increment (roadmap item B)
+
+Owner-ruled 2026-08-04: **B then C** — merge execution, then the M4 attestation slice. `merge-evidence` and
+`merge-plan` exist; **nothing applies a merge** (`IMPLEMENTATION-STATUS.md:302`). DC-16's conservative
+subset and its soundness oracle are the foundation; execution is the unbuilt half. RFC not yet written.
+
+### Conflict arbitration — recorded, and it is a trust question before it is a UX one
+
+**Conflict *detection* exists.** `patch_algebra` produces typed conflict witnesses (`ConflictWitnessKind` —
+`SamePathCreate`, `NodeIdReuse`, `LiveStateMismatch`, text-anchor kinds). **Nothing resolves them.**
+
+**The question that decides the design:** in prikk's model a resolution is itself a **patch**, which must be
+authored and signed. So an arbitrator that resolves automatically is producing signed content on someone's
+behalf. That is the same class of question as DC-35's "automation may verify evidence but cannot occupy an
+accountable approval identity" — and it should be answered from that precedent rather than treated as an
+ergonomics feature.
+
+Depends on merge execution existing. Not scoped.
+
+### Patch aggregation — an original concept that is NOT in the requirements
+
+**Recorded 2026-08-04 at the owner's prompting. Finding: it appears nowhere in `specs/`.** Grepping the
+requirements, NFRs, external design, and roadmap for *aggregate*, *compose*, *squash* returns nothing. The
+only related material is DC-18's **sequence confluence** — a proof that two candidate sequences compose to
+the same authored result — which is a *property*, not a capability that emits a composed patch.
+
+**So an original design concept never reached the written requirements.** That is worth knowing
+independently of whether it gets built.
+
+**Intended workflow, as described by the owner:** after a branch's development completes, generate a
+**block-unit patch** — one patch representing the whole block's change.
+
+**The tension that must be resolved before designing it.** prikk's thesis is history that cannot lie by
+construction: every change signed by its author, every publication policy-gated. **Aggregation that
+discards the constituent patches destroys exactly that** — the aggregate would carry one signature where
+there were N, and the record of who authored what would be gone.
+
+**A defensible shape exists**: the aggregate is *derived*, the constituents are *retained*, and the
+aggregate is offered as a view or a transfer unit rather than as a replacement for history. `BlockPayload`
+already holds `patch_ids: Vec<ObjectId>`, so a block is already the natural aggregation boundary — which
+may mean much of this is presentation over existing structure rather than a new object.
+
+**Do not design it as squash.** If the answer turns out to require discarding constituents, that is a
+change to what prikk claims to be and belongs to the owner, not to an increment.
+
 ### Structured output for tooling — prerequisite for the M4 slice
 
 `prikk` has **no `--format json`** and no machine-readable output of any kind; every command prints prose
