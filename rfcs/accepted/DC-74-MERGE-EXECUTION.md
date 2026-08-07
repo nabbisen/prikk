@@ -1,8 +1,22 @@
 # RFC (proposed) - DC-74 Merge Execution
 
-**Status.** **Proposed 2026-08-04.** Awaits owner acceptance.
+**Status.** **ACCEPTED by the project owner 2026-08-08**, same day as proposal, together with §3.3's
+recommendation. The ruling, recorded per §5 criterion 2:
+
+- **Merge semantics: B′ — adoption.** A merge seals the other side's patches **verbatim**: same bytes,
+  same ObjectIds, same AUTHOR signatures. **Nothing is re-authored.** §3 establishes this is a
+  correctness requirement, not a preference — synthesis would make the merger the apparent author of
+  another person's work.
+- **Block lineage: single-parent for this increment.** Multi-parent block lineage is **not rejected** —
+  it is already legal in the wire format and is deferred to its own increment, because the patch DAG
+  already records the merge structurally.
+
+**Implementation may not begin with design.** §4's remaining questions must be answered from the code
+and reported first — above all whether sealing can adopt a foreign-authored patch with signatures
+intact. **If it cannot, B′ is unavailable and this RFC returns to the owner.**
 **Authored by** the architect. **Independence.** Author-reviewed — the standing ceiling.
-**Arises from.** The forward roadmap accepted 2026-08-04, item B, ruled next after DC-73.
+**Arises from.** The forward roadmap, item B, ruled next after DC-73.
+**Amended 2026-08-08** — §3 rewritten to answer the owner's patch-theory question; the original Route B withdrawn.
 **Requirement.** Product **M3** ("Block DAG and Checkout"). Merge execution is its unbuilt half.
 
 ## 1. What exists, and what does not

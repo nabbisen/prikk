@@ -378,6 +378,7 @@ M5 bundles "Sync and Quarantine." **They are separable, and sync alone is at lea
 questions** — bundling them under one label would repeat the "increment 4.4" error, where one marker
 covered two unrelated blockers and produced a wrong roadmap framing:
 
+- **Multi-parent block lineage** — deferred out of DC-74 on 2026-08-08, **not rejected**. `BlockPayload.parent_block_ids` is already `Vec<ObjectId>`, sorted and unique, with a source comment anticipating *"a later design adds semantic parent roles"* — so this is a replay question, never a format change. `patch_replay.rs:206` fails closed on multi-parent lineage, and lifting that reopens what a baseline is for DC-64's cache, what `rollback_preview` walks, and what a horizon means. **The open question is whether it buys anything**: under DC-74's adoption model the patch DAG already records a merge structurally, so block parentage may be bookkeeping that duplicates it. Product **M3** is named "Block DAG and Checkout", which may encode a Git-inherited assumption worth re-examining rather than inheriting.
 - **Transport** — what moves objects between repositories, and whether prikk owns that at all.
 - **Peer trust** — what a remote is permitted to assert. All trust is local today
   (`trust maintainer add`); a peer claiming a ref advanced is a new authority question.
