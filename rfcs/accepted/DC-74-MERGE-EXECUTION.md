@@ -1,4 +1,4 @@
-# RFC (proposed) - DC-74 Merge Execution
+# RFC (accepted) - DC-74 Merge Execution
 
 **Status.** **ACCEPTED by the project owner 2026-08-08**, same day as proposal, together with §3.3's
 recommendation. The ruling, recorded per §5 criterion 2:
