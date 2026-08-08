@@ -41,10 +41,11 @@ becomes a later, separable decision made once the trust model is settled rather 
    blocks, or patches. Patch theory suggests patches; the sealing model suggests blocks; content
    addressing makes objects the simplest. **This is not a packaging choice** — it determines what a
    receiver can verify without already holding the rest of the history.
-2. **Against whose keys does the receiver verify?** The decisive question. Trust today is a **local**
-   store (`trust/`) naming maintainers permitted to seal *here*. When B receives history sealed by A's
-   maintainer, B must decide whether that authority means anything locally. **Exchange forces the trust
-   store to become distributed, and that is an identity problem, not a networking one.**
+2. **Against whose keys does the receiver verify?** The decisive question — **see §3.1, which states a
+   starting position rather than leaving this blank.** Trust today is a **local** store (`trust/`) naming
+   maintainers permitted to seal *here*. When B receives history sealed by A's maintainer, B must decide
+   whether that authority means anything locally. **Exchange forces the trust store to become
+   distributed, and that is an identity problem, not a networking one.**
 3. **What does a receiver do with refs?** Publication is compare-and-swap against local state. Two
    repositories advancing the same ref independently is the divergence merge handles *within* a
    repository; across repositories there is no equivalent concept yet.
@@ -55,11 +56,58 @@ becomes a later, separable decision made once the trust model is settled rather 
    receiver holding a suffix cannot do that. Either exchange is always genesis-complete, or lineage
    horizons acquire a meaning they do not currently have.
 
+### 3.1 A starting position on question 2 — to argue against, not to inherit
+
+Added 2026-08-09 at the owner's request, after they named the real tension: **security and cleanliness
+against usefulness and intuitiveness.** That tension is genuine. This is offered so the investigation
+starts from a position to attack rather than a blank page; **it is not a ruling, and §4 still requires
+question 2 answered from the code and the requirements.**
+
+**Most of the sharpness comes from conflating two things that need not be conflated: *having* history and
+*trusting* it.**
+
+- **Reception needs no trust.** Objects are content-addressed, so nothing can be forged into an existing
+  object id and receiving bytes cannot corrupt what the receiver already holds.
+- **Authority is the only thing needing a decision** — whether the sealer's maintainer key means anything
+  locally.
+
+**So the trust question is asked once per key, at the moment received history is made authoritative for a
+local ref — not per object, and not at reception.** Fetching is cheap and safe; adopting is the act that
+requires a decision. That separation is also what users already expect, which is why the ergonomic cost
+is far lower than "verify everything against keys you must obtain first" suggests.
+
+**First contact is then the only hard case**, and the proposal is **trust on first use, recorded and
+thereafter enforced**: the store notes that key X was accepted at block Y, and every later exchange is
+checked against that record. Strictly weaker than out-of-band key agreement, and strictly stronger than
+silent TOFU — a later key substitution stops validating and is detectable. It is also honest about what
+it is, which matters more here than claiming a strength the model does not have.
+
+**The line that must not be crossed.** Received history must **never** be trusted by default for
+convenience. This is the same defect shape as the system proposal's RΔ5 Git-import delta, ruled on
+2026-08-02: imported history must be **distinguishable at the object level, permanently and
+non-strippably**, or the central claim becomes false for any repository that ever used the bridge.
+**Received-but-unadopted history has exactly that property.** If it is indistinguishable from locally
+verified history, the claim dies quietly the first time anyone pulls.
+
+### 3.2 A sequencing consequence, corrected
+
+An earlier architect framing said a receiver could "verify structurally on receipt." **That is weaker
+today than it sounds:** `verify` performs no cryptographic verification of author signatures at all — the
+product's only crypto verification call site is a policy signature (`crates/prikk-store/src/trust.rs:215`).
+
+**So status-claim criterion 5 (DC-53, repository-wide author trust verification) is a prerequisite of
+exchange, not an item independent of it.** A receiver cannot meaningfully check what it was sent while
+nothing checks author signatures. This should be settled before this increment is sequenced, not
+discovered during it.
+
 ## 4. Blocking prerequisites
 
 - §3's five questions answered **from the code and the requirements**, reported before any design, in
   the pattern that has widened the recorded scope in five consecutive increments.
-- **Question 2 answered first.** If distributed trust has no acceptable answer, the rest is wasted work.
+- **Question 2 answered first**, with §3.1 treated as a position to test rather than adopt. If
+  distributed trust has no acceptable answer, the rest is wasted work.
+- **§3.2's dependency confirmed or refuted:** is DC-53 genuinely a prerequisite? If so this increment
+  cannot start before it, and the 0.20.0 sequence changes.
 - An explicit statement of whether **criterion 1 of the status-claim criteria** is satisfied by exchange
   alone, or requires transport too. **That determines whether this increment moves the badge.**
 
