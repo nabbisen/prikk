@@ -47,7 +47,7 @@ change.
 
 | Increment | Condition | Ruled |
 |---|---|---|
-| **DC-74** — merge execution | **Merge execution does not ship until sealed history structurally records a merge** — a later verifier must be able to re-check the baseline and both sides. DC-74 is buildable and mergeable now; it is not releasable until this holds. | Owner, 2026-08-08 |
+| **DC-74** — merge execution (**implemented `3464e2a`, accepted 2026-08-08; condition remains OPEN**) | **Merge execution does not ship until sealed history structurally records a merge** — a later verifier must be able to re-check the baseline and both sides. DC-74 is buildable and mergeable now; it is not releasable until this holds. | Owner, 2026-08-08 |
 
 **Why this condition exists, and why it cannot be deferred.** A merge under DC-74's adoption model is
 sound only if the two sides were confluent from a common baseline. `parent_patch_ids` is inert — set to
