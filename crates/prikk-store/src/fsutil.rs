@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use prikk_error::{PrikkError, Result};
 
 mod anchored;
+mod contract;
 
 // DC-71: every test in both modules (including caller_tests' matrix submodules) sets up its
 // scenario via real repository mutation, which is Linux-only; neither module ever compiles a
@@ -26,7 +27,11 @@ pub(crate) use anchored::{
 };
 
 #[cfg(all(test, target_os = "linux"))]
+pub(crate) use anchored::LinuxDurability;
+#[cfg(all(test, target_os = "linux"))]
 pub(crate) use anchored::remove_file_required;
+#[cfg(all(test, target_os = "linux"))]
+pub(crate) use contract::DurabilityContract;
 
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) use anchored::{TestFailPoint, fail_after_for_test, fail_once_for_test};

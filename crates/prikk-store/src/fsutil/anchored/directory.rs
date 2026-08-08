@@ -194,35 +194,6 @@ impl AnchoredDirectory {
     }
 }
 
-/// Ensure a relative directory tree and sync every owning parent.
-pub(crate) fn ensure_directory_required(root: &MutationRoot, relative: &Path) -> Result<()> {
-    #[cfg(target_os = "linux")]
-    {
-        prepare_directory_required(root, relative)?;
-        Ok(())
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        let _ = (root, relative);
-        unsupported_mutation()
-    }
-}
-
-/// Open and required-sync an existing root-relative directory.
-pub(crate) fn sync_directory_required(root: &MutationRoot, relative: &Path) -> Result<()> {
-    #[cfg(target_os = "linux")]
-    {
-        let directory = open_existing_directory_required(root, relative)?;
-        failpoints::required_directory_sync()?;
-        directory.sync()
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        let _ = (root, relative);
-        unsupported_mutation()
-    }
-}
-
 #[cfg(target_os = "linux")]
 pub(super) fn prepare_directory_required(
     root: &MutationRoot,

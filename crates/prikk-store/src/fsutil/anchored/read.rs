@@ -14,7 +14,9 @@ use super::MutationRoot;
 #[cfg(target_os = "linux")]
 use super::directory::open_existing_directory_for_read;
 #[cfg(target_os = "linux")]
-use super::{failpoints, io_error, required_file_name, required_parent};
+use super::regular::{required_file_name, required_parent};
+#[cfg(target_os = "linux")]
+use super::{failpoints, io_error};
 
 #[cfg(target_os = "linux")]
 use rustix::fs::{self, AtFlags, FileType, Mode, OFlags};

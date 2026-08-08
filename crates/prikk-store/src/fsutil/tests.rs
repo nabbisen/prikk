@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 
+mod conformance;
 mod directory;
 
 use crate::RepositoryLayout;

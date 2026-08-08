@@ -1,38 +1,31 @@
-//! Root-scoped filesystem mutation primitives.
+//! Root-scoped filesystem mutation primitives. Every function here is a thin call through the
+//! durability contract (DC-76, `super::contract::DurabilityContract`) — the guarantee each one
+//! provides is stated on the trait method it calls, not repeated here. `Linux` is the sole
+//! implementor (`linux::LinuxDurability`); no `target_os` gate is relaxed by this indirection.
 
 use std::path::Path;
 
 use prikk_error::{PrikkError, Result};
 
-#[cfg(target_os = "linux")]
-use std::fs::File;
-#[cfg(target_os = "linux")]
-use std::io::Write;
-
-#[cfg(target_os = "linux")]
-use super::temporary_path;
-
 mod directory;
 #[cfg(target_os = "linux")]
 mod failpoints;
 mod immutable;
+#[cfg(target_os = "linux")]
+mod linux;
 mod read;
 mod regular;
 
-pub(crate) use directory::{MutationRoot, ensure_directory_required, sync_directory_required};
-#[cfg(target_os = "linux")]
-use directory::{open_existing_directory_required, prepare_directory_required};
-pub(crate) use immutable::publish_immutable_file;
+pub(crate) use directory::MutationRoot;
 pub(crate) use read::{
     EntryKind, RootFileStat, inspect_entry, list_directory, read_file_if_exists,
     read_file_required, stat_file_state_if_exists,
 };
+
 #[cfg(target_os = "linux")]
-use regular::{
-    open_append_regular, open_existing_or_create_regular, open_existing_regular, open_new_regular,
-};
+use crate::fsutil::contract::DurabilityContract;
 #[cfg(target_os = "linux")]
-use regular::{required_file_name, required_parent};
+pub(crate) use linux::LinuxDurability;
 
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) use failpoints::{
@@ -40,9 +33,6 @@ pub(crate) use failpoints::{
     set_directory_create_barrier as set_directory_create_barrier_for_test,
     set_immutable_install_barrier as set_immutable_install_barrier_for_test,
 };
-
-#[cfg(target_os = "linux")]
-use rustix::fs::{self, OFlags};
 
 /// Write mutable metadata through a unique same-directory temporary file.
 pub(crate) fn write_file_atomically(
@@ -52,21 +42,7 @@ pub(crate) fn write_file_atomically(
 ) -> Result<()> {
     #[cfg(target_os = "linux")]
     {
-        let parent = required_parent(relative)?;
-        let destination = required_file_name(relative)?;
-        let directory = prepare_directory_required(root, parent)?;
-        let temp_path = temporary_path(relative)?;
-        let temp_name = required_file_name(&temp_path)?;
-        let fd = open_new_regular(&directory.fd, temp_name).map_err(io_error)?;
-        let mut file = File::from(fd);
-        file.write_all(bytes)?;
-        failpoints::mutable_file_sync()?;
-        file.sync_all()?;
-        drop(file);
-        failpoints::mutable_rename()?;
-        fs::renameat(&directory.fd, temp_name, &directory.fd, destination).map_err(io_error)?;
-        failpoints::mutable_parent_sync()?;
-        directory.sync()
+        LinuxDurability.atomic_replace(root, relative, bytes)
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -92,16 +68,7 @@ pub(crate) fn append_file_required(
 ) -> Result<()> {
     #[cfg(target_os = "linux")]
     {
-        let directory = open_existing_directory_required(root, required_parent(relative)?)?;
-        let name = required_file_name(relative)?;
-        let fd = open_append_regular(&directory.fd, name)?;
-        let mut file = File::from(fd);
-        failpoints::append_write()?;
-        file.write_all(bytes)?;
-        failpoints::required_file_sync()?;
-        file.sync_all()?;
-        failpoints::required_directory_sync()?;
-        directory.sync()
+        LinuxDurability.durable_append(root, relative, bytes)
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -118,16 +85,7 @@ pub(crate) fn truncate_existing_file_required(
 ) -> Result<()> {
     #[cfg(target_os = "linux")]
     {
-        let directory = open_existing_directory_required(root, required_parent(relative)?)?;
-        let fd =
-            open_existing_regular(&directory.fd, required_file_name(relative)?, OFlags::WRONLY)?;
-        let file = File::from(fd);
-        failpoints::truncate()?;
-        file.set_len(len)?;
-        failpoints::required_file_sync()?;
-        file.sync_all()?;
-        failpoints::required_directory_sync()?;
-        directory.sync()
+        LinuxDurability.durable_truncate(root, relative, len)
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -147,12 +105,7 @@ pub(crate) fn set_regular_file_mode_required(
 ) -> Result<()> {
     #[cfg(target_os = "linux")]
     {
-        let directory = open_existing_directory_required(root, required_parent(relative)?)?;
-        let fd =
-            open_existing_regular(&directory.fd, required_file_name(relative)?, OFlags::RDONLY)?;
-        // Permission bits only (0o7777): a recorded mode carries the S_IFREG file-type bits
-        // (e.g. `0o100_755`), which `fchmod` does not accept.
-        fs::fchmod(&fd, fs::Mode::from_raw_mode(mode & 0o7777)).map_err(io_error)
+        LinuxDurability.set_permission_bits(root, relative, mode)
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -165,19 +118,7 @@ pub(crate) fn set_regular_file_mode_required(
 pub(crate) fn truncate_file_empty_required(root: &MutationRoot, relative: &Path) -> Result<()> {
     #[cfg(target_os = "linux")]
     {
-        let directory = prepare_directory_required(root, required_parent(relative)?)?;
-        let fd = open_existing_or_create_regular(
-            &directory.fd,
-            required_file_name(relative)?,
-            OFlags::WRONLY,
-        )?;
-        let file = File::from(fd);
-        failpoints::truncate()?;
-        file.set_len(0)?;
-        failpoints::required_file_sync()?;
-        file.sync_all()?;
-        failpoints::required_directory_sync()?;
-        directory.sync()
+        LinuxDurability.durable_truncate_to_empty(root, relative)
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -194,19 +135,7 @@ pub(crate) fn create_new_file_required(
 ) -> std::io::Result<()> {
     #[cfg(target_os = "linux")]
     {
-        let parent = required_parent(relative).map_err(prikk_to_io)?;
-        let directory = prepare_directory_required(root, parent).map_err(prikk_to_io)?;
-        let fd = open_new_regular(
-            &directory.fd,
-            required_file_name(relative).map_err(prikk_to_io)?,
-        )
-        .map_err(std::io::Error::from)?;
-        let mut file = File::from(fd);
-        file.write_all(bytes)?;
-        failpoints::required_file_sync().map_err(prikk_to_io)?;
-        file.sync_all()?;
-        failpoints::required_directory_sync().map_err(prikk_to_io)?;
-        directory.sync().map_err(prikk_to_io)
+        LinuxDurability.create_exclusive(root, relative, bytes)
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -230,20 +159,7 @@ pub(crate) fn remove_file_if_present_required(
 ) -> Result<bool> {
     #[cfg(target_os = "linux")]
     {
-        let directory = open_existing_directory_required(root, required_parent(relative)?)?;
-        failpoints::unlink()?;
-        let removed = match fs::unlinkat(
-            &directory.fd,
-            required_file_name(relative)?,
-            fs::AtFlags::empty(),
-        ) {
-            Ok(()) => true,
-            Err(rustix::io::Errno::NOENT) => false,
-            Err(error) => return Err(io_error(error)),
-        };
-        failpoints::cleanup_directory_sync()?;
-        directory.sync()?;
-        Ok(removed)
+        LinuxDurability.remove_if_present(root, relative)
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -270,25 +186,56 @@ pub(crate) fn promote_file_required(
 ) -> Result<()> {
     #[cfg(target_os = "linux")]
     {
-        let source_dir = open_existing_directory_required(root, required_parent(source)?)?;
-        let destination_dir =
-            open_existing_directory_required(root, required_parent(destination)?)?;
-        failpoints::promotion_rename()?;
-        fs::renameat(
-            &source_dir.fd,
-            required_file_name(source)?,
-            &destination_dir.fd,
-            required_file_name(destination)?,
-        )
-        .map_err(io_error)?;
-        failpoints::promotion_destination_sync()?;
-        destination_dir.sync()?;
-        failpoints::promotion_source_sync()?;
-        source_dir.sync()
+        LinuxDurability.promote(root, source, destination)
     }
     #[cfg(not(target_os = "linux"))]
     {
         let _ = (root, source, destination);
+        unsupported_mutation()
+    }
+}
+
+/// Publish immutable, content-addressed bytes at `relative` without ever replacing existing
+/// content — see `DurabilityContract::publish_immutable` for the guarantee.
+pub(crate) fn publish_immutable_file(
+    root: &MutationRoot,
+    relative: &Path,
+    candidate: &[u8],
+    validate_existing: impl Fn(&[u8]) -> Result<()>,
+) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        LinuxDurability.publish_immutable(root, relative, candidate, validate_existing)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (root, relative, candidate, validate_existing);
+        unsupported_mutation()
+    }
+}
+
+/// Ensure a relative directory tree exists, durably, tolerating a concurrent creator (G8).
+pub(crate) fn ensure_directory_required(root: &MutationRoot, relative: &Path) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        LinuxDurability.ensure_directory(root, relative)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (root, relative);
+        unsupported_mutation()
+    }
+}
+
+/// Open and required-sync an existing root-relative directory.
+pub(crate) fn sync_directory_required(root: &MutationRoot, relative: &Path) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        LinuxDurability.durable_directory_entry(root, relative)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (root, relative);
         unsupported_mutation()
     }
 }
