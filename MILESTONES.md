@@ -44,6 +44,13 @@ has begun, parking or retargeting uses the same reviewed three-authority transit
 begins, DC-35's governance, containment, hold, and lift rules govern closure; a planning edit cannot
 erase that state.
 
+**Version targets, ruled by the owner 2026-08-08.** `0.19.0` is the **next ordinary minor release** —
+DC-74's merge execution is a new CLI verb, so the next release is a minor, not a patch. It is gated on
+**DC-75 alone**, which discharges DC-74's release condition. The **M2 assurance-and-distribution
+release is retargeted to `0.20.0`** (DC-43, DC-52). Six records previously named `0.19.0` for two
+different releases — the next minor and the M2 assurance release — which are far apart in effort;
+`DC-45:419`'s Python-retirement gate follows DC-52 to `0.20.0` with it.
+
 Release conditions attach to unshipped accepted increments, not only to a version label. The first
 release that contains an accepted but unshipped increment inherits every release condition and
 lifecycle/status correction attached to that increment. Therefore, activating 0.19.0 while 0.18.0
