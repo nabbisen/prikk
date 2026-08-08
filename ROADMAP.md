@@ -1,8 +1,8 @@
 # Prikk Roadmap
 
 This repository follows the design-first Prikk roadmap. Change history is tracked in `CHANGELOG.md`;
-the corrective release sequence is in `MILESTONES.md`, and current-state detail is in
-`rfcs/IMPLEMENTATION-STATUS.md`.
+the corrective release sequence is in `MILESTONES.md`, current-state detail is in
+`rfcs/IMPLEMENTATION-STATUS.md`, and open risk and review findings are registered in `FINDINGS.md`.
 
 Development priority and release readiness are separate planning lanes. The project owner selects the
 active development theme by product value. Release readiness remains dormant until the project owner
