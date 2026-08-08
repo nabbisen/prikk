@@ -34,8 +34,9 @@ These records are under design review. All proposed RFCs must respect the depend
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
 | DC-52 | [Python and Oracle Decommissioning](./proposed/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | M2 / 0.19.0; **release-blocked** — `DC-45:419` forbids deletion before the first Rust-gated 0.19.0 release |
 | DC-53 | [Repository-Wide AUTHOR Trust Verification](./proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md) | Post-M2, unscheduled |
+| DC-75 | [Merge Block Lineage and the Structural Merge Record](./proposed/DC-75-MERGE-BLOCK-LINEAGE.md) | **Discharges DC-74's release condition.** Sized by the developer, verified by the architect: the blocking gate is `block_state.rs:13-26`, which rejects `BlockKind::Merge` outright — greenfield write-side design, not a read-side widening. Carries one open design question (mainline-authoritative vs both-parents-verified). Awaits acceptance |
 
-**None of these five is a live design-review candidate** — all are blocked or unscheduled. DC-66 was accepted 2026-08-02 and has moved to `accepted/`.
+**Of the six, DC-75 is the only live design-review candidate** — the other five are blocked or unscheduled. (Previously: none of these five) — all are blocked or unscheduled. DC-66 was accepted 2026-08-02 and has moved to `accepted/`.
 DC-56, DC-60, DC-61, DC-62 and DC-63 have all moved to `accepted/`:
 
 - **DC-43** and **DC-52** cannot proceed while release stabilization is deferred. `DC-45:419` forbids
