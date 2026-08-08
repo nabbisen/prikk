@@ -16,7 +16,7 @@ use std::fmt;
 
 use prikk_error::PrikkError;
 use prikk_object::{
-    BlobKind, BlockPayload, NodeId, NodeKind, ObjectId, ObjectType, text_span_hash,
+    BlobKind, BlockKind, BlockPayload, NodeId, NodeKind, ObjectId, ObjectType, text_span_hash,
 };
 
 use super::{BlobContentResolver, BlobKindResolver, StoreBackedResolver};
@@ -41,7 +41,9 @@ pub(crate) enum LifecycleReplayError {
     MissingBlockInLineage { block_id: ObjectId },
     /// A block object exists but cannot be read as a `Block` (wrong type, decode failure).
     UnreadableBlockInLineage { block_id: ObjectId, detail: String },
-    /// A block in the v1 window has more than one parent. Merge windows are deferred (DC-13).
+    /// A block in the lineage window has more parents than this walk can follow: either a
+    /// non-`Merge` block with more than one parent, or a `Merge` block whose `mainline_parent_id`
+    /// is missing or does not name one of its own `parent_block_ids` (DC-75).
     MergeLineageUnsupported {
         block_id: ObjectId,
         parent_count: usize,
@@ -86,8 +88,8 @@ impl fmt::Display for LifecycleReplayError {
                 parent_count,
             } => write!(
                 f,
-                "lifecycle replay: block {block_id} has {parent_count} parents; \
-                 v1 windows require a single-parent lineage (merge deferred to DC-13)"
+                "lifecycle replay: block {block_id} has {parent_count} parents and no valid \
+                 mainline parent to derive state from"
             ),
             Self::LineageCycle { block_id } => {
                 write!(f, "lifecycle replay: cycle detected at block {block_id}")
@@ -183,8 +185,13 @@ pub(crate) trait LineageBlockReader {
     type Block;
     /// Read one lineage block exactly once.
     fn read_lineage_block(&self, block_id: ObjectId) -> Result<Self::Block, LifecycleReplayError>;
-    /// The parent block ids of a read block (drives the single-parent walk rule).
-    fn parents_of(block: &Self::Block) -> &[ObjectId];
+    /// The parent ids the walk should see for a read block, drives the single-parent walk rule.
+    /// For a `Merge` block (DC-75) with a validly recorded mainline parent, this is `[mainline]` —
+    /// state derivation and replay follow the mainline only, never the secondary parent, so the walk
+    /// never needs to change shape for `Merge`. A `Merge` block with a missing or invalid mainline
+    /// parent falls through to its raw (two-element) parent list, so the existing `>1 parent` guard
+    /// below fails closed on it exactly as it would on any other malformed multi-parent block.
+    fn parents_of(block: &Self::Block) -> Vec<ObjectId>;
 }
 
 /// Reader-backed lineage source: reads and **retains** the full block payload, preserving the
@@ -199,8 +206,17 @@ impl<R: ObjectReader> LineageBlockReader for ReaderLineage<'_, R> {
         read_block(self.0, block_id)
     }
 
-    fn parents_of(block: &BlockPayload) -> &[ObjectId] {
-        &block.parent_block_ids
+    fn parents_of(block: &BlockPayload) -> Vec<ObjectId> {
+        if block.kind == BlockKind::Merge {
+            if let Some(mainline) = block.mainline_parent_id {
+                if block.parent_block_ids.contains(&mainline) {
+                    return vec![mainline];
+                }
+            }
+            // Missing or invalid mainline: fall through to the raw (two-element) list below, so
+            // the walker's existing `>1 parent` guard fails closed on it, unchanged.
+        }
+        block.parent_block_ids.clone()
     }
 }
 
@@ -232,7 +248,7 @@ fn walk_single_parent_chain_inner<R: LineageBlockReader>(
             return Err(LifecycleReplayError::LineageCycle { block_id: current });
         }
         let block = blocks.read_lineage_block(current)?;
-        let next = match R::parents_of(&block) {
+        let next = match R::parents_of(&block).as_slice() {
             [] => None,
             [parent] => Some(*parent),
             other => {

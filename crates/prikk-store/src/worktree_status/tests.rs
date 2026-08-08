@@ -137,6 +137,8 @@ fn signed_snapshot_block_envelope(snapshot_blob_ref: prikk_object::ObjectId) -> 
         patch_ids: Vec::new(),
         state_merkle_root: MerkleRoot([0_u8; 32]),
         snapshot_blob_ref: Some(snapshot_blob_ref),
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());

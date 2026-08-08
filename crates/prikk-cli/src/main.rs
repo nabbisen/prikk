@@ -178,10 +178,6 @@ fn run_merge(args: Vec<String>) -> std::result::Result<(), String> {
     }
     println!("block id: {}", report.block_id);
     println!("{} RefState: {}", report.into_ref, report.ref_state_id);
-    println!(
-        "note: merge blocks are BlockKind::Normal (format-2's shape gate authorizes no other kind); \
-         nothing but ref history records this was a merge — see MILESTONES.md's DC-74 release condition"
-    );
     Ok(())
 }
 
@@ -509,6 +505,8 @@ fn run_verify(path: Option<String>) -> std::result::Result<(), String> {
         Err("lifecycle-state cache disagrees with an independent replay".to_string())
     } else if report.has_active_wal_ordering_issue() {
         Err("active WAL contains an out-of-order or duplicate queued patch sequence".to_string())
+    } else if report.has_merge_baseline_divergence() {
+        Err("a merge block's recorded baseline is not a common ancestor of its parents".to_string())
     } else {
         Ok(())
     }

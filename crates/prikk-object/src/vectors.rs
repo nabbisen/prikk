@@ -174,6 +174,8 @@ pub(crate) fn block_populated_payload() -> Vec<u8> {
         ],
         state_merkle_root: crate::MerkleRoot([0x44; 32]),
         snapshot_blob_ref: Some(ObjectId::from_bytes([0x55; 32])),
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
     };
     block.to_canonical_bytes().expect("block encodes")
 }

@@ -650,10 +650,16 @@ fn provenance_rejects_window_hash_mismatch() {
 
 #[test]
 fn provenance_rejects_merge_block() {
+    // `BlockParentResolver`/`ResolverLineage` (this trust-ladder scaffold, test-only, not
+    // production per DC-75's investigation) carries no `BlockKind` at all -- it cannot distinguish
+    // a legitimate `Merge` block's mainline parent from a malformed multi-parent block, so it still
+    // fails closed on any >1-parent block exactly as before DC-75. Message text updated to match
+    // `LifecycleReplayError::MergeLineageUnsupported`'s DC-75 wording (`replay.rs`); behavior
+    // unchanged.
     let chain = parents(&[(0xb0, &[0xa0, 0xc0]), (0xa0, &[]), (0xc0, &[])]);
     let err = ValidatedLifecycleCache::from_decoded(decoded_valid(), &full_resolver(), &chain)
         .expect_err("merge");
-    assert!(format!("{err:?}").contains("single-parent lineage"));
+    assert!(format!("{err:?}").contains("no valid mainline parent"));
 }
 
 #[test]

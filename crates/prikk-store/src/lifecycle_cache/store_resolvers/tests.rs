@@ -16,6 +16,8 @@ fn block_envelope(parents: &[ObjectId], kind: BlockKind) -> ObjectEnvelope {
         patch_ids: Vec::new(),
         state_merkle_root: MerkleRoot([0_u8; 32]),
         snapshot_blob_ref: None,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
     };
     ObjectEnvelope::unsigned(
         ObjectType::Block,

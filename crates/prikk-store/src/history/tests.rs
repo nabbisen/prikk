@@ -198,6 +198,8 @@ fn signed_block_envelope_with_root(
         patch_ids,
         state_merkle_root,
         snapshot_blob_ref: None,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());

@@ -94,6 +94,29 @@ pub struct RepositoryVerification {
     /// always assigns the next sequence), but a queue of N gives ordering a meaning ("patches seal in
     /// append order") worth verifying explicitly rather than assuming from decode success alone.
     pub active_wal_ordering_issues: Vec<ActiveWalOrderingIssue>,
+    /// DC-75: `Merge` blocks whose recorded `merge_baseline_block_id` is not, in fact, a common
+    /// ancestor of both parents — independently re-derived, not trusted, per
+    /// `baseline-recording-answer-v1.md` §3 ("record it, then check it, unconditionally"). A recorded
+    /// baseline that legitimate merge execution ever produced always passes this; a false claim (data
+    /// corruption or tampering) does not.
+    pub merge_baseline_divergences: Vec<MergeBaselineDivergence>,
+}
+
+/// A `Merge` block (DC-75) whose recorded `merge_baseline_block_id` is not a common ancestor of its
+/// two parents. Precision note: this checks *validity* (is the claim even a common ancestor), not
+/// *nearest-ness* (is it the single nearest one) — a merge legitimately sealed against an older-than-
+/// necessary common ancestor is unusual but not what this finding is for; a baseline that is not a
+/// common ancestor at all can only arise from a forged or corrupted field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MergeBaselineDivergence {
+    /// The `Merge` block whose recorded baseline failed re-derivation.
+    pub block_id: ObjectId,
+    /// The recorded (claimed) baseline.
+    pub recorded_baseline: ObjectId,
+    /// The block's mainline parent.
+    pub mainline_parent_id: ObjectId,
+    /// The block's secondary parent.
+    pub secondary_parent_id: ObjectId,
 }
 
 /// One active-WAL record whose sequence did not strictly increase over the previous record.
@@ -162,6 +185,13 @@ impl RepositoryVerification {
     #[must_use]
     pub fn has_active_wal_ordering_issue(&self) -> bool {
         !self.active_wal_ordering_issues.is_empty()
+    }
+
+    /// Return true when a `Merge` block's recorded baseline is not a common ancestor of its parents
+    /// (DC-75) — a false claim, from data corruption or tampering.
+    #[must_use]
+    pub fn has_merge_baseline_divergence(&self) -> bool {
+        !self.merge_baseline_divergences.is_empty()
     }
 }
 
@@ -253,6 +283,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
     let commit_index_divergences = verify_divergence(layout)?;
     let lifecycle_cache_divergences = verify_lifecycle_cache_divergence(&object_store, layout);
     let active_wal_ordering_issues = check_active_wal_ordering(&replay.records);
+    let merge_baseline_divergences = object_summary.merge_baseline_divergences;
     Ok(RepositoryVerification {
         legacy_state_roots_unverifiable: layout.format() == RepositoryFormat::LegacyV1,
         checked_objects: object_summary.object_count,
@@ -274,6 +305,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
         commit_index_divergences,
         lifecycle_cache_divergences,
         active_wal_ordering_issues,
+        merge_baseline_divergences,
     })
 }
 
@@ -322,7 +354,7 @@ fn verify_block_payload(
     block_id: ObjectId,
     format: RepositoryFormat,
     canonical_payload: &[u8],
-) -> Result<usize> {
+) -> Result<(usize, Option<MergeBaselineDivergence>)> {
     let payload = BlockPayload::decode_canonical(canonical_payload)?;
     for parent in &payload.parent_block_ids {
         ensure_object_exists(
@@ -359,7 +391,57 @@ fn verify_block_payload(
     if format == RepositoryFormat::CurrentV2 {
         crate::block_state::verify_block_v2_state(object_store, block_id, &payload)?;
     }
-    Ok(rollback_patch_count)
+    let merge_baseline_divergence = if format == RepositoryFormat::CurrentV2 {
+        verify_merge_baseline(object_store, block_id, &payload)?
+    } else {
+        None
+    };
+    Ok((rollback_patch_count, merge_baseline_divergence))
+}
+
+/// DC-75: for a `Merge` block, independently re-derive whether the recorded
+/// `merge_baseline_block_id` is a common ancestor of both parents — a claim, not trusted. Shape
+/// (kind, parent count, mainline/baseline presence) is already guaranteed by
+/// `verify_block_v2_state`'s `validate_block_v2_shape` call above, so this only checks the claim's
+/// content. Cost is the same full-parent reachability walk measured linear in
+/// `baseline-recording-answer-v1.md` §1 — unconditional, not a gated "deep verify" mode.
+fn verify_merge_baseline(
+    object_store: &FileObjectStore,
+    block_id: ObjectId,
+    payload: &BlockPayload,
+) -> Result<Option<MergeBaselineDivergence>> {
+    if payload.kind != prikk_object::BlockKind::Merge {
+        return Ok(None);
+    }
+    let (Some(mainline_parent_id), Some(recorded_baseline)) =
+        (payload.mainline_parent_id, payload.merge_baseline_block_id)
+    else {
+        // Malformed shape already failed closed above via `validate_block_v2_shape`.
+        return Ok(None);
+    };
+    let Some(&secondary_parent_id) = payload
+        .parent_block_ids
+        .iter()
+        .find(|&&id| id != mainline_parent_id)
+    else {
+        return Ok(None);
+    };
+    let mainline_ancestors =
+        crate::merge_evidence::ancestors_inclusive(object_store, mainline_parent_id)?;
+    let secondary_ancestors =
+        crate::merge_evidence::ancestors_inclusive(object_store, secondary_parent_id)?;
+    let is_common_ancestor = mainline_ancestors.contains_key(&recorded_baseline)
+        && secondary_ancestors.contains_key(&recorded_baseline);
+    if is_common_ancestor {
+        Ok(None)
+    } else {
+        Ok(Some(MergeBaselineDivergence {
+            block_id,
+            recorded_baseline,
+            mainline_parent_id,
+            secondary_parent_id,
+        }))
+    }
 }
 
 fn ensure_object_exists(

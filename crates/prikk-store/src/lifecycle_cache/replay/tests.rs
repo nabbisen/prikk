@@ -48,11 +48,38 @@ impl MockReader {
             patch_ids: patch_ids.to_vec(),
             state_merkle_root: MerkleRoot([0_u8; 32]),
             snapshot_blob_ref: None,
+            mainline_parent_id: None,
+            merge_baseline_block_id: None,
         };
         self.insert(
             id,
             ObjectType::Block,
             payload.to_canonical_bytes().expect("block"),
+        );
+    }
+
+    /// DC-75: a `Merge` block, distinct from `insert_block`'s always-`Root`/`Normal` inference.
+    fn insert_merge_block(
+        &mut self,
+        id: ObjectId,
+        parents: &[ObjectId; 2],
+        mainline: ObjectId,
+        baseline: ObjectId,
+        patch_ids: &[ObjectId],
+    ) {
+        let payload = BlockPayload {
+            parent_block_ids: parents.to_vec(),
+            kind: BlockKind::Merge,
+            patch_ids: patch_ids.to_vec(),
+            state_merkle_root: MerkleRoot([0_u8; 32]),
+            snapshot_blob_ref: None,
+            mainline_parent_id: Some(mainline),
+            merge_baseline_block_id: Some(baseline),
+        };
+        self.insert(
+            id,
+            ObjectType::Block,
+            payload.to_canonical_bytes().expect("merge block"),
         );
     }
 
@@ -182,6 +209,10 @@ fn wrong_type_block_is_unreadable() {
 
 #[test]
 fn merge_lineage_fails_closed() {
+    // DC-75 narrowed, not removed, this guard: `insert_block` always produces `BlockKind::Normal`
+    // for a non-empty parent list, so this proves a *malformed* multi-parent Normal block still
+    // fails closed exactly as before. See `merge_lineage_follows_mainline_only` below for the now-
+    // open case: a properly `BlockKind::Merge`-shaped two-parent block.
     let (baseline, p1, p2) = (oid(3), oid(1), oid(2));
     let mut reader = MockReader::new();
     reader.insert_block(p1, &[], &[]);
@@ -196,6 +227,31 @@ fn merge_lineage_fails_closed() {
             parent_count: 2,
         }
     );
+}
+
+/// DC-75: a properly-shaped `Merge` block's lineage walk follows its mainline parent only, exactly
+/// the same shape as a `Normal` block's single-parent walk — proven by walking straight past the
+/// secondary parent's own history (`off_mainline`, deliberately given no parent block at all here,
+/// so the walk would error immediately if it ever touched that side).
+#[test]
+fn merge_lineage_follows_mainline_only() -> Result<()> {
+    let (genesis, mainline_tip, off_mainline, merge) = (oid(1), oid(2), oid(3), oid(4));
+    let mut reader = MockReader::new();
+    reader.insert_block(genesis, &[], &[]);
+    reader.insert_block(mainline_tip, &[genesis], &[]);
+    let mut parents = [mainline_tip, off_mainline];
+    parents.sort();
+    reader.insert_merge_block(merge, &parents, mainline_tip, mainline_tip, &[]);
+
+    let chain = walk_lineage(&reader, merge, genesis)?;
+    let ids: Vec<ObjectId> = chain.iter().map(|(id, _)| *id).collect();
+    assert_eq!(ids, vec![genesis, mainline_tip, merge]);
+    assert_eq!(
+        reader.read_count(off_mainline),
+        0,
+        "secondary parent never read"
+    );
+    Ok(())
 }
 
 #[test]

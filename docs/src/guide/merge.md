@@ -37,26 +37,23 @@ The two sides must be **proven confluent** from the given baseline — the same 
 record, or ref update of any kind is created until confluence is confirmed, so a refused merge leaves
 `--into` exactly where it was.
 
-## What gets recorded — read this before relying on it
+## What gets recorded
 
-**Merge blocks are `BlockKind::Normal`.** `BlockKind::Merge` exists in the object format, but
-format-2's shape validator (`block_state.rs`) rejects both a `Normal` block with more than one
-parent and any block of kind `Merge`, so this command seals single-parent `Normal` blocks — a merge
-is, on disk, indistinguishable from an ordinary commit.
+**Merge blocks are `BlockKind::Merge`, naming both parents (DC-75).** `parent_block_ids` holds
+`--into`'s prior tip and `--from`'s adopted tip, sorted per the format's uniqueness invariant. A
+separate `mainline_parent_id` field names which one is `--into`'s side, since sorted order carries no
+positional meaning. State derivation and replay follow the mainline parent only — the same shape as
+an ordinary single-parent block — while the secondary parent's own chain is verified independently by
+the ordinary full-object-store scan every other block already gets.
 
-**There is no patch DAG to fall back on.** `PatchPayload.parent_patch_ids` exists in the wire format,
-but every construction site sets it to empty, including the ordinary authoring path, and nothing
-reads it. So a merge sealed under single-parent blocks leaves **no structural record that a merge
-happened at all** — not in the block's parentage, not in the patch DAG. The only trace is `--from`'s
-own ref history, which `branch close` can later remove. Authorship is unaffected (the adopted
-patches still carry their original author's signature), but a later verifier cannot re-derive *what
-the merge was checked against* — the baseline and the two sides — from sealed history alone.
+**The baseline is recorded, and independently re-derived.** `merge_baseline_block_id` states what
+`--baseline-block` was at seal time — a claim, not a trust boundary: ordinary `verify` computes the
+true merge base itself (a full-parent reachability walk) and reports disagreement if the recorded
+baseline is not it. Authorship is unaffected (the adopted patches still carry their original author's
+signature).
 
-This is why `MILESTONES.md` attaches a release condition to this command: **merge execution does not
-ship until sealed history structurally records a merge**, re-checkable by a later verifier. That
-condition gates release, not this command's use in development — build and merge normally. See
-`rfcs/proposed/DC-75-MERGE-BLOCK-LINEAGE.md` for the increment that would close the gap (multi-parent
-block lineage; not authorized, not built).
+This discharges the release condition DC-74 attached to this command: sealed history now structurally
+records a merge, re-checkable by a later verifier from sealed history alone.
 
 ## Conflicts
 
@@ -74,7 +71,8 @@ against a repository containing a merged block — tested, not argued
 ## Deferred
 
 - Automatic merge-base discovery — `--baseline-block` stays explicit.
-- Multi-parent block lineage and the structural merge record it would provide (DC-75, proposed).
 - Conflict arbitration / resolution.
 - Widening `patch_algebra`'s conservative subset.
 - Merging more than two sides in one command.
+- Populating `PatchPayload.parent_patch_ids` — no construction site sets it; the patch DAG it implies
+  is a different structure than the block-parentage DC-75 records, answering a different question.

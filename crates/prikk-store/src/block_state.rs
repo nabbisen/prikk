@@ -12,16 +12,68 @@ use crate::state_root::{compute_state_root, entries_from_state};
 /// Validate the format-2 Block kind and parent cardinality contract.
 pub fn validate_block_v2_shape(payload: &BlockPayload) -> Result<()> {
     match (payload.kind, payload.parent_block_ids.as_slice()) {
-        (BlockKind::Root, []) | (BlockKind::Normal, [_]) => Ok(()),
+        (BlockKind::Root, []) | (BlockKind::Normal, [_]) => validate_non_merge_shape(payload),
+        (BlockKind::Merge, [_, _]) => validate_merge_shape(payload),
         (BlockKind::Root, _) => Err(PrikkError::Integrity(
             "format-2 Root Block must have zero parents".to_string(),
         )),
         (BlockKind::Normal, _) => Err(PrikkError::Integrity(
             "format-2 Normal Block must have exactly one parent".to_string(),
         )),
-        (BlockKind::Merge | BlockKind::Repair | BlockKind::Import, _) => Err(
-            PrikkError::Integrity("format-2 Block kind is not authorized".to_string()),
-        ),
+        (BlockKind::Merge, _) => Err(PrikkError::Integrity(
+            "format-2 Merge Block must have exactly two parents".to_string(),
+        )),
+        (BlockKind::Repair | BlockKind::Import, _) => Err(PrikkError::Integrity(
+            "format-2 Block kind is not authorized".to_string(),
+        )),
+    }
+}
+
+/// `Root`/`Normal` blocks carry neither DC-75 field — only a `Merge` block has two parents to
+/// disambiguate or a proven baseline to record.
+fn validate_non_merge_shape(payload: &BlockPayload) -> Result<()> {
+    if payload.mainline_parent_id.is_some() || payload.merge_baseline_block_id.is_some() {
+        return Err(PrikkError::Integrity(format!(
+            "format-2 {:?} Block must not carry a mainline parent or merge baseline",
+            payload.kind
+        )));
+    }
+    Ok(())
+}
+
+/// A `Merge` block additionally names, and is bound to, its mainline parent (DC-75): one of its two
+/// `parent_block_ids`, designating which side state derivation and replay follow. Every other kind
+/// carries neither field — `parent_block_ids`' own cardinality already says everything a `Root` or
+/// `Normal` block needs.
+fn validate_merge_shape(payload: &BlockPayload) -> Result<()> {
+    let Some(mainline) = payload.mainline_parent_id else {
+        return Err(PrikkError::Integrity(
+            "format-2 Merge Block must name a mainline parent".to_string(),
+        ));
+    };
+    if !payload.parent_block_ids.contains(&mainline) {
+        return Err(PrikkError::Integrity(
+            "format-2 Merge Block mainline parent must be one of its own parents".to_string(),
+        ));
+    }
+    if payload.merge_baseline_block_id.is_none() {
+        return Err(PrikkError::Integrity(
+            "format-2 Merge Block must record the baseline confluence was proven against"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// The parent state derivation and replay follow for an already shape-validated payload: mainline
+/// only for a `Merge` block (DC-75), the sole parent otherwise. Callers must have already run
+/// [`validate_block_v2_shape`] on `payload` — this trusts `mainline_parent_id` is `Some` and names a
+/// real parent for `Merge`, exactly as that validation requires.
+fn state_derivation_parent(payload: &BlockPayload) -> Option<ObjectId> {
+    if payload.kind == BlockKind::Merge {
+        payload.mainline_parent_id
+    } else {
+        payload.parent_block_ids.first().copied()
     }
 }
 
@@ -46,7 +98,7 @@ pub(crate) fn verify_block_v2_state(
     payload: &BlockPayload,
 ) -> Result<()> {
     validate_block_v2_shape(payload)?;
-    let parent = payload.parent_block_ids.first().copied();
+    let parent = state_derivation_parent(payload);
     let computed = derive_next_state_root(reader, parent, &payload.patch_ids)?;
     if computed != payload.state_merkle_root {
         return Err(PrikkError::Integrity(format!(
@@ -86,7 +138,7 @@ fn validate_v2_lineage(
         }
         let payload = BlockPayload::decode_canonical(&envelope.canonical_payload)?;
         validate_block_v2_shape(&payload)?;
-        current = payload.parent_block_ids.first().copied();
+        current = state_derivation_parent(&payload);
         lineage.push((block_id, payload));
     }
     Ok(lineage)
@@ -97,7 +149,7 @@ fn verify_v2_lineage_roots(
     lineage_from_tip: &[(ObjectId, BlockPayload)],
 ) -> Result<()> {
     for (block_id, payload) in lineage_from_tip.iter().rev() {
-        let parent = payload.parent_block_ids.first().copied();
+        let parent = state_derivation_parent(payload);
         let state = replay_with_appended_patches(reader, parent, &payload.patch_ids)?;
         let computed = compute_state_root(&entries_from_state(&state)?)?;
         if computed != payload.state_merkle_root {

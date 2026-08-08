@@ -6,7 +6,7 @@ mod merge_plan;
 use std::collections::BTreeSet;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{BlockPayload, ObjectId, ObjectType, RefStatePayload};
+use prikk_object::{BlockKind, BlockPayload, ObjectId, ObjectType, RefStatePayload};
 
 pub use display::{
     MergeEvidenceDisplay, MergeEvidenceDisplayItem, MergeEvidenceDisplayOperation,
@@ -135,60 +135,173 @@ fn lineage_horizon(object_store: &FileObjectStore, baseline: ObjectId) -> Result
             )));
         }
         let block = read_block(object_store, current)?;
-        match block.parent_block_ids.as_slice() {
-            [] => return Ok(current),
-            [parent] => current = *parent,
-            parents => {
+        // State derivation, same category as `block_state.rs`'s replay walk (DC-75): a `Merge`
+        // block's own state is replayed from its mainline parent only, never its secondary.
+        match mainline_or_sole_parent(&block) {
+            Some(None) => return Ok(current),
+            Some(Some(parent)) => current = parent,
+            None => {
                 return Err(PrikkError::UnsupportedObjectType(format!(
                     "merge evidence requires a single-parent baseline lineage; block {current} has {} parents",
-                    parents.len()
+                    block.parent_block_ids.len()
                 )));
             }
         }
     }
 }
 
-/// Walk the single-parent block chain strictly between `baseline` (exclusive) and `target`
-/// (inclusive), oldest first. Shared by `candidate_sequence` (decoded operations, for evidence) and
-/// `candidate_patch_ids` (patch identity, for merge execution's adoption set — DC-74) so the walk,
-/// its cycle guard, and its single-parent requirement are defined exactly once.
+/// The parent state derivation continues through: mainline only for a `Merge` block (DC-75), the
+/// sole parent for `Normal`, none for `Root`. `Some(None)` is genesis, not an error; `None` is a
+/// shape this walk cannot follow — a non-`Merge` block with more than one parent, or a `Merge`
+/// block with no valid mainline parent.
+fn mainline_or_sole_parent(block: &BlockPayload) -> Option<Option<ObjectId>> {
+    if block.kind == BlockKind::Merge {
+        let mainline = block.mainline_parent_id?;
+        if !block.parent_block_ids.contains(&mainline) {
+            return None;
+        }
+        return Some(Some(mainline));
+    }
+    match block.parent_block_ids.as_slice() {
+        [] => Some(None),
+        [parent] => Some(Some(*parent)),
+        _ => None,
+    }
+}
+
+/// Full-DAG ancestor closure of `start` (inclusive), following **all** parents — the reachability
+/// primitive (DC-75), distinct from state derivation's mainline-only walk. A cycle (cryptographically
+/// impossible in honestly-generated data, since parent references are content hashes computed before
+/// the referencing block exists) is not distinguished from a legitimate diamond re-visit here: this
+/// closure is a set, used only for reachability/exclusion, never to decide state, so under-detecting a
+/// cycle can at worst leave a set slightly incomplete — it cannot make an unsound merge succeed. The
+/// state-derivation walks (`block_state.rs`, `lineage_horizon` above) retain explicit cycle errors,
+/// since those sit on the actual trust boundary.
+pub(crate) fn ancestors_inclusive(
+    object_store: &FileObjectStore,
+    start: ObjectId,
+) -> Result<std::collections::BTreeMap<ObjectId, BlockPayload>> {
+    let mut ancestors = std::collections::BTreeMap::new();
+    let mut stack = vec![start];
+    while let Some(current) = stack.pop() {
+        if ancestors.contains_key(&current) {
+            continue;
+        }
+        let block = read_block(object_store, current)?;
+        crate::validate_block_v2_shape(&block)?;
+        stack.extend(block.parent_block_ids.iter().copied());
+        ancestors.insert(current, block);
+    }
+    Ok(ancestors)
+}
+
+/// Topologically order `new_ids` (parents before children), restricted to edges within `new_ids`
+/// itself — a parent outside the set is, by construction, already satisfied (it is an ancestor of
+/// `baseline`). Kahn's algorithm, O(V+E): for the overwhelmingly common case (a simple single-parent
+/// chain since baseline, no repeated merge involved) this is linear, same cost as the walk it
+/// replaces — verified in `baseline-recording-answer-v1.md` §1.
+fn topological_order(
+    new_ids: &BTreeSet<ObjectId>,
+    ancestors: &std::collections::BTreeMap<ObjectId, BlockPayload>,
+) -> Result<Vec<ObjectId>> {
+    let mut remaining_parents = std::collections::BTreeMap::new();
+    let mut children: std::collections::BTreeMap<ObjectId, Vec<ObjectId>> =
+        std::collections::BTreeMap::new();
+    for id in new_ids {
+        let Some(block) = ancestors.get(id) else {
+            return Err(PrikkError::Integrity(format!(
+                "candidate block set references untracked block {id}"
+            )));
+        };
+        let count = block
+            .parent_block_ids
+            .iter()
+            .filter(|parent| new_ids.contains(parent))
+            .count();
+        remaining_parents.insert(*id, count);
+        for parent in &block.parent_block_ids {
+            if new_ids.contains(parent) {
+                children.entry(*parent).or_default().push(*id);
+            }
+        }
+    }
+    let mut ready: Vec<ObjectId> = remaining_parents
+        .iter()
+        .filter(|(_, count)| **count == 0)
+        .map(|(id, _)| *id)
+        .collect();
+    ready.sort();
+    let mut queue: std::collections::VecDeque<ObjectId> = ready.into();
+    let mut order = Vec::with_capacity(new_ids.len());
+    while let Some(id) = queue.pop_front() {
+        order.push(id);
+        for child in children.get(&id).into_iter().flatten() {
+            let Some(entry) = remaining_parents.get_mut(child) else {
+                return Err(PrikkError::Integrity(
+                    "candidate block set topological sort lost a tracked child".to_string(),
+                ));
+            };
+            *entry -= 1;
+            if *entry == 0 {
+                queue.push_back(*child);
+            }
+        }
+    }
+    if order.len() != new_ids.len() {
+        return Err(PrikkError::Integrity(
+            "candidate block set contains a cycle".to_string(),
+        ));
+    }
+    Ok(order)
+}
+
+/// Blocks strictly between `baseline` (exclusive) and `target` (inclusive), oldest first — the
+/// ancestor-closure difference `ancestors(target) \ ancestors(baseline)`, following **all** parents
+/// (DC-75; previously a single-parent-only walk, replaced because a `Merge` block's secondary parent
+/// can be the true, and only, path back to a repeated merge's baseline). Shared by `candidate_sequence`
+/// (decoded operations, for evidence) and `candidate_patch_ids` (patch identity, for merge execution's
+/// adoption set — DC-74) so the walk is defined exactly once.
 fn candidate_blocks(
     object_store: &FileObjectStore,
     baseline: ObjectId,
     target: ObjectId,
 ) -> Result<Vec<BlockPayload>> {
-    let mut newest_first = Vec::new();
-    let mut visited = BTreeSet::new();
-    let mut current = target;
-    loop {
-        if !visited.insert(current) {
-            return Err(PrikkError::Integrity(format!(
-                "block parent chain contains a cycle at {current}"
-            )));
-        }
-        if current == baseline {
-            break;
-        }
-        let block = read_block(object_store, current)?;
-        let parent = match block.parent_block_ids.as_slice() {
-            [parent] => *parent,
-            [] => {
-                return Err(PrikkError::Integrity(format!(
-                    "baseline Block {baseline} is not an ancestor of target Block {target}"
-                )));
-            }
-            parents => {
-                return Err(PrikkError::UnsupportedObjectType(format!(
-                    "merge evidence requires single-parent candidate chains; block {current} has {} parents",
-                    parents.len()
-                )));
-            }
-        };
-        newest_first.push(block);
-        current = parent;
+    let target_ancestors = ancestors_inclusive(object_store, target)?;
+    if !target_ancestors.contains_key(&baseline) {
+        return Err(PrikkError::Integrity(format!(
+            "baseline Block {baseline} is not an ancestor of target Block {target}"
+        )));
     }
-    newest_first.reverse();
-    Ok(newest_first)
+    let baseline_ancestors = ancestors_inclusive(object_store, baseline)?;
+    let new_ids: BTreeSet<ObjectId> = target_ancestors
+        .keys()
+        .filter(|id| !baseline_ancestors.contains_key(id))
+        .copied()
+        .collect();
+    topological_order(&new_ids, &target_ancestors)?
+        .into_iter()
+        .map(|id| {
+            target_ancestors.get(&id).cloned().ok_or_else(|| {
+                PrikkError::Integrity(format!("missing Block {id} in candidate set"))
+            })
+        })
+        .collect()
+}
+
+/// Patch ids already reachable from `baseline` via **any** parent path (DC-75 addendum-5): the set a
+/// side's candidate patches must exclude. A patch appearing here is either literally the baseline's
+/// own content or was already adopted into it by an earlier merge — replaying it again is not new
+/// content, and feeding it to confluence analysis breaks the proof rather than refusing cleanly
+/// (`reachability-vs-state-derivation-answer-v1.md` §2: `PairReplayFailed`, not a conflict).
+fn baseline_reachable_patch_ids(
+    object_store: &FileObjectStore,
+    baseline: ObjectId,
+) -> Result<BTreeSet<ObjectId>> {
+    let ancestors = ancestors_inclusive(object_store, baseline)?;
+    Ok(ancestors
+        .values()
+        .flat_map(|block| block.patch_ids.iter().copied())
+        .collect())
 }
 
 fn candidate_sequence(
@@ -196,9 +309,13 @@ fn candidate_sequence(
     baseline: ObjectId,
     target: ObjectId,
 ) -> Result<Vec<DecodedPatchOperation>> {
+    let excluded = baseline_reachable_patch_ids(object_store, baseline)?;
     let mut operations = Vec::new();
     for block in candidate_blocks(object_store, baseline, target)? {
         for patch_id in block.patch_ids {
+            if excluded.contains(&patch_id) {
+                continue;
+            }
             let envelope = object_store
                 .read_typed(patch_id, ObjectType::Patch)?
                 .ok_or_else(|| PrikkError::Integrity(format!("missing Patch {patch_id}")))?;
@@ -209,15 +326,18 @@ fn candidate_sequence(
 }
 
 /// Patch identities strictly between `baseline` (exclusive) and `target` (inclusive), in the order
-/// they were sealed — the set merge execution adopts verbatim onto the other side (DC-74).
+/// they were sealed — the set merge execution adopts verbatim onto the other side (DC-74). Excludes
+/// any patch already reachable from `baseline` (DC-75 addendum-5) — see `baseline_reachable_patch_ids`.
 pub(crate) fn candidate_patch_ids(
     object_store: &FileObjectStore,
     baseline: ObjectId,
     target: ObjectId,
 ) -> Result<Vec<ObjectId>> {
+    let excluded = baseline_reachable_patch_ids(object_store, baseline)?;
     Ok(candidate_blocks(object_store, baseline, target)?
         .into_iter()
         .flat_map(|block| block.patch_ids)
+        .filter(|patch_id| !excluded.contains(patch_id))
         .collect())
 }
 

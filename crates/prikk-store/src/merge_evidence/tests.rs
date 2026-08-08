@@ -4,9 +4,9 @@ mod merge_plan;
 
 use prikk_error::Result;
 use prikk_object::{
-    BlobKind, BlobPayload, BlockKind, CanonicalEncode, ChangePerm, CreateFile, DeleteNode,
-    DeleteNodePreimage, NodeId, NodeKind, ObjectEnvelope, ObjectId, ObjectType, Operation,
-    OperationKind, PatchPayload, PatchPurpose,
+    BlobKind, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, ChangePerm, CreateFile,
+    DeleteNode, DeleteNodePreimage, NodeId, NodeKind, ObjectEnvelope, ObjectId, ObjectType,
+    Operation, OperationKind, PatchPayload, PatchPurpose,
 };
 
 use super::{MergeEvidenceTarget, prepare_merge_evidence};
@@ -190,7 +190,15 @@ fn missing_ancestry_fails_before_report() -> Result<()> {
 }
 
 #[test]
-fn multi_parent_candidate_fails_before_report() -> Result<()> {
+fn multi_parent_normal_candidate_fails_before_report() -> Result<()> {
+    // DC-75 changed scope deliberately: `candidate_blocks`' reachability walk now follows *all*
+    // parents (a `Merge` block's secondary parent can be the only path back to a repeated merge's
+    // baseline), so ">1 parent" alone is no longer, by itself, an unsupported shape. What is still
+    // rejected is a *malformed* multi-parent block -- here, `BlockKind::Normal` with two parents,
+    // which `format2`'s own shape gate (`validate_block_v2_shape`, now called by
+    // `ancestors_inclusive` on every block the walk reads) has never permitted. The assertion and
+    // this test's name were updated accordingly; see `candidate_ready_merge_block_reaches_report`
+    // below for the now-open two-parent `Merge` shape.
     let root = unique_temp_dir("merge-evidence-multi-parent-candidate");
     let layout = RepositoryLayout::init(root.clone())?;
     let baseline = write_block(&layout, BlockKind::Root, Vec::new(), Vec::new())?;
@@ -215,7 +223,57 @@ fn multi_parent_candidate_fails_before_report() -> Result<()> {
         Err(err) => err,
     };
 
-    assert!(err.to_string().contains("single-parent candidate chains"));
+    assert!(
+        err.to_string()
+            .contains("Normal Block must have exactly one parent")
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-75: the now-open shape — a properly-formed two-parent `Merge` block, with a valid mainline
+/// parent and recorded baseline — reaches the report stage rather than being refused as an
+/// unsupported multi-parent shape (the pre-DC-75 behavior every other `Merge` construction in this
+/// file used to hit).
+#[test]
+fn candidate_ready_merge_block_reaches_report() -> Result<()> {
+    let root = unique_temp_dir("merge-evidence-merge-block-candidate");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let genesis = write_block(&layout, BlockKind::Root, Vec::new(), Vec::new())?;
+    let mainline_parent = write_create_block(
+        &layout,
+        BlockKind::Normal,
+        vec![genesis],
+        "mainline.txt",
+        0x51,
+    )?;
+    let secondary_parent = write_create_block(
+        &layout,
+        BlockKind::Normal,
+        vec![genesis],
+        "secondary.txt",
+        0x52,
+    )?;
+    let merge_block = write_merge_block(
+        &layout,
+        vec![mainline_parent, secondary_parent],
+        mainline_parent,
+        genesis,
+        Vec::new(),
+    )?;
+
+    let report = prepare_merge_evidence(
+        &layout,
+        genesis,
+        MergeEvidenceTarget::Block(merge_block),
+        MergeEvidenceTarget::Block(genesis),
+    )?;
+
+    assert_eq!(
+        report.left_operation_count, 2,
+        "mainline's and secondary's creates, no error"
+    );
+    assert_eq!(report.right_operation_count, 0);
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -338,6 +396,34 @@ pub(super) fn write_block(
     let mut store = FileObjectStore::new(layout.clone());
     let block = signed_block(kind, parents, patches, None);
     store.write_object(&block)
+}
+
+/// DC-75: a `Merge` block, distinct from `write_block`'s always-`None` mainline/baseline fields.
+/// State root is `compute_state_root(&[])`, same placeholder `write_block`/`signed_block` already
+/// use elsewhere in this file — `prepare_merge_evidence`'s candidate walk checks shape, not state
+/// root correctness (that is `verify`'s job, exercised separately).
+pub(super) fn write_merge_block(
+    layout: &RepositoryLayout,
+    mut parents: Vec<ObjectId>,
+    mainline: ObjectId,
+    baseline: ObjectId,
+    patches: Vec<ObjectId>,
+) -> Result<ObjectId> {
+    parents.sort();
+    let mut store = FileObjectStore::new(layout.clone());
+    let payload = BlockPayload {
+        parent_block_ids: parents,
+        kind: BlockKind::Merge,
+        patch_ids: patches,
+        state_merkle_root: crate::compute_state_root(&[])?,
+        snapshot_blob_ref: None,
+        mainline_parent_id: Some(mainline),
+        merge_baseline_block_id: Some(baseline),
+    };
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::Block, 2, payload.to_canonical_bytes()?);
+    envelope.add_signature(maintainer_signature())?;
+    store.write_object(&envelope)
 }
 
 fn publish_ref(layout: &RepositoryLayout, ref_name: &str, block_id: ObjectId) -> Result<()> {

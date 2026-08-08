@@ -40,6 +40,8 @@ impl MockReader {
             patch_ids: patch_ids.to_vec(),
             state_merkle_root: MerkleRoot([0_u8; 32]),
             snapshot_blob_ref: None,
+            mainline_parent_id: None,
+            merge_baseline_block_id: None,
         };
         self.insert(
             id,

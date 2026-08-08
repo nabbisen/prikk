@@ -476,6 +476,8 @@ fn signed_block(
         patch_ids,
         state_merkle_root: MerkleRoot([0_u8; 32]),
         snapshot_blob_ref,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());

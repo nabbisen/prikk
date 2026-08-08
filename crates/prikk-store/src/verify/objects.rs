@@ -22,6 +22,7 @@ pub(super) struct ObjectSummary {
     pub(super) rollback_patch_count: usize,
     pub(super) temp_paths: Vec<PathBuf>,
     pub(super) signature_issues: Vec<SignatureEnvelopeIssue>,
+    pub(super) merge_baseline_divergences: Vec<super::MergeBaselineDivergence>,
 }
 
 impl ObjectSummary {
@@ -33,6 +34,7 @@ impl ObjectSummary {
             rollback_patch_count: 0,
             temp_paths: Vec::new(),
             signature_issues: Vec::new(),
+            merge_baseline_divergences: Vec::new(),
         }
     }
 
@@ -51,6 +53,8 @@ impl ObjectSummary {
         )?;
         self.temp_paths.extend(other.temp_paths);
         self.signature_issues.extend(other.signature_issues);
+        self.merge_baseline_divergences
+            .extend(other.merge_baseline_divergences);
         Ok(())
     }
 }
@@ -143,9 +147,12 @@ fn verify_prefix_dir(
             summary.temp_paths.push(path);
             continue;
         }
-        let (object, signature_issues) =
+        let (object, signature_issues, merge_baseline_divergence) =
             verify_object_file(layout, object_store, object_type, &path, trust_verifier)?;
         summary.signature_issues.extend(signature_issues);
+        summary
+            .merge_baseline_divergences
+            .extend(merge_baseline_divergence);
         summary.object_count = checked_add(summary.object_count, 1, "object")?;
         if object.object_type == ObjectType::Block {
             summary.block_count = checked_add(summary.block_count, 1, "block")?;
@@ -169,7 +176,11 @@ fn verify_object_file(
     object_type: ObjectType,
     path: &Path,
     trust_verifier: &mut PublicationTrustVerifier<'_>,
-) -> Result<(ObjectVerification, Vec<SignatureEnvelopeIssue>)> {
+) -> Result<(
+    ObjectVerification,
+    Vec<SignatureEnvelopeIssue>,
+    Option<super::MergeBaselineDivergence>,
+)> {
     let object_id = object_id_from_path(path)?;
     let expected_path = layout.object_path(object_type, object_id);
     if path != expected_path {
@@ -212,7 +223,7 @@ fn verify_object_file(
     if matches!(object_type, ObjectType::Block | ObjectType::RefState) {
         trust_verifier.verify(&envelope)?;
     }
-    let rollback_patch_count = if object_type == ObjectType::Block {
+    let (rollback_patch_count, merge_baseline_divergence) = if object_type == ObjectType::Block {
         verify_block_payload(
             object_store,
             object_id,
@@ -220,7 +231,7 @@ fn verify_object_file(
             &envelope.canonical_payload,
         )?
     } else {
-        0
+        (0, None)
     };
     Ok((
         ObjectVerification {
@@ -230,6 +241,7 @@ fn verify_object_file(
             rollback_patch_count,
         },
         signature_issues,
+        merge_baseline_divergence,
     ))
 }
 

@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, HashSet};
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    BlobKind, BlobPayload, BlockPayload, NodeId, NodeKind, ObjectEnvelope, ObjectId, ObjectType,
-    RefStatePayload,
+    BlobKind, BlobPayload, BlockKind, BlockPayload, NodeId, NodeKind, ObjectEnvelope, ObjectId,
+    ObjectType, RefStatePayload,
 };
 
 use crate::layout::RepositoryLayout;
@@ -59,17 +59,37 @@ pub(super) fn single_parent_chain(
             )));
         }
         let block = read_block(object_store, block_id)?;
-        if block.parent_block_ids.len() > 1 {
-            return Err(PrikkError::UnsupportedObjectType(format!(
+        let next = mainline_or_sole_parent(&block).ok_or_else(|| {
+            PrikkError::UnsupportedObjectType(format!(
                 "patch replay supports only single-parent chains; block {block_id} has {} parents",
                 block.parent_block_ids.len()
-            )));
-        }
+            ))
+        })?;
         newest_first.push(block_id);
-        current = block.parent_block_ids.first().copied();
+        current = next;
     }
     newest_first.reverse();
     Ok(newest_first)
+}
+
+/// The parent materialization continues through: mainline only for a `Merge` block (DC-75, same
+/// state-derivation category as `block_state.rs`'s replay walk), the sole parent for `Normal`, none
+/// for `Root`. `Ok(None)` at genesis is not an error; the outer `Err` return is reserved for a
+/// non-`Merge` block with more than one parent, or a `Merge` block with no valid mainline parent —
+/// both indicate a shape this walk cannot follow, distinguished from `Ok(None)` by the caller.
+fn mainline_or_sole_parent(block: &BlockPayload) -> Option<Option<ObjectId>> {
+    if block.kind == BlockKind::Merge {
+        let mainline = block.mainline_parent_id?;
+        if !block.parent_block_ids.contains(&mainline) {
+            return None;
+        }
+        return Some(Some(mainline));
+    }
+    match block.parent_block_ids.as_slice() {
+        [] => Some(None),
+        [parent] => Some(Some(*parent)),
+        _ => None,
+    }
 }
 
 pub(super) fn read_block(

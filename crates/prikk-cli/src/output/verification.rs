@@ -114,6 +114,20 @@ pub(crate) fn print_verify_report(
         );
     }
     println!(
+        "merge-baseline divergences: {}",
+        report.merge_baseline_divergences.len()
+    );
+    for divergence in &report.merge_baseline_divergences {
+        println!(
+            "merge-baseline [divergence] block {}: recorded baseline {} is not a common ancestor \
+             of mainline parent {} and secondary parent {}",
+            divergence.block_id,
+            divergence.recorded_baseline,
+            divergence.mainline_parent_id,
+            divergence.secondary_parent_id
+        );
+    }
+    println!(
         "active WAL ordering issues: {}",
         report.active_wal_ordering_issues.len()
     );

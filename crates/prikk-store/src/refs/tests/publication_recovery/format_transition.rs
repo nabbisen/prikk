@@ -37,6 +37,8 @@ fn genuine_format1_ahead_log_promotes_without_identity_rewrite() -> prikk_error:
         patch_ids: vec![patch_id],
         state_merkle_root: MerkleRoot([0; 32]),
         snapshot_blob_ref: None,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
     };
     let block = sign_legacy_publication(
         ObjectType::Block,

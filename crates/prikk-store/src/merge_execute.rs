@@ -1,18 +1,18 @@
-//! Merge execution (DC-74): seals the other side's patches verbatim onto the target ref when the
-//! two sides are proven confluent from a common baseline.
+//! Merge execution (DC-74/DC-75): seals the other side's patches verbatim onto the target ref when
+//! the two sides are proven confluent from a common baseline.
 //!
 //! **A merge authors nothing** — the adopted patches are the exact objects already sealed on the
 //! source ref, same canonical bytes, same `ObjectId`, same author signature; this module never
 //! decodes, re-derives, or re-signs a patch. Only the new `Block`, `RefState`, and `RefUpdate` are
 //! signed here, with the maintainer key, exactly as an ordinary `seal` signs them.
 //!
-//! Single-parent blocks only (DC-74's ruled scope): the sealed merge block's `parent_block_ids` is
-//! `[target ref's current tip]`. `BlockKind::Merge` exists in the wire format but format-2's shape
-//! gate (`block_state.rs`) rejects it before parent count is even considered, so this seals
-//! `BlockKind::Normal` — a merge is, on disk, indistinguishable from an ordinary commit. Nothing
-//! records that a merge happened beyond the source ref's own history, which `branch close` can later
-//! remove. That gap is `MILESTONES.md`'s DC-74 release condition, not something to work around here —
-//! see `rfcs/proposed/DC-75-MERGE-BLOCK-LINEAGE.md` for the increment that would close it.
+//! Two-parent `BlockKind::Merge` blocks (DC-75): `parent_block_ids` names both `into_ref`'s prior
+//! tip (recorded again as `mainline_parent_id`) and `from_ref`'s adopted tip, sorted per the format's
+//! uniqueness invariant. `merge_baseline_block_id` records the baseline confluence was proven
+//! against — a claim `verify` independently re-derives and cross-checks rather than trusts. State
+//! derivation and replay follow the mainline parent only; the secondary parent's own chain is
+//! verified independently by the ordinary full-object-store scan. DC-74 sealed merges as
+//! indistinguishable `BlockKind::Normal` blocks; this is what discharges its release condition.
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
@@ -35,7 +35,7 @@ pub struct MergeExecutionReport {
     pub from_ref: String,
     /// Baseline block confluence was proven against.
     pub baseline_block_id: ObjectId,
-    /// `into_ref`'s target block immediately before the merge (the new block's sole parent).
+    /// `into_ref`'s target block immediately before the merge (the new block's mainline parent).
     pub parent_block_id: ObjectId,
     /// `from_ref`'s target block the adopted patches were collected up to.
     pub adopted_target_block_id: ObjectId,
@@ -125,12 +125,17 @@ pub fn execute_merge(
 
     let state_merkle_root =
         derive_next_state_root(&object_store, Some(parent_block_id), &adopted_patch_ids)?;
+    let adopted_target_block_id = evidence.right_selector.target_block_id;
+    let mut parent_block_ids = vec![parent_block_id, adopted_target_block_id];
+    parent_block_ids.sort();
     let block_payload = BlockPayload {
-        parent_block_ids: vec![parent_block_id],
-        kind: BlockKind::Normal,
+        parent_block_ids,
+        kind: BlockKind::Merge,
         patch_ids: adopted_patch_ids.clone(),
         state_merkle_root,
         snapshot_blob_ref: None,
+        mainline_parent_id: Some(parent_block_id),
+        merge_baseline_block_id: Some(baseline_block_id),
     };
     let mut object_store = object_store;
     let block_envelope = signed_envelope(
@@ -188,7 +193,7 @@ pub fn execute_merge(
         from_ref,
         baseline_block_id,
         parent_block_id,
-        adopted_target_block_id: evidence.right_selector.target_block_id,
+        adopted_target_block_id,
         adopted_patch_ids,
         block_id,
         ref_state_id: published_ref_state_id,

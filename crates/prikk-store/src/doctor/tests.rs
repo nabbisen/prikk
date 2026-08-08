@@ -70,6 +70,8 @@ fn doctor_reports_verification_error() {
             patch_ids: vec![missing_patch],
             state_merkle_root: MerkleRoot([0_u8; 32]),
             snapshot_blob_ref: None,
+            mainline_parent_id: None,
+            merge_baseline_block_id: None,
         };
         let payload_bytes = payload.to_canonical_bytes();
         assert!(payload_bytes.is_ok());
@@ -208,6 +210,8 @@ fn doctor_refuses_missing_main_ref_pointer_reconstruction() {
             patch_ids: Vec::new(),
             state_merkle_root: MerkleRoot([0_u8; 32]),
             snapshot_blob_ref: None,
+            mainline_parent_id: None,
+            merge_baseline_block_id: None,
         };
         let block = signed_publication_envelope(
             ObjectType::Block,

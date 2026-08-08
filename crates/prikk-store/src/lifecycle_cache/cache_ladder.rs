@@ -335,8 +335,8 @@ impl<P: BlockParentResolver> replay::LineageBlockReader for ResolverLineage<'_, 
         })
     }
 
-    fn parents_of(block: &Vec<ObjectId>) -> &[ObjectId] {
-        block
+    fn parents_of(block: &Vec<ObjectId>) -> Vec<ObjectId> {
+        block.clone()
     }
 }
 

@@ -165,6 +165,8 @@ fn seal_active_no_audit(
         patch_ids: patch_ids.clone(),
         state_merkle_root,
         snapshot_blob_ref: None,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
     };
     let block_envelope = signed_envelope(
         ObjectType::Block,

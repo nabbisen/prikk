@@ -3,14 +3,17 @@
 mod root_authority;
 mod trust;
 
+use prikk_error::Result;
 use prikk_object::{
-    BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType,
+    BlobKind, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile, MerkleRoot,
+    NodeId, ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind, PatchPayload,
+    PatchPurpose,
 };
 
 use crate::wal::{WalRecord, encode_record_for_test};
 use crate::{
     ActiveWalMetadataStatus, FileObjectStore, ObjectWriter, RepositoryLayout, Wal,
-    verify_repository, write_active_ref_metadata,
+    derive_next_state_root, verify_repository, write_active_ref_metadata,
 };
 
 use crate::test_support::{
@@ -32,6 +35,8 @@ fn verify_repository_detects_block_with_missing_patch() {
             patch_ids: vec![missing_patch],
             state_merkle_root: MerkleRoot([0_u8; 32]),
             snapshot_blob_ref: None,
+            mainline_parent_id: None,
+            merge_baseline_block_id: None,
         };
         let payload_bytes = payload.to_canonical_bytes();
         assert!(payload_bytes.is_ok());
@@ -43,6 +48,166 @@ fn verify_repository_detects_block_with_missing_patch() {
         }
     }
     let _ = std::fs::remove_dir_all(root);
+}
+
+fn write_signed_block(store: &mut FileObjectStore, payload: &BlockPayload) -> Result<ObjectId> {
+    let payload_bytes = payload.to_canonical_bytes()?;
+    let mut block = ObjectEnvelope::unsigned(ObjectType::Block, 2, payload_bytes);
+    block.add_signature(maintainer_signature())?;
+    store.write_object(&block)
+}
+
+/// Seals a child block over `parent` with one `CreateFile` patch at `path` — real, replayable
+/// content, so two children of the same parent are distinguishable (a content-addressed patch-free
+/// `Normal` child of a given parent is otherwise a single, unique object; there is only one way to
+/// say "nothing changed").
+fn write_create_child(
+    store: &mut FileObjectStore,
+    parent: ObjectId,
+    path: &str,
+    node_byte: u8,
+) -> Result<ObjectId> {
+    let blob = BlobPayload::new(BlobKind::Text, format!("{path}\n").into_bytes());
+    let mut blob_env = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob.to_canonical_bytes()?);
+    blob_env.add_signature(maintainer_signature())?;
+    let blob_id = store.write_object(&blob_env)?;
+
+    let patch = PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::CreateFile(CreateFile {
+                path: path.to_string(),
+                node_id: NodeId::from_bytes([node_byte; 32]),
+                blob_id,
+                mode: 0o100_644,
+            }),
+        }],
+        parent_patch_ids: Vec::new(),
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+    };
+    let mut patch_env = ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch.to_canonical_bytes()?);
+    patch_env.add_signature(maintainer_signature())?;
+    let patch_id = store.write_object(&patch_env)?;
+
+    let state_merkle_root = derive_next_state_root(store, Some(parent), &[patch_id])?;
+    write_signed_block(
+        store,
+        &BlockPayload {
+            parent_block_ids: vec![parent],
+            kind: BlockKind::Normal,
+            patch_ids: vec![patch_id],
+            state_merkle_root,
+            snapshot_blob_ref: None,
+            mainline_parent_id: None,
+            merge_baseline_block_id: None,
+        },
+    )
+}
+
+/// DC-75: a `Merge` block's `merge_baseline_block_id` is a claim `verify` independently re-derives,
+/// not trusts. This constructs a `Merge` block whose recorded baseline is not reachable from either
+/// parent at all — forged, distinct from `genesis`, the actual common ancestor — and confirms
+/// `verify` still passes structurally (shape and state root are both genuinely valid) but reports
+/// the divergence rather than silently accepting the claim.
+#[test]
+fn verify_repository_flags_merge_block_with_baseline_not_a_common_ancestor() -> Result<()> {
+    let root = unique_temp_dir("merge-baseline-forged");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+
+    let genesis_root = derive_next_state_root(&store, None, &[])?;
+    let genesis = write_signed_block(
+        &mut store,
+        &BlockPayload {
+            parent_block_ids: Vec::new(),
+            kind: BlockKind::Root,
+            patch_ids: Vec::new(),
+            state_merkle_root: genesis_root,
+            snapshot_blob_ref: None,
+            mainline_parent_id: None,
+            merge_baseline_block_id: None,
+        },
+    )?;
+    let mainline_parent = write_create_child(&mut store, genesis, "mainline.txt", 0x10)?;
+    let secondary_parent = write_create_child(&mut store, genesis, "secondary.txt", 0x20)?;
+    let mut parents = vec![mainline_parent, secondary_parent];
+    parents.sort();
+    let forged_baseline = sample_object_id("forged-baseline-not-an-ancestor");
+    let merge_root = derive_next_state_root(&store, Some(mainline_parent), &[])?;
+    let merge_block = write_signed_block(
+        &mut store,
+        &BlockPayload {
+            parent_block_ids: parents,
+            kind: BlockKind::Merge,
+            patch_ids: Vec::new(),
+            state_merkle_root: merge_root,
+            snapshot_blob_ref: None,
+            mainline_parent_id: Some(mainline_parent),
+            merge_baseline_block_id: Some(forged_baseline),
+        },
+    )?;
+
+    let report = verify_repository(&layout)?;
+    assert!(report.has_merge_baseline_divergence());
+    assert_eq!(report.merge_baseline_divergences.len(), 1);
+    let Some(divergence) = report.merge_baseline_divergences.first() else {
+        panic!("expected exactly one merge-baseline divergence");
+    };
+    assert_eq!(divergence.block_id, merge_block);
+    assert_eq!(divergence.recorded_baseline, forged_baseline);
+    assert_eq!(divergence.mainline_parent_id, mainline_parent);
+    assert_eq!(divergence.secondary_parent_id, secondary_parent);
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// The positive-path counterpart: a `Merge` block recording its true, genuine common ancestor as the
+/// baseline reports no divergence.
+#[test]
+fn verify_repository_accepts_merge_block_with_genuine_common_ancestor_baseline() -> Result<()> {
+    let root = unique_temp_dir("merge-baseline-genuine");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+
+    let genesis_root = derive_next_state_root(&store, None, &[])?;
+    let genesis = write_signed_block(
+        &mut store,
+        &BlockPayload {
+            parent_block_ids: Vec::new(),
+            kind: BlockKind::Root,
+            patch_ids: Vec::new(),
+            state_merkle_root: genesis_root,
+            snapshot_blob_ref: None,
+            mainline_parent_id: None,
+            merge_baseline_block_id: None,
+        },
+    )?;
+    let mainline_parent = write_create_child(&mut store, genesis, "mainline.txt", 0x30)?;
+    let secondary_parent = write_create_child(&mut store, genesis, "secondary.txt", 0x40)?;
+    let mut parents = vec![mainline_parent, secondary_parent];
+    parents.sort();
+    let merge_root = derive_next_state_root(&store, Some(mainline_parent), &[])?;
+    write_signed_block(
+        &mut store,
+        &BlockPayload {
+            parent_block_ids: parents,
+            kind: BlockKind::Merge,
+            patch_ids: Vec::new(),
+            state_merkle_root: merge_root,
+            snapshot_blob_ref: None,
+            mainline_parent_id: Some(mainline_parent),
+            merge_baseline_block_id: Some(genesis),
+        },
+    )?;
+
+    let report = verify_repository(&layout)?;
+    assert!(!report.has_merge_baseline_divergence());
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
 }
 
 #[test]

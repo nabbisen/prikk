@@ -38,6 +38,8 @@ fn full_verification_retains_wal_objects_trust_and_recovery_diagnosis_after_root
         patch_ids: vec![patch_id],
         state_merkle_root: derive_next_state_root(&objects, None, &[patch_id])?,
         snapshot_blob_ref: None,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
     };
     let block = signed_publication(
         ObjectType::Block,

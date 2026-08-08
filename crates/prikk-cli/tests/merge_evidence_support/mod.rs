@@ -186,6 +186,8 @@ fn write_block(
         patch_ids: patches,
         state_merkle_root: MerkleRoot([0_u8; 32]),
         snapshot_blob_ref: None,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
     };
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Block, 2, block.to_canonical_bytes()?);
     envelope.add_signature(maintainer_signature())?;

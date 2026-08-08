@@ -256,6 +256,8 @@ fn write_block(
         patch_ids: patches,
         state_merkle_root: MerkleRoot([0; 32]),
         snapshot_blob_ref: snapshot,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
     };
     write_maintainer_envelope(
         layout,

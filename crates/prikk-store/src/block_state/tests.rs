@@ -8,12 +8,24 @@ use super::{derive_next_state_root, validate_block_v2_shape, verify_block_v2_sta
 use crate::{MemoryObjectStore, ObjectWriter, compute_state_root};
 
 fn payload(kind: BlockKind, parents: Vec<ObjectId>, root: MerkleRoot) -> BlockPayload {
+    merge_payload(kind, parents, root, None, None)
+}
+
+fn merge_payload(
+    kind: BlockKind,
+    parents: Vec<ObjectId>,
+    root: MerkleRoot,
+    mainline_parent_id: Option<ObjectId>,
+    merge_baseline_block_id: Option<ObjectId>,
+) -> BlockPayload {
     BlockPayload {
         parent_block_ids: parents,
         kind,
         patch_ids: Vec::new(),
         state_merkle_root: root,
         snapshot_blob_ref: None,
+        mainline_parent_id,
+        merge_baseline_block_id,
     }
 }
 
@@ -28,9 +40,101 @@ fn format2_parent_and_kind_matrix_is_closed() -> prikk_error::Result<()> {
     assert!(
         validate_block_v2_shape(&payload(BlockKind::Normal, vec![parent, parent], root)).is_err()
     );
-    for kind in [BlockKind::Merge, BlockKind::Repair, BlockKind::Import] {
+    // DC-75: `Merge` is no longer unconditionally closed (see `format2_merge_shape_matrix` below
+    // for its now-open, narrowly-shaped case) -- but `Repair`/`Import` remain closed regardless of
+    // parent count, per DC-75's own investigation §4.3, accepted without change. Proven at both 0
+    // and 2 parents, since DC-75 is exactly the change that could have accidentally widened these
+    // too (both share `candidate_blocks`' shape validation with `Merge`).
+    for kind in [BlockKind::Repair, BlockKind::Import] {
         assert!(validate_block_v2_shape(&payload(kind, Vec::new(), root)).is_err());
+        assert!(validate_block_v2_shape(&payload(kind, vec![parent, parent], root)).is_err());
     }
+    assert!(validate_block_v2_shape(&payload(BlockKind::Merge, Vec::new(), root)).is_err());
+    Ok(())
+}
+
+/// DC-75: `Merge` is open only for the exact shape — two parents, a mainline parent naming one of
+/// them, and a recorded baseline. Every way to be short of that shape still fails closed; only the
+/// fully-specified case succeeds, changed deliberately from the pre-DC-75 "any parent count errors."
+#[test]
+fn format2_merge_shape_matrix() -> prikk_error::Result<()> {
+    let mainline = ObjectId::from_bytes([1; 32]);
+    let secondary = ObjectId::from_bytes([2; 32]);
+    let baseline = ObjectId::from_bytes([3; 32]);
+    let not_a_parent = ObjectId::from_bytes([4; 32]);
+    let root = compute_state_root(&[])?;
+    let two_parents = || {
+        let mut parents = vec![mainline, secondary];
+        parents.sort();
+        parents
+    };
+
+    // One parent, even with mainline/baseline set: still exactly the Normal/Root cardinality error.
+    assert!(
+        validate_block_v2_shape(&merge_payload(
+            BlockKind::Merge,
+            vec![mainline],
+            root,
+            Some(mainline),
+            Some(baseline)
+        ))
+        .is_err()
+    );
+    // Two parents, no mainline named at all.
+    assert!(
+        validate_block_v2_shape(&merge_payload(
+            BlockKind::Merge,
+            two_parents(),
+            root,
+            None,
+            Some(baseline)
+        ))
+        .is_err()
+    );
+    // Two parents, mainline named but not actually one of them.
+    assert!(
+        validate_block_v2_shape(&merge_payload(
+            BlockKind::Merge,
+            two_parents(),
+            root,
+            Some(not_a_parent),
+            Some(baseline)
+        ))
+        .is_err()
+    );
+    // Two parents, valid mainline, but no recorded baseline.
+    assert!(
+        validate_block_v2_shape(&merge_payload(
+            BlockKind::Merge,
+            two_parents(),
+            root,
+            Some(mainline),
+            None
+        ))
+        .is_err()
+    );
+    // Fully specified: open.
+    assert!(
+        validate_block_v2_shape(&merge_payload(
+            BlockKind::Merge,
+            two_parents(),
+            root,
+            Some(mainline),
+            Some(baseline)
+        ))
+        .is_ok()
+    );
+    // Root/Normal must not carry either DC-75 field, even when otherwise valid.
+    assert!(
+        validate_block_v2_shape(&merge_payload(
+            BlockKind::Normal,
+            vec![mainline],
+            root,
+            Some(mainline),
+            None
+        ))
+        .is_err()
+    );
     Ok(())
 }
 

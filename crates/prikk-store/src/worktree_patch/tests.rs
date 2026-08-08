@@ -197,6 +197,8 @@ fn publish_snapshot_baseline(layout: &RepositoryLayout, path: &str, bytes: &[u8]
         patch_ids: Vec::new(),
         state_merkle_root: MerkleRoot([0_u8; 32]),
         snapshot_blob_ref: Some(blob_id),
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
     };
     let mut block =
         ObjectEnvelope::unsigned(ObjectType::Block, 2, payload.to_canonical_bytes().unwrap());

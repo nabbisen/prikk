@@ -64,6 +64,8 @@ fn block_payload_strategy() -> impl Strategy<Value = BlockPayload> {
                 patch_ids,
                 state_merkle_root: MerkleRoot(root_bytes),
                 snapshot_blob_ref,
+                mainline_parent_id: None,
+                merge_baseline_block_id: None,
             },
         )
 }

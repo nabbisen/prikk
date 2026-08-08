@@ -57,6 +57,14 @@ pub struct BlockPayload {
     pub state_merkle_root: MerkleRoot,
     /// Optional full snapshot blob reference.
     pub snapshot_blob_ref: Option<ObjectId>,
+    /// The parent state derivation and replay follow. Present only on `Merge` blocks (DC-75); must
+    /// name one of `parent_block_ids`. `None` for every other kind, which have at most one parent
+    /// already and need no designation.
+    pub mainline_parent_id: Option<ObjectId>,
+    /// The block confluence was proven against when this `Merge` was sealed (DC-75). A claim, not a
+    /// trust boundary: `verify` independently re-derives the true merge base and reports disagreement
+    /// rather than trusting this field. `None` for every other kind.
+    pub merge_baseline_block_id: Option<ObjectId>,
 }
 
 impl BlockPayload {
@@ -68,6 +76,8 @@ impl BlockPayload {
         let mut patch_ids = Vec::new();
         let mut state_merkle_root = None;
         let mut snapshot_blob_ref = None;
+        let mut mainline_parent_id = None;
+        let mut merge_baseline_block_id = None;
         while let Some(field) = cursor.next_field()? {
             match field.tag {
                 1 => parent_block_ids.push(field.read_object_id()?),
@@ -75,6 +85,8 @@ impl BlockPayload {
                 3 => patch_ids.push(field.read_object_id()?),
                 4 => state_merkle_root = Some(MerkleRoot(field.read_array::<32>()?)),
                 5 => snapshot_blob_ref = Some(field.read_object_id()?),
+                6 => mainline_parent_id = Some(field.read_object_id()?),
+                7 => merge_baseline_block_id = Some(field.read_object_id()?),
                 other => {
                     return Err(PrikkError::MalformedData(format!(
                         "unknown Block field tag: {other}"
@@ -91,6 +103,8 @@ impl BlockPayload {
                 PrikkError::MalformedData("Block missing state_merkle_root".to_string())
             })?,
             snapshot_blob_ref,
+            mainline_parent_id,
+            merge_baseline_block_id,
         };
         if !is_strictly_sorted(&payload.parent_block_ids) {
             return Err(PrikkError::MalformedData(
@@ -232,6 +246,12 @@ impl CanonicalEncode for BlockPayload {
         writer.field_bytes(4, &self.state_merkle_root.0)?;
         if let Some(snapshot) = self.snapshot_blob_ref {
             writer.field_object_id(5, &snapshot)?;
+        }
+        if let Some(mainline) = self.mainline_parent_id {
+            writer.field_object_id(6, &mainline)?;
+        }
+        if let Some(baseline) = self.merge_baseline_block_id {
+            writer.field_object_id(7, &baseline)?;
         }
         Ok(())
     }

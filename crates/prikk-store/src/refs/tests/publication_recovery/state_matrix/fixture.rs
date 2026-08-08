@@ -200,6 +200,8 @@ fn publication(
         patch_ids: vec![patch_id],
         state_merkle_root: derive_next_state_root(&objects, parent, &[patch_id])?,
         snapshot_blob_ref: None,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
     };
     let block = signed_publication(
         ObjectType::Block,

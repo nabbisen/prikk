@@ -88,6 +88,8 @@ pub(crate) fn signed_empty_block_envelope() -> ObjectEnvelope {
         patch_ids: Vec::new(),
         state_merkle_root: crate::compute_state_root(&[]).unwrap_or(MerkleRoot([0_u8; 32])),
         snapshot_blob_ref: None,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
@@ -405,6 +407,8 @@ pub(crate) fn signed_block_with_state_root(
         patch_ids,
         state_merkle_root,
         snapshot_blob_ref,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
