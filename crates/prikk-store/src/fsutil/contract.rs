@@ -59,6 +59,14 @@ use super::anchored::MutationRoot;
 /// module documentation for the cross-cutting invariants (G1, G6, G7, G8) every method upholds and
 /// the guarantee-to-method map. `root` names the authority every path is resolved against; `relative`
 /// is always relative to it, never absolute.
+///
+/// Deliberately **not** gated to `target_os = "linux"`, even though `LinuxDurability` is currently
+/// the only implementor: the whole point of this contract is a platform-neutral statement of what
+/// the store requires, and a trait that vanishes on the platforms it exists to enable would defeat
+/// that (DC-76 addendum-2 B1). Off Linux it is therefore genuinely unused — `#[allow(dead_code)]`
+/// states that honestly rather than suppressing it, and it is expected to stop applying the moment
+/// a second platform implements this trait.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(crate) trait DurabilityContract {
     /// Replace `relative`'s content atomically and durably: a reader never observes a partial
     /// write, and a crash mid-replace leaves either the complete previous content or the complete

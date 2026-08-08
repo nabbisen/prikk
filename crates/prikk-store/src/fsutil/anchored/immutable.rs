@@ -26,6 +26,12 @@ use crate::fsutil::temporary_path;
 use rustix::fs::{self, AtFlags, OFlags};
 
 /// Publish immutable bytes without replacing an existing final entry.
+///
+/// Off Linux this function's own `#[cfg(not(target_os = "linux"))]` branch below is genuinely
+/// unreachable today: `anchored.rs`'s `publish_immutable_file` only reaches this function through
+/// `LinuxDurability`, which is itself Linux-only (DC-76 addendum-2 B1). `#[allow(dead_code)]`
+/// states that honestly; see `DurabilityContract`'s doc comment for why this is not gated instead.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(crate) fn publish_immutable_file(
     root: &MutationRoot,
     relative: &Path,
