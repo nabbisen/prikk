@@ -58,6 +58,38 @@ remains unpublished would carry forward all M1 gates in addition to applicable M
 also updates this file, `ROADMAP.md`, and every affected RFC target/status statement in the same reviewed
 change.
 
+### Status-claim criteria — the "early implementation" badge
+
+`README.md` carries `status-early-implementation`, and immediately below it: *"Do not use Prikk as the
+sole store for important project history yet. The repository format and command surface are still
+evolving, and future releases may require migration."* **The badge and that sentence stand or fall
+together** — removing one while the other holds would be incoherent, so these criteria govern both.
+
+Recorded 2026-08-09 at the owner's instruction, so the question is settled by evidence rather than by
+judgement at the time, and so each gap has a visible owner.
+
+| # | Criterion | Why it gates the claim | State today |
+|---|---|---|---|
+| 1 | **Sync exists** — two machines can exchange sealed history, and both verify it afterward | A *distributed* VCS that cannot distribute. Nothing in the tree exchanges history between repositories; branches merge only within one | **Nothing built. Unowned, no increment.** The largest single gap |
+| 2 | **The format-stability question is answered, and its answer honoured** — either canonical encoding is frozen with a stated compatibility promise, or a migration guarantee exists that a repository written by one release is readable by the next | The badge's own sentence says migration may be required. DC-75 added two `BlockPayload` fields on 2026-08-08 | **Unanswered.** This is the system proposal's RΔ3, still unsettled; the answerable form is *what minimum must never change for a verification claim made today to hold in ten years* |
+| 3 | **`verify` is not superlinear in history length** | The central claim is offline verifiability by anyone. At roughly O(N³) — 34 s at 160 blocks — that stops being practical at a few hundred commits | **Measured, tracked in `FINDINGS.md`, unowned.** Likely fix named |
+| 4 | **The signer bootstrap has occurred** — DC-35's authority transaction, two distinct natural persons | Release authority has never been established for any release to date | **`release-signers.toml` empty and fail-closed.** `docs/src/reference/release-compatibility.md:16` already states no release satisfies the gate |
+| 5 | **`verify` checks author signatures repository-wide** | The positioning is that every change is signed by its author *and verifiable by anyone*. Signatures are carried and preserved, but `verify` never checks them — the only cryptographic verification in the product is one policy-signature call site | **DC-53, proposed and unscheduled** |
+| 6 | **Mutation works wherever the project claims support** | A tool that can read but not write on two of three supported platforms is not past "early" | **Linux-only.** DC-76 in flight; macOS then Windows to follow |
+
+**These are necessary, not certified sufficient.** Whether the list is complete is the owner's call when
+the last one closes; the architect's record of prediction this cycle does not justify claiming otherwise.
+
+**Deliberately not criteria, with reasons**, so their absence is a decision rather than an oversight:
+
+- **Conflict resolution.** Conflicts are detected and refused cleanly, with no partial state. Refusing
+  well is a defensible posture for a tool that is otherwise mature; resolution is a capability, and a
+  resolution is itself a patch somebody must sign.
+- **Merge-base discovery.** Manual `--baseline-block` is a usability limit, and a wrong baseline is
+  refused rather than mis-merged.
+- **Unbounded lifecycle state.** Real, and it decides ten-year viability — but it degrades gradually
+  rather than making the tool unfit today.
+
 ### Attached release conditions
 
 | Increment | Condition | Ruled |
