@@ -1,6 +1,17 @@
-# RFC (proposed) - DC-75 Merge Block Lineage and the Structural Merge Record
+# RFC (accepted) - DC-75 Merge Block Lineage and the Structural Merge Record
 
-**Status.** **Proposed 2026-08-08.** Awaits owner acceptance. **Not authorized for implementation.**
+**Status.** **ACCEPTED by the project owner 2026-08-08**, same day as proposal.
+
+**Sequencing, ruled by the architect on acceptance.** DC-74 is in implementation and both increments
+touch the seal path, so:
+
+- **§4's prerequisite investigation may begin now, in parallel.** It is read-only — measurement and
+  design analysis, no production code — so it cannot collide with DC-74.
+- **§5 implementation waits for DC-74 to merge.** Two increments editing `block_state.rs` and the seal
+  path concurrently would make both harder to review and neither easier to write.
+
+**§3's design question must be answered before any design**, per §4.1 — with measurements, not
+preference.
 **Authored by** the architect, from a sizing finding produced by the developer.
 **Independence.** The §2 sizing is the developer's work, verified by the architect — better than the
 standing author-review ceiling, and recorded as such.
