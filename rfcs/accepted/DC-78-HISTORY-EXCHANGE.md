@@ -1,6 +1,11 @@
-# RFC (proposed) - DC-78 History Exchange
+# RFC (accepted) - DC-78 History Exchange
 
-**Status.** **Proposed 2026-08-09.** Awaits owner acceptance. **Not authorized for implementation.**
+**Status.** **ACCEPTED by the project owner 2026-08-09**, same day as proposal.
+
+**Cleared for §4's investigation only.** Design may not begin until §4 is answered and reported —
+including §3.2's dependency question, which may itself change when this increment can proceed.
+§2's recommendation (scope to exchange, defer transport) is accepted; **§3.1 is a position to test, not
+a ruling**, and the RFC says so.
 **Authored by** the architect. **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** `MILESTONES.md`'s status-claim criteria, **criterion 1**: a distributed VCS that cannot
 distribute. Priority ruled 2026-08-09 — this is the next design work after DC-76, may run alongside macOS
