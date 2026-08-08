@@ -189,8 +189,10 @@ the release lane is parked; see `MILESTONES.md` under Baseline and release postu
 
 ## Release Candidate Increment
 
-- Release lane state: **parked**.
-- Activated release target: **none**.
+- Release lane state: **active**.
+- Activated release target: **0.19.0**.
+- Activated 2026-08-08 by the architect under the owner's delegation, owner approval given. Gated on
+  DC-75, which discharged DC-74's release condition at `c0f29b5`.
 - **0.18.4 released 2026-08-04** (see MILESTONES.md).
 - **0.18.1 released 2026-08-03**; 0.18.0 was tagged but never published (see MILESTONES.md).
 - Activated 2026-08-02 by the architect under the owner's delegation of minor/patch release scheduling.

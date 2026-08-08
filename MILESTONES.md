@@ -76,9 +76,16 @@ is a one-way door.
 If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
 reviewed commit restores agreement.
 
-**Current release lane:** `parked`.
+**Current release lane:** `active`.
 
-**Current activated release target:** none.
+**Current activated release target:** 0.19.0.
+
+Activated 2026-08-08 by the architect under the owner's delegation of minor/patch release scheduling,
+with the owner's explicit approval to proceed, and **before any preparation began**.
+**Why now:** DC-74 merge execution and DC-75 merge block lineage are both accepted, and DC-74's release
+condition was **discharged at `c0f29b5`** — 0.19.0's sole gate. **Why minor:** `prikk merge` is a new CLI
+verb and `BlockPayload` gains two optional fields; no existing object id moves (proved — no hash literal
+changed in `c79c421`, DC-41's vectors unchanged), so this is additive, not breaking.
 
 **0.18.4 released 2026-08-04** — seven crates published, tag signed, release workflow green with six
 assets. **This is the first release since 0.18.0 to follow the transition rule**: activated at `4378643`
