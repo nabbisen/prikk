@@ -437,3 +437,35 @@ fn recognizes_dc71_ci_fixture_tar_round_trip() {
         );
     }
 }
+
+/// DC-77: `docs.yml`'s `mdbook-mermaid` install, so Mermaid diagrams render as pictures rather
+/// than code blocks. The `install` arm's new entry must accept exactly this vector — same DC-70
+/// B1 pattern as `tar`/`rustc`/`gh` above, not a widening of `install` to accept any crate. A
+/// *different* `cargo install` anywhere in a scanned file, including one installing the same
+/// crate at a different version or with different flags, must still be rejected.
+#[test]
+fn recognizes_dc77_mdbook_mermaid_install_procedure_narrowly() {
+    for command in ["cargo install mdbook-mermaid --vers \"^0.17\" --locked"] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+            assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+
+    for command in [
+        "cargo install mdbook-mermaid",
+        "cargo install mdbook-mermaid --vers \"^0.16\" --locked",
+        "cargo install mdbook-mermaid --locked",
+        "cargo install mdbook-mermaid --vers \"^0.17\"",
+        "cargo install mdbook-mermaid --vers \"^0.17\" --locked --force",
+        "cargo install --vers \"^0.17\" --locked mdbook-mermaid",
+        "cargo install mdbook-mermaid-ssr --vers \"^0.17\" --locked",
+        "cargo install some-other-crate --vers \"^0.17\" --locked",
+    ] {
+        assert!(!scan_shell(command).errors.is_empty(), "{command}");
+        assert!(
+            !scan_yaml(&format!("- run: {command}")).errors.is_empty(),
+            "{command}"
+        );
+    }
+}

@@ -156,6 +156,10 @@ fn cargo(command: &str, arguments: &[String]) -> bool {
                     "^0.5",
                     "--locked",
                 ]
+                // DC-77: docs.yml's mdbook-mermaid install, so Mermaid diagrams render as
+                // pictures rather than code blocks. Exact match only — this arm accepts exactly
+                // this vector, not `mdbook-mermaid` with any arguments (DC-70 B1 precedent).
+                || arguments == ["mdbook-mermaid", "--vers", "^0.17", "--locked"]
         }
         _ => false,
     }
