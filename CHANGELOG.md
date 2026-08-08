@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.19.0 — 2026-08-08
+
+Merge. New CLI surface, additive object-format change, no existing object id moves.
+
+**Added**
+
+- **`prikk merge` executes a merge.** `merge-evidence` and `merge-plan` could report on one since
+  DC-21/DC-25; nothing could apply one. `prikk merge --baseline-block ID --into REF --from REF` seals the
+  other side's patches onto the target when `patch_algebra` proves the two sides confluent from a common
+  baseline, and refuses cleanly — no object, WAL, or ref write — when it cannot.
+- **A merge authors nothing.** Adopted patches are sealed **verbatim**: same canonical bytes, same
+  `ObjectId`, same author signature. Nothing decodes, re-derives, or re-signs a patch. This works because
+  prikk's operations are context-free — every operation names a stable `NodeId`, and `EditText` identifies
+  its span by content anchors rather than position — so a patch from a divergent branch transports without
+  transformation and its author's signature keeps covering it. The maintainer seals; nobody re-authors.
+- **Merges are recorded structurally.** A merge seals as `BlockKind::Merge` naming both parents, a
+  mainline pointer, and the baseline confluence was proven against. `prikk verify` **re-derives** rather
+  than trusts that baseline, walking both parents' ancestries, and reports a divergence finding when the
+  recorded baseline is not a genuine common ancestor of both.
+- **Merging the same two branches more than once works.** The second merge's baseline is reachable only
+  through the first merge's secondary parent, and its candidate set excludes patches the baseline already
+  carries by adoption.
+
+**Changed**
+
+- `BlockPayload` gains two optional fields (canonical tags 6 and 7), written only when present, following
+  `snapshot_blob_ref`'s established shape. **No existing object id moves** — every `Root` and `Normal`
+  block encodes byte-identically to 0.18.4, and the DC-41 hash vectors and DC-55 reference implementation
+  are unchanged.
+
+**Known limitations**
+
+- **Merge-base discovery is manual.** `--baseline-block` is explicit; nothing computes it for you. A
+  baseline older than the true merge base is refused rather than mis-merged, though the message reports a
+  conflict rather than naming the stale baseline.
+- **`verify` confirms the recorded baseline is *a* common ancestor of both parents, not the *lowest*, and
+  does not re-run confluence** — a merge is trusted on the maintainer's signature exactly as every other
+  sealed decision is.
+- **Conflict resolution does not exist.** Conflicts are detected and refused; resolving one is a separate
+  capability, and a resolution is itself a patch somebody must sign.
+- **`prikk verify` cost grows steeply with history length** — roughly cubic in sealed block count,
+  measured at 34 s for 160 blocks. Pre-existing, not introduced here, and tracked in `FINDINGS.md`.
+- Mutation remains Linux-only (read-only commands run on macOS and Windows).
+
 ## 0.18.4 — 2026-08-04
 
 Correctness. No CLI surface change, no library API change, no format change.
