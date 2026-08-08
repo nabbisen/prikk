@@ -76,9 +76,16 @@ is a one-way door.
 If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
 reviewed commit restores agreement.
 
-**Current release lane:** `active`.
+**Current release lane:** `parked`.
 
-**Current activated release target:** 0.19.0.
+**Current activated release target:** none.
+
+**0.19.0 released 2026-08-08** — seven crates published, tag `0.19.0` signed with the owner's key
+(RSA `25757DA6CBF7022C4E14CCAC1B3066B87DB99A34`), CI and Release workflows green, six assets published.
+**Activated at `abef69b` before any preparation began**, per the transition rule — the second release to
+follow it. Verified after publication: `prikk 0.19.0` resolves all six internal crates at 0.19.0 with no
+0.18.x leakage (the 0.18.0 defect, confirmed absent), the published Linux x86_64 binary's checksum
+verifies, reports `prikk 0.19.0`, and carries the `merge` verb. Lane parked immediately on completion.
 
 Activated 2026-08-08 by the architect under the owner's delegation of minor/patch release scheduling,
 with the owner's explicit approval to proceed, and **before any preparation began**.
