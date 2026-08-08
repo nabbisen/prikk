@@ -43,6 +43,21 @@ remains unpublished would carry forward all M1 gates in addition to applicable M
 also updates this file, `ROADMAP.md`, and every affected RFC target/status statement in the same reviewed
 change.
 
+### Attached release conditions
+
+| Increment | Condition | Ruled |
+|---|---|---|
+| **DC-74** — merge execution | **Merge execution does not ship until sealed history structurally records a merge** — a later verifier must be able to re-check the baseline and both sides. DC-74 is buildable and mergeable now; it is not releasable until this holds. | Owner, 2026-08-08 |
+
+**Why this condition exists, and why it cannot be deferred.** A merge under DC-74's adoption model is
+sound only if the two sides were confluent from a common baseline. `parent_patch_ids` is inert — set to
+`Vec::new()` at every construction site including the authoring path, and read nowhere — so with
+single-parent blocks nothing in sealed history records what the confluence was checked against. **The
+irreversible event is a user sealing a merge**, which cannot occur before a release exposes the command.
+History is immutable, so a merge sealed under-recorded stays under-recorded permanently; no later
+increment can repair it without rewriting sealed history. This is the only condition on the board that
+is a one-way door.
+
 If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
 reviewed commit restores agreement.
 

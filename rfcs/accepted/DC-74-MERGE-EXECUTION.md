@@ -11,6 +11,15 @@ recommendation. The ruling, recorded per §5 criterion 2:
   it is already legal in the wire format and is deferred to its own increment, because the patch DAG
   already records the merge structurally.
 
+**RELEASE CONDITION, ruled by the owner 2026-08-08** and recorded in `MILESTONES.md`: **merge execution
+does not ship until sealed history structurally records a merge.** DC-74 is **buildable and mergeable
+now** — this gates release, not development. It is the inverse of DC-43/DC-49/DC-52, which are blocked
+*from being built* by a release-lane event; DC-74 must not be moved into `EXECUTION-ORDER.md` §2.
+
+**How the merge is recorded is still open.** Multi-parent blocks are the architect's recommendation —
+already legal in the format, and `verify.rs:327`/`checkout.rs:186` already traverse all parents, so the
+work is confined to derived-state machinery. Not yet ruled; it does not block building §3.
+
 **Implementation may not begin with design.** §4's remaining questions must be answered from the code
 and reported first — above all whether sealing can adopt a foreign-authored patch with signatures
 intact. **If it cannot, B′ is unavailable and this RFC returns to the owner.**
