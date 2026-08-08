@@ -265,6 +265,13 @@ These apply to all work above and are not restated in each handoff.
    `cargo test --workspace --locked`; `cargo +1.85.0 test --workspace --locked`; `git diff --check`;
    `cargo audit --no-fetch`; release-policy `check`, `boundary-check`, `reference-check`. Use a
    repository-local `TMPDIR` (`.git-exclude/tmp`) where `/tmp` is read-only.
+
+   **Additionally, for any increment touching `#[cfg(target_os)]`-gated code** — added 2026-08-09 after
+   DC-76 broke the non-Linux CI job while passing all nine gates above:
+   `cargo clippy --workspace --all-targets --all-features --locked --target x86_64-pc-windows-gnu -- -D warnings`
+   and the same with `--target x86_64-apple-darwin`. CI's `non-linux build` job runs this natively on both
+   platforms, so an increment that skips it can pass every canonical gate and still turn CI red. The nine
+   above cannot see platform-conditional dead code, which is the exact failure DC-71 exists to prevent.
 10. **Report counts before and after.** Test counts per touched crate, and locked package count where
     dependencies change, so no silent loss or growth can hide. Current: `prikk-store` 543,
     `prikk-object` 76, `prikk-replay` 44, `prikk-hash` 14, `prikk-crypto` 5, `prikk-release-policy` 59;
