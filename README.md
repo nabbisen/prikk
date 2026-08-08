@@ -42,7 +42,7 @@ Prikk is designed to be:
 
 ## Current Status
 
-Latest released implementation: **0.18.4**, adding branch and tag surfaces, multi-commit queuing, commit-path caching, and a correctness fix for repeated text edits.
+Latest released implementation: **0.19.0**, adding merge execution and merge block lineage: a confluent merge adopts the other side's patches verbatim — same bytes, same object ids, same author signatures — and seals them as a `Merge` block recording both parents, the mainline pointer, and the baseline the merge was proven against.
 
 Next increment candidates are tracked in `ROADMAP.md`.
 
@@ -54,8 +54,14 @@ for the pre-1.0 compatibility and official-release boundary.
 
 The local core can initialize a repository, author signed patches, seal them into blocks, inspect
 history, verify integrity, diagnose common repository issues, perform safe checkout planning and
-materialization for the supported subset, and display read-only merge evidence and merge plans for
-explicit sealed candidates.
+materialization for the supported subset, display merge evidence and merge plans for explicit sealed
+candidates, and **execute a merge** when the two sides are proven confluent — refusing cleanly, with no
+object, WAL, or ref write, when they are not.
+
+Known limits worth stating up front: **there is no networking or sync**, so history cannot be exchanged
+between machines; **mutation is Linux-only** (read-only commands run on macOS and Windows); merge-base
+discovery is manual; conflicts are detected and refused but never resolved; and `verify` cost grows
+steeply with history length.
 
 ## Good Fit
 
