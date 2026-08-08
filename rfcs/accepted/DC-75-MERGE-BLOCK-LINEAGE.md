@@ -83,8 +83,16 @@ Two candidate answers, and the choice shapes `block_state.rs`, both `single_pare
    `verify` re-derives its soundness **from sealed history alone**, tested through the compiled binary.
 3. DC-64's cache, `rollback_preview`, `patch_inverse`, and `checkout` work against post-merge history.
 4. The four tests in §2 are **changed deliberately, with the reason recorded** — not deleted.
-5. **DC-74's release condition is discharged explicitly** in `MILESTONES.md` by the same commit that
-   satisfies it.
+5. **DC-74's release condition is satisfied, and its discharge recorded — by different hands.**
+   **Amended 2026-08-08** after the developer raised the conflict this criterion created with
+   `MILESTONES.md`'s Authority section; as first written it named the developer, which was wrong.
+   The developer's delivery **reports** that sealed history structurally records a merge and that a
+   verifier re-derives its soundness, with evidence. **The architect records the discharge at
+   acceptance.** A release condition is an attestation about *release readiness* and is the very thing
+   implementation review tests, so it cannot be self-certified by the commit under review — the reason
+   is the conflict of interest, not merely which file it lives in. Discharge means the condition no
+   longer blocks a release; it does not authorize one, which remains the owner's three-authority
+   activation.
 6. Full gate set per `EXECUTION-ORDER.md` §6 rule 9, verbatim, with test counts before and after.
 
 ## 6. Non-goals
