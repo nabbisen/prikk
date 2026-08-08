@@ -22,6 +22,21 @@ cargo test --workspace --locked
 cargo run --locked -p prikk-release-policy -- check
 ```
 
+## Building the documentation
+
+The book uses Mermaid diagrams, which are rendered by the `mdbook-mermaid` preprocessor. Both tools are
+needed to build it:
+
+```sh
+cargo install mdbook --no-default-features --features search --vers "^0.5" --locked
+cargo install mdbook-mermaid --vers "^0.17" --locked
+mdbook build docs
+```
+
+`mdbook build` fails with a clear message if the preprocessor is missing, so a stale toolchain cannot
+silently produce diagrams as code blocks. The Mermaid assets are vendored under `docs/`, so the built
+book renders offline and fetches nothing.
+
 The workspace declares Rust 1.85 as its minimum supported version. Verify that contract with the exact
 minimum toolchain and locked dependency graph:
 
