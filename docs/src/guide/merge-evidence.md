@@ -8,7 +8,8 @@ reason codes, and proof phases, see
 [Patch Algebra and Merge Evidence](../reference/patch-algebra.md).
 
 For the planning classification layer over the same explicit-input evidence, see
-[Merge Plan](merge-plan.md). Neither command executes a merge.
+[Merge Plan](merge-plan.md). Neither command executes a merge — for that, see
+[Merge](merge.md) (DC-74), which reuses this same evidence to decide whether to seal.
 
 ```sh
 prikk merge-evidence \

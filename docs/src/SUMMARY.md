@@ -22,6 +22,7 @@
   - [Sealed Rollback History](guide/rollback/sealed-rollback-history.md)
 - [Merge Evidence](guide/merge-evidence.md)
 - [Merge Plan](guide/merge-plan.md)
+- [Merge](guide/merge.md)
 
 # Reference
 

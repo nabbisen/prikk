@@ -86,9 +86,10 @@ Process success is independent of plan status: a produced `BlockedConflict` plan
 
 ## Deferred
 
-- `prikk merge`, merge execution, and conflict resolution;
+- Conflict resolution — [`prikk merge`](merge.md) (DC-74) executes confluent merges, but detection
+  only, same as this command;
 - automatic merge-base discovery;
-- branch merge semantics, branch publication, merge commits, and multi-parent blocks;
+- multi-parent blocks and the structural merge record they would provide (DC-75, proposed);
 - active-WAL merge drafts and worktree conflict materialization;
 - display-path filtering and scoped/path-limited merge analysis;
 - persisted proof/witness/merge-plan objects;

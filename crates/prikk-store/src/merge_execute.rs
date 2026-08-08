@@ -1,0 +1,211 @@
+//! Merge execution (DC-74): seals the other side's patches verbatim onto the target ref when the
+//! two sides are proven confluent from a common baseline.
+//!
+//! **A merge authors nothing** — the adopted patches are the exact objects already sealed on the
+//! source ref, same canonical bytes, same `ObjectId`, same author signature; this module never
+//! decodes, re-derives, or re-signs a patch. Only the new `Block`, `RefState`, and `RefUpdate` are
+//! signed here, with the maintainer key, exactly as an ordinary `seal` signs them.
+//!
+//! Single-parent blocks only (DC-74's ruled scope): the sealed merge block's `parent_block_ids` is
+//! `[target ref's current tip]`. `BlockKind::Merge` exists in the wire format but format-2's shape
+//! gate (`block_state.rs`) rejects it before parent count is even considered, so this seals
+//! `BlockKind::Normal` — a merge is, on disk, indistinguishable from an ordinary commit. Nothing
+//! records that a merge happened beyond the source ref's own history, which `branch close` can later
+//! remove. That gap is `MILESTONES.md`'s DC-74 release condition, not something to work around here —
+//! see `rfcs/proposed/DC-75-MERGE-BLOCK-LINEAGE.md` for the increment that would close it.
+
+use prikk_error::{PrikkError, Result};
+use prikk_object::{
+    BlockKind, BlockPayload, CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, RefKind,
+    RefStatePayload, RefUpdatePayload,
+};
+
+use crate::merge_evidence::{MergeEvidenceTarget, candidate_patch_ids, prepare_merge_evidence};
+use crate::{
+    FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication, RefStore, RepositoryLayout,
+    derive_next_state_root, maintainer_signature, validate_local_branch_ref, verify_signer_trusted,
+};
+
+/// Result of a completed merge execution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MergeExecutionReport {
+    /// Ref advanced by the merge (the "into" side).
+    pub into_ref: String,
+    /// Ref merged in (the "from" side).
+    pub from_ref: String,
+    /// Baseline block confluence was proven against.
+    pub baseline_block_id: ObjectId,
+    /// `into_ref`'s target block immediately before the merge (the new block's sole parent).
+    pub parent_block_id: ObjectId,
+    /// `from_ref`'s target block the adopted patches were collected up to.
+    pub adopted_target_block_id: ObjectId,
+    /// Patch IDs adopted verbatim, in sealed order.
+    pub adopted_patch_ids: Vec<ObjectId>,
+    /// New block ID.
+    pub block_id: ObjectId,
+    /// New RefState ID.
+    pub ref_state_id: ObjectId,
+}
+
+/// Execute a merge: seal `from_ref`'s patches since `baseline_block_id` verbatim onto `into_ref`.
+///
+/// Refuses cleanly with no object, WAL, or ref write of any kind unless the two sides are proven
+/// confluent from the given baseline — conflict detection is `patch_algebra`'s existing evidence
+/// machinery (the same analysis `merge-evidence`/`merge-plan` already report), reused rather than
+/// duplicated.
+pub fn execute_merge(
+    layout: &RepositoryLayout,
+    baseline_block_id: ObjectId,
+    into_ref: &str,
+    from_ref: &str,
+    signer: &impl MaintainerSigner,
+) -> Result<MergeExecutionReport> {
+    layout.require_current_format()?;
+    let into_ref = validate_local_branch_ref(into_ref)?;
+    let from_ref = validate_local_branch_ref(from_ref)?;
+    if into_ref == from_ref {
+        return Err(PrikkError::InvalidName(
+            "merge into_ref and from_ref must differ".to_string(),
+        ));
+    }
+    // Read-only evidence gathering, requiring no signing credential at all — confluence is
+    // determinable exactly like `merge-plan`'s, before any question of who may seal is asked.
+    let evidence = prepare_merge_evidence(
+        layout,
+        baseline_block_id,
+        MergeEvidenceTarget::Ref(into_ref.clone()),
+        MergeEvidenceTarget::Ref(from_ref.clone()),
+    )?;
+    if !evidence.is_confluent() {
+        return Err(PrikkError::Integrity(format!(
+            "merge refused: {from_ref} is not confluent with {into_ref} from baseline \
+             {baseline_block_id} (outcome: {}{})",
+            evidence.outcome,
+            evidence
+                .reason
+                .map(|reason| format!(", reason: {reason}"))
+                .unwrap_or_default(),
+        )));
+    }
+
+    // Only proceeding to seal needs a trusted signer.
+    verify_signer_trusted(layout, signer)?;
+
+    let object_store = FileObjectStore::new(layout.clone());
+    let adopted_patch_ids = candidate_patch_ids(
+        &object_store,
+        baseline_block_id,
+        evidence.right_selector.target_block_id,
+    )?;
+    if adopted_patch_ids.is_empty() {
+        return Err(PrikkError::Integrity(format!(
+            "{from_ref} has no patches to adopt since baseline {baseline_block_id}"
+        )));
+    }
+
+    let ref_store = RefStore::new(layout.clone());
+    let into_ref_state_id = ref_store
+        .read_current_ref_state_id(&into_ref)?
+        .ok_or_else(|| PrikkError::Integrity(format!("ref {into_ref} is not published")))?;
+    let into_ref_state_envelope = object_store
+        .read_typed(into_ref_state_id, ObjectType::RefState)?
+        .ok_or_else(|| {
+            PrikkError::Integrity(format!("ref {into_ref} points to missing RefState"))
+        })?;
+    let into_ref_state = RefStatePayload::decode_canonical(
+        &into_ref_state_envelope.canonical_payload,
+        into_ref_state_envelope.schema_version,
+    )?;
+    let parent_block_id = into_ref_state.target_object_id;
+    if parent_block_id != evidence.left_selector.target_block_id {
+        return Err(PrikkError::Integrity(format!(
+            "ref {into_ref} advanced during merge evidence gathering; retry"
+        )));
+    }
+
+    let state_merkle_root =
+        derive_next_state_root(&object_store, Some(parent_block_id), &adopted_patch_ids)?;
+    let block_payload = BlockPayload {
+        parent_block_ids: vec![parent_block_id],
+        kind: BlockKind::Normal,
+        patch_ids: adopted_patch_ids.clone(),
+        state_merkle_root,
+        snapshot_blob_ref: None,
+    };
+    let mut object_store = object_store;
+    let block_envelope = signed_envelope(
+        ObjectType::Block,
+        2,
+        block_payload.to_canonical_bytes()?,
+        signer,
+    )?;
+    let block_id = object_store.write_object(&block_envelope)?;
+
+    let update_seq = into_ref_state.update_seq + 1;
+    let ref_state_payload = RefStatePayload {
+        ref_name: into_ref.clone(),
+        kind: RefKind::Branch,
+        target_object_id: block_id,
+        update_seq,
+        previous_ref_state_id: Some(into_ref_state_id),
+        required_attestation_ids: Vec::new(),
+        closed: false,
+    };
+    let ref_state_envelope = signed_envelope(
+        ObjectType::RefState,
+        1,
+        ref_state_payload.to_canonical_bytes()?,
+        signer,
+    )?;
+    let ref_state_id = ref_state_envelope.object_id();
+
+    let ref_update_payload = RefUpdatePayload {
+        ref_name: into_ref.clone(),
+        old_ref_state_id: Some(into_ref_state_id),
+        new_ref_state_id: ref_state_id,
+        new_target_object_id: block_id,
+        update_seq,
+        created_at: 0,
+        author_key_id: signer.key_id().to_string(),
+    };
+    let ref_update_envelope = signed_envelope(
+        ObjectType::RefUpdate,
+        1,
+        ref_update_payload.to_canonical_bytes()?,
+        signer,
+    )?;
+
+    let publication = RefPublication {
+        ref_name: into_ref.clone(),
+        expected_previous_ref_state_id: Some(into_ref_state_id),
+        ref_state: ref_state_envelope,
+        ref_update: ref_update_envelope,
+    };
+    let published_ref_state_id = ref_store.publish(&publication)?;
+
+    Ok(MergeExecutionReport {
+        into_ref,
+        from_ref,
+        baseline_block_id,
+        parent_block_id,
+        adopted_target_block_id: evidence.right_selector.target_block_id,
+        adopted_patch_ids,
+        block_id,
+        ref_state_id: published_ref_state_id,
+    })
+}
+
+fn signed_envelope(
+    object_type: ObjectType,
+    schema_version: u32,
+    canonical_payload: Vec<u8>,
+    signer: &impl MaintainerSigner,
+) -> Result<ObjectEnvelope> {
+    let mut envelope = ObjectEnvelope::unsigned(object_type, schema_version, canonical_payload);
+    let object_id = envelope.object_id();
+    envelope.add_signature(maintainer_signature(signer, object_type, object_id)?)?;
+    Ok(envelope)
+}
+
+#[cfg(test)]
+mod tests;

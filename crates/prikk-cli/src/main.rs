@@ -16,6 +16,7 @@ use std::process::ExitCode;
 
 mod args;
 mod branch;
+mod merge;
 mod output;
 mod seal;
 mod tag;
@@ -92,6 +93,7 @@ fn run() -> std::result::Result<(), String> {
         Some("checkout") => run_checkout(args.collect()),
         Some("merge-evidence") => run_merge_evidence(args.collect()),
         Some("merge-plan") => run_merge_plan(args.collect()),
+        Some("merge") => run_merge(args.collect()),
         Some("inverse-plan") => run_inverse_plan(args.collect()),
         Some("rollback-preview") => run_rollback_preview(args.collect()),
         Some("rollback-draft") => run_rollback_draft(args.collect()),
@@ -160,6 +162,26 @@ fn run_seal(args: Vec<String>) -> std::result::Result<(), String> {
     println!("block id: {}", result.block_id);
     println!("{} RefState: {}", result.ref_name, result.ref_state_id);
     println!("note: audit plugins and patch-based worktree materialization remain later PRs");
+    Ok(())
+}
+
+fn run_merge(args: Vec<String>) -> std::result::Result<(), String> {
+    let signer = maintainer_signer_from_env()?;
+    let report = merge::run_merge(args, &signer)?;
+    println!("merged {} into {}", report.from_ref, report.into_ref);
+    println!("baseline block: {}", report.baseline_block_id);
+    println!("parent block: {}", report.parent_block_id);
+    println!("adopted target block: {}", report.adopted_target_block_id);
+    println!("adopted patches: {}", report.adopted_patch_ids.len());
+    for patch_id in &report.adopted_patch_ids {
+        println!("  {patch_id}");
+    }
+    println!("block id: {}", report.block_id);
+    println!("{} RefState: {}", report.into_ref, report.ref_state_id);
+    println!(
+        "note: merge blocks are BlockKind::Normal (format-2's shape gate authorizes no other kind); \
+         nothing but ref history records this was a merge — see MILESTONES.md's DC-74 release condition"
+    );
     Ok(())
 }
 

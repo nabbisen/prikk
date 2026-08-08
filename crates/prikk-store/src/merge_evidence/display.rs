@@ -26,6 +26,16 @@ pub struct MergeEvidenceDisplay {
     pub items: Vec<MergeEvidenceDisplayItem>,
 }
 
+impl MergeEvidenceDisplay {
+    /// Whether the evidence proved confluence — the only outcome merge execution may seal against
+    /// (DC-74). Compares against the same `outcome_name` mapping `from_report` used to produce
+    /// `self.outcome`, rather than a second string literal at each call site.
+    #[must_use]
+    pub(crate) fn is_confluent(&self) -> bool {
+        self.outcome == outcome_name(MergeEvidenceOutcome::Confluent)
+    }
+}
+
 /// Submitted selector and resolved block identity for display.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MergeEvidenceDisplaySelector {

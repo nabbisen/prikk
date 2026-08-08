@@ -148,11 +148,15 @@ fn lineage_horizon(object_store: &FileObjectStore, baseline: ObjectId) -> Result
     }
 }
 
-fn candidate_sequence(
+/// Walk the single-parent block chain strictly between `baseline` (exclusive) and `target`
+/// (inclusive), oldest first. Shared by `candidate_sequence` (decoded operations, for evidence) and
+/// `candidate_patch_ids` (patch identity, for merge execution's adoption set — DC-74) so the walk,
+/// its cycle guard, and its single-parent requirement are defined exactly once.
+fn candidate_blocks(
     object_store: &FileObjectStore,
     baseline: ObjectId,
     target: ObjectId,
-) -> Result<Vec<DecodedPatchOperation>> {
+) -> Result<Vec<BlockPayload>> {
     let mut newest_first = Vec::new();
     let mut visited = BTreeSet::new();
     let mut current = target;
@@ -184,8 +188,16 @@ fn candidate_sequence(
         current = parent;
     }
     newest_first.reverse();
+    Ok(newest_first)
+}
+
+fn candidate_sequence(
+    object_store: &FileObjectStore,
+    baseline: ObjectId,
+    target: ObjectId,
+) -> Result<Vec<DecodedPatchOperation>> {
     let mut operations = Vec::new();
-    for block in newest_first {
+    for block in candidate_blocks(object_store, baseline, target)? {
         for patch_id in block.patch_ids {
             let envelope = object_store
                 .read_typed(patch_id, ObjectType::Patch)?
@@ -194,6 +206,19 @@ fn candidate_sequence(
         }
     }
     Ok(operations)
+}
+
+/// Patch identities strictly between `baseline` (exclusive) and `target` (inclusive), in the order
+/// they were sealed — the set merge execution adopts verbatim onto the other side (DC-74).
+pub(crate) fn candidate_patch_ids(
+    object_store: &FileObjectStore,
+    baseline: ObjectId,
+    target: ObjectId,
+) -> Result<Vec<ObjectId>> {
+    Ok(candidate_blocks(object_store, baseline, target)?
+        .into_iter()
+        .flat_map(|block| block.patch_ids)
+        .collect())
 }
 
 fn read_block(object_store: &FileObjectStore, block_id: ObjectId) -> Result<BlockPayload> {

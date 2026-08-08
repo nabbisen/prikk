@@ -6,11 +6,13 @@ use prikk_store::{DEFAULT_CHECKOUT_REF, DEFAULT_HISTORY_LIMIT};
 
 mod checkout;
 mod merge_evidence;
+mod merge_execute;
 
 pub(crate) use checkout::{CheckoutMode, parse_checkout_args};
 pub(crate) use merge_evidence::{
     MergeEvidenceTargetArg, parse_merge_evidence_args, parse_merge_plan_args,
 };
+pub(crate) use merge_execute::parse_merge_execute_args;
 
 /// Parsed commit command arguments.
 pub(crate) struct CommitArgs {

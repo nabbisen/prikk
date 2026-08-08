@@ -33,6 +33,7 @@ mod lock;
 mod maintainer_signing;
 mod memory_store;
 mod merge_evidence;
+mod merge_execute;
 // Production node-id minting (DC-09 Phase 4.4a-1), consumed by node-addressed worktree authoring
 // (4.4a-2) for fresh-node creation.
 mod node_id_gen;
@@ -93,6 +94,7 @@ pub use merge_evidence::{
     MergeEvidenceDisplaySelector, MergeEvidenceTarget, MergePlanDisplay, prepare_merge_evidence,
     prepare_merge_plan,
 };
+pub use merge_execute::{MergeExecutionReport, execute_merge};
 pub use object_store::{FileObjectStore, ObjectReader, ObjectWriter};
 pub use patch_checkout::{
     PatchDeletionConflict, PatchDeletionPlan, PatchMaterializationReport,

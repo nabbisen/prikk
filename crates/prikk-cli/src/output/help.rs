@@ -60,6 +60,10 @@ pub(crate) fn print_help(version: &str) {
         "  prikk merge-plan --baseline-block ID (--left-block ID|--left-ref REF) \
          (--right-block ID|--right-ref REF) [path]  Show a read-only merge plan"
     );
+    println!(
+        "  prikk merge --allow-no-audit --baseline-block ID --into REF --from REF [path]  \
+         Seal a proven-confluent merge"
+    );
     println!("  prikk inverse-plan [path] [--ref REF]     Plan an unsigned inverse patch");
     println!("  prikk rollback-preview [path] [--ref REF] Preview non-mutating rollback");
     println!(

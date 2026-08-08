@@ -419,9 +419,10 @@ after M2 remains a separate narrower ruling.
 
 ## Deferred until selected
 
-- Merge execution, branch lifecycle expansion, remotes/sync, rollback publication, plugins/audit, and
-  key lifecycle features are no longer frozen solely by release status. They remain unselected and
-  require design-first prioritization.
+- Branch lifecycle expansion, remotes/sync, rollback publication, plugins/audit, and key lifecycle
+  features are no longer frozen solely by release status. They remain unselected and require
+  design-first prioritization. Merge execution is no longer in this bucket — selected and implemented
+  as DC-74; see this file's "Attached release conditions" for what still gates its release.
 - TASK-14 through TASK-16 documentation themes remain queued. TASK-13 is the narrow exception because
   compatibility and release rules are required for the corrective format transition.
 - Any newly discovered correctness or identity defect interrupts this sequence and receives its own
