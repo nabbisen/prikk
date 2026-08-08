@@ -28,10 +28,12 @@
 
 - [Release, Versioning, and Compatibility](reference/release-compatibility.md)
 - [Platform Support](reference/platform-support.md)
+- [System Architecture](reference/architecture.md)
 - [Repository Layout and Authority](reference/repository-layout.md)
 - [Concurrency and Locking](reference/concurrency-locking.md)
 - [Path and Worktree Safety](reference/path-safety.md)
 - [Data Model](reference/data-model.md)
+- [Data Model Relationships and Lifecycle](reference/data-model-lifecycle.md)
 - [Trust and Threat Model](reference/trust-threat-model.md)
 - [Durability and Crash Recovery](reference/durability-recovery.md)
 - [Integrity and Recovery Diagnostics](reference/integrity-recovery.md)
