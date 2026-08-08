@@ -85,7 +85,7 @@ reviewed commit restores agreement.
 **Activated at `abef69b` before any preparation began**, per the transition rule — the second release to
 follow it. Verified after publication: `prikk 0.19.0` resolves all six internal crates at 0.19.0 with no
 0.18.x leakage (the 0.18.0 defect, confirmed absent), the published Linux x86_64 binary's checksum
-verifies, reports `prikk 0.19.0`, and carries the `merge` verb. Lane parked immediately on completion.
+verifies, reports `prikk 0.19.0`, and carries the `merge` verb. Lane parked immediately on completion. **Post-release stability rerun accepted 2026-08-08** from `664488f` (`.git-exclude/reviewed/prikk-0.19.0-post-release-stability-rerun-v1.md`): Python and Rust agree, the deliberate-disagreement self-test fires, all repository gates pass. **0.19.0 is closed**, and `DC-45:419`'s Python-retention condition is discharged.
 
 Activated 2026-08-08 by the architect under the owner's delegation of minor/patch release scheduling,
 with the owner's explicit approval to proceed, and **before any preparation began**.

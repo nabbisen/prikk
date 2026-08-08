@@ -166,8 +166,10 @@ Step 1 as instructed. **Blocked on an owner decision** — see `MILESTONES.md` f
 | Increment | Blocked by | Handoff (written, marked BLOCKED) |
 |---|---|---|
 | **DC-49** — portable-logic platform matrix | The M1 public portability-claim correction, which `MILESTONES.md` places inside the mandatory hold of an **activated** release. Cannot complete while the lane is parked. | `handoffs/DC-49-portable-logic-platform-matrix/implementation-handoff-v1.md` |
-| **DC-52** — Python and oracle decommissioning | `DC-45:419` and `:545` forbid Python deletion "before the first Rust-gated 0.19.0 release and its accepted post-release stability rerun." No release has shipped since 0.17.7. **Moved here 2026-07-30** — it was previously listed as available now, which was wrong. | `handoffs/DC-52-python-oracle-decommissioning/implementation-handoff-v1.md` |
 | **DC-43** — release security and distribution controls | Its scope *is* release security and distribution, and `DC-35:255-257` hands it key custody, rotation, expiry/revocation monitoring, attestations, and SBOMs. DC-35 needs a fitness amendment, so designing DC-43 now designs against a foundation about to change. **Moved here 2026-07-30.** | `handoffs/DC-43-release-security-controls/implementation-handoff-v1.md` |
+
+**DC-52 left this section 2026-08-08** — `DC-45:419`'s condition is discharged by 0.19.0 and its
+accepted stability rerun. It is available now; deletion is still a separate architect-reviewed change.
 
 **DC-74 does not belong here and must not be moved here.** It carries a *release condition* — buildable
 and mergeable now, not releasable until a named condition holds. That is the inverse of this section,
