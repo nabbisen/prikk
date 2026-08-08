@@ -84,8 +84,15 @@ pub(crate) trait DurabilityContract {
         bytes: &[u8],
     ) -> std::io::Result<()>;
 
-    /// Set `relative`'s permission bits (never its file-type bits, which this method must reject
-    /// or mask out of `mode` before applying it) on an existing regular file.
+    /// Set `relative`'s permission bits on an existing regular file, accepting a "recorded mode"
+    /// that carries file-type bits (e.g. `0o100_755`, matching a sealed `CreateFile`/`ChangePerm`
+    /// operation's own `mode` field) without letting them influence what gets applied. **Not
+    /// independently testable on Linux**: `fchmod`'s mode argument already ignores non-permission
+    /// bits at the kernel level (confirmed by a reverted negative control — masking `mode & 0o7777`
+    /// out of `LinuxDurability::set_permission_bits` before applying it produces byte-identical
+    /// results to leaving the file-type bits in), so this masking is deliberate, defensive input
+    /// handling for a reader's clarity, not a guarantee whose omission is Linux-observable. Left in
+    /// the contract because a future platform's `fchmod`-equivalent may not be as forgiving.
     fn set_permission_bits(&self, root: &MutationRoot, relative: &Path, mode: u32) -> Result<()>;
 
     /// Durably remove `relative` if present; returns whether an entry was actually removed. Absence

@@ -9,7 +9,7 @@ use crate::test_support::unique_temp_dir;
 
 use super::{
     MutationRoot, TestFailPoint, append_file_required, ensure_directory_required,
-    fail_once_for_test, promote_file_required, remove_file_required,
+    fail_once_for_test, promote_file_required, read_file_if_exists, remove_file_required,
     truncate_existing_file_required, write_file_atomically, write_worktree_file_atomically,
 };
 
@@ -222,6 +222,25 @@ fn append_and_truncate_reject_fifo_without_blocking() {
         assert!(append.is_err());
         assert!(truncate.is_err());
     }
+    let _ = fs::remove_file(fifo);
+    let _ = fs::remove_dir_all(path);
+}
+
+/// G6, isolated from G7: opening a FIFO for *reading* with `O_NONBLOCK` succeeds immediately at the
+/// OS level even with no writer present (unlike the write side above, which the kernel itself
+/// refuses with `ENXIO` when unblocked, independent of anything this crate checks) — so this is the
+/// one path where "is it actually a regular file" is checked by our own code, not handed to us for
+/// free by FIFO write semantics.
+#[cfg(target_os = "linux")]
+#[test]
+fn read_rejects_fifo_content_despite_the_os_permitting_the_open() {
+    use rustix::fs::{CWD, Mode, mkfifoat};
+
+    let path = unique_temp_dir("fifo-read-rejection");
+    let fifo = path.join("entry");
+    assert!(mkfifoat(CWD, &fifo, Mode::from_raw_mode(0o600)).is_ok());
+    let root = mutation_root(&path);
+    assert!(read_file_if_exists(&root, Path::new("entry")).is_err());
     let _ = fs::remove_file(fifo);
     let _ = fs::remove_dir_all(path);
 }
