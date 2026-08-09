@@ -28,7 +28,10 @@ impl<'a> PublicationTrustVerifier<'a> {
         }
     }
 
-    pub(super) fn verify(&mut self, envelope: &ObjectEnvelope) -> Result<()> {
+    /// Returns the matched adopted key id on success (DC-78 §D3), so a caller checking a Block can
+    /// report which key sealed it. `None` covers both a recorded trust-policy failure and an
+    /// unmatched signature — either way, nothing to report.
+    pub(super) fn verify(&mut self, envelope: &ObjectEnvelope) -> Result<Option<String>> {
         self.checked_records = self
             .checked_records
             .checked_add(1)
@@ -42,17 +45,19 @@ impl<'a> PublicationTrustVerifier<'a> {
                         "PRIKK-TRUST-POLICY-INVALID",
                         format!("publication trust policy is invalid: {err}"),
                     ));
-                    return Ok(());
+                    return Ok(None);
                 }
             }
         }
-        if let Some(issue) = self
-            .policy
-            .as_ref()
-            .and_then(|policy| verify_trusted_publication_envelope(policy, envelope).err())
-        {
-            self.issues.push(issue);
+        let Some(policy) = self.policy.as_ref() else {
+            return Ok(None);
+        };
+        match verify_trusted_publication_envelope(policy, envelope) {
+            Ok(key_id) => Ok(Some(key_id)),
+            Err(issue) => {
+                self.issues.push(issue);
+                Ok(None)
+            }
         }
-        Ok(())
     }
 }

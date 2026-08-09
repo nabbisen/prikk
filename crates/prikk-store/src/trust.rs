@@ -258,27 +258,31 @@ pub fn verify_signer_trusted(
     Ok(policy)
 }
 
-/// Verify a publication envelope against the current repository-local trust policy.
+/// Verify a publication envelope against the current repository-local trust policy. Returns the
+/// adopted key id whose signature matched (DC-78 §D3): the sealer's identity already lives inside
+/// the envelope's own signature, non-strippably — this is reporting that fact, not new state.
 pub fn verify_trusted_publication_envelope(
     policy: &MaintainerTrustPolicy,
     envelope: &ObjectEnvelope,
-) -> std::result::Result<(), PublicationTrustIssue> {
+) -> std::result::Result<String, PublicationTrustIssue> {
     let object_id = envelope.object_id();
-    let trusted = envelope
+    envelope
         .signatures
         .iter()
-        .any(|signature| verify_trusted_signature(policy, envelope, signature, object_id).is_ok());
-    if trusted {
-        Ok(())
-    } else {
-        Err(PublicationTrustIssue::new(
-            "PRIKK-TRUST-PUBLICATION-UNTRUSTED",
-            format!(
-                "{} {} has no trusted MAINTAINER signature",
-                envelope.object_type, object_id
-            ),
-        ))
-    }
+        .find_map(|signature| {
+            verify_trusted_signature(policy, envelope, signature, object_id)
+                .ok()
+                .map(|()| signature.key_id.clone())
+        })
+        .ok_or_else(|| {
+            PublicationTrustIssue::new(
+                "PRIKK-TRUST-PUBLICATION-UNTRUSTED",
+                format!(
+                    "{} {} has no trusted MAINTAINER signature",
+                    envelope.object_type, object_id
+                ),
+            )
+        })
 }
 
 fn verify_trusted_signature(

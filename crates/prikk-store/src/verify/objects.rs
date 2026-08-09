@@ -6,7 +6,9 @@ use std::str::FromStr;
 use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectId, ObjectType};
 
-use super::{ObjectVerification, PublicationTrustVerifier, verify_block_payload};
+use super::{
+    BlockSealVerification, ObjectVerification, PublicationTrustVerifier, verify_block_payload,
+};
 use crate::file_codec::decode_envelope_file;
 use crate::fsutil::{EntryKind, inspect_entry, list_directory, read_file_required};
 use crate::layout::{RepositoryLayout, persisted_object_types};
@@ -23,6 +25,7 @@ pub(super) struct ObjectSummary {
     pub(super) temp_paths: Vec<PathBuf>,
     pub(super) signature_issues: Vec<SignatureEnvelopeIssue>,
     pub(super) merge_baseline_divergences: Vec<super::MergeBaselineDivergence>,
+    pub(super) block_seals: Vec<BlockSealVerification>,
 }
 
 impl ObjectSummary {
@@ -35,6 +38,7 @@ impl ObjectSummary {
             temp_paths: Vec::new(),
             signature_issues: Vec::new(),
             merge_baseline_divergences: Vec::new(),
+            block_seals: Vec::new(),
         }
     }
 
@@ -55,6 +59,7 @@ impl ObjectSummary {
         self.signature_issues.extend(other.signature_issues);
         self.merge_baseline_divergences
             .extend(other.merge_baseline_divergences);
+        self.block_seals.extend(other.block_seals);
         Ok(())
     }
 }
@@ -156,6 +161,12 @@ fn verify_prefix_dir(
         summary.object_count = checked_add(summary.object_count, 1, "object")?;
         if object.object_type == ObjectType::Block {
             summary.block_count = checked_add(summary.block_count, 1, "block")?;
+            if let Some(sealed_by_key_id) = object.sealed_by_key_id.clone() {
+                summary.block_seals.push(BlockSealVerification {
+                    block_id: object.object_id,
+                    sealed_by_key_id,
+                });
+            }
             if object.rollback_patch_count != 0 {
                 summary.rollback_block_count =
                     checked_add(summary.rollback_block_count, 1, "rollback block")?;
@@ -220,9 +231,11 @@ fn verify_object_file(
             object_id,
         },
     )?;
-    if matches!(object_type, ObjectType::Block | ObjectType::RefState) {
-        trust_verifier.verify(&envelope)?;
-    }
+    let sealed_by_key_id = if matches!(object_type, ObjectType::Block | ObjectType::RefState) {
+        trust_verifier.verify(&envelope)?
+    } else {
+        None
+    };
     let (rollback_patch_count, merge_baseline_divergence) = if object_type == ObjectType::Block {
         verify_block_payload(
             object_store,
@@ -239,6 +252,7 @@ fn verify_object_file(
             object_type,
             path: path.to_path_buf(),
             rollback_patch_count,
+            sealed_by_key_id,
         },
         signature_issues,
         merge_baseline_divergence,

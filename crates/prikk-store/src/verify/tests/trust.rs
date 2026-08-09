@@ -71,6 +71,23 @@ fn trusted_and_untrusted_envelopes_preserve_counts_and_order() -> prikk_error::R
     Ok(())
 }
 
+#[test]
+fn verify_returns_the_matched_key_id_on_success() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("verify-trust-matched-key-id");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let signer = Ed25519MaintainerSigner::from_seed("matched-maintainer", &[0x21; 32])?;
+    add_trusted_maintainer(&layout, signer.key_id(), &public_key_hex(&signer))?;
+
+    let envelope = signed_envelope(b"matched", &signer)?;
+    let mut verifier = PublicationTrustVerifier::new(&layout);
+    let matched = verifier.verify(&envelope)?;
+    assert_eq!(matched, Some(signer.key_id().to_string()));
+    assert!(verifier.issues.is_empty());
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 fn assert_invalid_policy_sequence(
     fixture_name: &str,
     malformed_policy: Option<&str>,

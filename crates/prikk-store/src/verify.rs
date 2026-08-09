@@ -42,6 +42,19 @@ pub struct ObjectVerification {
     pub path: PathBuf,
     /// Rollback-marked Patch references verified for this object when it is a Block.
     pub rollback_patch_count: usize,
+    /// For a Block or RefState, the adopted MAINTAINER key id whose signature was trusted (DC-78
+    /// §D3). `None` for other object types, or when publication trust could not be established.
+    pub sealed_by_key_id: Option<String>,
+}
+
+/// Which adopted MAINTAINER key sealed a given Block (DC-78 §D3). Reporting only: the sealer's key
+/// id already lives, non-strippably, inside the block's own signature.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockSealVerification {
+    /// The sealed Block's object id.
+    pub block_id: ObjectId,
+    /// The MAINTAINER key id whose trusted signature matched this Block.
+    pub sealed_by_key_id: String,
 }
 
 /// Repository verification summary.
@@ -100,6 +113,10 @@ pub struct RepositoryVerification {
     /// baseline that legitimate merge execution ever produced always passes this; a false claim (data
     /// corruption or tampering) does not.
     pub merge_baseline_divergences: Vec<MergeBaselineDivergence>,
+    /// Which adopted MAINTAINER key sealed each checked Block (DC-78 §D3), in on-disk scan order.
+    /// Reporting only — surfaces provenance that was already intrinsic to each block's own
+    /// signature, so an auditor can ask "which parts of this history did I seal" and get an answer.
+    pub block_seals: Vec<BlockSealVerification>,
 }
 
 /// A `Merge` block (DC-75) whose recorded `merge_baseline_block_id` is not a common ancestor of its
@@ -306,6 +323,7 @@ pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerifica
         lifecycle_cache_divergences,
         active_wal_ordering_issues,
         merge_baseline_divergences,
+        block_seals: object_summary.block_seals,
     })
 }
 
