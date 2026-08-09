@@ -56,9 +56,12 @@ Ed25519 secret seeds encoded as 64 hex characters. Prikk does not provide local 
 generation, or public-key derivation. For the current setup workflow and seed-handling warnings, see
 the [security and signing setup](../guide/security-setup.md) guide.
 
-The local maintainer trust store supports a single repository-local trusted MAINTAINER key with
-`required = 1`. `prikk trust maintainer add` writes the trusted public key and fixed-shape policy. The
-parser deliberately rejects broader policy shapes. There is no implicit trust-on-first-use rule.
+The local maintainer trust store supports a set of repository-local adopted MAINTAINER keys, with
+`required = 1` continuing to mean any one adopted key's signature suffices. `prikk trust maintainer add`
+adds a new key id to the set, or idempotently confirms an already-adopted id's matching key; it refuses
+to replace an adopted id's key with a different one. This refusal is a trust-on-first-use rule: the
+first public key seen for a key id is the one trusted for that id, permanently, until an operator
+removes it out-of-band. There is no remote trust distribution.
 
 ## What Seal Checks
 
