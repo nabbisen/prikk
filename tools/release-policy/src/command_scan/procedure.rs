@@ -102,7 +102,22 @@ fn gh_release_create(tail: &[String]) -> bool {
 fn cargo(command: &str, arguments: &[String]) -> bool {
     match command {
         "fmt" => arguments == ["--check"] || arguments == ["--all", "--", "--check"],
-        "test" => arguments == ["--workspace"] || arguments == ["--workspace", "--locked"],
+        "test" => {
+            arguments == ["--workspace"]
+                || arguments == ["--workspace", "--locked"]
+                // DC-81: the macOS CI job's NFR-PERF-01 data-collection step, spelled out exactly
+                // (DC-70 B1 precedent — never widened to accept an arbitrary name/flag set after
+                // `--`). Runs exactly one `#[ignore]`d test by name; it is not a gate.
+                || arguments
+                    == [
+                        "--workspace",
+                        "--locked",
+                        "--",
+                        "measure_directory_sync_fsync_vs_fcntl_fullfsync",
+                        "--ignored",
+                        "--nocapture",
+                    ]
+        }
         "clippy" => {
             arguments
                 == [

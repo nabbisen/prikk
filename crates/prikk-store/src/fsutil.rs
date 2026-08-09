@@ -1,6 +1,6 @@
 //! Filesystem utility helpers for storage operations.
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::path::{Path, PathBuf};
 
 use prikk_error::{PrikkError, Result};
@@ -8,12 +8,12 @@ use prikk_error::{PrikkError, Result};
 mod anchored;
 mod contract;
 
-// DC-71: every test in both modules (including caller_tests' matrix submodules) sets up its
-// scenario via real repository mutation, which is Linux-only; neither module ever compiles a
-// non-Linux-meaningful test.
-#[cfg(all(test, target_os = "linux"))]
+// DC-71/DC-81: every test in both modules (including caller_tests' matrix submodules) sets up its
+// scenario via real repository mutation, which is Linux/macOS-only; neither module ever compiles a
+// test meaningful on any other platform.
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod caller_tests;
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod tests;
 
 pub(crate) use anchored::{
@@ -28,21 +28,23 @@ pub(crate) use anchored::{
 
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) use anchored::LinuxDurability;
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(test, target_os = "macos"))]
+pub(crate) use anchored::MacosDurability;
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 pub(crate) use anchored::remove_file_required;
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 pub(crate) use contract::DurabilityContract;
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 pub(crate) use anchored::{TestFailPoint, fail_after_for_test, fail_once_for_test};
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 pub(crate) use anchored::{
     set_directory_create_barrier_for_test, set_immutable_install_barrier_for_test,
 };
 
 /// Return a process-unique temporary path next to the destination.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) fn temporary_path(path: &Path) -> Result<PathBuf> {
     let Some(file_name) = path.file_name() else {
         return Err(PrikkError::Io(

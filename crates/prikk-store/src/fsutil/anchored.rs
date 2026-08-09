@@ -1,18 +1,21 @@
 //! Root-scoped filesystem mutation primitives. Every function here is a thin call through the
 //! durability contract (DC-76, `super::contract::DurabilityContract`) — the guarantee each one
-//! provides is stated on the trait method it calls, not repeated here. `Linux` is the sole
-//! implementor (`linux::LinuxDurability`); no `target_os` gate is relaxed by this indirection.
+//! provides is stated on the trait method it calls, not repeated here. `Linux` (`linux::LinuxDurability`)
+//! and, as of DC-81, `Macos` (`macos::MacosDurability`) are the implementors; no other `target_os`
+//! gate is relaxed by this indirection.
 
 use std::path::Path;
 
 use prikk_error::{PrikkError, Result};
 
 mod directory;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod failpoints;
 mod immutable;
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
 mod read;
 mod regular;
 
@@ -22,12 +25,14 @@ pub(crate) use read::{
     read_file_required, stat_file_state_if_exists,
 };
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use crate::fsutil::contract::DurabilityContract;
 #[cfg(target_os = "linux")]
 pub(crate) use linux::LinuxDurability;
+#[cfg(target_os = "macos")]
+pub(crate) use macos::MacosDurability;
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 pub(crate) use failpoints::{
     Point as TestFailPoint, fail_after as fail_after_for_test, fail_once as fail_once_for_test,
     set_directory_create_barrier as set_directory_create_barrier_for_test,
@@ -44,7 +49,11 @@ pub(crate) fn write_file_atomically(
     {
         LinuxDurability.atomic_replace(root, relative, bytes)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        MacosDurability.atomic_replace(root, relative, bytes)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = (root, relative, bytes);
         unsupported_mutation()
@@ -70,7 +79,11 @@ pub(crate) fn append_file_required(
     {
         LinuxDurability.durable_append(root, relative, bytes)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        MacosDurability.durable_append(root, relative, bytes)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = (root, relative, bytes);
         unsupported_mutation()
@@ -87,7 +100,11 @@ pub(crate) fn truncate_existing_file_required(
     {
         LinuxDurability.durable_truncate(root, relative, len)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        MacosDurability.durable_truncate(root, relative, len)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = (root, relative, len);
         unsupported_mutation()
@@ -107,7 +124,11 @@ pub(crate) fn set_regular_file_mode_required(
     {
         LinuxDurability.set_permission_bits(root, relative, mode)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        MacosDurability.set_permission_bits(root, relative, mode)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = (root, relative, mode);
         unsupported_mutation()
@@ -120,7 +141,11 @@ pub(crate) fn truncate_file_empty_required(root: &MutationRoot, relative: &Path)
     {
         LinuxDurability.durable_truncate_to_empty(root, relative)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        MacosDurability.durable_truncate_to_empty(root, relative)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = (root, relative);
         unsupported_mutation()
@@ -137,12 +162,16 @@ pub(crate) fn create_new_file_required(
     {
         LinuxDurability.create_exclusive(root, relative, bytes)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        MacosDurability.create_exclusive(root, relative, bytes)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = (root, relative, bytes);
         Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
-            "repository mutation requires Linux anchored filesystem primitives",
+            "repository mutation requires Linux or macOS anchored filesystem primitives",
         ))
     }
 }
@@ -161,7 +190,11 @@ pub(crate) fn remove_file_if_present_required(
     {
         LinuxDurability.remove_if_present(root, relative)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        MacosDurability.remove_if_present(root, relative)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = (root, relative);
         unsupported_mutation()
@@ -188,7 +221,11 @@ pub(crate) fn promote_file_required(
     {
         LinuxDurability.promote(root, source, destination)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        MacosDurability.promote(root, source, destination)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = (root, source, destination);
         unsupported_mutation()
@@ -207,7 +244,11 @@ pub(crate) fn publish_immutable_file(
     {
         LinuxDurability.publish_immutable(root, relative, candidate, validate_existing)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        MacosDurability.publish_immutable(root, relative, candidate, validate_existing)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = (root, relative, candidate, validate_existing);
         unsupported_mutation()
@@ -220,7 +261,11 @@ pub(crate) fn ensure_directory_required(root: &MutationRoot, relative: &Path) ->
     {
         LinuxDurability.ensure_directory(root, relative)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        MacosDurability.ensure_directory(root, relative)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = (root, relative);
         unsupported_mutation()
@@ -233,26 +278,31 @@ pub(crate) fn sync_directory_required(root: &MutationRoot, relative: &Path) -> R
     {
         LinuxDurability.durable_directory_entry(root, relative)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        MacosDurability.durable_directory_entry(root, relative)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = (root, relative);
         unsupported_mutation()
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn io_error(error: rustix::io::Errno) -> PrikkError {
     PrikkError::from(std::io::Error::from(error))
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn prikk_to_io(error: PrikkError) -> std::io::Error {
     std::io::Error::other(error.to_string())
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn unsupported_mutation<T>() -> Result<T> {
     Err(PrikkError::Io(
-        "repository mutation requires Linux root-scoped filesystem capabilities".to_string(),
+        "repository mutation requires Linux or macOS root-scoped filesystem capabilities"
+            .to_string(),
     ))
 }

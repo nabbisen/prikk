@@ -64,6 +64,26 @@ jobs:
       - name: Build
         run: cargo build --workspace --locked
 
+  # DC-81: repository mutation is Linux-and-macOS now (DC-76's contract ported), but this is the
+  # *only* verification available for it — neither developer nor architect can run macOS locally
+  # (DC-81 handoff §3). This job existing and being green is itself the DC-81 §5 stop condition: no
+  # gate is relaxed in a merged commit before it does. A green run proves prikk's own failure-handling
+  # behaviour on macOS; it does not and cannot prove the OS actually persisted anything, since a CI
+  # runner cannot be power-cycled — that limit is stated here, not discovered later.
+  macos-mutation:
+    name: macOS mutation test suite
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test
+        run: cargo test --workspace --locked
+      # DC-81 addendum-1 §3: Q3's measurement is follow-through, not optional. `#[ignore]`d so it
+      # never affects the gate above; run by name so only this one data-collection test executes,
+      # not every `#[ignore]`d test in the workspace.
+      - name: Measure fsync vs fcntl_fullfsync (NFR-PERF-01 data point, not a gate)
+        run: cargo test --workspace --locked -- measure_directory_sync_fsync_vs_fcntl_fullfsync --ignored --nocapture
+
   # A fixture repository is authored on Linux (repository mutation is Linux-only) and handed to the
   # non-linux-verify job below, which proves the read-only command set actually runs elsewhere —
   # criterion 2 asks for this demonstrated, not merely a successful compile.

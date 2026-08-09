@@ -469,3 +469,31 @@ fn recognizes_dc77_mdbook_mermaid_install_procedure_narrowly() {
         );
     }
 }
+
+#[test]
+fn recognizes_dc81_macos_sync_benchmark_procedure_narrowly() {
+    for command in [
+        "cargo test --workspace --locked -- measure_directory_sync_fsync_vs_fcntl_fullfsync --ignored --nocapture",
+    ] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+            assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+
+    for command in [
+        "cargo test --workspace --locked -- measure_directory_sync_fsync_vs_fcntl_fullfsync",
+        "cargo test --workspace --locked -- measure_directory_sync_fsync_vs_fcntl_fullfsync --nocapture",
+        "cargo test --workspace --locked -- measure_directory_sync_fsync_vs_fcntl_fullfsync --ignored",
+        "cargo test --workspace --locked -- --ignored --nocapture",
+        "cargo test --workspace --locked -- some_other_test --ignored --nocapture",
+        "cargo test --workspace -- measure_directory_sync_fsync_vs_fcntl_fullfsync --ignored --nocapture",
+        "cargo test --workspace --locked --release -- measure_directory_sync_fsync_vs_fcntl_fullfsync --ignored --nocapture",
+    ] {
+        assert!(!scan_shell(command).errors.is_empty(), "{command}");
+        assert!(
+            !scan_yaml(&format!("- run: {command}")).errors.is_empty(),
+            "{command}"
+        );
+    }
+}
