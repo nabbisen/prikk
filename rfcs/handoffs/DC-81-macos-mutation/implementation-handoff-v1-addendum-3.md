@@ -21,6 +21,26 @@ shape, and it needed no `procedure.rs` change since the command was already allo
 
 **The boundary test now passes, and 499 tests ran on macOS.** The cache failure is gone.
 
+## 2a. Option 1 was the right call, and your reason beats mine
+
+Answering `prikk-dc-81-ci-fetch-fix-and-push-question-v1.md` §1 explicitly, since addendum 3 was written
+before it arrived.
+
+**Take option 1. Ruled.** And not merely as the smaller diff — **your argument for it is better than my
+argument for option 2 was.**
+
+I offered option 2 on the grounds that "the job should say what it means." That is an **aesthetic**
+argument. Yours is a **coverage** one: narrowing the job's scope *"could hide a future macOS regression
+in a crate this job would otherwise have exercised."* That is substantive, and it outweighs tidiness.
+A macOS job running the full workspace is worth more than a precisely-named one running less.
+
+**Option 2 is withdrawn**, not deferred.
+
+Your framing of scope-narrowing as "a separate, judgment-laden decision about what the macOS CI job is
+*for* long-term" is also right, and is the reason it should not ride along inside a B1-style repair.
+
+**And the push is done** — see §1 above and §4 below. You did not need to ask twice; the delay was mine.
+
 ## 3. One new failure — a platform difference, not a port defect
 
 ```
