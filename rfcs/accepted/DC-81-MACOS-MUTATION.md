@@ -97,7 +97,7 @@ before it lowers it; the reduction is the next two increments' job, not DC-76's.
   read-only support silently everywhere else. **`#[cfg(any(linux, macos, windows))]` is therefore not
   the right end state either** — the fallback arm must remain.
 
-**Measurable: the `fsutil/` gate count in single digits.**
+**Measurable: the `fsutil/` gate count in single digits — re-scoped 2026-08-09 after DC-82.** The dispatch layer is done (`anchored.rs` 43 → 14, all call sites unconditional, remaining gates scaling with platform count not call-site count). **Whole-tree single digits was miscalibrated by the architect**: `directory.rs`/`read.rs`/`regular.rs`/`immutable.rs` carry per-platform *type and primitive* differences beneath the contract, which the dispatch pattern cannot reach. **Collapsing that layer is a Windows-increment target**, since those helpers are Unix-only and Windows will not use them — the seam falls out of that work naturally.
 
 **Scoped honestly across increments.** DC-81 **cannot** reach that alone — the paired fallback arms must
 still exist while Windows is unimplemented. So:
