@@ -83,6 +83,15 @@ pub fn add_trusted_maintainer(
     let keys_dir = layout.repository_relative(&layout.maintainer_trust_keys_dir())?;
     ensure_directory_required(layout.repository_mutation_root(), &keys_dir)?;
 
+    // Runs before read_existing_key, and unconditionally, so a case-insensitive filesystem's own
+    // folding (APFS) can never stand in for this check: read_existing_key("dev-maintainer") returning
+    // "Dev-Maintainer"'s file would otherwise be indistinguishable from a genuine idempotent re-add,
+    // silently conflating two key ids under one physical file (found on macOS CI after Stage 1 merged
+    // — dc72_path_safety_collisions.rs::maintainer_key_id_rejects_case_insensitive_collision).
+    // Excludes exact self-matches, so a real idempotent or TOFU-refusal re-add of the same key id is
+    // unaffected.
+    validate_no_maintainer_key_id_collision(layout, &keys_dir, key_id)?;
+
     match read_existing_key(layout, key_id)? {
         Some(existing) if existing == public_key => {}
         Some(_) => {
@@ -91,7 +100,6 @@ pub fn add_trusted_maintainer(
             )));
         }
         None => {
-            validate_no_maintainer_key_id_collision(layout, &keys_dir, key_id)?;
             let key_path = layout.maintainer_trust_key_path(key_id)?;
             let key_relative = layout.repository_relative(&key_path)?;
             let public_key_text = format!("{}\n", to_hex(&public_key));
@@ -164,12 +172,13 @@ fn load_policy_key_ids(layout: &RepositoryLayout) -> Result<Vec<String>> {
 }
 
 /// Reject a maintainer key id whose ASCII-folded form collides with an existing key file other than
-/// itself (DC-72). Re-adopting `key_id` unchanged is not a collision with itself — but by the time
-/// this runs, `add_trusted_maintainer` has already handled the exact-match and conflicting-match
-/// cases, so `key_id` reaching here is always genuinely new. Folds through `prikk_object::ascii_fold`,
-/// the one shared folding definition (DC-72 design ruling,
-/// `rfcs/accepted/DC-72-PATH-SAFETY-CONFORMANCE.md` §3.5) — see its doc comment for the recorded
-/// NFC/NFD limitation this inherits.
+/// itself (DC-72). Runs unconditionally, before any filesystem lookup keyed on `key_id` — a
+/// case-insensitive filesystem (APFS) can fold a genuinely different id onto an existing key's file,
+/// which must never be mistaken for that id's own idempotent or TOFU-refusal re-add. Re-adopting
+/// `key_id` unchanged (same exact string) is not a collision with itself; every other case-insensitive
+/// match is. Folds through `prikk_object::ascii_fold`, the one shared folding definition (DC-72 design
+/// ruling, `rfcs/accepted/DC-72-PATH-SAFETY-CONFORMANCE.md` §3.5) — see its doc comment for the
+/// recorded NFC/NFD limitation this inherits.
 fn validate_no_maintainer_key_id_collision(
     layout: &RepositoryLayout,
     keys_dir_relative: &std::path::Path,
