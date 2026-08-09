@@ -77,7 +77,7 @@ pub(crate) struct OsEntropySource;
 
 impl NodeIdEntropySource for OsEntropySource {
     fn fill_node_id_bytes(&mut self, out: &mut [u8; 32]) -> Result<(), NodeIdMintError> {
-        getrandom::getrandom(out).map_err(|e| NodeIdMintError::EntropyUnavailable(e.to_string()))
+        getrandom::fill(out).map_err(|e| NodeIdMintError::EntropyUnavailable(e.to_string()))
     }
 }
 

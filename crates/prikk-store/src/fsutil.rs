@@ -56,7 +56,7 @@ pub(crate) fn temporary_path(path: &Path) -> Result<PathBuf> {
         ));
     };
     let mut random = [0_u8; 16];
-    getrandom::getrandom(&mut random)
+    getrandom::fill(&mut random)
         .map_err(|error| PrikkError::Io(format!("temporary path randomness failed: {error}")))?;
     let mut name = file_name.to_os_string();
     name.push(format!(

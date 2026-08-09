@@ -35,7 +35,7 @@ impl Ed25519KeyPair {
     /// Fails closed if the OS entropy source is unavailable.
     pub fn generate() -> Result<Self> {
         let mut seed = [0_u8; ED25519_KEY_LEN];
-        getrandom::getrandom(&mut seed)
+        getrandom::fill(&mut seed)
             .map_err(|e| PrikkError::Integrity(format!("OS CSPRNG unavailable: {e}")))?;
         Ok(Self::from_seed(&seed))
     }
