@@ -76,7 +76,10 @@ pub use active::{
 };
 pub use author_signing::{AuthorSigner, Ed25519AuthorSigner, author_signature};
 pub use block_state::{derive_next_state_root, validate_block_v2_shape};
-pub use bundle::{BundleExportReport, BundleImportReport, export_bundle, import_bundle};
+pub use bundle::{
+    BundleExportReport, BundleImportOptions, BundleImportReport, DEFAULT_BUNDLE_MAX_OBJECT_COUNT,
+    DEFAULT_BUNDLE_MAX_TOTAL_BYTES, export_bundle, import_bundle,
+};
 pub use checkout::{
     CheckoutMaterialization, CheckoutPlan, DEFAULT_CHECKOUT_REF, SnapshotCheckoutPlan,
     prepare_checkout_plan, prepare_snapshot_checkout_plan,

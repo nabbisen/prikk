@@ -1,5 +1,7 @@
 //! Received-ref pointer storage tests.
 
+mod proptest_decode_received_pointer;
+
 use prikk_object::ObjectId;
 
 use crate::received::{list_received_pointers, read_received_pointer, validate_received_ref};

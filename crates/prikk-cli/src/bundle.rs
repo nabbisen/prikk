@@ -12,7 +12,10 @@
 
 use std::path::PathBuf;
 
-use prikk_store::{export_bundle, import_bundle};
+use prikk_store::{
+    BundleImportOptions, DEFAULT_BUNDLE_MAX_OBJECT_COUNT, DEFAULT_BUNDLE_MAX_TOTAL_BYTES,
+    export_bundle, import_bundle,
+};
 
 /// Dispatch `prikk bundle [export|import]`.
 pub fn run_bundle(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
@@ -54,7 +57,8 @@ fn run_import(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
             parsed.input.display()
         )
     })?;
-    let report = import_bundle(&layout, &bytes).map_err(|err| err.to_string())?;
+    let options = bundle_import_options_from_env()?;
+    let report = import_bundle(&layout, &bytes, &options).map_err(|err| err.to_string())?;
     println!("received {}", report.ref_name);
     println!("RefState: {}", report.ref_state_id);
     println!("objects: {}", report.object_count);
@@ -64,6 +68,33 @@ fn run_import(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
          `trust maintainer add` to trust the sealing key, then `merge` to incorporate this history"
     );
     Ok(())
+}
+
+/// DC-86: `BundleImportOptions` from `PRIKK_BUNDLE_MAX_OBJECTS`/`PRIKK_BUNDLE_MAX_BYTES`, in
+/// `ActivePatchThresholds::from_env`'s exact shape (DC-57) — absent means the documented default;
+/// present but non-numeric or zero is a hard error, never a silent fallback to the default.
+fn bundle_import_options_from_env() -> std::result::Result<BundleImportOptions, String> {
+    let max_object_count =
+        parse_bundle_limit_env("PRIKK_BUNDLE_MAX_OBJECTS", DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let max_total_bytes =
+        parse_bundle_limit_env("PRIKK_BUNDLE_MAX_BYTES", DEFAULT_BUNDLE_MAX_TOTAL_BYTES)?;
+    Ok(BundleImportOptions::default_limits()
+        .with_max_object_count(max_object_count)
+        .with_max_total_bytes(max_total_bytes))
+}
+
+fn parse_bundle_limit_env(name: &str, default: usize) -> std::result::Result<usize, String> {
+    let Ok(raw) = std::env::var(name) else {
+        return Ok(default);
+    };
+    let trimmed = raw.trim();
+    let value: usize = trimmed
+        .parse()
+        .map_err(|_| format!("{name} must be a positive integer, got {raw:?}"))?;
+    if value == 0 {
+        return Err(format!("{name} must be greater than zero, got 0"));
+    }
+    Ok(value)
 }
 
 struct ExportArgs {

@@ -23,6 +23,52 @@ use crate::refs::RefStore;
 
 const BUNDLE_MAGIC: &[u8; 8] = b"PBNDL001";
 
+/// DC-86 default hard block on a bundle's declared object count, checked as early as the format
+/// allows — right after the count header field, before a single object is decoded. Not a claim about
+/// what any real bundle needs; a ceiling an operator can rely on existing at all.
+pub const DEFAULT_BUNDLE_MAX_OBJECT_COUNT: usize = 100_000;
+
+/// DC-86 default hard block on a bundle's total encoded byte length, checked before any decoding
+/// begins. This length-prefixed format can never decode to more logical content than its encoded
+/// input size, so bounding the input bytes is a tight, cheap proxy for bounding decoded bytes —
+/// cheaper than decoding first only to discover the result should have been refused. 256 MiB.
+pub const DEFAULT_BUNDLE_MAX_TOTAL_BYTES: usize = 256 * 1024 * 1024;
+
+/// DC-86 resource bound for [`import_bundle`], checked before any object is decoded or written —
+/// DC-57's shape: a hard block ahead of any write, with a documented default the CLI may override.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BundleImportOptions {
+    /// Maximum objects a bundle may declare. Refused before the decode loop runs.
+    pub max_object_count: usize,
+    /// Maximum encoded byte length a bundle may have. Refused before `decode_bundle` runs at all.
+    pub max_total_bytes: usize,
+}
+
+impl BundleImportOptions {
+    /// [`DEFAULT_BUNDLE_MAX_OBJECT_COUNT`] and [`DEFAULT_BUNDLE_MAX_TOTAL_BYTES`].
+    #[must_use]
+    pub const fn default_limits() -> Self {
+        Self {
+            max_object_count: DEFAULT_BUNDLE_MAX_OBJECT_COUNT,
+            max_total_bytes: DEFAULT_BUNDLE_MAX_TOTAL_BYTES,
+        }
+    }
+
+    /// Override the maximum object count.
+    #[must_use]
+    pub const fn with_max_object_count(mut self, max_object_count: usize) -> Self {
+        self.max_object_count = max_object_count;
+        self
+    }
+
+    /// Override the maximum total encoded byte length.
+    #[must_use]
+    pub const fn with_max_total_bytes(mut self, max_total_bytes: usize) -> Self {
+        self.max_total_bytes = max_total_bytes;
+        self
+    }
+}
+
 /// Summary of a bundle export.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BundleExportReport {
@@ -183,8 +229,19 @@ pub fn export_bundle(
 /// will report as untrusted until the operator explicitly runs `trust maintainer add` for the key that
 /// sealed them. That is a deliberate choice, not an oversight: auto-adopting a key seen in imported
 /// history would be a new, unreviewed trust mechanism, exactly what §D6 rules out.
-pub fn import_bundle(layout: &RepositoryLayout, bytes: &[u8]) -> Result<BundleImportReport> {
-    let (origin_ref_name, objects) = decode_bundle(bytes)?;
+pub fn import_bundle(
+    layout: &RepositoryLayout,
+    bytes: &[u8],
+    options: &BundleImportOptions,
+) -> Result<BundleImportReport> {
+    if bytes.len() > options.max_total_bytes {
+        return Err(PrikkError::MalformedData(format!(
+            "bundle is {} bytes, over the configured limit of {} bytes",
+            bytes.len(),
+            options.max_total_bytes
+        )));
+    }
+    let (origin_ref_name, objects) = decode_bundle(bytes, options.max_object_count)?;
     let Some(ref_state_envelope) = objects.first() else {
         return Err(PrikkError::MalformedData(
             "bundle contains no objects".to_string(),
@@ -241,7 +298,7 @@ fn encode_bundle(ref_name: &str, objects: &[ObjectEnvelope]) -> Result<Vec<u8>> 
     Ok(out)
 }
 
-fn decode_bundle(bytes: &[u8]) -> Result<(String, Vec<ObjectEnvelope>)> {
+fn decode_bundle(bytes: &[u8], max_object_count: usize) -> Result<(String, Vec<ObjectEnvelope>)> {
     let mut cursor = ByteCursor::new(bytes);
     let magic = cursor.read_array::<8>()?;
     if &magic != BUNDLE_MAGIC {
@@ -254,6 +311,14 @@ fn decode_bundle(bytes: &[u8]) -> Result<(String, Vec<ObjectEnvelope>)> {
         PrikkError::MalformedData(format!("invalid bundle ref name utf-8: {err}"))
     })?;
     let count = cursor.read_u64()?;
+    // DC-86: refused here, before the loop below decodes a single object — a declared count over
+    // the limit must not cost more than reading one u64 to reject, regardless of how large `count`
+    // claims to be or how much of `bytes` actually backs it.
+    if count > len_to_u64(max_object_count)? {
+        return Err(PrikkError::MalformedData(format!(
+            "bundle declares {count} objects, over the configured limit of {max_object_count}"
+        )));
+    }
     let mut objects = Vec::new();
     for _ in 0..count {
         let encoded = cursor.read_bytes_u64()?;

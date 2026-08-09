@@ -1,8 +1,10 @@
 //! Bundle export/import tests.
 
+mod proptest_decode_bundle;
+
 use prikk_object::{BlockKind, ObjectType};
 
-use crate::bundle::{export_bundle, import_bundle};
+use crate::bundle::{BundleImportOptions, export_bundle, import_bundle};
 use crate::received::read_received_pointer;
 use crate::test_support::{
     signed_block, signed_patch_blob_envelope, signed_patch_envelope, signed_ref_state_envelope,
@@ -60,9 +62,10 @@ fn import_of_malformed_bytes_fails_closed() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        assert!(import_bundle(&layout, b"not a bundle").is_err());
-        assert!(import_bundle(&layout, b"PBNDL001").is_err());
-        assert!(import_bundle(&layout, &[]).is_err());
+        let options = BundleImportOptions::default_limits();
+        assert!(import_bundle(&layout, b"not a bundle", &options).is_err());
+        assert!(import_bundle(&layout, b"PBNDL001", &options).is_err());
+        assert!(import_bundle(&layout, &[], &options).is_err());
     }
     let _ = std::fs::remove_dir_all(root);
 }
@@ -82,7 +85,7 @@ fn export_then_import_carries_the_full_genesis_complete_closure() -> prikk_error
 
     let target_root = unique_temp_dir("bundle-import-target");
     let target = RepositoryLayout::init(target_root.clone())?;
-    let import_report = import_bundle(&target, &bytes)?;
+    let import_report = import_bundle(&target, &bytes, &BundleImportOptions::default_limits())?;
     assert_eq!(import_report.ref_name, "remotes/heads/main");
     assert_eq!(import_report.object_count, 5);
     assert_eq!(import_report.written_object_count, 5);
@@ -118,7 +121,7 @@ fn import_never_writes_a_local_ref_pointer() -> prikk_error::Result<()> {
     let before = ref_store.list_ref_pointers()?;
     assert!(before.is_empty());
 
-    import_bundle(&target, &bytes)?;
+    import_bundle(&target, &bytes, &BundleImportOptions::default_limits())?;
 
     let after = RefStore::new(target.clone()).list_ref_pointers()?;
     assert_eq!(
@@ -140,12 +143,126 @@ fn reimporting_the_same_bundle_is_idempotent() -> prikk_error::Result<()> {
 
     let target_root = unique_temp_dir("bundle-reimport-target");
     let target = RepositoryLayout::init(target_root.clone())?;
-    let first = import_bundle(&target, &bytes)?;
+    let options = BundleImportOptions::default_limits();
+    let first = import_bundle(&target, &bytes, &options)?;
     assert_eq!(first.written_object_count, 5);
 
-    let second = import_bundle(&target, &bytes)?;
+    let second = import_bundle(&target, &bytes, &options)?;
     assert_eq!(second.written_object_count, 0);
     assert_eq!(second.ref_state_id, first.ref_state_id);
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// DC-86 criterion 3, the negative control: a bundle whose declared object count is exactly at the
+/// limit is accepted, and the identical bundle against a limit one below its actual count is refused.
+/// A bound nobody has seen fire is a bound nobody knows exists.
+#[test]
+fn import_object_count_limit_fires_exactly_at_the_boundary() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("bundle-limit-count-boundary-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    seal_two_block_history(&source)?;
+    let (report, bytes) = export_bundle(&source, "heads/main")?;
+    assert_eq!(report.object_count, 5);
+
+    let under_root = unique_temp_dir("bundle-limit-count-boundary-under");
+    let under_target = RepositoryLayout::init(under_root.clone())?;
+    let refused = import_bundle(
+        &under_target,
+        &bytes,
+        &BundleImportOptions::default_limits().with_max_object_count(4),
+    );
+    assert!(
+        refused.is_err(),
+        "a limit one below the actual count (5) must refuse"
+    );
+
+    let at_root = unique_temp_dir("bundle-limit-count-boundary-at");
+    let at_target = RepositoryLayout::init(at_root.clone())?;
+    let accepted = import_bundle(
+        &at_target,
+        &bytes,
+        &BundleImportOptions::default_limits().with_max_object_count(5),
+    );
+    assert!(
+        accepted.is_ok(),
+        "a limit exactly at the actual count (5) must accept"
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(under_root);
+    let _ = std::fs::remove_dir_all(at_root);
+    Ok(())
+}
+
+/// The same negative control for the total-bytes bound: one byte short of the encoded bundle's own
+/// length refuses; the exact length accepts.
+#[test]
+fn import_total_bytes_limit_fires_exactly_at_the_boundary() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("bundle-limit-bytes-boundary-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    seal_two_block_history(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+
+    let under_root = unique_temp_dir("bundle-limit-bytes-boundary-under");
+    let under_target = RepositoryLayout::init(under_root.clone())?;
+    let refused = import_bundle(
+        &under_target,
+        &bytes,
+        &BundleImportOptions::default_limits().with_max_total_bytes(bytes.len() - 1),
+    );
+    assert!(
+        refused.is_err(),
+        "a byte limit one below the bundle's own length must refuse"
+    );
+
+    let at_root = unique_temp_dir("bundle-limit-bytes-boundary-at");
+    let at_target = RepositoryLayout::init(at_root.clone())?;
+    let accepted = import_bundle(
+        &at_target,
+        &bytes,
+        &BundleImportOptions::default_limits().with_max_total_bytes(bytes.len()),
+    );
+    assert!(
+        accepted.is_ok(),
+        "a byte limit exactly at the bundle's own length must accept"
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(under_root);
+    let _ = std::fs::remove_dir_all(at_root);
+    Ok(())
+}
+
+/// DC-86 criterion 2, measured rather than asserted: a refused over-limit import leaves the target's
+/// object store with exactly the same object count as before the attempt — "it returned an error"
+/// does not by itself prove nothing was written.
+#[test]
+fn import_refused_over_the_object_count_limit_writes_nothing() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("bundle-limit-writes-nothing-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    seal_two_block_history(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+
+    let target_root = unique_temp_dir("bundle-limit-writes-nothing-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let before = crate::verify_repository(&target)?.checked_objects;
+
+    let refused = import_bundle(
+        &target,
+        &bytes,
+        &BundleImportOptions::default_limits().with_max_object_count(4),
+    );
+    assert!(refused.is_err());
+
+    let after = crate::verify_repository(&target)?.checked_objects;
+    assert_eq!(
+        before, after,
+        "a refused import must leave the object store's checked-object count unchanged"
+    );
+    assert_eq!(before, 0);
 
     let _ = std::fs::remove_dir_all(source_root);
     let _ = std::fs::remove_dir_all(target_root);
