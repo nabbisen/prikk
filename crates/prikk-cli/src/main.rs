@@ -220,9 +220,13 @@ fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {
                 .ok_or_else(|| "trust maintainer add requires --public-key".to_string())?;
             let root = current_dir()?;
             let layout = open_repository(root)?;
-            let policy = add_trusted_maintainer(&layout, &key_id, &public_key)
+            let (adopted, newly_added) = add_trusted_maintainer(&layout, &key_id, &public_key)
                 .map_err(|err| err.to_string())?;
-            println!("trusted maintainer key: {}", policy.key_id);
+            if newly_added {
+                println!("trusted maintainer key: {}", adopted.key_id);
+            } else {
+                println!("maintainer key already trusted: {}", adopted.key_id);
+            }
             println!("policy: required=1");
             Ok(())
         }
