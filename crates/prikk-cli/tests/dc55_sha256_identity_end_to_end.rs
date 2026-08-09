@@ -35,6 +35,8 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+mod support;
+
 use prikk_store::RepositoryLayout;
 
 const FIXTURE: &str = concat!(
@@ -59,12 +61,8 @@ fn ok(output: &Output, what: &str) {
 }
 
 fn copy_fixture() -> PathBuf {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
     let mut dest = std::env::temp_dir();
-    dest.push(format!("prikk-dc55-e2e-{}-{nanos}", std::process::id()));
+    dest.push(format!("prikk-dc55-e2e-{}", support::unique_suffix()));
     copy_dir(Path::new(FIXTURE), &dest);
 
     let layout = RepositoryLayout::open(&dest).unwrap();

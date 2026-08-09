@@ -26,16 +26,31 @@ pub fn ok(output: &Output, what: &str) {
     );
 }
 
-pub fn unique_repo(tag: &str) -> PathBuf {
+/// DC-84: a temp-directory-naming suffix that is genuinely collision-free across threads of one test
+/// binary, not just across separate processes. Every prikk-cli integration test file that built its
+/// own `unique_repo`/`unique_root`/`unique_dir` from `process::id()` plus a nanosecond timestamp
+/// shared the same latent defect DC-83 found and measured: `process::id()` is constant for every
+/// thread of one process, so it cannot distinguish two racing threads of the *same* binary, and a
+/// bare-barrier stress test showed real nanosecond collisions under thread contention (214 in
+/// 128,000 samples — a rate, not a hypothetical). The `fetch_add` sequence number below is the only
+/// part that actually guarantees uniqueness, regardless of clock resolution or thread scheduling —
+/// confirmed by the same stress test at zero collisions once added (see the crate's
+/// `helper_uniqueness` test module). Process id and the timestamp are kept: the id still separates
+/// this binary's temp directories from an unrelated process using the same scheme, and the timestamp
+/// keeps directory names human-orderable.
+pub fn unique_suffix() -> String {
+    static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
+    let sequence = SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    format!("{}-{nanos}-{sequence}", std::process::id())
+}
+
+pub fn unique_repo(tag: &str) -> PathBuf {
     let mut dir = std::env::temp_dir();
-    dir.push(format!(
-        "prikk-cli-dc67-{tag}-{}-{nanos}",
-        std::process::id()
-    ));
+    dir.push(format!("prikk-cli-dc67-{tag}-{}", unique_suffix()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }

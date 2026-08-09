@@ -1,7 +1,14 @@
 //! DC-38 signer-backed seal recovery through the release-facing CLI.
 
+// DC-84: pulls in `tests/support/mod.rs` for `unique_suffix()`, and that shared file's own
+// (pre-existing, unrelated) helpers use `.unwrap()` throughout — matching every other prikk-cli
+// integration test file that already carries this allow.
+#![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+
+mod support;
 
 use prikk_store::{Ed25519MaintainerSigner, MaintainerSigner, RefStore, RepositoryLayout};
 
@@ -247,11 +254,7 @@ fn seal_rejects_format2_log_lead() -> TestResult {
 }
 
 fn unique_root(tag: &str) -> TestResult<PathBuf> {
-    let nonce = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_nanos();
-    let path =
-        std::env::temp_dir().join(format!("prikk-dc38-{tag}-{}-{nonce}", std::process::id()));
+    let path = std::env::temp_dir().join(format!("prikk-dc38-{tag}-{}", support::unique_suffix()));
     std::fs::create_dir_all(&path)?;
     Ok(path)
 }

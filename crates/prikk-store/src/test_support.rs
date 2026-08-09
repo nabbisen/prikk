@@ -223,22 +223,32 @@ pub(crate) fn create_fifo_for_test(path: &std::path::Path, mode: u32) -> std::io
     }
 }
 
+/// DC-84: routed through `unique_suffix()` below, which is the only part that actually guarantees
+/// collision-freedom under thread contention.
 pub(crate) fn unique_temp_dir(name: &str) -> std::path::PathBuf {
     let mut path = std::env::temp_dir();
-    path.push(format!(
-        "prikk-pr014-{name}-{}-{}",
-        std::process::id(),
-        monotonic_suffix()
-    ));
+    path.push(format!("prikk-pr014-{name}-{}", unique_suffix()));
     assert!(std::fs::create_dir_all(&path).is_ok());
     path
 }
 
-fn monotonic_suffix() -> u128 {
-    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+/// DC-84: renamed from `monotonic_suffix`, which was wrong — it returned a wall-clock nanosecond
+/// timestamp with **no counter at all**, and the misleading name caused a real error (DC-83's
+/// handoff cited this function, by name, as the correct pattern to mirror, without reading its
+/// body; blindly mirroring it would have left DC-83's bug in place, since `process::id()` is
+/// constant across every thread of one process and cannot distinguish two racing threads of the
+/// same test binary). Confirmed empirically (DC-83): a barrier-synchronized stress test against the
+/// bare timestamp produced real collisions under thread contention (214 in 128,000 samples), and
+/// zero once the `fetch_add` sequence number below was added — that atomic increment, not the
+/// timestamp or the process id, is what makes this genuinely unique.
+fn unique_suffix() -> String {
+    static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nanos = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
         Ok(duration) => duration.as_nanos(),
         Err(_) => 0,
-    }
+    };
+    let sequence = SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    format!("{}-{nanos}-{sequence}", std::process::id())
 }
 
 mod snapshot_history;
@@ -449,4 +459,48 @@ pub(crate) fn signed_block_with_state_root(
         ObjectEnvelope::unsigned(ObjectType::Block, 2, payload_bytes.unwrap_or_default());
     assert!(envelope.add_signature(maintainer_signature()).is_ok());
     envelope
+}
+
+#[cfg(test)]
+mod tests {
+    //! DC-84: one demonstration for `unique_suffix()`, in the same shape DC-83 used to disprove the
+    //! naive "process id plus timestamp" pattern — a synchronized-barrier thread-contention test.
+    //! `unique_temp_dir` (used by all 580+ other tests in this crate) routes through this same
+    //! function, so one demonstration here covers every caller.
+
+    use std::collections::HashSet;
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    #[test]
+    fn unique_suffix_has_no_collisions_under_synchronized_thread_contention() {
+        let threads = 64;
+        let rounds = 200;
+        let mut total_samples = 0usize;
+        let mut all_unique = HashSet::new();
+        for _ in 0..rounds {
+            let barrier = Arc::new(Barrier::new(threads));
+            let handles: Vec<_> = (0..threads)
+                .map(|_| {
+                    let barrier = Arc::clone(&barrier);
+                    thread::spawn(move || {
+                        barrier.wait();
+                        super::unique_suffix()
+                    })
+                })
+                .collect();
+            for handle in handles {
+                let value = match handle.join() {
+                    Ok(value) => value,
+                    Err(_) => panic!("stress-test thread panicked"),
+                };
+                total_samples += 1;
+                assert!(
+                    all_unique.insert(value.clone()),
+                    "unique_suffix() produced a duplicate value under synchronized contention: {value}"
+                );
+            }
+        }
+        assert_eq!(all_unique.len(), total_samples);
+    }
 }

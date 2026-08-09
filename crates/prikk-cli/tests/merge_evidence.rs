@@ -1,5 +1,10 @@
 //! CLI regression tests for the read-only `merge-evidence` command.
 
+// DC-84: `merge_evidence_support` now pulls in `tests/support/mod.rs` for `unique_suffix()`, and
+// that shared file's own (pre-existing, unrelated) helpers use `.unwrap()` throughout — matching
+// every other prikk-cli integration test file that already carries this allow.
+#![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
+
 mod merge_evidence_support;
 
 use merge_evidence_support::*;

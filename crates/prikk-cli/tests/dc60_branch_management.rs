@@ -11,6 +11,8 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+mod support;
+
 use prikk_object::{ObjectType, RefKind, RefStatePayload};
 use prikk_store::{
     Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, RefStore, RepositoryLayout,
@@ -42,15 +44,8 @@ fn fail(output: &Output, what: &str) {
 }
 
 fn unique_repo(tag: &str) -> PathBuf {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
     let mut dir = std::env::temp_dir();
-    dir.push(format!(
-        "prikk-cli-dc60-{tag}-{}-{nanos}",
-        std::process::id()
-    ));
+    dir.push(format!("prikk-cli-dc60-{tag}-{}", support::unique_suffix()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }

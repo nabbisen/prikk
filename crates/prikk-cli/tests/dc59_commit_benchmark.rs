@@ -74,6 +74,8 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+
+mod support;
 use std::time::{Duration, Instant};
 
 use prikk_store::{Ed25519MaintainerSigner, MaintainerSigner};
@@ -196,14 +198,10 @@ fn maintainer_public_key_hex() -> String {
 }
 
 fn unique_dir(tag: &str) -> PathBuf {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
     let mut dir = std::env::temp_dir();
     dir.push(format!(
-        "prikk-dc59-bench-{tag}-{}-{nanos}",
-        std::process::id()
+        "prikk-dc59-bench-{tag}-{}",
+        support::unique_suffix()
     ));
     dir
 }

@@ -1,5 +1,8 @@
 //! Shared helpers for `merge_evidence` integration tests.
 
+#[path = "../support/mod.rs"]
+mod support;
+
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::io;
@@ -53,13 +56,10 @@ pub(crate) fn fail(output: &Output, what: &str) -> TestResult {
 }
 
 pub(crate) fn unique_repo(tag: &str) -> TestResult<PathBuf> {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_nanos();
     let mut dir = std::env::temp_dir();
     dir.push(format!(
-        "prikk-cli-merge-evidence-{tag}-{}-{nanos}",
-        std::process::id()
+        "prikk-cli-merge-evidence-{tag}-{}",
+        support::unique_suffix()
     ));
     std::fs::create_dir_all(&dir)?;
     Ok(dir)

@@ -11,6 +11,8 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+mod support;
+
 fn prikk(repo: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_prikk"));
     cmd.current_dir(repo);
@@ -37,15 +39,8 @@ fn fail(output: &Output, what: &str) {
 }
 
 fn unique_repo(tag: &str) -> PathBuf {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
     let mut dir = std::env::temp_dir();
-    dir.push(format!(
-        "prikk-cli-dc64-{tag}-{}-{nanos}",
-        std::process::id()
-    ));
+    dir.push(format!("prikk-cli-dc64-{tag}-{}", support::unique_suffix()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
