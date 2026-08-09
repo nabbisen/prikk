@@ -71,6 +71,46 @@ equally true on Linux and is not a new weakness, but it matters more where `fsyn
    mutation before criterion 5 holds. **The project has published a false portability claim once; it
    will not do so twice.**
 
+## 6. Architectural target, carried forward to the Windows increment
+
+**Recorded 2026-08-09 at the owner's request**, because it is exactly the kind of goal that drifts when
+nobody writes it down. This is the measure of whether DC-76 paid off.
+
+**Baseline today: 99 `target_os` references across `fsutil/`** — 31 `anchored.rs`, 23 `directory.rs`,
+16 `read.rs`, 13 `regular.rs`, 12 `immutable.rs`, 1 each `failpoints.rs`/`linux.rs`, 2 `contract.rs`.
+That is *up* from the 93 the prerequisite report counted, because DC-76 added the contract, the `linux`
+module, and two `cfg_attr` allowances. **A refactor that inserts an indirection layer raises the count
+before it lowers it; the reduction is the next two increments' job, not DC-76's.**
+
+**Target end state once every supported platform has an implementor:**
+
+- **Call sites carry no `target_os` at all.** Most of today's gates are *paired* — a real arm and a
+  `#[cfg(not(target_os = "linux"))]` arm returning `unsupported_mutation()`, repeated per function.
+  Each pair collapses to one unconditional call through the contract.
+- **Implementation modules stay gated.** `LinuxDurability` cannot compile where `rustix::fs` does not
+  exist. That gate is the definition of which implementation exists, not scaffolding.
+- **One selection point** resolving to the active implementor.
+- **The `not(any(...))` fallback survives — this one is load-bearing.** `unsupported_mutation()` returns
+  a **runtime** error, not a compile error, so `prikk-store` **compiles** on FreeBSD, illumos, or any
+  target with no implementor, and read-only commands still work there. **That is DC-71's guarantee.**
+  Deleting the gates outright would stop the crate compiling outside the implemented platforms and break
+  read-only support silently everywhere else. **`#[cfg(any(linux, macos, windows))]` is therefore not
+  the right end state either** — the fallback arm must remain.
+
+**Measurable: the `fsutil/` gate count in single digits.**
+
+**Scoped honestly across increments.** DC-81 **cannot** reach that alone — the paired fallback arms must
+still exist while Windows is unimplemented. So:
+
+- **For DC-81:** the count goes **down, not up**, and call sites move toward unconditional. Report the
+  before/after count.
+- **For the Windows increment:** single digits is a **criterion**, and this section is its source.
+
+**Likely further reduction:** Linux and macOS are both `rustix`-based Unix differing only at G3 (`fsync`
+versus `fcntl_fullfsync`), so they may collapse into one Unix implementor with a small internal gate
+rather than two types. Windows will genuinely stand alone. **Not prescribed here** — if the split proves
+cleaner in practice, that is a finding to report, not a target to force.
+
 ## 5. Non-goals
 
 - **Windows mutation.** Separate, and still carrying an unresolved dependency question.
