@@ -53,8 +53,13 @@ equally true on Linux and is not a new weakness, but it matters more where `fsyn
 1. §3 answered and reported before any design.
 2. `MacosDurability` implements `DurabilityContract`, with **G3 using `fcntl_fullfsync`** and the reason
    recorded at the call site.
-3. **DC-76's conformance suite passes on macOS unmodified.** A suite that must change to pass is a
-   **finding to report** — it would mean the contract was written to Linux rather than to the guarantee.
+3. **The conformance suite's assertion bodies pass on macOS unchanged.** **Amended 2026-08-09** — as
+   first written this said "passes on macOS unmodified", which §1's report showed is unsatisfiable: the
+   suite is `#[cfg(all(test, target_os = "linux"))]` at the module level and does not compile on macOS
+   at all, so relaxing a gate is itself a modification. Module gates may be relaxed and a
+   per-implementor `#[test]` wrapper added per assertion — both mechanical. **Any change to an assertion
+   body, or to what it asserts, is a finding to report**, because it would mean the contract was written
+   to Linux rather than to the guarantee.
 4. **DC-41's crash matrix passes on macOS**, through the same seams, module gate relaxed only.
 5. **A CI job runs the macOS mutation suite and is green** before any `target_os` gate is relaxed in a
    merged commit.
