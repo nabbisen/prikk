@@ -30,6 +30,9 @@ and differential evidence. **This deserves the same treatment.**
 1. **Does the upgrade raise MSRV above 1.85?** Stop and report if so — owner decision.
 2. **What changed in 3.x's verification semantics** relative to 2.x? Answer from the crate's own source
    and changelog, and **cite what you opened** — a path that cannot be opened is not evidence.
+   **Also cover `curve25519-dalek` 4.1.3 → 5.0.0**, which `ed25519-dalek 3` pulls along — found by
+   DC-79's probe 2026-08-09. It declares `rust-version: 1.85`, so MSRV holds, but a second major bump
+   in the signature path is in scope for this question.
 3. **Is any already-sealed signature affected?** The decisive question, and it must be answered by
    construction, not by reading.
 
@@ -38,14 +41,17 @@ and differential evidence. **This deserves the same treatment.**
 1. §2 answered and reported before any change.
 2. **A repository sealed with 2.x verifies identically under 3.x** — built with the old version, then
    verified with the new one, through the compiled binary. Not argued; constructed.
-3. **A negative control in both directions**, and this is the criterion that matters most:
+3. **`sha2` collapses back to a single version.** Added 2026-08-09 from DC-79's investigation:
+   `ed25519-dalek 3` requires `sha2 0.11`, so landing this increment after DC-79 returns the lock from
+   two `sha2` versions to one. Cheap to check, and it confirms the pair landed correctly.
+4. **A negative control in both directions**, and this is the criterion that matters most:
    - a **tampered** signature still fails under 3.x;
    - a signature 2.x **rejected** is still rejected under 3.x.
    The second is the one nobody thinks to test, and it is the failure direction that is silent.
-4. All existing tests pass unchanged. A test that must change is a finding to report.
-5. MSRV remains 1.85, or an owner ruling is obtained first.
-6. `ALLOWED_THIRD_PARTY` untouched — the crate is already permitted; only the version moves.
-7. Full gate set per `EXECUTION-ORDER.md` §6 rule 9, verbatim, with counts before and after.
+5. All existing tests pass unchanged. A test that must change is a finding to report.
+6. MSRV remains 1.85, or an owner ruling is obtained first.
+7. `ALLOWED_THIRD_PARTY` untouched — the crate is already permitted; only the version moves.
+8. Full gate set per `EXECUTION-ORDER.md` §6 rule 9, verbatim, with counts before and after.
 
 ## 4. Non-goals
 
