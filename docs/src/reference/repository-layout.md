@@ -174,10 +174,10 @@ trust/keys/maintainer/<key-id>.pub
 
 These files are written by `prikk trust maintainer add`, not by bare repository initialization.
 
-The trust policy currently supports one trusted MAINTAINER key with `required = 1`. The maintainer key
-file contains the trusted Ed25519 public key for that storage-safe key id. Seal checks the configured
-MAINTAINER signer against this repository-local policy before publication, and verify checks
-publication envelopes against the same local trust boundary.
+The trust policy holds a set of adopted MAINTAINER keys, with `required = 1` meaning any one adopted
+key's signature suffices. Each maintainer key file contains the trusted Ed25519 public key for its
+storage-safe key id. Seal checks the configured MAINTAINER signer against this repository-local policy
+before publication, and verify checks publication envelopes against the same local trust boundary.
 
 This trust store is authority for current publication-trust checks. It is not remote trust, global
 identity, key rotation, key revocation, hosted forge policy, or a multi-maintainer threshold system.
