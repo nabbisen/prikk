@@ -23,11 +23,24 @@ fn run(root: &Path, args: &[&str]) -> TestResult<Output> {
     Ok(prikk(root).args(args).output()?)
 }
 
+/// DC-83: the nanosecond timestamp alone was the defect — two threads of this same test binary can
+/// observe the identical value (confirmed empirically: a 64-thread synchronized-barrier stress test
+/// against bare `SystemTime::now()` nanoseconds produced real collisions, not a theoretical risk).
+/// Adding `process::id()` alone would not have closed it: every thread in this one binary shares one
+/// PID, so it cannot distinguish two racing threads — only a per-process atomic counter can. Combines
+/// the process id (matching `prikk-store::test_support::unique_temp_dir`'s shape, so a collision
+/// against a *different* binary's temp directory is still avoided) with a `fetch_add` counter that is
+/// unique for the life of this process regardless of clock resolution or thread scheduling.
 fn unique_root() -> TestResult<PathBuf> {
+    static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("prikk-format-transition-{nonce}"));
+    let sequence = SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!(
+        "prikk-format-transition-{}-{nonce}-{sequence}",
+        std::process::id()
+    ));
     std::fs::create_dir_all(&root)?;
     Ok(root)
 }
