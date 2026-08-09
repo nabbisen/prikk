@@ -161,6 +161,92 @@ trust claim that §3.1b rules out: A receiver cannot meaningfully check what it 
 nothing checks author signatures. This should be settled before this increment is sequenced, not
 discovered during it.
 
+## D. Design — authored 2026-08-09 by the architect, under rulings 1–4 and option B
+
+Design is the architect's (`EXECUTION-ORDER.md` §6 rule 1). This section is the design; §4's
+prerequisites are answered and accepted, and the developer implements from here.
+
+### D1. The finding that shapes everything: single-key trust breaks the *receiver's own* repository
+
+`verify/objects.rs:223` applies the publication-trust check to **`ObjectType::Block | RefState`** — so
+`verify_repository` already checks **every block** against the trusted maintainer policy, not merely ref
+publication objects. Combined with DC-11's single-key policy, that means:
+
+> **If Alice adopts Bob's key today, every block Alice sealed herself becomes untrusted, and her own
+> repository fails `verify`.**
+
+Option A was therefore never merely "less functional" — **it is destructive to the receiver.** The
+owner's instinct was right and the evidence is stronger than the argument that produced the ruling.
+
+### D2. Trust model — a set of adopted keys, and object-trust separated from ref-authority
+
+**The policy becomes a set.** `MaintainerTrustPolicy` holds `Vec<(key_id, public_key)>`; the parser
+accepts `keys = ["a", "b", …]` and `required = 1` retains its present meaning (**a block needs one
+trusted signature, not a threshold of several**). The on-disk shape already expresses this — DC-11 pinned
+the values, not the schema.
+
+**"Trusted for what?" — trusted to have sealed *objects*, not to advance *refs*.** This is the design's
+central answer, and it falls out of how the code already separates the two:
+
+- **Object trust** is what `verify` checks: a block is valid if *some* adopted key signed it.
+- **Ref authority** is a separate, local, CAS-guarded act. `RefStore::publish` requires a signature from
+  **this operator's** signer, and `verify_signer_trusted` gates sealing.
+
+**So adopting Bob's key lets Bob's blocks be valid objects here. It does not let Bob move any ref.**
+Advancing `heads/main` still requires a local seal by the local operator. The blast radius of adoption is
+therefore much smaller than "Bob is trusted", and it needs no ref-scoped trust machinery — which would
+mean making `verify`'s object scan ref-aware, a far larger change for no additional safety.
+
+### D3. Provenance — already intrinsic, and this is how RΔ5 is satisfied
+
+**No new provenance mechanism is needed, and none should be invented.** The sealer's `key_id` lives
+inside the block's own signature. It cannot be altered without invalidating that signature, and it cannot
+be stripped without making the block untrusted. **That is exactly RΔ5's "distinguishable at the object
+level, permanently and non-strippably"** — provenance recorded in the objects, not in documentation or a
+side file.
+
+**What is missing is only the reporting.** `verify` must surface, per block, **which key sealed it**, so
+an auditor can ask "which parts of this history did *I* seal?" and get an answer. That is a reporting
+change, not a format change.
+
+### D4. Import never advances a local ref
+
+An import writes **objects** and **adopted-key records**. It **must not** advance `heads/*` or create a
+ref the local operator did not ask for. Received refs land in a distinct namespace the local operator
+never seals to; incorporating that work into local history is an ordinary **merge** (DC-74/DC-75) —
+already built, already reviewed, already recording the merge structurally.
+
+**This is why exchange does not need a "pull" concept**: receive, then merge, using machinery that
+exists.
+
+### D5. The TOFU record
+
+Adoption binds, in the trust store: **key id, public key, the block id at which it was first accepted,
+and the ref name it arrived under.** Thereafter every exchange from that peer is checked against the
+recorded public key; a changed key for a known key id is **refused, not re-prompted**.
+
+**This is new construction**, not an extension — DC-11 declined to build TOFU and both
+`security-setup.md:67` and `trust-threat-model.md:61` say so today. Those two sentences must change in the
+same increment, or the docs become false.
+
+### D6. The exchange artifact
+
+A **verifiable subset**, never a summary — NFR-PERF-04's spirit forbids a bundle that is a new root of
+trust. It carries the objects reachable for the exchanged lineage, **genesis-complete** (ruling 2), and a
+receiver verifies it with **`verify_repository` unchanged**. The only new code is a serialization
+boundary and the import path.
+
+### D7. What the implementation must still answer, before writing code
+
+1. **Does the multi-key parser stay strict and fixed-shape?** DC-11's parser is deliberately not a general
+   TOML implementation. Extending it to a list must not turn it into one.
+2. **What does `required` mean once several keys exist?** This design says "one trusted signature
+   suffices"; confirm nothing in `trust.rs` or DC-11 assumed otherwise, and **report if it did**.
+3. **Which ref namespace do received refs land in**, and does anything today assume every ref under
+   `refs/` is locally sealed? Check `branch list`, `history`, `verify` counts.
+4. **Does `verify`'s per-block trust check cost change** when the policy is a set rather than one key? It
+   runs per block; `FINDINGS.md` already records `verify` as O(N³).
+
 ## 4. Blocking prerequisites
 
 - §3's five questions answered **from the code and the requirements**, reported before any design, in
