@@ -383,6 +383,6 @@ fn hex_prefix(hex: &str) -> String {
     hex.chars().take(2).collect()
 }
 
-fn ref_name_storage_key(ref_name: &str) -> String {
+pub(crate) fn ref_name_storage_key(ref_name: &str) -> String {
     to_hex(&sha256(ref_name.as_bytes()))
 }

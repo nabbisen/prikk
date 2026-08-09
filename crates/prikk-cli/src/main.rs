@@ -16,6 +16,7 @@ use std::process::ExitCode;
 
 mod args;
 mod branch;
+mod bundle;
 mod merge;
 mod output;
 mod seal;
@@ -38,13 +39,13 @@ use prikk_store::{
     ActiveRefMetadata, DEFAULT_ACTIVE_PATCH_LIMIT, DoctorRepairOptions, Ed25519AuthorSigner,
     Ed25519MaintainerSigner, MergeEvidenceTarget, RefStore, RepositoryFormat, RepositoryLayout,
     Wal, WorktreePatchCommitOptions, add_trusted_maintainer, append_rollback_draft,
-    commit_worktree_changes_signed, doctor_repository, load_ref_history,
-    materialize_patch_checkout, materialize_patch_checkout_with_deletions,
-    materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan,
-    prepare_merge_evidence, prepare_merge_plan, prepare_patch_inverse_plan,
-    prepare_patch_replay_plan, prepare_rollback_preview, prepare_snapshot_checkout_plan,
-    read_active_ref_metadata, repair_repository, verify_active_rollback_draft, verify_repository,
-    worktree_status,
+    commit_worktree_changes_signed, doctor_repository, list_received_pointers,
+    load_received_ref_history, load_ref_history, materialize_patch_checkout,
+    materialize_patch_checkout_with_deletions, materialize_snapshot_checkout,
+    plan_patch_checkout_deletions, prepare_checkout_plan, prepare_merge_evidence,
+    prepare_merge_plan, prepare_patch_inverse_plan, prepare_patch_replay_plan,
+    prepare_rollback_preview, prepare_snapshot_checkout_plan, read_active_ref_metadata,
+    repair_repository, verify_active_rollback_draft, verify_repository, worktree_status,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -86,6 +87,7 @@ fn run() -> std::result::Result<(), String> {
         Some("commit") => run_commit(args.collect()),
         Some("seal") => run_seal(args.collect()),
         Some("branch") => run_branch(args.collect()),
+        Some("bundle") => run_bundle(args.collect()),
         Some("tag") => run_tag(args.collect()),
         Some("trust") => run_trust(args.collect()),
         Some("status") => run_status(),
@@ -189,6 +191,11 @@ fn run_branch(args: Vec<String>) -> std::result::Result<(), String> {
 fn run_tag(args: Vec<String>) -> std::result::Result<(), String> {
     let root = current_dir()?;
     tag::run_tag(root, args)
+}
+
+fn run_bundle(args: Vec<String>) -> std::result::Result<(), String> {
+    let root = current_dir()?;
+    bundle::run_bundle(root, args)
 }
 
 fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {
@@ -352,8 +359,15 @@ fn parse_active_patch_threshold_env(
 fn run_log(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_log_args(args)?;
     let layout = open_repository(args.root)?;
-    let history =
-        load_ref_history(&layout, &args.ref_name, args.limit).map_err(|err| err.to_string())?;
+    // Received refs (DC-78 ruling 4) live under refs/received/, not refs/by-id/, and their
+    // RefState objects carry the origin's own name rather than the local "remotes/"-prefixed one
+    // — load_ref_history's pointer/name-match check can't resolve them, so route separately.
+    let history = if args.ref_name.starts_with("remotes/") {
+        load_received_ref_history(&layout, &args.ref_name, args.limit)
+    } else {
+        load_ref_history(&layout, &args.ref_name, args.limit)
+    }
+    .map_err(|err| err.to_string())?;
     print_history(&layout, &history);
     Ok(())
 }
@@ -495,6 +509,17 @@ fn run_verify(path: Option<String>) -> std::result::Result<(), String> {
     let layout = open_repository(root)?;
     let report = verify_repository(&layout).map_err(|err| err.to_string())?;
     print_verify_report(&layout, &report);
+    // Received refs (DC-78 ruling 4) are never read by verify_repository itself — every object
+    // they point at is already checked by the ordinary type-based object scan regardless of which
+    // ref (if any) points to it, so this is purely additive presentation, not a new check.
+    let received = list_received_pointers(&layout).map_err(|err| err.to_string())?;
+    println!("received refs: {}", received.len());
+    for pointer in &received {
+        println!(
+            "received-ref {}: {}",
+            pointer.ref_name, pointer.ref_state_id
+        );
+    }
     if report.has_unverifiable_state_roots() {
         Err("format-1 scaffold roots are not verifiable state commitments".to_string())
     } else if report.has_active_wal_metadata_integrity_issue() {

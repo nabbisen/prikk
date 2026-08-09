@@ -107,6 +107,68 @@ pub fn load_ref_history(
     })
 }
 
+/// Load history for a received ref (DC-78 ruling 4), newest first. Received refs have no ref-log
+/// chain of their own (`received.rs`'s single-overwrite pointer) — this walks the same
+/// `RefState.previous_ref_state_id` links as [`load_ref_history`], starting from the received tip.
+/// Each RefState's *embedded* name is checked against the origin's own name (the `remotes/` prefix is
+/// a local rename applied only to the received pointer, never written into the objects themselves —
+/// exactly why received refs cannot use `refs/by-id/`'s pointer format, whose consistency check
+/// requires the opposite: pointer name and embedded name to agree).
+pub fn load_received_ref_history(
+    layout: &RepositoryLayout,
+    received_ref_name: &str,
+    limit: usize,
+) -> Result<RefHistory> {
+    let Some(pointer) = crate::received::read_received_pointer(layout, received_ref_name)? else {
+        return Ok(RefHistory {
+            ref_name: received_ref_name.to_string(),
+            entries: Vec::new(),
+        });
+    };
+    let Some(origin_ref_name) = received_ref_name.strip_prefix("remotes/") else {
+        return Err(PrikkError::InvalidName(format!(
+            "{received_ref_name} is not a received ref"
+        )));
+    };
+    let object_store = FileObjectStore::new(layout.clone());
+    let mut current = Some(pointer.ref_state_id);
+    let mut entries = Vec::new();
+    let mut seen = HashSet::new();
+
+    while let Some(ref_state_id) = current {
+        if entries.len() >= limit {
+            break;
+        }
+        if !seen.insert(ref_state_id) {
+            return Err(PrikkError::Integrity(format!(
+                "RefState chain for {received_ref_name} contains a cycle at {ref_state_id}"
+            )));
+        }
+        let ref_state = read_ref_state(&object_store, ref_state_id, origin_ref_name)?;
+        let block = read_block(&object_store, ref_state.target_object_id)?;
+        let rollback_patch_count =
+            count_rollback_patches(&object_store, ref_state.target_object_id, &block.patch_ids)?;
+        entries.push(HistoryEntry {
+            ref_state_id,
+            block_id: ref_state.target_object_id,
+            update_seq: ref_state.update_seq,
+            previous_ref_state_id: ref_state.previous_ref_state_id,
+            block_kind: block.kind,
+            parent_count: block.parent_block_ids.len(),
+            patch_count: block.patch_ids.len(),
+            required_attestation_count: ref_state.required_attestation_ids.len(),
+            rollback_patch_count,
+            is_rollback_block: rollback_patch_count != 0,
+        });
+        current = ref_state.previous_ref_state_id;
+    }
+
+    Ok(RefHistory {
+        ref_name: received_ref_name.to_string(),
+        entries,
+    })
+}
+
 fn read_ref_state(
     object_store: &FileObjectStore,
     ref_state_id: ObjectId,

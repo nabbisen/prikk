@@ -1,0 +1,271 @@
+//! History exchange artifact (DC-78 §D6): a **verifiable subset**, never a summary. A bundle carries
+//! the exported ref's RefState plus every object reachable from its target Block back to genesis
+//! (ruling 2) — the same objects `verify_repository` already checks for any locally sealed history,
+//! unconditionally, regardless of which ref (if any) points to them. Import writes exactly those
+//! objects plus one `received` pointer (`crate::received`); it never touches `refs/by-id/`, never
+//! advances a local ref, and never adopts a MAINTAINER key into the local trust policy — adopting
+//! trust for an imported key remains the operator's own explicit `trust maintainer add` call. The
+//! receiver's confidence comes from running ordinary, unmodified `verify_repository` afterward: this
+//! module adds a serialization boundary and an import path, and deliberately no new verification
+//! machinery (§D6's "no new verification path").
+
+use std::collections::BTreeSet;
+
+use prikk_error::{PrikkError, Result};
+use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload};
+
+use crate::byte_cursor::ByteCursor;
+use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_bytes_u64, push_u64};
+use crate::fsutil::len_to_u64;
+use crate::layout::RepositoryLayout;
+use crate::object_store::{FileObjectStore, ObjectWriter};
+use crate::refs::RefStore;
+
+const BUNDLE_MAGIC: &[u8; 8] = b"PBNDL001";
+
+/// Summary of a bundle export.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BundleExportReport {
+    /// The exported ref's own name in the source repository.
+    pub ref_name: String,
+    /// The exported ref's target Block at export time.
+    pub tip_block_id: ObjectId,
+    /// Total objects carried in the bundle (the RefState plus its full genesis-complete closure).
+    pub object_count: usize,
+}
+
+/// Summary of a bundle import.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BundleImportReport {
+    /// The local received-namespace name the import was recorded under (`remotes/<origin ref name>`).
+    pub ref_name: String,
+    /// The imported RefState's object id, now the received pointer's target.
+    pub ref_state_id: ObjectId,
+    /// Total objects the bundle carried.
+    pub object_count: usize,
+    /// Objects that did not already exist in this repository's object store before this import.
+    pub written_object_count: usize,
+}
+
+/// Export a genesis-complete, verifiable subset of objects for `ref_name` (DC-78 §D4/§D6). Walks the
+/// full Block ancestor closure (all parents, not mainline-only — ruling 2's "genesis-complete") plus
+/// every Patch and Blob those blocks reference, plus the exported RefState's own required
+/// attestations. Returns the report and the encoded bundle bytes; writing them to a file is a CLI
+/// concern, not this crate's.
+pub fn export_bundle(
+    layout: &RepositoryLayout,
+    ref_name: &str,
+) -> Result<(BundleExportReport, Vec<u8>)> {
+    let ref_store = RefStore::new(layout.clone());
+    let object_store = FileObjectStore::new(layout.clone());
+    let Some(ref_state_id) = ref_store.read_current_ref_state_id(ref_name)? else {
+        return Err(PrikkError::Integrity(format!(
+            "ref {ref_name} does not exist, nothing to export"
+        )));
+    };
+    let ref_state_envelope = object_store
+        .read_typed(ref_state_id, ObjectType::RefState)?
+        .ok_or_else(|| PrikkError::Integrity(format!("missing RefState object: {ref_state_id}")))?;
+    let ref_state_payload = RefStatePayload::decode_canonical(
+        &ref_state_envelope.canonical_payload,
+        ref_state_envelope.schema_version,
+    )?;
+    let tip_block_id = ref_state_payload.target_object_id;
+
+    // Genesis-complete (ruling 2) covers the publication chain too, not only the Block DAG: a
+    // received ref's `log --ref` walks `previous_ref_state_id` exactly as a local ref's does, so
+    // every earlier RefState this ref ever published is required, not only the tip.
+    let mut ref_state_chain: Vec<ObjectEnvelope> = vec![ref_state_envelope];
+    let mut required_attestation_ids: BTreeSet<ObjectId> = ref_state_payload
+        .required_attestation_ids
+        .iter()
+        .copied()
+        .collect();
+    let mut ancestors = crate::merge_evidence::ancestors_inclusive(&object_store, tip_block_id)?;
+    let mut previous = ref_state_payload.previous_ref_state_id;
+    let mut seen_ref_states: BTreeSet<ObjectId> = BTreeSet::from([ref_state_id]);
+    while let Some(previous_id) = previous {
+        if !seen_ref_states.insert(previous_id) {
+            return Err(PrikkError::Integrity(format!(
+                "RefState chain for {ref_name} contains a cycle at {previous_id}"
+            )));
+        }
+        let envelope = read_required(&object_store, previous_id, ObjectType::RefState)?;
+        let payload = RefStatePayload::decode_canonical(
+            &envelope.canonical_payload,
+            envelope.schema_version,
+        )?;
+        required_attestation_ids.extend(payload.required_attestation_ids.iter().copied());
+        ancestors.extend(crate::merge_evidence::ancestors_inclusive(
+            &object_store,
+            payload.target_object_id,
+        )?);
+        previous = payload.previous_ref_state_id;
+        ref_state_chain.push(envelope);
+    }
+
+    let mut patch_ids: BTreeSet<ObjectId> = BTreeSet::new();
+    let mut blob_ids: BTreeSet<ObjectId> = BTreeSet::new();
+    for payload in ancestors.values() {
+        patch_ids.extend(payload.patch_ids.iter().copied());
+        if let Some(blob_id) = payload.snapshot_blob_ref {
+            blob_ids.insert(blob_id);
+        }
+    }
+
+    let mut objects: Vec<ObjectEnvelope> = ref_state_chain;
+    for block_id in ancestors.keys() {
+        objects.push(read_required(&object_store, *block_id, ObjectType::Block)?);
+    }
+    let mut patch_envelopes: Vec<ObjectEnvelope> = Vec::with_capacity(patch_ids.len());
+    for patch_id in &patch_ids {
+        let envelope = read_required(&object_store, *patch_id, ObjectType::Patch)?;
+        // A Patch's operations can themselves reference Blobs (CreateFile, file-kind DeleteNode,
+        // ReplaceBinary) independently of any Block's snapshot_blob_ref — a repository-local
+        // verify never notices a missing one of these, since it never replays lifecycle state for
+        // an export; the receiver's ordinary verify does, so every one of these must travel too.
+        for operation in
+            crate::patch_replay::decode::decode_patch_operations(&envelope.canonical_payload)?
+        {
+            match operation.kind {
+                crate::patch_replay::decode::DecodedOperationKind::CreateFile {
+                    blob_id, ..
+                } => {
+                    blob_ids.insert(blob_id);
+                }
+                crate::patch_replay::decode::DecodedOperationKind::ReplaceBinary {
+                    old_blob_id,
+                    new_blob_id,
+                    ..
+                } => {
+                    blob_ids.insert(old_blob_id);
+                    blob_ids.insert(new_blob_id);
+                }
+                crate::patch_replay::decode::DecodedOperationKind::DeleteNode {
+                    preimage:
+                        crate::patch_replay::decode::DecodedDeletePreimage::File { old_blob_id, .. },
+                    ..
+                } => {
+                    blob_ids.insert(old_blob_id);
+                }
+                _ => {}
+            }
+        }
+        patch_envelopes.push(envelope);
+    }
+    objects.extend(patch_envelopes);
+    for blob_id in &blob_ids {
+        objects.push(read_required(&object_store, *blob_id, ObjectType::Blob)?);
+    }
+    for attestation_id in &required_attestation_ids {
+        objects.push(read_required(
+            &object_store,
+            *attestation_id,
+            ObjectType::Attestation,
+        )?);
+    }
+
+    let object_count = objects.len();
+    let bytes = encode_bundle(ref_name, &objects)?;
+    Ok((
+        BundleExportReport {
+            ref_name: ref_name.to_string(),
+            tip_block_id,
+            object_count,
+        },
+        bytes,
+    ))
+}
+
+/// Import a bundle's objects and record a `received` pointer for its ref (DC-78 §D4). Never touches
+/// `refs/by-id/`, never advances a local ref, and never adopts any MAINTAINER key into the local trust
+/// policy — the imported RefState/Blocks remain ordinary, structurally-checkable objects that `verify`
+/// will report as untrusted until the operator explicitly runs `trust maintainer add` for the key that
+/// sealed them. That is a deliberate choice, not an oversight: auto-adopting a key seen in imported
+/// history would be a new, unreviewed trust mechanism, exactly what §D6 rules out.
+pub fn import_bundle(layout: &RepositoryLayout, bytes: &[u8]) -> Result<BundleImportReport> {
+    let (origin_ref_name, objects) = decode_bundle(bytes)?;
+    let Some(ref_state_envelope) = objects.first() else {
+        return Err(PrikkError::MalformedData(
+            "bundle contains no objects".to_string(),
+        ));
+    };
+    if ref_state_envelope.object_type != ObjectType::RefState {
+        return Err(PrikkError::MalformedData(
+            "bundle's first object must be the exported ref's RefState".to_string(),
+        ));
+    }
+    let ref_state_id = ref_state_envelope.object_id();
+
+    let mut object_store = FileObjectStore::new(layout.clone());
+    let mut written_object_count = 0_usize;
+    for envelope in &objects {
+        let id = envelope.object_id();
+        if !object_store.contains_object(envelope.object_type, id) {
+            written_object_count = written_object_count.checked_add(1).ok_or_else(|| {
+                PrikkError::Integrity("bundle import written-object count overflow".to_string())
+            })?;
+        }
+        object_store.write_object(envelope)?;
+    }
+
+    let received_ref_name = format!("remotes/{origin_ref_name}");
+    crate::received::write_received_pointer(layout, &received_ref_name, ref_state_id)?;
+
+    Ok(BundleImportReport {
+        ref_name: received_ref_name,
+        ref_state_id,
+        object_count: objects.len(),
+        written_object_count,
+    })
+}
+
+fn read_required(
+    object_store: &FileObjectStore,
+    id: ObjectId,
+    object_type: ObjectType,
+) -> Result<ObjectEnvelope> {
+    object_store
+        .read_typed(id, object_type)?
+        .ok_or_else(|| PrikkError::Integrity(format!("missing {object_type} object: {id}")))
+}
+
+fn encode_bundle(ref_name: &str, objects: &[ObjectEnvelope]) -> Result<Vec<u8>> {
+    let mut out = Vec::new();
+    out.extend_from_slice(BUNDLE_MAGIC);
+    push_bytes_u64(&mut out, ref_name.as_bytes())?;
+    push_u64(&mut out, len_to_u64(objects.len())?);
+    for envelope in objects {
+        push_bytes_u64(&mut out, &encode_envelope_file(envelope)?)?;
+    }
+    Ok(out)
+}
+
+fn decode_bundle(bytes: &[u8]) -> Result<(String, Vec<ObjectEnvelope>)> {
+    let mut cursor = ByteCursor::new(bytes);
+    let magic = cursor.read_array::<8>()?;
+    if &magic != BUNDLE_MAGIC {
+        return Err(PrikkError::MalformedData(
+            "invalid bundle magic".to_string(),
+        ));
+    }
+    let ref_name_bytes = cursor.read_bytes_u64()?;
+    let ref_name = String::from_utf8(ref_name_bytes).map_err(|err| {
+        PrikkError::MalformedData(format!("invalid bundle ref name utf-8: {err}"))
+    })?;
+    let count = cursor.read_u64()?;
+    let mut objects = Vec::new();
+    for _ in 0..count {
+        let encoded = cursor.read_bytes_u64()?;
+        objects.push(decode_envelope_file(&encoded)?);
+    }
+    if !cursor.is_finished() {
+        return Err(PrikkError::MalformedData(
+            "trailing bytes in bundle".to_string(),
+        ));
+    }
+    Ok((ref_name, objects))
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests;

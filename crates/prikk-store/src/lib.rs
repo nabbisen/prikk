@@ -19,6 +19,7 @@ mod active;
 mod author_signing;
 mod blob_access;
 mod block_state;
+mod bundle;
 mod byte_cursor;
 mod checkout;
 mod commit_index;
@@ -46,6 +47,7 @@ mod patch_checkout;
 mod patch_inverse;
 mod patch_replay;
 mod path;
+mod received;
 mod refs;
 mod rollback_draft;
 mod rollback_preview;
@@ -74,6 +76,7 @@ pub use active::{
 };
 pub use author_signing::{AuthorSigner, Ed25519AuthorSigner, author_signature};
 pub use block_state::{derive_next_state_root, validate_block_v2_shape};
+pub use bundle::{BundleExportReport, BundleImportReport, export_bundle, import_bundle};
 pub use checkout::{
     CheckoutMaterialization, CheckoutPlan, DEFAULT_CHECKOUT_REF, SnapshotCheckoutPlan,
     prepare_checkout_plan, prepare_snapshot_checkout_plan,
@@ -83,7 +86,9 @@ pub use doctor::{
     DoctorIssue, DoctorRepairOptions, DoctorRepairReport, DoctorReport, DoctorSeverity,
     doctor_repository, repair_repository,
 };
-pub use history::{DEFAULT_HISTORY_LIMIT, HistoryEntry, RefHistory, load_ref_history};
+pub use history::{
+    DEFAULT_HISTORY_LIMIT, HistoryEntry, RefHistory, load_received_ref_history, load_ref_history,
+};
 pub use layout::{RepositoryFormat, RepositoryLayout};
 pub use lifecycle_cache::incremental::LifecycleCacheDivergence;
 pub use lock::{ActiveLock, RefLock};
@@ -107,6 +112,9 @@ pub use patch_inverse::{
 };
 pub use patch_replay::{PatchReplayPlan, prepare_patch_replay_plan};
 pub use path::{RepoPath, validate_no_path_collisions, validate_repo_path};
+pub use received::{
+    ReceivedPointer, list_received_pointers, read_received_pointer, validate_received_ref,
+};
 pub use refs::{
     RefLogRecord, RefLogReplay, RefPointerSummary, RefPublication, RefPublicationIssue,
     RefRecoveryCandidate, RefRecoveryRepair, RefStore, validate_local_branch_ref,

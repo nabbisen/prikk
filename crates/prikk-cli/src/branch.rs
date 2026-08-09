@@ -78,7 +78,7 @@ fn run_list(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String>
     }
     let layout = crate::open_repository(root)?;
     let ref_store = RefStore::new(layout.clone());
-    let object_store = FileObjectStore::new(layout);
+    let object_store = FileObjectStore::new(layout.clone());
     let entries = ref_store
         .list_ref_pointers()
         .map_err(|err| err.to_string())?;
@@ -104,6 +104,14 @@ fn run_list(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String>
         } else {
             println!("{} {}", entry.ref_name, entry.ref_state_id);
         }
+        printed_any = true;
+    }
+    // Received refs (DC-78 ruling 4) live entirely outside refs/by-id/ and are never a local
+    // branch — listed separately, never interleaved with the loop above, so a received ref can
+    // never be mistaken for one this repository can seal to.
+    let received = prikk_store::list_received_pointers(&layout).map_err(|err| err.to_string())?;
+    for pointer in received {
+        println!("{} {} (received)", pointer.ref_name, pointer.ref_state_id);
         printed_any = true;
     }
     if !printed_any {
