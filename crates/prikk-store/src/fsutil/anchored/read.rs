@@ -3,22 +3,22 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::fs::File;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::io::Read;
 
 use prikk_error::{PrikkError, Result};
 
 use super::MutationRoot;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use super::directory::open_existing_directory_for_read;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use super::regular::{required_file_name, required_parent};
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use super::{failpoints, io_error};
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use rustix::fs::{self, AtFlags, FileType, Mode, OFlags};
 
 /// No-follow classification of a root-relative final entry.
@@ -49,7 +49,7 @@ pub(crate) struct RootDirEntry {
 
 /// Read a regular file's bytes, returning `None` only when a path component is absent.
 pub(crate) fn read_file_if_exists(root: &MutationRoot, relative: &Path) -> Result<Option<Vec<u8>>> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
         let Some(directory) = open_existing_directory_for_read(root, required_parent(relative)?)?
         else {
@@ -76,7 +76,7 @@ pub(crate) fn read_file_if_exists(root: &MutationRoot, relative: &Path) -> Resul
         File::from(fd).read_to_end(&mut bytes)?;
         Ok(Some(bytes))
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let path = root.fallback_path(relative)?;
         match std::fs::read(&path) {
@@ -92,7 +92,7 @@ pub(crate) fn stat_file_state_if_exists(
     root: &MutationRoot,
     relative: &Path,
 ) -> Result<Option<RootFileStat>> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
         let Some(directory) = open_existing_directory_for_read(root, required_parent(relative)?)?
         else {
@@ -112,14 +112,22 @@ pub(crate) fn stat_file_state_if_exists(
                 "stat target is not a regular file".to_string(),
             ));
         }
+        // `RootFileStat::mode` is `u32` on every platform; `stat.st_mode`'s raw width is
+        // platform-native (`u32` on Linux, `u16` on macOS/apple) — Linux's own `u32::from(u32)`
+        // trips `clippy::useless_conversion` (the reflexive `From` blanket impl compiles but isn't
+        // wanted here), so the widening is branched explicitly rather than written as one line.
+        #[cfg(target_os = "linux")]
+        let mode = stat.st_mode;
+        #[cfg(target_os = "macos")]
+        let mode = u32::from(stat.st_mode);
         Ok(Some(RootFileStat {
             size: u64::try_from(stat.st_size).unwrap_or_default(),
             mtime_secs: stat.st_mtime,
             mtime_nanos: u32::try_from(stat.st_mtime_nsec).unwrap_or_default(),
-            mode: stat.st_mode,
+            mode,
         }))
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let path = root.fallback_path(relative)?;
         match std::fs::symlink_metadata(&path) {
@@ -155,7 +163,7 @@ pub(crate) fn stat_file_state_if_exists(
 
 /// List a root-relative directory and classify entries without following symlinks.
 pub(crate) fn list_directory(root: &MutationRoot, relative: &Path) -> Result<Vec<RootDirEntry>> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
         use std::os::unix::ffi::OsStrExt;
 
@@ -178,7 +186,7 @@ pub(crate) fn list_directory(root: &MutationRoot, relative: &Path) -> Result<Vec
         }
         Ok(entries)
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let path = root.fallback_path(relative)?;
         let reader = match std::fs::read_dir(&path) {
@@ -217,7 +225,7 @@ pub(crate) fn read_file_required(root: &MutationRoot, relative: &Path) -> Result
 
 /// Inspect a root-relative entry without following its final component.
 pub(crate) fn inspect_entry(root: &MutationRoot, relative: &Path) -> Result<Option<EntryKind>> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
         let Some(directory) = open_existing_directory_for_read(root, required_parent(relative)?)?
         else {
@@ -234,7 +242,7 @@ pub(crate) fn inspect_entry(root: &MutationRoot, relative: &Path) -> Result<Opti
         };
         Ok(Some(classify(FileType::from_raw_mode(stat.st_mode))))
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let path = root.fallback_path(relative)?;
         let metadata = match std::fs::symlink_metadata(&path) {
@@ -255,7 +263,7 @@ pub(crate) fn inspect_entry(root: &MutationRoot, relative: &Path) -> Result<Opti
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn classify(file_type: FileType) -> EntryKind {
     match file_type {
         FileType::RegularFile => EntryKind::Regular,
@@ -273,7 +281,7 @@ fn classify(file_type: FileType) -> EntryKind {
 /// gap that made an "i/o error: No such file or directory" report unisolable to one of several
 /// commands in a sequence — every fallback I/O failure now names the absolute path it was
 /// attempting, not just the OS errno.
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn fallback_io_error(path: &Path, action: &str, error: std::io::Error) -> PrikkError {
     PrikkError::Io(format!("failed to {action} {}: {error}", path.display()))
 }
