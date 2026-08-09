@@ -1410,7 +1410,13 @@ fn content_and_mode_change_orders_change_perm_before_replace_binary() {
     let _ = std::fs::remove_dir_all(root);
 }
 
-#[cfg(unix)]
+// DC-81 addendum-3: Linux-only, not `#[cfg(unix)]` — APFS enforces UTF-8 filenames, so
+// `std::fs::write` below fails `EILSEQ` before prikk's own code ever runs; the precondition this
+// test constructs is unreachable on macOS, not merely untested. The guarantee holds *a fortiori*
+// there (the OS makes the bad state impossible, so prikk's own fail-closed guard is never needed),
+// and gating costs no coverage — there is nothing on macOS to cover, unlike the FIFO tests DC-81
+// ported (where the precondition stayed reachable and gating would have been a real loss).
+#[cfg(target_os = "linux")]
 #[test]
 fn non_utf8_worktree_path_fails_closed() {
     // N2: a non-UTF-8 OS path fails closed at the strict conversion boundary, not lossily.
