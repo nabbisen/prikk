@@ -378,3 +378,87 @@ fn measure_directory_sync_fsync_vs_fcntl_fullfsync() {
 
     let _ = fs::remove_dir_all(path);
 }
+
+/// DC-82 §3: "mutation fails at runtime, not a compile error" for the implementor-less case, proven
+/// by *running* the code, not by cross-target `clippy`/`build` alone (which prove compilation, never
+/// runtime behaviour). `none::NoDurability` is visible here under its `#[cfg(any(test, ...))]` gate
+/// regardless of host platform — this test constructs it directly and calls every trait method,
+/// which the compiler accepts (proving no compile-time obstacle) and which each return `Err` at
+/// runtime with the exact message the pre-DC-82 `#[cfg(not(any(...)))]` fallback arms used to
+/// construct inline. The production dispatch (`ACTIVE_DURABILITY`) is untouched by this test — on
+/// this host it still resolves to `LinuxDurability`/`MacosDurability`, never `NoDurability`.
+#[test]
+fn no_durability_every_method_fails_at_runtime_not_compile_time() {
+    use crate::fsutil::{DurabilityContract, NoDurability};
+
+    const EXPECTED: &str = "i/o error: repository mutation requires Linux or macOS root-scoped filesystem capabilities";
+
+    let path = unique_temp_dir("no-durability-runtime-check");
+    let root = mutation_root(&path);
+    let relative = Path::new("state");
+
+    let results = [
+        NoDurability
+            .atomic_replace(&root, relative, b"x")
+            .err()
+            .map(|error| error.to_string()),
+        NoDurability
+            .durable_append(&root, relative, b"x")
+            .err()
+            .map(|error| error.to_string()),
+        NoDurability
+            .durable_truncate(&root, relative, 0)
+            .err()
+            .map(|error| error.to_string()),
+        NoDurability
+            .durable_truncate_to_empty(&root, relative)
+            .err()
+            .map(|error| error.to_string()),
+        NoDurability
+            .set_permission_bits(&root, relative, 0o644)
+            .err()
+            .map(|error| error.to_string()),
+        NoDurability
+            .remove_if_present(&root, relative)
+            .err()
+            .map(|error| error.to_string()),
+        NoDurability
+            .promote(&root, relative, Path::new("destination"))
+            .err()
+            .map(|error| error.to_string()),
+        NoDurability
+            .publish_immutable(&root, relative, b"x", |_| Ok(()))
+            .err()
+            .map(|error| error.to_string()),
+        NoDurability
+            .ensure_directory(&root, relative)
+            .err()
+            .map(|error| error.to_string()),
+        NoDurability
+            .durable_directory_entry(&root, relative)
+            .err()
+            .map(|error| error.to_string()),
+    ];
+    for (index, result) in results.iter().enumerate() {
+        assert_eq!(
+            result.as_deref(),
+            Some(EXPECTED),
+            "method at index {index} did not fail with the expected runtime error"
+        );
+    }
+
+    let create_exclusive_error = match NoDurability.create_exclusive(&root, relative, b"x") {
+        Ok(()) => panic!("create_exclusive must fail at runtime, not compile time"),
+        Err(error) => error,
+    };
+    assert_eq!(
+        create_exclusive_error.kind(),
+        std::io::ErrorKind::Unsupported
+    );
+    assert_eq!(
+        create_exclusive_error.to_string(),
+        "repository mutation requires Linux or macOS anchored filesystem primitives"
+    );
+
+    let _ = fs::remove_dir_all(path);
+}

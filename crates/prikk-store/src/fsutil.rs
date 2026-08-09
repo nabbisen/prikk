@@ -30,6 +30,10 @@ pub(crate) use anchored::{
 pub(crate) use anchored::LinuxDurability;
 #[cfg(all(test, target_os = "macos"))]
 pub(crate) use anchored::MacosDurability;
+// DC-82: visible in test builds regardless of platform (`none`'s own gate), but only re-exported
+// here where `fsutil::tests` — the only consumer — actually compiles.
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+pub(crate) use anchored::NoDurability;
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 pub(crate) use anchored::remove_file_required;
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]

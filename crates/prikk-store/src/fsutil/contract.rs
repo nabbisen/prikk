@@ -6,7 +6,10 @@
 //! by the compiler: every mutation path in `anchored.rs` calls through [`DurabilityContract`], so
 //! there is exactly one place that can state — and one place a future platform's implementation
 //! must satisfy — what durability prikk-store depends on. `Linux` and, as of DC-81, `Macos` are the
-//! implementors (`super::anchored::LinuxDurability`, `super::anchored::MacosDurability`).
+//! real implementors (`super::anchored::LinuxDurability`, `super::anchored::MacosDurability`);
+//! DC-82 added `NoDurability` (`super::anchored::none::NoDurability`) as the implementor for every
+//! platform with neither — "unsupported" is a third implementor, not a `target_os` arm at each of
+//! `anchored.rs`'s call sites.
 //!
 //! **Guarantee, not syscall — the whole point.** [`atomic_replace`](DurabilityContract::atomic_replace)
 //! says "replace this file's content atomically, durably" — never "write a temp file and call
@@ -60,14 +63,14 @@ use super::anchored::MutationRoot;
 /// the guarantee-to-method map. `root` names the authority every path is resolved against; `relative`
 /// is always relative to it, never absolute.
 ///
-/// Deliberately **not** gated to any specific `target_os`, even though `LinuxDurability` and
-/// `MacosDurability` are currently the only implementors: the whole point of this contract is a
+/// Deliberately **not** gated to any specific `target_os`: the whole point of this contract is a
 /// platform-neutral statement of what the store requires, and a trait that vanishes on the
-/// platforms it exists to enable would defeat that (DC-76 addendum-2 B1). Off both implemented
-/// platforms it is therefore genuinely unused — `#[allow(dead_code)]` states that honestly rather
-/// than suppressing it, and it is expected to stop applying the moment a third platform implements
-/// this trait.
-#[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
+/// platforms it exists to enable would defeat that (DC-76 addendum-2 B1). The B1 repair's
+/// `#[allow(dead_code)]` — needed because off Linux and macOS nothing implemented this trait — no
+/// longer applies as of DC-82: `NoDurability` (`super::anchored::none::NoDurability`) is the
+/// implementor for every platform without a real one, so the trait is used unconditionally now,
+/// exactly the outcome the B1 repair's own doc comment predicted ("expected to stop applying the
+/// moment a third platform implements this trait").
 pub(crate) trait DurabilityContract {
     /// Replace `relative`'s content atomically and durably: a reader never observes a partial
     /// write, and a crash mid-replace leaves either the complete previous content or the complete
