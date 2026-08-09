@@ -76,6 +76,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      - name: Fetch dependencies for every target
+        # DC-81 addendum-2 B1: without this, boundary::tests::workspace_and_product_boundaries_hold
+        # fails — that test runs `cargo metadata --locked --offline`, which needs every target's
+        # dependency graph already cached (DC-71's same requirement, matching lines 20/40 above).
+        run: cargo fetch --locked
       - name: Test
         run: cargo test --workspace --locked
       # DC-81 addendum-1 §3: Q3's measurement is follow-through, not optional. `#[ignore]`d so it
