@@ -123,7 +123,7 @@ pub use state_root::{
     StateRootContent, StateRootEntry, compute_state_root, state_leaf_hash, state_leaf_preimage,
 };
 pub use trust::{
-    AdoptedMaintainerKey, MaintainerTrustPolicy, PublicationTrustIssue, add_trusted_maintainer,
+    MaintainerTrustPolicy, PublicationTrustIssue, add_trusted_maintainer,
     load_maintainer_trust_policy, verify_signer_trusted, verify_trusted_publication_envelope,
 };
 pub use verify::{

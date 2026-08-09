@@ -56,12 +56,9 @@ Ed25519 secret seeds encoded as 64 hex characters. Prikk does not provide local 
 generation, or public-key derivation. For the current setup workflow and seed-handling warnings, see
 the [security and signing setup](../guide/security-setup.md) guide.
 
-The local maintainer trust store supports a set of repository-local adopted MAINTAINER keys, with
-`required = 1` continuing to mean any one adopted key's signature suffices. `prikk trust maintainer add`
-adds a new key id to the set, or idempotently confirms an already-adopted id's matching key; it refuses
-to replace an adopted id's key with a different one. This refusal is a trust-on-first-use rule: the
-first public key seen for a key id is the one trusted for that id, permanently, until an operator
-removes it out-of-band. There is no remote trust distribution.
+The local maintainer trust store supports a single repository-local trusted MAINTAINER key with
+`required = 1`. `prikk trust maintainer add` writes the trusted public key and fixed-shape policy. The
+parser deliberately rejects broader policy shapes. There is no implicit trust-on-first-use rule.
 
 ## What Seal Checks
 
@@ -118,7 +115,7 @@ and stable repository-format migration.
 | AUTHOR signing is real Ed25519 on Patch envelopes, not a placeholder. | [`author_signing.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/author_signing.rs), [`node_authoring.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/worktree_patch/node_authoring.rs), [DC-10](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-10-ROLLBACK-DRAFT-SIGNING.md) |
 | AUTHOR key material comes from environment variables and is not persisted by Prikk. | [`main.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/main.rs), [`author_signing.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/author_signing.rs), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
 | MAINTAINER publication signing is real Ed25519 and role-bound. | [`maintainer_signing.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/maintainer_signing.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-11](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-11-MAINTAINER-TRUST-STORE.md) |
-| Maintainer trust is repository-local, held as a set of adopted keys, with `required = 1` meaning any one adopted key's signature suffices. | [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-11 FDD-04 handoff](https://github.com/nabbisen/prikk/blob/main/rfcs/handoffs/DC-11-maintainer-trust-store/fdd-04-update.md) |
+| Maintainer trust is repository-local and limited to one key with `required = 1`. | [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-11 FDD-04 handoff](https://github.com/nabbisen/prikk/blob/main/rfcs/handoffs/DC-11-maintainer-trust-store/fdd-04-update.md) |
 | Seal validates the maintainer signer against local trust before publication. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs) |
 | Verify checks publication trust for Block, RefState, and RefUpdate envelopes. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs) |
 | Verify does not enforce repository-wide AUTHOR trust. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`rollback_verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/rollback_verify.rs), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |

@@ -14,8 +14,7 @@ paths, see [repository layout and authority](../reference/repository-layout.md).
   generate private keys.
 - Prikk currently has no key-generation command and no command that derives a public key from a seed.
 - Operators must obtain matched Ed25519 seed and public-key material with external tooling.
-- Maintainer trust is repository-local, held as a set of adopted MAINTAINER keys with `required = 1`
-  (any one adopted key's signature suffices), and enforces trust-on-first-use per key id.
+- Maintainer trust is repository-local and limited to one trusted MAINTAINER key with `required = 1`.
 - AUTHOR signatures are real Ed25519 signatures, but Prikk does not currently enforce a
   repository-wide AUTHOR trust policy.
 - There is no key rotation, revocation, hardware signing, remote trust, sync trust, hosted identity,
@@ -64,12 +63,9 @@ prikk trust maintainer add --key-id ID --public-key HEX
 `ID` must match the MAINTAINER key id used by `PRIKK_MAINTAINER_KEY_ID`. `HEX` must be the lowercase
 64-hex-character Ed25519 public key that matches `PRIKK_MAINTAINER_SEED`.
 
-The command writes the trusted public key and adds it to the repository's adopted-key set, with
-`required = 1` continuing to mean any one adopted key's signature suffices. Adopting a key id already
-in the set with the same public key succeeds idempotently; adopting it again with a different public
-key is refused. This refusal is Prikk's trust-on-first-use enforcement: the first public key seen for a
-key id is the one trusted for that id, permanently, until an operator removes it out-of-band. There is
-still no remote trust distribution.
+The command writes the trusted public key and a fixed-shape policy equivalent to one trusted
+MAINTAINER key with `required = 1`. Broader policy shapes are rejected. There is no trust-on-first-use
+rule and no remote trust distribution.
 
 ## Minimal Local Workflow
 
