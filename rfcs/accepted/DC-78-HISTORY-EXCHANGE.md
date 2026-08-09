@@ -216,8 +216,20 @@ ref the local operator did not ask for. Received refs land in a distinct namespa
 never seals to; incorporating that work into local history is an ordinary **merge** (DC-74/DC-75) —
 already built, already reviewed, already recording the merge structurally.
 
-**This is why exchange does not need a "pull" concept**: receive, then merge, using machinery that
-exists.
+**Corrected 2026-08-09 by Stage 3.** The claim above — *"receive, then merge, using machinery that
+exists"* — **is false as built, and the error is the architect's.** `execute_merge` (`merge_execute.rs:65`)
+validates `from_ref` through `validate_local_branch_ref`, which **rejects the `remotes/` prefix** by
+design (`refs.rs:386-389`). So a received ref cannot be a merge input today.
+
+**The gap is real and not small.** `prepare_merge_evidence` assumes both sides are ref-log-backed local
+branches with a `previous_ref_state_id` chain reachable through `RefStore`; a received pointer has
+neither a ref-log nor CAS semantics. Closing it needs a new `MergeEvidenceTarget` variant and a ruling on
+what confluence means against a source with no local publication history — **its own increment, opened as
+DC-85.**
+
+**Practical consequence today:** an operator can receive, inspect (`branch list`, `verify`, `log --ref`),
+and adopt trust for a bundle, **but cannot fold it into local history.** Exchange is complete for an
+auditor and incomplete for a collaborator.
 
 ### D5. The TOFU record
 
