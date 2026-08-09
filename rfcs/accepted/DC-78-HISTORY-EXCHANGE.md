@@ -127,6 +127,27 @@ stronger one.**
 unconditionally and no partial-history concept exists anywhere, including `specs/`. Recorded as a stated
 limitation. And **TOFU is new construction**, so it is the part designed first and reviewed hardest.
 
+### 3.1c Ruled 2026-08-09 — multiple adopted maintainer keys (option B)
+
+**The owner ruled B**, after correctly observing that option A is "less functional for production use."
+Investigating that objection showed it was **stronger than the architect had put it**:
+
+- **`add_trusted_maintainer` is documented "Add or *replace* the single trusted MAINTAINER key"**, and
+  `MaintainerTrustPolicy` (`trust.rs:40-45`) holds one `key_id`, not a list. **Adopting a remote key
+  would replace the local one**, so a repository could receive history *or* seal its own, never both.
+  That is not a viable production shape, and the architect's "publish/subscribe with local authoring"
+  framing of A was simply wrong.
+- **B is cheaper than the architect implied.** The on-disk policy is already
+  `[maintainer] / required = 1 / keys = ["<id>"]` — **`keys` is already an array and `required` already
+  a threshold field.** The parser pins both (`trust.rs:244-263`), but the *schema* anticipated growth.
+  **DC-11 declined to implement multi-key; it did not decline to allow expressing it.** The architect's
+  "reopens a deliberate constraint" framing overstated the cost.
+
+**Consequence for the design:** the substantive question is no longer *how many keys* but **"trusted for
+what?"** Adopting a peer's key cannot sensibly mean "everything that key ever sealed, anywhere"; it
+needs scoping — most plausibly to what a named ref points at, with the TOFU record binding key to ref at
+first contact. **That is the design's central problem and it is the architect's to answer.**
+
 ### 3.2 A sequencing consequence, corrected
 
 An earlier architect framing said a receiver could "verify structurally on receipt." **That is weaker
