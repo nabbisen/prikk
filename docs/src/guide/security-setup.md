@@ -14,7 +14,8 @@ paths, see [repository layout and authority](../reference/repository-layout.md).
   generate private keys.
 - Prikk currently has no key-generation command and no command that derives a public key from a seed.
 - Operators must obtain matched Ed25519 seed and public-key material with external tooling.
-- Maintainer trust is repository-local and limited to one trusted MAINTAINER key with `required = 1`.
+- Maintainer trust is repository-local, held as a set of adopted MAINTAINER keys with `required = 1`
+  (any one adopted key's signature suffices), and enforces trust-on-first-use per key id.
 - AUTHOR signatures are real Ed25519 signatures, but Prikk does not currently enforce a
   repository-wide AUTHOR trust policy.
 - There is no key rotation, revocation, hardware signing, remote trust, sync trust, hosted identity,
