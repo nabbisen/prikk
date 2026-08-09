@@ -94,14 +94,49 @@ non-strippably**, or the central claim becomes false for any repository that eve
 **Received-but-unadopted history has exactly that property.** If it is indistinguishable from locally
 verified history, the claim dies quietly the first time anyone pulls.
 
+### 3.1a §3.1 tested — two clauses were wrong. Corrected 2026-08-09.
+
+§4's investigation tested the proposition rather than inheriting it, as instructed, and found this:
+
+- **Clause 1 holds.** Reception needs no trust; `ObjectId` derives from
+  domain ‖ type ‖ schema ‖ len ‖ payload (`id.rs:114-122`) with signatures excluded, so storing received
+  bytes is safe independent of any trust decision.
+- **Clause 2 was wrong.** *"Authority is the only thing needing a decision"* presumes a verification
+  mechanism exists per signer role. **`trust.rs:215` is the sole production `verify_ed25519` call site
+  and it hardcodes `SignerRole::Maintainer`.** Author signatures are **never** cryptographically
+  verified — for received *or* purely local history. Adopting a remote author's key would have nothing
+  to verify against.
+- **Clause 3 overclaimed by tense.** TOFU does not exist: DC-11 declined to build it, and
+  `security-setup.md:67` and `trust-threat-model.md:61` both state plainly that there is no
+  trust-on-first-use rule. **This increment builds it from nothing.**
+
+**The RΔ5 line is unaffected and is now more load-bearing, not less:** because authorship is exactly what
+nothing checks, permanent non-strippable provenance marking does real work.
+
+### 3.1b Ruled 2026-08-09 — the trust claim this increment may make
+
+**"This history was sealed by a Maintainer key you adopted."** Buildable today with zero new
+cryptographic capability — `add_trusted_maintainer` already is ask-once-per-key adoption, never yet
+pointed at a remote peer's key.
+
+**Not: "the received patches' authorship is verified."** That code exists nowhere, and building it here
+would absorb DC-53. **State the claim explicitly in design and in user-facing docs; never imply the
+stronger one.**
+
+**Also ruled:** exchange is **genesis-complete for v1** — the lineage walk reaches a literal Root
+unconditionally and no partial-history concept exists anywhere, including `specs/`. Recorded as a stated
+limitation. And **TOFU is new construction**, so it is the part designed first and reviewed hardest.
+
 ### 3.2 A sequencing consequence, corrected
 
 An earlier architect framing said a receiver could "verify structurally on receipt." **That is weaker
 today than it sounds:** `verify` performs no cryptographic verification of author signatures at all — the
 product's only crypto verification call site is a policy signature (`crates/prikk-store/src/trust.rs:215`).
 
-**So status-claim criterion 5 (DC-53, repository-wide author trust verification) is a prerequisite of
-exchange, not an item independent of it.** A receiver cannot meaningfully check what it was sent while
+**Superseded 2026-08-09 by §4's investigation: DC-53 is *conditionally* a prerequisite, and under
+§3.1b's ruling it is not one.** A receiver verifies exactly as much as a local user does today, so
+criterion 1 is reachable without criterion 5. The original claim below stands only for the stronger
+trust claim that §3.1b rules out: A receiver cannot meaningfully check what it was sent while
 nothing checks author signatures. This should be settled before this increment is sequenced, not
 discovered during it.
 
