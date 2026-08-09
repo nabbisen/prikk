@@ -41,9 +41,12 @@ and differential evidence. **This deserves the same treatment.**
 1. §2 answered and reported before any change.
 2. **A repository sealed with 2.x verifies identically under 3.x** — built with the old version, then
    verified with the new one, through the compiled binary. Not argued; constructed.
-3. **`sha2` collapses back to a single version.** Added 2026-08-09 from DC-79's investigation:
-   `ed25519-dalek 3` requires `sha2 0.11`, so landing this increment after DC-79 returns the lock from
-   two `sha2` versions to one. Cheap to check, and it confirms the pair landed correctly.
+3. **The duplicated `digest` stack collapses back to single versions.** Added 2026-08-09 from DC-79's
+   investigation; **broadened the same day after DC-79's review measured the real delta.**
+   `ed25519-dalek 3` requires `sha2 0.11`, so landing after DC-79 collapses **six** duplicated packages,
+   not one: `sha2`, `digest`, `block-buffer`, `crypto-common`, `cpufeatures`, and `const-oid`, each of
+   which DC-79 left at two versions. **`hybrid-array` is a permanent addition of the 0.11 stack and
+   correctly stays.** Report the locked-package count before and after; DC-79 took it 180 → 187.
 4. **A negative control in both directions**, and this is the criterion that matters most:
    - a **tampered** signature still fails under 3.x;
    - a signature 2.x **rejected** is still rejected under 3.x.
