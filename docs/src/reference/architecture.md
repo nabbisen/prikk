@@ -130,5 +130,38 @@ Two limits are worth stating plainly, because they define what verification mean
 | `prikk verify` is roughly **O(N³)** in sealed block count — 34 s at 160 blocks | Tracked, unowned |
 | Node lifecycle state grows with cumulative history, not the current tree | Tracked; the project has no theory of forgetting yet |
 | Mutation is Linux-only | Being addressed, contract first |
+| Commit cost is not yet bounded independently of repository size (NFR-PERF-01) | Reduced, still missed |
+| Merge complexity scoped to active block size (NFR-PERF-03) is **argued, not benchmarked** | Unowned |
 
 These are recorded in `FINDINGS.md` in the repository rather than left implicit.
+
+## What the block design trades, and what it does not
+
+Patch-theoretic systems have a known failure mode: **Darcs's exponential merge**, which arises because
+its patches are *context-dependent*. Reordering two of them requires **commuting** one into an equivalent
+that applies in the other's context, and resolving conflicts means searching those orderings.
+
+**Prikk cannot have that failure mode, by construction.** Its operations are context-free — every
+operation names a stable `NodeId`, and `EditText` identifies its span by content anchors with
+`presentation_hint_line` explicitly excluded from algebraic identity. A patch transports between
+lineages **without transformation**, which is also why a merge can adopt patches byte-identically with
+their author signatures intact. There is no commutation search to explode.
+
+The second half is deliberate refusal rather than cleverness: the patch algebra proves confluence only
+for a **conservative subset** it can prove, and returns a typed conflict witness for everything else.
+**Cost is bounded by refusing hard cases, not by exploring them.** Sealing history into immutable blocks
+then keeps that reasoning confined to the active working set, which is itself capped (NFR-PERF-02).
+
+**But the trade is real, and it is worth stating plainly rather than leaving for someone to discover:**
+
+> **The mechanism that bounds patch cost is the one that creates prikk's actual cost.** History is sealed
+> into a chain carrying state roots, and `verify` re-derives that chain **from genesis, for every
+> block** — which is exactly the O(N³) term above.
+
+**Prikk did not inherit Darcs's problem. It has a different one, and it lives in the verification path
+rather than the merge path.** That distinction matters strategically: verification is this project's
+central claim in a way that merge throughput is not, so the cubic cost is a dependency of the claim
+rather than a performance ticket beside it.
+
+The fix is known and does not require a design change — memoize the lineage walk and reuse the
+accumulated state across the per-block loop.
