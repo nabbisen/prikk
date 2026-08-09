@@ -1,6 +1,7 @@
-# RFC (proposed) - DC-85 Merge From a Received Ref
+# RFC (accepted) - DC-85 Merge From a Received Ref
 
-**Status.** **Proposed 2026-08-09.** Awaits owner acceptance. **Not authorized for implementation.**
+**Status.** **ACCEPTED by the project owner 2026-08-09.** **Cleared for §3's four questions only** —
+design follows their acceptance, and §3.1 in particular may show this increment is larger than it looks.
 **Authored by** the architect. **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** DC-78 Stage 3, which showed that **the architect's §D4 claim was false**: a received ref
 cannot be a merge input. The developer identified the gap, declined to close it unilaterally, and
