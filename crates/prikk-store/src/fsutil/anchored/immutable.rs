@@ -6,40 +6,39 @@ use prikk_error::{PrikkError, Result};
 
 use super::directory::MutationRoot;
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use std::fs::File;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use std::io::{Read, Write};
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use super::directory::prepare_directory_required;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use super::regular::{
     open_existing_regular_if_exists, open_new_regular, required_file_name, required_parent,
 };
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use super::{failpoints, io_error};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use crate::fsutil::temporary_path;
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use rustix::fs::{self, AtFlags, OFlags};
 
 /// Publish immutable bytes without replacing an existing final entry.
 ///
-/// Off Linux and macOS this function's own `#[cfg(not(any(...)))]` branch below is genuinely
+/// Off Linux this function's own `#[cfg(not(target_os = "linux"))]` branch below is genuinely
 /// unreachable today: `anchored.rs`'s `publish_immutable_file` only reaches this function through
-/// `LinuxDurability`/`MacosDurability`, both gated to their own platform (DC-76 addendum-2 B1;
-/// DC-81 widened the gate, not relaxed it). `#[allow(dead_code)]` states that honestly; see
-/// `DurabilityContract`'s doc comment for why this is not gated instead.
-#[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
+/// `LinuxDurability`, which is itself Linux-only (DC-76 addendum-2 B1). `#[allow(dead_code)]`
+/// states that honestly; see `DurabilityContract`'s doc comment for why this is not gated instead.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(crate) fn publish_immutable_file(
     root: &MutationRoot,
     relative: &Path,
     candidate: &[u8],
     validate_existing: impl Fn(&[u8]) -> Result<()>,
 ) -> Result<()> {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(target_os = "linux")]
     {
         let parent = required_parent(relative)?;
         let directory = prepare_directory_required(root, parent)?;
@@ -92,7 +91,7 @@ pub(crate) fn publish_immutable_file(
         failpoints::immutable_cleanup_sync()?;
         directory.sync()
     }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    #[cfg(not(target_os = "linux"))]
     {
         let _ = (root, relative, candidate, validate_existing);
         Err(PrikkError::Io(
@@ -101,7 +100,7 @@ pub(crate) fn publish_immutable_file(
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 fn classify_install_error(error: rustix::io::Errno) -> PrikkError {
     match error {
         rustix::io::Errno::OPNOTSUPP | rustix::io::Errno::NOSYS | rustix::io::Errno::PERM => {
@@ -113,7 +112,7 @@ fn classify_install_error(error: rustix::io::Errno) -> PrikkError {
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 fn compare_existing(
     directory: &super::directory::AnchoredDirectory,
     destination: &std::ffi::OsStr,

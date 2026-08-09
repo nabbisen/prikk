@@ -135,21 +135,19 @@ fn final_symlink_directory_and_symlinked_shard_are_rejected() -> prikk_error::Re
     Ok(())
 }
 
-/// DC-81: ported per POSIX.1-2017 §2.9.7 (see the equivalent note on
-/// `fsutil::tests::append_and_truncate_reject_fifo_without_blocking`) — a genuine port, not a
-/// recompile; macOS runtime behavior needs the CI job to confirm, not asserted here.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 #[test]
 fn final_fifo_is_rejected_without_blocking() -> prikk_error::Result<()> {
     use std::sync::mpsc;
     use std::time::Duration;
 
-    use crate::test_support::create_fifo_for_test;
+    use rustix::fs::{CWD, Mode, mkfifoat};
 
     let (root, layout, envelope) = setup("object-fifo")?;
     let path = layout.object_path(ObjectType::Blob, envelope.object_id());
     std::fs::create_dir_all(required_parent(&path)?)?;
-    create_fifo_for_test(&path, 0o600)?;
+    mkfifoat(CWD, &path, Mode::from_raw_mode(0o600))
+        .map_err(|error| std::io::Error::from_raw_os_error(error.raw_os_error()))?;
     let (sender, receiver) = mpsc::channel();
     std::thread::spawn(move || {
         let mut store = FileObjectStore::new(layout);

@@ -1,32 +1,32 @@
 //! Nonblocking final-entry opens and same-handle validation.
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use std::path::Path;
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use prikk_error::{PrikkError, Result};
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use super::{failpoints, io_error};
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use rustix::fd::{AsFd, OwnedFd};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use rustix::fs::{self, FileType, Mode, OFlags};
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub(super) fn required_parent(path: &Path) -> Result<&Path> {
     path.parent()
         .ok_or_else(|| PrikkError::Io("relative mutation path has no parent".to_string()))
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub(super) fn required_file_name(path: &Path) -> Result<&std::ffi::OsStr> {
     path.file_name()
         .ok_or_else(|| PrikkError::Io("relative mutation path has no file name".to_string()))
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub(super) fn open_new_regular(
     directory: impl AsFd,
     name: &std::ffi::OsStr,
@@ -45,7 +45,7 @@ pub(super) fn open_new_regular(
     )
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub(super) fn open_existing_regular(
     directory: impl AsFd,
     name: &std::ffi::OsStr,
@@ -63,7 +63,7 @@ pub(super) fn open_existing_regular(
     Ok(fd)
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub(super) fn open_existing_regular_if_exists(
     directory: impl AsFd,
     name: &std::ffi::OsStr,
@@ -84,7 +84,7 @@ pub(super) fn open_existing_regular_if_exists(
     Ok(Some(fd))
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub(super) fn open_existing_or_create_regular(
     directory: impl AsFd,
     name: &std::ffi::OsStr,
@@ -106,7 +106,7 @@ pub(super) fn open_existing_or_create_regular(
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub(super) fn open_append_regular(directory: impl AsFd, name: &std::ffi::OsStr) -> Result<OwnedFd> {
     match open_new_regular(directory.as_fd(), name) {
         Ok(fd) => Ok(fd),
@@ -117,7 +117,7 @@ pub(super) fn open_append_regular(directory: impl AsFd, name: &std::ffi::OsStr) 
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 fn validate_regular(fd: impl AsFd) -> Result<()> {
     let stat = fs::fstat(fd).map_err(io_error)?;
     if FileType::from_raw_mode(stat.st_mode).is_file() {

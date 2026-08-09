@@ -1,13 +1,7 @@
-//! DC-76: the durability contract's conformance suite. Every `assert_*` function here is generic
-//! over `impl DurabilityContract`, so a future platform's implementation is checked by the *same*
-//! assertion logic, not a re-derived parallel suite — the whole argument for stating a contract
-//! rather than leaving the guarantee implicit in one platform's own implementation. **Correcting an
-//! overclaim the architect flagged at DC-81 addendum-1**: the two `#[test]` entry points below are
-//! *not* themselves generic — each is a thin, platform-gated wrapper naming a concrete type
-//! (`&LinuxDurability` under `target_os = "linux"`, `&MacosDurability` under `target_os = "macos"`),
-//! because a `#[test]` function has no type parameter to be generic over. What is shared is the
-//! `assert_*` body every wrapper calls into — that is the "same code" this suite's argument rests
-//! on, not the `#[test]` function itself.
+//! DC-76: the durability contract's conformance suite. Every function here is generic over
+//! `impl DurabilityContract`, so a future platform's implementation is checked by the *same* code,
+//! not a re-derived parallel suite — the whole argument for stating a contract rather than leaving
+//! the guarantee implicit in Linux's own implementation.
 //!
 //! **Coverage map — where each guarantee is conformance-tested, new or pre-existing:**
 //!
@@ -26,11 +20,7 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-#[cfg(target_os = "linux")]
-use crate::fsutil::LinuxDurability;
-#[cfg(target_os = "macos")]
-use crate::fsutil::MacosDurability;
-use crate::fsutil::{DurabilityContract, MutationRoot};
+use crate::fsutil::{DurabilityContract, LinuxDurability, MutationRoot};
 use crate::test_support::unique_temp_dir;
 
 fn mutation_root(path: &Path) -> MutationRoot {
@@ -66,16 +56,9 @@ fn assert_create_exclusive_refuses_an_already_occupied_path(durability: &impl Du
     let _ = std::fs::remove_dir_all(path);
 }
 
-#[cfg(target_os = "linux")]
 #[test]
 fn create_exclusive_refuses_an_already_occupied_path() {
     assert_create_exclusive_refuses_an_already_occupied_path(&LinuxDurability);
-}
-
-#[cfg(target_os = "macos")]
-#[test]
-fn create_exclusive_refuses_an_already_occupied_path() {
-    assert_create_exclusive_refuses_an_already_occupied_path(&MacosDurability);
 }
 
 /// G9: `set_permission_bits` must accept a "recorded mode" carrying file-type bits (exactly the
@@ -122,14 +105,7 @@ fn assert_set_permission_bits_masks_file_type_bits_out_of_a_recorded_mode(
     let _ = std::fs::remove_dir_all(path);
 }
 
-#[cfg(target_os = "linux")]
 #[test]
 fn set_permission_bits_masks_file_type_bits_out_of_a_recorded_mode() {
     assert_set_permission_bits_masks_file_type_bits_out_of_a_recorded_mode(&LinuxDurability);
-}
-
-#[cfg(target_os = "macos")]
-#[test]
-fn set_permission_bits_masks_file_type_bits_out_of_a_recorded_mode() {
-    assert_set_permission_bits_masks_file_type_bits_out_of_a_recorded_mode(&MacosDurability);
 }

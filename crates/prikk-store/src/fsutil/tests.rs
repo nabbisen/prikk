@@ -198,22 +198,17 @@ fn failed_unlink_retains_file_and_cleanup_sync_reports_removed_state() {
     let _ = fs::remove_dir_all(path);
 }
 
-/// DC-81: `mkfifoat` and non-blocking-open-refuses-a-FIFO are POSIX-specified behavior (POSIX.1-2017
-/// §2.9.7: opening a FIFO `O_WRONLY | O_NONBLOCK` with no reader present fails `ENXIO`), so this is
-/// ported to macOS rather than left Linux-only — but it is a genuine port, not a recompile
-/// (DC-81 addendum-1 §3): the *POSIX specification* is common to both platforms; this exact runtime
-/// behavior on APFS has not been observed and needs the macOS CI job (once it exists) to confirm.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 #[test]
 fn append_and_truncate_reject_fifo_without_blocking() {
     use std::sync::mpsc;
     use std::time::Duration;
 
-    use crate::test_support::create_fifo_for_test;
+    use rustix::fs::{CWD, Mode, mkfifoat};
 
     let path = unique_temp_dir("fifo-final-entry");
     let fifo = path.join("wal");
-    assert!(create_fifo_for_test(&fifo, 0o600).is_ok());
+    assert!(mkfifoat(CWD, &fifo, Mode::from_raw_mode(0o600)).is_ok());
     let root = mutation_root(&path);
     let (sender, receiver) = mpsc::channel();
     std::thread::spawn(move || {
@@ -236,21 +231,21 @@ fn append_and_truncate_reject_fifo_without_blocking() {
 /// refuses with `ENXIO` when unblocked, independent of anything this crate checks) — so this is the
 /// one path where "is it actually a regular file" is checked by our own code, not handed to us for
 /// free by FIFO write semantics.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 #[test]
 fn read_rejects_fifo_content_despite_the_os_permitting_the_open() {
-    use crate::test_support::create_fifo_for_test;
+    use rustix::fs::{CWD, Mode, mkfifoat};
 
     let path = unique_temp_dir("fifo-read-rejection");
     let fifo = path.join("entry");
-    assert!(create_fifo_for_test(&fifo, 0o600).is_ok());
+    assert!(mkfifoat(CWD, &fifo, Mode::from_raw_mode(0o600)).is_ok());
     let root = mutation_root(&path);
     assert!(read_file_if_exists(&root, Path::new("entry")).is_err());
     let _ = fs::remove_file(fifo);
     let _ = fs::remove_dir_all(path);
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(target_os = "linux"))]
 #[test]
 fn unsupported_mutation_fails_before_filesystem_side_effect() {
     let path = unique_temp_dir("unsupported-mutation");
@@ -329,52 +324,5 @@ fn promotion_source_sync_failure_reports_committed_destination() {
         fs::read(path.join("destination/pointer")).unwrap_or_default(),
         b"pointer"
     );
-    let _ = fs::remove_dir_all(path);
-}
-
-/// DC-81 addendum-1 §3: "Q3's measurement is follow-through, not optional" once the macOS CI job
-/// runs mutation. `#[ignore]`d by default — this is a data point for NFR-PERF-01, not a pass/fail
-/// gate (there is no accepted threshold to assert against, and timing varies by runner) — the CI job
-/// runs it explicitly with `--ignored --nocapture` so the numbers land in the log. Compares raw
-/// `fsync` against `fcntl_fullfsync` directly, bypassing `MacosDurability` (which always uses the
-/// latter for directory syncs, per `AnchoredDirectory::sync`): the point is measuring the primitive
-/// gap `contract.rs`'s G3 doc comment describes, not exercising the contract itself.
-#[cfg(target_os = "macos")]
-#[test]
-#[ignore = "prints timing data for NFR-PERF-01; run explicitly with --ignored --nocapture"]
-fn measure_directory_sync_fsync_vs_fcntl_fullfsync() {
-    use std::time::Instant;
-
-    use rustix::fs::{Mode, OFlags};
-
-    const ITERATIONS: u32 = 50;
-    let path = unique_temp_dir("macos-sync-benchmark");
-    let fd = match rustix::fs::open(&path, OFlags::RDONLY | OFlags::DIRECTORY, Mode::empty()) {
-        Ok(fd) => fd,
-        Err(error) => panic!("open benchmark directory failed: {error}"),
-    };
-
-    let started = Instant::now();
-    for _ in 0..ITERATIONS {
-        if let Err(error) = rustix::fs::fsync(&fd) {
-            panic!("fsync failed: {error}");
-        }
-    }
-    let fsync_elapsed = started.elapsed();
-
-    let started = Instant::now();
-    for _ in 0..ITERATIONS {
-        if let Err(error) = rustix::fs::fcntl_fullfsync(&fd) {
-            panic!("fcntl_fullfsync failed: {error}");
-        }
-    }
-    let fullfsync_elapsed = started.elapsed();
-
-    let ratio = fullfsync_elapsed.as_secs_f64() / fsync_elapsed.as_secs_f64().max(f64::EPSILON);
-    println!(
-        "NFR-PERF-01 data point: {ITERATIONS} directory syncs on this runner \u{2014} \
-         fsync {fsync_elapsed:?}, fcntl_fullfsync {fullfsync_elapsed:?} (ratio {ratio:.2}x)"
-    );
-
     let _ = fs::remove_dir_all(path);
 }

@@ -5,8 +5,8 @@
 //! code actually does, silently, the moment either changes without the other. A trait is checked
 //! by the compiler: every mutation path in `anchored.rs` calls through [`DurabilityContract`], so
 //! there is exactly one place that can state — and one place a future platform's implementation
-//! must satisfy — what durability prikk-store depends on. `Linux` and, as of DC-81, `Macos` are the
-//! implementors (`super::anchored::LinuxDurability`, `super::anchored::MacosDurability`).
+//! must satisfy — what durability prikk-store depends on. `Linux` is the sole implementor today
+//! ([`super::anchored::LinuxDurability`]); no platform is added by this increment.
 //!
 //! **Guarantee, not syscall — the whole point.** [`atomic_replace`](DurabilityContract::atomic_replace)
 //! says "replace this file's content atomically, durably" — never "write a temp file and call
@@ -60,14 +60,13 @@ use super::anchored::MutationRoot;
 /// the guarantee-to-method map. `root` names the authority every path is resolved against; `relative`
 /// is always relative to it, never absolute.
 ///
-/// Deliberately **not** gated to any specific `target_os`, even though `LinuxDurability` and
-/// `MacosDurability` are currently the only implementors: the whole point of this contract is a
-/// platform-neutral statement of what the store requires, and a trait that vanishes on the
-/// platforms it exists to enable would defeat that (DC-76 addendum-2 B1). Off both implemented
-/// platforms it is therefore genuinely unused — `#[allow(dead_code)]` states that honestly rather
-/// than suppressing it, and it is expected to stop applying the moment a third platform implements
-/// this trait.
-#[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
+/// Deliberately **not** gated to `target_os = "linux"`, even though `LinuxDurability` is currently
+/// the only implementor: the whole point of this contract is a platform-neutral statement of what
+/// the store requires, and a trait that vanishes on the platforms it exists to enable would defeat
+/// that (DC-76 addendum-2 B1). Off Linux it is therefore genuinely unused — `#[allow(dead_code)]`
+/// states that honestly rather than suppressing it, and it is expected to stop applying the moment
+/// a second platform implements this trait.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(crate) trait DurabilityContract {
     /// Replace `relative`'s content atomically and durably: a reader never observes a partial
     /// write, and a crash mid-replace leaves either the complete previous content or the complete

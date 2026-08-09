@@ -190,39 +190,6 @@ pub(crate) fn maintainer_signature() -> Signature {
     }
 }
 
-/// Create a FIFO at `path` for a negative-control test fixture, portable between Linux and macOS.
-/// `rustix::fs::mkfifoat`/`mknodat` are gated `#[cfg(not(any(apple, ...)))]` in `rustix` 1.1.4's own
-/// source (`src/fs/at.rs`) — genuinely absent on `apple`, discovered by DC-81 only through actually
-/// cross-compiling test code with `--target x86_64-apple-darwin`, since no production
-/// `DurabilityContract` method calls `mkfifoat` and DC-76's own primitive-availability check never
-/// had reason to look at it. `mkfifo(3)` is declared directly via FFI rather than adding a
-/// dependency: it is a stable POSIX libc symbol every Unix `std` build already links against, so this
-/// three-call-site test helper needs no `ALLOWED_THIRD_PARTY` change.
-#[cfg(target_os = "linux")]
-pub(crate) fn create_fifo_for_test(path: &std::path::Path, mode: u32) -> std::io::Result<()> {
-    rustix::fs::mkfifoat(rustix::fs::CWD, path, rustix::fs::Mode::from_raw_mode(mode))
-        .map_err(std::io::Error::from)
-}
-
-/// `crates/prikk-store` is `#![forbid(unsafe_code)]`, so a raw FFI declaration for `mkfifo(3)` is not
-/// an option here — shelling out to the `mkfifo(1)` utility (a standard part of every macOS install,
-/// including GitHub-hosted `macos-latest` runners) needs neither `unsafe` nor a new dependency.
-#[cfg(target_os = "macos")]
-pub(crate) fn create_fifo_for_test(path: &std::path::Path, mode: u32) -> std::io::Result<()> {
-    let status = std::process::Command::new("mkfifo")
-        .arg("-m")
-        .arg(format!("{mode:o}"))
-        .arg(path)
-        .status()?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(std::io::Error::other(format!(
-            "mkfifo exited with status {status}"
-        )))
-    }
-}
-
 pub(crate) fn unique_temp_dir(name: &str) -> std::path::PathBuf {
     let mut path = std::env::temp_dir();
     path.push(format!(

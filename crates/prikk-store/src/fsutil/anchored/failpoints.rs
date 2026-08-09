@@ -144,14 +144,7 @@ pub(super) fn immutable_install() -> Result<()> {
     check_test_point(TestPoint::ImmutableInstall)
 }
 
-/// Injects the errno `LinuxDurability`/`MacosDurability`'s `linkat`-based no-clobber install could
-/// plausibly surface if the destination filesystem or OS policy refuses a hardlink install. The three
-/// `rustix::io::Errno` values named are portable POSIX errno wrappers (present in `rustix`'s `Errno`
-/// type on every `libc`-backed target, `apple` included) — the injection mechanism and the values it
-/// injects are shared between platforms. What is **not** re-verified here: whether these are the
-/// *actual* errnos APFS's `linkat` returns for "not supported" (DC-81 §1 Q4/addendum-1: a genuine port,
-/// not a recompile — needs macOS CI confirmation, not asserted from this file alone).
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub(super) fn immutable_install_error() -> Option<rustix::io::Errno> {
     for (point, error) in [
         (

@@ -6,23 +6,23 @@ use std::sync::Arc;
 
 use prikk_error::{PrikkError, Result};
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use rustix::fd::OwnedFd;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use rustix::fs::{self, Mode, OFlags};
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use super::failpoints;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use super::io_error;
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(target_os = "linux"))]
 use super::unsupported_mutation;
 
 /// A validated mutation authority rooted at one retained directory handle.
 #[derive(Clone)]
 pub(crate) struct MutationRoot {
     path: Arc<PathBuf>,
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(target_os = "linux")]
     directory: Arc<AnchoredDirectory>,
 }
 
@@ -34,18 +34,18 @@ impl fmt::Debug for MutationRoot {
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub(super) struct AnchoredDirectory {
     pub(super) fd: OwnedFd,
 }
 
 impl MutationRoot {
     pub(crate) fn same_authority(&self, other: &Self) -> bool {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(target_os = "linux")]
         {
             Arc::ptr_eq(&self.directory, &other.directory)
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(not(target_os = "linux"))]
         {
             Arc::ptr_eq(&self.path, &other.path)
         }
@@ -53,14 +53,14 @@ impl MutationRoot {
 
     /// Bind mutation authority to an existing no-follow directory handle.
     pub(crate) fn open(path: &Path) -> Result<Self> {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(target_os = "linux")]
         {
             Ok(Self {
                 path: Arc::new(path.to_path_buf()),
                 directory: Arc::new(AnchoredDirectory::open(path)?),
             })
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(not(target_os = "linux"))]
         {
             Ok(Self {
                 path: Arc::new(path.to_path_buf()),
@@ -70,14 +70,14 @@ impl MutationRoot {
 
     /// Create and bind a nested root relative to this authority.
     pub(crate) fn ensure_root(&self, relative: &Path) -> Result<Self> {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(target_os = "linux")]
         {
             Ok(Self {
                 path: Arc::new(self.fallback_path(relative)?),
                 directory: Arc::new(prepare_directory_required(self, relative)?),
             })
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(not(target_os = "linux"))]
         {
             let _ = relative;
             unsupported_mutation()
@@ -86,14 +86,14 @@ impl MutationRoot {
 
     /// Bind a nested existing root relative to this authority.
     pub(crate) fn open_root(&self, relative: &Path) -> Result<Self> {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(target_os = "linux")]
         {
             Ok(Self {
                 path: Arc::new(self.fallback_path(relative)?),
                 directory: Arc::new(open_existing_directory_required(self, relative)?),
             })
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(not(target_os = "linux"))]
         {
             Ok(Self {
                 path: Arc::new(self.fallback_path(relative)?),
@@ -106,14 +106,14 @@ impl MutationRoot {
         Ok(self.path.join(relative))
     }
 
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(target_os = "linux")]
     pub(super) fn duplicate_directory(&self) -> Result<AnchoredDirectory> {
         let fd = rustix::io::dup(&self.directory.fd).map_err(io_error)?;
         Ok(AnchoredDirectory { fd })
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 impl AnchoredDirectory {
     fn open(path: &Path) -> Result<Self> {
         failpoints::required_open()?;
@@ -189,29 +189,12 @@ impl AnchoredDirectory {
         }
     }
 
-    /// Sync this directory's entry-list state — G3's worked example. `fsync` on a directory fd is
-    /// Linux's guarantee; macOS documents `fsync` as insufficient (Apple's own `fsync(2)`: the drive
-    /// may not have physically written the data, and may reorder it) and provides
-    /// `fcntl(fd, F_FULLFSYNC)` as the stronger primitive (DC-76 addendum-1, confirmed against
-    /// `rustix` 1.1.4 source: `fcntl_fullfsync` wraps it and is available on `apple`). This is the
-    /// one place the two platforms' implementations genuinely diverge — everywhere else, identical
-    /// `rustix` calls happen to also be correct on both, because `std::fs::File::sync_all`/
-    /// `sync_data` already call `F_FULLFSYNC` internally on Apple targets (`library/std/src/sys/fs/unix.rs`,
-    /// `os_fsync`/`os_datasync` under `cfg(target_vendor = "apple")`) — but a directory fd is never a
-    /// `std::fs::File`, so this call site needs the platform branch explicitly.
     pub(super) fn sync(&self) -> Result<()> {
-        #[cfg(target_os = "linux")]
-        {
-            fs::fsync(&self.fd).map_err(io_error)
-        }
-        #[cfg(target_os = "macos")]
-        {
-            fs::fcntl_fullfsync(&self.fd).map_err(io_error)
-        }
+        fs::fsync(&self.fd).map_err(io_error)
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub(super) fn prepare_directory_required(
     root: &MutationRoot,
     relative: &Path,
@@ -223,7 +206,7 @@ pub(super) fn prepare_directory_required(
     Ok(current)
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub(super) fn open_existing_directory_required(
     root: &MutationRoot,
     relative: &Path,
@@ -235,7 +218,7 @@ pub(super) fn open_existing_directory_required(
     Ok(current)
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub(super) fn open_existing_directory_for_read(
     root: &MutationRoot,
     relative: &Path,
@@ -250,7 +233,7 @@ pub(super) fn open_existing_directory_for_read(
     Ok(Some(current))
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 fn relative_components(path: &Path) -> Result<Vec<&std::ffi::OsStr>> {
     validate_relative(path)?;
     let mut components = Vec::new();
