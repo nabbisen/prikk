@@ -20,7 +20,11 @@ use prikk_object::{
     RefStatePayload, RefUpdatePayload,
 };
 
-use crate::merge_evidence::{MergeEvidenceTarget, candidate_patch_ids, prepare_merge_evidence};
+use crate::merge_evidence::{
+    MergeEvidenceTarget, candidate_patch_ids, prepare_merge_evidence,
+    verify_candidate_blocks_trusted,
+};
+use crate::received::validate_received_ref;
 use crate::{
     FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication, RefStore, RepositoryLayout,
     derive_next_state_root, maintainer_signature, validate_local_branch_ref, verify_signer_trusted,
@@ -62,7 +66,19 @@ pub fn execute_merge(
 ) -> Result<MergeExecutionReport> {
     layout.require_current_format()?;
     let into_ref = validate_local_branch_ref(into_ref)?;
-    let from_ref = validate_local_branch_ref(from_ref)?;
+    // DC-85: `from_ref` may be a local branch or a received ref (`remotes/<name>`) — never widen
+    // `validate_local_branch_ref` itself to accept `remotes/`, since it also gates `into_ref` here
+    // and `branch create --from` elsewhere; a merge source that happens to be received gets its own
+    // resolution path instead (§3A.3). `into_ref` is never eligible: `RefStore::publish` only ever
+    // writes `refs/by-id/`, so the side being advanced must remain a genuine local branch.
+    let from_is_received = from_ref.starts_with("remotes/");
+    let from_target = if from_is_received {
+        validate_received_ref(from_ref)?;
+        MergeEvidenceTarget::ReceivedRef(from_ref.to_string())
+    } else {
+        MergeEvidenceTarget::Ref(validate_local_branch_ref(from_ref)?)
+    };
+    let from_ref = from_ref.to_string();
     if into_ref == from_ref {
         return Err(PrikkError::InvalidName(
             "merge into_ref and from_ref must differ".to_string(),
@@ -74,7 +90,7 @@ pub fn execute_merge(
         layout,
         baseline_block_id,
         MergeEvidenceTarget::Ref(into_ref.clone()),
-        MergeEvidenceTarget::Ref(from_ref.clone()),
+        from_target,
     )?;
     if !evidence.is_confluent() {
         return Err(PrikkError::Integrity(format!(
@@ -89,9 +105,22 @@ pub fn execute_merge(
     }
 
     // Only proceeding to seal needs a trusted signer.
-    verify_signer_trusted(layout, signer)?;
+    let policy = verify_signer_trusted(layout, signer)?;
 
     let object_store = FileObjectStore::new(layout.clone());
+
+    // DC-85 §3A.1's mandatory criterion: a received ref's blocks never passed a trust check on the
+    // way in (`import_bundle` performs none, deliberately). Checked here, before any write, reusing
+    // the signer's already-loaded policy rather than a second load.
+    if from_is_received {
+        verify_candidate_blocks_trusted(
+            &object_store,
+            &policy,
+            baseline_block_id,
+            evidence.right_selector.target_block_id,
+        )?;
+    }
+
     let adopted_patch_ids = candidate_patch_ids(
         &object_store,
         baseline_block_id,
