@@ -39,7 +39,7 @@ prikk-object                = { version = "0.19.0", path = "crates/prikk-object"
 prikk-replay                = { version = "0.19.0", path = "crates/prikk-replay" }
 prikk-store                 = { version = "0.19.0", path = "crates/prikk-store" }
 
-ed25519-dalek               = "2"
+ed25519-dalek               = "3"
 getrandom                   = "0.4"
 rustix                      = { version = "1", features = ["fs"] }
 sha2                        = "0.11"
