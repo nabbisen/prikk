@@ -57,8 +57,12 @@ unattributable — the argument this project has used to split DC-82 from DC-81,
 
 ## 4. Acceptance criteria
 
-1. No page in `docs/src` states or implies that mutation requires Linux, or that mutation is exercised
-   only on Linux.
+1. **Amended 2026-08-10, during the implementation review — the amendment is the architect's own
+   correction, not a change of ask.** No **user-facing documentation** states or implies that mutation
+   requires Linux, or that mutation is exercised only on Linux. The original wording said "no page in
+   `docs/src`", which wrongly excluded **`README.md`** — the project's front page, and the third time in
+   this chain the architect scoped "where else does this claim live" too narrowly. `README.md` is in
+   scope. **`README.md:105` and `:137` are about prebuilt binaries, are true, and must not be touched.**
 2. `architecture.md:106`'s claim is restated in terms that remain true as platforms are added, or
    removed.
 3. The set of corrected sites is **independently derived**, and any site found beyond §1's list is
