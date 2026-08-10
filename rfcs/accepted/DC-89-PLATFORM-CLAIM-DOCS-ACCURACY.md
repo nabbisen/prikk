@@ -1,7 +1,7 @@
-# RFC (proposed) - DC-89 Platform Claim Documentation Accuracy
+# RFC (accepted) - DC-89 Platform Claim Documentation Accuracy
 
-**Status.** **PROPOSED** — needs the project owner's acceptance. Small and mechanical; recommended to
-move quickly, because these are shipped user-facing pages stating something untrue.
+**Status.** **ACCEPTED by the project owner 2026-08-10.** Small and mechanical; cleared to implement
+directly — §3's scope is the work, there are no prerequisite questions.
 **Independence.** Author-reviewed — the standing ceiling. **Note that most of the incorrect text is the
 architect's own**, which is a reason for care, not for skipping the increment.
 **Arises from.** The DC-87 mode-shape review, 2026-08-10. The architect's accept condition named one
