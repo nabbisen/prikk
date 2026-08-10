@@ -72,13 +72,22 @@ pub fn execute_merge(
     // resolution path instead (§3A.3). `into_ref` is never eligible: `RefStore::publish` only ever
     // writes `refs/by-id/`, so the side being advanced must remain a genuine local branch.
     let from_is_received = from_ref.starts_with("remotes/");
-    let from_target = if from_is_received {
+    // Carry the local arm's own canonical string forward for the comparison below, rather than
+    // re-deriving `from_ref` from the raw argument a second time — today `validate_local_branch_ref`
+    // happens to return its input unchanged, so the two forms agree, but that is not guaranteed to
+    // stay true (`refs.rs`'s own comment on `validate_local_tag_ref` already records NFR-SEC-03's
+    // case-collision rule as unmet and tracked for later); comparing a validated name against an
+    // unvalidated one would silently stop catching `heads/Main` vs `heads/main` the day it lands.
+    let (from_target, from_ref) = if from_is_received {
         validate_received_ref(from_ref)?;
-        MergeEvidenceTarget::ReceivedRef(from_ref.to_string())
+        (
+            MergeEvidenceTarget::ReceivedRef(from_ref.to_string()),
+            from_ref.to_string(),
+        )
     } else {
-        MergeEvidenceTarget::Ref(validate_local_branch_ref(from_ref)?)
+        let canonical = validate_local_branch_ref(from_ref)?;
+        (MergeEvidenceTarget::Ref(canonical.clone()), canonical)
     };
-    let from_ref = from_ref.to_string();
     if into_ref == from_ref {
         return Err(PrikkError::InvalidName(
             "merge into_ref and from_ref must differ".to_string(),

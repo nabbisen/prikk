@@ -28,6 +28,10 @@ Selector rules:
 - `--baseline-block` is required and names the sealed baseline block.
 - Each side must choose exactly one selector: `--left-block` or `--left-ref`, and `--right-block`
   or `--right-ref`.
+- A `--left-ref`/`--right-ref` value may name a received ref (`remotes/<name>`, DC-85), previewing
+  evidence against imported history exactly as it would for a local branch. This is read-only, so a
+  preview can name a `remotes/` ref on either side even though `prikk merge` itself never accepts one
+  as `--into` — the preview does not claim the plan it shows is executable as-is.
 - The optional positional argument is the repository root, as with other commands. It is not a path
   filter.
 
