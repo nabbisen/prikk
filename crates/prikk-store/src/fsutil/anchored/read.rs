@@ -33,12 +33,16 @@ pub(crate) enum EntryKind {
 /// Size, modification time, and raw mode of one validated regular-file entry, gathered without
 /// opening or reading its content (DC-56: the commit-index cache consults this to decide whether a
 /// content read can be skipped).
+///
+/// `mode` is `None` on a platform with no observable POSIX mode (DC-87 §3.3/§4.3) — never a
+/// synthetic value standing in for one. Consumers that need a mode to compare or record are the
+/// ones that decide what `None` means for them; this type does not manufacture that answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RootFileStat {
     pub(crate) size: u64,
     pub(crate) mtime_secs: i64,
     pub(crate) mtime_nanos: u32,
-    pub(crate) mode: u32,
+    pub(crate) mode: Option<u32>,
 }
 
 /// One no-follow root-relative directory entry.
@@ -124,7 +128,7 @@ pub(crate) fn stat_file_state_if_exists(
             size: u64::try_from(stat.st_size).unwrap_or_default(),
             mtime_secs: stat.st_mtime,
             mtime_nanos: u32::try_from(stat.st_mtime_nsec).unwrap_or_default(),
-            mode,
+            mode: Some(mode),
         }))
     }
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
@@ -137,17 +141,21 @@ pub(crate) fn stat_file_state_if_exists(
                         "stat target is not a regular file".to_string(),
                     ));
                 }
+                // A POSIX mode is only observable where `std::os::unix::fs::MetadataExt` exists —
+                // other Unix-family targets besides Linux/macOS reach this fallback (e.g. *BSD) and
+                // still have a real mode. `None` (DC-87 §3.3/§4.3) is reserved for platforms with no
+                // POSIX mode at all, not a stand-in for "didn't bother computing it."
                 #[cfg(unix)]
                 let (mode, mtime_secs, mtime_nanos) = {
                     use std::os::unix::fs::MetadataExt;
                     (
-                        metadata.mode(),
+                        Some(metadata.mode()),
                         metadata.mtime(),
                         u32::try_from(metadata.mtime_nsec()).unwrap_or_default(),
                     )
                 };
                 #[cfg(not(unix))]
-                let (mode, mtime_secs, mtime_nanos) = (0_u32, 0_i64, 0_u32);
+                let (mode, mtime_secs, mtime_nanos): (Option<u32>, i64, u32) = (None, 0_i64, 0_u32);
                 Ok(Some(RootFileStat {
                     size: metadata.len(),
                     mtime_secs,

@@ -108,7 +108,7 @@ fn matches_stat_requires_size_and_mtime_equality() {
         size: entry.size,
         mtime_secs: entry.mtime_secs,
         mtime_nanos: entry.mtime_nanos,
-        mode: entry.mode,
+        mode: Some(entry.mode),
     };
     assert!(entry.matches_stat(&same));
 

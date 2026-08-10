@@ -90,3 +90,10 @@ a successful compile.
   Windows variant is separately CI-gated as of DC-71; nothing in the fix is architecture-specific
   (it is `#[cfg(target_os = ...)]`, not target-triple-specific), so this is a coverage gap in CI
   breadth, not a known or suspected difference in behavior.
+- **File mode / executable-bit authoring on a platform with no observable POSIX mode** (DC-87
+  §3.3/§4.3): worktree authoring never derives a node's recorded mode from such a platform's
+  filesystem — an existing node's already-recorded mode is always carried forward untouched, and a
+  brand-new file is created non-executable by default, since there is no existing recorded mode to
+  inherit and no observed signal to use. This is a missing capability (an executable file's initial
+  creation cannot be authored from such a worktree), not data loss — a previously-recorded executable
+  bit is never silently dropped from sealed history by this platform difference.

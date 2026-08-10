@@ -357,6 +357,7 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
                         &mut commit_index,
                         path,
                         meta,
+                        base.mode,
                         BlobKind::Text,
                     )?;
                     if resolved.content_hash != base.blob_id {
@@ -381,6 +382,7 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
                         &mut commit_index,
                         path,
                         meta,
+                        base.mode,
                         BlobKind::Binary,
                     )?;
                     if resolved.content_hash != base.blob_id {
@@ -398,12 +400,10 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
                 }
             }
             // Mode-change detection (4.4a-2b), independent of content, for regular file nodes only
-            // (symlink nodes never reach here — they live in `baseline_symlinks`). The worktree mode
-            // is normalized through the same `normalize_file_mode` rule as `CreateFile` (N2). If the
-            // canonical mode differs from the replay-derived baseline mode, emit one `ChangePerm`;
-            // the canonical operation sort places it before any `ReplaceBinary`/`EditText` content op.
-            if meta.mode != base.mode {
-                planned.push(plan_change_perm(base, meta.mode, path));
+            // (symlink nodes never reach here — they live in `baseline_symlinks`). The canonical
+            // operation sort places `ChangePerm` before any `ReplaceBinary`/`EditText` content op.
+            if let Some(op) = plan_mode_change_if_observed(base, meta.mode, path) {
+                planned.push(op);
             }
         } else if baseline_symlinks.contains_key(path) {
             return Err(AuthorError::UnsupportedSymlinkAuthoring(format!(
@@ -417,18 +417,24 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
             let (blob_kind, _node_kind) = classify_new(&bytes);
             let content_hash =
                 commit_index::content_hash(blob_kind, &bytes).map_err(AuthorError::Store)?;
+            // No baseline node exists yet, so there is no existing recorded mode to carry forward —
+            // unlike the existing-node case above. A platform with no observable POSIX mode
+            // (DC-87 §3.3/§4.3) creates the file non-executable by default; this is a missing
+            // capability, not silent corruption of something previously right (see
+            // `docs/src/reference/platform-support.md`).
+            let resolved_mode = meta.mode.unwrap_or(REGULAR_FILE_MODE);
             commit_index.record(
                 path.clone(),
                 CommitIndexEntry {
                     size: meta.size,
                     mtime_secs: meta.mtime_secs,
                     mtime_nanos: meta.mtime_nanos,
-                    mode: meta.mode,
+                    mode: resolved_mode,
                     kind: blob_kind,
                     content_hash,
                 },
             );
-            create_candidates.push((path.clone(), bytes, meta.mode));
+            create_candidates.push((path.clone(), bytes, resolved_mode));
         }
     }
 
@@ -656,6 +662,27 @@ fn plan_replace_binary(
     })
 }
 
+/// Decide whether an existing regular file node's worktree mode changed (4.4a-2b), and plan a
+/// `ChangePerm` if so. The worktree mode is normalized through the same `normalize_file_mode` rule
+/// as `CreateFile` (N2).
+///
+/// `observed_mode` is `None` on a platform with no observable POSIX mode (DC-87 §3.3/§4.3).
+/// Declining to compare there is deliberate: it is choosing not to detect a signal the platform
+/// structurally cannot produce, not claiming to have set something and not doing it (contrast with
+/// `set_permission_bits`'s "returns `Ok` is not evidence" standard, which governs a different claim).
+/// The existing recorded mode (`base.mode`) carries forward untouched — see `mode_change_tests`.
+fn plan_mode_change_if_observed(
+    base: &BaselineFile,
+    observed_mode: Option<u32>,
+    path: &str,
+) -> Option<PlannedOp> {
+    let observed_mode = observed_mode?;
+    if observed_mode == base.mode {
+        return None;
+    }
+    Some(plan_change_perm(base, observed_mode, path))
+}
+
 /// Plan a `ChangePerm` for an existing regular file node whose normalized worktree mode differs from
 /// its replay-derived baseline mode (4.4a-2b). `old_mode` is the baseline mode; `new_mode` is the
 /// normalized worktree mode.
@@ -708,6 +735,7 @@ fn resolve_existing_file(
     commit_index: &mut CommitIndex,
     path: &str,
     meta: &WorktreeFileMeta,
+    base_mode: u32,
     blob_kind: BlobKind,
 ) -> std::result::Result<ExistingFileResolution, AuthorError> {
     let stat = RootFileStat {
@@ -726,13 +754,17 @@ fn resolve_existing_file(
     }
     let bytes = read_existing_file_bytes(layout, path, blob_kind)?;
     let content_hash = commit_index::content_hash(blob_kind, &bytes).map_err(AuthorError::Store)?;
+    // `meta.mode` is `None` on a platform with no observable POSIX mode (DC-87 §3.3/§4.3); the cache
+    // entry records whatever mode was actually resolved for this node — `base_mode`, carried forward
+    // untouched — rather than a raw `Option`, since `CommitIndexEntry.mode` is plain bookkeeping,
+    // never part of `matches_stat`'s trust condition.
     commit_index.record(
         path.to_string(),
         CommitIndexEntry {
             size: meta.size,
             mtime_secs: meta.mtime_secs,
             mtime_nanos: meta.mtime_nanos,
-            mode: meta.mode,
+            mode: meta.mode.unwrap_or(base_mode),
             kind: blob_kind,
             content_hash,
         },
@@ -852,4 +884,58 @@ fn current_text_for_node(
             base.blob_id
         )))
     })
+}
+
+/// DC-87 §3.3/§4.3: an unobservable worktree mode must never be mistaken for a real, unchanged one,
+/// and must never fire `ChangePerm` — exercised directly here (not through a real filesystem walk)
+/// so this protection is verified on every platform's CI, not only a future Windows job's.
+#[cfg(test)]
+mod mode_change_tests {
+    #![allow(clippy::expect_used)]
+
+    use prikk_object::{NodeId, NodeKind, ObjectId, ObjectType};
+
+    use super::{
+        BaselineFile, EXECUTABLE_FILE_MODE, REGULAR_FILE_MODE, plan_mode_change_if_observed,
+    };
+
+    fn sample_baseline(mode: u32) -> BaselineFile {
+        BaselineFile {
+            node_id: NodeId::from_bytes([0x42; 32]),
+            kind: NodeKind::TextFile,
+            blob_id: ObjectId::from_canonical_payload(ObjectType::Blob, 1, b"mode-change-tests"),
+            mode,
+        }
+    }
+
+    #[test]
+    fn unobserved_mode_never_plans_a_change_perm_even_when_baseline_differs() {
+        // The platform cannot observe a mode at all (DC-87 §3.3/§4.3) — the baseline is executable,
+        // so a real `REGULAR_FILE_MODE` observation would have fired `ChangePerm`; `None` must not.
+        let base = sample_baseline(EXECUTABLE_FILE_MODE);
+        assert!(plan_mode_change_if_observed(&base, None, "bin/tool").is_none());
+    }
+
+    #[test]
+    fn unobserved_mode_never_plans_a_change_perm_when_baseline_is_regular() {
+        let base = sample_baseline(REGULAR_FILE_MODE);
+        assert!(plan_mode_change_if_observed(&base, None, "src/lib.rs").is_none());
+    }
+
+    #[test]
+    fn observed_mode_matching_baseline_plans_no_change() {
+        let base = sample_baseline(REGULAR_FILE_MODE);
+        assert!(
+            plan_mode_change_if_observed(&base, Some(REGULAR_FILE_MODE), "src/lib.rs").is_none()
+        );
+    }
+
+    #[test]
+    fn observed_mode_differing_from_baseline_plans_a_change_perm() {
+        let base = sample_baseline(REGULAR_FILE_MODE);
+        let op = plan_mode_change_if_observed(&base, Some(EXECUTABLE_FILE_MODE), "bin/tool")
+            .expect("a real observed change must be planned");
+        assert_eq!(op.path, "bin/tool");
+        assert_eq!(op.node_id, base.node_id);
+    }
 }
