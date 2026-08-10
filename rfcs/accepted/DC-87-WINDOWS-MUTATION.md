@@ -1,6 +1,7 @@
-# RFC (proposed) - DC-87 Windows Mutation
+# RFC (accepted) - DC-87 Windows Mutation
 
-**Status.** **PROPOSED** — needs the project owner's acceptance before design begins.
+**Status.** **ACCEPTED by the project owner 2026-08-10.** §3's six prerequisites still precede design;
+acceptance clears the investigation, not the implementation.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** The owner's direction of 2026-08-10: mutation expansion on Windows and macOS as soon
 as possible, *with clean architecture and a safe process*. macOS landed as DC-81; this is the other
