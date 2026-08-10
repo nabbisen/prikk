@@ -14,13 +14,24 @@
 //! **Guarantee, not syscall — the whole point.** [`atomic_replace`](DurabilityContract::atomic_replace)
 //! says "replace this file's content atomically, durably" — never "write a temp file and call
 //! `renameat`". A method named after a primitive would already be platform-specific before a
-//! second platform exists. The worked example the architect asked this contract be built around:
-//! [`durable_directory_entry`](DurabilityContract::durable_directory_entry) — "once this returns,
-//! every mutation made under `relative` since the last durability point survives a crash" — is
-//! satisfied on Linux by `fsync` on the directory fd, and (per DC-76 addendum-1, confirmed against
-//! `rustix` 1.1.4's own source) would be satisfied on macOS by `fcntl(fd, F_FULLFSYNC)`
-//! (`rustix::fs::fcntl_fullfsync`) instead — `fsync` alone does not give the same guarantee there.
-//! Stating the method as "fsync" would already have been wrong, before macOS was ever implemented.
+//! second platform exists.
+//!
+//! [`durable_directory_entry`](DurabilityContract::durable_directory_entry) was originally the
+//! worked example this contract was built around, and it was itself the one method that missed the
+//! bar: it read "once this returns, every mutation made under `relative` since the last durability
+//! point survives a crash" — a directory-scoped **batching** guarantee, shaped after `fsync` on a
+//! directory fd rather than after any real caller's need. **DC-88 traced every caller in the
+//! codebase and found none that wanted batching** — every other method above already bundles its
+//! own transition-scoped directory sync as an integral part of *its own* guarantee (see each
+//! method's doc comment), and this method's two real callers (`worktree.rs`'s checkout
+//! materialization, confirming one file's presence is durable even when a call wrote nothing) only
+//! ever wanted that narrower, single-entry confirmation. The method is restated accordingly: it
+//! still resolves to `fsync` on the containing directory's fd on Linux, and (per DC-76 addendum-1,
+//! confirmed against `rustix` 1.1.4's own source) `fcntl(fd, F_FULLFSYNC)`
+//! (`rustix::fs::fcntl_fullfsync`) on macOS instead — `fsync` alone does not give the same guarantee
+//! there, and stating the method as "fsync" would already have been wrong, before macOS was ever
+//! implemented — but what it *promises* is now the requirement its callers actually rely on, not the
+//! primitive that happens to satisfy it on POSIX.
 //!
 //! ## Cross-cutting invariants — properties every method must hold, not separate methods
 //!
@@ -47,7 +58,7 @@
 //! | Guarantee | Method |
 //! |---|---|
 //! | G2 (atomic content replacement) | [`atomic_replace`](DurabilityContract::atomic_replace) |
-//! | G3 (durable-after-return) | every method below returns only once its effect is durable; [`durable_directory_entry`](DurabilityContract::durable_directory_entry) is the guarantee in its most direct form |
+//! | G3 (durable-after-return) | every method below returns only once its effect is durable; [`durable_directory_entry`](DurabilityContract::durable_directory_entry) confirms one entry's presence directly, without relying on any other method's write having happened in the same call |
 //! | G4 (exclusive creation) | [`create_exclusive`](DurabilityContract::create_exclusive) |
 //! | G5 (race-safe no-clobber publication) | [`publish_immutable`](DurabilityContract::publish_immutable) |
 //! | G9 (mode-bit isolation) | [`set_permission_bits`](DurabilityContract::set_permission_bits) |
@@ -133,8 +144,11 @@ pub(crate) trait DurabilityContract {
     /// Ensure a relative directory tree exists, durably, tolerating a concurrent creator (G8).
     fn ensure_directory(&self, root: &MutationRoot, relative: &Path) -> Result<()>;
 
-    /// Durably sync an existing root-relative directory's entry-list state — the guarantee in its
-    /// most direct form (G3's worked example): once this returns, every mutation made under
-    /// `relative` since the last durability point survives a crash.
+    /// Durably confirm that `relative` — an existing regular file — is recorded in its containing
+    /// directory: once this returns, `relative`'s presence survives a crash, even when this call
+    /// itself wrote nothing (DC-88; see the module doc for why this is stated as a single-entry
+    /// confirmation rather than the directory-scoped batching guarantee it originally read as).
+    /// `relative` names the **entry to confirm**, not the directory to sync — an implementor
+    /// resolves and syncs `relative`'s parent internally.
     fn durable_directory_entry(&self, root: &MutationRoot, relative: &Path) -> Result<()>;
 }

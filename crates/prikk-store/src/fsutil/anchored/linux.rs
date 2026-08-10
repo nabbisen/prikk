@@ -168,7 +168,7 @@ impl DurabilityContract for LinuxDurability {
     }
 
     fn durable_directory_entry(&self, root: &MutationRoot, relative: &Path) -> Result<()> {
-        let directory = open_existing_directory_required(root, relative)?;
+        let directory = open_existing_directory_required(root, required_parent(relative)?)?;
         failpoints::required_directory_sync()?;
         directory.sync()
     }

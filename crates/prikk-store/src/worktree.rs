@@ -142,8 +142,7 @@ fn materialize_replay_entry(
             .and_then(|stat| stat.mode)
             .map(|mode| mode & 0o7777);
         if current_mode == Some(entry.mode & 0o7777) {
-            let parent = relative.parent().unwrap_or_else(|| Path::new(""));
-            sync_directory_required(layout.worktree_mutation_root(), parent)?;
+            sync_directory_required(layout.worktree_mutation_root(), relative)?;
             return Ok(EntryWriteOutcome::Unchanged);
         }
         set_regular_file_mode_required(layout.worktree_mutation_root(), relative, entry.mode)?;
@@ -191,8 +190,7 @@ fn materialize_entry(
     let relative = Path::new(entry.path.as_str());
     if let Some(current) = read_file_if_exists(layout.worktree_mutation_root(), relative)? {
         if current == entry.bytes {
-            let parent = relative.parent().unwrap_or_else(|| Path::new(""));
-            sync_directory_required(layout.worktree_mutation_root(), parent)?;
+            sync_directory_required(layout.worktree_mutation_root(), relative)?;
             return Ok(EntryWriteOutcome::Unchanged);
         }
         return Err(PrikkError::Integrity(format!(

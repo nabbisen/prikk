@@ -164,7 +164,8 @@ pub(crate) fn ensure_directory_required(root: &MutationRoot, relative: &Path) ->
     ACTIVE_DURABILITY.ensure_directory(root, relative)
 }
 
-/// Open and required-sync an existing root-relative directory.
+/// Durably confirm that `relative` — an existing regular file — is recorded in its containing
+/// directory (DC-88). `relative` names the entry to confirm, not the directory to sync.
 pub(crate) fn sync_directory_required(root: &MutationRoot, relative: &Path) -> Result<()> {
     ACTIVE_DURABILITY.durable_directory_entry(root, relative)
 }
