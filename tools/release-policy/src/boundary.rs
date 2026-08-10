@@ -1,6 +1,7 @@
 mod package;
 mod placement;
 mod publication;
+mod unsafe_boundary;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -19,13 +20,14 @@ const PRODUCTS: [(&str, &str); 7] = [
     ("prikk-store", "crates/prikk-store/Cargo.toml"),
     ("prikk", "crates/prikk-cli/Cargo.toml"),
 ];
-const CATEGORY_ORDER: [&str; 9] = [
+const CATEGORY_ORDER: [&str; 10] = [
     "workspace-members",
     "default-members",
     "tool-metadata",
     "lockfile-boundary",
     "dependency-boundary",
     "dependency-placement",
+    "unsafe-boundary",
     "publication-allowlist",
     "package-contents",
     "source-archive-contents",
@@ -55,6 +57,7 @@ pub(crate) fn run(root: &Path) -> Result<BoundaryReport> {
     check_tool(root, &metadata, &mut errors)?;
     check_dependencies(&metadata, &mut errors);
     placement::check(root, &mut errors);
+    unsafe_boundary::check(root, &mut errors);
     package::check(root, &mut errors)?;
     publication::check(root, &mut errors)?;
     errors.sort_by(|left, right| {
