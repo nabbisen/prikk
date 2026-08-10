@@ -18,13 +18,25 @@
 //! override in the same manifest — confirmed empirically against `cargo`'s own manifest parser
 //! during this increment's investigation, not assumed. So a crate has exactly two options: inherit
 //! the workspace table in full (in which case `unsafe_code = "forbid"` and
-//! `undocumented_unsafe_blocks = "deny"` both apply, unconditionally), or opt out of inheritance
+//! `undocumented_unsafe_blocks = "forbid"` both apply, unconditionally), or opt out of inheritance
 //! entirely. The one crate legitimately exercising the exemption necessarily takes the second path —
 //! but taking it is not enough on its own to pass this check. **A crate that opts out of workspace
-//! inheritance must re-declare `undocumented_unsafe_blocks = "deny"` locally**, in its own
+//! inheritance must re-declare `undocumented_unsafe_blocks = "forbid"` locally**, in its own
 //! `[lints.clippy]` table, or the check fails. This is the specific rule DC-90's negative-control
 //! requirement targets: the exempt crate attempting to drop inheritance without re-declaring the
 //! guard is exactly the failure this boundary exists to catch.
+//!
+//! **Why the re-declaration must be `"forbid"`, not `"deny"` (found by review, not by the original
+//! design — recorded so the mistake is not repeated).** A `deny`-level lint can be locally overridden
+//! by an inner `#[allow(...)]`; a `forbid`-level one cannot — that asymmetry is exactly why
+//! `unsafe_code = "forbid"` is robust in the first place, and this module originally applied the
+//! principle to `unsafe_code` while setting `undocumented_unsafe_blocks` itself to `"deny"`. That
+//! left a one-line escape: a crate could re-declare the lint at `"deny"` (satisfying the check as
+//! first built), then add `#![allow(clippy::undocumented_unsafe_blocks)]` at its own crate root, and
+//! every gate in the set — including this one — would still pass, silently, while the SAFETY-comment
+//! requirement was gone. A guard weaker than the thing it guards is not a guard. `"forbid"` closes
+//! this: `#[allow(...)]` against a `forbid`-level lint is a hard compile error
+//! (`E0453: incompatible with previous forbid`), verified directly rather than assumed.
 //!
 //! **Dependency isolation, when a crate is actually named.** [`UNSAFE_EXEMPT_CRATES`]'s associated
 //! third-party allowlist is separate from `placement.rs`'s `ALLOWED_THIRD_PARTY` — an unsafe-exempt
@@ -65,7 +77,9 @@ use super::{BoundaryError, PRODUCTS, push};
 const UNSAFE_EXEMPT_CRATES: &[&str] = &[];
 
 const SELF_GUARDING_LINT: &str = "undocumented_unsafe_blocks";
-const SELF_GUARDING_LEVEL: &str = "deny";
+/// `"forbid"`, not `"deny"` — see the module doc's "why the re-declaration must be forbid" section.
+/// A `deny`-level lint can be locally overridden by an inner `#[allow(...)]`; `forbid` cannot.
+const SELF_GUARDING_LEVEL: &str = "forbid";
 
 pub(super) fn check(root: &std::path::Path, errors: &mut Vec<BoundaryError>) {
     check_root_lint_table(root, errors);

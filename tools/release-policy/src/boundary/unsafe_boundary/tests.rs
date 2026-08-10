@@ -26,7 +26,7 @@ const ROOT_MANIFEST_WITH_LINT: &str = "\
 members = []
 
 [workspace.lints.clippy]
-undocumented_unsafe_blocks = \"deny\"
+undocumented_unsafe_blocks = \"forbid\"
 ";
 
 fn write_baseline(root: &Path) {
@@ -88,7 +88,7 @@ fn root_manifest_missing_the_self_guarding_lint_fails() {
     assert_eq!(errors.len(), 1, "{errors:?}");
     assert_eq!(
         errors[0].detail,
-        "root workspace.lints.clippy.undocumented_unsafe_blocks != \"deny\""
+        "root workspace.lints.clippy.undocumented_unsafe_blocks != \"forbid\""
     );
 }
 
@@ -170,7 +170,30 @@ fn exempt_crate_opting_out_without_redeclaring_the_lint_fails() {
     assert_eq!(
         errors[0].detail,
         "prikk-ffi: exempt from workspace lint inheritance but does not locally re-declare \
-         lints.clippy.undocumented_unsafe_blocks = \"deny\""
+         lints.clippy.undocumented_unsafe_blocks = \"forbid\""
+    );
+}
+
+/// Review-found (DC-90 implementation-review-v1 §2): re-declaring the lint at `"deny"` is not
+/// enough. `deny` can be locally overridden by an inner `#[allow(...)]`, which would let the exempt
+/// crate satisfy this check and then silently remove its own guard in source -- the escape route the
+/// review demonstrated by building it. Only `"forbid"` closes it, since `#[allow]` against a
+/// `forbid`-level lint is a hard compile error. Pinned here so a future reader who sees "deny" and
+/// "forbid" as interchangeable-looking strings does not pick the familiar one.
+#[test]
+fn exempt_crate_redeclaring_the_lint_at_deny_still_fails() {
+    let mut errors = Vec::new();
+    check_member(
+        "prikk-ffi",
+        "[package]\nname = \"prikk-ffi\"\n\n[lints.clippy]\nundocumented_unsafe_blocks = \"deny\"\n",
+        &["prikk-ffi"],
+        &mut errors,
+    );
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert_eq!(
+        errors[0].detail,
+        "prikk-ffi: exempt from workspace lint inheritance but does not locally re-declare \
+         lints.clippy.undocumented_unsafe_blocks = \"forbid\""
     );
 }
 
@@ -180,7 +203,7 @@ fn exempt_crate_opting_out_with_the_lint_redeclared_passes() {
     let mut errors = Vec::new();
     check_member(
         "prikk-ffi",
-        "[package]\nname = \"prikk-ffi\"\n\n[lints.clippy]\nundocumented_unsafe_blocks = \"deny\"\n",
+        "[package]\nname = \"prikk-ffi\"\n\n[lints.clippy]\nundocumented_unsafe_blocks = \"forbid\"\n",
         &["prikk-ffi"],
         &mut errors,
     );
@@ -194,7 +217,7 @@ fn non_exempt_crate_opting_out_with_the_lint_redeclared_still_fails() {
     let mut errors = Vec::new();
     check_member(
         "prikk-object",
-        "[package]\nname = \"prikk-object\"\n\n[lints.clippy]\nundocumented_unsafe_blocks = \"deny\"\n",
+        "[package]\nname = \"prikk-object\"\n\n[lints.clippy]\nundocumented_unsafe_blocks = \"forbid\"\n",
         &[],
         &mut errors,
     );

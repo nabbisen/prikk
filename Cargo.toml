@@ -57,5 +57,7 @@ unwrap_used         = "warn"
 expect_used         = "warn"
 indexing_slicing    = "warn"
 # DC-90: goes here, at the workspace root, and not in any individual crate's manifest --
-# see tools/release-policy/src/boundary/unsafe_boundary.rs's module doc for why.
-undocumented_unsafe_blocks = "deny"
+# see tools/release-policy/src/boundary/unsafe_boundary.rs's module doc for why. "forbid", not
+# "deny": deny can be locally overridden by an inner #[allow], which the crate this lint exists
+# to constrain could otherwise use to remove its own guard in one line.
+undocumented_unsafe_blocks = "forbid"
