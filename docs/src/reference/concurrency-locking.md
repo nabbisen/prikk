@@ -25,9 +25,10 @@ see the [trust and threat model](./trust-threat-model.md) and the
   multi-active-session model.
 - Durability and recovery claims are supported by current unit and integration tests, not by a
   completed crash-matrix or fuzzing campaign.
-- Repository *mutation* is exercised by project gates on Linux only; cross-platform filesystem
-  locking, fsync, and rename behavior for mutation remain design targets. Read-only commands are
-  CI-gated on macOS and Windows too — see [platform support](./platform-support.md).
+- Repository *mutation* is exercised by project gates on Linux and macOS; Windows mutation remains
+  unimplemented, so cross-platform filesystem locking, fsync, and rename behavior for mutation remain a
+  design target there. Read-only commands are CI-gated on macOS and Windows too — see
+  [platform support](./platform-support.md).
 - `.prikk/` is not a stable repository format and there is no stable migration policy yet.
 
 ## Lock Files and Scope
@@ -188,7 +189,7 @@ and production-readiness claims.
 | Unborn ref publication is allowed only when the pointer is absent and the ref log is empty with no trailing partial bytes. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-13](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-13-NONDEFAULT-REF-GENESIS.md) |
 | Doctor refuses format-1 missing-pointer reconstruction; exact interrupted publication completion requires signer-backed seal under the active and ref locks. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
 | Doctor repairs are opt-in and do not clear unsafe active sessions or define stale-lock cleanup. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [integrity and recovery diagnostics](./integrity-recovery.md), [DC-29](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-29-VERIFY-DOCTOR-INTEGRITY-RECOVERY-REFERENCE.md) |
-| Repository path and durability claims for *mutation* remain limited by current test evidence and Linux-only exercised gates; read-only commands are CI-gated cross-platform as of DC-71. | [durability and crash recovery](./durability-recovery.md), [path and worktree safety](./path-safety.md), [platform support](./platform-support.md), [DC-28](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md), [DC-32](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-32-PATH-WORKTREE-SAFETY-REFERENCE.md) |
+| Repository path and durability claims for *mutation* remain limited by current test evidence and gates exercised on Linux and macOS only; read-only commands are CI-gated cross-platform as of DC-71. | [durability and crash recovery](./durability-recovery.md), [path and worktree safety](./path-safety.md), [platform support](./platform-support.md), [DC-28](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md), [DC-32](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-32-PATH-WORKTREE-SAFETY-REFERENCE.md) |
 
 ## Provenance
 

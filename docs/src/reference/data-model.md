@@ -11,9 +11,10 @@ status records listed in the anchor table at the foot of the page.
 - Ref files are mutable pointers for convenience and recovery, not roots of trust.
 - Durability and recovery claims are supported by current unit and integration tests, not by a
   completed crash-matrix or fuzzing campaign.
-- Repository *mutation* is exercised by project gates on Linux only; cross-platform fsync and path
-  semantics for mutation remain design targets. Read-only commands are CI-gated on macOS and Windows
-  too — see [platform support](./platform-support.md).
+- Repository *mutation* is exercised by project gates on Linux and macOS; Windows mutation remains
+  unimplemented, so cross-platform fsync and path semantics for mutation remain a design target there.
+  Read-only commands are CI-gated on macOS and Windows too — see
+  [platform support](./platform-support.md).
 - Stable repository-format migration, complete branch management, tags/remotes, sync, hosted forge
   trust, plugin execution, and production merge execution remain deferred.
 
