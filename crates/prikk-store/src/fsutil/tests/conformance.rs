@@ -22,6 +22,7 @@
 //! | G7 (non-blocking opens) | same as G6 |
 //! | G8 (concurrent-safe directory creation) | pre-existing: `tests::directory::concurrent_required_directory_creation_is_idempotent` |
 //! | G9 (mode-bit isolation) | new: [`set_permission_bits_masks_file_type_bits_out_of_a_recorded_mode`] proves the accepted-input shape; **not independently negative-controllable on Linux** — see the trait doc comment on `set_permission_bits` for why |
+//! | `durable_directory_entry`'s restated parameter shape (DC-88) | new: [`durable_directory_entry_accepts_the_named_files_own_path`] proves the interface change — `relative` is the file to confirm, not its parent — by calling with a file's own path and asserting success. This is not a G3 durability-under-crash proof (the existing G3 row's reasoning still applies unchanged); it is a parameter-resolution correctness check for the restatement itself |
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -132,4 +133,48 @@ fn set_permission_bits_masks_file_type_bits_out_of_a_recorded_mode() {
 #[test]
 fn set_permission_bits_masks_file_type_bits_out_of_a_recorded_mode() {
     assert_set_permission_bits_masks_file_type_bits_out_of_a_recorded_mode(&MacosDurability);
+}
+
+/// DC-88: `durable_directory_entry`'s `relative` parameter now names the file whose directory entry
+/// should be confirmed, not the directory to sync directly — the implementor resolves and syncs
+/// `relative`'s parent internally. Calling with a nested file's own path (not its precomputed
+/// parent) must succeed; before this restatement, passing a file path here would have attempted to
+/// open that file with `OFlags::DIRECTORY` and failed.
+fn assert_durable_directory_entry_accepts_the_named_files_own_path(
+    durability: &impl DurabilityContract,
+) {
+    let path = unique_temp_dir("conformance-durable-directory-entry");
+    let root = mutation_root(&path);
+    let relative = Path::new("nested/object");
+    assert!(
+        durability
+            .ensure_directory(&root, Path::new("nested"))
+            .is_ok(),
+        "parent directory must be creatable before the file it will contain"
+    );
+    assert!(
+        durability
+            .create_exclusive(&root, relative, b"content")
+            .is_ok(),
+        "file must be creatable under the freshly ensured directory"
+    );
+
+    assert!(
+        durability.durable_directory_entry(&root, relative).is_ok(),
+        "durable_directory_entry must accept the file's own path and resolve its parent, not \
+         require the caller to precompute and pass the parent directly"
+    );
+    let _ = std::fs::remove_dir_all(path);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn durable_directory_entry_accepts_the_named_files_own_path() {
+    assert_durable_directory_entry_accepts_the_named_files_own_path(&LinuxDurability);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn durable_directory_entry_accepts_the_named_files_own_path() {
+    assert_durable_directory_entry_accepts_the_named_files_own_path(&MacosDurability);
 }
