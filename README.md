@@ -59,9 +59,9 @@ candidates, and **execute a merge** when the two sides are proven confluent — 
 object, WAL, or ref write, when they are not.
 
 Known limits worth stating up front: **there is no networking or sync**, so history cannot be exchanged
-between machines; **mutation is Linux-only** (read-only commands run on macOS and Windows); merge-base
-discovery is manual; conflicts are detected and refused but never resolved; and `verify` cost grows
-steeply with history length.
+between machines; **mutation is Linux and macOS only, not Windows** (read-only commands run on macOS
+and Windows too); merge-base discovery is manual; conflicts are detected and refused but never
+resolved; and `verify` cost grows steeply with history length.
 
 ## Good Fit
 
@@ -125,7 +125,8 @@ From crates.io, requires a Rust toolchain:
 cargo install prikk
 ```
 
-**Repository *mutation* is Linux-only; read-only commands build and run on macOS and Windows too**
+**Repository *mutation* is Linux and macOS only, not Windows; read-only commands build and run on macOS
+and Windows too**
 (`verify`, `log`, `status`, `doctor`, `checkout --plan-only`/`--snapshot-plan`/`--patch-plan`/
 `--patch-delete-plan`, `merge-evidence`, `merge-plan`, `inverse-plan`, `rollback-preview`,
 `rollback-draft-verify`, `branch [list]`, `tag [list]` — the full, durable list, including one

@@ -102,12 +102,16 @@ explicitly excluded from block identity.
 
 ## Where the platform boundary sits
 
-Read-only commands run on Linux, macOS, and Windows, verified continuously in CI. **Mutation is
-Linux-only** — 93 `target_os = "linux"` gates across `prikk-store`'s anchored filesystem module.
+Read-only commands run on Linux, macOS, and Windows, verified continuously in CI. **Mutation is Linux
+and macOS** — each platform's durability implementor lives behind one gated dispatch point
+(`ACTIVE_DURABILITY`, DC-82), so a third platform is one more arm there, not a rewrite of the mutation
+layer. Windows resolves to a stub implementor today and mutating there fails at runtime, not at build
+time.
 
 That is deliberate. DC-37 requires anchored opens that refuse symlink traversal, atomic replacement, and
-explicit file and directory durability; those guarantees were implemented against Linux primitives and
-have not yet been re-established elsewhere. See [Platform Support](./platform-support.md).
+explicit file and directory durability; those guarantees were implemented against Linux primitives
+first (`LinuxDurability`) and macOS second (`MacosDurability`, DC-81), and have not yet been
+re-established on any other platform. See [Platform Support](./platform-support.md).
 
 ## Verification is the trust boundary
 
@@ -129,7 +133,7 @@ Two limits are worth stating plainly, because they define what verification mean
 |---|---|
 | `prikk verify` is roughly **O(N³)** in sealed block count — 34 s at 160 blocks | Tracked, unowned |
 | Node lifecycle state grows with cumulative history, not the current tree | Tracked; the project has no theory of forgetting yet |
-| Mutation is Linux-only | Being addressed, contract first |
+| Mutation is Linux and macOS only, not Windows | Windows unimplemented, blocked on DC-88 (durability contract requirement shape) |
 | Commit cost is not yet bounded independently of repository size (NFR-PERF-01) | Reduced, still missed |
 | Merge complexity scoped to active block size (NFR-PERF-03) is **argued, not benchmarked** | Unowned |
 

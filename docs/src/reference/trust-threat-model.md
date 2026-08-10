@@ -15,9 +15,10 @@ implementation status records listed in the anchor table at the foot of the page
   policy yet.
 - Durability and recovery claims are supported by current unit and integration tests, not by a
   completed crash-matrix or fuzzing campaign.
-- Repository *mutation* is exercised by project gates on Linux only; cross-platform fsync and path
-  semantics for mutation remain design targets. Read-only commands are CI-gated on macOS and Windows
-  too — see [platform support](./platform-support.md).
+- Repository *mutation* is exercised by project gates on Linux and macOS; Windows mutation remains
+  unimplemented, so cross-platform fsync and path semantics for mutation remain a design target there.
+  Read-only commands are CI-gated on macOS and Windows too — see
+  [platform support](./platform-support.md).
 
 Changes that alter trust, threat, verification, signature, key-management, durability,
 platform-support, or production-readiness claims require architect review or accepted RFC/DC coverage.
