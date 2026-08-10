@@ -1,8 +1,11 @@
 # RFC (accepted) - DC-88 Durability Contract Requirement Shape
 
-**Status.** **ACCEPTED by the project owner 2026-08-10**, with §5's scope trade taken as stated:
-**DC-87 Stage 2 waits for this.** §4's four prerequisites still precede design; acceptance clears the
-investigation, not the implementation.
+**Status.** **ACCEPTED by the project owner 2026-08-10.** §4 answered and ruled the same day; **cleared
+to implement** — the increment is a parameter restatement plus two one-line caller edits.
+**§5's scope trade is WITHDRAWN as mispriced.** It was sold to the owner on the architect's assumption
+that this method sat in DC-38's ref-publication path. It does not: DC-38's three durability-bearing steps
+reach `atomic_replace`/`promote`/`durable_append`, never this method. **DC-87 Stage 2 does not wait for
+this**, and DC-87 Stage 1's seam refactor is released from the hold placed on it for the same reason.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** DC-87's narrow prerequisite round, 2026-08-10, and the architect's own error in setting
 its blocking question. **Fires DC-87 §4/§6's stop-and-report trigger** on `DurabilityContract`'s method
@@ -83,7 +86,20 @@ pointer or log file, where a directory entry genuinely must appear and become du
 4. **Does DC-38's state machine still hold** under the restated method, on POSIX, unchanged? DC-38 is
    the reason this matters; a change that quietly weakens it on Linux is worse than the problem.
 
-## 5. The scope trade, for the owner
+## 5. The scope trade — **WITHDRAWN 2026-08-10, mispriced**
+
+**This section is retained as written, and is wrong.** The prerequisite investigation showed the premise
+under it was false: `durable_directory_entry` is not in DC-38's path, so this increment never blocked
+DC-87 Stage 2 and the owner was asked to accept a delay that did not exist. One grep would have
+established that before the trade was offered.
+
+**The Windows blocker is real and still open — it is located in `atomic_replace`, `promote`, and
+`durable_append`**, each of which bundles a directory sync Windows cannot provide. Those three are
+already stated as requirements rather than primitives, so a Windows implementor may satisfy them any way
+it can **with no contract change**. That question belongs to DC-87 Stage 2. See
+`handoffs/DC-88-durability-contract-requirement-shape/prerequisite-ruling-v1.md` §4.
+
+### Original text, retained
 
 **Accepting this blocks DC-87 Stage 2 until it lands.** The alternative is to ship Windows mutation with
 a documented weaker crash invariant — DC-38's "format-2 publication never permits an ahead log" would not
