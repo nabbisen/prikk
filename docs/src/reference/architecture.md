@@ -113,6 +113,32 @@ explicit file and directory durability; those guarantees were implemented agains
 first (`LinuxDurability`) and macOS second (`MacosDurability`, DC-81), and have not yet been
 re-established on any other platform. See [Platform Support](./platform-support.md).
 
+## Where the unsafe-code boundary sits
+
+Every crate in the workspace carries `#![forbid(unsafe_code)]`, applied uniformly through the root
+`Cargo.toml`'s `[workspace.lints.rust]` table (`unsafe_code = "forbid"`) and each member's own
+`[lints]` / `workspace = true`. The owner's ruling (DC-90) permits at most one workspace crate to be
+named as an exception — never inferred from what a crate happens to do — and no crate is named today:
+prikk writes no `unsafe` code of its own yet, even though it already *runs* some (`rustix`'s own
+internal FFI on Linux and macOS, which `forbid(unsafe_code)` governs code prikk writes, not code it
+depends on).
+
+**The boundary is a gate, not a convention.** `release-policy boundary-check`
+(`tools/release-policy/src/boundary/unsafe_boundary.rs`) fails the build if a second crate is ever
+named exempt, if any non-exempt crate drops workspace lint inheritance, or — the rule that makes an
+eventual exemption self-guarding — if the one exempt crate opts out of inheritance without locally
+re-declaring `clippy::undocumented_unsafe_blocks = "deny"` in its own manifest. That lint is enabled
+once, at the workspace root, specifically because the crate permitted to write `unsafe` is also the
+one crate that could otherwise switch its own SAFETY-comment requirement off by deleting a line.
+
+**What the gate cannot see, and the review obligation that covers it instead**, is documented in full
+in `unsafe_boundary.rs`'s own module doc — read that before relying on a green `boundary-check` as
+proof of anything it doesn't test. In short: FFI-ABI correctness (whether a foreign function
+declaration actually matches the real platform ABI) and `SAFETY:` comment *content* are both human
+review judgments, not machine-checkable properties, and comment *staleness* — a comment that no longer
+justifies the code beneath it after an edit — degrades silently behind a gate that stays green either
+way.
+
 ## Verification is the trust boundary
 
 `prikk verify` re-derives rather than trusts: object ids are recomputed from canonical bytes, block state
