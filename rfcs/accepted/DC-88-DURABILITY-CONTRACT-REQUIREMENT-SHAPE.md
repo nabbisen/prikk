@@ -41,7 +41,19 @@ to stop and report if the port appears to require one. It does. Absorbing it wou
 mistake DC-82 was created to avoid: a contract redesign and a new-platform backend have different
 proofs, and bundled, a reviewer cannot tell which half a failure came from.
 
-## 3. Candidate shape — to evaluate, not to inherit
+## 3. Candidate shape — **reassigned to DC-87 Stage 2, 2026-08-10**
+
+**Amended after the prerequisite investigation.** The two-slot sketch below describes an alternative way
+to satisfy a **transition** guarantee (`atomic_replace`/`promote`/`durable_append`) on a platform with no
+directory durability. It is **not** a restatement of `durable_directory_entry`, which the investigation
+showed has two callers wanting per-entry confirmation and is not in DC-38's path at all. Left here it
+would invite building a two-slot record for a method that needs nothing of the kind.
+
+**DC-88's own shape is the parameter restatement** — take the file path, compute the parent internally,
+same two primitives. The text below stands as an input to **DC-87 Stage 2's** design, not to this
+increment. See `handoffs/DC-88-durability-contract-requirement-shape/prerequisite-ruling-v1.md` §4.
+
+### Original text, retained for Stage 2
 
 Offered so §4 starts from a proposition rather than a blank page. **It is not a ruling.** The architect's
 design assertions on platform work have needed correction repeatedly, including the one that produced
