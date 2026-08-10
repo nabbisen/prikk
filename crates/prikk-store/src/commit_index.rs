@@ -1,7 +1,11 @@
 //! Changed-path commit index (DC-56).
 //!
 //! A rebuildable, non-authoritative cache under `cache_dir()` that lets `commit` skip reading a
-//! worktree file's content when its size, mtime, and mode match what was last recorded for it. Per
+//! worktree file's content when its size and mtime match what was last recorded for it —
+//! [`CommitIndexEntry::matches_stat`] deliberately excludes mode from the trust condition, since a
+//! permission change does not change content; `mode` is carried on the entry as plain bookkeeping,
+//! not as a cache-validity input (DC-87 §3.3/§4.3 — it is also `None`-able at the source on a
+//! platform with no observable POSIX mode, which the trust condition must stay indifferent to). Per
 //! NFR-PERF-04 (`specs/prikk-non-functional-requirements-v1.1.md` §3 traceability row, "Caches are
 //! rebuildable and never roots of trust"), this index is never authoritative for object identity: a
 //! corrupt or absent file is always treated as an empty index, never a hard error, and any commit's

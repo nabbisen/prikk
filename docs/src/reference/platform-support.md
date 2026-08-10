@@ -8,12 +8,16 @@ non-Linux target on every change; see [Non-Linux CI conformance](#non-linux-ci-c
 
 ## The boundary
 
-**Repository *mutation* requires Linux.** `crates/prikk-store`'s anchored filesystem primitives use
-Linux-specific no-follow, nonblocking, atomic-rename, and no-clobber-install capabilities
-([durability and crash recovery](./durability-recovery.md)) that have no reviewed equivalent on other
-platforms yet ([DC-37](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md)).
-Every mutation function's *signature* compiles on every platform; only its *body* is Linux-only, and
-a non-Linux caller receives a clean runtime error rather than a build failure or a silent no-op.
+**Repository *mutation* requires Linux or macOS.** `crates/prikk-store`'s anchored filesystem
+primitives use no-follow, nonblocking, atomic-rename, and no-clobber-install capabilities
+([durability and crash recovery](./durability-recovery.md)) with a reviewed implementation on each of
+those two platforms — `LinuxDurability`, and, since DC-81/DC-82, `MacosDurability` (G3 uses
+`fcntl_fullfsync` in place of `fsync`, measured ~180x slower on the GitHub macOS runner and recorded
+in `FINDINGS.md`) — and no reviewed equivalent on any other platform yet
+([DC-37](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md)).
+Every mutation function's *signature* compiles on every platform; only its *body* has a real
+implementor on Linux and macOS, and a caller on any other platform receives a clean runtime error
+rather than a build failure or a silent no-op.
 
 **Read-only commands build and run everywhere.** They never reach a mutation primitive — verified by
 tracing every command's call graph to `crates/prikk-store/src/fsutil`'s mutation set (`ensure_root`,
@@ -90,3 +94,10 @@ a successful compile.
   Windows variant is separately CI-gated as of DC-71; nothing in the fix is architecture-specific
   (it is `#[cfg(target_os = ...)]`, not target-triple-specific), so this is a coverage gap in CI
   breadth, not a known or suspected difference in behavior.
+- **File mode / executable-bit authoring on a platform with no observable POSIX mode** (DC-87
+  §3.3/§4.3): worktree authoring never derives a node's recorded mode from such a platform's
+  filesystem — an existing node's already-recorded mode is always carried forward untouched, and a
+  brand-new file is created non-executable by default, since there is no existing recorded mode to
+  inherit and no observed signal to use. This is a missing capability (an executable file's initial
+  creation cannot be authored from such a worktree), not data loss — a previously-recorded executable
+  bit is never silently dropped from sealed history by this platform difference.

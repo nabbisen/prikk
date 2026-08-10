@@ -13,11 +13,15 @@ use super::{AuthorError, EXECUTABLE_FILE_MODE, REGULAR_FILE_MODE, RepoPath, Repo
 use crate::fsutil::{EntryKind, RootFileStat, list_directory, stat_file_state_if_exists};
 
 /// A worktree regular file's metadata, gathered without reading its content.
+///
+/// `mode` is `None` on a platform with no observable POSIX mode (DC-87 §3.3/§4.3) — the caller
+/// decides what that means (see `node_authoring.rs`'s existing-node comparison and creation sites),
+/// not this type.
 pub(super) struct WorktreeFileMeta {
     pub(super) size: u64,
     pub(super) mtime_secs: i64,
     pub(super) mtime_nanos: u32,
-    pub(super) mode: u32,
+    pub(super) mode: Option<u32>,
 }
 
 pub(super) fn enumerate_worktree_files(
@@ -97,12 +101,14 @@ fn insert_regular_file(
     Ok(())
 }
 
-fn normalize_file_mode(mode: u32) -> u32 {
-    if mode & 0o111 != 0 {
-        EXECUTABLE_FILE_MODE
-    } else {
-        REGULAR_FILE_MODE
-    }
+fn normalize_file_mode(mode: Option<u32>) -> Option<u32> {
+    mode.map(|mode| {
+        if mode & 0o111 != 0 {
+            EXECUTABLE_FILE_MODE
+        } else {
+            REGULAR_FILE_MODE
+        }
+    })
 }
 
 fn join_relative(parent: &Path, name: &std::ffi::OsStr) -> PathBuf {

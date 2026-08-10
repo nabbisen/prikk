@@ -134,8 +134,13 @@ fn materialize_replay_entry(
                 target.display()
             )));
         }
+        // `stat.mode` is `None` on a platform with no observable POSIX mode (DC-87 §3.3/§4.3), in
+        // which case `current_mode` is `None` here too: the comparison below never matches, the
+        // skip-optimization never fires, and `set_regular_file_mode_required` always runs — `entry`'s
+        // already-decided mode, not this stat, is what ends up on disk either way.
         let current_mode = stat_file_state_if_exists(layout.worktree_mutation_root(), relative)?
-            .map(|stat| stat.mode & 0o7777);
+            .and_then(|stat| stat.mode)
+            .map(|mode| mode & 0o7777);
         if current_mode == Some(entry.mode & 0o7777) {
             let parent = relative.parent().unwrap_or_else(|| Path::new(""));
             sync_directory_required(layout.worktree_mutation_root(), parent)?;
