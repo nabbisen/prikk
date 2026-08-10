@@ -1,7 +1,8 @@
-# RFC (proposed) - DC-88 Durability Contract Requirement Shape
+# RFC (accepted) - DC-88 Durability Contract Requirement Shape
 
-**Status.** **PROPOSED** — needs the project owner's acceptance. **Scope decision attached:** accepting
-this blocks DC-87 Stage 2 until it lands. See §5.
+**Status.** **ACCEPTED by the project owner 2026-08-10**, with §5's scope trade taken as stated:
+**DC-87 Stage 2 waits for this.** §4's four prerequisites still precede design; acceptance clears the
+investigation, not the implementation.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** DC-87's narrow prerequisite round, 2026-08-10, and the architect's own error in setting
 its blocking question. **Fires DC-87 §4/§6's stop-and-report trigger** on `DurabilityContract`'s method
