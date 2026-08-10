@@ -18,7 +18,9 @@ use crate::lifecycle_cache::replay_derived_state;
 use crate::object_store::FileObjectStore;
 use crate::patch_algebra::{EvidenceScope, StorePatchAlgebraEvidence, analyze_merge_evidence};
 use crate::patch_replay::decode::{DecodedPatchOperation, decode_patch_operations};
+use crate::received::read_received_pointer;
 use crate::refs::RefStore;
+use crate::trust::{MaintainerTrustPolicy, verify_trusted_publication_envelope};
 use crate::{RepositoryLayout, validate_local_branch_ref};
 
 /// Target selector for `prikk merge-evidence`.
@@ -28,6 +30,9 @@ pub enum MergeEvidenceTarget {
     Block(ObjectId),
     /// Select the current target block of a local branch ref.
     Ref(String),
+    /// Select the current target block of a received ref (`remotes/<name>`, DC-85). Never valid as
+    /// a merge's `into_ref` — only as a source.
+    ReceivedRef(String),
 }
 
 /// Prepare a read-only merge evidence display report.
@@ -119,6 +124,32 @@ fn resolve_target(
             read_block(object_store, ref_state.target_object_id)?;
             Ok(MergeEvidenceDisplaySelector {
                 selector: format!("ref {ref_name}"),
+                target_block_id: ref_state.target_object_id,
+            })
+        }
+        MergeEvidenceTarget::ReceivedRef(ref_name) => {
+            let pointer = read_received_pointer(layout, &ref_name)?.ok_or_else(|| {
+                PrikkError::Integrity(format!("received ref {ref_name} does not exist"))
+            })?;
+            let envelope = object_store
+                .read_typed(pointer.ref_state_id, ObjectType::RefState)?
+                .ok_or_else(|| {
+                    PrikkError::Integrity(format!(
+                        "received ref {ref_name} points to missing RefState"
+                    ))
+                })?;
+            let ref_state = RefStatePayload::decode_canonical(
+                &envelope.canonical_payload,
+                envelope.schema_version,
+            )?;
+            // Deliberately no name-equality check here (unlike the local-ref arm above): a received
+            // RefState's embedded `ref_name` is the *origin's* own name (e.g. "heads/main"), never
+            // the local "remotes/..." label — DC-85 §3A carries this asymmetry forward from DC-78's
+            // received-ref design, where it's why received refs cannot reuse `refs/by-id/`'s pointer
+            // format at all.
+            read_block(object_store, ref_state.target_object_id)?;
+            Ok(MergeEvidenceDisplaySelector {
+                selector: format!("received ref {ref_name}"),
                 target_block_id: ref_state.target_object_id,
             })
         }
@@ -255,17 +286,19 @@ fn topological_order(
     Ok(order)
 }
 
-/// Blocks strictly between `baseline` (exclusive) and `target` (inclusive), oldest first — the
-/// ancestor-closure difference `ancestors(target) \ ancestors(baseline)`, following **all** parents
-/// (DC-75; previously a single-parent-only walk, replaced because a `Merge` block's secondary parent
-/// can be the true, and only, path back to a repeated merge's baseline). Shared by `candidate_sequence`
-/// (decoded operations, for evidence) and `candidate_patch_ids` (patch identity, for merge execution's
-/// adoption set — DC-74) so the walk is defined exactly once.
+/// Blocks strictly between `baseline` (exclusive) and `target` (inclusive), oldest first, paired with
+/// their own object ids — the ancestor-closure difference `ancestors(target) \ ancestors(baseline)`,
+/// following **all** parents (DC-75; previously a single-parent-only walk, replaced because a `Merge`
+/// block's secondary parent can be the true, and only, path back to a repeated merge's baseline).
+/// Shared by `candidate_sequence` (decoded operations, for evidence), `candidate_patch_ids` (patch
+/// identity, for merge execution's adoption set — DC-74), and `verify_candidate_blocks_trusted` (DC-85
+/// — the same candidate set, not a second walk of the ancestor graph) so the walk is defined exactly
+/// once.
 fn candidate_blocks(
     object_store: &FileObjectStore,
     baseline: ObjectId,
     target: ObjectId,
-) -> Result<Vec<BlockPayload>> {
+) -> Result<Vec<(ObjectId, BlockPayload)>> {
     let target_ancestors = ancestors_inclusive(object_store, target)?;
     if !target_ancestors.contains_key(&baseline) {
         return Err(PrikkError::Integrity(format!(
@@ -281,9 +314,10 @@ fn candidate_blocks(
     topological_order(&new_ids, &target_ancestors)?
         .into_iter()
         .map(|id| {
-            target_ancestors.get(&id).cloned().ok_or_else(|| {
+            let payload = target_ancestors.get(&id).cloned().ok_or_else(|| {
                 PrikkError::Integrity(format!("missing Block {id} in candidate set"))
-            })
+            })?;
+            Ok((id, payload))
         })
         .collect()
 }
@@ -311,7 +345,7 @@ fn candidate_sequence(
 ) -> Result<Vec<DecodedPatchOperation>> {
     let excluded = baseline_reachable_patch_ids(object_store, baseline)?;
     let mut operations = Vec::new();
-    for block in candidate_blocks(object_store, baseline, target)? {
+    for (_, block) in candidate_blocks(object_store, baseline, target)? {
         for patch_id in block.patch_ids {
             if excluded.contains(&patch_id) {
                 continue;
@@ -336,9 +370,42 @@ pub(crate) fn candidate_patch_ids(
     let excluded = baseline_reachable_patch_ids(object_store, baseline)?;
     Ok(candidate_blocks(object_store, baseline, target)?
         .into_iter()
-        .flat_map(|block| block.patch_ids)
+        .flat_map(|(_, block)| block.patch_ids)
         .filter(|patch_id| !excluded.contains(patch_id))
         .collect())
+}
+
+/// DC-85 §3A.1's mandatory acceptance criterion: every candidate block a merge would adopt must carry
+/// a currently-trusted MAINTAINER signature, checked here — over the exact same candidate set
+/// `candidate_patch_ids` computes (`candidate_blocks`, not a second walk of the ancestor graph), and
+/// using the same trust machinery `verify` uses (`verify_trusted_publication_envelope`), not a new
+/// check invented for this path.
+///
+/// Required specifically because a received ref's blocks arrive via `import_bundle`, which performs
+/// no trust check at all (DC-78 Stage 3 §4, deliberate — "no automatic trust adoption on import").
+/// A local-to-local merge's adopted blocks are safe by induction: every block reachable from a local
+/// ref was itself created through this repository's own seal/merge path, each gated by
+/// `verify_signer_trusted` at creation. That induction does not hold for imported content, which was
+/// never gated on entry — so it must be gated here, before `into_ref` advances, not deferred to a
+/// later `verify` run.
+pub(crate) fn verify_candidate_blocks_trusted(
+    object_store: &FileObjectStore,
+    policy: &MaintainerTrustPolicy,
+    baseline: ObjectId,
+    target: ObjectId,
+) -> Result<()> {
+    for (block_id, _) in candidate_blocks(object_store, baseline, target)? {
+        let envelope = object_store
+            .read_typed(block_id, ObjectType::Block)?
+            .ok_or_else(|| PrikkError::Integrity(format!("missing Block {block_id}")))?;
+        verify_trusted_publication_envelope(policy, &envelope).map_err(|issue| {
+            PrikkError::InvalidSignature(format!(
+                "adopted Block {block_id} has no trusted MAINTAINER signature ({}: {})",
+                issue.code, issue.message
+            ))
+        })?;
+    }
+    Ok(())
 }
 
 fn read_block(object_store: &FileObjectStore, block_id: ObjectId) -> Result<BlockPayload> {

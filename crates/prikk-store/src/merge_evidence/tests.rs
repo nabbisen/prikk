@@ -10,6 +10,7 @@ use prikk_object::{
 };
 
 use super::{MergeEvidenceTarget, prepare_merge_evidence};
+use crate::received::write_received_pointer;
 use crate::test_support::{
     dummy_signature, maintainer_signature, signed_block, signed_ref_state_envelope,
     signed_ref_update_envelope, unique_temp_dir,
@@ -64,6 +65,45 @@ fn ref_target_reports_selector_and_resolved_block() -> Result<()> {
     )?;
 
     assert_eq!(report.left_selector.selector, "ref heads/left");
+    assert_eq!(report.left_selector.target_block_id, left);
+    assert_eq!(report.right_operation_count, 0);
+    assert!(matches!(
+        report.outcome,
+        "Confluent" | "Unsupported" | "InvalidCandidate"
+    ));
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-85: `MergeEvidenceTarget::ReceivedRef` resolves through `received.rs`'s pointer store, not
+/// `RefStore` — mirrors `ref_target_reports_selector_and_resolved_block` above for the local-ref
+/// variant. Deliberately writes the RefState's embedded `ref_name` as the *origin's* own name
+/// (`"heads/left"`), never the local `"remotes/..."` label, per DC-85 §3A's carried-forward asymmetry
+/// note: the received-ref resolver must not (and does not) apply the local-ref arm's name-equality
+/// check.
+#[test]
+fn received_ref_target_reports_selector_and_resolved_block() -> Result<()> {
+    let root = unique_temp_dir("merge-evidence-received-ref-target");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let baseline = write_block(&layout, BlockKind::Root, Vec::new(), Vec::new())?;
+    let left = write_create_block(&layout, BlockKind::Normal, vec![baseline], "left.txt", 0x26)?;
+
+    let mut store = FileObjectStore::new(layout.clone());
+    let ref_state = signed_ref_state_envelope("heads/left", None, left, 1);
+    let ref_state_id = store.write_object(&ref_state)?;
+    write_received_pointer(&layout, "remotes/heads/left", ref_state_id)?;
+
+    let report = prepare_merge_evidence(
+        &layout,
+        baseline,
+        MergeEvidenceTarget::ReceivedRef("remotes/heads/left".to_string()),
+        MergeEvidenceTarget::Block(baseline),
+    )?;
+
+    assert_eq!(
+        report.left_selector.selector,
+        "received ref remotes/heads/left"
+    );
     assert_eq!(report.left_selector.target_block_id, left);
     assert_eq!(report.right_operation_count, 0);
     assert!(matches!(

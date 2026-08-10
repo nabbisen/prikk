@@ -21,7 +21,9 @@ Selector rules:
 - `--baseline-block` is required and names the sealed baseline block.
 - Each side must choose exactly one selector: `--left-block` or `--left-ref`, and `--right-block`
   or `--right-ref`.
-- Ref selectors resolve only through the current local branch target block.
+- A ref selector resolves through the current local branch target block, or, for a `remotes/<name>`
+  value (DC-85), through the received ref it names — read-only, so either side may preview a received
+  ref even though `prikk merge` itself never accepts one as `--into`.
 - The optional positional argument is the repository root. It is not a path filter.
 
 The command is read-only. It does not infer merge bases, execute merges, publish merge commits, write

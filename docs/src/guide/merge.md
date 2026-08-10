@@ -17,7 +17,9 @@ prikk merge --allow-no-audit \
 - `--baseline-block` is required and names the sealed baseline block confluence is proven against.
 - `--into` is the ref the merge advances. It must currently be published and must be the branch
   the caller has maintainer signing authority to seal.
-- `--from` is the ref merged in. Its patches since the baseline are what get adopted.
+- `--from` is the ref merged in. Its patches since the baseline are what get adopted. It may be a
+  local branch, or a received ref (`remotes/<name>`, DC-85) imported by `prikk bundle import` — see
+  [Merging from a received ref](#merging-from-a-received-ref) below.
 - `--allow-no-audit` is required, matching `seal`'s own flag: this command signs and publishes new
   sealed history, and audit plugins are not implemented.
 - The optional positional argument is the repository root.
@@ -54,6 +56,28 @@ signature).
 
 This discharges the release condition DC-74 attached to this command: sealed history now structurally
 records a merge, re-checkable by a later verifier from sealed history alone.
+
+## Merging from a received ref
+
+`--from` accepts `remotes/<name>` — a ref imported by `prikk bundle import --input FILE` (produced on
+the other side by `prikk bundle export --ref REF --output FILE`) — exactly as it accepts a local
+branch. `--into` never does: it must always be a genuine local branch, since publishing a ref only ever
+writes the local ref store.
+
+**Adopting content from a received ref requires the maintainer key that sealed it to already be
+trusted here.** Received content arrives via `import_bundle` with no trust check at all — deliberate,
+per DC-78 Stage 3: importing is not trusting. A local-to-local merge needs no equivalent check, because
+every block reachable from a local ref was itself created through this repository's own `seal`/`merge`
+path, each already gated by trust at creation. A received ref's blocks were never gated on the way in,
+so `prikk merge` checks them itself, before `--into` advances: every block it would adopt must carry a
+signature from a currently-adopted maintainer key, or the merge is refused with `no trusted MAINTAINER
+signature` and writes nothing.
+
+**If you meet that refusal, do not treat it as an error to clear.** Running `prikk trust maintainer add`
+for whatever key the bundle happened to carry is exactly the decision this check exists to make you
+take deliberately, not by reflex. Trusting a maintainer key means trusting every block that key has
+ever sealed or ever will — confirm you mean to extend that trust to this specific origin before adding
+it, the same judgment call `trust maintainer add` already asks of a purely local setup.
 
 ## Conflicts
 

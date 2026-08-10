@@ -449,6 +449,13 @@ fn run_merge_plan(args: Vec<String>) -> std::result::Result<(), String> {
 fn merge_target_from_arg(target: MergeEvidenceTargetArg) -> MergeEvidenceTarget {
     match target {
         MergeEvidenceTargetArg::Block(block_id) => MergeEvidenceTarget::Block(block_id),
+        // DC-85: a `--left-ref`/`--right-ref` value can name a received ref too, so evidence/plan
+        // previews reach the same source a `merge` invocation would — same prefix-routing shape as
+        // `run_log`'s `remotes/` dispatch, not `run_verify`/`branch list`'s list-both shape, since
+        // this resolves one specific input rather than showing everything.
+        MergeEvidenceTargetArg::Ref(ref_name) if ref_name.starts_with("remotes/") => {
+            MergeEvidenceTarget::ReceivedRef(ref_name)
+        }
         MergeEvidenceTargetArg::Ref(ref_name) => MergeEvidenceTarget::Ref(ref_name),
     }
 }
