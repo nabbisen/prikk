@@ -1,6 +1,7 @@
-# RFC (proposed) - DC-90 Unsafe Code Boundary and Gate
+# RFC (accepted) - DC-90 Unsafe Code Boundary and Gate
 
-**Status.** **PROPOSED** — needs the project owner's acceptance.
+**Status.** **ACCEPTED by the project owner 2026-08-10.** §4's four prerequisites still precede design;
+acceptance clears the investigation, not the implementation.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** The owner's ruling of 2026-08-10: *"`unsafe` is allowed under control with safety and
 maintainability preserved."* This increment is what turns "under control" from an intention into a
