@@ -13,8 +13,13 @@ DC-45 left two assurance obligations recorded only as prose. They were written a
 retiring the Python; **that coupling is withdrawn** (DC-93 §2). What remains is whether each is worth
 doing on its own merits. The architect's view is that the first clearly is and the second probably is.
 
-**1 — The responsibility map is not mechanically bound.** A 50-entry map relates release-policy
-responsibilities to the checks that discharge them. Today divergence between the map and what actually
+**1 — The responsibility map is not mechanically bound.** ~~A 50-entry map relates release-policy
+responsibilities to the checks that discharge them.~~ **Corrected 2026-08-11:** the entries are
+`{python_check, rust_check}` pairs — **self-test mutation-category correspondence between the retired
+Python harness and the Rust one**, not a governance mapping. Binding it proves the Rust harness still
+runs a case for every category the Python covered: a migration-completeness guard. After DC-93 retires
+the Python, `python_check` is **historical by design** and the binding is built against `rust_check`
+only — see `handoffs/DC-94-responsibility-map-executable-binding/prerequisite-ruling-v1.md` §3. Today divergence between the map and what actually
 executes is caught by a human reading both. That is the same shape as DC-51's dependency placement and
 DC-90's unsafe boundary: **a rule that a document asserts and nothing enforces.** Binding it so that a
 map entry with no executed check — or an executed check with no map entry — **fails closed** converts
@@ -54,7 +59,10 @@ may be substantially smaller than DC-52's framing implied, or already partly dis
 
 1. §3 answered and reported before design.
 2. **Negative controls per rule** — introduce a map entry with no executed check, and an executed check
-   with no map entry, and show the specific check firing for each. Per DC-86's and DC-90's precedent.
+   with no map entry, and show the specific check firing for each. **Amended 2026-08-11: this covers the
+   *pre-existing* shape checks too** (wrong entry count, duplicate `rust_check`, empty string), which the
+   investigation found have no negative control either — the same shape as DC-95's Finding A in a
+   different corner of the tool. Per DC-86's and DC-90's precedent.
 3. **The `defaults.run` validator accepts every procedure currently in the tree** and rejects an
    unknown key, demonstrated both ways.
 4. **What the binding cannot see is stated plainly**, in the tool's own documentation. A map entry can
