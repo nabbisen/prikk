@@ -110,6 +110,52 @@ a Windows unblock, and it should never be sold as one.
 2. Whether "branch and tag creation stay Windows-blocked while ordinary seals work" would ever be an
    acceptable interim state. They flagged it as a product judgment and declined to settle it. Correct.
 
+## 5a. Addendum — the recommendation's scope, after the owner's maintain-and-verify question
+
+The owner asked whether §5's recommendation holds "for the future as well as now," stating a preference
+for **ease of maintenance and verifiability of security**. It is worth being precise, because §5 read
+more absolutely than it was meant.
+
+**What §5 was scoped to, and what still holds on any horizon:** do not restructure publication *for
+Windows' sake*. That does not weaken with time — the first-appearance problem at ref creation is not
+fixed by any pointer-shaped change, so the Windows payoff stays partial however long one waits.
+
+**What the owner's criterion raises that DC-91 did not measure.** The evaluation scored crash-state
+count, detectability, recoverability, and cost-to-re-prove. **It did not measure maintainability**, and
+on a long horizon the arithmetic shifts in a way §5's "cost is full" framing understated: re-earning the
+audit is paid **once**; a simpler verification story pays back for the product's life.
+
+On the owner's two goals, from what DC-91 did establish:
+
+- **Verifiability improves, narrowly and genuinely.** One state class becomes self-describing from a
+  single artifact's checksum rather than requiring a `refs/tmp/` scan plus knowledge of the protocol
+  shape. That is on-thesis for a product whose central claim is history that can be verified.
+- **Maintenance surface shrinks** in one identifiable place: two on-disk names become one,
+  `doctor`/`verify` lose the `CANDIDATE-DEBRIS` classification entirely, and dependence on
+  directory-sync ordering — the hardest part of DC-38 to test, and much of why DC-41's matrix is as
+  large as it is — is reduced.
+- **The hard part is unchanged.** Pointer-log joint consistency stays exactly as complex.
+- **And it is worse before it is better.** The riskiest moment for security-critical machinery is when
+  it is changed. DC-34/DC-38 exist because of a real split-brain bug; "easier to verify eventually" is
+  bought with "less verified right now."
+
+**Revised recommendation: not now, but not never — and never as a Windows increment.** If it is done it
+should be justified on POSIX maintain-and-verify merits alone, scoped as its own increment with the
+full DC-41-grade proof budgeted up front rather than discovered mid-flight, and sequenced when the
+verification path is otherwise stable, which it is not while DC-92 is open.
+
+**A redirect worth more for the stated goal than this increment is.** If the objective is to verify
+security easily, two already-registered findings do more for it, cost far less, and do not touch
+safety-critical machinery:
+
+1. **`verify` reports only the first hard error**, so a damaged repository takes N runs to enumerate N
+   defects — the difference between triage and guesswork for the command that *is* the security
+   assurance.
+2. **Nothing proved `verify` state-checks blocks end to end.** DC-92 closes that for one path; what else
+   `verify` does that no end-to-end test would notice remains open.
+
+Both are directly about verifiability. The architect would take those before touching publication.
+
 ## 6. Standing
 
 - **DC-91: complete.** Its question is answered; §5 criterion 3 held — no design was proposed and no
