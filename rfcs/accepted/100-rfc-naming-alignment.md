@@ -1,6 +1,6 @@
 # RFC 100 — RFC naming alignment
 
-**Status.** Proposed
+**Status.** Accepted (2026-08-11)
 **Tracks.** RFC directory hygiene. Aligns this project's RFC filenames with
 [RFC-000](../done/000-rfc-lifecycle-policy.md), which the project already adopted but has not followed
 in its naming.

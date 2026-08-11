@@ -22,6 +22,19 @@ Prikk uses RFC-000's 5-folder variant:
 RFC-000 says folder location is lifecycle authority. The status text inside each RFC should be kept
 consistent with its folder.
 
+### Naming (RFC 100)
+
+New RFCs are `NNN-slug.md` — zero-padded number, lowercase hyphenated slug — **numbered sequentially
+from 100**. New handoffs use the matching `handoffs/NNN-slug/`.
+
+`100` rather than `001` because `001` is already `PR-001` and RFC-000 forbids reusing a number. The gap
+at 096-099 is deliberate: it marks where the scheme changed.
+
+**Legacy names are frozen.** `DC-*` and `PR-*` RFCs keep their filenames permanently — `DC-09`-`DC-30`
+duplicate `PR-009`-`PR-030` numerically, so de-prefixing them would collide, and resolving that means
+renumbering, which RFC-000 names as an anti-pattern. The rule a reader needs: **a prefix means legacy, a
+bare number means current.**
+
 ## Proposed
 
 These records are under design review. All proposed RFCs must respect the dependencies in
@@ -32,7 +45,7 @@ These records are under design review. All proposed RFCs must respect the depend
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / **0.20.0 (retargeted from 0.19.0 by owner ruling 2026-08-08 — 0.19.0 is the next ordinary minor, gated on DC-75 alone)**; **release-blocked** — inherits key lifecycle from DC-35, which needs amendment |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
-| DC-52 | [Python and Oracle Decommissioning](./proposed/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | M2 / **0.20.0 (retargeted from 0.19.0, 2026-08-08)**; **UNBLOCKED 2026-08-08** — `DC-45:419`'s condition discharged by 0.19.0's release and its accepted post-release stability rerun; deletion remains a separate architect-reviewed change, and fixture compaction only after deletion review. Previously release-blocked — `DC-45:419` forbids deletion before the first Rust-gated 0.19.0 release |
+| DC-52 | [Python and Oracle Decommissioning](./archive/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | M2 / **0.20.0 (retargeted from 0.19.0, 2026-08-08)**; **UNBLOCKED 2026-08-08** — `DC-45:419`'s condition discharged by 0.19.0's release and its accepted post-release stability rerun; deletion remains a separate architect-reviewed change, and fixture compaction only after deletion review. Previously release-blocked — `DC-45:419` forbids deletion before the first Rust-gated 0.19.0 release |
 | DC-53 | [Repository-Wide AUTHOR Trust Verification](./proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md) | Post-M2, unscheduled |
 | DC-85 | [Merge From a Received Ref](./accepted/DC-85-MERGE-FROM-RECEIVED-REF.md) | **Accepted 2026-08-09.** Closes the gap DC-78 Stage 3 exposed: `execute_merge` rejects `remotes/`, so received history cannot be incorporated. **The architect's §D4 claim that this used existing machinery was false.** §3's four questions precede design |
 
@@ -104,6 +117,16 @@ These reviewed designs may govern downstream work but have not yet released.
 | DC-73 | [Node-Model Operation Apply](./accepted/DC-73-NODE-MODEL-APPLY.md) | **Accepted 2026-08-04** — roadmap item A, and the **first increment in this program that adds capability rather than correcting a defect**. Closes rollback refusing `ReplaceBinary`/`ChangePerm` spans and `checkout --patch-materialize` unable to replay `ChangePerm`. Lifecycle-state apply is already complete for all seven operations; the gap is materialization and inverse |
 | DC-61 | [Branch Closure](./accepted/DC-61-BRANCH-CLOSURE.md) | §6.5 deletion half, as **closure** — the pointer stays. Redesigned from tombstones 2026-07-30 after review found `doctor` would resurrect deleted branches. **Complete.** Implemented `ca4c044`, reviewed 2026-07-31 — accepted with one non-blocking finding (N1, a fail-open WAL guard), **repaired `2394f1b`**. Open ref-state ObjectIds provably unmoved: the closed vector is the open bytes plus one appended field |
 | DC-60 | [Branch Management Surface](./accepted/DC-60-BRANCH-MANAGEMENT-SURFACE.md) | §6.5 list + create. Accepted 2026-07-30; **scope amended the same day** — deletion moved to DC-61 after implementation proved it blocks repository-wide commits at every record count. **Complete at `6c2b7a6`**, implementation review accepted with one non-blocking note |
+| DC-87 | [Windows Mutation](./accepted/DC-87-WINDOWS-MUTATION.md) | Product **M3**. Two stages behind six prerequisites. **Stage 2 deferred 2026-08-11 by the owner as "deferred but controlled"** — DC-38's ahead-log invariant cannot hold on Windows: the log append is achievable there, the pointer promotion is not |
+| DC-88 | [Durability Contract Requirement Shape](./accepted/DC-88-DURABILITY-CONTRACT-REQUIREMENT-SHAPE.md) | **Complete, merged 2026-08-11.** `durable_directory_entry` restated as a single-entry confirmation rather than directory-scoped batching. The architect's scope trade ("this blocks Stage 2") was **mispriced and withdrawn** — DC-38 never calls the method |
+| DC-89 | [Platform Claim Documentation Accuracy](./accepted/DC-89-PLATFORM-CLAIM-DOCS-ACCURACY.md) | **Complete, merged 2026-08-10.** Corrected the Linux-only mutation claim across eight sites in seven pages plus `README.md`. Criterion 1 amended mid-review after the architect's scope wrongly excluded `README.md` |
+| DC-90 | [Unsafe Code Boundary and Gate](./accepted/DC-90-UNSAFE-CODE-BOUNDARY-GATE.md) | **Complete, merged 2026-08-11.** Turns the owner's "`unsafe` allowed under control" ruling into a checked property. The guard is `forbid`, not `deny` — review found a `deny`-level lint can be silently overridden by the very crate it constrains |
+| DC-91 | [Publication Record Shape](./accepted/DC-91-PUBLICATION-RECORD-SHAPE.md) | **Complete (evaluation), 2026-08-11.** Answer: **partial**. A slot record removes one state class with a real detectability gain, but leaves pointer-log joint consistency untouched and **does not unblock new branch/tag creation on Windows at all** |
+| DC-92 | [Lineage Replay Memoization](./accepted/DC-92-LINEAGE-REPLAY-MEMOIZATION.md) | **Complete, merged 2026-08-11.** `verify` O(N³) → **O(N)** (46.4 s → 2.7 s at N=160); `seal` O(N²)-per-call → near-flat; peak memory **599 MB → 15.1 MB**, bounded by lineage frontier |
+| DC-93 | [Release Policy Python Retirement](./accepted/DC-93-RELEASE-POLICY-PYTHON-RETIREMENT.md) | **Accepted 2026-08-11.** Retires 18 unused Python files (2,895 lines) and the Rust command scanner's own Python-recognition path. Supersedes DC-52's obligations 3 and 4 |
+| DC-94 | [Responsibility Map Executable Binding](./accepted/DC-94-RESPONSIBILITY-MAP-EXECUTABLE-BINDING.md) | **Accepted 2026-08-11.** DC-52's obligations 1 and 2, **decoupled** — they no longer gate the retirement. May already be largely discharged, which is a complete outcome |
+| DC-95 | [Verify Coverage and Finding Accumulation](./accepted/DC-95-VERIFY-COVERAGE-AND-FINDING-ACCUMULATION.md) | Product **M1**. **Accepted 2026-08-11.** Two ordered stages: nothing proves `verify` state-checks blocks end to end (the architect disabled the wiring twice and the suite stayed green), and `verify` reports only the first hard error |
+| 100 | [RFC naming alignment](./accepted/100-rfc-naming-alignment.md) | **Accepted 2026-08-11.** Aligns new RFC filenames with RFC-000's `NNN-slug.md`, from 100. Legacy `DC-*`/`PR-*` names frozen |
 | DC-59 | [Commit Benchmark Harness](./accepted/DC-59-COMMIT-BENCHMARK-HARNESS.md) | Produces NFR-PERF-01's named evidence artifact. **Complete at `a9c2fe0`**, implementation review accepted 2026-07-29 with no findings. Measured the full-tree scan: 4.22 ms at 10 files to 516 ms at 10,000, change set fixed at one |
 
 ## Done
