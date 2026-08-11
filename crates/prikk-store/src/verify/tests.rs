@@ -86,6 +86,178 @@ fn verify_repository_detects_block_with_state_root_mismatch() -> Result<()> {
     Ok(())
 }
 
+/// DC-95 Stage 1, §5.2: the 8 `validate_block_v2_shape` error arms, proven through `verify_repository`
+/// rather than only at the unit level (`block_state/tests.rs`'s own `format2_parent_and_kind_matrix_
+/// is_closed`/`format2_merge_shape_matrix`). The review's own probe found that disabling shape
+/// validation entirely left every existing test passing -- including DC-92's own lineage-member shape
+/// violation test, which calls `verify_blocks_topological` directly -- because none of them reach the
+/// check through `verify_repository`. One fresh repository per row (not one growing repository across
+/// rows: `verify_repository` stops at the first hard error, so a shared repository would only ever
+/// prove whichever row's block sorts first by `ObjectId`, not the row under test). Each row's payload
+/// is built from a shared set of real parent blocks so it's wrong only in the one field under test.
+#[test]
+fn verify_repository_detects_every_block_shape_violation() -> Result<()> {
+    type CaseFn = fn(ObjectId, ObjectId, ObjectId) -> (BlockPayload, &'static str);
+    let cases: Vec<(&str, CaseFn)> = vec![
+        ("root-with-parent", |genesis, _a, _b| {
+            (
+                BlockPayload {
+                    parent_block_ids: vec![genesis],
+                    kind: BlockKind::Root,
+                    patch_ids: Vec::new(),
+                    state_merkle_root: MerkleRoot([0xAA_u8; 32]),
+                    snapshot_blob_ref: None,
+                    mainline_parent_id: None,
+                    merge_baseline_block_id: None,
+                },
+                "Root Block must have zero parents",
+            )
+        }),
+        ("normal-with-zero-parents", |_genesis, _a, _b| {
+            (
+                BlockPayload {
+                    parent_block_ids: Vec::new(),
+                    kind: BlockKind::Normal,
+                    patch_ids: Vec::new(),
+                    state_merkle_root: MerkleRoot([0xAB_u8; 32]),
+                    snapshot_blob_ref: None,
+                    mainline_parent_id: None,
+                    merge_baseline_block_id: None,
+                },
+                "Normal Block must have exactly one parent",
+            )
+        }),
+        ("merge-with-one-parent", |genesis, _a, _b| {
+            (
+                BlockPayload {
+                    parent_block_ids: vec![genesis],
+                    kind: BlockKind::Merge,
+                    patch_ids: Vec::new(),
+                    state_merkle_root: MerkleRoot([0xAC_u8; 32]),
+                    snapshot_blob_ref: None,
+                    mainline_parent_id: Some(genesis),
+                    merge_baseline_block_id: Some(genesis),
+                },
+                "Merge Block must have exactly two parents",
+            )
+        }),
+        ("repair-kind-unauthorized", |_genesis, _a, _b| {
+            (
+                BlockPayload {
+                    parent_block_ids: Vec::new(),
+                    kind: BlockKind::Repair,
+                    patch_ids: Vec::new(),
+                    state_merkle_root: MerkleRoot([0xAD_u8; 32]),
+                    snapshot_blob_ref: None,
+                    mainline_parent_id: None,
+                    merge_baseline_block_id: None,
+                },
+                "Block kind is not authorized",
+            )
+        }),
+        ("root-with-mainline-field", |genesis, _a, _b| {
+            (
+                BlockPayload {
+                    parent_block_ids: Vec::new(),
+                    kind: BlockKind::Root,
+                    patch_ids: Vec::new(),
+                    state_merkle_root: MerkleRoot([0xAE_u8; 32]),
+                    snapshot_blob_ref: None,
+                    mainline_parent_id: Some(genesis),
+                    merge_baseline_block_id: None,
+                },
+                "must not carry a mainline parent or merge baseline",
+            )
+        }),
+        ("merge-without-mainline", |genesis, a, b| {
+            let mut parents = vec![a, b];
+            parents.sort();
+            (
+                BlockPayload {
+                    parent_block_ids: parents,
+                    kind: BlockKind::Merge,
+                    patch_ids: Vec::new(),
+                    state_merkle_root: MerkleRoot([0xAF_u8; 32]),
+                    snapshot_blob_ref: None,
+                    mainline_parent_id: None,
+                    merge_baseline_block_id: Some(genesis),
+                },
+                "Merge Block must name a mainline parent",
+            )
+        }),
+        ("merge-mainline-not-a-parent", |genesis, a, b| {
+            let mut parents = vec![a, b];
+            parents.sort();
+            (
+                BlockPayload {
+                    parent_block_ids: parents,
+                    kind: BlockKind::Merge,
+                    patch_ids: Vec::new(),
+                    state_merkle_root: MerkleRoot([0xB0_u8; 32]),
+                    snapshot_blob_ref: None,
+                    mainline_parent_id: Some(genesis),
+                    merge_baseline_block_id: Some(genesis),
+                },
+                "mainline parent must be one of its own parents",
+            )
+        }),
+        ("merge-without-baseline", |_genesis, a, b| {
+            let mut parents = vec![a, b];
+            parents.sort();
+            (
+                BlockPayload {
+                    parent_block_ids: parents,
+                    kind: BlockKind::Merge,
+                    patch_ids: Vec::new(),
+                    state_merkle_root: MerkleRoot([0xB1_u8; 32]),
+                    snapshot_blob_ref: None,
+                    mainline_parent_id: Some(a),
+                    merge_baseline_block_id: None,
+                },
+                "must record the baseline confluence was proven against",
+            )
+        }),
+    ];
+
+    for (name, case_fn) in cases {
+        let root = unique_temp_dir(&format!("block-shape-{name}"));
+        let layout = RepositoryLayout::init(root.clone())?;
+        let mut store = FileObjectStore::new(layout.clone());
+
+        let genesis_root = derive_next_state_root(&store, None, &[])?;
+        let genesis = write_signed_block(
+            &mut store,
+            &BlockPayload {
+                parent_block_ids: Vec::new(),
+                kind: BlockKind::Root,
+                patch_ids: Vec::new(),
+                state_merkle_root: genesis_root,
+                snapshot_blob_ref: None,
+                mainline_parent_id: None,
+                merge_baseline_block_id: None,
+            },
+        )?;
+        let parent_a = write_create_child(&mut store, genesis, "a.txt", 0x51)?;
+        let parent_b = write_create_child(&mut store, genesis, "b.txt", 0x52)?;
+
+        let (payload, expected_substring) = case_fn(genesis, parent_a, parent_b);
+        write_signed_block(&mut store, &payload)?;
+
+        let error = match verify_repository(&layout) {
+            Ok(_) => {
+                panic!("case {name:?}: expected verify_repository to reject a shape violation")
+            }
+            Err(error) => error.to_string(),
+        };
+        assert!(
+            error.contains(expected_substring),
+            "case {name:?}: expected error containing {expected_substring:?}, got: {error}"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+    Ok(())
+}
+
 fn write_signed_block(store: &mut FileObjectStore, payload: &BlockPayload) -> Result<ObjectId> {
     let payload_bytes = payload.to_canonical_bytes()?;
     let mut block = ObjectEnvelope::unsigned(ObjectType::Block, 2, payload_bytes);
