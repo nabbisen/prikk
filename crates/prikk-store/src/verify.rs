@@ -367,11 +367,20 @@ fn classify_active_wal_metadata(
     }
 }
 
+/// Phase A (DC-92 §4.2): every check that does not depend on lineage-state derivation order —
+/// existence of referenced objects, rollback-patch counting, and (independent of the shared memo)
+/// the merge-baseline re-derivation. A `CurrentV2` block's own state-root verification is
+/// deliberately **not** done here; it is deferred to a batch, dependency-ordered pass
+/// (`crate::block_state::verify_blocks_topological`) run once after every object type has been
+/// scanned, so `pending_v2_blocks` collects this block's already-decoded payload rather than
+/// discarding it. See that function's own doc for why deferring is what bounds
+/// `LineageStateMemo`'s memory instead of merely avoiding redundant re-derivation.
 fn verify_block_payload(
     object_store: &FileObjectStore,
     block_id: ObjectId,
     format: RepositoryFormat,
     canonical_payload: &[u8],
+    pending_v2_blocks: &mut Vec<(ObjectId, BlockPayload)>,
 ) -> Result<(usize, Option<MergeBaselineDivergence>)> {
     let payload = BlockPayload::decode_canonical(canonical_payload)?;
     for parent in &payload.parent_block_ids {
@@ -406,14 +415,14 @@ fn verify_block_payload(
             block_id,
         )?;
     }
-    if format == RepositoryFormat::CurrentV2 {
-        crate::block_state::verify_block_v2_state(object_store, block_id, &payload)?;
-    }
     let merge_baseline_divergence = if format == RepositoryFormat::CurrentV2 {
         verify_merge_baseline(object_store, block_id, &payload)?
     } else {
         None
     };
+    if format == RepositoryFormat::CurrentV2 {
+        pending_v2_blocks.push((block_id, payload));
+    }
     Ok((rollback_patch_count, merge_baseline_divergence))
 }
 

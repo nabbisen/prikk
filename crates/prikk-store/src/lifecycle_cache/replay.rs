@@ -276,13 +276,6 @@ fn walk_single_parent_chain_inner<R: LineageBlockReader>(
     Ok(chain)
 }
 
-fn walk_lineage_to_genesis(
-    reader: &impl ObjectReader,
-    baseline: ObjectId,
-) -> Result<Vec<WalkedBlock>, LifecycleReplayError> {
-    walk_single_parent_chain_inner(&ReaderLineage(reader), baseline, None)
-}
-
 /// Walk the v1 single-parent lineage from `baseline` back to the genesis `horizon`, returning the
 /// chain in **apply order** with each block's payload — read exactly once by the walk and retained
 /// for patch application. Built on the shared [`walk_single_parent_chain`]; performs no second
@@ -353,6 +346,52 @@ pub(crate) fn apply_one_block(
         &mut text_cache,
         require_schema_one,
     )
+}
+
+/// Apply exactly one already-read block's patches to an existing lifecycle state **and** an
+/// existing, externally-carried `TextCache` (DC-92). Unlike [`apply_one_block`], which creates a
+/// fresh cache per call — correct only when the caller processes one block in isolation — this
+/// variant is for a caller replaying **several separate blocks in sequence** and needing text
+/// materialization to survive between them, exactly as a single continuous full replay would
+/// provide. Without this, a node's `TextFile` content identity produced by an *earlier* block's
+/// `EditText` (a content identity, not necessarily a stored object — see the DC-65 invariant
+/// document) would be unreachable once that earlier call's own local cache was discarded, and a
+/// later `EditText` against the same node would fail looking for a blob that was never stored.
+/// [`crate::lifecycle_cache::incremental`]'s own one-block step hits exactly this gap and falls
+/// back to full replay rather than solving it (see its module doc); this function is DC-92's
+/// solution for the case where blocks are visited **in order**, so there is a real cache to carry.
+pub(crate) fn apply_one_block_with_text_cache(
+    reader: &impl ObjectReader,
+    block: &BlockPayload,
+    state: &mut NodeLifecycleState,
+    text_cache: &mut TextCache,
+) -> Result<(), LifecycleReplayError> {
+    let blob_resolver = StoreBackedResolver::new_format2(reader);
+    apply_patch_ids(
+        reader,
+        &block.patch_ids,
+        &blob_resolver,
+        state,
+        text_cache,
+        true,
+    )
+}
+
+/// Apply a raw candidate patch id list — not yet a sealed `BlockPayload`, since it names the patches
+/// a *proposed* block would carry — onto an existing lifecycle state and carried `TextCache`
+/// (DC-92). The tail-only counterpart to [`apply_one_block_with_text_cache`] for the one caller
+/// that has a patch list but no block payload yet: `derive_next_state_root`'s own final step,
+/// deriving the state a new block's own transition would produce before that block has been signed
+/// or persisted. Takes the same carried `text_cache` its parent's lineage resolution accumulated,
+/// for the identical reason `apply_one_block_with_text_cache` needs it.
+pub(crate) fn apply_candidate_patches(
+    reader: &impl ObjectReader,
+    state: &mut NodeLifecycleState,
+    text_cache: &mut TextCache,
+    patch_ids: &[ObjectId],
+) -> Result<(), LifecycleReplayError> {
+    let blob_resolver = StoreBackedResolver::new_format2(reader);
+    apply_patch_ids(reader, patch_ids, &blob_resolver, state, text_cache, true)
 }
 
 /// Fold a sequence of not-yet-sealed queued patch envelopes (DC-66) onto an already-resolved
@@ -443,19 +482,6 @@ fn read_patch_operations_from_envelope(
             detail: e.to_string(),
         }
     })
-}
-
-pub(crate) fn replay_with_appended_patches(
-    reader: &impl ObjectReader,
-    parent: Option<ObjectId>,
-    patch_ids: &[ObjectId],
-) -> Result<NodeLifecycleState, LifecycleReplayError> {
-    let chain = match parent {
-        Some(parent) => walk_lineage_to_genesis(reader, parent)?,
-        None => Vec::new(),
-    };
-    let (state, _text_cache) = replay_chain_with_appended_patches(reader, &chain, patch_ids, true)?;
-    Ok(state)
 }
 
 fn replay_chain_with_appended_patches(
