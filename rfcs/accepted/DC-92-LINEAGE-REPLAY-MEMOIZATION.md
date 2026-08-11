@@ -102,8 +102,13 @@ that before reaching for anything persisted.**
    not this increment's.
 7. **Amended 2026-08-11, after the memory measurement: the memo must be bounded.** Peak memory for
    `verify` measured as **O(N × tree_size)** — 599 MB at N=160 with 10,000 files, a fitted line putting
-   N=10,000 north of 37 GB, and the `TextCache` (materialized file content) term **excluded** from
-   those figures because the churn harness never edits text. "Faster" is not delivered by something
+   N=10,000 north of 37 GB, and the `TextCache` (materialized file content) term excluded from
+   those figures because the churn harness never edits text. **Corrected 2026-08-11:** the architect
+   wrote here that this made the measured figure "a floor." An edit-heavy variant measured the content
+   term and found **no increase at all** at the harness's 64-byte file size — the index term dominates
+   completely. The residual is narrower: the content term is real in principle and unmeasured at
+   realistic file sizes, not a floor under the number above. A frontier-bounded memo (§4.2) bounds both
+   halves regardless of file size, which retires the open question rather than measuring it. "Faster" is not delivered by something
    that may exhaust memory instead: before this increment `verify` was slow on a large repository,
    after it it may not complete. A bound is required before merge, and the memory axis must be
    measured after the fix as the time axis already is — including an edit-heavy variant so the content
