@@ -14,6 +14,27 @@ DC-38's invariant cannot hold on Windows under the current publication design.
 
 Everything else follows from the answer, and nothing else is in scope.
 
+## 1a. The owner's deciding criterion, 2026-08-11
+
+> "I prefer one which is more secure and more robust. It's true minimalism is very important but, in
+> production use, the stable performance and the data integrity is more important."
+
+**This changes how §1's question is weighed, and the change is on the record because the architect's
+original framing carried the opposite bias.** §2 and §5 below were written leaning toward *do not
+disturb proved-safe machinery without cause* — treating "the current design is already tested" as close
+to decisive.
+
+It is not decisive. It is a **cost**, to be stated honestly and weighed against robustness and data
+integrity, which rank above minimality of change. Concretely, for §4:
+
+- A design that is **more robust** does not lose because it would require re-earning evidence. Report
+  the re-proving cost as a cost; do not let it settle the comparison.
+- "Fewer crash states" is not the only robustness axis. **Detectability** (can a bad state be recognised
+  from the artifact's own bytes?) and **recoverability** (can it be finished without operator judgment?)
+  count equally, and the current design should be scored on them too, not just on state count.
+- Performance stability is in scope where the shapes differ — a fixed-size slot write versus a
+  write-then-rename-then-directory-sync sequence have different costs and different variance.
+
 ## 2. Why it is worth asking
 
 DC-87 Stage 2 found that every durability-bearing transition splits in two: an **update of an existing
