@@ -351,12 +351,64 @@ fn measure_verify_memory_by_depth(
     results
 }
 
+/// One generation of the edit-heavy variant: overwrite one already-tracked file's content in place
+/// (round-robin through `files`, never creating or deleting) and commit, producing an `EditText`
+/// patch (DC-65's own pattern — `dc65_text_edit_baseline.rs`'s
+/// `editing_the_same_text_file_across_five_sealed_commits_succeeds` confirms overwriting a tracked
+/// path is all `commit` needs to classify it as an edit, no separate API). Unlike churn, live tree
+/// membership and `NodeLifecycleState`'s `seen_ids`/`live_by_id`/`path_to_id` sizes stay exactly
+/// constant across every generation -- isolating the `TextCache` term the depth/tree-size axes above
+/// cannot see (their churn technique never edits, so `TextCache` stayed empty in every trial there).
+#[cfg(target_os = "linux")]
+fn edit_generation(root: &Path, files: &[PathBuf], edit_index: &mut usize, rng: &mut SplitMix64) {
+    let path = &files[*edit_index % files.len()];
+    *edit_index += 1;
+    std::fs::write(root.join(path), random_content(rng)).unwrap();
+    let commit_output = support::commit(root, REF_NAME, "dc92-bench: edit");
+    support::ok(&commit_output, "edit commit");
+    let seal_output = seal(root, REF_NAME);
+    support::ok(&seal_output, "edit seal");
+}
+
+/// Grow a repository to `target_depth` at a fixed `tree_size` via **edits** (see [`edit_generation`]),
+/// measuring `verify`'s peak memory at each of `checkpoints`. The edit-axis counterpart to
+/// [`measure_verify_memory_by_depth`], which uses churn.
+#[cfg(target_os = "linux")]
+fn measure_verify_memory_by_depth_with_edits(
+    tree_size: usize,
+    target_depth: usize,
+    checkpoints: &[usize],
+) -> Vec<(usize, MemoryTrial)> {
+    let root = unique_repo(&format!(
+        "dc92-mem-edit-tree{tree_size}-depth{target_depth}"
+    ));
+    let seed = 0xDC92_ED17_0000_0000_u64
+        .wrapping_add(tree_size as u64)
+        .rotate_left(13)
+        .wrapping_add(target_depth as u64);
+    let files = build_genesis(&root, seed, tree_size);
+    let mut rng = SplitMix64::new(seed ^ 0x5555_5555_AAAA_AAAA);
+    let mut edit_index = 0_usize;
+
+    let mut results = Vec::with_capacity(checkpoints.len());
+    for depth in 2..=target_depth {
+        edit_generation(&root, &files, &mut edit_index, &mut rng);
+        if checkpoints.contains(&depth) {
+            results.push((depth, measure_verify_memory(&root, MEMORY_SAMPLE_INTERVAL)));
+        }
+    }
+
+    let _ = std::fs::remove_dir_all(&root);
+    results
+}
+
 #[cfg(target_os = "linux")]
 struct MemoryAxisResult {
     floor_peak_kb: Option<u64>,
     floor_samples: (usize, usize),
     by_depth: Vec<(usize, MemoryTrial)>,
     by_tree_size: Vec<(usize, MemoryTrial)>,
+    by_depth_with_edits: Vec<(usize, MemoryTrial)>,
 }
 
 #[cfg(target_os = "linux")]
@@ -407,11 +459,21 @@ fn run_memory_axis() -> MemoryAxisResult {
     }
     by_tree_size.sort_by_key(|(tree_size, _)| *tree_size);
 
+    eprintln!(
+        "memory axis: edit-heavy depth sweep (tree size {MEMORY_DEPTH_TREE_SIZE}, depths {MEMORY_DEPTH_VALUES:?})..."
+    );
+    let by_depth_with_edits = measure_verify_memory_by_depth_with_edits(
+        MEMORY_DEPTH_TREE_SIZE,
+        MAX_DEPTH,
+        &MEMORY_DEPTH_VALUES,
+    );
+
     MemoryAxisResult {
         floor_peak_kb,
         floor_samples: (floor_obtained, floor_attempted),
         by_depth,
         by_tree_size,
+        by_depth_with_edits,
     }
 }
 
@@ -482,6 +544,28 @@ fn render_memory_axis(out: &mut String) {
         for (tree_size, trial) in &result.by_tree_size {
             out.push_str(&format!(
                 "| {tree_size} | {} | {} |\n",
+                fmt_kb(trial.peak_kb),
+                fmt_above_floor(trial.peak_kb, result.floor_peak_kb),
+            ));
+        }
+        out.push('\n');
+
+        out.push_str(&format!(
+            "### Depth axis, edit-heavy variant (tree size fixed at {MEMORY_DEPTH_TREE_SIZE} files, \
+             review §4.4)\n\n"
+        ));
+        out.push_str(
+            "Every generation **overwrites one already-tracked file's content** (round-robin, DC-65's \
+             `EditText` pattern) instead of churn's create+delete -- live tree membership and \
+             `NodeLifecycleState`'s `seen_ids`/`live_by_id`/`path_to_id` sizes stay exactly constant \
+             across every generation, isolating `TextCache`'s own contribution from the depth axis \
+             above (which never edits, so `TextCache` stayed empty there).\n\n",
+        );
+        out.push_str("| Sealed blocks (N) | Peak VmHWM (KB) | Above floor (KB) |\n");
+        out.push_str("|---:|---:|---:|\n");
+        for (depth, trial) in &result.by_depth_with_edits {
+            out.push_str(&format!(
+                "| {depth} | {} | {} |\n",
                 fmt_kb(trial.peak_kb),
                 fmt_above_floor(trial.peak_kb, result.floor_peak_kb),
             ));
