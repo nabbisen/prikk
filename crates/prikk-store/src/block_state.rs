@@ -1,6 +1,6 @@
 //! Format-2 Block shape and authoritative clean-state derivation.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{BlockKind, BlockPayload, MerkleRoot, ObjectId, ObjectType};
@@ -113,6 +113,20 @@ impl LineageStateMemo {
     pub(crate) fn new() -> Self {
         Self::default()
     }
+
+    /// Number of entries currently live. Read by [`verify_blocks_topological`] to track its own
+    /// peak-concurrency diagnostic, and by the frontier-boundedness test that checks it.
+    pub(crate) fn len(&self) -> usize {
+        self.verified.len()
+    }
+
+    /// Drop `block_id`'s entry once [`verify_blocks_topological`] has determined no remaining block
+    /// still needs it (DC-92 §4.2) — the mechanism that turns O(N) live entries into O(frontier).
+    /// Not exposed outside this module: callers elsewhere in `verify`/`seal`/`merge` never share a
+    /// memo across more than the one derivation they asked for, so they have no reason to evict.
+    fn evict(&mut self, block_id: &ObjectId) {
+        self.verified.remove(block_id);
+    }
 }
 
 /// Derive the state root for a proposed format-2 Block from its parent and ordered Patches.
@@ -195,6 +209,121 @@ pub(crate) fn verify_block_v2_state(
     }
     memo.verified.insert(block_id, (state, text_cache));
     Ok(())
+}
+
+/// Verify every format-2 Block in `blocks` — `verify`'s own outer loop's batch, collected in
+/// ObjectId scan order by its Phase A pass — in **state-dependency order** rather than that scan
+/// order (DC-92 §4.2). `state_derivation_parent` reduces every block, including `Merge` (mainline
+/// parent only), to a single state-derivation parent, so the dependency structure here is always a
+/// tree/forest, never a general multi-parent DAG — the same simplification
+/// [`validate_v2_lineage`]'s own single-parent walk already relies on.
+///
+/// **Why this bounds memory, not just avoids re-deriving.** `verify_block_v2_state` is called on a
+/// block only once its state-derivation parent is already memoized (or it has none — a root). The
+/// instant every block that depends on a given memo entry has consumed it, that entry is evicted —
+/// so at most a handful of entries are ever live at once: exactly the "frontier" of the traversal,
+/// not the total block count. For a strict linear history the frontier is a small constant (two
+/// entries momentarily coexist right as a new tip is verified, before its now-fully-consumed parent
+/// is evicted) regardless of how deep the history is; for `B` concurrently open, never-merged
+/// branches, it is `O(B)`. This is the mechanism the implementation review's §4 measurement asked
+/// for: turning `LineageStateMemo` from something that grows with every block `verify` ever checks
+/// into something that only ever holds what the *traversal in progress* still needs.
+///
+/// Uses Kahn's algorithm — in-degree map, children map, FIFO queue — the same shape already
+/// established in this codebase by [`crate::merge_evidence::topological_order`] for a related but
+/// distinct purpose (ordering candidate blocks for merge evidence, over full `parent_block_ids`
+/// rather than the single state-derivation parent used here).
+///
+/// A block whose `state_derivation_parent` is not itself present in `blocks` (a format-1 ancestor at
+/// a format transition boundary, or a missing/wrong-schema parent under corruption) is treated as
+/// immediately ready — nothing in *this* batch to wait for — and `verify_block_v2_state`'s own
+/// internal lineage walk still runs for it exactly as before, so a genuine defect there is still
+/// caught with the same error it always was; this function adds no new trust in that path, only
+/// reordering the batch that *is* self-contained.
+///
+/// Returns the peak number of entries [`LineageStateMemo`] held live at any point during this call —
+/// diagnostic only, read by the frontier-boundedness test, ignored by every production caller.
+pub(crate) fn verify_blocks_topological(
+    reader: &impl ObjectReader,
+    blocks: &[(ObjectId, BlockPayload)],
+    memo: &mut LineageStateMemo,
+) -> Result<usize> {
+    let by_id: BTreeMap<ObjectId, &BlockPayload> =
+        blocks.iter().map(|(id, payload)| (*id, payload)).collect();
+
+    let mut children: BTreeMap<ObjectId, Vec<ObjectId>> = BTreeMap::new();
+    let mut pending_parent: BTreeMap<ObjectId, bool> = BTreeMap::new();
+    for (id, payload) in blocks {
+        let has_in_batch_parent = match state_derivation_parent(payload) {
+            Some(parent_id) if by_id.contains_key(&parent_id) => {
+                children.entry(parent_id).or_default().push(*id);
+                true
+            }
+            _ => false,
+        };
+        pending_parent.insert(*id, has_in_batch_parent);
+    }
+    let mut remaining_children: BTreeMap<ObjectId, usize> = blocks
+        .iter()
+        .map(|(id, _)| (*id, children.get(id).map_or(0, Vec::len)))
+        .collect();
+
+    let mut ready: Vec<ObjectId> = pending_parent
+        .iter()
+        .filter(|&(_, has_parent)| !has_parent)
+        .map(|(id, _)| *id)
+        .collect();
+    ready.sort();
+    let mut queue: VecDeque<ObjectId> = ready.into();
+
+    let mut peak = memo.len();
+    let mut processed = BTreeSet::new();
+    while let Some(id) = queue.pop_front() {
+        let payload = by_id.get(&id).ok_or_else(|| {
+            PrikkError::Integrity("format-2 topological pass lost a block".into())
+        })?;
+        verify_block_v2_state(reader, id, payload, memo)?;
+        processed.insert(id);
+        peak = peak.max(memo.len());
+
+        if let Some(parent_id) = state_derivation_parent(payload) {
+            if let Some(count) = remaining_children.get_mut(&parent_id) {
+                *count = count.saturating_sub(1);
+                if *count == 0 {
+                    memo.evict(&parent_id);
+                }
+            }
+        }
+        if remaining_children.get(&id).copied() == Some(0) {
+            memo.evict(&id);
+        }
+
+        for child in children.get(&id).into_iter().flatten() {
+            let entry = pending_parent.get_mut(child).ok_or_else(|| {
+                PrikkError::Integrity("format-2 topological pass lost a tracked child".into())
+            })?;
+            *entry = false;
+            queue.push_back(*child);
+        }
+    }
+
+    if processed.len() != blocks.len() {
+        return Err(
+            match blocks
+                .iter()
+                .map(|(id, _)| *id)
+                .find(|id| !processed.contains(id))
+            {
+                Some(stuck) => {
+                    PrikkError::Integrity(format!("format-2 Block lineage cycle at {stuck}"))
+                }
+                None => PrikkError::Integrity(
+                    "format-2 topological pass detected an inconsistent cycle count".to_string(),
+                ),
+            },
+        );
+    }
+    Ok(peak)
 }
 
 /// Walk parent pointers from `tip` back toward genesis, stopping at genesis *or* at the first

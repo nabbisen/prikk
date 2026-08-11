@@ -6,6 +6,7 @@ use prikk_object::{
 
 use super::{
     LineageStateMemo, derive_next_state_root, validate_block_v2_shape, verify_block_v2_state,
+    verify_blocks_topological,
 };
 use crate::lifecycle_cache::replay::{TextCache, apply_candidate_patches};
 use crate::node_lifecycle::NodeLifecycleState;
@@ -477,4 +478,86 @@ fn block_payload_of(
     let envelope = crate::ObjectReader::read_object(store, block_id)?
         .ok_or_else(|| prikk_error::PrikkError::Integrity("test block missing".to_string()))?;
     BlockPayload::decode_canonical(&envelope.canonical_payload)
+}
+
+/// DC-92 §4.2 review: proves boundedness itself, not merely that results stay correct. `BRANCHES`
+/// independent chains of `DEPTH` blocks each, all forking from one shared genesis -- the peak number
+/// of `LineageStateMemo` entries live at any point must track open-branch count, not total history
+/// length. Submitted in ObjectId order (`blocks.sort_by_key`), matching what `verify`'s real Phase A
+/// scan actually collects -- not lineage order -- so this also proves the algorithm's own dependency
+/// ordering, not accidental input-order locality, is what bounds memory.
+#[test]
+fn multi_branch_history_bounds_peak_memo_size_by_branch_count_not_block_count()
+-> prikk_error::Result<()> {
+    const BRANCHES: usize = 4;
+    const DEPTH: usize = 10;
+
+    let mut store = MemoryObjectStore::new();
+    let genesis_id = write_block(&mut store, None, Vec::new(), compute_state_root(&[])?)?;
+    let mut blocks = vec![(genesis_id, block_payload_of(&store, genesis_id)?)];
+
+    for branch in 0..BRANCHES {
+        let mut parent = genesis_id;
+        for step in 0..DEPTH {
+            let seed = (branch * DEPTH + step + 1) as u8;
+            let patch_id = create_file_patch(&mut store, &format!("b{branch}-{step}.txt"), seed)?;
+            let root = derive_next_state_root(&store, Some(parent), &[patch_id])?;
+            let block_id = write_block(&mut store, Some(parent), vec![patch_id], root)?;
+            blocks.push((block_id, block_payload_of(&store, block_id)?));
+            parent = block_id;
+        }
+    }
+    blocks.sort_by_key(|(id, _)| *id);
+    let total = blocks.len();
+
+    let mut memo = LineageStateMemo::new();
+    let peak = verify_blocks_topological(&store, &blocks, &mut memo)?;
+
+    assert_eq!(
+        memo.len(),
+        0,
+        "every entry must be evicted once nothing in the batch still needs it"
+    );
+    assert!(
+        peak <= BRANCHES + 2,
+        "peak live memo entries ({peak}) should track open-branch count ({BRANCHES}), not grow \
+         with history depth"
+    );
+    assert!(
+        peak < total,
+        "peak ({peak}) should be far below total block count ({total}) -- proving the entries \
+         were never all live at once, which is the whole point of §4.2"
+    );
+    Ok(())
+}
+
+/// DC-92 §4.2 review: a cycle-detection control for `verify_blocks_topological`'s own Kahn's-
+/// algorithm path specifically, distinct from `validate_v2_lineage`'s walk-based cycle detection
+/// (which a genuine content-addressed object store cannot actually be forced into, since a real
+/// cycle would require two objects whose ids are chosen before their mutually-referencing content is
+/// known -- a hash fixed point). Constructed directly against fabricated ids via `ObjectId::from_
+/// bytes`, bypassing the store entirely: the two blocks never become ready, so `verify_block_v2_
+/// state` is never called and the store is never touched, matching the fact that this is caught
+/// purely from the batch's own dependency structure before any replay is attempted.
+#[test]
+fn two_blocks_naming_each_other_as_state_parent_are_caught_as_a_cycle() -> prikk_error::Result<()> {
+    let id_a = ObjectId::from_bytes([0xC1; 32]);
+    let id_b = ObjectId::from_bytes([0xC2; 32]);
+    let payload_a = payload(BlockKind::Normal, vec![id_b], WRONG_ROOT);
+    let payload_b = payload(BlockKind::Normal, vec![id_a], WRONG_ROOT);
+    let blocks = vec![(id_a, payload_a), (id_b, payload_b)];
+
+    let store = MemoryObjectStore::new();
+    let mut memo = LineageStateMemo::new();
+    match verify_blocks_topological(&store, &blocks, &mut memo) {
+        Ok(_) => panic!("a two-block cycle must be rejected, not silently dropped from the batch"),
+        Err(error) => {
+            let message = error.to_string();
+            assert!(
+                message.contains("lineage cycle"),
+                "expected a lineage-cycle error, got: {message}"
+            );
+        }
+    }
+    Ok(())
 }

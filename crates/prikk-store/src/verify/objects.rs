@@ -4,12 +4,12 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{ObjectId, ObjectType};
+use prikk_object::{BlockPayload, ObjectId, ObjectType};
 
 use super::{
     BlockSealVerification, ObjectVerification, PublicationTrustVerifier, verify_block_payload,
 };
-use crate::block_state::LineageStateMemo;
+use crate::block_state::{LineageStateMemo, verify_blocks_topological};
 use crate::file_codec::decode_envelope_file;
 use crate::fsutil::{EntryKind, inspect_entry, list_directory, read_file_required};
 use crate::layout::{RepositoryLayout, persisted_object_types};
@@ -70,10 +70,14 @@ pub(super) fn verify_objects(
     object_store: &FileObjectStore,
     trust_verifier: &mut PublicationTrustVerifier<'_>,
 ) -> Result<ObjectSummary> {
-    // DC-92: constructed once, threaded through every block this whole verify run checks, so no
-    // block's state is ever derived twice regardless of how many later blocks' lineages reference
-    // it. Never persisted past this call.
+    // DC-92 §4.2: Phase A (below) collects every CurrentV2 Block's already-decoded payload instead
+    // of verifying its state inline, in whatever order the generic scan visits objects (ObjectId
+    // order — unrelated to lineage). Phase B (`verify_blocks_topological`, after the loop) verifies
+    // them in state-dependency order instead, against one shared memo constructed here and evicted
+    // from as it goes — see that function's doc for why this bounds memory rather than merely
+    // avoiding redundant re-derivation. Never persisted past this call.
     let mut lineage_memo = LineageStateMemo::new();
+    let mut pending_v2_blocks: Vec<(ObjectId, BlockPayload)> = Vec::new();
     let mut summary = ObjectSummary::empty();
     for object_type in persisted_object_types() {
         summary.add(verify_object_type(
@@ -81,9 +85,10 @@ pub(super) fn verify_objects(
             object_store,
             object_type,
             trust_verifier,
-            &mut lineage_memo,
+            &mut pending_v2_blocks,
         )?)?;
     }
+    verify_blocks_topological(object_store, &pending_v2_blocks, &mut lineage_memo)?;
     Ok(summary)
 }
 
@@ -92,7 +97,7 @@ fn verify_object_type(
     object_store: &FileObjectStore,
     object_type: ObjectType,
     trust_verifier: &mut PublicationTrustVerifier<'_>,
-    lineage_memo: &mut LineageStateMemo,
+    pending_v2_blocks: &mut Vec<(ObjectId, BlockPayload)>,
 ) -> Result<ObjectSummary> {
     let dir = layout.object_type_dir(object_type);
     let relative_dir = layout.repository_relative(&dir)?;
@@ -127,7 +132,7 @@ fn verify_object_type(
             object_type,
             &prefix_path,
             trust_verifier,
-            lineage_memo,
+            pending_v2_blocks,
         )?)?;
     }
     Ok(summary)
@@ -139,7 +144,7 @@ fn verify_prefix_dir(
     object_type: ObjectType,
     prefix_path: &Path,
     trust_verifier: &mut PublicationTrustVerifier<'_>,
-    lineage_memo: &mut LineageStateMemo,
+    pending_v2_blocks: &mut Vec<(ObjectId, BlockPayload)>,
 ) -> Result<ObjectSummary> {
     let mut summary = ObjectSummary::empty();
     let relative_prefix = layout.repository_relative(prefix_path)?;
@@ -167,7 +172,7 @@ fn verify_prefix_dir(
             object_type,
             &path,
             trust_verifier,
-            lineage_memo,
+            pending_v2_blocks,
         )?;
         summary.signature_issues.extend(signature_issues);
         summary
@@ -202,7 +207,7 @@ fn verify_object_file(
     object_type: ObjectType,
     path: &Path,
     trust_verifier: &mut PublicationTrustVerifier<'_>,
-    lineage_memo: &mut LineageStateMemo,
+    pending_v2_blocks: &mut Vec<(ObjectId, BlockPayload)>,
 ) -> Result<(
     ObjectVerification,
     Vec<SignatureEnvelopeIssue>,
@@ -258,7 +263,7 @@ fn verify_object_file(
             object_id,
             layout.format(),
             &envelope.canonical_payload,
-            lineage_memo,
+            pending_v2_blocks,
         )?
     } else {
         (0, None)
