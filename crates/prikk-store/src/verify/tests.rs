@@ -50,6 +50,42 @@ fn verify_repository_detects_block_with_missing_patch() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// DC-92 implementation review §4: an end-to-end control that `verify` actually performs block state
+/// verification through the real `verify_objects` wiring — Phase A's collection into
+/// `pending_v2_blocks`, then Phase B's `verify_blocks_topological` — not merely in the unit-level
+/// `verify_block_v2_state`/`verify_blocks_topological` calls `block_state::tests` exercises directly
+/// against a `MemoryObjectStore`. The review found that removing the inline state-check call entirely
+/// (on `main`, pre-DC-92, and again after DC-92's restructuring) left the whole workspace suite
+/// green — nothing wired the two together. Built, not byte-corrupted, matching this module's own
+/// `verify_repository_detects_block_with_missing_patch`: content addressing means a post-hoc-
+/// corrupted object is just a different, self-consistent valid object, never a mismatch.
+#[test]
+fn verify_repository_detects_block_with_state_root_mismatch() -> Result<()> {
+    let root = unique_temp_dir("block-state-root-mismatch");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+
+    // A Root block over empty history, claiming a state root that is not the true empty-state root
+    // (`derive_next_state_root(&store, None, &[])`) -- wrong only in what it claims, otherwise
+    // shape-valid and schema-valid.
+    write_signed_block(
+        &mut store,
+        &BlockPayload {
+            parent_block_ids: Vec::new(),
+            kind: BlockKind::Root,
+            patch_ids: Vec::new(),
+            state_merkle_root: MerkleRoot([0xEE_u8; 32]),
+            snapshot_blob_ref: None,
+            mainline_parent_id: None,
+            merge_baseline_block_id: None,
+        },
+    )?;
+
+    assert!(verify_repository(&layout).is_err());
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 fn write_signed_block(store: &mut FileObjectStore, payload: &BlockPayload) -> Result<ObjectId> {
     let payload_bytes = payload.to_canonical_bytes()?;
     let mut block = ObjectEnvelope::unsigned(ObjectType::Block, 2, payload_bytes);
