@@ -39,7 +39,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 mod support;
-use support::{init, prikk, seal, unique_repo, verify};
+#[cfg(target_os = "linux")]
+use support::prikk;
+use support::{init, seal, unique_repo, verify};
 
 const REF_NAME: &str = "heads/main";
 
@@ -221,21 +223,28 @@ fn median(durations: &[Duration]) -> Duration {
 // it justified the same count for a different reason.
 
 /// Sampling interval for `/proc/<pid>/status` polling, identical to DC-62's own harness.
+#[cfg(target_os = "linux")]
 const MEMORY_SAMPLE_INTERVAL: Duration = Duration::from_micros(500);
 
 /// Fixed tree size for the depth-sensitivity axis: a "realistic" file count per the review's
 /// condition, not the churn-fixed 10 files the timing axis uses to isolate depth alone.
+#[cfg(target_os = "linux")]
 const MEMORY_DEPTH_TREE_SIZE: usize = 1_000;
+#[cfg(target_os = "linux")]
 const MEMORY_DEPTH_VALUES: [usize; 4] = [5, 40, 100, 160];
 
 /// Fixed depth (the deepest checkpoint measured elsewhere in this harness) for the
 /// tree-size-sensitivity axis.
+#[cfg(target_os = "linux")]
 const MEMORY_TREE_DEPTH: usize = 160;
 /// `1_000` is deliberately omitted -- the depth axis above already measures that exact grid point
 /// (tree size 1,000, depth 160) as its own last checkpoint, so it is reused rather than rebuilt.
+#[cfg(target_os = "linux")]
 const MEMORY_TREE_VALUES: [usize; 3] = [10, 100, 10_000];
 
+#[cfg(target_os = "linux")]
 const MEMORY_FLOOR_TREE_SIZE: usize = 1;
+#[cfg(target_os = "linux")]
 const MEMORY_FLOOR_SAMPLES: usize = 5;
 
 /// Outcome of one memory-measuring `verify` trial: the peak `VmHWM` observed (if any sample landed
