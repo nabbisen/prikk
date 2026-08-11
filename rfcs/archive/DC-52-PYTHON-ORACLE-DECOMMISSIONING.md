@@ -1,6 +1,20 @@
 # RFC (proposed) - DC-52 Python and Oracle Decommissioning
 
-**Status.** Proposed; design review required. Executes retirement obligations that DC-45 created and that
+**Status.** **SUPERSEDED 2026-08-11, and never scheduled.** Drafted with an implementation handoff
+prepared in advance on 2026-07-28, it then never received a row in `EXECUTION-ORDER.md` and fell out of
+the one view that answers "what do I pick up next" — an increment written to stop a deferred cleanup
+becoming permanent, itself becoming a deferred cleanup. Found 2026-08-11 when the project owner asked
+whether the older proposals were deferred, ignored, or controlled; four were controlled, this one was
+not.
+
+**Superseded by:** **DC-93** (retire the Python — obligations 3 and 4) and **DC-94** (bind the
+responsibility map, validate `defaults.run` — obligations 1 and 2). The split exists because this RFC
+made the additions *preconditions* for the subtraction, so an increment whose purpose was reducing
+complexity read as one that increased it. That coupling was DC-45's policy and sound at cutover; it is
+withdrawn now. Retained unedited below as the record of what was analysed, and its handoff
+(`handoffs/DC-52-python-oracle-decommissioning/`) with it.
+
+**Original status.** Proposed; design review required. Executes retirement obligations that DC-45 created and that
 currently exist only as prose across `MILESTONES.md`, `rfcs/IMPLEMENTATION-STATUS.md`, and architect
 review records.
 **Target milestone.** M2 - post-correction assurance milestone.
