@@ -1,7 +1,12 @@
 # RFC (proposed) - DC-91 Publication Record Shape
 
-**Status.** **PROPOSED** — needs the project owner's acceptance. **This is an evaluation, not a
-commitment to change anything.** §5 states what a "no" outcome looks like and why it is a good result.
+**Status.** **ACCEPTED by the project owner 2026-08-11.** **This is an evaluation, not a commitment to
+change anything** — §5 states what a "no" outcome looks like and why it is a good result. §4's four
+prerequisites are the work; acceptance clears the evaluation, not any implementation.
+**Note on §1a:** the owner's robustness-over-minimalism direction is the *deciding criterion*, not the
+answer. It settles how to weigh the comparison; it does not settle which design wins, because the
+comparison has not been made. That distinction is why this increment exists rather than being closed by
+the direction.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** DC-87 Stage 2's transition-durability investigation, 2026-08-11, which established that
 DC-38's invariant cannot hold on Windows under the current publication design.
