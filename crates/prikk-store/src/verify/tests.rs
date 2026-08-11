@@ -21,33 +21,105 @@ use crate::test_support::{
     signed_patch_envelope, unique_temp_dir,
 };
 
+/// DC-95 Stage 1, round 2: the three "referenced object is missing" checks in `verify_block_payload`
+/// (`verify.rs`) -- parent block, patch, and snapshot blob. Supersedes the older, weaker `verify_
+/// repository_detects_block_with_missing_patch` (asserted only `.is_err()`) with a table asserting
+/// each check's own specific message, per the round-1 condition's standard. Each fixture is shape-valid
+/// (isolating the existence check from `validate_block_v2_shape`) -- a `Normal` block referencing one
+/// nonexistent parent for the parent-existence row, `Root` blocks otherwise.
+///
+/// **The `missing-snapshot-blob` row uses a replay-correct root** (`snapshot_blob_ref` is metadata only
+/// -- never read by state derivation, confirmed by tracing `derive_next_state_root`/`apply_candidate_
+/// patches`, neither of which touch it -- so a correct root is always computable regardless of whether
+/// the snapshot blob exists). Disabling the snapshot-blob check on this row was confirmed, by an actual
+/// probe, to let `verify_repository` return `Ok` -- a clean pass, not a differently-worded rejection --
+/// so this row genuinely demonstrates Stage 1's own rule.
+///
+/// **`missing-parent` and `missing-patch` use arbitrary roots, and cannot do otherwise: reported, not
+/// silently inconsistent with round 1's standard.** Computing a replay-correct root for either requires
+/// *reading* the referenced object to derive from it -- exactly what "missing" makes impossible. Probed
+/// anyway, to learn what disabling each check actually does rather than assume it would be confounded
+/// the same way an arbitrary root was in round 1: disabling the parent-existence loop still rejects the
+/// block, via `validate_v2_lineage`'s own independent "format-2 parent Block {id} is missing" read in
+/// Phase B; disabling the patch-existence check still rejects it, via the lifecycle-replay layer's own
+/// "patch {id} is malformed (patch object is missing)" when Phase B tries to replay it. **Both are
+/// redundant with a downstream read for `CurrentV2` blocks specifically** -- disabling `verify_block_
+/// payload`'s own explicit check does not let a bad repository verify clean, because something else
+/// already reads the same reference and fails closed too. That is a real property of the current design,
+/// not a gap this round's test can paper over with a placeholder root, and it is why these two rows are
+/// regression guards on `verify_block_payload`'s own message (useful for diagnostics -- "which check
+/// said so" matters to an operator) rather than the "silent absence" demonstration `missing-snapshot-
+/// blob` gives directly.
 #[test]
-fn verify_repository_detects_block_with_missing_patch() {
-    let root = unique_temp_dir("block-missing-patch");
-    let layout = RepositoryLayout::init(root.clone());
-    assert!(layout.is_ok());
-    if let Ok(layout) = layout {
+fn verify_repository_detects_every_missing_referenced_object() -> Result<()> {
+    type CaseFn = fn(&FileObjectStore, ObjectId) -> Result<(BlockPayload, &'static str)>;
+    let cases: Vec<(&str, CaseFn)> = vec![
+        ("missing-parent", |_store, missing| {
+            Ok((
+                BlockPayload {
+                    parent_block_ids: vec![missing],
+                    kind: BlockKind::Normal,
+                    patch_ids: Vec::new(),
+                    state_merkle_root: MerkleRoot([0xC0_u8; 32]),
+                    snapshot_blob_ref: None,
+                    mainline_parent_id: None,
+                    merge_baseline_block_id: None,
+                },
+                "references missing parent block",
+            ))
+        }),
+        ("missing-patch", |_store, missing| {
+            Ok((
+                BlockPayload {
+                    parent_block_ids: Vec::new(),
+                    kind: BlockKind::Root,
+                    patch_ids: vec![missing],
+                    state_merkle_root: MerkleRoot([0xC1_u8; 32]),
+                    snapshot_blob_ref: None,
+                    mainline_parent_id: None,
+                    merge_baseline_block_id: None,
+                },
+                "references missing block patch",
+            ))
+        }),
+        ("missing-snapshot-blob", |store, missing| {
+            let state_merkle_root = derive_next_state_root(store, None, &[])?;
+            Ok((
+                BlockPayload {
+                    parent_block_ids: Vec::new(),
+                    kind: BlockKind::Root,
+                    patch_ids: Vec::new(),
+                    state_merkle_root,
+                    snapshot_blob_ref: Some(missing),
+                    mainline_parent_id: None,
+                    merge_baseline_block_id: None,
+                },
+                "references missing snapshot blob",
+            ))
+        }),
+    ];
+
+    for (name, case_fn) in cases {
+        let root = unique_temp_dir(&format!("missing-referenced-{name}"));
+        let layout = RepositoryLayout::init(root.clone())?;
         let mut store = FileObjectStore::new(layout.clone());
-        let missing_patch = sample_object_id("missing-patch");
-        let payload = BlockPayload {
-            parent_block_ids: Vec::new(),
-            kind: BlockKind::Root,
-            patch_ids: vec![missing_patch],
-            state_merkle_root: MerkleRoot([0_u8; 32]),
-            snapshot_blob_ref: None,
-            mainline_parent_id: None,
-            merge_baseline_block_id: None,
+        let missing = sample_object_id(&format!("{name}-target"));
+        let (payload, expected_substring) = case_fn(&store, missing)?;
+        write_signed_block(&mut store, &payload)?;
+
+        let error = match verify_repository(&layout) {
+            Ok(_) => {
+                panic!("case {name:?}: expected verify_repository to reject a missing reference")
+            }
+            Err(error) => error.to_string(),
         };
-        let payload_bytes = payload.to_canonical_bytes();
-        assert!(payload_bytes.is_ok());
-        if let Ok(payload_bytes) = payload_bytes {
-            let mut block = ObjectEnvelope::unsigned(ObjectType::Block, 2, payload_bytes);
-            assert!(block.add_signature(maintainer_signature()).is_ok());
-            assert!(store.write_object(&block).is_ok());
-            assert!(verify_repository(&layout).is_err());
-        }
+        assert!(
+            error.contains(expected_substring),
+            "case {name:?}: expected error containing {expected_substring:?}, got: {error}"
+        );
+        let _ = std::fs::remove_dir_all(root);
     }
-    let _ = std::fs::remove_dir_all(root);
+    Ok(())
 }
 
 /// DC-92 implementation review §4: an end-to-end control that `verify` actually performs block state
