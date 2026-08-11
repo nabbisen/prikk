@@ -1,6 +1,7 @@
 # RFC (proposed) - DC-95 Verify Coverage and Finding Accumulation
 
-**Status.** **PROPOSED** — needs the project owner's acceptance.
+**Status.** **ACCEPTED by the project owner 2026-08-11.** §3's four prerequisites precede either
+stage; acceptance clears the investigation, not the implementation.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** Two findings registered during the DC-92 cycle, and the owner's stated preference for
 maintainability and **verifiability of security**. The architect recommended these twice as the next
