@@ -1,7 +1,7 @@
 # RFC (proposed) - DC-94 Responsibility Map Executable Binding
 
-**Status.** **PROPOSED** — needs the project owner's acceptance. **Take it or leave it independently of
-DC-93**; it gates nothing and nothing gates it.
+**Status.** **ACCEPTED by the project owner 2026-08-11.** **Independent of DC-93** — it gates nothing
+and nothing gates it. §3's four prerequisites precede design.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** DC-52's obligations 1 and 2, decoupled from its retirement obligations on 2026-08-11
 so that removing complexity is not held hostage to adding a check.

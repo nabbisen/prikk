@@ -1,6 +1,7 @@
 # RFC (proposed) - DC-93 Release Policy Python Retirement
 
-**Status.** **PROPOSED** — needs the project owner's acceptance.
+**Status.** **ACCEPTED by the project owner 2026-08-11.** §3's four prerequisites precede removal;
+acceptance clears the investigation, not the deletion.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** The owner's question of 2026-08-11 — *"I care about increased complexity of the project
 which can be possibly avoided"* — and the audit it prompted, which found DC-52 drafted, handed off in
