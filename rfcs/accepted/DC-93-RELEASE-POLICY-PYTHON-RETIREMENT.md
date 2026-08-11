@@ -6,7 +6,10 @@ acceptance clears the investigation, not the deletion.
 **Arises from.** The owner's question of 2026-08-11 — *"I care about increased complexity of the project
 which can be possibly avoided"* — and the audit it prompted, which found DC-52 drafted, handed off in
 advance on 2026-07-28, and then absent from `EXECUTION-ORDER.md` entirely.
-**Supersedes** DC-52's obligations 3 and 4. **Does not** supersede its obligations 1 and 2, which move
+**Supersedes** DC-52's obligation 3 only — **amended 2026-08-11**; the original claim covered obligation
+4 (the eight frozen contract/evidence JSON files) but §3 never asks about them, and the developer caught
+the mismatch. Obligation 4 is a disposition question about JSON contract data, not about retiring
+Python; it remains open and unowned. **Does not** supersede its obligations 1 and 2, which move
 to **DC-94** and stop gating this increment. See §2.
 **Target milestone.** M2. No release-lane action; the lane stays parked.
 
@@ -14,7 +17,12 @@ to **DC-94** and stop gating this increment. See §2.
 
 DC-45 made the Rust `prikk-release-policy` command authoritative on 2026-07-21 and deliberately retained
 the Python implementation and frozen oracle as a rollback path. Three weeks later the retained material
-is still present and **nothing invokes it** — grep-confirmed across `.github/workflows/` and `scripts/`.
+is still present. ~~**Nothing invokes it** — grep-confirmed across `.github/workflows/` and
+`scripts/`.~~ **Corrected 2026-08-11: that claim was wrong.** `differential.rs:71-72` spawns
+`python3 -B release/observe-policy.py` from inside the authoritative Rust tool, and `scripts/` does not
+exist in this tree — half the grep targeted a phantom path and its empty result was read as evidence.
+Nothing in **CI** invokes the Python; the tool itself does. See
+`handoffs/DC-93-release-policy-python-retirement/prerequisite-ruling-v1.md` §1.
 
 Measured, not estimated:
 
