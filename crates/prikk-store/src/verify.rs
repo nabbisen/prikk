@@ -372,6 +372,7 @@ fn verify_block_payload(
     block_id: ObjectId,
     format: RepositoryFormat,
     canonical_payload: &[u8],
+    lineage_memo: &mut crate::block_state::LineageStateMemo,
 ) -> Result<(usize, Option<MergeBaselineDivergence>)> {
     let payload = BlockPayload::decode_canonical(canonical_payload)?;
     for parent in &payload.parent_block_ids {
@@ -407,7 +408,7 @@ fn verify_block_payload(
         )?;
     }
     if format == RepositoryFormat::CurrentV2 {
-        crate::block_state::verify_block_v2_state(object_store, block_id, &payload)?;
+        crate::block_state::verify_block_v2_state(object_store, block_id, &payload, lineage_memo)?;
     }
     let merge_baseline_divergence = if format == RepositoryFormat::CurrentV2 {
         verify_merge_baseline(object_store, block_id, &payload)?
