@@ -1,6 +1,7 @@
-# RFC (proposed) - DC-92 Lineage Replay Memoization
+# RFC (accepted) - DC-92 Lineage Replay Memoization
 
-**Status.** **PROPOSED** — needs the project owner's acceptance.
+**Status.** **ACCEPTED by the project owner 2026-08-11.** §4's five prerequisites still precede design;
+acceptance clears the investigation, not the implementation.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** The owner's direction of 2026-08-11 selecting the O(N³) `verify` cost as the next
 theme. The finding itself is **owner-authorized, recorded 2026-08-08** in `FINDINGS.md` and measured
