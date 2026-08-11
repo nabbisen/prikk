@@ -100,7 +100,16 @@ that before reaching for anything persisted.**
 6. If §4.1 confirms the seal cost, **seal is measured before and after too**, and NFR-PERF-01's record is
    updated to reflect what was actually found. Whether NFR-PERF-01 can then be claimed is the owner's,
    not this increment's.
-7. Gate set per `EXECUTION-ORDER.md` §6 rule 9.
+7. **Amended 2026-08-11, after the memory measurement: the memo must be bounded.** Peak memory for
+   `verify` measured as **O(N × tree_size)** — 599 MB at N=160 with 10,000 files, a fitted line putting
+   N=10,000 north of 37 GB, and the `TextCache` (materialized file content) term **excluded** from
+   those figures because the churn harness never edits text. "Faster" is not delivered by something
+   that may exhaust memory instead: before this increment `verify` was slow on a large repository,
+   after it it may not complete. A bound is required before merge, and the memory axis must be
+   measured after the fix as the time axis already is — including an edit-heavy variant so the content
+   term stops being invisible. See
+   `handoffs/DC-92-lineage-replay-memoization/memory-shape-ruling-v1.md`.
+8. Gate set per `EXECUTION-ORDER.md` §6 rule 9.
 
 ## 6. Non-goals
 
