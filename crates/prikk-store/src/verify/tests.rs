@@ -95,127 +95,161 @@ fn verify_repository_detects_block_with_state_root_mismatch() -> Result<()> {
 /// rows: `verify_repository` stops at the first hard error, so a shared repository would only ever
 /// prove whichever row's block sorts first by `ObjectId`, not the row under test). Each row's payload
 /// is built from a shared set of real parent blocks so it's wrong only in the one field under test.
+///
+/// **Every row's `state_merkle_root` is the replay-*correct* root for what `state_derivation_parent`
+/// would resolve if shape validation did not run first** -- computed via `derive_next_state_root`
+/// against exactly that parent, never an arbitrary placeholder. This is DC-92's own isolation
+/// discipline (`naive_continue`'s doc comment, `block_state/tests.rs`), required here for the same
+/// reason a first review round found missing: an arbitrary root lets the *state-root* check catch a
+/// shape-invalid fixture instead, so disabling shape validation alone would not make the row pass and
+/// the test would prove nothing about shape specifically. Confirmed by re-deriving `state_derivation_
+/// parent`'s own match arms for each row: non-`Merge` kinds resolve to `parent_block_ids.first()`
+/// (`None` when empty, regardless of shape validity), `Merge` resolves to `mainline_parent_id` directly
+/// (`None` when absent, unchecked against `parent_block_ids` when present) -- so every row here has a
+/// well-defined resolved parent, and none needed `naive_continue`'s from-scratch-continuation trick,
+/// since no row builds on an already-corrupted ancestor.
 #[test]
 fn verify_repository_detects_every_block_shape_violation() -> Result<()> {
-    type CaseFn = fn(ObjectId, ObjectId, ObjectId) -> (BlockPayload, &'static str);
+    type CaseFn =
+        fn(&FileObjectStore, ObjectId, ObjectId, ObjectId) -> Result<(BlockPayload, &'static str)>;
     let cases: Vec<(&str, CaseFn)> = vec![
-        ("root-with-parent", |genesis, _a, _b| {
-            (
+        ("root-with-parent", |store, genesis, _a, _b| {
+            // state_derivation_parent(Root, ..) = parent_block_ids.first() = Some(genesis).
+            let state_merkle_root = derive_next_state_root(store, Some(genesis), &[])?;
+            Ok((
                 BlockPayload {
                     parent_block_ids: vec![genesis],
                     kind: BlockKind::Root,
                     patch_ids: Vec::new(),
-                    state_merkle_root: MerkleRoot([0xAA_u8; 32]),
+                    state_merkle_root,
                     snapshot_blob_ref: None,
                     mainline_parent_id: None,
                     merge_baseline_block_id: None,
                 },
                 "Root Block must have zero parents",
-            )
+            ))
         }),
-        ("normal-with-zero-parents", |_genesis, _a, _b| {
-            (
+        ("normal-with-zero-parents", |store, _genesis, _a, _b| {
+            // state_derivation_parent(Normal, []) = parent_block_ids.first() = None.
+            let state_merkle_root = derive_next_state_root(store, None, &[])?;
+            Ok((
                 BlockPayload {
                     parent_block_ids: Vec::new(),
                     kind: BlockKind::Normal,
                     patch_ids: Vec::new(),
-                    state_merkle_root: MerkleRoot([0xAB_u8; 32]),
+                    state_merkle_root,
                     snapshot_blob_ref: None,
                     mainline_parent_id: None,
                     merge_baseline_block_id: None,
                 },
                 "Normal Block must have exactly one parent",
-            )
+            ))
         }),
-        ("merge-with-one-parent", |genesis, _a, _b| {
-            (
+        ("merge-with-one-parent", |store, genesis, _a, _b| {
+            // state_derivation_parent(Merge, ..) = mainline_parent_id = Some(genesis).
+            let state_merkle_root = derive_next_state_root(store, Some(genesis), &[])?;
+            Ok((
                 BlockPayload {
                     parent_block_ids: vec![genesis],
                     kind: BlockKind::Merge,
                     patch_ids: Vec::new(),
-                    state_merkle_root: MerkleRoot([0xAC_u8; 32]),
+                    state_merkle_root,
                     snapshot_blob_ref: None,
                     mainline_parent_id: Some(genesis),
                     merge_baseline_block_id: Some(genesis),
                 },
                 "Merge Block must have exactly two parents",
-            )
+            ))
         }),
-        ("repair-kind-unauthorized", |_genesis, _a, _b| {
-            (
+        ("repair-kind-unauthorized", |store, _genesis, _a, _b| {
+            // state_derivation_parent(Repair, []) = parent_block_ids.first() = None.
+            let state_merkle_root = derive_next_state_root(store, None, &[])?;
+            Ok((
                 BlockPayload {
                     parent_block_ids: Vec::new(),
                     kind: BlockKind::Repair,
                     patch_ids: Vec::new(),
-                    state_merkle_root: MerkleRoot([0xAD_u8; 32]),
+                    state_merkle_root,
                     snapshot_blob_ref: None,
                     mainline_parent_id: None,
                     merge_baseline_block_id: None,
                 },
                 "Block kind is not authorized",
-            )
+            ))
         }),
-        ("root-with-mainline-field", |genesis, _a, _b| {
-            (
+        ("root-with-mainline-field", |store, genesis, _a, _b| {
+            // state_derivation_parent ignores mainline_parent_id for non-Merge kinds:
+            // parent_block_ids.first() = None (parent_block_ids is empty here).
+            let state_merkle_root = derive_next_state_root(store, None, &[])?;
+            Ok((
                 BlockPayload {
                     parent_block_ids: Vec::new(),
                     kind: BlockKind::Root,
                     patch_ids: Vec::new(),
-                    state_merkle_root: MerkleRoot([0xAE_u8; 32]),
+                    state_merkle_root,
                     snapshot_blob_ref: None,
                     mainline_parent_id: Some(genesis),
                     merge_baseline_block_id: None,
                 },
                 "must not carry a mainline parent or merge baseline",
-            )
+            ))
         }),
-        ("merge-without-mainline", |genesis, a, b| {
+        ("merge-without-mainline", |store, genesis, a, b| {
+            // state_derivation_parent(Merge, ..) = mainline_parent_id = None here, regardless of
+            // parent_block_ids -- so the resolved parent is genesis-equivalent (empty), not a or b.
             let mut parents = vec![a, b];
             parents.sort();
-            (
+            let state_merkle_root = derive_next_state_root(store, None, &[])?;
+            Ok((
                 BlockPayload {
                     parent_block_ids: parents,
                     kind: BlockKind::Merge,
                     patch_ids: Vec::new(),
-                    state_merkle_root: MerkleRoot([0xAF_u8; 32]),
+                    state_merkle_root,
                     snapshot_blob_ref: None,
                     mainline_parent_id: None,
                     merge_baseline_block_id: Some(genesis),
                 },
                 "Merge Block must name a mainline parent",
-            )
+            ))
         }),
-        ("merge-mainline-not-a-parent", |genesis, a, b| {
+        ("merge-mainline-not-a-parent", |store, genesis, a, b| {
+            // state_derivation_parent(Merge, ..) = mainline_parent_id = Some(genesis) directly --
+            // never checked against parent_block_ids at this stage, that's exactly the shape rule
+            // being bypassed.
             let mut parents = vec![a, b];
             parents.sort();
-            (
+            let state_merkle_root = derive_next_state_root(store, Some(genesis), &[])?;
+            Ok((
                 BlockPayload {
                     parent_block_ids: parents,
                     kind: BlockKind::Merge,
                     patch_ids: Vec::new(),
-                    state_merkle_root: MerkleRoot([0xB0_u8; 32]),
+                    state_merkle_root,
                     snapshot_blob_ref: None,
                     mainline_parent_id: Some(genesis),
                     merge_baseline_block_id: Some(genesis),
                 },
                 "mainline parent must be one of its own parents",
-            )
+            ))
         }),
-        ("merge-without-baseline", |_genesis, a, b| {
+        ("merge-without-baseline", |store, _genesis, a, b| {
+            // state_derivation_parent(Merge, ..) = mainline_parent_id = Some(a).
             let mut parents = vec![a, b];
             parents.sort();
-            (
+            let state_merkle_root = derive_next_state_root(store, Some(a), &[])?;
+            Ok((
                 BlockPayload {
                     parent_block_ids: parents,
                     kind: BlockKind::Merge,
                     patch_ids: Vec::new(),
-                    state_merkle_root: MerkleRoot([0xB1_u8; 32]),
+                    state_merkle_root,
                     snapshot_blob_ref: None,
                     mainline_parent_id: Some(a),
                     merge_baseline_block_id: None,
                 },
                 "must record the baseline confluence was proven against",
-            )
+            ))
         }),
     ];
 
@@ -240,7 +274,7 @@ fn verify_repository_detects_every_block_shape_violation() -> Result<()> {
         let parent_a = write_create_child(&mut store, genesis, "a.txt", 0x51)?;
         let parent_b = write_create_child(&mut store, genesis, "b.txt", 0x52)?;
 
-        let (payload, expected_substring) = case_fn(genesis, parent_a, parent_b);
+        let (payload, expected_substring) = case_fn(&store, genesis, parent_a, parent_b)?;
         write_signed_block(&mut store, &payload)?;
 
         let error = match verify_repository(&layout) {
