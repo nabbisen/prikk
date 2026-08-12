@@ -56,7 +56,14 @@ fn publish_ref_to_new_block(
 /// runs before `verify_refs` (`verify.rs:268-269`) but never notices: it only iterates objects that
 /// still exist, and nothing about a leftover dangling pointer touches the object-count scan.
 /// **Probed, load-bearing, confirmed**: disabling `ensure_ref_target_valid`'s block-existence arm
-/// lets `verify_repository` return `Ok`.
+/// lets `verify_repository` return `Ok`. **Re-verified against a genuinely clean baseline**
+/// (DC-95-stage-1-round-5-review-v1 §2-4): the original probe used this file's fake, unadopted
+/// signer for the Block/RefState pair, so the disabled-check `Ok` always carried a `PRIKK-TRUST-
+/// POLICY-INVALID` finding regardless of `ensure_ref_target_valid`'s own state -- unable to
+/// distinguish load-bearing from downstream-redundant. Re-probed with a real, adopted signer behind
+/// both the Block and the RefState: disabling the check now returns `Ok` with `ref_publication_
+/// issues`, `publication_trust_issues`, and `signature_envelope_issues` all empty. Classification
+/// unchanged: load-bearing.
 #[test]
 fn verify_repository_detects_dangling_ref_target() -> Result<()> {
     let root = unique_temp_dir("verify-dangling-ref-target");
@@ -95,7 +102,10 @@ fn verify_repository_detects_dangling_ref_target() -> Result<()> {
 /// and match its own untouched log with no divergence. This check runs immediately after decode,
 /// strictly before the RefState or log are even read (`scan.rs`'s `read_pointers`).
 /// **Probed, load-bearing, confirmed** (with the move-based fixture): disabling this check lets
-/// `verify_repository` return `Ok`.
+/// `verify_repository` return `Ok`. **Re-verified against a genuinely clean baseline**
+/// (DC-95-stage-1-round-5-review-v1 §2-4), for the same reason as `ensure_ref_target_valid` above:
+/// re-probed with a real, adopted signer behind the Block/RefState pair, disabling the check still
+/// returns `Ok` with every issue vector empty. Classification unchanged: load-bearing.
 #[test]
 fn verify_repository_detects_noncanonical_ref_pointer_path() -> Result<()> {
     let root = unique_temp_dir("verify-noncanonical-ref-pointer");

@@ -35,7 +35,11 @@ use crate::test_support::{
 /// patches`, neither of which touch it -- so a correct root is always computable regardless of whether
 /// the snapshot blob exists). Disabling the snapshot-blob check on this row was confirmed, by an actual
 /// probe, to let `verify_repository` return `Ok` -- a clean pass, not a differently-worded rejection --
-/// so this row genuinely demonstrates Stage 1's own rule.
+/// so this row genuinely demonstrates Stage 1's own rule. **Re-verified against a genuinely clean
+/// baseline** (DC-95-stage-1-round-5-review-v1 §2-4): the original probe's fixture used a fake,
+/// unadopted signer, so its `Ok` result always carried `PRIKK-TRUST-POLICY-INVALID` regardless of
+/// the check's own state. Re-probed with a real, adopted signer behind the Block: disabling the
+/// check now returns `Ok` with every issue vector empty. Classification unchanged: load-bearing.
 ///
 /// **`missing-parent` and `missing-patch` use arbitrary roots, and cannot do otherwise: reported, not
 /// silently inconsistent with round 1's standard.** Computing a replay-correct root for either requires
@@ -182,6 +186,17 @@ fn verify_repository_detects_block_with_state_root_mismatch() -> Result<()> {
 /// (`None` when absent, unchecked against `parent_block_ids` when present) -- so every row here has a
 /// well-defined resolved parent, and none needed `naive_continue`'s from-scratch-continuation trick,
 /// since no row builds on an already-corrupted ancestor.
+///
+/// **Load-bearing classification re-verified against a genuinely clean baseline** (DC-95-stage-1-
+/// round-5-review-v1 §2-4): the original disable-and-restore probe used these fixtures' own fake,
+/// unadopted signer, so every probe's `Ok` result always carried a `PRIKK-TRUST-POLICY-INVALID`
+/// finding regardless of the shape check's own state -- the repository could never have "verified
+/// clean" either way, making the original probe's result unable to distinguish load-bearing from
+/// downstream-redundant. Re-probed all 8 rows with a real, adopted `Ed25519MaintainerSigner` behind
+/// every Block: with the check enabled, all 8 reject with their original messages unchanged; with
+/// `validate_block_v2_shape` disabled, all 8 return `Ok` with `publication_trust_issues`,
+/// `ref_publication_issues`, and `signature_envelope_issues` all empty -- genuinely clean, not
+/// merely `Ok`. Classification unchanged: all 8 confirmed load-bearing.
 #[test]
 fn verify_repository_detects_every_block_shape_violation() -> Result<()> {
     type CaseFn =
@@ -690,7 +705,14 @@ fn verify_repository_detects_object_file_in_wrong_prefix() {
 /// write path from `envelope.object_type` itself. **Probed, load-bearing, confirmed**: disabling the
 /// check (commenting out the `if envelope.object_type != object_type` arm) lets `verify_repository`
 /// return `Ok` -- nothing downstream re-checks that a directory's contents match its own declared type,
-/// unlike the two missing-reference checks round 2 found redundant.
+/// unlike the two missing-reference checks round 2 found redundant. **Re-verified against a
+/// genuinely clean baseline** (DC-95-stage-1-round-5-review-v1 §2-4): unlike the Block-carrying
+/// fixtures elsewhere in this file, this fixture writes only a `Blob` and a `Patch` -- neither type
+/// `PublicationTrustVerifier::verify` ever checks (`verify/objects.rs`'s `matches!(object_type,
+/// Block | RefState)` gate) -- so no trust policy was ever consulted here and the original probe's
+/// `Ok` result was never confounded by `PRIKK-TRUST-POLICY-INVALID` the way the Block-carrying
+/// fixtures were. Confirmed by re-probing with the full report printed: every issue vector is
+/// empty. Classification unchanged: load-bearing.
 #[test]
 fn verify_repository_detects_envelope_type_mismatch() -> Result<()> {
     let root = unique_temp_dir("verify-envelope-type-mismatch");
@@ -754,7 +776,11 @@ fn verify_repository_detects_envelope_type_mismatch() -> Result<()> {
 /// one) within the *correct* type directory, so the type check passes and only the id disagrees.
 /// **Probed, load-bearing, confirmed**: disabling the check lets `verify_repository` return `Ok` --
 /// content addressing is enforced only by this one explicit comparison at read time, nothing else
-/// re-derives a stored file's id independently.
+/// re-derives a stored file's id independently. **Re-verified against a genuinely clean baseline**
+/// (DC-95-stage-1-round-5-review-v1 §2-4), for the same reason the type-mismatch test above is: a
+/// lone `Blob`, never checked by `PublicationTrustVerifier`, so the original probe was never
+/// confounded by an absent trust policy. Re-probed with the full report printed: every issue vector
+/// is empty. Classification unchanged: load-bearing.
 #[test]
 fn verify_repository_detects_object_id_mismatch() -> Result<()> {
     let root = unique_temp_dir("verify-object-id-mismatch");
@@ -1054,6 +1080,12 @@ fn verify_repository_flags_untrusted_ref_state_signer_and_clears_once_trusted() 
 /// would report as an informational note while `prikk verify` still exits clean: precisely the "silent
 /// absence lets a repository verify clean" scenario the rule is about, just realized through a
 /// non-blocking sibling finding rather than through total silence.
+///
+/// **Re-verified against a genuinely clean baseline** (DC-95-stage-1-round-5-review-v1 §2-4): this
+/// fixture, like the type/id-mismatch tests, writes only a `Blob`, never checked by `Publication
+/// TrustVerifier` -- so the original probe's report (`publication_trust_issues: []`, `checked_
+/// publication_trust_records: 0`, already printed at the time this classification was first made)
+/// was never confounded by an absent trust policy. Re-confirmed by re-running the probe: unchanged.
 #[test]
 fn verify_repository_rejects_malformed_signature_shape() -> Result<()> {
     let root = unique_temp_dir("verify-malformed-signature-shape");
