@@ -263,3 +263,85 @@ fn verify_reports_a_deliberately_stale_lifecycle_cache_as_divergence() {
 
     let _ = std::fs::remove_dir_all(&repo);
 }
+
+/// DC-95 Stage 1, round 12: `lifecycle_cache::incremental::verify_divergence`'s "could not be
+/// independently verified" arm -- the deliberate inversion (prerequisite report §3.3) that converts
+/// what would otherwise be a replay `Err` into a `Vec` divergence entry instead of propagating it,
+/// so `verify` completes with a full picture rather than aborting. Distinct from the row above: that
+/// one exercises the `Ok(_)` branch (structurally valid cache, disagreeing content); this one
+/// exercises the `Err(_)` branch (the cache's own independent replay itself fails).
+///
+/// **A first construction attempt (delete the cache's claimed baseline block from the object store)
+/// does not isolate this check.** `verify_objects` unconditionally re-derives every persisted V2
+/// block's `state_merkle_root` via `block_state.rs`'s own full parent-lineage walk
+/// (`validate_v2_lineage`/`resolved_parent_state`), which shares its patch/operation-application fold
+/// with `lifecycle_cache/replay.rs` (`apply_candidate_patches` is defined there and imported by
+/// `block_state.rs`). Deleting a block or patch anywhere in a currently-relevant lineage therefore
+/// makes `verify_objects`' own state-root re-derivation fail first, with a hard `Err`, well before
+/// `verify_lifecycle_cache_divergence` is ever reached -- structurally the same "earlier gate
+/// intercepts the defect" pattern this module's own doc comment now names generally (rounds 10-11).
+///
+/// **The one place the two independent replays are not equivalent**: `lifecycle_cache/replay.rs`'s
+/// walk is horizon-anchored -- it requires the parentless block the walk terminates on to equal the
+/// cache's own claimed `horizon_id`, or it fails with `HorizonNotInLineage`
+/// (`replay.rs::walk_single_parent_chain_inner`). `block_state.rs`'s own lineage walk has no horizon
+/// concept at all; it simply walks to genesis and accepts whatever root it lands on. The cache file's
+/// `horizon_id` field is read only by `lifecycle_cache::verify_divergence`, from the persisted cache
+/// file itself (protected only by a plain SHA-256 over the body, recomputable) -- nothing else in
+/// `verify_repository` reads or cross-checks it. Rewriting it to an arbitrary `ObjectId` therefore
+/// changes nothing `verify_objects` or the ref checks look at: the object store stays byte-identical,
+/// so this reaches the target check with no other category confounding the report -- unlike the first
+/// attempt, which also flagged a dangling ref target (round 5's already-load-bearing check).
+///
+/// Byte offset for `horizon_id` (field 3, `WireType::ObjectId`) is computed the same way round 11's
+/// op_seq surgery was: from `CanonicalWriter::field_raw`'s own fixed wire format (`tag: u16 BE` +
+/// `wire_type: u8` + `len: u64 BE` + value), not by guessing, following
+/// `verify_reports_a_deliberately_stale_lifecycle_cache_as_divergence`'s own established checksum-
+/// recompute technique above.
+#[test]
+fn verify_reports_a_lifecycle_cache_with_a_horizon_not_in_its_own_lineage_as_divergence() {
+    let repo = unique_repo("verify-lifecycle-horizon-mismatch");
+    init(&repo);
+    write_two_files(&repo, "alpha\n", "bravo\n");
+    ok(&commit(&repo, "genesis"), "genesis commit");
+    seal(&repo);
+    std::fs::write(repo.join("a.txt"), "alpha, edited\n").unwrap();
+    ok(&commit(&repo, "second"), "second commit");
+
+    let cache_path = lifecycle_cache_path(&repo);
+    let mut bytes = std::fs::read(&cache_path).unwrap();
+    const MAGIC: &[u8] = b"PRIKK-LIFECYCLE-INCREMENTAL-CACHE-v1\0";
+    // Field 1 (schema_version, U32): 2 (tag) + 1 (wire) + 8 (len) + 4 (value) = 15 bytes.
+    // Field 2 (baseline_block_id, ObjectId): 2 + 1 + 8 + 32 = 43 bytes.
+    // Field 3 (horizon_id, ObjectId) starts immediately after both, inside the checksummed body.
+    const OBJECT_ID_FIELD_HEADER_LEN: usize = 11;
+    const OBJECT_ID_LEN: usize = 32;
+    let body_start = MAGIC.len() + 32;
+    let field1_len = 2 + 1 + 8 + 4;
+    let field2_len = OBJECT_ID_FIELD_HEADER_LEN + OBJECT_ID_LEN;
+    let horizon_header = [0x00u8, 0x03, 0x12, 0, 0, 0, 0, 0, 0, 0, 0x20];
+    let horizon_header_start = body_start + field1_len + field2_len;
+    assert_eq!(
+        &bytes[horizon_header_start..horizon_header_start + OBJECT_ID_FIELD_HEADER_LEN],
+        &horizon_header,
+        "expected the horizon_id field header at the computed offset"
+    );
+    let horizon_value_start = horizon_header_start + OBJECT_ID_FIELD_HEADER_LEN;
+    bytes[horizon_value_start..horizon_value_start + OBJECT_ID_LEN].copy_from_slice(&[0xAB; 32]);
+    let body = bytes[body_start..].to_vec();
+    let checksum = prikk_hash::sha256(&body);
+    bytes[MAGIC.len()..MAGIC.len() + 32].copy_from_slice(&checksum);
+    std::fs::write(&cache_path, &bytes).unwrap();
+
+    let out = prikk(&repo).arg("verify").output().unwrap();
+    fail(
+        &out,
+        "verify with a lifecycle cache whose horizon isn't in its own lineage",
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("lifecycle-cache divergences: 1"));
+    assert!(stdout.contains("could not be independently verified"));
+    assert!(stdout.contains("without crossing the claimed horizon"));
+
+    let _ = std::fs::remove_dir_all(&repo);
+}

@@ -675,6 +675,38 @@ fn verify_repository_reports_malformed_empty_active_metadata_as_warning_state() 
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// DC-95 Stage 1, round 12: `ActiveWalMetadataStatus::InvalidForNonEmptyWal` -- the last row in §5.
+/// The sibling empty-WAL case (`InvalidForEmptyWal`, above) is a non-blocking warning; this is its
+/// non-empty counterpart, which `has_active_wal_metadata_integrity_issue()` treats as blocking
+/// (`main.rs`'s `run_verify` priority chain). Construction mirrors the warning-state test exactly,
+/// with one real WAL record appended first so the malformed metadata is read against a non-empty
+/// WAL instead of an empty one -- the same malformed bytes (`"tags/v1"`, a reserved namespace
+/// `validate_local_branch_ref` rejects), reaching a different arm of `classify_active_wal_metadata`
+/// purely because of the WAL's own emptiness at read time.
+#[test]
+fn verify_repository_reports_malformed_active_metadata_for_non_empty_wal_as_integrity_issue() {
+    let root = unique_temp_dir("verify-active-metadata-invalid-nonempty");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let wal = Wal::for_layout(&layout);
+        assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
+        assert!(std::fs::write(layout.default_active_ref_name_path(), b"tags/v1").is_ok());
+
+        let report = verify_repository(&layout);
+        assert!(report.is_ok());
+        if let Ok(report) = report {
+            assert!(matches!(
+                report.active_wal_metadata_status,
+                ActiveWalMetadataStatus::InvalidForNonEmptyWal { .. }
+            ));
+            assert!(report.has_active_wal_metadata_integrity_issue());
+            assert!(!report.has_active_wal_metadata_warning());
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
 #[test]
 fn verify_repository_detects_object_file_in_wrong_prefix() {
     let root = unique_temp_dir("verify-wrong-prefix");
