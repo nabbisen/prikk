@@ -1,7 +1,9 @@
-# RFC (proposed) - 101 First-Appearance Durability
+# RFC (accepted) - 101 First-Appearance Durability
 
-**Status.** **PROPOSED 2026-08-12**, on the owner's direction of the same date: *Windows mutation at
-parity with Linux.* This supersedes the scope of DC-91's §5 recommendation — see §2.3.
+**Status.** **ACCEPTED by the project owner 2026-08-12**, on the owner's direction of the same date:
+*Windows mutation at parity with Linux.* **Acceptance clears §5's prerequisites, not any design or
+implementation** — §5's six investigations are the work, and a stop-and-report on any of them ends the
+RFC. This supersedes the scope of DC-91's §5 recommendation — see §2.3.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** DC-87 Stage 2's transition-durability ruling (2026-08-11) and DC-91's evaluation
 ruling §3, which together established that the obstacle is not the ref pointer's shape.
