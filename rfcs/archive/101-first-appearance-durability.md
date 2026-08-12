@@ -22,7 +22,7 @@ is one.
 5. **Three `FINDINGS.md` rows survive independently** — T12's silent signed deletion, T11's `verify` gap
    on `refs/received/`, and T15's contract bypass.
 
-**Successor.** [RFC 102](../proposed/102-container-based-durability.md) — container-based durability,
+**Successor.** [RFC 102](../accepted/102-container-based-durability.md) — container-based durability,
 which takes the storage model as the unit of change. **Windows read-only is a staging state, not a
 verdict.**
 

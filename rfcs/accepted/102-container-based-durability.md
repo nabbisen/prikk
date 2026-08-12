@@ -1,8 +1,8 @@
-# RFC (proposed) - 102 Container-Based Durability
+# RFC (accepted) - 102 Container-Based Durability
 
-**Status.** **PROPOSED 2026-08-12.** Successor to RFC 101, which closed with a negative result the same
-day. **Acceptance would clear §6's prerequisites only** — no design, no implementation, no production
-code — and a stop-and-report on any of them ends this RFC as it ended 101.
+**Status.** **ACCEPTED by the project owner 2026-08-12.** Successor to RFC 101, which closed with a
+negative result the same day. **Acceptance clears §6's prerequisites only** — no design, no
+implementation, no production code — and a stop-and-report on any of them ends this RFC as it ended 101.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** RFC 101's §5.2 transition trace, which established that the obstacle is prikk's storage
 model rather than its ref publication; and the owner's direction of 2026-08-12 that Windows read-only
