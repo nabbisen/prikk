@@ -1126,3 +1126,88 @@ fn verify_repository_rejects_malformed_signature_shape() -> Result<()> {
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
+
+/// DC-95 Stage 1, round 8: `PRIKK-TRUST-POLICY-INVALID` (`verify/trust.rs`'s `PublicationTrust
+/// Verifier::verify`, backed by `load_maintainer_trust_policy`, `trust.rs`) -- proven through
+/// `verify_repository` end to end, for both ways loading a policy can fail (no policy file at all;
+/// a policy file present but malformed), not only at the unit level `verify/tests/trust.rs`'s own
+/// `missing_policy_is_reported_once_while_count_advances`/`malformed_policy_is_reported_once_
+/// while_count_advances` already cover by instantiating `PublicationTrustVerifier` directly.
+///
+/// **This is the check that confounded rounds 1, 2, and two of round 5's probes before the
+/// classification pass** (`DC-95-stage-1-round-5-review-v1` §2; `DC-95-stage-1-classified-
+/// inventory-ruling-v1.md` §3): every fixture in this file that never calls `add_trusted_maintainer`
+/// -- which was every fixture, before round 3 introduced the technique -- has been silently
+/// producing exactly this finding as baseline noise, without it ever being the deliberate subject
+/// of its own test. This one is that test.
+///
+/// **No disable-and-restore probe applies here, unlike every other round-1-7 check.** There is no
+/// validation branch to toggle off: `PRIKK-TRUST-POLICY-INVALID` is the direct, sole consequence of
+/// `load_maintainer_trust_policy` failing, not a separate guard *against* something else that could
+/// independently catch the same defect. Classified load-bearing by construction -- confirmed instead
+/// by asserting the specific code reaches `report.publication_trust_issues` *and* that `report.
+/// has_publication_trust_issues()` is true, i.e. it genuinely reaches the blocking `has_*` surface
+/// `run_verify` decides pass/fail from, not merely that `verify_repository` returns some `Ok`.
+#[test]
+fn verify_repository_detects_invalid_trust_policy() -> Result<()> {
+    let missing_root = unique_temp_dir("verify-trust-policy-missing");
+    let layout = RepositoryLayout::init(missing_root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+    let state_merkle_root = derive_next_state_root(&store, None, &[])?;
+    write_signed_block(
+        &mut store,
+        &BlockPayload {
+            parent_block_ids: Vec::new(),
+            kind: BlockKind::Root,
+            patch_ids: Vec::new(),
+            state_merkle_root,
+            snapshot_blob_ref: None,
+            mainline_parent_id: None,
+            merge_baseline_block_id: None,
+        },
+    )?;
+    let report = verify_repository(&layout)?;
+    assert!(report.has_publication_trust_issues());
+    assert!(
+        report
+            .publication_trust_issues
+            .iter()
+            .any(|issue| issue.code == "PRIKK-TRUST-POLICY-INVALID"),
+        "expected a missing-policy PRIKK-TRUST-POLICY-INVALID issue, got: {:?}",
+        report.publication_trust_issues
+    );
+    let _ = std::fs::remove_dir_all(missing_root);
+
+    let malformed_root = unique_temp_dir("verify-trust-policy-malformed");
+    let layout = RepositoryLayout::init(malformed_root.clone())?;
+    std::fs::write(
+        layout.trust_policy_path(),
+        "[maintainer]\nrequired = 2\nkeys = []\n",
+    )?;
+    let mut store = FileObjectStore::new(layout.clone());
+    let state_merkle_root = derive_next_state_root(&store, None, &[])?;
+    write_signed_block(
+        &mut store,
+        &BlockPayload {
+            parent_block_ids: Vec::new(),
+            kind: BlockKind::Root,
+            patch_ids: Vec::new(),
+            state_merkle_root,
+            snapshot_blob_ref: None,
+            mainline_parent_id: None,
+            merge_baseline_block_id: None,
+        },
+    )?;
+    let report = verify_repository(&layout)?;
+    assert!(report.has_publication_trust_issues());
+    assert!(
+        report
+            .publication_trust_issues
+            .iter()
+            .any(|issue| issue.code == "PRIKK-TRUST-POLICY-INVALID"),
+        "expected a malformed-policy PRIKK-TRUST-POLICY-INVALID issue, got: {:?}",
+        report.publication_trust_issues
+    );
+    let _ = std::fs::remove_dir_all(malformed_root);
+    Ok(())
+}
