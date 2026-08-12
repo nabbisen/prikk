@@ -3,6 +3,123 @@
 //! Verification is read-only. It checks object identity, object-type placement, envelope decoding,
 //! sealed block references, joint ref publication state, active WAL replay checksums, and retained
 //! active-publication cleanup state. Mutation belongs to narrow doctor or signer-backed seal paths.
+//!
+//! **A check's own code being present does not establish that a defect actually reaches it.** Earlier
+//! gates in this module's pipeline can intercept a malformed input before a specific, later check ever
+//! sees it -- so a check existing, and even a fixture that constructs the shape that check is meant to
+//! reject, are not proof the check is exercised. Two independent instances (DC-95 Stage 1 rounds 10 and
+//! 11): `ref_publication::require_retained_evidence` reclassifies several `refs/verify.rs` codes before
+//! they're returned, so a raw pointer/log-shape fixture can silently land on a different code than the
+//! one under test; `crate::format::validate_read_schema`, called from `Wal::replay()` itself, already
+//! rejects a malformed-shape signature under `RepositoryFormat::CurrentV2` before
+//! `rollback_verify::verify_rollback_draft_wal_records` is ever reached, so the same defect is reachable
+//! only under `RepositoryFormat::LegacyV1`. Building a fixture for a specific check in this module means
+//! tracing its actual call path from `verify_repository`, not just constructing input shaped to match
+//! the check's own condition.
+//!
+//! # DC-95 Stage 1: end-to-end coverage, by cluster
+//!
+//! Every check `verify_repository` performs, classified by whether disabling it lets a defective
+//! repository pass through `verify_repository` as `Ok` with no trace -- **Load-bearing** (the check is
+//! the last line of defence; some are load-bearing only via a non-blocking-sibling mechanism, named
+//! where that applies); **Downstream-redundant** (something else independently catches the same defect,
+//! blocking, under a different code); **Excluded** (non-blocking finding, out of mandatory scope);
+//! **Unreachable** (provably impossible to construct -- kept, untested, ruled on explicitly, not merely
+//! unattempted). Full reasoning for each row lives in the test file cited, not duplicated here; this
+//! table is the current-state index, not the round-by-round record (that's
+//! `DC-95-VERIFY-COVERAGE-AND-FINDING-ACCUMULATION.md`'s own handoff trail).
+//!
+//! **Scope limit**: this enumerates checks `verify` *has*, not checks it *should have* -- a gap of a
+//! different kind this method cannot surface. One known instance: `refs/received/` is never read by
+//! `verify_repository` at all (RFC 101 §5.2's independently-derived transition trace); registered in
+//! `FINDINGS.md`, not a row here, since there is no existing check to classify.
+//!
+//! ## `verify/objects.rs` + `block_state.rs` (`verify/tests.rs`)
+//!
+//! | Check | Classification |
+//! |---|---|
+//! | Block parent-block existence | Downstream-redundant (`validate_v2_lineage`) |
+//! | Block patch existence | Downstream-redundant (lifecycle-replay layer's own read) |
+//! | Block snapshot-blob existence | Load-bearing |
+//! | Block format-2 shape validation (8 arms) | Load-bearing, all 8 |
+//! | Topological cycle detection | Unreachable (needs a SHA-256 fixed point; unit-level substitute in `block_state/tests.rs`) |
+//! | Envelope type mismatch / object id mismatch | Load-bearing, both |
+//! | `validate_read_schema` strict-signature-shape | Load-bearing, via non-blocking-sibling mechanism |
+//! | Publication-trust failure (Block/RefState) | Demonstrated via trusted/untrusted contrast |
+//! | Directory/file shape structural errors | Downstream-redundant, both sub-arms |
+//!
+//! ## `refs/verify.rs` + `refs/verify/scan.rs` (`verify/tests/ref_cluster.rs`)
+//!
+//! | Check | Classification |
+//! |---|---|
+//! | Incomplete log tail without pointer lead | Load-bearing |
+//! | `LEGACY-LOG-LEADS` (format-1) | Downstream-redundant (format-2 `DIVERGENCE` sibling equally blocks) |
+//! | Catch-all "unexplained pointer/log divergence" | Load-bearing |
+//! | `LEGACY-TIMESTAMP` (format-1) | Excluded, non-blocking |
+//! | `created_at == 0` (format-2) | Load-bearing |
+//! | `CANDIDATE-DEBRIS` | Non-blocking |
+//! | Duplicate pointer identity / duplicate ref-log identity | Unreachable, both (needs a genuine SHA-256 collision) |
+//! | Non-canonical ref pointer path | Load-bearing |
+//! | RefState name mismatches pointer | Downstream-redundant (`classify_ref_state`'s own coherence arm) |
+//! | `ensure_ref_target_valid` (dangling Branch/Tag target) | Load-bearing |
+//! | Ref-log chain/sequence divergence | Load-bearing |
+//! | `verify_update` RefState/RefUpdate coherence | Load-bearing |
+//! | RefState unsigned | Downstream-redundant (`PublicationTrustVerifier`) |
+//! | `ensure_ref_path_shape` (`by-id/`, `logs/`) | Downstream-redundant, provably, both |
+//! | Signature-envelope issues, `RefLog` source | Excluded (see `signature_envelope_issues` caveat below) |
+//!
+//! ## `verify/ref_publication.rs`
+//!
+//! `mark_unproved` reclassification and `ACTIVE-CLEANUP-PENDING` were both already end-to-end covered
+//! before DC-95 started; not part of Stage 1's gap-closing scope.
+//!
+//! ## `wal.rs` / `verify_wal_persistence` / `rollback_verify.rs` (`verify/tests/wal_cluster.rs`)
+//!
+//! | Check | Classification |
+//! |---|---|
+//! | `Wal::replay()` checksum mismatch | Load-bearing |
+//! | `verify_wal_persistence` type mismatch | Load-bearing |
+//! | Rollback WAL envelope type | Unreachable (`is_rollback_draft_envelope` already guarantees Patch type before this check runs) |
+//! | Rollback WAL decode (op_seq contiguity) | Load-bearing |
+//! | Rollback WAL apply-support (`DeleteNode(symlink)`) | Load-bearing |
+//! | Rollback WAL empty-ops | Unreachable (`decode_patch_operations` already errors before returning empty) |
+//! | Rollback AUTHOR signature: missing | Load-bearing |
+//! | Rollback AUTHOR signature: wrong algorithm | Unreachable (`SignatureAlgorithm` has exactly one variant) |
+//! | Rollback AUTHOR signature: legacy marker key id | Load-bearing |
+//! | Rollback AUTHOR signature: wrong length | Load-bearing, via non-blocking-sibling mechanism; format-1 only |
+//! | Signature-envelope issues, `ActiveWal` source | Excluded (see caveat below) |
+//!
+//! ## Active-WAL metadata status + WAL ordering (DC-66, `verify/tests.rs`)
+//!
+//! | Check | Classification |
+//! |---|---|
+//! | `MissingForEmptyWal` / `ValidForEmptyWal` | Excluded, non-blocking, both |
+//! | `InvalidForNonEmptyWal` | Load-bearing |
+//! | Active-WAL ordering violations | Load-bearing |
+//!
+//! ## `verify/trust.rs` / `trust.rs` (`verify/tests/trust.rs`)
+//!
+//! | Check | Classification |
+//! |---|---|
+//! | `PRIKK-TRUST-POLICY-INVALID` (missing/malformed policy) | Load-bearing |
+//! | `PRIKK-TRUST-PUBLICATION-UNTRUSTED` | Load-bearing |
+//!
+//! ## `commit_index.rs` (DC-56) / `lifecycle_cache/incremental.rs` (DC-64) (`crates/prikk-cli/tests/dc64_baseline_cache.rs`)
+//!
+//! | Check | Classification |
+//! |---|---|
+//! | Commit-index content divergence | Load-bearing |
+//! | Lifecycle-cache content-disagrees divergence | Load-bearing |
+//! | Lifecycle-cache "could not be independently verified" | Load-bearing (horizon-anchored replay vs. `block_state.rs`'s non-horizon-anchored one -- the one genuine asymmetry between two otherwise-equivalent replay paths) |
+//!
+//! ## Standing caveat: `signature_envelope_issues`
+//!
+//! `signature_envelope_issues` (one `Vec` on [`RepositoryVerification`], populated from every
+//! `SignatureEnvelopeSource`) backs no `has_*` blocking predicate, for any source -- an open question,
+//! not a settled design: should the `MALFORMED` variant be wired into a blocking predicate? Every
+//! "Excluded" row above that names this caveat, plus every "Load-bearing, via non-blocking-sibling
+//! mechanism" row, depends on this staying `false`. If it's ever answered the other way, those rows
+//! reopen.
 
 use std::path::PathBuf;
 
