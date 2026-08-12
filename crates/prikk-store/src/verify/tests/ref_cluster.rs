@@ -54,21 +54,21 @@
 //! round 5's copy-vs-move lesson was). `LEGACY-LOG-LEADS` (format-1) is the one row left in this
 //! cluster, deferred to the round that takes on the format-1-flip technique.
 
-use prikk_error::Result;
+use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    BlockKind, BlockPayload, CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, RefKind,
-    RefStatePayload, RefUpdatePayload,
+    BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectId, ObjectType,
+    RefKind, RefStatePayload, RefUpdatePayload,
 };
 
 use crate::maintainer_signing::MaintainerSigner;
 use crate::test_support::{
-    sample_object_id, signed_empty_block_envelope, signed_ref_state_envelope,
-    signed_ref_update_envelope, unique_temp_dir,
+    sample_object_id, signed_empty_block_envelope, signed_patch_blob_envelope,
+    signed_patch_envelope, signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
 };
 use crate::{
     Ed25519MaintainerSigner, FileObjectStore, ObjectWriter, RefPublication, RefStore,
-    RepositoryLayout, add_trusted_maintainer, derive_next_state_root, maintainer_signature,
-    verify_repository,
+    RepositoryLayout, Wal, add_trusted_maintainer, derive_next_state_root, maintainer_signature,
+    verify_repository, write_active_ref_metadata,
 };
 
 fn trusted_signer(seed_label: &str, byte: u8) -> Result<Ed25519MaintainerSigner> {
@@ -873,4 +873,182 @@ fn build_signed_ref_update(
     let id = envelope.object_id();
     envelope.add_signature(maintainer_signature(signer, ObjectType::RefUpdate, id)?)?;
     Ok(envelope)
+}
+
+/// DC-95 Stage 1, round 10: `LEGACY-LOG-LEADS` (format-1) -- `refs/verify.rs`'s `classify_ref_
+/// state`, the format-1 branch of the "log leads pointer by one transition" arm (`log.previous_tip
+/// == Some(pointer.id)`). The format-2 sibling of this exact arm (`PRIKK-VERIFY-REF-DIVERGENCE`) was
+/// already "Yes"-covered before DC-95 started; this closes the one branch that wasn't, matching the
+/// classified inventory's own row (`refs/verify.rs` + `scan.rs` cluster, the last of its 16 rows).
+///
+/// **A first attempt at this fixture (bare pointer-rollback, no active-WAL state) surfaced a real
+/// finding, not a construction bug**: `classify_ref_state`'s raw code is not what `verify_repository`
+/// ultimately reports for this arm. `verify.rs` pipes every `POINTER-LEADS-LOG` / `LEGACY-LOG-LEADS` /
+/// `POINTER-MISSING` issue through `ref_publication::require_retained_evidence` before returning it.
+/// That function's job is to distinguish "this divergence is the retained evidence of a publication
+/// that was genuinely interrupted mid-flight" from "this divergence is unexplained" -- and it proves
+/// the former only when *all* of: the issue names a ref, the active-WAL metadata names that same ref
+/// with a non-empty WAL, `PublicationTrustVerifier` raised no issues, and the log's own tip-RefState's
+/// target Block's `patch_ids` exactly match the WAL's queued records. Fail any one of those and
+/// `mark_unproved` overwrites the issue in place: code -> `PRIKK-VERIFY-REF-DIVERGENCE`, message ->
+/// "pointer/log divergence is not proved by matching retained active state and trust", regardless of
+/// which arm of `classify_ref_state` produced it or which format the repository claims. A bare
+/// pointer-rollback (log advanced, pointer rolled back, no WAL/active-metadata state at all) fails the
+/// active-WAL-metadata leg and is reclassified to `DIVERGENCE` every time -- which is what the first
+/// attempt observed. Reaching `LEGACY-LOG-LEADS` itself therefore requires constructing the retained
+/// evidence that proves it, not just the pointer/log shape.
+///
+/// **Construction**: follows `refs/tests/publication_recovery/format_transition.rs`'s
+/// `genuine_format1_ahead_log_promotes_without_identity_rewrite` for the retained-evidence half (write
+/// a Patch + its Blob through `FileObjectStore::write_object`, call `write_active_ref_metadata` for
+/// `heads/main`, then `Wal::append_patch` the same Patch -- all while still genuinely format-2, since
+/// both calls require the current format) and this file's own established two-publish-then-roll-back
+/// shape for the pointer/log half: publish `heads/main` twice, chained, entirely through `RefStore::
+/// publish`, with the Block both `RefState`s target carrying `patch_ids: vec![patch_id]` so it matches
+/// the WAL's own queued record exactly (`block_matches_wal`'s comparison is order-sensitive `Vec`
+/// equality against the *tip* record's target, so one shared Block suffices; no second Block is
+/// needed). The Block is still hand-built at schema 1 and installed via raw `std::fs::write` -- format-
+/// 2's `validate_format2_schema` requires schema 2 for `Block`, format-1's `validate_read_schema` will
+/// require schema 1 once reopened as format-1, and `RefState`/`RefUpdate` remain schema-1-valid under
+/// either format so the publish flow itself needs no bypassing there. After both publications, the
+/// pointer is rolled back to the first publication's own saved bytes -- log at two records (`tip` =
+/// the second `RefState`, `previous_tip` = the first), pointer still naming the first. Only then is
+/// `.prikk/FORMAT` flipped to `"1\n"` and the layout **reopened** (`RepositoryLayout::open`, never the
+/// same handle that just published under `CurrentV2` -- `require_current_format()` would refuse
+/// further writes through it, and reads should see the format the repository now claims).
+///
+/// **This is an accumulated `Vec` issue, not a hard `Err`** (`refs/verify.rs`'s `blocking_issue`),
+/// so the assertion checks `report.ref_publication_issues` for the specific code *and* `report.has_
+/// blocking_ref_publication_issues()`, matching round 8's own standing instruction for this shape of
+/// check -- not the `Ok(_) => panic!(...)` pattern used for hard-`Err` checks elsewhere in this file.
+///
+/// **Probed, but the probe answers a narrower question than usual, and that narrowness is itself the
+/// finding.** The `if format == LegacyV1 { LEGACY-LOG-LEADS } else { DIVERGENCE }` branch is the only
+/// thing this row's own code adds beyond the already-covered format-2 arm; there is no way to
+/// disable *only* the format-1 label without disabling the whole match arm (which would just
+/// reproduce round 9's catch-all scenario, testing a different thing). Forcing the branch to *always*
+/// choose `DIVERGENCE`, regardless of format, was the probe actually run: this fixture's own
+/// assertion (checking for the `LEGACY-LOG-LEADS` code specifically) then fails, exactly as
+/// expected -- but `report.has_blocking_ref_publication_issues()` **stays true**, since `DIVERGENCE`
+/// is equally blocking. **Not load-bearing under DC-95's own operational rule**: a repository with
+/// this defect is still correctly refused either way, so the format-1-specific code is a diagnostic
+/// attribution, not a last line of defence -- the same "kept for diagnostic value, not counted as
+/// demonstrating the rule" status this file has already given other redundant rows (round 2's
+/// missing-parent/patch, round 3's directory-shape checks).
+#[test]
+fn verify_repository_detects_legacy_log_leads_under_format1() -> Result<()> {
+    let root = unique_temp_dir("verify-legacy-log-leads");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let signer = trusted_signer("verify-legacy-log-leads", 0x17)?;
+    adopt(&layout, &signer)?;
+
+    let patch = signed_patch_envelope();
+    let patch_id = patch.object_id();
+    let mut objects = FileObjectStore::new(layout.clone());
+    objects.write_object(&signed_patch_blob_envelope())?;
+    objects.write_object(&patch)?;
+    write_active_ref_metadata(&layout, "heads/main")?;
+    Wal::for_layout(&layout).append_patch(&patch)?;
+
+    let block_payload = BlockPayload {
+        parent_block_ids: Vec::new(),
+        kind: BlockKind::Root,
+        patch_ids: vec![patch_id],
+        state_merkle_root: MerkleRoot([0; 32]),
+        snapshot_blob_ref: None,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
+    };
+    let mut block_envelope =
+        ObjectEnvelope::unsigned(ObjectType::Block, 1, block_payload.to_canonical_bytes()?);
+    let block_id = block_envelope.object_id();
+    block_envelope.add_signature(maintainer_signature(&signer, ObjectType::Block, block_id)?)?;
+    let block_path = layout.object_path(ObjectType::Block, block_id);
+    std::fs::create_dir_all(
+        block_path
+            .parent()
+            .ok_or_else(|| PrikkError::Io("legacy Block path has no parent".to_string()))?,
+    )?;
+    std::fs::write(
+        &block_path,
+        crate::file_codec::encode_envelope_file(&block_envelope)?,
+    )?;
+
+    let state1 = RefStatePayload {
+        ref_name: "heads/main".to_string(),
+        kind: RefKind::Branch,
+        target_object_id: block_id,
+        update_seq: 1,
+        previous_ref_state_id: None,
+        required_attestation_ids: Vec::new(),
+        closed: false,
+    };
+    let mut ref_state1 =
+        ObjectEnvelope::unsigned(ObjectType::RefState, 1, state1.to_canonical_bytes()?);
+    let state1_id = ref_state1.object_id();
+    ref_state1.add_signature(maintainer_signature(
+        &signer,
+        ObjectType::RefState,
+        state1_id,
+    )?)?;
+    let update1 = build_signed_ref_update("heads/main", None, state1_id, block_id, 1, &signer)?;
+    RefStore::new(layout.clone()).publish(&RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_state: ref_state1,
+        ref_update: update1,
+    })?;
+    let pointer_after_first = std::fs::read(layout.ref_pointer_path("heads/main"))?;
+
+    let state2 = RefStatePayload {
+        ref_name: "heads/main".to_string(),
+        kind: RefKind::Branch,
+        target_object_id: block_id,
+        update_seq: 2,
+        previous_ref_state_id: Some(state1_id),
+        required_attestation_ids: Vec::new(),
+        closed: false,
+    };
+    let mut ref_state2 =
+        ObjectEnvelope::unsigned(ObjectType::RefState, 1, state2.to_canonical_bytes()?);
+    let state2_id = ref_state2.object_id();
+    ref_state2.add_signature(maintainer_signature(
+        &signer,
+        ObjectType::RefState,
+        state2_id,
+    )?)?;
+    let update2 = build_signed_ref_update(
+        "heads/main",
+        Some(state1_id),
+        state2_id,
+        block_id,
+        2,
+        &signer,
+    )?;
+    RefStore::new(layout.clone()).publish(&RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: Some(state1_id),
+        ref_state: ref_state2,
+        ref_update: update2,
+    })?;
+
+    // Roll the pointer back to the first publication's own bytes -- the log still has both
+    // records (tip = state2, previous_tip = state1), but the pointer now names state1 again:
+    // log.previous_tip == Some(pointer.id), the exact "log leads pointer" shape.
+    std::fs::write(layout.ref_pointer_path("heads/main"), &pointer_after_first)?;
+    std::fs::write(layout.format_path(), b"1\n")?;
+
+    let legacy_layout = RepositoryLayout::open(root.clone())?;
+    let report = verify_repository(&legacy_layout)?;
+    assert!(report.has_blocking_ref_publication_issues());
+    assert!(
+        report
+            .ref_publication_issues
+            .iter()
+            .any(|issue| issue.code == "PRIKK-VERIFY-REF-LEGACY-LOG-LEADS" && issue.blocking),
+        "expected a LEGACY-LOG-LEADS issue, got: {:?}",
+        report.ref_publication_issues
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
 }
