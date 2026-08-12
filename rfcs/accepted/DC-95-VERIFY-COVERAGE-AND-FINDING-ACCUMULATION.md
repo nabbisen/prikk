@@ -66,7 +66,15 @@ reviewer cannot tell which half a failure came from.
 ## 4. Acceptance criteria
 
 1. §3 answered and reported before either stage is designed.
-2. **Stage 1: for every check in §3.2's class, disabling it fails at least one test that runs through
+2. **Amended 2026-08-11 after Stage 1 round 2:** the inventory's "36 rule-matching checks" was derived by
+   reasoning about each check's role, and round 2 showed that reasoning can be wrong — two of its three
+   checks proved **downstream-redundant** (something else catches the same defect), determinable only by
+   disabling the check and looking. **36 is an upper bound, not a count**, and Stage 1 audits its own
+   inventory as it goes. **Record each check's probe result** — load-bearing, or downstream-redundant and
+   by which path — as a fact about today's code, not a property to rely on. Redundant checks still earn a
+   regression guard on their own message (diagnostic value for an operator), labelled as such rather than
+   counted as rule-matching controls.
+3. **Stage 1: for every check in §3.2's class, disabling it fails at least one test that runs through
    `verify_repository`.** Demonstrated the way DC-92's controls were — disable the production check,
    observe the specific failure, restore, confirm no residual diff. **A check whose disablement is
    caught only by a unit test calling it directly does not count**; that is the exact gap this exists
