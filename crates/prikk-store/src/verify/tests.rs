@@ -3,6 +3,7 @@
 mod ref_cluster;
 mod root_authority;
 mod trust;
+mod wal_cluster;
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
