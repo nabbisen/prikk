@@ -19,7 +19,7 @@ use crate::{
 
 use crate::test_support::{
     dummy_signature, maintainer_signature, rollback_patch_envelope, sample_object_id,
-    signed_patch_envelope, unique_temp_dir,
+    signed_patch_envelope, signed_ref_state_envelope, unique_temp_dir,
 };
 
 /// DC-95 Stage 1, round 2: the three "referenced object is missing" checks in `verify_block_payload`
@@ -944,6 +944,150 @@ fn verify_repository_flags_untrusted_block_signer_and_clears_once_trusted() -> R
             .any(|issue| issue.message.contains(&trusted_id.to_string())),
         "the trusted block must carry no publication-trust issue of its own: {:?}",
         report.publication_trust_issues
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-95 Stage 1, round 4: the `RefState` half of the publication-trust check, mirroring round 3's
+/// `Block` test above. `verify_object_file` (`verify/objects.rs:255`) routes `Block` and `RefState`
+/// through `PublicationTrustVerifier::verify` identically (`matches!(object_type, ObjectType::Block |
+/// ObjectType::RefState)`); nothing else about the check's own arm needs re-probing, but this codebase's
+/// DC-95 bar is per-object-type end-to-end proof, not "the same `matches!` arm should behave the same".
+/// A `RefState` object is written raw via `store.write_object`, orphaned (no ref pointer created,
+/// matching the Block test's own precedent): `verify_refs`/`verify_ref_publication` only resolve
+/// `RefState` objects reachable through an actual ref pointer, never by scanning the `ref-state`
+/// object-type directory, so an orphan is invisible to every check except this one and the general
+/// object-count scan. Two distinct `ref_name`s keep the two payloads' canonical bytes apart, unlike the
+/// Block test, which needed a distinguishing snapshot-blob reference since an empty Root block has no
+/// other field to vary.
+#[test]
+fn verify_repository_flags_untrusted_ref_state_signer_and_clears_once_trusted() -> Result<()> {
+    let root = unique_temp_dir("verify-untrusted-refstate-signer");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+
+    let trusted_signer =
+        crate::Ed25519MaintainerSigner::from_seed("verify-trust-maintainer-rs", &[0x64; 32])?;
+    let trusted_public_key_hex: String = trusted_signer
+        .public_key_bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    crate::add_trusted_maintainer(&layout, trusted_signer.key_id(), &trusted_public_key_hex)?;
+
+    let untrusted_envelope = signed_ref_state_envelope(
+        "heads/untrusted",
+        None,
+        sample_object_id("untrusted-target"),
+        1,
+    );
+    let untrusted_id = store.write_object(&untrusted_envelope)?;
+
+    let trusted_payload = prikk_object::RefStatePayload {
+        ref_name: "heads/trusted".to_string(),
+        kind: prikk_object::RefKind::Branch,
+        target_object_id: sample_object_id("trusted-target"),
+        update_seq: 1,
+        previous_ref_state_id: None,
+        required_attestation_ids: Vec::new(),
+        closed: false,
+    };
+    let trusted_bytes = trusted_payload.to_canonical_bytes()?;
+    let mut trusted_envelope = ObjectEnvelope::unsigned(ObjectType::RefState, 1, trusted_bytes);
+    let trusted_id = trusted_envelope.object_id();
+    trusted_envelope.add_signature(crate::maintainer_signature(
+        &trusted_signer,
+        ObjectType::RefState,
+        trusted_id,
+    )?)?;
+    store.write_object(&trusted_envelope)?;
+
+    let report = verify_repository(&layout)?;
+    assert!(report.has_publication_trust_issues());
+    assert!(report.publication_trust_issues.iter().any(|issue| {
+        issue.code == "PRIKK-TRUST-PUBLICATION-UNTRUSTED"
+            && issue.message.contains(&untrusted_id.to_string())
+    }));
+    assert!(
+        !report
+            .publication_trust_issues
+            .iter()
+            .any(|issue| issue.message.contains(&trusted_id.to_string())),
+        "the trusted ref-state must carry no publication-trust issue of its own: {:?}",
+        report.publication_trust_issues
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-95 Stage 1, round 4: `format::validate_read_schema`'s strict-signature-shape branch
+/// (`ObjectEnvelope::validate_strict`, `prikk-object/src/envelope.rs:98-117`) -- an Ed25519 signature
+/// whose `signature_bytes` is not exactly 64 bytes. Previously only "Partial" coverage: `signature_
+/// contract_tests/read_admission.rs`'s `format2_object_reads_reject_every_strict_envelope_failure`
+/// already runs this through `verify_repository` end to end, but only asserts `.is_err()` over three
+/// bundled variants (malformed shape, duplicate signature, non-canonical order) without pinning the
+/// rejection to this specific one's message -- so a regression that swapped which variant fired first,
+/// or which of the three rejected at all, could pass silently. This isolates the shape variant alone
+/// with a specific-message assertion, matching this file's own bar for every other round.
+///
+/// **Must bypass both `write_object` and `verify/tests.rs`'s own established `encode_envelope_file`
+/// helper** (used by every other raw-placement test in this file, e.g. the type/id-mismatch tests
+/// above): both enforce `validate_strict()` at encode time and would reject a malformed-shape signature
+/// before any bytes could be written. Only the `#[cfg(test)]`-only `encode_envelope_file_structural`
+/// (which validates shape loosely, not strictly) permits constructing this fixture at all -- confirming
+/// this rule is enforced exactly once, at read time in `verify_object_file`, with production write paths
+/// closed to it entirely.
+///
+/// **Probed, load-bearing, confirmed -- but not the way the type/id-mismatch checks were.** Disabling
+/// `validate_strict`'s `malformed_shape` arm does not produce a clean `Ok` with zero issues: the
+/// downstream, independent `classify_signature_envelope` (`verify/objects.rs`) still records the same
+/// defect, as a `SignatureEnvelopeIssue` with code `PRIKK-VERIFY-SIGNATURE-MALFORMED`, in `report.
+/// signature_envelope_issues`. The reason this still counts as load-bearing under Stage 1's rule: unlike
+/// `publication_trust_issues` or `merge_baseline_divergences`, `signature_envelope_issues` backs none of
+/// `RepositoryVerification`'s eight `has_*` blocking predicates (`verify.rs:153-212`) -- the exact set
+/// `run_verify`'s priority chain (`prikk-cli/src/main.rs:530-544`) reads to decide pass/fail. So a
+/// malformed-shape signature caught only by the downstream classifier, with this hard check removed,
+/// would report as an informational note while `prikk verify` still exits clean: precisely the "silent
+/// absence lets a repository verify clean" scenario the rule is about, just realized through a
+/// non-blocking sibling finding rather than through total silence.
+#[test]
+fn verify_repository_rejects_malformed_signature_shape() -> Result<()> {
+    let root = unique_temp_dir("verify-malformed-signature-shape");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    let blob = BlobPayload::new(BlobKind::Text, b"strict-shape fixture\n".to_vec());
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob.to_canonical_bytes()?);
+    // Bypasses add_signature's own shape gate by setting the field directly -- Ed25519 requires
+    // exactly 64 bytes; this is 63.
+    envelope.signatures = vec![prikk_object::Signature {
+        algorithm: prikk_object::SignatureAlgorithm::Ed25519,
+        key_id: "maintainer-key".to_string(),
+        signature_bytes: vec![5_u8; 63],
+        created_at: 8,
+        signer_role: prikk_object::SignerRole::Maintainer,
+    }];
+
+    let object_id = envelope.object_id();
+    let path = layout.object_path(envelope.object_type, object_id);
+    std::fs::create_dir_all(
+        path.parent()
+            .ok_or_else(|| PrikkError::Io("test object path has no parent".to_string()))?,
+    )?;
+    std::fs::write(
+        &path,
+        crate::file_codec::encode_envelope_file_structural(&envelope)?,
+    )?;
+
+    let error = match verify_repository(&layout) {
+        Ok(_) => panic!("expected verify_repository to reject a malformed-shape signature"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("malformed algorithm shape"),
+        "expected the strict-signature-shape rejection, got: {error}"
     );
 
     let _ = std::fs::remove_dir_all(root);
