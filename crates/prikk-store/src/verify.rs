@@ -3,6 +3,19 @@
 //! Verification is read-only. It checks object identity, object-type placement, envelope decoding,
 //! sealed block references, joint ref publication state, active WAL replay checksums, and retained
 //! active-publication cleanup state. Mutation belongs to narrow doctor or signer-backed seal paths.
+//!
+//! **A check's own code being present does not establish that a defect actually reaches it.** Earlier
+//! gates in this module's pipeline can intercept a malformed input before a specific, later check ever
+//! sees it -- so a check existing, and even a fixture that constructs the shape that check is meant to
+//! reject, are not proof the check is exercised. Two independent instances (DC-95 Stage 1 rounds 10 and
+//! 11): `ref_publication::require_retained_evidence` reclassifies several `refs/verify.rs` codes before
+//! they're returned, so a raw pointer/log-shape fixture can silently land on a different code than the
+//! one under test; `crate::format::validate_read_schema`, called from `Wal::replay()` itself, already
+//! rejects a malformed-shape signature under `RepositoryFormat::CurrentV2` before
+//! `rollback_verify::verify_rollback_draft_wal_records` is ever reached, so the same defect is reachable
+//! only under `RepositoryFormat::LegacyV1`. Building a fixture for a specific check in this module means
+//! tracing its actual call path from `verify_repository`, not just constructing input shaped to match
+//! the check's own condition.
 
 use std::path::PathBuf;
 
