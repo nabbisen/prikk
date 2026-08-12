@@ -1,7 +1,14 @@
-# RFC (proposed) - DC-95 Verify Coverage and Finding Accumulation
+# RFC (accepted) - DC-95 Verify Coverage and Finding Accumulation
 
 **Status.** **ACCEPTED by the project owner 2026-08-11.** §3's four prerequisites precede either
 stage; acceptance clears the investigation, not the implementation.
+**Stage 1: COMPLETE, merged 2026-08-12 at `5477df5`** after a green three-platform CI run — twelve
+rounds, **all 41 checks classified** (34 resolved, 4 excluded as non-blocking, 3 provably unreachable),
+with the classification moved into `verify.rs`'s own module doc rather than left in the review archive.
+§3.1 and §3.2 are discharged by it.
+**Stage 2: AUTHORIZED by the project owner 2026-08-12**, prerequisites §3.3 and §3.4 only —
+`handoffs/DC-95-verify-coverage-and-finding-accumulation/stage-2-handoff-v1.md`. Still no design and no
+implementation.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** Two findings registered during the DC-92 cycle, and the owner's stated preference for
 maintainability and **verifiability of security**. The architect recommended these twice as the next
