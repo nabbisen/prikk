@@ -85,6 +85,15 @@ pub(crate) fn verify_refs(layout: &RepositoryLayout) -> Result<RefVerification> 
     })
 }
 
+/// A code this function pushes is not necessarily the code `verify_repository` reports: `POINTER-
+/// LEADS-LOG`, `LEGACY-LOG-LEADS`, and `POINTER-MISSING` are all piped through `ref_publication::
+/// require_retained_evidence` afterward, which overwrites any of the three in place -- code, message,
+/// and blocking flag -- to `PRIKK-VERIFY-REF-DIVERGENCE` unless retained active-WAL evidence (matching
+/// ref, valid trust, and a target `Block` whose `patch_ids` match the queued WAL records) proves the
+/// divergence is a genuinely interrupted publication rather than an unexplained one. `LEGACY-LOG-LEADS`
+/// is downstream-redundant with that same `DIVERGENCE` fallback for exactly this reason (DC-95 Stage 1
+/// round 10): a repository is refused either way, so the distinct code is a diagnostic attribution of
+/// which side of the format divide the divergence was found on, not an independent line of defence.
 fn classify_ref_state(
     format: RepositoryFormat,
     ref_name: &str,
