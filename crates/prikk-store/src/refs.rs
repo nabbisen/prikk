@@ -15,6 +15,8 @@ mod verify;
 pub(crate) use log::{
     append_log_record as append_log_record_for_signature_test, encode_log_record_for_test,
 };
+#[cfg(test)]
+pub(crate) use pointer::write_ref_pointer_candidate;
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, RefUpdatePayload};

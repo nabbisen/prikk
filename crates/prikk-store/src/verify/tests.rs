@@ -1,5 +1,6 @@
 //! Repository verification tests.
 
+mod ref_cluster;
 mod root_authority;
 mod trust;
 
