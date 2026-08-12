@@ -57,6 +57,35 @@ than straining it. Packed object storage is well-trodden; this is not a novel st
 **This is a hypothesis, not a design.** RFC 101's hypothesis was equally plausible and died on contact
 with §5.2. §6 exists to find out whether this one survives the same treatment.
 
+### 3.1 What this claims, stated precisely — amended 2026-08-12
+
+§6.1 established that every comparable system (SQLite/Fossil, Git, Mercurial) converged on a
+bounded-container shape, and that **none of them closes the gap for the containers' own first
+creation.** This RFC originally implied it did, by analogy. It does not:
+
+> The container model does **not** find a Windows primitive for new-name durability. It reduces
+> new-name events to a **fixed, enumerable set created once at `init`** — and `init` is idempotent and
+> retry-safe, so a crash there loses no history and the remedy is to run it again.
+
+That is RFC 101 §5.3's T1 finding applied to a small set of names instead of one. **It closes the gap
+only if the set is genuinely fixed.**
+
+### 3.2 Fixed names, and no rotation — amended 2026-08-12
+
+§6.2 found *"bounded set"* ambiguous between a fixed set of names each unbounded in size
+(Fossil/SQLite) and periodically-rotated size-capped segments (Git packfiles), where **each rotation is
+a new-name event** — rarer, not absent.
+
+**Ruled: fixed set of names, each unbounded in size. Rotation is forbidden.** Rarer is not never, and
+prikk's standard is invariants rather than probabilities; a design whose durability degrades every N
+megabytes fails eventually and unpredictably.
+
+**Consequently, compaction must target a pre-created alternate slot** — fixed A/B names allocated at
+`init` like every other container — because compaction that writes a new container reintroduces the
+problem at the worst moment.
+
+**Every container name is created at `init`, or the design is wrong.** This is §6.3's acceptance test.
+
 ## 4. The worktree, which cannot be containerized
 
 Worktree files are the user's real files. Materializing them creates new names, always, and no container
@@ -83,7 +112,13 @@ repository is not. Losing a worktree file is recoverable. Signing a false deleti
 3. **Object-trust and ref-authority stay separate** (DC-78 §D2).
 4. **No conversion of format-2's *rejection* of the ahead-log state into *recovery*.**
 5. **Recoverability does not regress below today's audited ceiling** — DC-41 Stage 1's 24/24 reachable
-   states — and the audit is re-earned rather than assumed.
+   states — and the audit is re-earned rather than assumed. **Amended 2026-08-12, after §6.2 showed
+   this was incomplete:** state count is a *coverage* measure and does not catch *severity*. Today every
+   object is independently content-hash validated, so corruption is confined to one object and `verify`
+   names exactly which; Git's packfile experience is the contrast — one corruption, hundreds of objects
+   lost. **So: corruption isolation must not regress either.** A single corruption event must remain
+   attributable to, and confined to, a single object, and **per-entry checksums or an equivalent
+   isolation mechanism is a requirement of any proposed container format — demonstrated, not asserted.**
 6. **A format migration must exist** for repositories already written in the current format, and it is
    in scope for the design even though it is out of scope for §6.
 
