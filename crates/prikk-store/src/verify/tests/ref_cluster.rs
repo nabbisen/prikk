@@ -158,7 +158,18 @@ fn write_trusted_ref_state(
 /// Publishes `ref_name` pointing at a freshly written, real `Block`, via the normal `RefStore::
 /// publish` path -- exactly what every check in this file assumes has already happened cleanly,
 /// so the test's own fixture-construction step is the one deliberate irregularity, isolated.
-fn publish_ref_to_new_block(
+///
+/// **Fake-signed (`test_support::maintainer_signature()`), not adopted by any trust policy.** Fine
+/// for a *committed test*'s own construction (production code rejects the fixture's real defect
+/// before trust is ever consulted), but reusing this for a disable-and-restore *probe* has now
+/// confounded four separate rounds (1, 2, 5, 9 -- `DC-95-stage-1-round-9-review-v1.md` §3): every
+/// probe built on it carries a permanent `PRIKK-TRUST-POLICY-INVALID`, so `Ok` from a disabled
+/// check is never distinguishable from a genuinely clean pass. **Never reach for this in a new
+/// probe.** Use `write_trusted_block`/`write_trusted_ref_state` (real, adopted signer) instead --
+/// they have covered every construction need this helper has since round 6. The ugly name is
+/// deliberate: a name that reads as ordinary is what let the mistake recur three times after the
+/// first.
+fn publish_ref_to_new_block_fake_signed_confounds_probes(
     layout: &RepositoryLayout,
     objects: &mut FileObjectStore,
     ref_name: &str,
@@ -200,7 +211,8 @@ fn verify_repository_detects_dangling_ref_target() -> Result<()> {
     let layout = RepositoryLayout::init(root.clone())?;
     let mut objects = FileObjectStore::new(layout.clone());
 
-    let (_, block_id) = publish_ref_to_new_block(&layout, &mut objects, "heads/main")?;
+    let (_, block_id) =
+        publish_ref_to_new_block_fake_signed_confounds_probes(&layout, &mut objects, "heads/main")?;
     std::fs::remove_file(layout.object_path(ObjectType::Block, block_id))?;
 
     let error = match verify_repository(&layout) {
@@ -242,7 +254,7 @@ fn verify_repository_detects_noncanonical_ref_pointer_path() -> Result<()> {
     let layout = RepositoryLayout::init(root.clone())?;
     let mut objects = FileObjectStore::new(layout.clone());
 
-    publish_ref_to_new_block(&layout, &mut objects, "heads/aux")?;
+    publish_ref_to_new_block_fake_signed_confounds_probes(&layout, &mut objects, "heads/aux")?;
     let canonical = layout.ref_pointer_path("heads/aux");
     let misplaced = layout
         .refs_dir()
@@ -296,7 +308,8 @@ fn verify_repository_detects_ref_state_name_pointer_mismatch() -> Result<()> {
     let layout = RepositoryLayout::init(root.clone())?;
     let mut objects = FileObjectStore::new(layout.clone());
 
-    let (main_ref_state_id, _) = publish_ref_to_new_block(&layout, &mut objects, "heads/main")?;
+    let (main_ref_state_id, _) =
+        publish_ref_to_new_block_fake_signed_confounds_probes(&layout, &mut objects, "heads/main")?;
     crate::refs::write_ref_pointer_candidate(&layout, "heads/other", main_ref_state_id)?;
     std::fs::rename(
         layout.ref_tmp_path("heads/other"),
@@ -557,7 +570,8 @@ fn verify_repository_detects_unsigned_ref_state() -> Result<()> {
 /// doesn't corrupt the prior valid record or require constructing a plausible-looking next header.
 ///
 /// **Built with a real, adopted signer from the start of this probe, not the fixture's first
-/// draft.** The first draft reused round 5's `publish_ref_to_new_block` (fake-signed) for speed;
+/// draft.** The first draft reused round 5's fake-signed helper (now renamed to make the hazard
+/// visible: `publish_ref_to_new_block_fake_signed_confounds_probes`) for speed;
 /// probing it produced `Ok` with `publication_trust_issues` non-empty (`PRIKK-TRUST-POLICY-INVALID`
 /// baseline noise) -- not a clean report, and `has_publication_trust_issues()` would still be `true`,
 /// so the probe couldn't distinguish load-bearing from redundant. Rebuilt with `write_trusted_block`/
