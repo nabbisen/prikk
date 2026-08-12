@@ -21,17 +21,130 @@
 //! file's own load-bearing doc comments for that evidence. The corrected methodology (adopted
 //! signer where a Block/RefState is involved, full report inspected on every probe) applies from
 //! round 6 onward.
+//!
+//! **Duplicate pointer identity and duplicate ref-log identity (`refs/verify/scan.rs`'s
+//! `read_pointers`/`read_logs`) are ruled provably unreachable, kept, and permanently untested**
+//! (DC-95-stage-1-round-6-review-v1 §3). Both fire only on a second `insert` into a name-keyed map,
+//! reachable per entry only after that entry's own canonical-path check passes -- and since `layout
+//! ::ref_pointer_path`/`ref_log_path` are deterministic functions of the ref name, two distinct
+//! directory entries can only both pass that check under the same name via a genuine SHA-256
+//! collision, or by being the literal same file (impossible in one `list_directory` pass). **This
+//! is a fact about the current canonical-path scheme, not a stated format invariant** -- ruled
+//! unreachable *today*, not unreachable *by design*; changing that scheme (a non-hashed component,
+//! a shortened key, a namespace prefix) would make both reachable again with nothing left to catch
+//! them. Kept for that reason, mirroring DC-92's topological-cycle exception (`block_state/
+//! tests.rs`'s own `two_blocks_naming_each_other_as_state_parent_are_caught_as_a_cycle` doc
+//! comment, the precedent this ruling cites) -- unlike that check, no lower-level function here
+//! bypasses the filesystem/canonical-path constraint the way `verify_blocks_topological` bypasses
+//! content-addressing, so there is no unit-level substitute demonstration to build either.
+//!
+//! Round 7 (Group C: direct `RefState`/`RefUpdate` construction, bypassing `RefStore::publish`)
+//! adds two more: `verify_update`'s RefState/RefUpdate coherence check (load-bearing, but only once
+//! its fixture gained a real matching pointer -- a log-only fixture hits `classify_ref_state`'s own
+//! "pointer missing" arm regardless of the check under test, the same shape of confound round 5's
+//! copy-vs-move lesson was about) and "RefState is unsigned" (downstream-redundant with publication
+//! trust: an object with no signatures at all trivially has none matching a trusted key either).
+//! 23 of 36.
 
 use prikk_error::Result;
-use prikk_object::ObjectType;
+use prikk_object::{
+    BlockKind, BlockPayload, CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, RefKind,
+    RefStatePayload, RefUpdatePayload,
+};
 
+use crate::maintainer_signing::MaintainerSigner;
 use crate::test_support::{
     sample_object_id, signed_empty_block_envelope, signed_ref_state_envelope,
     signed_ref_update_envelope, unique_temp_dir,
 };
 use crate::{
-    FileObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout, verify_repository,
+    Ed25519MaintainerSigner, FileObjectStore, ObjectWriter, RefPublication, RefStore,
+    RepositoryLayout, add_trusted_maintainer, derive_next_state_root, maintainer_signature,
+    verify_repository,
 };
+
+fn trusted_signer(seed_label: &str, byte: u8) -> Result<Ed25519MaintainerSigner> {
+    let signer = Ed25519MaintainerSigner::from_seed(seed_label, &[byte; 32])?;
+    Ok(signer)
+}
+
+fn adopt(layout: &RepositoryLayout, signer: &Ed25519MaintainerSigner) -> Result<()> {
+    let public_key_hex: String = signer
+        .public_key_bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    add_trusted_maintainer(layout, signer.key_id(), &public_key_hex)?;
+    Ok(())
+}
+
+/// Writes a real, trusted, empty `Root` `Block`, signed by `signer` -- the target every Group-C
+/// fixture below needs, for a baseline that can genuinely verify clean. `distinguishing_snapshot`
+/// names a real, already-persisted `Blob` to reference, needed whenever a test writes more than one
+/// otherwise-identical Root block: two empty Root blocks with no other varying field are the same
+/// content-addressed object (the exact confound round 3's Block-trust test hit first), so a second
+/// "distinct" target needs a real distinguishing field, not just a second call to this function.
+fn write_trusted_block(
+    objects: &mut FileObjectStore,
+    signer: &Ed25519MaintainerSigner,
+    distinguishing_snapshot: Option<ObjectId>,
+) -> Result<ObjectId> {
+    let payload = BlockPayload {
+        parent_block_ids: Vec::new(),
+        kind: BlockKind::Root,
+        patch_ids: Vec::new(),
+        state_merkle_root: derive_next_state_root(objects, None, &[])?,
+        snapshot_blob_ref: distinguishing_snapshot,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
+    };
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::Block, 2, payload.to_canonical_bytes()?);
+    let id = envelope.object_id();
+    envelope.add_signature(maintainer_signature(signer, ObjectType::Block, id)?)?;
+    objects.write_object(&envelope)
+}
+
+/// Writes a real, trusted `Blob`, for use as a distinguishing `snapshot_blob_ref`.
+fn write_trusted_blob(
+    objects: &mut FileObjectStore,
+    signer: &Ed25519MaintainerSigner,
+    content: &[u8],
+) -> Result<ObjectId> {
+    let payload = prikk_object::BlobPayload::new(prikk_object::BlobKind::Text, content.to_vec());
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, payload.to_canonical_bytes()?);
+    let id = envelope.object_id();
+    envelope.add_signature(maintainer_signature(signer, ObjectType::Blob, id)?)?;
+    objects.write_object(&envelope)
+}
+
+/// Writes a real, trusted `RefState` object directly (not published), signed by `signer` unless
+/// `sign` is false. Returns its id.
+fn write_trusted_ref_state(
+    objects: &mut FileObjectStore,
+    ref_name: &str,
+    target_object_id: ObjectId,
+    update_seq: u64,
+    signer: &Ed25519MaintainerSigner,
+    sign: bool,
+) -> Result<ObjectId> {
+    let payload = RefStatePayload {
+        ref_name: ref_name.to_string(),
+        kind: RefKind::Branch,
+        target_object_id,
+        update_seq,
+        previous_ref_state_id: None,
+        required_attestation_ids: Vec::new(),
+        closed: false,
+    };
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::RefState, 1, payload.to_canonical_bytes()?);
+    let id = envelope.object_id();
+    if sign {
+        envelope.add_signature(maintainer_signature(signer, ObjectType::RefState, id)?)?;
+    }
+    objects.write_object(&envelope)
+}
 
 /// Publishes `ref_name` pointing at a freshly written, real `Block`, via the normal `RefStore::
 /// publish` path -- exactly what every check in this file assumes has already happened cleanly,
@@ -253,5 +366,161 @@ fn verify_repository_detects_every_ref_path_shape_violation() -> Result<()> {
         "expected a ref-path-shape error, got: {error}"
     );
     let _ = std::fs::remove_dir_all(log_root);
+    Ok(())
+}
+
+/// DC-95 Stage 1, round 7: `verify_update`'s RefState/RefUpdate coherence check (`refs/verify/
+/// scan.rs`) -- a ref-log record whose fields disagree with the `RefState` object it names as its
+/// own new state. `RefStore::publish`'s own `validate_coherent_publication` cross-checks these two
+/// exact objects before either is ever written, so this fixture -- like round 5's RefState/pointer
+/// name mismatch -- is unreachable through the public API and must bypass it: a real `RefState`
+/// object written directly (`write_trusted_ref_state`, not `publish`), and a `RefUpdate` log record
+/// appended directly via the `#[cfg(test)]`-only `refs::append_log_record_for_signature_test`
+/// (already re-exported in `refs.rs` for `signature_contract_tests`, reused here rather than adding
+/// a new one), whose `new_target_object_id` deliberately differs from the `RefState`'s own
+/// `target_object_id` -- every other field agrees, isolating this one disagreement. Built with a
+/// real, adopted signer behind both the `Block` and the `RefState` from the start (the corrected
+/// methodology, not a retrofit).
+///
+/// **A matching pointer is required, not optional -- found by omitting it first.** `verify_update`
+/// runs from `read_logs`' own per-record loop (`validate_log`), reached for every log file
+/// regardless of whether a matching pointer exists, so a first draft omitted the pointer entirely.
+/// Probing that draft (check disabled) didn't reach a clean `Ok`: with no pointer at all, `classify_
+/// ref_state`'s own `(None, Some(log))` arm fires unconditionally for this ref, reporting `PRIKK-
+/// VERIFY-REF-DIVERGENCE` ("pointer is missing while committed log history exists") regardless of
+/// `verify_update`'s own state -- a confound in the fixture, not evidence about the check. Fixed by
+/// adding a real pointer matching `ref_state_id` at its own canonical location (`write_ref_pointer_
+/// candidate` + rename, round 5's own technique), so `classify_ref_state` reaches its clean arm
+/// once `verify_update` no longer objects, and only `verify_update`'s own field comparison is what
+/// the probe is actually measuring.
+/// **Probed, load-bearing, confirmed** (with the pointer present): disabling `verify_update`'s
+/// field-agreement check lets `verify_repository` return `Ok` with every issue vector empty.
+#[test]
+fn verify_repository_detects_ref_update_ref_state_mismatch() -> Result<()> {
+    let root = unique_temp_dir("verify-ref-update-mismatch");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let signer = trusted_signer("verify-ref-update-mismatch", 0x11)?;
+    adopt(&layout, &signer)?;
+
+    let target_block = write_trusted_block(&mut objects, &signer, None)?;
+    let distinguishing_blob = write_trusted_blob(&mut objects, &signer, b"wrong-target-marker")?;
+    let wrong_target_block = write_trusted_block(&mut objects, &signer, Some(distinguishing_blob))?;
+    let ref_state_id =
+        write_trusted_ref_state(&mut objects, "heads/main", target_block, 1, &signer, true)?;
+
+    let update_payload = RefUpdatePayload {
+        ref_name: "heads/main".to_string(),
+        old_ref_state_id: None,
+        new_ref_state_id: ref_state_id,
+        new_target_object_id: wrong_target_block,
+        update_seq: 1,
+        created_at: 0,
+        author_key_id: signer.key_id().to_string(),
+    };
+    let mut update_envelope = ObjectEnvelope::unsigned(
+        ObjectType::RefUpdate,
+        1,
+        update_payload.to_canonical_bytes()?,
+    );
+    let update_id = update_envelope.object_id();
+    update_envelope.add_signature(maintainer_signature(
+        &signer,
+        ObjectType::RefUpdate,
+        update_id,
+    )?)?;
+    crate::refs::append_log_record_for_signature_test(&layout, "heads/main", &update_envelope)?;
+    // A pointer matching ref_state_id, at its own canonical location -- otherwise, with no
+    // pointer at all, classify_ref_state's own "pointer missing while log exists" arm fires
+    // regardless of verify_update's state, confounding the probe below (found by running it).
+    crate::refs::write_ref_pointer_candidate(&layout, "heads/main", ref_state_id)?;
+    std::fs::rename(
+        layout.ref_tmp_path("heads/main"),
+        layout.ref_pointer_path("heads/main"),
+    )?;
+
+    let error = match verify_repository(&layout) {
+        Ok(_) => panic!("expected verify_repository to reject a RefState/RefUpdate mismatch"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("RefState disagrees with RefUpdate"),
+        "expected a RefState/RefUpdate mismatch error, got: {error}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-95 Stage 1, round 7: the "RefState is unsigned" check (`verified_ref_state_payload`,
+/// `refs/verify/scan.rs`) -- a `RefState` object with zero signatures. `ObjectEnvelope::validate_
+/// strict` (checked by `store.write_object` on every write) does not require any signature to be
+/// present at all: an empty `signatures` vec makes every one of its shape/duplicate/order checks
+/// vacuously true, so `write_trusted_ref_state(..., sign: false)` writes successfully, and this
+/// defect is invisible until read time. Reached via a real, matching pointer (same construction and
+/// same reason as the mismatch test above -- `read_pointers` calls this same `verified_ref_state_
+/// payload` function too, so either call site would do, and a log-only fixture without one would
+/// hit the same "pointer missing" confound).
+///
+/// **Probed, downstream-redundant -- not load-bearing.** Disabling the `signatures.is_empty()`
+/// check does not produce a clean `Ok`: `PublicationTrustVerifier` still classifies the RefState as
+/// untrusted, `PRIKK-TRUST-PUBLICATION-UNTRUSTED` (`blocking` via `has_publication_trust_issues`),
+/// since an object with zero signatures trivially has no signature matching any trusted key either.
+/// This is structural, not incidental to this fixture: any `Block`/`RefState` with no signatures at
+/// all fails trust verification for the same reason, regardless of what this hard check does.
+/// **Probed, downstream-redundant, confirmed**: disabling the check still returns `Ok`, but with
+/// `publication_trust_issues` non-empty and blocking. Kept as a regression guard on the more
+/// specific "is unsigned" message (real diagnostic value distinguishing "never signed" from "signed
+/// by an untrusted key"), not as a Stage-1-rule demonstration.
+#[test]
+fn verify_repository_detects_unsigned_ref_state() -> Result<()> {
+    let root = unique_temp_dir("verify-unsigned-ref-state");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let signer = trusted_signer("verify-unsigned-ref-state", 0x12)?;
+    adopt(&layout, &signer)?;
+
+    let target_block = write_trusted_block(&mut objects, &signer, None)?;
+    let ref_state_id =
+        write_trusted_ref_state(&mut objects, "heads/main", target_block, 1, &signer, false)?;
+
+    let update_payload = RefUpdatePayload {
+        ref_name: "heads/main".to_string(),
+        old_ref_state_id: None,
+        new_ref_state_id: ref_state_id,
+        new_target_object_id: target_block,
+        update_seq: 1,
+        created_at: 0,
+        author_key_id: signer.key_id().to_string(),
+    };
+    let mut update_envelope = ObjectEnvelope::unsigned(
+        ObjectType::RefUpdate,
+        1,
+        update_payload.to_canonical_bytes()?,
+    );
+    let update_id = update_envelope.object_id();
+    update_envelope.add_signature(maintainer_signature(
+        &signer,
+        ObjectType::RefUpdate,
+        update_id,
+    )?)?;
+    crate::refs::append_log_record_for_signature_test(&layout, "heads/main", &update_envelope)?;
+    // A matching pointer, for the same reason the RefUpdate/RefState mismatch test above needs
+    // one: without it, disabling the check under test would still hit classify_ref_state's own
+    // "pointer missing while log exists" arm, confounding the probe.
+    crate::refs::write_ref_pointer_candidate(&layout, "heads/main", ref_state_id)?;
+    std::fs::rename(
+        layout.ref_tmp_path("heads/main"),
+        layout.ref_pointer_path("heads/main"),
+    )?;
+
+    let error = match verify_repository(&layout) {
+        Ok(_) => panic!("expected verify_repository to reject an unsigned RefState"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("is unsigned"),
+        "expected an unsigned-RefState error, got: {error}"
+    );
+    let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
