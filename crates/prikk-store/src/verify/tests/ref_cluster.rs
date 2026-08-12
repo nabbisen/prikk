@@ -44,7 +44,15 @@
 //! "pointer missing" arm regardless of the check under test, the same shape of confound round 5's
 //! copy-vs-move lesson was about) and "RefState is unsigned" (downstream-redundant with publication
 //! trust: an object with no signatures at all trivially has none matching a trusted key either).
-//! 23 of 36.
+//!
+//! Round 9 closes four of the cluster's remaining five rows, all reachable without a format-1 flip:
+//! incomplete log tail without pointer lead, format-2's `created_at == 0` check, ref-log chain/
+//! sequence divergence, and `classify_ref_state`'s catch-all fallback -- all four load-bearing, all
+//! four found a fixture-construction lesson before or during their probe (a fake-signed fixture
+//! confounding the trust baseline, same as round 5's; a left-behind pointer making a chain-sequence
+//! probe redundant with an unrelated divergence check instead of clean, discovered the same way
+//! round 5's copy-vs-move lesson was). `LEGACY-LOG-LEADS` (format-1) is the one row left in this
+//! cluster, deferred to the round that takes on the format-1-flip technique.
 
 use prikk_error::Result;
 use prikk_object::{
@@ -125,6 +133,7 @@ fn write_trusted_ref_state(
     ref_name: &str,
     target_object_id: ObjectId,
     update_seq: u64,
+    previous_ref_state_id: Option<ObjectId>,
     signer: &Ed25519MaintainerSigner,
     sign: bool,
 ) -> Result<ObjectId> {
@@ -133,7 +142,7 @@ fn write_trusted_ref_state(
         kind: RefKind::Branch,
         target_object_id,
         update_seq,
-        previous_ref_state_id: None,
+        previous_ref_state_id,
         required_attestation_ids: Vec::new(),
         closed: false,
     };
@@ -406,8 +415,15 @@ fn verify_repository_detects_ref_update_ref_state_mismatch() -> Result<()> {
     let target_block = write_trusted_block(&mut objects, &signer, None)?;
     let distinguishing_blob = write_trusted_blob(&mut objects, &signer, b"wrong-target-marker")?;
     let wrong_target_block = write_trusted_block(&mut objects, &signer, Some(distinguishing_blob))?;
-    let ref_state_id =
-        write_trusted_ref_state(&mut objects, "heads/main", target_block, 1, &signer, true)?;
+    let ref_state_id = write_trusted_ref_state(
+        &mut objects,
+        "heads/main",
+        target_block,
+        1,
+        None,
+        &signer,
+        true,
+    )?;
 
     let update_payload = RefUpdatePayload {
         ref_name: "heads/main".to_string(),
@@ -480,8 +496,15 @@ fn verify_repository_detects_unsigned_ref_state() -> Result<()> {
     adopt(&layout, &signer)?;
 
     let target_block = write_trusted_block(&mut objects, &signer, None)?;
-    let ref_state_id =
-        write_trusted_ref_state(&mut objects, "heads/main", target_block, 1, &signer, false)?;
+    let ref_state_id = write_trusted_ref_state(
+        &mut objects,
+        "heads/main",
+        target_block,
+        1,
+        None,
+        &signer,
+        false,
+    )?;
 
     let update_payload = RefUpdatePayload {
         ref_name: "heads/main".to_string(),
@@ -523,4 +546,317 @@ fn verify_repository_detects_unsigned_ref_state() -> Result<()> {
     );
     let _ = std::fs::remove_dir_all(root);
     Ok(())
+}
+
+/// DC-95 Stage 1, round 9: "incomplete log tail without pointer lead" (`refs/verify.rs`'s
+/// `classify_ref_state`, the very first match arm) -- a log whose tip still matches the pointer
+/// (nothing to repair, nothing missing) but which has undecodable trailing bytes after its last
+/// complete record. Built by publishing normally, then appending fewer than `REF_LOG_HEADER_LEN`
+/// (50; `refs/log.rs`) raw bytes directly to the log file -- `decode_log_records` (`refs/log.rs:173-
+/// 218`) treats anything shorter than one full header as a trailing partial, not an error, so this
+/// doesn't corrupt the prior valid record or require constructing a plausible-looking next header.
+///
+/// **Built with a real, adopted signer from the start of this probe, not the fixture's first
+/// draft.** The first draft reused round 5's `publish_ref_to_new_block` (fake-signed) for speed;
+/// probing it produced `Ok` with `publication_trust_issues` non-empty (`PRIKK-TRUST-POLICY-INVALID`
+/// baseline noise) -- not a clean report, and `has_publication_trust_issues()` would still be `true`,
+/// so the probe couldn't distinguish load-bearing from redundant. Rebuilt with `write_trusted_block`/
+/// `write_trusted_ref_state` and a real pointer/log pair instead (the same fix applied to the
+/// `created_at` test immediately below, before its own probe could hit the identical confound).
+/// **Probed, load-bearing, confirmed**: disabling the `trailing_partial_bytes != 0` check inside
+/// `classify_ref_state`'s matching arm lets `verify_repository` return `Ok` with every issue vector
+/// empty.
+#[test]
+fn verify_repository_detects_incomplete_log_tail_without_pointer_lead() -> Result<()> {
+    let root = unique_temp_dir("verify-incomplete-log-tail");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let signer = trusted_signer("verify-incomplete-log-tail", 0x15)?;
+    adopt(&layout, &signer)?;
+
+    let target_block = write_trusted_block(&mut objects, &signer, None)?;
+    let state_id = write_trusted_ref_state(
+        &mut objects,
+        "heads/main",
+        target_block,
+        1,
+        None,
+        &signer,
+        true,
+    )?;
+    let update = build_signed_ref_update("heads/main", None, state_id, target_block, 1, &signer)?;
+    crate::refs::append_log_record_for_signature_test(&layout, "heads/main", &update)?;
+    crate::refs::write_ref_pointer_candidate(&layout, "heads/main", state_id)?;
+    std::fs::rename(
+        layout.ref_tmp_path("heads/main"),
+        layout.ref_pointer_path("heads/main"),
+    )?;
+
+    let mut log_file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(layout.ref_log_path("heads/main"))?;
+    std::io::Write::write_all(&mut log_file, &[0xAB, 0xCD, 0xEF])?;
+    drop(log_file);
+
+    let error = match verify_repository(&layout) {
+        Ok(_) => panic!("expected verify_repository to reject an incomplete log tail"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("incomplete log tail without a pointer lead"),
+        "expected an incomplete-log-tail error, got: {error}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-95 Stage 1, round 9: `verify_refs`'s format-2 `created_at == 0` check (`verify.rs:46-52`) --
+/// tightens existing coverage (`refs/tests/publication_recovery/compatibility.rs`'s `format2_
+/// legacy_timestamp_is_not_normalized_and_blocks_mutation`, which already builds exactly this
+/// fixture but only asserts `.is_err()`) to a specific-message assertion, matching this file's own
+/// bar. Reuses that test's exact construction: `RefStore::publish` a normal ref, then overwrite the
+/// log record with schema-1 `created_at: 7` -- `append_log_record` unconditionally rejects a
+/// nonzero `created_at` at schema 1 (`refs/log.rs`'s `validate_log_record`), so building this
+/// fixture at all requires bypassing it via the `#[cfg(test)]`-only `encode_log_record_for_test`
+/// and a raw `std::fs::write`, exactly as the existing test does.
+/// **Probed, load-bearing, confirmed**: disabling this specific check (leaving the schema-1-at-
+/// write-time rejection in `append_log_record` untouched, since that's a different call site) lets
+/// `verify_repository` return `Ok` with every issue vector empty.
+#[test]
+fn verify_repository_detects_nonzero_created_at_under_format2() -> Result<()> {
+    let root = unique_temp_dir("verify-nonzero-created-at");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let signer = trusted_signer("verify-nonzero-created-at", 0x16)?;
+    adopt(&layout, &signer)?;
+
+    let target_block = write_trusted_block(&mut objects, &signer, None)?;
+    let ref_state_id = write_trusted_ref_state(
+        &mut objects,
+        "heads/main",
+        target_block,
+        1,
+        None,
+        &signer,
+        true,
+    )?;
+    crate::refs::write_ref_pointer_candidate(&layout, "heads/main", ref_state_id)?;
+    std::fs::rename(
+        layout.ref_tmp_path("heads/main"),
+        layout.ref_pointer_path("heads/main"),
+    )?;
+
+    let update_payload = RefUpdatePayload {
+        ref_name: "heads/main".to_string(),
+        old_ref_state_id: None,
+        new_ref_state_id: ref_state_id,
+        new_target_object_id: target_block,
+        update_seq: 1,
+        created_at: 7,
+        author_key_id: signer.key_id().to_string(),
+    };
+    let mut update_envelope = ObjectEnvelope::unsigned(
+        ObjectType::RefUpdate,
+        1,
+        update_payload.to_canonical_bytes()?,
+    );
+    let update_id = update_envelope.object_id();
+    update_envelope.add_signature(maintainer_signature(
+        &signer,
+        ObjectType::RefUpdate,
+        update_id,
+    )?)?;
+    std::fs::write(
+        layout.ref_log_path("heads/main"),
+        crate::refs::encode_log_record_for_test(&update_envelope)?,
+    )?;
+
+    let error = match verify_repository(&layout) {
+        Ok(_) => panic!("expected verify_repository to reject a nonzero created_at under format-2"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("format-2 RefUpdate requires created_at == 0"),
+        "expected a nonzero-created_at error, got: {error}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-95 Stage 1, round 9: ref-log chain/sequence divergence (`refs/verify/scan.rs`'s
+/// `validate_log`, the "ref-log chain or sequence diverges" check) -- tightens existing coverage
+/// (`refs/tests/publication_recovery.rs`'s `ref_log_sequence_gap_fails_closed`, which already
+/// builds exactly this fixture -- a second log record whose `update_seq` jumps from 1 to 3 -- but
+/// only asserts `.is_err()` and `!doctor.is_healthy()`) to a specific-message assertion.
+///
+/// **The pointer must be advanced to the gap record's id too, found by probing the first draft
+/// without it.** The existing test's own construction leaves the pointer at the first record (it
+/// never needed to move it, since `.is_err()` doesn't care which check fired). Reusing that
+/// construction unchanged and disabling the chain check didn't reach a clean `Ok`: with the log now
+/// two records ahead of a pointer that never moved, `classify_ref_state`'s own "log leads pointer"
+/// arm (`PRIKK-VERIFY-REF-DIVERGENCE`, blocking) caught the resulting mismatch instead -- real
+/// evidence about a *different* defect (pointer left behind), not about this check. Fixed by also
+/// repointing to the gap record's id, matching the log's new tip, so the only remaining way to
+/// notice the broken internal sequence is the chain check itself.
+/// **Probed, load-bearing, confirmed** (with the pointer advanced): disabling this check lets
+/// `verify_repository` return `Ok` with every issue vector empty.
+#[test]
+fn verify_repository_detects_ref_log_sequence_gap() -> Result<()> {
+    let root = unique_temp_dir("verify-ref-log-sequence-gap");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let signer = trusted_signer("verify-ref-log-sequence-gap", 0x13)?;
+    adopt(&layout, &signer)?;
+
+    let target_block = write_trusted_block(&mut objects, &signer, None)?;
+    let first_state_id = write_trusted_ref_state(
+        &mut objects,
+        "heads/main",
+        target_block,
+        1,
+        None,
+        &signer,
+        true,
+    )?;
+    let first_update =
+        build_signed_ref_update("heads/main", None, first_state_id, target_block, 1, &signer)?;
+    crate::refs::append_log_record_for_signature_test(&layout, "heads/main", &first_update)?;
+    crate::refs::write_ref_pointer_candidate(&layout, "heads/main", first_state_id)?;
+    std::fs::rename(
+        layout.ref_tmp_path("heads/main"),
+        layout.ref_pointer_path("heads/main"),
+    )?;
+
+    // Second RefState/RefUpdate pair, self-consistent with each other, but the update_seq jumps
+    // from 1 to 3 -- a gap validate_log's own chain check exists to catch.
+    let gap_state_id = write_trusted_ref_state(
+        &mut objects,
+        "heads/main",
+        target_block,
+        3,
+        Some(first_state_id),
+        &signer,
+        true,
+    )?;
+    let gap_update = build_signed_ref_update(
+        "heads/main",
+        Some(first_state_id),
+        gap_state_id,
+        target_block,
+        3,
+        &signer,
+    )?;
+    crate::refs::append_log_record_for_signature_test(&layout, "heads/main", &gap_update)?;
+    // Advance the pointer to match the log's new (chain-broken) tip too -- otherwise, with the
+    // chain check disabled, classify_ref_state's own "log leads pointer" divergence arm catches
+    // the resulting pointer/log mismatch instead, which is a downstream-redundant finding about a
+    // *different* defect (pointer left behind), not evidence about this check. With the pointer
+    // kept in step, the only thing left to notice the broken sequence is the chain check itself.
+    crate::refs::write_ref_pointer_candidate(&layout, "heads/main", gap_state_id)?;
+    std::fs::rename(
+        layout.ref_tmp_path("heads/main"),
+        layout.ref_pointer_path("heads/main"),
+    )?;
+
+    let error = match verify_repository(&layout) {
+        Ok(_) => panic!("expected verify_repository to reject a ref-log sequence gap"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("ref-log chain or sequence diverges"),
+        "expected a sequence-gap error, got: {error}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-95 Stage 1, round 9: `classify_ref_state`'s catch-all fallback (`verify.rs:161-163`,
+/// `"unexplained pointer/log divergence for ref {ref_name}"`) -- reached only when a pointer and a
+/// log both individually decode and both individually satisfy `verify_update`'s own per-record
+/// coherence check, but the *pair* matches none of `classify_ref_state`'s other four explicit
+/// arms. Built from two entirely independent, individually self-consistent RefState/RefUpdate
+/// pairs for the same ref name: a log recording a genuine first publication (`update_seq: 1`,
+/// `old_ref_state_id: None`) for RefState `Y`, and a pointer -- placed directly, bypassing
+/// `RefStore::publish`'s own coherence enforcement, the same way round 5's name-mismatch test and
+/// round 7's coherence test both had to -- naming a completely unrelated RefState `X` (`update_seq:
+/// 99`, its own `previous_ref_state_id: None`). Neither the pointer-leads-log arm (`X`'s `previous_
+/// ref_state_id` doesn't name `Y`) nor the log-leads-pointer arm (`log.previous_tip` is `None`, not
+/// `Some(X)`) nor the pointer-missing arm (a pointer *is* present) applies -- confirmed by tracing
+/// each guard against this fixture's exact fields before writing it, not by trial and error.
+/// **Probed, load-bearing, confirmed**: disabling the catch-all's own `Err` (routing the fallback to
+/// `Ok(())` instead) lets `verify_repository` return `Ok` with every issue vector empty.
+#[test]
+fn verify_repository_detects_unexplained_pointer_log_divergence() -> Result<()> {
+    let root = unique_temp_dir("verify-unexplained-divergence");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let signer = trusted_signer("verify-unexplained-divergence", 0x14)?;
+    adopt(&layout, &signer)?;
+
+    let target_block = write_trusted_block(&mut objects, &signer, None)?;
+
+    // Y: log records a genuine, self-consistent first publication.
+    let y_state_id = write_trusted_ref_state(
+        &mut objects,
+        "heads/main",
+        target_block,
+        1,
+        None,
+        &signer,
+        true,
+    )?;
+    let y_update =
+        build_signed_ref_update("heads/main", None, y_state_id, target_block, 1, &signer)?;
+    crate::refs::append_log_record_for_signature_test(&layout, "heads/main", &y_update)?;
+
+    // X: an unrelated RefState, pointed to directly -- no relationship to Y at all.
+    let x_state_id = write_trusted_ref_state(
+        &mut objects,
+        "heads/main",
+        target_block,
+        99,
+        None,
+        &signer,
+        true,
+    )?;
+    crate::refs::write_ref_pointer_candidate(&layout, "heads/main", x_state_id)?;
+    std::fs::rename(
+        layout.ref_tmp_path("heads/main"),
+        layout.ref_pointer_path("heads/main"),
+    )?;
+
+    let error = match verify_repository(&layout) {
+        Ok(_) => panic!("expected verify_repository to reject an unexplained divergence"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("unexplained pointer/log divergence"),
+        "expected an unexplained-divergence error, got: {error}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+fn build_signed_ref_update(
+    ref_name: &str,
+    old_ref_state_id: Option<ObjectId>,
+    new_ref_state_id: ObjectId,
+    new_target_object_id: ObjectId,
+    update_seq: u64,
+    signer: &Ed25519MaintainerSigner,
+) -> Result<ObjectEnvelope> {
+    let payload = RefUpdatePayload {
+        ref_name: ref_name.to_string(),
+        old_ref_state_id,
+        new_ref_state_id,
+        new_target_object_id,
+        update_seq,
+        created_at: 0,
+        author_key_id: signer.key_id().to_string(),
+    };
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::RefUpdate, 1, payload.to_canonical_bytes()?);
+    let id = envelope.object_id();
+    envelope.add_signature(maintainer_signature(signer, ObjectType::RefUpdate, id)?)?;
+    Ok(envelope)
 }
