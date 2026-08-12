@@ -74,7 +74,14 @@ reviewer cannot tell which half a failure came from.
    by which path — as a fact about today's code, not a property to rely on. Redundant checks still earn a
    regression guard on their own message (diagnostic value for an operator), labelled as such rather than
    counted as rule-matching controls.
-3. **Stage 1: for every check in §3.2's class, disabling it fails at least one test that runs through
+3. **Added 2026-08-11 after Stage 1 round 7: the classified inventory is an explicit Stage 1
+   deliverable.** Every one of the 36 rows with its final classification (load-bearing /
+   downstream-redundant, by which path / provably unreachable / structurally immune to the confound),
+   the probe evidence, and the rows needing no probe. **Assembled as Stage 1 goes, not reconstructed at
+   the end from the review documents.** This is the durable half of the increment — a future reader
+   consults it to know which checks are the last line of defence — and it belongs in the code's own
+   documentation, not only in the review archive.
+4. **Stage 1: for every check in §3.2's class, disabling it fails at least one test that runs through
    `verify_repository`.** Demonstrated the way DC-92's controls were — disable the production check,
    observe the specific failure, restore, confirm no residual diff. **A check whose disablement is
    caught only by a unit test calling it directly does not count**; that is the exact gap this exists
