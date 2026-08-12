@@ -1,9 +1,33 @@
-# RFC (accepted) - 101 First-Appearance Durability
+# RFC (archived) - 101 First-Appearance Durability
 
-**Status.** **ACCEPTED by the project owner 2026-08-12**, on the owner's direction of the same date:
-*Windows mutation at parity with Linux.* **Acceptance clears §5's prerequisites, not any design or
-implementation** — §5's six investigations are the work, and a stop-and-report on any of them ends the
-RFC. This supersedes the scope of DC-91's §5 recommendation — see §2.3.
+**Status.** **CLOSED 2026-08-12 with a negative result, and SUPERSEDED by RFC 102.** Accepted
+2026-08-12 on the owner's Windows-parity direction; closed the same day after §5.1–§5.3 and §5.5.
+**No code was produced.** §6's own standing was that a stop-and-report is a successful outcome, and this
+is one.
+
+**What it established, and why it was worth running:**
+
+1. **§1's problem statement was wrong.** The obstacle is not DC-38's step 5 versus step 6 — that is a
+   symptom. **prikk is content-addressed, so every object write creates a new name**, and the problem
+   belongs to the storage model. Found by §5.2's independently derived transition trace (T2), against
+   this document.
+2. **The hypothesis would have made Windows worse.** Routing ref publication through the WAL while
+   object writes remained new names would produce a durable ref pointing at a non-durable object — the
+   DC-38 failure relocated, not removed.
+3. **No Windows primitive provides new-name durability**, and **Transactional NTFS did and is being
+   withdrawn** — ruled unusable because its removal would silently void the guarantee rather than break
+   detectably (§5.5 ruling §4).
+4. **§5.2's fifteen-transition table and 31-site call index survive this closure** as the map of prikk's
+   new-name surface, and are RFC 102's primary input.
+5. **Three `FINDINGS.md` rows survive independently** — T12's silent signed deletion, T11's `verify` gap
+   on `refs/received/`, and T15's contract bypass.
+
+**Successor.** [RFC 102](../proposed/102-container-based-durability.md) — container-based durability,
+which takes the storage model as the unit of change. **Windows read-only is a staging state, not a
+verdict.**
+
+**Everything below is preserved as written and its §1 and §3 are known wrong.** Read §2 and §5 for what
+still holds. This supersedes the scope of DC-91's §5 recommendation — see §2.3.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** DC-87 Stage 2's transition-durability ruling (2026-08-11) and DC-91's evaluation
 ruling §3, which together established that the obstacle is not the ref pointer's shape.

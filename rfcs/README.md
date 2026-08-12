@@ -47,6 +47,7 @@ These records are under design review. All proposed RFCs must respect the depend
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
 | DC-52 | [Python and Oracle Decommissioning](./archive/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | M2 / **0.20.0 (retargeted from 0.19.0, 2026-08-08)**; **UNBLOCKED 2026-08-08** — `DC-45:419`'s condition discharged by 0.19.0's release and its accepted post-release stability rerun; deletion remains a separate architect-reviewed change, and fixture compaction only after deletion review. Previously release-blocked — `DC-45:419` forbids deletion before the first Rust-gated 0.19.0 release |
 | DC-53 | [Repository-Wide AUTHOR Trust Verification](./proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md) | Post-M2, unscheduled |
+| 102 | [Container-Based Durability](./proposed/102-container-based-durability.md) | **Proposed 2026-08-12**, successor to RFC 101. Moves durability-bearing repository state into fixed-name container files, so no new directory entry sits on the durability path — the only route to Windows parity that needs no vendor-specific primitive and no weakened invariant. §6's six prerequisites precede any design. **1.0-scale**, not 0.20.0 |
 | DC-85 | [Merge From a Received Ref](./accepted/DC-85-MERGE-FROM-RECEIVED-REF.md) | **Accepted 2026-08-09.** Closes the gap DC-78 Stage 3 exposed: `execute_merge` rejects `remotes/`, so received history cannot be incorporated. **The architect's §D4 claim that this used existing machinery was false.** §3's four questions precede design |
 
 **None of these five is a live design-review candidate** — all are blocked or unscheduled. DC-66 was accepted 2026-08-02 and has moved to `accepted/`.
@@ -127,7 +128,6 @@ These reviewed designs may govern downstream work but have not yet released.
 | DC-94 | [Responsibility Map Executable Binding](./accepted/DC-94-RESPONSIBILITY-MAP-EXECUTABLE-BINDING.md) | **Accepted 2026-08-11.** DC-52's obligations 1 and 2, **decoupled** — they no longer gate the retirement. May already be largely discharged, which is a complete outcome |
 | DC-95 | [Verify Coverage and Finding Accumulation](./accepted/DC-95-VERIFY-COVERAGE-AND-FINDING-ACCUMULATION.md) | Product **M1**. **Accepted 2026-08-11.** Two ordered stages: nothing proves `verify` state-checks blocks end to end (the architect disabled the wiring twice and the suite stayed green), and `verify` reports only the first hard error |
 | 100 | [RFC naming alignment](./accepted/100-rfc-naming-alignment.md) | **Accepted 2026-08-11.** Aligns new RFC filenames with RFC-000's `NNN-slug.md`, from 100. Legacy `DC-*`/`PR-*` names frozen |
-| 101 | [First-Appearance Durability](./accepted/101-first-appearance-durability.md) | **Accepted 2026-08-12** on the owner's Windows-parity direction. Windows cannot make a newly-created name durable, so DC-38's invariant breaks at ref creation under **every** per-ref file shape (DC-91 §3) — the pointer's shape was never the obstacle. Routes durability-bearing transitions through already-existing names, making per-ref files replayable consequences. §5's six prerequisites precede any design; a stop-and-report ends the RFC. Largest increment in flight; 0.20.0 moves |
 | DC-59 | [Commit Benchmark Harness](./accepted/DC-59-COMMIT-BENCHMARK-HARNESS.md) | Produces NFR-PERF-01's named evidence artifact. **Complete at `a9c2fe0`**, implementation review accepted 2026-07-29 with no findings. Measured the full-tree scan: 4.22 ms at 10 files to 516 ms at 10,000, change set fixed at one |
 
 ## Done
@@ -203,6 +203,7 @@ These records currently live under `archive/`.
 |---|---|---|
 | DC-09 | [Phase 4 Node Model and Operation Application](./archive/DC-09-PHASE-4-NODE-MODEL.md) | Superseded / partially implemented historical umbrella. |
 | DC-42 | [Performance and Maintainability Gates](./archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md) | Superseded 2026-07-29 into DC-56, DC-57, DC-58. Never implemented; design review found it bundled three unrelated increments. |
+| 101 | [First-Appearance Durability](./archive/101-first-appearance-durability.md) | **Closed 2026-08-12 with a negative result; superseded by RFC 102.** Accepted and closed the same day, no code produced. Its own §5.2 trace disproved its §1 problem statement: prikk is content-addressed, so *every* object write creates a new name, and the fix as scoped would have made Windows worse. Established that no Windows primitive provides new-name durability and that Transactional NTFS is unusable. Its transition table and three `FINDINGS.md` rows survive it. |
 
 ## Handoffs
 

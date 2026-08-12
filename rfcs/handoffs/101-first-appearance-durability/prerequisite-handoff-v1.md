@@ -1,7 +1,12 @@
 # RFC 101 First-Appearance Durability — Prerequisite Handoff v1
 
+> **Superseded 2026-08-12.** RFC 101 closed with a negative result; the RFC now lives at
+> `rfcs/archive/101-first-appearance-durability.md` and its successor is
+> `rfcs/proposed/102-container-based-durability.md`. This handoff is retained as the historical record of
+> what was asked. **Nothing in it is live work.**
+
 **Cleared to answer §5's six prerequisites only.** Accepted 2026-08-12,
-`rfcs/accepted/101-first-appearance-durability.md`. **No design, no implementation, no production
+`rfcs/archive/101-first-appearance-durability.md`. **No design, no implementation, no production
 code.**
 
 ## 1. What this is
