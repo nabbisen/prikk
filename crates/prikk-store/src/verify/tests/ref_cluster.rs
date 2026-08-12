@@ -13,6 +13,14 @@
 //! the pointer/log coherence classifier in `refs/verify.rs`, discovered only by inspecting the
 //! full report returned with the check disabled rather than trusting that a `panic!` on the `Ok`
 //! arm alone proved a clean pass.
+//!
+//! Round 6 adds `ensure_ref_path_shape` -- provably downstream-redundant with the pointer/log
+//! canonical-path checks, not merely observed for one fixture (see that test's own doc comment for
+//! the structural argument). Classifications for rounds 1-5 were re-verified against a genuinely
+//! clean baseline per DC-95-stage-1-round-5-review-v1's condition; see `verify/tests.rs` and this
+//! file's own load-bearing doc comments for that evidence. The corrected methodology (adopted
+//! signer where a Block/RefState is involved, full report inspected on every probe) applies from
+//! round 6 onward.
 
 use prikk_error::Result;
 use prikk_object::ObjectType;
@@ -182,5 +190,68 @@ fn verify_repository_detects_ref_state_name_pointer_mismatch() -> Result<()> {
         "expected a name-mismatch error, got: {error}"
     );
     let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-95 Stage 1, round 6: `ensure_ref_path_shape` (`refs/verify/scan.rs`) -- a directory entry
+/// under `by-id/` or `logs/` whose filename is not exactly 64 hex characters plus the expected
+/// extension. Called immediately after `list_directory`, strictly before any attempt to decode the
+/// entry's content (`read_pointers`/`read_logs`), so a completely bare, freshly-initialized
+/// repository is enough: `by-id/`/`logs/` both exist from `RepositoryLayout::init` itself
+/// (`layout.rs:206-207`), no publish needed, no Block/RefState object exists anywhere in either
+/// fixture. That also means `PublicationTrustVerifier` is never invoked here at all (it only checks
+/// `Block`/`RefState`, and there are none), so unlike round 5's Block/RefState-carrying checks, a
+/// real adopted signer isn't needed for a clean baseline -- confirmed by inspecting the full report
+/// on every probe below, not assumed from the parallel to round 3/4's already-immune fixtures.
+///
+/// **Probed, downstream-redundant -- provably so, not merely observed for one fixture.** Both
+/// sub-cases here use undecodable garbage bytes, which is enough to prove the check rejects in
+/// production (this file's own job), but disabling `ensure_ref_path_shape` with garbage content
+/// doesn't reach a clean `Ok` -- decode itself fails first (`"invalid ref pointer magic"` /
+/// equivalent for logs), a different check entirely. That alone would be a weak redundancy claim
+/// (maybe a *decodable* wrong-shaped file behaves differently), so it was checked directly: built a
+/// real, valid pointer via a normal publish, moved its real bytes verbatim to a wrong-length
+/// filename, and disabled the check. Result: `"non-canonical ref pointer: short.ref"` -- the
+/// canonical-path check (`scan.rs`, `path != layout.ref_pointer_path(&pointer.ref_name)`) catches
+/// it instead. Confirmed identically for logs (`"non-canonical ref log: short.log"` against `path
+/// != layout.ref_log_path(&name)`). **This redundancy is structural, not incidental**: `ref_pointer_
+/// path`/`ref_log_path` are deterministic functions that only ever produce correctly-shaped output,
+/// so no path failing the shape check can ever equal either function's result -- meaning the
+/// canonical-path check necessarily also rejects anything the shape check would have, whenever
+/// decode succeeds at all. `ensure_ref_path_shape` cannot be load-bearing against either canonical-
+/// path check by construction, only against a decode step that would otherwise have accepted
+/// malformed content -- and decode already rejects it independently, as the garbage-bytes fixtures
+/// above show. Kept as a regression guard on the friendlier, more specific "invalid shape" message
+/// (real diagnostic value: an operator sees *why* the file is wrong, not just that decode choked on
+/// it), not as a demonstration of Stage 1's rule.
+#[test]
+fn verify_repository_detects_every_ref_path_shape_violation() -> Result<()> {
+    let pointer_root = unique_temp_dir("verify-ref-pointer-path-shape");
+    let layout = RepositoryLayout::init(pointer_root.clone())?;
+    let bad_pointer = layout.refs_dir().join("by-id").join("zz.ref");
+    std::fs::write(&bad_pointer, b"not a valid length or content")?;
+    let error = match verify_repository(&layout) {
+        Ok(_) => panic!("expected verify_repository to reject a badly-shaped pointer filename"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("ref path has invalid shape"),
+        "expected a ref-path-shape error, got: {error}"
+    );
+    let _ = std::fs::remove_dir_all(pointer_root);
+
+    let log_root = unique_temp_dir("verify-ref-log-path-shape");
+    let layout = RepositoryLayout::init(log_root.clone())?;
+    let bad_log = layout.refs_dir().join("logs").join("zz.log");
+    std::fs::write(&bad_log, b"not a valid length or content")?;
+    let error = match verify_repository(&layout) {
+        Ok(_) => panic!("expected verify_repository to reject a badly-shaped log filename"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("ref path has invalid shape"),
+        "expected a ref-path-shape error, got: {error}"
+    );
+    let _ = std::fs::remove_dir_all(log_root);
     Ok(())
 }
