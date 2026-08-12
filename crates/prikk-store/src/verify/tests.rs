@@ -3,13 +3,14 @@
 mod root_authority;
 mod trust;
 
-use prikk_error::Result;
+use prikk_error::{PrikkError, Result};
 use prikk_object::{
     BlobKind, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile, MerkleRoot,
     NodeId, ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind, PatchPayload,
     PatchPurpose,
 };
 
+use crate::maintainer_signing::MaintainerSigner;
 use crate::wal::{WalRecord, encode_record_for_test};
 use crate::{
     ActiveWalMetadataStatus, FileObjectStore, ObjectWriter, RepositoryLayout, Wal,
@@ -129,7 +130,7 @@ fn verify_repository_detects_every_missing_referenced_object() -> Result<()> {
 /// against a `MemoryObjectStore`. The review found that removing the inline state-check call entirely
 /// (on `main`, pre-DC-92, and again after DC-92's restructuring) left the whole workspace suite
 /// green — nothing wired the two together. Built, not byte-corrupted, matching this module's own
-/// `verify_repository_detects_block_with_missing_patch`: content addressing means a post-hoc-
+/// `verify_repository_detects_every_missing_referenced_object`: content addressing means a post-hoc-
 /// corrupted object is just a different, self-consistent valid object, never a mismatch.
 #[test]
 fn verify_repository_detects_block_with_state_root_mismatch() -> Result<()> {
@@ -677,4 +678,274 @@ fn verify_repository_detects_object_file_in_wrong_prefix() {
         }
     }
     let _ = std::fs::remove_dir_all(root);
+}
+
+/// DC-95 Stage 1, round 3: `verify_object_file`'s envelope-type-mismatch check
+/// (`verify/objects.rs:230-237`) -- a file physically placed under one type's directory whose decoded
+/// envelope names a different `ObjectType`. Placed via a raw `std::fs::write` at the type-mismatched
+/// directory's own canonical path for the *envelope's real id* (so the file's id and the envelope's
+/// computed id agree -- isolating the type mismatch from the id-mismatch check the next test covers),
+/// bypassing `store.write_object`, which can never produce this fixture since it always derives the
+/// write path from `envelope.object_type` itself. **Probed, load-bearing, confirmed**: disabling the
+/// check (commenting out the `if envelope.object_type != object_type` arm) lets `verify_repository`
+/// return `Ok` -- nothing downstream re-checks that a directory's contents match its own declared type,
+/// unlike the two missing-reference checks round 2 found redundant.
+#[test]
+fn verify_repository_detects_envelope_type_mismatch() -> Result<()> {
+    let root = unique_temp_dir("verify-envelope-type-mismatch");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    let blob = BlobPayload::new(BlobKind::Text, b"type-mismatch-fixture\n".to_vec());
+    let mut blob_env = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob.to_canonical_bytes()?);
+    blob_env.add_signature(maintainer_signature())?;
+    let mut store = FileObjectStore::new(layout.clone());
+    let blob_id = store.write_object(&blob_env)?;
+
+    let patch = PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::CreateFile(CreateFile {
+                path: "type-mismatch-fixture.txt".to_string(),
+                node_id: NodeId::from_bytes([0x71; 32]),
+                blob_id,
+                mode: 0o100_644,
+            }),
+        }],
+        parent_patch_ids: Vec::new(),
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+    };
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch.to_canonical_bytes()?);
+    envelope.add_signature(maintainer_signature())?;
+    let patch_id = envelope.object_id();
+
+    // Placed under the Blob directory, at the path that id would canonically occupy there --
+    // self-consistent in id, wrong only in which directory holds it.
+    let misplaced = layout.object_path(ObjectType::Blob, patch_id);
+    std::fs::create_dir_all(
+        misplaced
+            .parent()
+            .ok_or_else(|| PrikkError::Io("misplaced object path has no parent".to_string()))?,
+    )?;
+    std::fs::write(
+        &misplaced,
+        crate::file_codec::encode_envelope_file(&envelope)?,
+    )?;
+
+    let error = match verify_repository(&layout) {
+        Ok(_) => panic!("expected verify_repository to reject a type-mismatched object file"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("is under type") && error.contains("but envelope type is"),
+        "expected an envelope-type-mismatch error, got: {error}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-95 Stage 1, round 3: `verify_object_file`'s object-id-mismatch check
+/// (`verify/objects.rs:239-246`) -- a file's filename-derived id disagreeing with its envelope's own
+/// computed content hash. Placed at the canonical path for an *arbitrary* id (not the envelope's real
+/// one) within the *correct* type directory, so the type check passes and only the id disagrees.
+/// **Probed, load-bearing, confirmed**: disabling the check lets `verify_repository` return `Ok` --
+/// content addressing is enforced only by this one explicit comparison at read time, nothing else
+/// re-derives a stored file's id independently.
+#[test]
+fn verify_repository_detects_object_id_mismatch() -> Result<()> {
+    let root = unique_temp_dir("verify-object-id-mismatch");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    let blob = BlobPayload::new(BlobKind::Text, b"payload".to_vec());
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob.to_canonical_bytes()?);
+    envelope.add_signature(maintainer_signature())?;
+
+    let wrong_id = sample_object_id("not-this-blob-s-real-id");
+    let misplaced = layout.object_path(ObjectType::Blob, wrong_id);
+    std::fs::create_dir_all(
+        misplaced
+            .parent()
+            .ok_or_else(|| PrikkError::Io("misplaced object path has no parent".to_string()))?,
+    )?;
+    std::fs::write(
+        &misplaced,
+        crate::file_codec::encode_envelope_file(&envelope)?,
+    )?;
+
+    let error = match verify_repository(&layout) {
+        Ok(_) => panic!("expected verify_repository to reject an id-mismatched object file"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("has id") && error.contains("but computed id is"),
+        "expected an object-id-mismatch error, got: {error}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-95 Stage 1, round 3: the two "unexpected entry kind" structural checks in `verify_object_type`/
+/// `verify_prefix_dir` (`verify/objects.rs`) -- a plain file sitting directly under an object-type
+/// directory (where a two-character hex prefix *directory* is expected), and a directory sitting
+/// inside a prefix directory (where an object *file* is expected). **Both probed, both
+/// downstream-redundant** -- neither disabling arm lets `verify_repository` return `Ok`; each is
+/// independently caught one layer further in, with a different, less specific message. Disabling the
+/// type-directory check: `list_directory` itself rejects treating the stray file as a directory (a
+/// plain filesystem `i/o error: Not a directory (os error 20)`, not an integrity error at all).
+/// Disabling the prefix-directory check: `object_id_from_path` (`verify/objects.rs:291`) rejects the
+/// stray directory's name for lacking a `.pobj` extension, before the entry is ever read as an object
+/// file. Both rows are regression guards on `verify_object_type`'s/`verify_prefix_dir`'s own friendlier,
+/// more specific messages -- worth keeping for that diagnostic value -- not demonstrations of Stage 1's
+/// silent-absence rule; today's code catches both defects some other way even without these two arms.
+#[test]
+fn verify_repository_detects_every_directory_shape_violation() -> Result<()> {
+    let non_directory_root = unique_temp_dir("verify-non-directory-in-type-dir");
+    let layout = RepositoryLayout::init(non_directory_root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+    store.write_object(&ObjectEnvelope::unsigned(
+        ObjectType::Blob,
+        1,
+        b"payload".to_vec(),
+    ))?;
+    let stray_file = layout.object_type_dir(ObjectType::Blob).join("zz");
+    std::fs::write(&stray_file, b"not a prefix directory")?;
+    let error = match verify_repository(&layout) {
+        Ok(_) => {
+            panic!("expected verify_repository to reject a non-directory in the type directory")
+        }
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("unexpected non-directory in object type directory"),
+        "expected that specific error, got: {error}"
+    );
+    let _ = std::fs::remove_dir_all(non_directory_root);
+
+    let non_file_root = unique_temp_dir("verify-non-file-in-prefix-dir");
+    let layout = RepositoryLayout::init(non_file_root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+    let id = store.write_object(&ObjectEnvelope::unsigned(
+        ObjectType::Blob,
+        1,
+        b"payload".to_vec(),
+    ))?;
+    let prefix_dir = layout
+        .object_path(ObjectType::Blob, id)
+        .parent()
+        .ok_or_else(|| PrikkError::Io("object path has no parent".to_string()))?
+        .to_path_buf();
+    std::fs::create_dir_all(prefix_dir.join("stray-directory"))?;
+    let error = match verify_repository(&layout) {
+        Ok(_) => panic!("expected verify_repository to reject a non-file in a prefix directory"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("unexpected non-file in object prefix directory"),
+        "expected that specific error, got: {error}"
+    );
+    let _ = std::fs::remove_dir_all(non_file_root);
+    Ok(())
+}
+
+/// DC-95 Stage 1, round 3: publication-trust failure proven for a `Block` specifically through
+/// `verify_repository`, not only for a `Blob` at the unit level (`verify/tests/trust.rs`, which calls
+/// `PublicationTrustVerifier` directly). Every existing Block-fixture test in this file signs with
+/// `test_support::maintainer_signature()` -- a fixed, non-cryptographic placeholder signature (`key_id
+/// "maintainer-key"`, `signature_bytes: vec![5; 64]`) -- and, until this test, none of them ever
+/// established a trust policy at all. **That distinction matters and was learned by getting it wrong
+/// first**: an absent trust policy produces `PRIKK-TRUST-POLICY-INVALID` (`verify/trust.rs:39-50`), not
+/// `PRIKK-TRUST-PUBLICATION-UNTRUSTED` -- confirmed by an initial version of this test asserting the
+/// wrong code and failing. The fixture below establishes a *valid* policy (via `add_trusted_maintainer`,
+/// trusting a different, genuinely keyed signer) before writing the untrusted block, so the untrusted
+/// signer's own key is checked against a real policy that legitimately doesn't name it, not against a
+/// missing one. The trusted contrast then uses *genuinely, cryptographically* signed material --
+/// `crate::Ed25519MaintainerSigner` and the real, argument-taking `crate::maintainer_signature`
+/// (distinct from this file's already-imported `test_support::maintainer_signature`; the placeholder's
+/// fixed bytes are not a real signature under any keypair, so trusting its literal key id would not make
+/// it verify). **Not independently probed by disabling production code** -- `publication_trust_issues`
+/// is accumulated, never a hard `Err` (confirmed in `verify/tests/trust.rs`'s own tests), so "disable the
+/// check" would need to suppress the whole `PublicationTrustVerifier::verify` call rather than one arm;
+/// the untrusted-vs-trusted contrast within this one test, checked in a single `verify_repository` call,
+/// is the isolation instead.
+#[test]
+fn verify_repository_flags_untrusted_block_signer_and_clears_once_trusted() -> Result<()> {
+    let root = unique_temp_dir("verify-untrusted-block-signer");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+
+    // Establish a real, valid trust policy first, naming only `trusted_signer` -- so the untrusted
+    // block below is checked against a policy that legitimately excludes it, not a missing one.
+    let trusted_signer =
+        crate::Ed25519MaintainerSigner::from_seed("verify-trust-maintainer", &[0x63; 32])?;
+    let trusted_public_key_hex: String = trusted_signer
+        .public_key_bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    crate::add_trusted_maintainer(&layout, trusted_signer.key_id(), &trusted_public_key_hex)?;
+
+    let untrusted_payload = BlockPayload {
+        parent_block_ids: Vec::new(),
+        kind: BlockKind::Root,
+        patch_ids: Vec::new(),
+        state_merkle_root: derive_next_state_root(&store, None, &[])?,
+        snapshot_blob_ref: None,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
+    };
+    let untrusted_block_id = write_signed_block(&mut store, &untrusted_payload)?;
+
+    // A second, independent Root block (no relationship to the first needed -- verify_objects scans
+    // every persisted object regardless of any ref pointing to it, matching every other block-only
+    // fixture in this file, none of which create a ref/pointer either), signed for real by the
+    // already-trusted key. It names a real, existing snapshot blob -- distinguishing its payload bytes
+    // (and so its content-addressed id) from the untrusted block above, which is otherwise identical --
+    // without tripping the unrelated missing-snapshot-blob check.
+    let snapshot_blob = BlobPayload::new(BlobKind::Text, b"trusted-block-snapshot".to_vec());
+    let mut snapshot_envelope =
+        ObjectEnvelope::unsigned(ObjectType::Blob, 1, snapshot_blob.to_canonical_bytes()?);
+    snapshot_envelope.add_signature(maintainer_signature())?;
+    let snapshot_blob_id = snapshot_envelope.object_id();
+    store.write_object(&snapshot_envelope)?;
+
+    let trusted_payload = BlockPayload {
+        parent_block_ids: Vec::new(),
+        kind: BlockKind::Root,
+        patch_ids: Vec::new(),
+        state_merkle_root: derive_next_state_root(&store, None, &[])?,
+        snapshot_blob_ref: Some(snapshot_blob_id),
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
+    };
+    let trusted_payload_bytes = trusted_payload.to_canonical_bytes()?;
+    let mut trusted_envelope =
+        ObjectEnvelope::unsigned(ObjectType::Block, 2, trusted_payload_bytes);
+    let trusted_id = trusted_envelope.object_id();
+    trusted_envelope.add_signature(crate::maintainer_signature(
+        &trusted_signer,
+        ObjectType::Block,
+        trusted_id,
+    )?)?;
+    store.write_object(&trusted_envelope)?;
+
+    let report = verify_repository(&layout)?;
+    assert!(report.has_publication_trust_issues());
+    assert!(report.publication_trust_issues.iter().any(|issue| {
+        issue.code == "PRIKK-TRUST-PUBLICATION-UNTRUSTED"
+            && issue.message.contains(&untrusted_block_id.to_string())
+    }));
+    assert!(
+        !report
+            .publication_trust_issues
+            .iter()
+            .any(|issue| issue.message.contains(&trusted_id.to_string())),
+        "the trusted block must carry no publication-trust issue of its own: {:?}",
+        report.publication_trust_issues
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
 }
