@@ -10,8 +10,8 @@ use prikk_object::{
 use crate::{
     DoctorRepairOptions, DoctorSeverity, Ed25519MaintainerSigner, FileObjectStore,
     MaintainerSigner, ObjectWriter, RepositoryLayout, Wal, add_trusted_maintainer,
-    doctor_repository, maintainer_signature as real_maintainer_signature, repair_repository,
-    write_active_ref_metadata,
+    derive_next_state_root, doctor_repository, maintainer_signature as real_maintainer_signature,
+    repair_repository, write_active_ref_metadata,
 };
 
 use crate::test_support::{
@@ -50,12 +50,29 @@ fn doctor_reports_trailing_partial_wal_warning() {
                 .verification
                 .as_ref()
                 .map(|summary| summary.trailing_partial_wal_bytes),
-            Some(7)
+            Some(Some(7))
         );
     }
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// DC-95 Stage 2 Level 1: a hard error inside a verification stage no longer aborts
+/// `verify_repository` itself -- it's contained as a `Failed` outcome for that stage, so
+/// `doctor_repository` still gets a full `RepositoryVerification` to report against (`verification`
+/// is `Some`, not `None`), and the stage-outcome loop is what makes doctor refuse to call the
+/// repository healthy, not the absence of a report.
+///
+/// **Two errors, not one, and that is the point of containment.** This fixture's Block is signed by
+/// `maintainer_signature()` (aliased `legacy_maintainer_signature` here), never adopted via
+/// `add_trusted_maintainer` -- the DC-95 Stage 1 "fake signer" hazard, deliberately reused here.
+/// `verify_objects`'s Phase A reaches this Block's own trust check (pushing a real
+/// `PRIKK-TRUST-POLICY-INVALID`/`PRIKK-TRUST-PUBLICATION-UNTRUSTED` finding into the shared
+/// `PublicationTrustVerifier`) before Phase B's topological pass reaches the missing-patch error
+/// that fails the whole `Objects` stage. Both survive: the trust finding because `trust_verifier` is
+/// mutated by reference and outlives `verify_objects`'s own `Err` return, and the stage failure via
+/// its own `StageOutcome`. Pre-Level-1, the second was invisible -- the first hard error any object
+/// hit aborted everything after it, so only one of the two ever got reported. This is a strict
+/// improvement in diagnosis, not a construction bug to route around.
 #[test]
 fn doctor_reports_verification_error() {
     let root = unique_temp_dir("doctor-bad-block");
@@ -81,8 +98,8 @@ fn doctor_reports_verification_error() {
             assert!(store.write_object(&block).is_ok());
             let report = doctor_repository(&layout);
             assert!(!report.is_healthy());
-            assert_eq!(report.count_by_severity(DoctorSeverity::Error), 1);
-            assert!(report.verification.is_none());
+            assert_eq!(report.count_by_severity(DoctorSeverity::Error), 2);
+            assert!(report.verification.is_some());
         }
     }
     let _ = std::fs::remove_dir_all(root);
@@ -113,7 +130,7 @@ fn doctor_repair_truncates_only_trailing_partial_wal() {
                 .verification
                 .as_ref()
                 .map(|summary| summary.trailing_partial_wal_bytes),
-            Some(7)
+            Some(Some(7))
         );
 
         let repair = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail());
@@ -128,7 +145,7 @@ fn doctor_repair_truncates_only_trailing_partial_wal() {
                     .verification
                     .as_ref()
                     .map(|summary| summary.trailing_partial_wal_bytes),
-                Some(0)
+                Some(Some(0))
             );
         }
 
@@ -204,11 +221,20 @@ fn doctor_refuses_missing_main_ref_pointer_reconstruction() {
             .collect::<String>();
         assert!(add_trusted_maintainer(&layout, "doctor-maintainer", &public_key).is_ok());
         let mut object_store = FileObjectStore::new(layout.clone());
+        // DC-95 Stage 2 Level 1: this must be the true empty-history root, not an arbitrary one --
+        // an arbitrary root fails the Objects stage's own state-root check first, which pre-Level-1
+        // hard-aborted verify_repository before ever reaching the missing-pointer condition this
+        // fixture is actually meant to exercise, silently making this test check the wrong thing.
+        // Stage containment surfaced this: both failures are now reported instead of just the first.
+        let state_merkle_root = match derive_next_state_root(&object_store, None, &[]) {
+            Ok(root) => root,
+            Err(error) => panic!("empty-history state root should be derivable: {error}"),
+        };
         let block_payload = BlockPayload {
             parent_block_ids: Vec::new(),
             kind: BlockKind::Root,
             patch_ids: Vec::new(),
-            state_merkle_root: MerkleRoot([0_u8; 32]),
+            state_merkle_root,
             snapshot_blob_ref: None,
             mainline_parent_id: None,
             merge_baseline_block_id: None,
@@ -317,6 +343,128 @@ fn doctor_rechecks_publication_guard_after_acquiring_active_lock() -> prikk_erro
     );
     assert_eq!(std::fs::read(layout.default_queue_wal_path())?, before);
     assert_eq!(std::fs::read(&candidate)?, b"candidate");
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-95 Stage 2 Level 1 acceptance criterion 3 (design §11, implementation handoff §6.3):
+/// `repair_repository` must still refuse for every defect it refused pre-Level-1, proven per stage
+/// by test -- the assertion is the refusal itself, not merely that a finding is present. This is
+/// the ruling's own binding constraint (`stage-2-prerequisite-3.3-3.4-ruling-v1.md` §2): a hard
+/// `Err` used to make `repair_repository` refuse "for free," and that protection now comes from the
+/// stage-outcome loop in `doctor_repository` mapping every non-`Evaluated` stage to
+/// `DoctorSeverity::Error` uniformly, not from `verify_repository` itself returning `Err`.
+///
+/// Covers two stages deliberately not the one `doctor_reports_verification_error` above already
+/// exercises (`Objects`), to demonstrate the refusal holds regardless of which stage failed --
+/// `Refs` (a dangling ref target) and `WalReplay` (a checksum-corrupted active record).
+#[test]
+fn repair_repository_still_refuses_when_the_refs_stage_fails() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("doctor-repair-refuses-refs");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let maintainer_seed = [0x45_u8; 32];
+    let maintainer =
+        match Ed25519MaintainerSigner::from_seed("doctor-refs-maintainer", &maintainer_seed) {
+            Ok(signer) => signer,
+            Err(error) => panic!("test maintainer signer should be constructible: {error}"),
+        };
+    let public_key = maintainer
+        .public_key_bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    assert!(add_trusted_maintainer(&layout, "doctor-refs-maintainer", &public_key).is_ok());
+    let mut object_store = FileObjectStore::new(layout.clone());
+    let block_payload = BlockPayload {
+        parent_block_ids: Vec::new(),
+        kind: BlockKind::Root,
+        patch_ids: Vec::new(),
+        state_merkle_root: match derive_next_state_root(&object_store, None, &[]) {
+            Ok(root) => root,
+            Err(error) => panic!("empty-history state root should be derivable: {error}"),
+        },
+        snapshot_blob_ref: None,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
+    };
+    let block = signed_publication_envelope(
+        ObjectType::Block,
+        block_payload.to_canonical_bytes().unwrap_or_default(),
+        &maintainer,
+    );
+    let target = block.object_id();
+    assert!(object_store.write_object(&block).is_ok());
+    let store = crate::RefStore::new(layout.clone());
+    let ref_state_payload = RefStatePayload {
+        ref_name: "heads/main".to_string(),
+        kind: RefKind::Branch,
+        target_object_id: target,
+        update_seq: 1,
+        previous_ref_state_id: None,
+        required_attestation_ids: Vec::new(),
+        closed: false,
+    };
+    let ref_state = signed_publication_envelope(
+        ObjectType::RefState,
+        ref_state_payload.to_canonical_bytes().unwrap_or_default(),
+        &maintainer,
+    );
+    let ref_state_id = ref_state.object_id();
+    let ref_update_payload = RefUpdatePayload {
+        ref_name: "heads/main".to_string(),
+        old_ref_state_id: None,
+        new_ref_state_id: ref_state_id,
+        new_target_object_id: target,
+        update_seq: 1,
+        created_at: 0,
+        author_key_id: "doctor-refs-maintainer".to_string(),
+    };
+    let ref_update = signed_publication_envelope(
+        ObjectType::RefUpdate,
+        ref_update_payload.to_canonical_bytes().unwrap_or_default(),
+        &maintainer,
+    );
+    let publication = crate::RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_state,
+        ref_update,
+    };
+    assert!(store.publish(&publication).is_ok());
+    // A dangling ref target: delete the Block the just-published RefState still names.
+    assert!(std::fs::remove_file(layout.object_path(ObjectType::Block, target)).is_ok());
+
+    let before = doctor_repository(&layout);
+    assert!(!before.is_healthy());
+    let repair = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail());
+    assert!(repair.is_err());
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// See `repair_repository_still_refuses_when_the_refs_stage_fails` above for the acceptance
+/// criterion this proves. Here: `WalReplay` itself fails (a checksum-corrupted active record), which
+/// per Step 0's dependency graph also makes five other stages `NotEvaluated` -- confirming the
+/// refusal holds even when most of the pipeline never ran.
+#[test]
+fn repair_repository_still_refuses_when_the_wal_replay_stage_fails() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("doctor-repair-refuses-wal-replay");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let wal = Wal::for_layout(&layout);
+    assert!(write_active_ref_metadata(&layout, "heads/main").is_ok());
+    assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
+    let mut bytes = std::fs::read(wal.path())?;
+    if let Some(last_byte) = bytes.last_mut() {
+        *last_byte ^= 0x01;
+    }
+    std::fs::write(wal.path(), &bytes)?;
+
+    let before = doctor_repository(&layout);
+    assert!(!before.is_healthy());
+    let repair = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail());
+    assert!(repair.is_err());
+
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
