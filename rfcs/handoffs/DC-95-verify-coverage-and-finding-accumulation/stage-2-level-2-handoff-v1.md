@@ -5,7 +5,8 @@
 a formality: Level 2 changes code Level 1 just restructured, and stacking on an unmerged branch is how a
 review loses track of which half a failure came from.
 
-**Do not start until `dc-95-stage2-level1-scope-containment` is merged to `main`.**
+**UNBLOCKED 2026-08-13** — Level 1 merged to `main` at `3820976` after a green three-platform CI run;
+its branch is deleted. Level 2 may begin, starting with §2's Step 0.
 
 ## 1. What Level 2 is
 
@@ -80,7 +81,7 @@ expected entry.
 
 ## 6. Standing
 
-- **Blocked on Level 1's merge.** Nothing begins before that.
+- **Level 1 merged at `3820976`.** No longer blocked.
 - **Step 0 first**, reported and ruled before implementation — same as Level 1, which cost one round and
   saved a refactor.
 - Volatile review results now live in `.git-exclude/reviewed/` only; binding rulings go into the RFC or
