@@ -6,10 +6,14 @@ stage; acceptance clears the investigation, not the implementation.
 rounds, **all 41 checks classified** (34 resolved, 4 excluded as non-blocking, 3 provably unreachable),
 with the classification moved into `verify.rs`'s own module doc rather than left in the review archive.
 §3.1 and §3.2 are discharged by it.
-**Stage 2: AUTHORIZED by the project owner 2026-08-12**, prerequisites §3.3 and §3.4 only —
-`handoffs/DC-95-verify-coverage-and-finding-accumulation/stage-2-handoff-v1.md`. Still no design and no
-implementation.
-**Independence.** Author-reviewed — the standing ceiling.
+**Stage 2: AUTHORIZED by the project owner 2026-08-12.** Prerequisites §3.3 and §3.4 answered and ruled
+the same day; **design accepted by the project owner 2026-08-12**
+(`handoffs/…/stage-2-design-v1.md`) — scope containment at the twelve pipeline-stage boundaries rather
+than per-check conversion, with an explicit `NotEvaluated` state so an incomplete verification can never
+read as a clean one. **Level 1 cleared to implement**
+(`handoffs/…/stage-2-level-1-implementation-handoff-v1.md`); Level 2 not authorized.
+**Independence.** Author-reviewed — the standing ceiling. **The Stage 2 design in particular has had no
+independent adversary on its central choice**; compensated at implementation review.
 **Arises from.** Two findings registered during the DC-92 cycle, and the owner's stated preference for
 maintainability and **verifiability of security**. The architect recommended these twice as the next
 theme and then did not write the RFC; this closes that gap.
