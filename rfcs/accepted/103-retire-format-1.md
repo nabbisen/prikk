@@ -36,10 +36,21 @@ exist only to serve format-1:
 
 - **`PublicationState::LegacyLogLeading`** — enum variant plus six format-1-gated usage sites
   (`refs/publication.rs`), mirrored in fixtures.
-- **The vestigial format-1 missing-pointer reconstruction subsystem** — `RefRecoveryCandidate`,
-  `RefRecoveryRepair`, `recoverable_missing_ref`, `reconstruct_missing_ref_from_log` (which already
-  returns `Err` unconditionally), wired through `DoctorRepairOptions::reconstruct_main_ref` and
-  `repair_repository`'s refusal branch. Dead compatibility stubs carrying no `LegacyV1` token.
+- ~~**The vestigial format-1 missing-pointer reconstruction subsystem**~~ — **WRONG, and withdrawn
+  2026-08-13** after Increment A's stop-and-report. I classified this as one unit of format-1 machinery.
+  **It is two things, and neither is format-1-gated:**
+
+  - **`RefRecoveryCandidate` / `recoverable_missing_ref` is live, general, format-2 machinery.** It
+    carries no `RepositoryFormat` reference and is called from `branch.rs:145-154`'s `run_create` to fail
+    closed on a surviving ref log with no live pointer (DC-61). **Removing it as this RFC originally
+    instructed would have deleted a live corruption check from `branch create`.** Its own doc comment
+    says "the format-1 log is valid" — **the comment is what is wrong, not the machinery.** *Ruled: keep
+    it, fix the comment, recategorise as ordinary format-2 code.*
+  - **`RefRecoveryRepair` / `reconstruct_missing_ref_from_log` / `DoctorRepairOptions::reconstruct_main_ref`
+    is a permanently-refused placeholder**, refused for *any* format. Its message merely says "format-1."
+    It is wired to a live, documented CLI flag (`prikk doctor --repair-main-ref`). *Ruled: out of scope
+    for this RFC.* Deleting user-facing surface because a string mentions format-1 is a different
+    decision from retiring format-1, and it does not ride along on this one.
 - **`signature_diagnostics.rs` — flagged, not removed.** Its logic stays and is load-bearing; it carries
   **no `RepositoryFormat` gate at all** and is format-1-only in *practice*, via the same upstream gating
   DC-95 round 11 established. What goes stale is its doc comment and issue-message framing, which label
