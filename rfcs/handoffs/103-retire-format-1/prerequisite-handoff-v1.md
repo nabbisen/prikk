@@ -24,11 +24,18 @@ re-litigate it or design around it.
 
 ## 3. The one thing most likely to be got wrong
 
-**The `created_at == 0` check survives.** With format-1 gone it stops meaning "contaminated by an old
-format" and becomes plain malformed-data detection — **unconditional, not weaker.** DC-95 Stage 1
-classified it load-bearing.
+**Two checks survive that a removal sweep would take.**
 
-Anyone reading the removal list and assuming "legacy checks go" would delete it. Don't.
+1. **`created_at == 0`.** With format-1 gone it stops meaning "contaminated by an old format" and becomes
+   plain malformed-data detection — **unconditional, not weaker.** DC-95 Stage 1 classified it
+   load-bearing (inventory line 65, round 9).
+2. **Rollback WAL wrong-signature-length.** Retiring format-1 makes it **provably unreachable** — round 11
+   established it is reachable only under format-1 — but round 6's ruling on unreachable checks applies:
+   **keep it, untested, with the argument recorded.** Unreachable today is not unreachable by design.
+
+**Do not confuse `validate_read_schema`'s `LegacyV1` branch with its strict-signature-shape row.** The
+branch goes; the row (round 4) is not format-1-only and stays load-bearing. An earlier draft of the RFC
+got this wrong and would have deleted the wrong thing — corrected in RFC §2 and §6.
 
 ## 4. Constraints
 

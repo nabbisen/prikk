@@ -142,7 +142,7 @@ repository is not. Losing a worktree file is recoverable. Signing a false deleti
    mutation today. Does a container preserve that, and at what cost to lookup?
 5. **The worktree question of §4** — is the unclean-shutdown marker sound, and does it close T12 without
    requiring new-name durability? Answer from the commit-authoring code, not from the sketch above.
-6. **Cost.** The proof surface to be re-earned, the migration, and what a container does to DC-41's
+6. **Cost.** The proof surface to be re-earned, and what a container does to DC-41's
    failpoint matrix.
 
 ## 7. Acceptance criteria
@@ -166,7 +166,9 @@ repository is not. Losing a worktree file is recoverable. Signing a false deleti
 ## 9. The cost, and the staging consequence
 
 This is a storage-format change: object layout, `verify` and `doctor` state derivation, the durability
-contract's platform layer, DC-41's recoverability audit, and a migration for existing repositories.
+contract's platform layer, and DC-41's recoverability audit. **No migration for existing
+repositories** — constraint 6 withdrawn 2026-08-13, which removes what had been the largest single cost
+item here.
 **It is 1.0-scale work and should not be forced into 0.20.0.**
 
 **What it changes immediately, before any of it is built:** Windows read-only stops being a verdict and

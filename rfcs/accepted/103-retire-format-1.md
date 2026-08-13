@@ -9,7 +9,8 @@ implementation.**
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** The format-1/format-2 duality surfacing as a complication in four consecutive DC-95
 rounds, and the owner's ruling that migration from an older prikk need not be preserved.
-**Target.** Owner's call. Prerequisite to RFC 102 if that ordering is taken — see §5.
+**Target.** Owner's call. **Not a prerequisite to RFC 102** — see §5; they share a direction, not a
+dependency.
 
 ## 1. The decision
 
@@ -33,7 +34,8 @@ And three checks whose only reason to exist is the duality:
 | Check | DC-95 Stage 1 classification | Effect of this RFC |
 |---|---|---|
 | `PRIKK-VERIFY-REF-LEGACY-LOG-LEADS` | **Downstream-redundant** (round 10) | Deleted. Its format-2 sibling already catches the same defect — that is what round 10 proved |
-| `validate_read_schema`'s `LegacyV1` branch | Load-bearing **via non-blocking sibling** (round 11) | Deleted. Round 11 established the malformed-signature defect it catches is reachable *only* under format-1 |
+| `validate_read_schema`'s `LegacyV1` branch | *(not a classified row of its own)* | Deleted — the format it branches on is gone. **Its format-2 branch stays and remains load-bearing** (inventory row: strict-signature-shape, round 4). Do not confuse the two |
+| Rollback WAL **wrong signature length** | **Load-bearing** via non-blocking sibling (round 11) | **Becomes provably unreachable.** Round 11 established it is reachable end-to-end *only* under format-1: under format-2, `Wal::replay()`'s own `validate_read_schema` rejects a malformed-shape signature before this check runs. **Keep it, untested, with the argument recorded** — round 6's ruling on unreachable checks. **Do not delete it** |
 | `legacy_state_roots_unverifiable` | Precondition fact, not a stage output | Deleted — it can only ever be false |
 
 **Every one of those three is documented, classified, and probed** by DC-95 Stage 1. That is why this
@@ -67,20 +69,31 @@ A format-1 repository must fail at open with a message that is **actionable, not
 and they will hit it exactly once, with no context. Detection must be by the `FORMAT` file's own
 content, not by a downstream decode failure.
 
-## 5. Consequence for RFC 102, which may be the larger prize
+## 5. Consequence for RFC 102 — asked, and answered
 
-RFC 102's constraint 6 requires **"a format migration must exist for repositories already written in the
-current format."** That constraint was written before this direction and is the single largest cost item
-in a container-based storage redesign.
+RFC 102's constraint 6 required *"a format migration must exist for repositories already written in the
+current format"* — the single largest cost item in a container-based storage redesign.
 
-**If the owner's "without concern about migration" extends to RFC 102, constraint 6 relaxes and the
-container work becomes materially cheaper.** I am flagging that rather than assuming it: dropping
-migration for a *retired* format is a different decision from dropping it for the *current* one, and the
-second is much bigger. **It needs its own ruling and I am not taking it here.**
+This RFC originally flagged the question and declined to take it: dropping migration for a *retired*
+format is a different decision from dropping it for the *current* one, and the second is much bigger.
+
+**Answered 2026-08-13. The owner's direction extends to both:** *"We are in early development stage. The
+risk is accepted."* **RFC 102's constraint 6 and its paired acceptance criterion 5 are withdrawn**, and
+its §9 cost no longer carries a migration. That is recorded in RFC 102 itself, marked in place.
+
+**Consequence for sequencing: RFC 103 is no longer a prerequisite to RFC 102 in any strong sense.**
+Neither blocks the other. They share a direction, not a dependency.
 
 ## 6. Consequence for DC-95's classified inventory
 
-Three of the 41 classified rows change status. **The inventory must be updated in the same increment,
+**Corrected 2026-08-13 on re-check.** An earlier draft of §2 named `validate_read_schema`'s branch as the
+round-11 format-1-only finding. It is not: round 11's finding is about the **rollback wrong-signature-length**
+check, and `validate_read_schema`'s own strict-shape row is round 4 and not format-1-only. Followed
+literally, that error would have deleted a load-bearing check and missed a fourth affected row entirely.
+
+Three of the 41 classified rows change status — `LEGACY-LOG-LEADS` (deleted), rollback
+wrong-signature-length (**load-bearing → provably unreachable, kept**), and
+`legacy_state_roots_unverifiable` (deleted). **The inventory must be updated in the same increment,
 not left to drift** — it is the map a future reader consults, and DC-95 Stage 1 spent twelve rounds
 making it trustworthy.
 
