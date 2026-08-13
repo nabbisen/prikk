@@ -32,12 +32,6 @@ pub enum ActiveRefMetadata {
     Invalid(String),
 }
 
-/// Opaque authority for the active cleanup of one validated legacy publication completion.
-#[derive(Debug)]
-pub struct LegacyActiveCleanupAuthorization {
-    layout: RepositoryLayout,
-}
-
 /// Default active-session handle.
 #[derive(Debug, Clone)]
 pub struct ActiveSession {
@@ -147,32 +141,6 @@ pub fn finish_active_publication_cleanup(
     Wal::for_layout(layout).truncate_empty()?;
     remove_active_ref_metadata_authorized(layout)?;
     Ok(())
-}
-
-/// Drain retained active state after exact signer-backed legacy publication completion.
-pub fn finish_legacy_active_publication_cleanup(
-    layout: &RepositoryLayout,
-    active_lock: &ActiveLock,
-    authorization: LegacyActiveCleanupAuthorization,
-) -> Result<()> {
-    active_lock.require_layout(layout)?;
-    if authorization.layout != *layout {
-        return Err(PrikkError::Integrity(
-            "legacy active cleanup authorization belongs to a different repository".to_string(),
-        ));
-    }
-    layout.validate_format()?;
-    Wal::for_layout(layout).truncate_empty_for_legacy_recovery()?;
-    remove_active_ref_metadata_authorized(layout)?;
-    Ok(())
-}
-
-pub(crate) fn authorize_legacy_active_cleanup(
-    layout: &RepositoryLayout,
-) -> LegacyActiveCleanupAuthorization {
-    LegacyActiveCleanupAuthorization {
-        layout: layout.clone(),
-    }
 }
 
 /// Prepare active ref metadata for the first WAL append.

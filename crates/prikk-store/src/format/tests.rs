@@ -85,27 +85,8 @@ fn format2_rejects_wrong_schema_for_every_allowed_type() {
 }
 
 #[test]
-fn format1_read_schema_is_exactly_one() {
-    for object_type in [
-        ObjectType::Patch,
-        ObjectType::Block,
-        ObjectType::RefState,
-        ObjectType::RefUpdate,
-        ObjectType::Tag,
-        ObjectType::Attestation,
-        ObjectType::Blob,
-    ] {
-        let schema1 = ObjectEnvelope::unsigned(object_type, 1, Vec::new());
-        let schema2 = ObjectEnvelope::unsigned(object_type, 2, Vec::new());
-        assert!(validate_read_schema(RepositoryFormat::LegacyV1, &schema1).is_ok());
-        assert!(validate_read_schema(RepositoryFormat::LegacyV1, &schema2).is_err());
-    }
-}
-
-#[test]
 fn format2_read_rejects_every_strict_envelope_failure() {
     for envelope in strict_read_failures() {
         assert!(validate_read_schema(RepositoryFormat::CurrentV2, &envelope).is_err());
-        assert!(validate_read_schema(RepositoryFormat::LegacyV1, &envelope).is_ok());
     }
 }

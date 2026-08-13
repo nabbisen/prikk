@@ -209,10 +209,6 @@ impl Wal {
         self.truncate_empty_authorized()
     }
 
-    pub(crate) fn truncate_empty_for_legacy_recovery(&self) -> Result<()> {
-        self.truncate_empty_authorized()
-    }
-
     fn truncate_empty_authorized(&self) -> Result<()> {
         let (root, relative) = self.mutation()?;
         let Some(parent) = relative.parent() else {

@@ -9,14 +9,13 @@ use super::{
 };
 use crate::layout::RepositoryFormat;
 use crate::lock::RefLock;
-use crate::object_store::{FileObjectStore, ObjectReader, ObjectWriter};
+use crate::object_store::{FileObjectStore, ObjectWriter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PublicationState {
     Ready,
     PointerLeading,
     Complete,
-    LegacyLogLeading,
 }
 
 pub(super) fn publish(store: &RefStore, publication: &RefPublication) -> Result<ObjectId> {
@@ -51,30 +50,9 @@ fn publish_locked(
         RepositoryFormat::CurrentV2 => {
             object_store.write_object(&publication.ref_state)?;
         }
-        RepositoryFormat::LegacyV1 => {
-            let existing = object_store.read_object(ref_state_id)?;
-            if existing.as_ref() != Some(&publication.ref_state) {
-                return Err(PrikkError::Integrity(
-                    "legacy publication completion requires the exact persisted RefState"
-                        .to_string(),
-                ));
-            }
-        }
     }
 
     let (state, trailing_partial_bytes) = classify_state(store, publication, &update)?;
-    match (store.layout.format(), state, allow_partial_tail_repair) {
-        (RepositoryFormat::LegacyV1, PublicationState::LegacyLogLeading, true) => {}
-        (RepositoryFormat::LegacyV1, _, _) => {
-            return Err(PrikkError::UnsupportedFormatVersion(1));
-        }
-        (RepositoryFormat::CurrentV2, PublicationState::LegacyLogLeading, _) => {
-            return Err(PrikkError::Integrity(
-                "format-2 ref log must not lead its authoritative pointer".to_string(),
-            ));
-        }
-        (RepositoryFormat::CurrentV2, _, _) => {}
-    }
     if trailing_partial_bytes != 0 {
         if !allow_partial_tail_repair
             || state != PublicationState::PointerLeading
@@ -118,14 +96,6 @@ fn publish_locked(
                 &publication.ref_name,
                 &publication.ref_update,
             )?;
-        }
-        PublicationState::LegacyLogLeading => {
-            store.write_ref_pointer_candidate(&publication.ref_name, ref_state_id)?;
-            store.ensure_current_matches(
-                &publication.ref_name,
-                publication.expected_previous_ref_state_id,
-            )?;
-            store.promote_ref_pointer_candidate(&publication.ref_name)?;
         }
     }
     ensure_agreement(store, publication, &update)?;
@@ -217,11 +187,6 @@ fn classify_state(
             if current == proposed && tip == proposed && previous == expected =>
         {
             PublicationState::Complete
-        }
-        (current, tip, true, previous)
-            if current == expected && tip == proposed && previous == expected =>
-        {
-            PublicationState::LegacyLogLeading
         }
         _ => {
             return Err(PrikkError::Integrity(format!(

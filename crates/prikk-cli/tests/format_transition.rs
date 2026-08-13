@@ -1,4 +1,7 @@
-//! Release-facing format-1/format-2 compatibility matrix.
+//! Release-facing format-1 rejection proof (RFC 103): a format-1 repository is refused at open, not
+//! read in a bounded legacy mode -- there is no dual-path behavior left to exercise across a command
+//! matrix. `build_legacy_fixture` remains load-bearing here: design-v1.md §5 acceptance criterion 2
+//! requires the rejection proven against a real format-1 fixture, not a hand-built one.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -45,14 +48,6 @@ fn unique_root() -> TestResult<PathBuf> {
     Ok(root)
 }
 
-fn assert_legacy_warning(output: &Output) {
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("format-1 repository opened"),
-        "missing legacy warning: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
 fn run_owned(root: &Path, args: &[String]) -> TestResult<Output> {
     Ok(prikk(root)
         .env("PRIKK_AUTHOR_KEY_ID", "legacy-author")
@@ -97,51 +92,96 @@ fn snapshot_tree(root: &Path) -> TestResult<BTreeMap<PathBuf, Vec<u8>>> {
     Ok(snapshot)
 }
 
+fn assert_rejection_contract(args: &[&str], output: &Output) {
+    assert!(
+        !output.status.success(),
+        "{args:?} unexpectedly succeeded: stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    for expected in [
+        "this repository uses format 1",
+        "requires format 2",
+        "removed after 0.19.0",
+        "bundle export",
+        "bundle import",
+    ] {
+        assert!(
+            stderr.contains(expected),
+            "{args:?}: rejection message missing {expected:?}: {stderr}"
+        );
+    }
+}
+
+/// RFC 103 §4/design-v1.md §2: a format-1 repository is rejected at `RepositoryLayout::open`, with a
+/// message naming the detected format, the required format, the last supporting version, and the
+/// bundle export/import remedy — for every command, not a command-specific subset, since rejection now
+/// happens before any command-specific logic runs. Proven against two independently-built real
+/// format-1 fixtures (differing only in what kind of active-session state they carry), not a
+/// hand-built one.
 #[test]
-fn format1_empty_repository_is_bounded_read_only() -> TestResult {
+fn format1_repository_is_rejected_at_open_for_every_command() -> TestResult {
+    for active in [
+        ActiveFixture::RollbackDraft,
+        ActiveFixture::InterruptedPublication,
+    ] {
+        let root = unique_root()?;
+        build_legacy_fixture(&root, active)?;
+        let before = snapshot_tree(&root)?;
+
+        for args in [
+            vec!["status"],
+            vec!["log"],
+            vec!["worktree-status"],
+            vec!["verify"],
+            vec!["doctor"],
+            vec!["checkout", "--plan-only"],
+            vec!["rollback-preview"],
+            vec!["commit", "-m", "must refuse"],
+            vec!["seal", "--allow-no-audit"],
+            vec![
+                "trust",
+                "maintainer",
+                "add",
+                "--key-id",
+                "legacy-refused",
+                "--public-key",
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            ],
+        ] {
+            // `run_owned`, not `run`: `seal` in particular constructs its signer from these env
+            // vars before it ever opens the repository, so without them it fails at signer
+            // construction and never reaches (or proves) the rejection this test is checking.
+            let owned_args = args.iter().map(ToString::to_string).collect::<Vec<_>>();
+            let output = run_owned(&root, &owned_args)?;
+            assert_rejection_contract(&args, &output);
+            assert_eq!(
+                snapshot_tree(&root)?,
+                before,
+                "{args:?} must not mutate a rejected repository"
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+    Ok(())
+}
+
+/// `RepositoryLayout::init` refuses to initialize over an existing non-format-2 repository through
+/// its own, separate check (`layout.rs::init`, not `read_repository_format`) — out of RFC 103's scope
+/// since it never opens the repository for use, but still a real safety property worth keeping under
+/// regression coverage: it must not silently reformat or clobber a format-1 repository in place.
+#[test]
+fn reinit_over_a_format1_repository_refuses_and_preserves_it() -> TestResult {
     let root = unique_root()?;
-    let init = run(&root, &["init"])?;
-    assert!(init.status.success());
-    assert_eq!(std::fs::read(root.join(".prikk/FORMAT"))?, b"2\n");
-    std::fs::write(root.join(".prikk/FORMAT"), b"1\n")?;
-
-    let status = run(&root, &["status"])?;
-    assert!(status.status.success());
-    assert_legacy_warning(&status);
-
-    let verify = run(&root, &["verify"])?;
-    assert!(!verify.status.success());
-    assert_legacy_warning(&verify);
-    assert!(String::from_utf8_lossy(&verify.stderr).contains("not verifiable"));
-
-    let doctor = run(&root, &["doctor"])?;
-    assert!(doctor.status.success());
-    assert_legacy_warning(&doctor);
-    assert!(String::from_utf8_lossy(&doctor.stdout).contains("PRIKK-DOCTOR-LEGACY-FORMAT"));
-
-    let commit = run(&root, &["commit", "-m", "must refuse"])?;
-    assert!(!commit.status.success());
-    assert!(String::from_utf8_lossy(&commit.stderr).contains("unsupported format version: 1"));
-
-    let trust = run(
-        &root,
-        &[
-            "trust",
-            "maintainer",
-            "add",
-            "--key-id",
-            "legacy-refused",
-            "--public-key",
-            "0000000000000000000000000000000000000000000000000000000000000000",
-        ],
-    )?;
-    assert!(!trust.status.success());
-    assert!(String::from_utf8_lossy(&trust.stderr).contains("unsupported format version: 1"));
+    build_legacy_fixture(&root, ActiveFixture::InterruptedPublication)?;
+    let before = snapshot_tree(&root)?;
 
     let reinit = run(&root, &["init"])?;
     assert!(!reinit.status.success());
     assert_eq!(std::fs::read(root.join(".prikk/FORMAT"))?, b"1\n");
-    assert!(!root.join(".prikk/active/default/queue.wal").exists());
+    assert_eq!(snapshot_tree(&root)?, before);
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

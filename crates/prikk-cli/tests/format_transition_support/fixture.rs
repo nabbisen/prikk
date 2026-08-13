@@ -1,9 +1,10 @@
 use super::*;
 
-pub(crate) fn build_legacy_fixture(
-    root: &Path,
-    active: ActiveFixture,
-) -> TestResult<LegacyFixture> {
+/// Builds a real format-1 repository on disk: real signed objects, blocks, and refs, published
+/// through the same primitives an ordinary repository uses, with `.prikk/FORMAT` flipped to `1\n`
+/// only as the final step. RFC 103 design-v1.md §5 acceptance criterion 2 requires the open-time
+/// rejection proven against a fixture like this, not a hand-built one.
+pub(crate) fn build_legacy_fixture(root: &Path, active: ActiveFixture) -> TestResult {
     let layout = RepositoryLayout::init(root.to_path_buf())?;
     let author = Ed25519AuthorSigner::from_seed("legacy-author", &[0x36; 32])?;
     let maintainer = Ed25519MaintainerSigner::from_seed(MAINTAINER_KEY_ID, &[0x35; 32])?;
@@ -113,7 +114,10 @@ pub(crate) fn build_legacy_fixture(
         Some(snapshot_blob),
         &maintainer,
     )?;
-    let right_block = write_block(
+    // Written for repository realism (a second branch point off `root_block`) but not otherwise
+    // read by this fixture -- see `mod.rs`, its id used to be exposed for merge-evidence coverage
+    // that lived in the now-removed bounded-legacy-mode command matrix.
+    let _right_block = write_block(
         &layout,
         BlockKind::Normal,
         vec![root_block],
@@ -141,13 +145,7 @@ pub(crate) fn build_legacy_fixture(
     std::fs::write(root.join("README.md"), b"hello\n")?;
     std::fs::write(root.join("old.txt"), b"old\n")?;
     std::fs::write(layout.format_path(), b"1\n")?;
-    Ok(LegacyFixture {
-        root_block,
-        left_block,
-        right_block,
-        block_path: layout.object_path(ObjectType::Block, left_block),
-        log_path: layout.ref_log_path("heads/main"),
-    })
+    Ok(())
 }
 
 pub(crate) fn build_format2_strict_wal_fixture(root: &Path, failure: StrictFailure) -> TestResult {

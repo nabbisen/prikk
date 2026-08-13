@@ -37,8 +37,8 @@ use output::{
 };
 use prikk_store::{
     ActiveRefMetadata, DEFAULT_ACTIVE_PATCH_LIMIT, DoctorRepairOptions, Ed25519AuthorSigner,
-    Ed25519MaintainerSigner, MergeEvidenceTarget, RefStore, RepositoryFormat, RepositoryLayout,
-    VerifyOptions, Wal, WorktreePatchCommitOptions, add_trusted_maintainer, append_rollback_draft,
+    Ed25519MaintainerSigner, MergeEvidenceTarget, RefStore, RepositoryLayout, VerifyOptions, Wal,
+    WorktreePatchCommitOptions, add_trusted_maintainer, append_rollback_draft,
     commit_worktree_changes_signed, doctor_repository, list_received_pointers,
     load_received_ref_history, load_ref_history, materialize_patch_checkout,
     materialize_patch_checkout_with_deletions, materialize_snapshot_checkout,
@@ -54,13 +54,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub(crate) fn open_repository(
     root: impl Into<PathBuf>,
 ) -> std::result::Result<RepositoryLayout, String> {
-    let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
-    if layout.format() == RepositoryFormat::LegacyV1 {
-        eprintln!(
-            "warning: format-1 repository opened in legacy read-only mode; scaffold roots are not verifiable state commitments"
-        );
-    }
-    Ok(layout)
+    RepositoryLayout::open(root).map_err(|err| err.to_string())
 }
 
 fn main() -> ExitCode {
@@ -541,8 +535,6 @@ fn run_verify(args: Vec<String>) -> std::result::Result<(), String> {
             "repository verification found at least one failed object, block, or ref; see item outcomes above"
                 .to_string(),
         )
-    } else if report.has_unverifiable_state_roots() {
-        Err("format-1 scaffold roots are not verifiable state commitments".to_string())
     } else if report.has_active_wal_metadata_integrity_issue() {
         Err("repository has active-WAL metadata integrity issues".to_string())
     } else if report.has_blocking_ref_publication_issues() {

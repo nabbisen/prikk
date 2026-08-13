@@ -7,7 +7,7 @@
 use prikk_error::{PrikkError, Result};
 
 use crate::block_state::BlockStateStatus;
-use crate::layout::{RepositoryFormat, RepositoryLayout};
+use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
 use crate::refs::{RefFileStatus, RefItemStatus, RefRecoveryRepair};
 use crate::verify::{
@@ -284,13 +284,6 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                         "preserve the repository and inspect the failing ref before attempting repair",
                     ));
                 }
-            }
-            if layout.format() == RepositoryFormat::LegacyV1 {
-                issues.push(DoctorIssue::warning(
-                    "PRIKK-DOCTOR-LEGACY-FORMAT",
-                    "repository is open in format-1 legacy read-only mode; scaffold roots are not verifiable state commitments",
-                    "preserve the repository bytes or initialize a new format-2 repository and deliberately re-author the worktree",
-                ));
             }
             if verification
                 .trailing_partial_wal_bytes

@@ -6,7 +6,7 @@ use std::path::Path;
 use prikk_error::{PrikkError, Result};
 
 use crate::fsutil::{EntryKind, list_directory};
-use crate::layout::{RepositoryFormat, RepositoryLayout};
+use crate::layout::RepositoryLayout;
 use crate::object_store::FileObjectStore;
 use crate::signature_diagnostics::{
     SignatureEnvelopeIssue, SignatureEnvelopeSource, classify_signature_envelope,
@@ -107,13 +107,12 @@ pub(crate) fn verify_refs(layout: &RepositoryLayout) -> Result<RefVerification> 
     let (pointers, pointer_outcomes) = read_pointers(layout, &objects)?;
     let (logs, log_record_count, ref_log_envelopes, log_outcomes) =
         read_logs(layout, &objects, &pointers)?;
-    // DC-95 Stage 2 Level 2 handoff §7 Q4, ruled: stays a whole-set precheck. A stale timestamp
-    // anywhere in ref history is evidence the format-1-to-2 migration did not complete or did not
-    // cover everything -- a claim about the whole repository's format-2 assertion, not a per-ref
-    // defect, so it is deliberately not contained to the one ref that happens to carry it.
-    if layout.format() == RepositoryFormat::CurrentV2
-        && logs.values().any(|state| state.has_legacy_timestamp)
-    {
+    // DC-95 Stage 2 Level 2 handoff §7 Q4, ruled: stays a whole-set precheck. RFC 103: with format-1
+    // retired, this is no longer "a format-2 repository contaminated by format-1 records" -- it is
+    // simply malformed data, and the check is unconditional rather than format-gated. Still a claim
+    // about the whole repository's history, not a per-ref defect, so still deliberately not
+    // contained to the one ref that happens to carry it.
+    if logs.values().any(|state| state.has_legacy_timestamp) {
         return Err(PrikkError::Integrity(
             "format-2 RefUpdate requires created_at == 0".to_string(),
         ));
@@ -163,13 +162,7 @@ pub(crate) fn verify_refs(layout: &RepositoryLayout) -> Result<RefVerification> 
         }
         // This ref's own classification is caught here, at the item boundary, rather than
         // propagated -- every other ref is still attempted.
-        match classify_ref_state(
-            layout.format(),
-            &ref_name,
-            pointer,
-            log,
-            &mut publication_issues,
-        ) {
+        match classify_ref_state(&ref_name, pointer, log, &mut publication_issues) {
             Ok(()) => ref_item_outcomes.push(RefItemOutcome {
                 ref_name,
                 status: RefItemStatus::Evaluated,
@@ -210,30 +203,22 @@ fn failed_message_at(outcomes: &[RefFileOutcome], path: &Path) -> Option<String>
     })
 }
 
-/// A code this function pushes is not necessarily the code `verify_repository` reports: `POINTER-
-/// LEADS-LOG`, `LEGACY-LOG-LEADS`, and `POINTER-MISSING` are all piped through `ref_publication::
-/// require_retained_evidence` afterward, which overwrites any of the three in place -- code, message,
-/// and blocking flag -- to `PRIKK-VERIFY-REF-DIVERGENCE` unless retained active-WAL evidence (matching
-/// ref, valid trust, and a target `Block` whose `patch_ids` match the queued WAL records) proves the
-/// divergence is a genuinely interrupted publication rather than an unexplained one. `LEGACY-LOG-LEADS`
-/// is downstream-redundant with that same `DIVERGENCE` fallback for exactly this reason (DC-95 Stage 1
-/// round 10): a repository is refused either way, so the distinct code is a diagnostic attribution of
-/// which side of the format divide the divergence was found on, not an independent line of defence.
+/// A code this function pushes is not necessarily the code `verify_repository` reports:
+/// `POINTER-LEADS-LOG` is piped through `ref_publication::require_retained_evidence` afterward,
+/// which overwrites it in place -- code, message, and blocking flag -- to
+/// `PRIKK-VERIFY-REF-DIVERGENCE` unless retained active-WAL evidence (matching ref, valid trust, and
+/// a target `Block` whose `patch_ids` match the queued WAL records) proves the divergence is a
+/// genuinely interrupted publication rather than an unexplained one. RFC 103: the two format-1-only
+/// codes this function used to choose between here (`LEGACY-LOG-LEADS`, `POINTER-MISSING`) and their
+/// format-2 `DIVERGENCE` counterparts are gone along with format-1 itself -- both conditions now
+/// report `DIVERGENCE` unconditionally, which is what they always resolved to under format-2 and
+/// what `LEGACY-LOG-LEADS` was already downstream-redundant with (DC-95 Stage 1 round 10).
 fn classify_ref_state(
-    format: RepositoryFormat,
     ref_name: &str,
     pointer: Option<&PointerState>,
     log: Option<&LogState>,
     issues: &mut Vec<RefPublicationIssue>,
 ) -> Result<()> {
-    if format == RepositoryFormat::LegacyV1 && log.is_some_and(|state| state.has_legacy_timestamp) {
-        issues.push(RefPublicationIssue {
-            code: "PRIKK-VERIFY-REF-LEGACY-TIMESTAMP",
-            ref_name: Some(ref_name.to_string()),
-            message: "format-1 RefUpdate uses a non-canonical legacy timestamp".to_string(),
-            blocking: false,
-        });
-    }
     match (pointer, log) {
         (Some(pointer), Some(log)) if Some(pointer.id) == log.tip => {
             if log.trailing_partial_bytes != 0 {
@@ -262,33 +247,19 @@ fn classify_ref_state(
             Ok(())
         }
         (Some(pointer), Some(log)) if log.previous_tip == Some(pointer.id) => {
-            let (code, message) = if format == RepositoryFormat::LegacyV1 {
-                (
-                    "PRIKK-VERIFY-REF-LEGACY-LOG-LEADS",
-                    "format-1 ref log leads the authoritative pointer by one transition",
-                )
-            } else {
-                (
-                    "PRIKK-VERIFY-REF-DIVERGENCE",
-                    "format-2 ref log leads the authoritative pointer",
-                )
-            };
-            issues.push(blocking_issue(code, ref_name, message.to_string()));
+            issues.push(blocking_issue(
+                "PRIKK-VERIFY-REF-DIVERGENCE",
+                ref_name,
+                "format-2 ref log leads the authoritative pointer".to_string(),
+            ));
             Ok(())
         }
         (None, Some(log)) if log.record_count == 1 && log.previous_tip.is_none() => {
-            let (code, message) = if format == RepositoryFormat::LegacyV1 {
-                (
-                    "PRIKK-VERIFY-REF-POINTER-MISSING",
-                    "format-1 ref pointer is missing while committed log history exists",
-                )
-            } else {
-                (
-                    "PRIKK-VERIFY-REF-DIVERGENCE",
-                    "format-2 ref pointer is missing while committed log history exists",
-                )
-            };
-            issues.push(blocking_issue(code, ref_name, message.to_string()));
+            issues.push(blocking_issue(
+                "PRIKK-VERIFY-REF-DIVERGENCE",
+                ref_name,
+                "format-2 ref pointer is missing while committed log history exists".to_string(),
+            ));
             Ok(())
         }
         (None, None) => Ok(()),

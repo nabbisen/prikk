@@ -4,8 +4,8 @@ use prikk_object::{
     BlockPayload, CanonicalEncode, ObjectEnvelope, ObjectType, RefStatePayload, RefUpdatePayload,
 };
 use prikk_store::{
-    ActiveLock, FileObjectStore, LegacyActiveCleanupAuthorization, MaintainerSigner, ObjectWriter,
-    RefPublication, RefStore, RepositoryFormat, maintainer_signature,
+    ActiveLock, FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication, RefStore,
+    RepositoryFormat, maintainer_signature,
 };
 
 pub(super) fn persist_wal_patches(
@@ -127,69 +127,13 @@ pub(super) fn current_ref_state(
     }))
 }
 
-pub(super) fn legacy_interrupted_ref_state(
-    object_store: &FileObjectStore,
-    ref_store: &RefStore,
-    ref_name: &str,
-) -> Result<Option<CurrentRefState>, String> {
-    if object_store.layout().format() != RepositoryFormat::LegacyV1 {
-        return Ok(None);
-    }
-    let pointer = ref_store
-        .read_current_ref_state_id(ref_name)
-        .map_err(|err| err.to_string())?;
-    let log = ref_store
-        .replay_log(ref_name)
-        .map_err(|err| err.to_string())?;
-    if log.trailing_partial_bytes != 0 {
-        return Ok(None);
-    }
-    let Some(last) = log.records.last() else {
-        return Ok(None);
-    };
-    let update = RefUpdatePayload::decode_canonical(&last.envelope.canonical_payload)
-        .map_err(|err| err.to_string())?;
-    if update.ref_name != ref_name
-        || update.old_ref_state_id != pointer
-        || Some(update.new_ref_state_id) == pointer
-    {
-        return Ok(None);
-    }
-    let envelope = object_store
-        .read_typed(update.new_ref_state_id, ObjectType::RefState)
-        .map_err(|err| err.to_string())?
-        .ok_or_else(|| {
-            format!(
-                "legacy ref log names missing RefState {}",
-                update.new_ref_state_id
-            )
-        })?;
-    let payload =
-        RefStatePayload::decode_canonical(&envelope.canonical_payload, envelope.schema_version)
-            .map_err(|err| err.to_string())?;
-    if payload.ref_name != ref_name
-        || payload.previous_ref_state_id != pointer
-        || payload.target_object_id != update.new_target_object_id
-        || payload.update_seq != update.update_seq
-    {
-        return Ok(None);
-    }
-    Ok(Some(CurrentRefState {
-        ref_state_id: update.new_ref_state_id,
-        target_block_id: payload.target_object_id,
-        update_seq: payload.update_seq,
-        previous_ref_state_id: payload.previous_ref_state_id,
-        ref_state_envelope: envelope,
-    }))
-}
-
 pub(super) fn finish_current_publication(
     ref_store: &RefStore,
     active_lock: &ActiveLock,
     ref_name: &str,
     current: &CurrentRefState,
     signer: &impl MaintainerSigner,
-) -> Result<Option<LegacyActiveCleanupAuthorization>, String> {
+) -> Result<(), String> {
     let update = RefUpdatePayload {
         ref_name: ref_name.to_string(),
         old_ref_state_id: current.previous_ref_state_id,
@@ -205,8 +149,8 @@ pub(super) fn finish_current_publication(
         update.to_canonical_bytes().map_err(|err| err.to_string())?,
         signer,
     )?;
-    let (_, authorization) = ref_store
-        .finish_interrupted_publication_with_cleanup_authorization(
+    ref_store
+        .finish_interrupted_publication(
             active_lock,
             &RefPublication {
                 ref_name: ref_name.to_string(),
@@ -216,7 +160,7 @@ pub(super) fn finish_current_publication(
             },
         )
         .map_err(|err| err.to_string())?;
-    Ok(authorization)
+    Ok(())
 }
 
 pub(super) fn signed_envelope(

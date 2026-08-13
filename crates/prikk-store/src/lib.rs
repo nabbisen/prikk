@@ -69,8 +69,7 @@ mod signature_contract_tests;
 mod test_support;
 
 pub use active::{
-    ActiveCommitResult, ActiveRefMetadata, ActiveSession, LegacyActiveCleanupAuthorization,
-    finish_active_publication_cleanup, finish_legacy_active_publication_cleanup,
+    ActiveCommitResult, ActiveRefMetadata, ActiveSession, finish_active_publication_cleanup,
     read_active_ref_metadata, remove_active_ref_metadata, require_active_ref_for_non_empty_wal,
     write_active_ref_metadata,
 };
