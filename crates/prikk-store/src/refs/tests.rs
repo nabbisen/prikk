@@ -426,6 +426,54 @@ fn verify_repository_detects_missing_ref_state_object() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// DC-95 Stage 2 Level 2 (refs half) implementation review v1 §2, required: `ensure_no_incomplete_
+/// publication` -- the gate every mutation entry point (`ActiveSession`, `append_rollback_draft`,
+/// `doctor_repository`'s repair path, `add_trusted_maintainer`, `commit_worktree_changes_signed` via
+/// `node_authoring.rs`) calls before proceeding -- previously relied on `verify_refs` returning `Err`
+/// for effectively any ref defect. Item containment means `verify_refs` now returns `Ok` even when a
+/// specific ref's own item failed; `ensure_no_incomplete_publication`'s own `has_item_failure()`
+/// check (`refs.rs`) is what still makes it refuse. **Removing that check from `refs.rs` and running
+/// the whole workspace suite found zero failures** -- proving the check was previously wired but
+/// entirely untested; this closes that gap. The assertion is the refusal itself, matching the
+/// standard `repair_repository_still_refuses_when_the_refs_stage_fails` (`doctor/tests.rs`) already
+/// set for the repair path -- the mutation path needed the same proof and did not have it.
+///
+/// Same fixture as `verify_repository_detects_missing_ref_state_object` above: a published ref
+/// whose RefState object is then deleted, a genuine item-level defect (this ref's own pointer read
+/// fails), not a structural one.
+#[test]
+fn ensure_no_incomplete_publication_refuses_when_a_ref_item_fails() {
+    let root = unique_temp_dir("ref-mutation-gate-item-failure");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let mut object_store = FileObjectStore::new(layout.clone());
+        let block = signed_empty_block_envelope();
+        let target = block.object_id();
+        assert!(object_store.write_object(&block).is_ok());
+        let store = RefStore::new(layout.clone());
+        let ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
+        let ref_state_id = ref_state.object_id();
+        let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, target, 1);
+        let publication = RefPublication {
+            ref_name: "heads/main".to_string(),
+            expected_previous_ref_state_id: None,
+            ref_state,
+            ref_update,
+        };
+        assert!(store.publish(&publication).is_ok());
+        let ref_state_path = layout.object_path(ObjectType::RefState, ref_state_id);
+        assert!(std::fs::remove_file(ref_state_path).is_ok());
+
+        // Confirm the premise first: `verify_refs` itself no longer returns `Err` for this fixture
+        // (item containment), so `ensure_no_incomplete_publication`'s own refusal cannot be coming
+        // from that path -- it must be the `has_item_failure()` check.
+        assert!(super::verify_refs(&layout).is_ok());
+        assert!(super::ensure_no_incomplete_publication(&layout).is_err());
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
 #[test]
 fn ref_store_refuses_unsigned_missing_pointer_reconstruction() {
     let root = unique_temp_dir("ref-reconstruct");
