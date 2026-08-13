@@ -9,7 +9,9 @@ use prikk_error::{PrikkError, Result};
 use crate::layout::{RepositoryFormat, RepositoryLayout};
 use crate::lock::ActiveLock;
 use crate::refs::RefRecoveryRepair;
-use crate::verify::{ActiveWalMetadataStatus, RepositoryVerification, verify_repository};
+use crate::verify::{
+    ActiveWalMetadataStatus, RepositoryVerification, StageStatus, verify_repository,
+};
 use crate::wal::{Wal, WalRepair};
 
 /// Severity assigned to a doctor diagnostic issue.
@@ -187,6 +189,29 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                 "repository structural verification scan completed",
                 "review the remaining diagnostics before deciding whether action is required",
             ));
+            // DC-95 Stage 2 Level 1: a stage that failed or could not evaluate is blocking by
+            // construction (severity derives from the stage outcome itself, not a per-field decision
+            // here) -- this is what preserves `repair_repository`'s refusal gate now that
+            // `verify_repository` no longer aborts on the first hard error.
+            for outcome in &verification.stage_outcomes {
+                let message = match &outcome.status {
+                    StageStatus::Evaluated => continue,
+                    StageStatus::Failed { message } => {
+                        format!("verification stage {} failed: {message}", outcome.stage)
+                    }
+                    StageStatus::NotEvaluated { blocked_by } => {
+                        format!(
+                            "verification stage {} could not run because stage {blocked_by} did not evaluate",
+                            outcome.stage
+                        )
+                    }
+                };
+                issues.push(DoctorIssue::error(
+                    "PRIKK-DOCTOR-VERIFY-STAGE-INCOMPLETE",
+                    message,
+                    "preserve the repository and inspect the failing stage before attempting repair",
+                ));
+            }
             if layout.format() == RepositoryFormat::LegacyV1 {
                 issues.push(DoctorIssue::warning(
                     "PRIKK-DOCTOR-LEGACY-FORMAT",
@@ -194,7 +219,10 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                     "preserve the repository bytes or initialize a new format-2 repository and deliberately re-author the worktree",
                 ));
             }
-            if verification.trailing_partial_wal_bytes != 0 {
+            if verification
+                .trailing_partial_wal_bytes
+                .is_some_and(|n| n != 0)
+            {
                 issues.push(DoctorIssue::warning(
                     "PRIKK-DOCTOR-WAL-TRAILING-PARTIAL",
                     format!(
@@ -202,7 +230,7 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                             "active WAL has {} trailing byte(s) that look like an incomplete ",
                             "final record"
                         ),
-                        verification.trailing_partial_wal_bytes
+                        verification.trailing_partial_wal_bytes.unwrap_or_default()
                     ),
                     "run `prikk doctor --repair-wal-tail` to truncate only the incomplete \
                      final WAL bytes",
@@ -325,7 +353,12 @@ fn add_active_wal_metadata_issues(
     verification: &RepositoryVerification,
     issues: &mut Vec<DoctorIssue>,
 ) {
-    match &verification.active_wal_metadata_status {
+    // `None` (the active-WAL-metadata stage did not evaluate) is already surfaced, more precisely, by
+    // the stage-outcome loop above this function's own call site.
+    let Some(status) = &verification.active_wal_metadata_status else {
+        return;
+    };
+    match status {
         ActiveWalMetadataStatus::MissingForNonEmptyWal => issues.push(DoctorIssue::error(
             "PRIKK-DOCTOR-ACTIVE-REF-METADATA-MISSING",
             "active WAL has records but active ref metadata is missing",
