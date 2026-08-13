@@ -98,6 +98,35 @@ pub(super) fn assert_block_state_failed(report: &RepositoryVerification, expecte
     );
 }
 
+/// DC-95 Stage 2 Level 2 (refs half): the `verify_refs` analogue of [`assert_object_item_failed`].
+/// A ref's own defect can surface in any of three places depending on where the check that catches
+/// it actually lives -- a pointer file's own read (`pointer_outcomes`), a log file's own read
+/// (`log_outcomes`), or `classify_ref_state` itself (`ref_item_outcomes`) -- and which one applies
+/// is an implementation detail of *where* a given check runs, not something each fixture's own
+/// intent needs to pin down (unlike the Phase A/Phase B split for objects, which is a load-bearing
+/// distinction `stage-2-level-2-step0-v1.md` §1.2 derived). This checks all three.
+pub(super) fn assert_ref_failed(report: &RepositoryVerification, expected_substring: &str) {
+    assert!(
+        report.has_item_failure(),
+        "expected at least one item to fail, got: {report:?}"
+    );
+    let found = report
+        .pointer_outcomes
+        .iter()
+        .chain(&report.log_outcomes)
+        .any(|outcome| {
+            matches!(&outcome.status, crate::refs::RefFileStatus::Failed { message } if message.contains(expected_substring))
+        })
+        || report.ref_item_outcomes.iter().any(|outcome| {
+            matches!(&outcome.status, crate::refs::RefItemStatus::Failed { message } if message.contains(expected_substring))
+        });
+    assert!(
+        found,
+        "expected a ref-related outcome Failed with a message containing {expected_substring:?}, got: pointer_outcomes={:?} log_outcomes={:?} ref_item_outcomes={:?}",
+        report.pointer_outcomes, report.log_outcomes, report.ref_item_outcomes
+    );
+}
+
 /// DC-95 Stage 1, round 2: the three "referenced object is missing" checks in `verify_block_payload`
 /// (`verify.rs`) -- parent block, patch, and snapshot blob. Supersedes the older, weaker `verify_
 /// repository_detects_block_with_missing_patch` (asserted only `.is_err()`) with a table asserting

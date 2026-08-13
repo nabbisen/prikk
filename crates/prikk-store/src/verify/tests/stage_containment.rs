@@ -205,6 +205,169 @@ fn verify_repository_reports_two_independent_bad_objects_in_the_same_stage() -> 
     Ok(())
 }
 
+/// DC-95 Stage 2 Level 2 acceptance criterion 1, refs half: two independent bad refs with nothing
+/// in common -- two ref pointers each targeting a Block that was deleted after publishing -- are
+/// both reported `Failed`, and neither suppresses the other, the `Refs` stage itself, or a third,
+/// genuinely clean ref. Whole-map assertion (handoff §4): the outcome sets are walked and every
+/// entry classified, not just checked for the presence of one expected entry.
+#[test]
+fn verify_repository_reports_two_independent_bad_refs_in_the_same_stage() -> Result<()> {
+    let root = unique_temp_dir("stage2-two-independent-bad-refs");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let signer = trusted_signer("stage2-two-bad-refs", 0x1d)?;
+    adopt(&layout, &signer)?;
+    let mut objects = FileObjectStore::new(layout.clone());
+
+    let publish_dangling_ref = |objects: &mut FileObjectStore, ref_name: &str| -> Result<()> {
+        // A distinguishing snapshot blob keeps each ref's Block from content-addressing to the
+        // *same* id -- otherwise a later block with an identical (empty) payload would silently
+        // recreate an earlier one's just-deleted file at their shared canonical path.
+        let snapshot = prikk_object::BlobPayload::new(
+            prikk_object::BlobKind::Text,
+            ref_name.as_bytes().to_vec(),
+        );
+        let mut snapshot_envelope =
+            ObjectEnvelope::unsigned(ObjectType::Blob, 1, snapshot.to_canonical_bytes()?);
+        let snapshot_id = snapshot_envelope.object_id();
+        snapshot_envelope.add_signature(maintainer_signature(
+            &signer,
+            ObjectType::Blob,
+            snapshot_id,
+        )?)?;
+        objects.write_object(&snapshot_envelope)?;
+
+        let block_payload = BlockPayload {
+            parent_block_ids: Vec::new(),
+            kind: BlockKind::Root,
+            patch_ids: Vec::new(),
+            state_merkle_root: crate::derive_next_state_root(objects, None, &[])?,
+            snapshot_blob_ref: Some(snapshot_id),
+            mainline_parent_id: None,
+            merge_baseline_block_id: None,
+        };
+        let mut block_envelope =
+            ObjectEnvelope::unsigned(ObjectType::Block, 2, block_payload.to_canonical_bytes()?);
+        let block_id = block_envelope.object_id();
+        block_envelope.add_signature(maintainer_signature(
+            &signer,
+            ObjectType::Block,
+            block_id,
+        )?)?;
+        objects.write_object(&block_envelope)?;
+
+        let state = RefStatePayload {
+            ref_name: ref_name.to_string(),
+            kind: RefKind::Branch,
+            target_object_id: block_id,
+            update_seq: 1,
+            previous_ref_state_id: None,
+            required_attestation_ids: Vec::new(),
+            closed: false,
+        };
+        let mut ref_state =
+            ObjectEnvelope::unsigned(ObjectType::RefState, 1, state.to_canonical_bytes()?);
+        let state_id = ref_state.object_id();
+        ref_state.add_signature(maintainer_signature(
+            &signer,
+            ObjectType::RefState,
+            state_id,
+        )?)?;
+        let update = build_signed_ref_update(ref_name, None, state_id, block_id, 1, &signer)?;
+        RefStore::new(layout.clone()).publish(&RefPublication {
+            ref_name: ref_name.to_string(),
+            expected_previous_ref_state_id: None,
+            ref_state,
+            ref_update: update,
+        })?;
+
+        // Delete the target Block after publishing -- a genuinely dangling reference, same
+        // technique as `verify_repository_detects_dangling_ref_target` (`ref_cluster.rs`).
+        std::fs::remove_file(layout.object_path(ObjectType::Block, block_id))?;
+        Ok(())
+    };
+    publish_dangling_ref(&mut objects, "heads/first")?;
+    publish_dangling_ref(&mut objects, "heads/second")?;
+
+    // One genuinely clean ref too, so the test also confirms a bad ref does not suppress a good
+    // one's own Evaluated outcome.
+    let clean_block_payload = BlockPayload {
+        parent_block_ids: Vec::new(),
+        kind: BlockKind::Root,
+        patch_ids: Vec::new(),
+        state_merkle_root: crate::derive_next_state_root(&objects, None, &[])?,
+        snapshot_blob_ref: None,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
+    };
+    let mut clean_block_envelope = ObjectEnvelope::unsigned(
+        ObjectType::Block,
+        2,
+        clean_block_payload.to_canonical_bytes()?,
+    );
+    let clean_block = clean_block_envelope.object_id();
+    clean_block_envelope.add_signature(maintainer_signature(
+        &signer,
+        ObjectType::Block,
+        clean_block,
+    )?)?;
+    objects.write_object(&clean_block_envelope)?;
+    let clean_state = RefStatePayload {
+        ref_name: "heads/clean".to_string(),
+        kind: RefKind::Branch,
+        target_object_id: clean_block,
+        update_seq: 1,
+        previous_ref_state_id: None,
+        required_attestation_ids: Vec::new(),
+        closed: false,
+    };
+    let mut clean_ref_state =
+        ObjectEnvelope::unsigned(ObjectType::RefState, 1, clean_state.to_canonical_bytes()?);
+    let clean_state_id = clean_ref_state.object_id();
+    clean_ref_state.add_signature(maintainer_signature(
+        &signer,
+        ObjectType::RefState,
+        clean_state_id,
+    )?)?;
+    let clean_update =
+        build_signed_ref_update("heads/clean", None, clean_state_id, clean_block, 1, &signer)?;
+    RefStore::new(layout.clone()).publish(&RefPublication {
+        ref_name: "heads/clean".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_state: clean_ref_state,
+        ref_update: clean_update,
+    })?;
+
+    let report = verify_repository(&layout)?;
+    assert!(matches!(
+        find_stage(&report.stage_outcomes, VerificationStage::Refs).status,
+        StageStatus::Evaluated
+    ));
+    assert!(report.has_item_failure());
+    let failed_count = report
+        .pointer_outcomes
+        .iter()
+        .filter(|outcome| matches!(outcome.status, crate::RefFileStatus::Failed { .. }))
+        .count();
+    let evaluated_count = report
+        .pointer_outcomes
+        .iter()
+        .filter(|outcome| matches!(outcome.status, crate::RefFileStatus::Evaluated { .. }))
+        .count();
+    assert_eq!(
+        failed_count, 2,
+        "expected exactly the two dangling-target refs to be Failed: {:?}",
+        report.pointer_outcomes
+    );
+    assert_eq!(
+        evaluated_count, 1,
+        "the genuinely clean ref must still evaluate: {:?}",
+        report.pointer_outcomes
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 /// Acceptance criterion 2 (design §11, handoff §6.2): every stage whose own execution genuinely
 /// requires `WalReplay`'s output is `NotEvaluated`, naming `WalReplay` as the blocker -- not
 /// silently absent, not defaulted to `Evaluated`. Covers all six real dependents from Step 0's

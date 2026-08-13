@@ -60,7 +60,7 @@ use prikk_object::{
     RefKind, RefStatePayload, RefUpdatePayload,
 };
 
-use super::assert_stage_failed;
+use super::{assert_ref_failed, assert_stage_failed};
 use crate::maintainer_signing::MaintainerSigner;
 use crate::test_support::{
     sample_object_id, signed_empty_block_envelope, signed_patch_blob_envelope,
@@ -217,7 +217,7 @@ fn verify_repository_detects_dangling_ref_target() -> Result<()> {
     std::fs::remove_file(layout.object_path(ObjectType::Block, block_id))?;
 
     let report = verify_repository(&layout)?;
-    assert_stage_failed(&report, VerificationStage::Refs, "targets missing block");
+    assert_ref_failed(&report, "targets missing block");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -258,11 +258,7 @@ fn verify_repository_detects_noncanonical_ref_pointer_path() -> Result<()> {
     std::fs::rename(&canonical, &misplaced)?;
 
     let report = verify_repository(&layout)?;
-    assert_stage_failed(
-        &report,
-        VerificationStage::Refs,
-        "non-canonical ref pointer",
-    );
+    assert_ref_failed(&report, "non-canonical ref pointer");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -310,11 +306,7 @@ fn verify_repository_detects_ref_state_name_pointer_mismatch() -> Result<()> {
     )?;
 
     let report = verify_repository(&layout)?;
-    assert_stage_failed(
-        &report,
-        VerificationStage::Refs,
-        "name differs from pointer ref",
-    );
+    assert_ref_failed(&report, "name differs from pointer ref");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -357,11 +349,7 @@ fn verify_repository_detects_every_ref_path_shape_violation() -> Result<()> {
     let bad_pointer = layout.refs_dir().join("by-id").join("zz.ref");
     std::fs::write(&bad_pointer, b"not a valid length or content")?;
     let report = verify_repository(&layout)?;
-    assert_stage_failed(
-        &report,
-        VerificationStage::Refs,
-        "ref path has invalid shape",
-    );
+    assert_ref_failed(&report, "ref path has invalid shape");
     let _ = std::fs::remove_dir_all(pointer_root);
 
     let log_root = unique_temp_dir("verify-ref-log-path-shape");
@@ -369,11 +357,7 @@ fn verify_repository_detects_every_ref_path_shape_violation() -> Result<()> {
     let bad_log = layout.refs_dir().join("logs").join("zz.log");
     std::fs::write(&bad_log, b"not a valid length or content")?;
     let report = verify_repository(&layout)?;
-    assert_stage_failed(
-        &report,
-        VerificationStage::Refs,
-        "ref path has invalid shape",
-    );
+    assert_ref_failed(&report, "ref path has invalid shape");
     let _ = std::fs::remove_dir_all(log_root);
     Ok(())
 }
@@ -456,11 +440,7 @@ fn verify_repository_detects_ref_update_ref_state_mismatch() -> Result<()> {
     )?;
 
     let report = verify_repository(&layout)?;
-    assert_stage_failed(
-        &report,
-        VerificationStage::Refs,
-        "RefState disagrees with RefUpdate",
-    );
+    assert_ref_failed(&report, "RefState disagrees with RefUpdate");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -535,7 +515,7 @@ fn verify_repository_detects_unsigned_ref_state() -> Result<()> {
     )?;
 
     let report = verify_repository(&layout)?;
-    assert_stage_failed(&report, VerificationStage::Refs, "is unsigned");
+    assert_ref_failed(&report, "is unsigned");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -592,11 +572,7 @@ fn verify_repository_detects_incomplete_log_tail_without_pointer_lead() -> Resul
     drop(log_file);
 
     let report = verify_repository(&layout)?;
-    assert_stage_failed(
-        &report,
-        VerificationStage::Refs,
-        "incomplete log tail without a pointer lead",
-    );
+    assert_ref_failed(&report, "incomplete log tail without a pointer lead");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -663,6 +639,10 @@ fn verify_repository_detects_nonzero_created_at_under_format2() -> Result<()> {
     )?;
 
     let report = verify_repository(&layout)?;
+    // DC-95 Stage 2 Level 2 handoff §7 Q4, ruled: this stays a whole-set `Refs`-stage failure, not
+    // an item-contained one -- a stale timestamp anywhere is evidence the format-1-to-2 migration
+    // did not complete or did not cover everything, a claim about the whole repository's format-2
+    // assertion, deliberately not contained to the one ref that happens to carry it.
     assert_stage_failed(
         &report,
         VerificationStage::Refs,
@@ -748,11 +728,7 @@ fn verify_repository_detects_ref_log_sequence_gap() -> Result<()> {
     )?;
 
     let report = verify_repository(&layout)?;
-    assert_stage_failed(
-        &report,
-        VerificationStage::Refs,
-        "ref-log chain or sequence diverges",
-    );
+    assert_ref_failed(&report, "ref-log chain or sequence diverges");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -813,11 +789,7 @@ fn verify_repository_detects_unexplained_pointer_log_divergence() -> Result<()> 
     )?;
 
     let report = verify_repository(&layout)?;
-    assert_stage_failed(
-        &report,
-        VerificationStage::Refs,
-        "unexplained pointer/log divergence",
-    );
+    assert_ref_failed(&report, "unexplained pointer/log divergence");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }

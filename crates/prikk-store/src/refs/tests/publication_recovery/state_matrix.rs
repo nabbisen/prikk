@@ -4,8 +4,8 @@ mod fixture;
 
 use crate::{
     ActiveLock, ActiveRefMetadata, ActiveSession, DEFAULT_ACTIVE_PATCH_LIMIT, DoctorSeverity,
-    RefStore, VerificationStage, Wal, doctor_repository, finish_active_publication_cleanup,
-    read_active_ref_metadata, verify_repository,
+    RefStore, Wal, doctor_repository, finish_active_publication_cleanup, read_active_ref_metadata,
+    verify_repository,
 };
 use fixture::{Fixture, PersistedState};
 
@@ -16,11 +16,15 @@ enum VerifyExpectation {
         blocking: bool,
     },
     NoRefIssue,
-    /// DC-95 Stage 2 Level 1: what was a hard `Err` from `verify_repository` pre-Level-1 is now
-    /// contained as a `Failed` outcome against one specific stage, with `verify_repository` itself
-    /// returning `Ok`.
-    StageFailure {
-        stage: VerificationStage,
+    /// DC-95 Stage 2 Level 2 (refs half): what was a whole-`Refs`-stage `Failed` outcome under
+    /// Level 1 is now contained one level further, to a single ref's own pointer file, log file,
+    /// or classification -- `verify_repository` returns `Ok` and the `Refs` `StageOutcome` itself
+    /// reads `Evaluated`. Checks all three item-outcome buckets, matching `verify/tests.rs`'s own
+    /// `assert_ref_failed` (which the fixture in this module could not reuse directly since it
+    /// asserts against `verify_repository`'s return value inline, not through that helper). No
+    /// remaining `CASES` row exercises the previous, whole-stage form of this expectation --
+    /// item containment covers every case that used to need it.
+    RefItemFailure {
         message_substring: &'static str,
     },
 }
@@ -105,11 +109,10 @@ const CASES: &[StateCase] = &[
     },
     StateCase {
         state: PersistedState::Divergence,
-        verify: VerifyExpectation::StageFailure {
-            stage: VerificationStage::Refs,
+        verify: VerifyExpectation::RefItemFailure {
             message_substring: "ref-log chain or sequence diverges",
         },
-        doctor_code: "PRIKK-DOCTOR-VERIFY-STAGE-INCOMPLETE",
+        doctor_code: "PRIKK-DOCTOR-VERIFY-REF-FILE-INCOMPLETE",
         doctor_severity: DoctorSeverity::Error,
         recommendation: "preserve the repository",
         retry: RetryExpectation::Refuses,
@@ -144,30 +147,27 @@ fn every_state_has_explicit_verify_and_doctor_read_only_outcomes() -> prikk_erro
                 assert!(report.ref_publication_issues.is_empty());
                 assert!(report.has_active_wal_metadata_warning());
             }
-            (
-                Ok(report),
-                VerifyExpectation::StageFailure {
-                    stage,
-                    message_substring,
-                },
-            ) => {
-                assert!(report.has_stage_failure());
-                let outcome = report
-                    .stage_outcomes
+            (Ok(report), VerifyExpectation::RefItemFailure { message_substring }) => {
+                assert!(report.has_item_failure());
+                let found = report
+                    .pointer_outcomes
                     .iter()
-                    .find(|outcome| outcome.stage == stage)
-                    .ok_or_else(|| {
-                        prikk_error::PrikkError::Integrity(format!(
-                            "missing StageOutcome for {stage} in {:?}",
-                            case.state
-                        ))
-                    })?;
-                match &outcome.status {
-                    crate::StageStatus::Failed { message } => {
-                        assert!(message.contains(message_substring));
-                    }
-                    other => panic!("expected stage {stage} to be Failed, got: {other:?}"),
-                }
+                    .chain(&report.log_outcomes)
+                    .any(|outcome| {
+                        matches!(&outcome.status, crate::RefFileStatus::Failed { message } if message.contains(message_substring))
+                    })
+                    || report.ref_item_outcomes.iter().any(|outcome| {
+                        matches!(&outcome.status, crate::RefItemStatus::Failed { message } if message.contains(message_substring))
+                    });
+                assert!(
+                    found,
+                    "expected a ref outcome Failed containing {message_substring:?} for {:?}, got: \
+                     pointer_outcomes={:?} log_outcomes={:?} ref_item_outcomes={:?}",
+                    case.state,
+                    report.pointer_outcomes,
+                    report.log_outcomes,
+                    report.ref_item_outcomes
+                );
             }
             (result, _) => panic!("unexpected verify result for {:?}: {result:?}", case.state),
         }

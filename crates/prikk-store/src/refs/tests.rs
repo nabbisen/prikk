@@ -418,7 +418,9 @@ fn verify_repository_detects_missing_ref_state_object() {
         let report = verify_repository(&layout);
         assert!(report.is_ok());
         if let Ok(report) = report {
-            assert!(report.has_stage_failure());
+            // DC-95 Stage 2 Level 2: this ref's own missing target object is now an item-level
+            // failure (its pointer/log read), not a whole-`Refs`-stage failure.
+            assert!(report.has_item_failure());
         }
     }
     let _ = std::fs::remove_dir_all(root);

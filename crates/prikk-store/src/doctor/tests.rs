@@ -358,6 +358,13 @@ fn doctor_rechecks_publication_guard_after_acquiring_active_lock() -> prikk_erro
 /// Covers two stages deliberately not the one `doctor_reports_verification_error` above already
 /// exercises (`Objects`), to demonstrate the refusal holds regardless of which stage failed --
 /// `Refs` (a dangling ref target) and `WalReplay` (a checksum-corrupted active record).
+///
+/// **Function name now describes Level 1's framing, not Level 2's.** DC-95 Stage 2 Level 2 (refs
+/// half) contains a dangling ref target one level further, to the specific ref's own pointer
+/// outcome -- the `Refs` `StageOutcome` itself now reads `Evaluated` for this exact fixture, not
+/// `Failed`. The test's own two assertions (`!before.is_healthy()`, `repair.is_err()`) never
+/// depended on which granularity the defect surfaced at, so it continues to prove criterion 4 at
+/// item granularity without modification -- only this comment needed correcting, not the test.
 #[test]
 fn repair_repository_still_refuses_when_the_refs_stage_fails() -> prikk_error::Result<()> {
     let root = unique_temp_dir("doctor-repair-refuses-refs");

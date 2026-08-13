@@ -98,7 +98,9 @@ fn format2_ref_log_reads_reject_every_strict_envelope_failure() -> prikk_error::
                 .replay_log("heads/main")
                 .is_err()
         );
-        assert!(verify_repository(&layout)?.has_stage_failure());
+        // DC-95 Stage 2 Level 2: a single malformed ref-log record is now an item-level failure
+        // (this ref's own log read), not a whole-`Refs`-stage failure.
+        assert!(verify_repository(&layout)?.has_item_failure());
         let _ = std::fs::remove_dir_all(root);
     }
     Ok(())
