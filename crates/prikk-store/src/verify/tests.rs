@@ -16,9 +16,9 @@ use prikk_object::{
 use crate::maintainer_signing::MaintainerSigner;
 use crate::wal::{WalRecord, encode_record_for_test};
 use crate::{
-    ActiveWalMetadataStatus, FileObjectStore, ObjectWriter, RepositoryLayout,
-    RepositoryVerification, StageStatus, VerificationStage, Wal, derive_next_state_root,
-    verify_repository, write_active_ref_metadata,
+    ActiveWalMetadataStatus, BlockStateStatus, FileObjectStore, ObjectItemStatus, ObjectWriter,
+    RepositoryLayout, RepositoryVerification, StageStatus, VerificationStage, Wal,
+    derive_next_state_root, verify_repository, write_active_ref_metadata,
 };
 
 use crate::test_support::{
@@ -54,6 +54,48 @@ pub(super) fn assert_stage_failed(
         ),
         other => panic!("expected stage {stage} to be Failed, got: {other:?}"),
     }
+}
+
+/// DC-95 Stage 2 Level 2: assert that at least one Phase A object outcome (`report.object_outcomes`)
+/// is `Failed` with a message containing `expected_substring`. Every fixture that used to reach this
+/// defect via a whole-stage `assert_stage_failed(..., VerificationStage::Objects, ...)` now asserts
+/// this instead -- item containment means a single bad object no longer fails the `Objects` stage
+/// itself (`StageOutcome` for `Objects` reads `Evaluated`); the same defect now surfaces as one
+/// `ObjectItemOutcome::Failed` entry among the others, which may all still be `Evaluated`.
+pub(super) fn assert_object_item_failed(report: &RepositoryVerification, expected_substring: &str) {
+    assert!(
+        report.has_item_failure(),
+        "expected at least one item to fail, got: {report:?}"
+    );
+    let found = report.object_outcomes.iter().any(|outcome| {
+        matches!(&outcome.status, ObjectItemStatus::Failed { message } if message.contains(expected_substring))
+    });
+    assert!(
+        found,
+        "expected an object item Failed with a message containing {expected_substring:?}, got: {:?}",
+        report.object_outcomes
+    );
+}
+
+/// DC-95 Stage 2 Level 2: the Phase B analogue of [`assert_object_item_failed`] -- asserts at least
+/// one block-state outcome (`report.block_state_outcomes`) is `Failed` with a message containing
+/// `expected_substring`. `validate_block_v2_shape` and the state-root comparison both run inside
+/// `verify_block_v2_state` (Phase B, `block_state.rs`), not Phase A -- a shape violation or state-root
+/// mismatch was never a Phase A defect even before Level 2, it just used to fail the whole `Objects`
+/// stage the same way every other defect in it did.
+pub(super) fn assert_block_state_failed(report: &RepositoryVerification, expected_substring: &str) {
+    assert!(
+        report.has_item_failure(),
+        "expected at least one item to fail, got: {report:?}"
+    );
+    let found = report.block_state_outcomes.iter().any(|outcome| {
+        matches!(&outcome.status, BlockStateStatus::Failed { message } if message.contains(expected_substring))
+    });
+    assert!(
+        found,
+        "expected a block-state outcome Failed with a message containing {expected_substring:?}, got: {:?}",
+        report.block_state_outcomes
+    );
 }
 
 /// DC-95 Stage 1, round 2: the three "referenced object is missing" checks in `verify_block_payload`
@@ -147,7 +189,7 @@ fn verify_repository_detects_every_missing_referenced_object() -> Result<()> {
         write_signed_block(&mut store, &payload)?;
 
         let report = verify_repository(&layout)?;
-        assert_stage_failed(&report, VerificationStage::Objects, expected_substring);
+        assert_object_item_failed(&report, expected_substring);
         let _ = std::fs::remove_dir_all(root);
     }
     Ok(())
@@ -185,11 +227,7 @@ fn verify_repository_detects_block_with_state_root_mismatch() -> Result<()> {
     )?;
 
     let report = verify_repository(&layout)?;
-    assert_stage_failed(
-        &report,
-        VerificationStage::Objects,
-        "state root does not match authoritative replay",
-    );
+    assert_block_state_failed(&report, "state root does not match authoritative replay");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -397,7 +435,7 @@ fn verify_repository_detects_every_block_shape_violation() -> Result<()> {
         write_signed_block(&mut store, &payload)?;
 
         let report = verify_repository(&layout)?;
-        assert_stage_failed(&report, VerificationStage::Objects, expected_substring);
+        assert_block_state_failed(&report, expected_substring);
         let _ = std::fs::remove_dir_all(root);
     }
     Ok(())
@@ -747,11 +785,7 @@ fn verify_repository_detects_object_file_in_wrong_prefix() {
             let report = verify_repository(&layout);
             assert!(report.is_ok());
             if let Ok(report) = report {
-                assert_stage_failed(
-                    &report,
-                    VerificationStage::Objects,
-                    "does not match canonical path",
-                );
+                assert_object_item_failed(&report, "does not match canonical path");
             }
         }
     }
@@ -821,7 +855,7 @@ fn verify_repository_detects_envelope_type_mismatch() -> Result<()> {
     )?;
 
     let report = verify_repository(&layout)?;
-    assert_stage_failed(&report, VerificationStage::Objects, "is under type");
+    assert_object_item_failed(&report, "is under type");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -859,7 +893,7 @@ fn verify_repository_detects_object_id_mismatch() -> Result<()> {
     )?;
 
     let report = verify_repository(&layout)?;
-    assert_stage_failed(&report, VerificationStage::Objects, "has id");
+    assert_object_item_failed(&report, "has id");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -1159,11 +1193,7 @@ fn verify_repository_rejects_malformed_signature_shape() -> Result<()> {
     )?;
 
     let report = verify_repository(&layout)?;
-    assert_stage_failed(
-        &report,
-        VerificationStage::Objects,
-        "malformed algorithm shape",
-    );
+    assert_object_item_failed(&report, "malformed algorithm shape");
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

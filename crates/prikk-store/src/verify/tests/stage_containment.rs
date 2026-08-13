@@ -14,8 +14,7 @@ use prikk_object::{
 
 use crate::maintainer_signing::MaintainerSigner;
 use crate::test_support::{
-    maintainer_signature as fake_maintainer_signature, sample_object_id,
-    signed_patch_blob_envelope, signed_patch_envelope, unique_temp_dir,
+    sample_object_id, signed_patch_blob_envelope, signed_patch_envelope, unique_temp_dir,
 };
 use crate::{
     Ed25519MaintainerSigner, FileObjectStore, ObjectWriter, RefPublication, RefStore,
@@ -72,30 +71,32 @@ fn find_stage(outcomes: &[StageOutcome], stage: VerificationStage) -> &StageOutc
 }
 
 /// Acceptance criterion 1 (design §11, handoff §6.1): a `Failed` stage does not suppress a later,
-/// independent stage's own findings. Two defects with nothing in common -- an object-id-mismatched
-/// Blob (`Objects`) and a checksum-corrupted active WAL record (`WalReplay`) -- planted in the same
-/// repository. Both must appear `Failed` in the same report.
+/// independent stage's own findings. Two defects with nothing in common -- a structural directory-
+/// shape violation (`Objects`; DC-95 Stage 2 Level 2 Step 0 §1.1: this class of defect stays
+/// whole-stage hard-`Err` even under item containment, since it invalidates the directory-shape
+/// assumption every per-item read in the stage relies on, not just one item) and a checksum-
+/// corrupted active WAL record (`WalReplay`) -- planted in the same repository. Both must appear
+/// `Failed` in the same report.
 #[test]
 fn verify_repository_reports_two_independent_stage_failures_together() -> Result<()> {
     let root = unique_temp_dir("stage2-two-independent-failures");
     let layout = RepositoryLayout::init(root.clone())?;
 
-    // Objects: an id-mismatched Blob, same technique as `verify_repository_detects_object_id_
-    // mismatch` (`verify/tests.rs`).
-    let blob = prikk_object::BlobPayload::new(prikk_object::BlobKind::Text, b"payload".to_vec());
-    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob.to_canonical_bytes()?);
-    envelope.add_signature(fake_maintainer_signature())?;
-    let wrong_id = sample_object_id("stage2-wrong-id");
-    let misplaced = layout.object_path(ObjectType::Blob, wrong_id);
-    std::fs::create_dir_all(
-        misplaced
-            .parent()
-            .ok_or_else(|| PrikkError::Io("misplaced object path has no parent".to_string()))?,
-    )?;
-    std::fs::write(
-        &misplaced,
-        crate::file_codec::encode_envelope_file(&envelope)?,
-    )?;
+    // Objects: a stray directory inside an object prefix directory, where only object files are
+    // expected -- structural, same technique as
+    // `verify_repository_detects_every_directory_shape_violation` (`verify/tests.rs`).
+    let mut objects = FileObjectStore::new(layout.clone());
+    let stray_id = objects.write_object(&ObjectEnvelope::unsigned(
+        ObjectType::Blob,
+        1,
+        b"payload".to_vec(),
+    ))?;
+    let prefix_dir = layout
+        .object_path(ObjectType::Blob, stray_id)
+        .parent()
+        .ok_or_else(|| PrikkError::Io("object path has no parent".to_string()))?
+        .to_path_buf();
+    std::fs::create_dir_all(prefix_dir.join("stray-directory"))?;
 
     // WalReplay: a real, well-formed patch, then a corrupted checksum byte, same technique as
     // `verify_repository_detects_wal_checksum_mismatch` (`wal_cluster.rs`).
@@ -121,6 +122,84 @@ fn verify_repository_reports_two_independent_stage_failures_together() -> Result
         find_stage(&report.stage_outcomes, VerificationStage::WalReplay).status,
         StageStatus::Failed { .. }
     ));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-95 Stage 2 Level 2 acceptance criterion 1, at Phase A granularity (the criterion Level 1
+/// could not satisfy one level in): two independent bad objects with nothing in common -- two
+/// id-mismatched Blobs, distinguished by different wrong ids -- are both reported `Failed` in
+/// `object_outcomes`, and neither suppresses the other, the `Objects` stage itself, or any other
+/// item. Whole-map assertion (handoff §4), not presence-of-one-expected-entry: the outcome set is
+/// walked and every entry classified, the same pattern that caught Level 1's own `CommitIndex` and
+/// `blocked_by` regressions.
+#[test]
+fn verify_repository_reports_two_independent_bad_objects_in_the_same_stage() -> Result<()> {
+    let root = unique_temp_dir("stage2-two-independent-bad-objects");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    let plant_id_mismatched_blob =
+        |label: &str| -> Result<()> {
+            let blob = prikk_object::BlobPayload::new(prikk_object::BlobKind::Text, label.into());
+            let mut envelope =
+                ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob.to_canonical_bytes()?);
+            envelope.add_signature(maintainer_signature(
+                &trusted_signer("stage2-two-bad-objects", 0x1c)?,
+                ObjectType::Blob,
+                envelope.object_id(),
+            )?)?;
+            let wrong_id = sample_object_id(&format!("stage2-two-bad-objects-{label}"));
+            let misplaced = layout.object_path(ObjectType::Blob, wrong_id);
+            std::fs::create_dir_all(misplaced.parent().ok_or_else(|| {
+                PrikkError::Io("misplaced object path has no parent".to_string())
+            })?)?;
+            std::fs::write(
+                &misplaced,
+                crate::file_codec::encode_envelope_file(&envelope)?,
+            )?;
+            Ok(())
+        };
+    plant_id_mismatched_blob("first")?;
+    plant_id_mismatched_blob("second")?;
+
+    // One genuinely clean object too, so the test also confirms a bad item does not suppress a
+    // good one's own Evaluated outcome.
+    let mut objects = FileObjectStore::new(layout.clone());
+    objects.write_object(&signed_patch_blob_envelope())?;
+
+    let report = verify_repository(&layout)?;
+    assert!(matches!(
+        find_stage(&report.stage_outcomes, VerificationStage::Objects).status,
+        StageStatus::Evaluated
+    ));
+    assert!(report.has_item_failure());
+    assert_eq!(
+        report.object_outcomes.len(),
+        3,
+        "no object may be silently absent: {:?}",
+        report.object_outcomes
+    );
+    let failed_count = report
+        .object_outcomes
+        .iter()
+        .filter(|outcome| matches!(outcome.status, crate::ObjectItemStatus::Failed { .. }))
+        .count();
+    let evaluated_count = report
+        .object_outcomes
+        .iter()
+        .filter(|outcome| matches!(outcome.status, crate::ObjectItemStatus::Evaluated(_)))
+        .count();
+    assert_eq!(
+        failed_count, 2,
+        "expected exactly the two id-mismatched Blobs to be Failed: {:?}",
+        report.object_outcomes
+    );
+    assert_eq!(
+        evaluated_count, 1,
+        "the genuinely clean object must still evaluate: {:?}",
+        report.object_outcomes
+    );
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())
@@ -194,26 +273,34 @@ fn verify_repository_marks_every_wal_replay_dependent_as_not_evaluated() -> Resu
     Ok(())
 }
 
-/// The correctness fix the Step 0 ruling required (`stage-2-level-1-step0-ruling-v1.md` §2-§3), the
-/// reason Level 1's implementation exists to get right: an accumulator's emptiness proves "none
-/// found" only if its producer ran to completion. `trust_verifier.issues.is_empty()` alone would
-/// read `true` when `Objects` failed *before* checking a single Block or RefState -- not because
-/// trust was validated, but because it was never attempted. `require_retained_evidence` must not
-/// treat that as proof.
+/// **Superseded by Level 2's item containment.** Originally (Level 1) this proved `trust_is_valid`
+/// reads `false` whenever the whole `Objects` STAGE fails for *any* reason, including one unrelated
+/// to trust (Step 0 ruling §2-§3: an accumulator's emptiness proves "none found" only if its
+/// producer ran to completion). Under Level 2, a single unrelated item's failure no longer fails the
+/// whole `Objects` stage at all -- `objects_evaluated` now means "every item was independently
+/// attempted," which is what makes it *correctly* sufficient again, for a different reason than
+/// under Level 1: item containment means `PublicationTrustVerifier` sees every Block/RefState
+/// regardless of an unrelated object's own fate (Level 2 handoff §7's closing note -- "Level 2 will
+/// increase real trust coverage without touching trust code... that is the change working, not a
+/// regression").
+///
+/// **A closely related concern was checked and ruled out, not merely assumed away**:
+/// `require_retained_evidence` independently re-reads its specific target Block/RefState
+/// (`interrupted_target`/`block_matches_wal`, `ref_publication.rs`) rather than trusting
+/// `trust_verifier`'s own findings, which raised the question of whether that re-read might skip
+/// read-schema/signature-shape strictness the way `trust_verifier` itself would catch. It does not:
+/// both reads go through `FileObjectStore::read_typed`, which delegates to `read_object`
+/// (`object_store.rs:100`), which unconditionally calls `crate::format::validate_read_schema` for
+/// every object it returns -- there is no path to a schema-invalid object through either function.
 ///
 /// Construction: the `LEGACY-LOG-LEADS` retained-evidence shape from DC-95 Stage 1 round 10 (real
 /// WAL/active-metadata evidence a Block's `patch_ids` genuinely match) -- normally enough for
 /// `require_retained_evidence` to leave the issue as `LEGACY-LOG-LEADS` rather than reclassifying
-/// it. Then, separately, an object-id-mismatched Blob is planted under the `Blob` object-type
-/// directory. `persisted_object_types` (`layout.rs`) scans `Patch`, `Block`, `RefState` before
-/// `Blob` -- so this defect does *not* interrupt the Block/RefState trust checks this fixture's own
-/// retained-evidence proof depends on, and both stay real. What this test isolates is different:
-/// with `Objects` itself `Failed` (for a reason unrelated to trust), the fix requires
-/// `trust_is_valid` to read `false` regardless of what `trust_verifier.issues` contains, because
-/// the objects stage's own failure means "no stage guarantees every relevant object was checked" --
-/// not "every check that ran found nothing." The issue must still be reclassified to `DIVERGENCE`.
+/// it. An *unrelated* item failure -- an object-id-mismatched Blob, scanned after Patch/Block/
+/// RefState per `persisted_object_types`'s own order so it does not interrupt this fixture's own
+/// trust checks -- must not suppress a reclassification that is otherwise genuinely earned.
 #[test]
-fn verify_repository_does_not_treat_an_incomplete_objects_stage_as_proof_of_trust() -> Result<()> {
+fn verify_repository_reclassifies_despite_an_unrelated_item_failure() -> Result<()> {
     let root = unique_temp_dir("stage2-trust-is-valid-fix");
     let layout = RepositoryLayout::init(root.clone())?;
     let signer = trusted_signer("stage2-trust-is-valid-fix", 0x18)?;
@@ -342,12 +429,16 @@ fn verify_repository_does_not_treat_an_incomplete_objects_stage_as_proof_of_trus
     let legacy_layout = RepositoryLayout::open(root.clone())?;
     let report = verify_repository(&legacy_layout)?;
 
+    // The Objects stage itself now evaluates -- the stray Blob's id mismatch is a per-item Failed
+    // entry, not a whole-stage failure (DC-95 Stage 2 Level 2).
     assert!(matches!(
         find_stage(&report.stage_outcomes, VerificationStage::Objects).status,
-        StageStatus::Failed { .. }
+        StageStatus::Evaluated
     ));
-    // PublicationReclassification does not hard-depend on Objects (only on Refs/WalReplay/
-    // ActiveWalMetadata) -- it still runs, but with trust_is_valid forced false.
+    assert!(
+        report.has_item_failure(),
+        "the stray Blob's id mismatch must still surface as an item failure: {report:?}"
+    );
     assert!(matches!(
         find_stage(
             &report.stage_outcomes,
@@ -360,16 +451,17 @@ fn verify_repository_does_not_treat_an_incomplete_objects_stage_as_proof_of_trus
         report
             .ref_publication_issues
             .iter()
-            .any(|issue| issue.code == "PRIKK-VERIFY-REF-DIVERGENCE" && issue.blocking),
-        "expected the issue reclassified to DIVERGENCE (trust not provably valid), got: {:?}",
+            .any(|issue| issue.code == "PRIKK-VERIFY-REF-LEGACY-LOG-LEADS"),
+        "the target Block's own trust was genuinely established; an unrelated item's failure must \
+         not suppress this reclassification: {:?}",
         report.ref_publication_issues
     );
     assert!(
         !report
             .ref_publication_issues
             .iter()
-            .any(|issue| issue.code == "PRIKK-VERIFY-REF-LEGACY-LOG-LEADS"),
-        "the specific code must not survive when Objects never proved trust: {:?}",
+            .any(|issue| issue.code == "PRIKK-VERIFY-REF-DIVERGENCE"),
+        "must not be reclassified to DIVERGENCE when trust was genuinely established: {:?}",
         report.ref_publication_issues
     );
 
@@ -379,11 +471,11 @@ fn verify_repository_does_not_treat_an_incomplete_objects_stage_as_proof_of_trus
 
 /// `--stop-on-first-error` (`VerifyOptions::stop_on_first_error`), preserving today's bounded walk:
 /// once the *first* stage in pipeline order fails, every later stage becomes blocking. Same fixture as
-/// `verify_repository_reports_two_independent_stage_failures_together` (an id-mismatched Blob in
-/// `Objects`, a checksum-corrupted active WAL record in `WalReplay`), which proves the *opposite*
-/// under default options: both `Failed` independently. Here, with the flag set, `Objects` runs first,
-/// fails, and the halt suppresses `WalReplay` from ever attempting its own (also genuinely broken)
-/// check.
+/// `verify_repository_reports_two_independent_stage_failures_together` (a structural directory-shape
+/// violation in `Objects`, a checksum-corrupted active WAL record in `WalReplay`), which proves the
+/// *opposite* under default options: both `Failed` independently. Here, with the flag set, `Objects`
+/// runs first, fails, and the halt suppresses `WalReplay` from ever attempting its own (also
+/// genuinely broken) check.
 ///
 /// The required fix from `stage-2-level-1-implementation-review-v1.md` §4: a stage preempted by the
 /// halt is `Halted { after: Objects }`, not `NotEvaluated { blocked_by: Objects }` -- `Objects` is not
@@ -400,21 +492,20 @@ fn verify_repository_with_options_halts_every_later_stage_when_stop_on_first_err
     let root = unique_temp_dir("stage2-stop-on-first-error");
     let layout = RepositoryLayout::init(root.clone())?;
 
-    // Objects: an id-mismatched Blob, same technique as the two-independent-failures test above.
-    let blob = prikk_object::BlobPayload::new(prikk_object::BlobKind::Text, b"payload".to_vec());
-    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob.to_canonical_bytes()?);
-    envelope.add_signature(fake_maintainer_signature())?;
-    let wrong_id = sample_object_id("stage2-stop-wrong-id");
-    let misplaced = layout.object_path(ObjectType::Blob, wrong_id);
-    std::fs::create_dir_all(
-        misplaced
-            .parent()
-            .ok_or_else(|| PrikkError::Io("misplaced object path has no parent".to_string()))?,
-    )?;
-    std::fs::write(
-        &misplaced,
-        crate::file_codec::encode_envelope_file(&envelope)?,
-    )?;
+    // Objects: a stray directory inside an object prefix directory, structural, same technique as
+    // the two-independent-failures test above.
+    let mut objects = FileObjectStore::new(layout.clone());
+    let stray_id = objects.write_object(&ObjectEnvelope::unsigned(
+        ObjectType::Blob,
+        1,
+        b"payload".to_vec(),
+    ))?;
+    let prefix_dir = layout
+        .object_path(ObjectType::Blob, stray_id)
+        .parent()
+        .ok_or_else(|| PrikkError::Io("object path has no parent".to_string()))?
+        .to_path_buf();
+    std::fs::create_dir_all(prefix_dir.join("stray-directory"))?;
 
     // WalReplay: a real, well-formed patch, then a corrupted checksum byte -- independently broken,
     // same as the two-independent-failures test, so this stage would fail on its own if it ran.
