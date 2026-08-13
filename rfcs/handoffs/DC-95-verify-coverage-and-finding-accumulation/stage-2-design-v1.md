@@ -81,6 +81,19 @@ assumed:
 read off the current pipeline and is exactly the kind of framing that has proved narrower than the code
 three times this cycle.
 
+> **SUPERSEDED 2026-08-12 — the list above is wrong and is retained only to show what was corrected.**
+> Step 0 derived the real graph (`stage-2-level-1-step0-ruling-v1.md`, and its own §1 table, which is
+> now authoritative). Three corrections: **`require_retained_evidence` depends on stages 1, 2, 4 and 8,
+> not on stage 2 alone**; **`classify_active_wal_metadata` depends on stage 4** and was missing from the
+> WAL list; and **stage 1 couples to stages 3 and 9 through the shared, mutable `trust_verifier`**,
+> which this section did not mention at all.
+>
+> **Consequence ruled as a correctness defect, not a polish item:** `trust_is_valid` is computed as
+> `trust_verifier.issues.is_empty()`, which under containment reads `true` when stage 1 failed before
+> any trust check ran — *"proved"* from an unrun check. Generalised in the ruling's §3: **an
+> accumulator's emptiness means "none found" only if its producer ran to completion.** Every cross-stage
+> inference of that shape must be swept for and given an explicit unknown case.
+
 ## 5. Severity, `doctor`, and repair
 
 - **One new finding type**, carrying scope, code, message, and a `blocking` flag — mirroring
@@ -156,8 +169,11 @@ object-trust/ref-authority separation.
 
 ## 12. Open items the implementation handoff must resolve
 
-1. **Where the new finding type lives**, and whether existing `Vec` fields fold into it or sit alongside
-   it. I have deliberately not decided this — it depends on the dependency graph in §4 being confirmed.
+1. ~~**Where the new finding type lives**, and whether existing `Vec` fields fold into it or sit alongside
+   it.~~ **ANSWERED 2026-08-12 by Step 0 §6.1, ruled accepted:** a `stage_status` map sits **alongside**
+   the existing per-finding `Vec`s, which stay exactly as they are today. Folding would conflate *"this
+   defect is blocking"* with *"this scope could not be checked"* — the same argument §2.5 makes in the
+   opposite direction.
 2. **Whether `verify_objects`'s existing per-object loop already has a natural item boundary** for
    Level 2, or needs one introduced.
 3. **The exact `--stop-on-first-error` surface** — flag name, and whether `doctor` gets it too.
