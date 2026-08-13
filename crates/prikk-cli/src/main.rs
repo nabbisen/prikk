@@ -23,10 +23,10 @@ mod seal;
 mod tag;
 
 use args::{
-    CheckoutMode, MergeEvidenceTargetArg, current_dir, optional_path_or_current,
-    parse_checkout_args, parse_commit_args, parse_doctor_args, parse_inverse_plan_args,
-    parse_log_args, parse_merge_evidence_args, parse_merge_plan_args, parse_rollback_draft_args,
-    parse_rollback_draft_verify_args, parse_rollback_preview_args, parse_worktree_status_args,
+    CheckoutMode, MergeEvidenceTargetArg, current_dir, parse_checkout_args, parse_commit_args,
+    parse_doctor_args, parse_inverse_plan_args, parse_log_args, parse_merge_evidence_args,
+    parse_merge_plan_args, parse_rollback_draft_args, parse_rollback_draft_verify_args,
+    parse_rollback_preview_args, parse_verify_args, parse_worktree_status_args,
 };
 use output::{
     print_checkout_plan, print_doctor_report, print_help, print_history, print_merge_evidence,
@@ -38,14 +38,15 @@ use output::{
 use prikk_store::{
     ActiveRefMetadata, DEFAULT_ACTIVE_PATCH_LIMIT, DoctorRepairOptions, Ed25519AuthorSigner,
     Ed25519MaintainerSigner, MergeEvidenceTarget, RefStore, RepositoryFormat, RepositoryLayout,
-    Wal, WorktreePatchCommitOptions, add_trusted_maintainer, append_rollback_draft,
+    VerifyOptions, Wal, WorktreePatchCommitOptions, add_trusted_maintainer, append_rollback_draft,
     commit_worktree_changes_signed, doctor_repository, list_received_pointers,
     load_received_ref_history, load_ref_history, materialize_patch_checkout,
     materialize_patch_checkout_with_deletions, materialize_snapshot_checkout,
     plan_patch_checkout_deletions, prepare_checkout_plan, prepare_merge_evidence,
     prepare_merge_plan, prepare_patch_inverse_plan, prepare_patch_replay_plan,
     prepare_rollback_preview, prepare_snapshot_checkout_plan, read_active_ref_metadata,
-    repair_repository, verify_active_rollback_draft, verify_repository, worktree_status,
+    repair_repository, verify_active_rollback_draft, verify_repository_with_options,
+    worktree_status,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -101,7 +102,7 @@ fn run() -> std::result::Result<(), String> {
         Some("rollback-draft") => run_rollback_draft(args.collect()),
         Some("rollback-draft-verify") => run_rollback_draft_verify(args.collect()),
         Some("worktree-status") => run_worktree_status(args.collect()),
-        Some("verify") => run_verify(args.next()),
+        Some("verify") => run_verify(args.collect()),
         Some("doctor") => run_doctor(args.collect()),
         Some(other) => Err(format!("unknown command: {other}")),
     }
@@ -511,10 +512,13 @@ fn run_worktree_status(args: Vec<String>) -> std::result::Result<(), String> {
     }
 }
 
-fn run_verify(path: Option<String>) -> std::result::Result<(), String> {
-    let root = optional_path_or_current(path)?;
-    let layout = open_repository(root)?;
-    let report = verify_repository(&layout).map_err(|err| err.to_string())?;
+fn run_verify(args: Vec<String>) -> std::result::Result<(), String> {
+    let verify_args = parse_verify_args(args)?;
+    let layout = open_repository(verify_args.root)?;
+    let options = VerifyOptions {
+        stop_on_first_error: verify_args.stop_on_first_error,
+    };
+    let report = verify_repository_with_options(&layout, options).map_err(|err| err.to_string())?;
     print_verify_report(&layout, &report);
     // Received refs (DC-78 ruling 4) are never read by verify_repository itself — every object
     // they point at is already checked by the ordinary type-based object scan regardless of which
@@ -527,7 +531,12 @@ fn run_verify(path: Option<String>) -> std::result::Result<(), String> {
             pointer.ref_name, pointer.ref_state_id
         );
     }
-    if report.has_unverifiable_state_roots() {
+    if report.has_stage_failure() {
+        Err(
+            "repository verification did not complete every stage; see stage outcomes above"
+                .to_string(),
+        )
+    } else if report.has_unverifiable_state_roots() {
         Err("format-1 scaffold roots are not verifiable state commitments".to_string())
     } else if report.has_active_wal_metadata_integrity_issue() {
         Err("repository has active-WAL metadata integrity issues".to_string())
