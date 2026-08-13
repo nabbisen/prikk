@@ -27,7 +27,23 @@ exist only to serve format-1:
 - `active.rs::finish_legacy_active_publication_cleanup` and `authorize_legacy_active_cleanup`
 - `wal.rs::truncate_empty_for_legacy_recovery`
 - `verify.rs::legacy_state_roots_unverifiable` — a field, its predicate, and its assignment
-- `test_support.rs::legacy_rollback_marker_signature`
+- ~~`test_support.rs::legacy_rollback_marker_signature`~~ — **REMOVED 2026-08-13, misattributed.**
+  It backs `rollback_verify.rs:210`'s `key_id == LEGACY_ROLLBACK_MARKER_KEY_ID` check, which runs
+  **unconditionally** — a hardcoded placeholder key id, not a format condition. It sits three lines above
+  the check that genuinely is format-1-only, and DC-95's own module doc already keeps the two rows apart.
+
+**Added the same date, found by §8's independent enumeration and missed by the literal-token grep:**
+
+- **`PublicationState::LegacyLogLeading`** — enum variant plus six format-1-gated usage sites
+  (`refs/publication.rs`), mirrored in fixtures.
+- **The vestigial format-1 missing-pointer reconstruction subsystem** — `RefRecoveryCandidate`,
+  `RefRecoveryRepair`, `recoverable_missing_ref`, `reconstruct_missing_ref_from_log` (which already
+  returns `Err` unconditionally), wired through `DoctorRepairOptions::reconstruct_main_ref` and
+  `repair_repository`'s refusal branch. Dead compatibility stubs carrying no `LegacyV1` token.
+- **`signature_diagnostics.rs` — flagged, not removed.** Its logic stays and is load-bearing; it carries
+  **no `RepositoryFormat` gate at all** and is format-1-only in *practice*, via the same upstream gating
+  DC-95 round 11 established. What goes stale is its doc comment and issue-message framing, which label
+  it format-1 compatibility machinery. **Correct the framing; keep the code.**
 
 And three checks whose only reason to exist is the duality:
 
@@ -116,7 +132,11 @@ making it trustworthy.
 ## 9. Acceptance criteria
 
 1. **No `RepositoryFormat::LegacyV1` remains in production code.** The enum variant itself may stay only
-   if detection requires naming the rejected format.
+   if detection requires naming the rejected format. **Amended 2026-08-13: this criterion is not
+   sufficient on its own.** §8's enumeration found format-1-specific identifiers and dead compatibility
+   stubs carrying no `LegacyV1` token — `PublicationState::LegacyLogLeading` and the reconstruction
+   subsystem — which a token-based check passes over entirely. **The criterion is "no format-1-specific
+   machinery remains," and the token is one instrument for finding it, not the definition.**
 2. **A format-1 repository is rejected at open with §4's message**, proven by a test using a real
    format-1 fixture, not a hand-built one.
 3. **The `created_at == 0` check still fires**, unconditionally — proven by the DC-95 method: disable it,

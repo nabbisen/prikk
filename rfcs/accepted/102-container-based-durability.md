@@ -145,6 +145,25 @@ repository is not. Losing a worktree file is recoverable. Signing a false deleti
 6. **Cost.** The proof surface to be re-earned, and what a container does to DC-41's
    failpoint matrix.
 
+### 6.3a Two findings promoted from §6.3's answer — 2026-08-13
+
+**The object container's read path is a blast-radius requirement with no precedent in this codebase.**
+The WAL and ref log already implement per-record SHA-256 framing, which is the mechanism amended
+constraint 5 asks for — but both hard-`Err` on a mid-stream checksum mismatch. **Correct for a
+single-purpose queue; a regression for a container holding many unrelated objects**, where today's
+one-file-per-object layout lets `verify` name the bad object and keep scanning. The object container must
+name the failed record *and continue*. No existing read path does this.
+
+**An accepted fix is orphaned and needs a home.** RFC 101 §5.1 established that the active WAL is created
+lazily on first append rather than at `init`, and that moving it is behaviour-neutral. That fix was
+accepted — and RFC 101 then closed with a negative result, so it never had an implementation vehicle.
+**It is independently correct and blocks this RFC's own acceptance test** (every container name created
+at `init`). Assign it explicitly rather than letting it ride on a closed RFC.
+
+**Minor, recorded so it is not carried forward as real:** `quarantine/` is created at `init` and never
+read or written anywhere in the workspace. Verified — the only non-`layout.rs` matches are an unrelated
+doc comment and an unrelated enum variant. Do not enumerate it as a container.
+
 ## 7. Acceptance criteria
 
 1. **Parity stated as a property of the design**, not as a platform list that happens to pass.
