@@ -211,6 +211,58 @@ pub(crate) fn verify_block_v2_state(
     Ok(())
 }
 
+/// Outcome of attempting to verify one `CurrentV2` Block's state root during
+/// [`verify_blocks_topological`]'s whole-batch pass (DC-95 Stage 2 Level 2). Distinct from
+/// `verify::StageOutcome`/`StageStatus` (Level 1): there is no operator-requested halt at block
+/// granularity, so there is no `Halted` analogue — a block's non-evaluation is always because its
+/// own state-derivation parent did not itself evaluate, never because an unrelated walk stopped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BlockStateStatus {
+    /// The block's state root was independently re-derived and matches its recorded value.
+    Verified,
+    /// The block's own state-root check failed.
+    Failed {
+        /// The error the check raised.
+        message: String,
+    },
+    /// This block's state-derivation parent did not itself evaluate (`Failed` or `NotEvaluated`), so
+    /// this block's own state is undefined by construction and [`verify_block_v2_state`] was never
+    /// attempted for it — attempting anyway would mean either trusting an unsound parent or
+    /// re-deriving from genesis per descendant, defeating DC-92's whole memoization point.
+    /// `blocked_by` names this block's *immediate* state-derivation parent, not the root cause
+    /// (implementation review v1 §4 / Level 2 handoff §7 Q2: each record asserts only what it
+    /// knows — a reader follows the chain one hop at a time, exactly as `StageStatus::NotEvaluated`
+    /// requires at the stage level).
+    NotEvaluated {
+        /// This block's own state-derivation parent.
+        blocked_by: ObjectId,
+    },
+}
+
+/// One block's resolved outcome from [`verify_blocks_topological`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockStateOutcome {
+    /// The block this outcome is for.
+    pub block_id: ObjectId,
+    /// How that block's state-root check resolved.
+    pub status: BlockStateStatus,
+}
+
+/// Result of [`verify_blocks_topological`]: one outcome per input block, plus its pre-existing
+/// diagnostic. Always exactly `blocks.len()` outcomes — no block may be silently absent, the same
+/// invariant Level 1's `StageOutcome` carries at the stage level.
+#[derive(Debug, Clone)]
+pub(crate) struct TopologicalVerification {
+    /// One outcome per block in `blocks`, in the order each was resolved (topological order, not
+    /// input order).
+    pub(crate) outcomes: Vec<BlockStateOutcome>,
+    /// Peak number of entries [`LineageStateMemo`] held live at any point during this call —
+    /// diagnostic only, unchanged by Level 2, read by the frontier-boundedness test and ignored by
+    /// every production caller (unread outside `#[cfg(test)]`, hence the attribute below).
+    #[allow(dead_code)]
+    pub(crate) peak_memo_entries: usize,
+}
+
 /// Verify every format-2 Block in `blocks` — `verify`'s own outer loop's batch, collected in
 /// ObjectId scan order by its Phase A pass — in **state-dependency order** rather than that scan
 /// order (DC-92 §4.2). `state_derivation_parent` reduces every block, including `Merge` (mainline
@@ -241,13 +293,23 @@ pub(crate) fn verify_block_v2_state(
 /// caught with the same error it always was; this function adds no new trust in that path, only
 /// reordering the batch that *is* self-contained.
 ///
-/// Returns the peak number of entries [`LineageStateMemo`] held live at any point during this call —
-/// diagnostic only, read by the frontier-boundedness test, ignored by every production caller.
+/// **DC-95 Stage 2 Level 2: item-contained.** A block whose own check fails no longer aborts the
+/// whole pass — it is recorded [`BlockStateStatus::Failed`] and the walk continues. Every block
+/// whose state-derivation parent resolved to anything but [`BlockStateStatus::Verified`] is recorded
+/// [`BlockStateStatus::NotEvaluated`] *without* attempting `verify_block_v2_state` at all: its state
+/// is undefined by construction (§ above), so nothing is gained by attempting it and failing a second,
+/// less informative way. The topological order Kahn's algorithm already establishes guarantees a
+/// block's parent (if in-batch) is always resolved before the block itself, so looking up the
+/// parent's already-recorded status is always safe. The batch-level cycle detection below remains a
+/// genuine whole-pass failure — a cycle violates the tree/forest structure every other guarantee in
+/// this function assumes, the same footing as a directory-shape violation one level up in `verify`'s
+/// own pipeline (DC-95 Stage 2 Level 2 Step 0 §1.1's structural/semantic split) — and this check is
+/// provably unreachable in practice regardless (round 6's ruling, kept for defense).
 pub(crate) fn verify_blocks_topological(
     reader: &impl ObjectReader,
     blocks: &[(ObjectId, BlockPayload)],
     memo: &mut LineageStateMemo,
-) -> Result<usize> {
+) -> Result<TopologicalVerification> {
     let by_id: BTreeMap<ObjectId, &BlockPayload> =
         blocks.iter().map(|(id, payload)| (*id, payload)).collect();
 
@@ -278,13 +340,38 @@ pub(crate) fn verify_blocks_topological(
 
     let mut peak = memo.len();
     let mut processed = BTreeSet::new();
+    let mut resolved: BTreeMap<ObjectId, BlockStateStatus> = BTreeMap::new();
+    let mut outcomes: Vec<BlockStateOutcome> = Vec::with_capacity(blocks.len());
     while let Some(id) = queue.pop_front() {
         let payload = by_id.get(&id).ok_or_else(|| {
             PrikkError::Integrity("format-2 topological pass lost a block".into())
         })?;
-        verify_block_v2_state(reader, id, payload, memo)?;
-        processed.insert(id);
+        let in_batch_parent =
+            state_derivation_parent(payload).filter(|parent_id| by_id.contains_key(parent_id));
+        let blocking_parent =
+            in_batch_parent.and_then(|parent_id| match resolved.get(&parent_id) {
+                Some(BlockStateStatus::Verified) | None => None,
+                Some(BlockStateStatus::Failed { .. } | BlockStateStatus::NotEvaluated { .. }) => {
+                    Some(parent_id)
+                }
+            });
+        let status = if let Some(blocked_by) = blocking_parent {
+            BlockStateStatus::NotEvaluated { blocked_by }
+        } else {
+            match verify_block_v2_state(reader, id, payload, memo) {
+                Ok(()) => BlockStateStatus::Verified,
+                Err(err) => BlockStateStatus::Failed {
+                    message: err.to_string(),
+                },
+            }
+        };
         peak = peak.max(memo.len());
+        resolved.insert(id, status.clone());
+        outcomes.push(BlockStateOutcome {
+            block_id: id,
+            status,
+        });
+        processed.insert(id);
 
         if let Some(parent_id) = state_derivation_parent(payload) {
             if let Some(count) = remaining_children.get_mut(&parent_id) {
@@ -323,7 +410,10 @@ pub(crate) fn verify_blocks_topological(
             },
         );
     }
-    Ok(peak)
+    Ok(TopologicalVerification {
+        outcomes,
+        peak_memo_entries: peak,
+    })
 }
 
 /// Walk parent pointers from `tip` back toward genesis, stopping at genesis *or* at the first

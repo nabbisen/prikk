@@ -176,6 +176,7 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::{BlockPayload, ObjectId, ObjectType};
 
 use crate::active::{ActiveRefMetadata, read_active_ref_metadata};
+use crate::block_state::{BlockStateOutcome, BlockStateStatus};
 use crate::commit_index::{CommitIndexDivergence, verify_divergence};
 use crate::layout::{RepositoryFormat, RepositoryLayout};
 use crate::lifecycle_cache::incremental::{
@@ -191,6 +192,7 @@ use crate::trust::PublicationTrustIssue;
 use crate::wal::Wal;
 
 use objects::verify_objects;
+pub use objects::{ObjectItemOutcome, ObjectItemStatus};
 use trust::PublicationTrustVerifier;
 
 /// Verification summary for a single persisted object.
@@ -345,23 +347,37 @@ pub struct RepositoryVerification {
     /// Outcome of each of the twelve verification stages (DC-95 Stage 2 Level 1), in pipeline order.
     /// Always exactly twelve entries — no stage may be silently absent.
     pub stage_outcomes: Vec<StageOutcome>,
-    /// Number of persisted object files checked successfully. `None` when the objects stage did not
-    /// evaluate to completion — a partial count is not "this many verified" (DC-95 Stage 2 ruling):
-    /// object verification includes a whole-store topological pass that only runs after every object
-    /// has been scanned, so a count from a stage that failed partway through does not establish that
-    /// even the objects it did see are individually fine.
+    /// Phase A: one outcome per persisted object file scanned, in scan order (DC-95 Stage 2 Level 2).
+    /// Empty when the `Objects` stage itself did not evaluate (a structural directory-shape error) —
+    /// nothing was attempted, distinct from a non-empty set where every entry happens to be `Failed`.
+    pub object_outcomes: Vec<ObjectItemOutcome>,
+    /// Phase B: one outcome per `CurrentV2` Block whose Phase A check succeeded, in the
+    /// state-dependency order `verify_blocks_topological` resolved them — not scan order (DC-92
+    /// §4.2). Empty when the `Objects` stage did not evaluate, or when no `CurrentV2` Block passed
+    /// Phase A at all.
+    pub block_state_outcomes: Vec<BlockStateOutcome>,
+    /// Number of persisted object files whose own Phase A checks ran to completion (DC-95 Stage 2
+    /// Level 2). `None` only when the `Objects` stage itself did not evaluate (a structural
+    /// directory-shape error) — under item containment this is no longer the same claim as "every
+    /// object in the store is individually sound": some entries in `object_outcomes` may themselves
+    /// be `Failed` while this count still reflects how many succeeded. Never a partial claim about
+    /// state-root soundness, which `block_state_outcomes` is the only source of truth for (Level 2
+    /// handoff §7 Q3 — `checked_blocks` below keeps its pre-Level-2 meaning unchanged).
     pub checked_objects: Option<usize>,
     /// Number of active WAL records replayed successfully. `None` when the WAL-replay stage did not
     /// evaluate to completion.
     pub checked_wal_records: Option<usize>,
-    /// Number of persisted block objects whose references were checked. `None` when the objects stage
-    /// did not evaluate to completion.
+    /// Number of persisted Block objects whose references (parent, patch, snapshot existence, merge
+    /// baseline) were checked successfully — a Phase A claim only, never a claim about state-root
+    /// soundness (see `block_state_outcomes`). `None` only when the `Objects` stage itself did not
+    /// evaluate. This field's meaning is unchanged by Level 2 (handoff §7 Q3) — only *when* it is
+    /// `None` changed, from "the whole stage failed" to "the whole stage did not evaluate at all."
     pub checked_blocks: Option<usize>,
-    /// Number of persisted Block objects classified as rollback blocks. `None` when the objects stage
-    /// did not evaluate to completion.
+    /// Number of persisted Block objects classified as rollback blocks, among those whose Phase A
+    /// check succeeded. `None` only when the `Objects` stage itself did not evaluate.
     pub checked_rollback_blocks: Option<usize>,
-    /// Number of sealed rollback-marked Patch objects referenced by verified Blocks. `None` when the
-    /// objects stage did not evaluate to completion.
+    /// Number of sealed rollback-marked Patch objects referenced by Blocks whose Phase A check
+    /// succeeded. `None` only when the `Objects` stage itself did not evaluate.
     pub checked_sealed_rollback_patches: Option<usize>,
     /// Number of active WAL patch records that already exist as persisted patch objects. `None` when
     /// the WAL-persistence stage did not evaluate to completion.
@@ -457,11 +473,46 @@ impl RepositoryVerification {
     /// verified, regardless of what the stages that did run found. Checked first, ahead of every
     /// finding-specific predicate below: those predicates' own backing data can itself be incomplete
     /// precisely because a stage failed, so this is the more fundamental question.
+    ///
+    /// **Does not, by itself, cover item-level defects (DC-95 Stage 2 Level 2)** — the `Objects`
+    /// stage evaluates cleanly (`Evaluated`) even when one of its items individually failed, since
+    /// item containment means a bad object no longer aborts the whole stage. See
+    /// [`Self::has_item_failure`] for that question, and [`Self::has_blocking_defect`] for the
+    /// combined check almost every caller actually wants.
     #[must_use]
     pub fn has_stage_failure(&self) -> bool {
         self.stage_outcomes
             .iter()
             .any(|outcome| outcome.status.is_blocking())
+    }
+
+    /// Return true when any individual item did not evaluate cleanly (DC-95 Stage 2 Level 2) — a
+    /// Phase A object whose own check failed, or a Phase B `CurrentV2` Block whose state-root check
+    /// failed or could not be attempted because its own state-derivation parent did not evaluate.
+    /// Item containment means these no longer make [`Self::has_stage_failure`] true: the `Objects`
+    /// stage itself completed, so this is a genuinely separate question, not a more detailed view of
+    /// the same one. `object_outcomes`/`block_state_outcomes` are empty (not merely all-`Evaluated`)
+    /// when the `Objects` stage itself did not evaluate — this method reads that case as `false`,
+    /// same as every other item-backed predicate in this type; `has_stage_failure` is what is already
+    /// true for it.
+    #[must_use]
+    pub fn has_item_failure(&self) -> bool {
+        self.object_outcomes
+            .iter()
+            .any(|outcome| matches!(outcome.status, ObjectItemStatus::Failed { .. }))
+            || self
+                .block_state_outcomes
+                .iter()
+                .any(|outcome| !matches!(outcome.status, BlockStateStatus::Verified))
+    }
+
+    /// Return true when this repository's verification found any blocking reason to refuse it --
+    /// stage-level (`has_stage_failure`) or item-level (`has_item_failure`). The check almost every
+    /// caller wants: `doctor_repository`'s refusal gate and `prikk verify`'s own exit-code chain both
+    /// need "is this repository verified at all," not one half of that question.
+    #[must_use]
+    pub fn has_blocking_defect(&self) -> bool {
+        self.has_stage_failure() || self.has_item_failure()
     }
 
     /// Return true when legacy scaffold roots prevent state-commitment verification.
@@ -712,6 +763,8 @@ pub fn verify_repository_with_options(
     );
     let objects_evaluated = object_summary.is_some();
     let (
+        object_outcomes,
+        block_state_outcomes,
         checked_objects,
         checked_blocks,
         checked_rollback_blocks,
@@ -721,17 +774,24 @@ pub fn verify_repository_with_options(
         block_seals,
         mut signature_envelope_issues,
     ) = match object_summary {
-        Some(summary) => (
-            Some(summary.object_count),
-            Some(summary.block_count),
-            Some(summary.rollback_block_count),
-            Some(summary.rollback_patch_count),
-            summary.temp_paths,
-            summary.merge_baseline_divergences,
-            summary.block_seals,
-            summary.signature_issues,
-        ),
+        Some(summary) => {
+            let counts = phase_a_counts(&summary.item_outcomes)?;
+            (
+                summary.item_outcomes,
+                summary.topological_outcomes,
+                Some(counts.objects),
+                Some(counts.blocks),
+                Some(counts.rollback_blocks),
+                Some(counts.rollback_patches),
+                summary.temp_paths,
+                summary.merge_baseline_divergences,
+                summary.block_seals,
+                summary.signature_issues,
+            )
+        }
         None => (
+            Vec::new(),
+            Vec::new(),
             None,
             None,
             None,
@@ -929,6 +989,8 @@ pub fn verify_repository_with_options(
     Ok(RepositoryVerification {
         legacy_state_roots_unverifiable: layout.format() == RepositoryFormat::LegacyV1,
         stage_outcomes: pipeline.outcomes,
+        object_outcomes,
+        block_state_outcomes,
         checked_objects,
         checked_wal_records: replay.as_ref().map(|replay| replay.records.len()),
         checked_blocks,
@@ -950,6 +1012,52 @@ pub fn verify_repository_with_options(
         active_wal_ordering_issues,
         merge_baseline_divergences,
         block_seals,
+    })
+}
+
+/// Aggregate counts derived from Phase A's per-item outcomes (DC-95 Stage 2 Level 2). Each field
+/// counts only `Evaluated` entries -- a `Failed` object contributes to none of them, same as it never
+/// contributed to the pre-Level-2 running totals a whole-stage failure would have zeroed out entirely.
+struct PhaseACounts {
+    objects: usize,
+    blocks: usize,
+    rollback_blocks: usize,
+    rollback_patches: usize,
+}
+
+fn phase_a_counts(object_outcomes: &[ObjectItemOutcome]) -> Result<PhaseACounts> {
+    let mut objects = 0_usize;
+    let mut blocks = 0_usize;
+    let mut rollback_blocks = 0_usize;
+    let mut rollback_patches = 0_usize;
+    for outcome in object_outcomes {
+        let ObjectItemStatus::Evaluated(verification) = &outcome.status else {
+            continue;
+        };
+        objects = objects.checked_add(1).ok_or_else(|| {
+            PrikkError::Integrity("object verification count overflow".to_string())
+        })?;
+        if verification.object_type == ObjectType::Block {
+            blocks = blocks.checked_add(1).ok_or_else(|| {
+                PrikkError::Integrity("block verification count overflow".to_string())
+            })?;
+            if verification.rollback_patch_count != 0 {
+                rollback_blocks = rollback_blocks.checked_add(1).ok_or_else(|| {
+                    PrikkError::Integrity("rollback block count overflow".to_string())
+                })?;
+                rollback_patches = rollback_patches
+                    .checked_add(verification.rollback_patch_count)
+                    .ok_or_else(|| {
+                        PrikkError::Integrity("rollback patch count overflow".to_string())
+                    })?;
+            }
+        }
+    }
+    Ok(PhaseACounts {
+        objects,
+        blocks,
+        rollback_blocks,
+        rollback_patches,
     })
 }
 
