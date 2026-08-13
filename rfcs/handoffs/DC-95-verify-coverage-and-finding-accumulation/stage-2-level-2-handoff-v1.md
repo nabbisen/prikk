@@ -132,18 +132,31 @@ The field's own doc already says "references checked," so the doc is accurate an
 was covering for it. **Do not rename it** — churn. **Do surface Phase B through per-block outcomes**, and
 if you add an aggregate, scope its name to Phase B's actual claim.
 
-**Q4 — legacy-timestamp relocation: NOT YET. Authorized only on a probe.** You reported rather than
-moved, which was right. But moving a check's evaluation site is a behaviour change, and this project
-settles those by probe, not by argument.
+**Q4 — legacy-timestamp relocation: NO. Ruled 2026-08-13, superseding the same day's "probe first."**
 
-Stage 1 proved `created_at == 0` load-bearing **as a check**. It did not prove anything about the *scope*
-of its veto. Before relocating: demonstrate that per-ref attribution detects the same defects the
-whole-set pre-check does — construct a repository where one ref carries a legacy timestamp and others do
-not, and show what each form reports. **If the whole-set veto turns out to be deliberate — a mixed-format
-repository being uninterpretable as a whole — that is a finding and the relocation does not happen.**
+You reported rather than moved, which was right. My first ruling asked for a probe and framed this as a
+generic behaviour-change question. **That framing was wrong, and the owner's question supplied the
+reason.**
 
-Note what is at stake either way: left whole-set, one ref's legacy timestamp blocks **every** ref's
-classification under item containment, which defeats Level 2 for that path.
+`refs/verify.rs:46-52` fires when a repository **claiming `CurrentV2`** contains **any** ref-log record
+with `created_at != 0` — a format-1 artifact. **That is a migration-integrity check, not a per-ref
+defect.** A stale timestamp anywhere in ref history is evidence that DC-40's format transition did not
+complete or did not cover everything, which makes the repository's format-2 claim unproven **for all of
+its refs**, not only the one carrying the field.
+
+Per-ref attribution would report *"fourteen refs fine, one has a legacy timestamp."* The honest statement
+is *"this repository asserts format-2 and its own ref history contradicts that."* Relocating would
+convert a repository-level claim into a per-item annotation and weaken migration verification for the
+users most exposed to it — anyone upgrading from an older prikk.
+
+**It stays a whole-set pre-check, evaluated before per-ref classification.** And the consequence I called
+a cost is not one: one legacy timestamp blocking every ref's classification is **correct**, because what
+failed is the claim covering every ref. I wrote that this "defeats Level 2 for that path" — it does not.
+Level 2 contains failures that are genuinely per-item; this one is not.
+
+**Do not probe it and do not move it.** `has_legacy_timestamp` being a per-`LogState` field makes the
+relocation *possible*, which is what your derivation established and it was correct to establish it. It
+does not make it right.
 
 **Q5 — filename-parsing errors: CONTAIN, as you proposed.** One file's name is one file's name; a
 malformed filename says nothing about any sibling, so it passes your own dependency test. The
