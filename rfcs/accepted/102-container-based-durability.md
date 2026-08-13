@@ -119,8 +119,13 @@ repository is not. Losing a worktree file is recoverable. Signing a false deleti
    lost. **So: corruption isolation must not regress either.** A single corruption event must remain
    attributable to, and confined to, a single object, and **per-entry checksums or an equivalent
    isolation mechanism is a requirement of any proposed container format — demonstrated, not asserted.**
-6. **A format migration must exist** for repositories already written in the current format, and it is
-   in scope for the design even though it is out of scope for §6.
+6. ~~**A format migration must exist** for repositories already written in the current format.~~
+   **WITHDRAWN 2026-08-13 by owner ruling.** Asked whether "without concern about migration" extended
+   from RFC 103's retired format to this RFC's *current* one, the owner answered that it does: *"We are
+   in early development stage. The risk is accepted."* **No migration is required for repositories
+   written in the current format.** This removes the single largest cost item in the container redesign
+   and changes what §6.3 onward must account for. The corresponding acceptance criterion 5 (migration
+   demonstrated on an existing repository) is withdrawn with it.
 
 ## 6. Blocking prerequisites
 
@@ -147,7 +152,7 @@ repository is not. Losing a worktree file is recoverable. Signing a false deleti
    the specific failure `verify` reports, restore, confirm no residual diff.
 3. **Green three-platform CI**, macOS included.
 4. **DC-41-grade recoverability audit re-earned** at the new design's own state count.
-5. **The migration demonstrated on a repository written in the current format**, not only on fresh ones.
+5. ~~The migration demonstrated on a repository written in the current format.~~ **Withdrawn 2026-08-13** with constraint 6.
 
 ## 8. Non-goals
 

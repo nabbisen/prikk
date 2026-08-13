@@ -1,7 +1,11 @@
-# RFC (proposed) - 103 Retire Format-1
+# RFC (accepted) - 103 Retire Format-1
 
-**Status.** **PROPOSED 2026-08-13**, on the owner's direction: design *"clean, simple as possible,
-reasonably functional and sophisticated, without concern about migration."*
+**Status.** **ACCEPTED by the project owner 2026-08-13**, on the owner's direction: design *"clean,
+simple as possible, reasonably functional and sophisticated, without concern about migration."*
+**Risk accepted explicitly, same date:** *"We are in early development stage. The risk is accepted."*
+§10's cost — that any format-1 repository in the wild becomes unopenable by every future version — is
+therefore an accepted risk, not an open one. **Acceptance clears §8's prerequisites, not the
+implementation.**
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** The format-1/format-2 duality surfacing as a complication in four consecutive DC-95
 rounds, and the owner's ruling that migration from an older prikk need not be preserved.
