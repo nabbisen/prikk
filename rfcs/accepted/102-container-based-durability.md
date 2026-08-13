@@ -154,7 +154,14 @@ single-purpose queue; a regression for a container holding many unrelated object
 one-file-per-object layout lets `verify` name the bad object and keep scanning. The object container must
 name the failed record *and continue*. No existing read path does this.
 
-**An accepted fix is orphaned and needs a home.** RFC 101 §5.1 established that the active WAL is created
+**An accepted fix is orphaned — ASSIGNED 2026-08-13 to this RFC's own implementation scope.** RFC 101
+§5.1's WAL-at-`init` change carries its own already-accepted reasoning (behaviour-neutral: every reader
+treats a missing WAL and an empty WAL identically), and it is the one place today's code fails §6.3's
+acceptance test. It lands with this RFC's implementation rather than as a standalone increment, since it
+is meaningless on its own and load-bearing here. **Its acceptance evidence is RFC 101 §5.1's, not
+re-derived** — but confirm the reader-equivalence claim still holds before relying on it.
+
+Original finding, retained: RFC 101 §5.1 established that the active WAL is created
 lazily on first append rather than at `init`, and that moving it is behaviour-neutral. That fix was
 accepted — and RFC 101 then closed with a negative result, so it never had an implementation vehicle.
 **It is independently correct and blocks this RFC's own acceptance test** (every container name created
