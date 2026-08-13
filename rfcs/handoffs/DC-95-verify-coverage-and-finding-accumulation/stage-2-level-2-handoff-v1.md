@@ -103,3 +103,55 @@ Both read `rfcs/accepted/DC-78-HISTORY-EXCHANGE.md`; both should read `rfcs/done
 
 **Do not sweep for others.** The nearby DC-72 citations in `path.rs`, `trust.rs:180` and
 `refs/publication.rs:141` are correct — DC-72 did not move. Exactly these two lines are wrong.
+
+---
+
+## 7. Step 0 rulings — 2026-08-13
+
+Step 0's five questions, answered. These bind Level 2's implementation.
+
+**Q1 — return-shape restructuring: AUTHORIZED.** Your reading is right and the argument is the one that
+settles it: **item containment cannot be expressed in an aggregate-only shape.** Level 1's exclusion said
+*no restructuring in Level 1*, and its reason was that Level 1 did not need it. Level 2 does, by
+definition. `ObjectSummary` and `RefVerification` may carry per-item outcome collections.
+
+**Q2 — Phase B's shape: APPROVED, with one carry-forward.** `Failed` for the block whose own check broke,
+`NotEvaluated { blocked_by: ObjectId }` for its descendants, no `Halted` analogue — correct, since there
+is no operator-requested halt at block level and you are rightly not inventing one.
+
+**`blocked_by` names the immediate state-derivation parent, not the root cause.** That is Level 1's
+ruling carried down: each record asserts only what it knows, and root causes are followed one hop at a
+time. Do not resolve the chain eagerly.
+
+**Q3 — Phase B needs its own outcome: YES, as per-block outcomes; a count is optional.** Your finding is
+correct and I verified it: `summary.block_count` increments at `objects.rs:183` during Phase A, before
+`verify_blocks_topological` runs, so **`checked_blocks` has never meant "state root verified."** Level 1's
+stage-level `None` gate has been masking a claim gap that predates it.
+
+The field's own doc already says "references checked," so the doc is accurate and only the stage gate
+was covering for it. **Do not rename it** — churn. **Do surface Phase B through per-block outcomes**, and
+if you add an aggregate, scope its name to Phase B's actual claim.
+
+**Q4 — legacy-timestamp relocation: NOT YET. Authorized only on a probe.** You reported rather than
+moved, which was right. But moving a check's evaluation site is a behaviour change, and this project
+settles those by probe, not by argument.
+
+Stage 1 proved `created_at == 0` load-bearing **as a check**. It did not prove anything about the *scope*
+of its veto. Before relocating: demonstrate that per-ref attribution detects the same defects the
+whole-set pre-check does — construct a repository where one ref carries a legacy timestamp and others do
+not, and show what each form reports. **If the whole-set veto turns out to be deliberate — a mixed-format
+repository being uninterpretable as a whole — that is a finding and the relocation does not happen.**
+
+Note what is at stake either way: left whole-set, one ref's legacy timestamp blocks **every** ref's
+classification under item containment, which defeats Level 2 for that path.
+
+**Q5 — filename-parsing errors: CONTAIN, as you proposed.** One file's name is one file's name; a
+malformed filename says nothing about any sibling, so it passes your own dependency test. The
+directory-shape checks stay hard-`Err` and the distinction between them is exactly right — shape is an
+assumption every later read depends on; a filename is not.
+
+**One thing not asked, ruled anyway:** §2's observation that `PublicationTrustVerifier` currently gets
+starved by an early abort is correct, and the consequence is that **Level 2 will increase real trust
+coverage without touching trust code.** Expect `checked_publication_trust_records` to rise on existing
+fixtures. That is the change working, not a regression — but assert it deliberately somewhere, so a
+later reader does not mistake a moved number for an accident.
