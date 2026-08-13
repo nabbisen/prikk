@@ -39,7 +39,9 @@ fn format2_object_reads_reject_every_strict_envelope_failure() -> prikk_error::R
         let objects = FileObjectStore::new(layout.clone());
 
         assert!(objects.read_object(object_id).is_err());
-        assert!(verify_repository(&layout)?.has_stage_failure());
+        // DC-95 Stage 2 Level 2: a single malformed object is now a Phase A item-level failure, not
+        // a whole-`Objects`-stage failure.
+        assert!(verify_repository(&layout)?.has_item_failure());
         let _ = std::fs::remove_dir_all(root);
     }
     Ok(())
@@ -96,7 +98,9 @@ fn format2_ref_log_reads_reject_every_strict_envelope_failure() -> prikk_error::
                 .replay_log("heads/main")
                 .is_err()
         );
-        assert!(verify_repository(&layout)?.has_stage_failure());
+        // DC-95 Stage 2 Level 2: a single malformed ref-log record is now an item-level failure
+        // (this ref's own log read), not a whole-`Refs`-stage failure.
+        assert!(verify_repository(&layout)?.has_item_failure());
         let _ = std::fs::remove_dir_all(root);
     }
     Ok(())
@@ -115,7 +119,9 @@ fn format2_authoritative_replay_rejects_every_strict_patch_failure() -> prikk_er
         let objects = FileObjectStore::new(layout.clone());
 
         assert!(derive_next_state_root(&objects, None, &[patch_id]).is_err());
-        assert!(verify_repository(&layout)?.has_stage_failure());
+        // DC-95 Stage 2 Level 2: a single malformed Patch object is now a Phase A item-level
+        // failure, not a whole-`Objects`-stage failure.
+        assert!(verify_repository(&layout)?.has_item_failure());
         let _ = std::fs::remove_dir_all(root);
     }
     Ok(())

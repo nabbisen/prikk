@@ -6,11 +6,13 @@
 
 use prikk_error::{PrikkError, Result};
 
+use crate::block_state::BlockStateStatus;
 use crate::layout::{RepositoryFormat, RepositoryLayout};
 use crate::lock::ActiveLock;
-use crate::refs::RefRecoveryRepair;
+use crate::refs::{RefFileStatus, RefItemStatus, RefRecoveryRepair};
 use crate::verify::{
-    ActiveWalMetadataStatus, RepositoryVerification, StageStatus, verify_repository,
+    ActiveWalMetadataStatus, ObjectItemStatus, RepositoryVerification, StageStatus,
+    verify_repository,
 };
 use crate::wal::{Wal, WalRepair};
 
@@ -217,6 +219,71 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                     message,
                     "preserve the repository and inspect the failing stage before attempting repair",
                 ));
+            }
+            // DC-95 Stage 2 Level 2: item containment means the `Objects` stage above can be
+            // `Evaluated` even when one of its items individually failed -- these two loops are what
+            // preserve `repair_repository`'s refusal gate at item granularity, the same way the loop
+            // above preserves it at stage granularity.
+            for outcome in &verification.object_outcomes {
+                if let ObjectItemStatus::Failed { message } = &outcome.status {
+                    issues.push(DoctorIssue::error(
+                        "PRIKK-DOCTOR-VERIFY-OBJECT-INCOMPLETE",
+                        format!(
+                            "object {} ({}) failed verification: {message}",
+                            outcome.path.display(),
+                            outcome.object_type
+                        ),
+                        "preserve the repository and inspect the failing object before attempting repair",
+                    ));
+                }
+            }
+            for outcome in &verification.block_state_outcomes {
+                let message = match &outcome.status {
+                    BlockStateStatus::Verified => continue,
+                    BlockStateStatus::Failed { message } => {
+                        format!(
+                            "Block {} state-root verification failed: {message}",
+                            outcome.block_id
+                        )
+                    }
+                    BlockStateStatus::NotEvaluated { blocked_by } => {
+                        format!(
+                            "Block {} state root could not be verified because its state-derivation \
+                             parent {blocked_by} did not evaluate",
+                            outcome.block_id
+                        )
+                    }
+                };
+                issues.push(DoctorIssue::error(
+                    "PRIKK-DOCTOR-VERIFY-BLOCK-STATE-INCOMPLETE",
+                    message,
+                    "preserve the repository and inspect the failing block before attempting repair",
+                ));
+            }
+            // DC-95 Stage 2 Level 2 (refs half): same reasoning as the two loops above, one level
+            // in for `verify_refs`'s own items -- a single ref's pointer file, log file, or
+            // classification failing no longer fails the whole `Refs` stage.
+            for outcome in verification
+                .pointer_outcomes
+                .iter()
+                .chain(&verification.log_outcomes)
+            {
+                if let RefFileStatus::Failed { message } = &outcome.status {
+                    issues.push(DoctorIssue::error(
+                        "PRIKK-DOCTOR-VERIFY-REF-FILE-INCOMPLETE",
+                        format!("ref file {} failed verification: {message}", outcome.path.display()),
+                        "preserve the repository and inspect the failing ref file before attempting repair",
+                    ));
+                }
+            }
+            for outcome in &verification.ref_item_outcomes {
+                if let RefItemStatus::Failed { message } = &outcome.status {
+                    issues.push(DoctorIssue::error(
+                        "PRIKK-DOCTOR-VERIFY-REF-ITEM-INCOMPLETE",
+                        format!("ref {} failed verification: {message}", outcome.ref_name),
+                        "preserve the repository and inspect the failing ref before attempting repair",
+                    ));
+                }
             }
             if layout.format() == RepositoryFormat::LegacyV1 {
                 issues.push(DoctorIssue::warning(

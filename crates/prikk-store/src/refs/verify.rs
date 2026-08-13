@@ -14,6 +14,8 @@ use crate::signature_diagnostics::{
 
 mod scan;
 
+pub use scan::{RefFileOutcome, RefFileStatus};
+
 use scan::{LogState, PointerState, read_logs, read_pointers};
 
 /// One recognized interrupted-publication or local-debris condition.
@@ -29,6 +31,36 @@ pub struct RefPublicationIssue {
     pub blocking: bool,
 }
 
+/// Outcome of attempting to classify one ref by name (DC-95 Stage 2 Level 2), after its pointer
+/// and/or log file (whichever exist) were themselves read. No `NotEvaluated` distinct from
+/// `Failed`: unlike Level 1's stages or Phase B's blocks, a ref has no *peer* ref it depends on --
+/// its own pointer/log files are its own data, the same footing as an object's own file in
+/// `verify_objects` Phase A -- so a failure attributable to this ref, whether from its own file
+/// read or from `classify_ref_state` itself, is `Failed`, not a dependency-graph claim about
+/// another item.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RefItemStatus {
+    /// This ref's own classification (or its file reads, if either failed) resolved cleanly.
+    Evaluated,
+    /// This ref's pointer read, log read, or `classify_ref_state` call itself failed. Carries
+    /// whichever failure applies -- a ref whose *own* pointer or log file did not read is reported
+    /// through that file's real failure message, not reinterpreted as "pointer/log absent" (see
+    /// `verify_refs`'s own cross-referencing of `RefFileOutcome`s by canonical path).
+    Failed {
+        /// The error that applies to this ref.
+        message: String,
+    },
+}
+
+/// One ref's resolved outcome.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefItemOutcome {
+    /// The ref's human-readable name.
+    pub ref_name: String,
+    /// How this ref's own verification resolved.
+    pub status: RefItemStatus,
+}
+
 /// Ref verification counters and publication-state issues.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RefVerification {
@@ -37,12 +69,48 @@ pub(crate) struct RefVerification {
     pub ref_update_envelopes: Vec<prikk_object::ObjectEnvelope>,
     pub publication_issues: Vec<RefPublicationIssue>,
     pub signature_envelope_issues: Vec<SignatureEnvelopeIssue>,
+    /// One outcome per pointer file scanned under `refs/by-id/`, in scan order (DC-95 Stage 2
+    /// Level 2).
+    pub pointer_outcomes: Vec<RefFileOutcome>,
+    /// One outcome per log file scanned under `refs/logs/`, in scan order. A log file that is
+    /// legitimately empty with no trailing bytes is not an item at all (nothing to report), same
+    /// as the pre-Level-2 behavior of skipping it entirely.
+    pub log_outcomes: Vec<RefFileOutcome>,
+    /// One outcome per ref name reached via a successfully-read pointer or log (DC-95 Stage 2
+    /// Level 2). A ref whose own pointer/log file failed to read is still included here -- see
+    /// `RefItemStatus::Failed`'s own doc -- so no ref name known to exist is silently absent.
+    pub ref_item_outcomes: Vec<RefItemOutcome>,
+}
+
+impl RefVerification {
+    /// Return true when any pointer file, log file, or ref-name classification failed (DC-95
+    /// Stage 2 Level 2). Item containment means `verify_refs` itself now returns `Ok` for these
+    /// cases -- callers that need "is this repository's ref state fully sound," not just "did the
+    /// scan run at all," must check this alongside any hard `Err`.
+    pub(crate) fn has_item_failure(&self) -> bool {
+        self.pointer_outcomes
+            .iter()
+            .any(|outcome| matches!(outcome.status, RefFileStatus::Failed { .. }))
+            || self
+                .log_outcomes
+                .iter()
+                .any(|outcome| matches!(outcome.status, RefFileStatus::Failed { .. }))
+            || self
+                .ref_item_outcomes
+                .iter()
+                .any(|outcome| matches!(outcome.status, RefItemStatus::Failed { .. }))
+    }
 }
 
 pub(crate) fn verify_refs(layout: &RepositoryLayout) -> Result<RefVerification> {
     let objects = FileObjectStore::new(layout.clone());
-    let pointers = read_pointers(layout, &objects)?;
-    let (logs, log_record_count, ref_log_envelopes) = read_logs(layout, &objects, &pointers)?;
+    let (pointers, pointer_outcomes) = read_pointers(layout, &objects)?;
+    let (logs, log_record_count, ref_log_envelopes, log_outcomes) =
+        read_logs(layout, &objects, &pointers)?;
+    // DC-95 Stage 2 Level 2 handoff §7 Q4, ruled: stays a whole-set precheck. A stale timestamp
+    // anywhere in ref history is evidence the format-1-to-2 migration did not complete or did not
+    // cover everything -- a claim about the whole repository's format-2 assertion, not a per-ref
+    // defect, so it is deliberately not contained to the one ref that happens to carry it.
     if layout.format() == RepositoryFormat::CurrentV2
         && logs.values().any(|state| state.has_legacy_timestamp)
     {
@@ -67,14 +135,52 @@ pub(crate) fn verify_refs(layout: &RepositoryLayout) -> Result<RefVerification> 
     names.extend(pointers.keys().cloned());
     names.extend(logs.keys().cloned());
     let mut publication_issues = candidate_issues(layout)?;
+    let mut ref_item_outcomes = Vec::with_capacity(names.len());
     for ref_name in names {
-        classify_ref_state(
+        let pointer = pointers.get(&ref_name);
+        let log = logs.get(&ref_name);
+        // DC-95 Stage 2 Level 2: a ref reached only through its log (or only through its pointer)
+        // might have a pointer (or log) that genuinely does not exist -- or might have one that
+        // exists but failed to read, which `read_pointers`/`read_logs` recorded as its own
+        // `RefFileOutcome::Failed` under that file's own canonical path rather than silently
+        // omitting it. These are different facts: the first is legitimate business logic
+        // `classify_ref_state`'s own match arms already handle; the second must not be
+        // reinterpreted as the first. Cross-reference by the file's own canonical path (pointer/
+        // log filenames are `SHA-256(ref_name)`, not reversible, so this is the only way to
+        // attribute a read failure back to a specific ref name once one is already known).
+        let pointer_failure = pointer
+            .is_none()
+            .then(|| failed_message_at(&pointer_outcomes, &layout.ref_pointer_path(&ref_name)));
+        let log_failure = log
+            .is_none()
+            .then(|| failed_message_at(&log_outcomes, &layout.ref_log_path(&ref_name)));
+        if let Some(message) = pointer_failure.flatten().or(log_failure.flatten()) {
+            ref_item_outcomes.push(RefItemOutcome {
+                ref_name,
+                status: RefItemStatus::Failed { message },
+            });
+            continue;
+        }
+        // This ref's own classification is caught here, at the item boundary, rather than
+        // propagated -- every other ref is still attempted.
+        match classify_ref_state(
             layout.format(),
             &ref_name,
-            pointers.get(&ref_name),
-            logs.get(&ref_name),
+            pointer,
+            log,
             &mut publication_issues,
-        )?;
+        ) {
+            Ok(()) => ref_item_outcomes.push(RefItemOutcome {
+                ref_name,
+                status: RefItemStatus::Evaluated,
+            }),
+            Err(err) => ref_item_outcomes.push(RefItemOutcome {
+                ref_name,
+                status: RefItemStatus::Failed {
+                    message: err.to_string(),
+                },
+            }),
+        }
     }
     Ok(RefVerification {
         pointer_count: pointers.len(),
@@ -82,6 +188,25 @@ pub(crate) fn verify_refs(layout: &RepositoryLayout) -> Result<RefVerification> 
         ref_update_envelopes,
         publication_issues,
         signature_envelope_issues,
+        pointer_outcomes,
+        log_outcomes,
+        ref_item_outcomes,
+    })
+}
+
+/// Look up whether `path` appears in `outcomes` with a `Failed` status, returning its message.
+/// Every physical file produces exactly one outcome (never both `Evaluated` and `Failed` for the
+/// same path), so this is a safe, unambiguous lookup.
+fn failed_message_at(outcomes: &[RefFileOutcome], path: &Path) -> Option<String> {
+    outcomes.iter().find_map(|outcome| {
+        if outcome.path == path {
+            match &outcome.status {
+                RefFileStatus::Failed { message } => Some(message.clone()),
+                RefFileStatus::Evaluated { .. } => None,
+            }
+        } else {
+            None
+        }
     })
 }
 

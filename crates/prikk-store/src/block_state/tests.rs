@@ -5,8 +5,8 @@ use prikk_object::{
 };
 
 use super::{
-    LineageStateMemo, derive_next_state_root, validate_block_v2_shape, verify_block_v2_state,
-    verify_blocks_topological,
+    BlockStateStatus, LineageStateMemo, derive_next_state_root, validate_block_v2_shape,
+    verify_block_v2_state, verify_blocks_topological,
 };
 use crate::lifecycle_cache::replay::{TextCache, apply_candidate_patches};
 use crate::node_lifecycle::NodeLifecycleState;
@@ -511,12 +511,26 @@ fn multi_branch_history_bounds_peak_memo_size_by_branch_count_not_block_count()
     let total = blocks.len();
 
     let mut memo = LineageStateMemo::new();
-    let peak = verify_blocks_topological(&store, &blocks, &mut memo)?;
+    let result = verify_blocks_topological(&store, &blocks, &mut memo)?;
+    let peak = result.peak_memo_entries;
 
     assert_eq!(
         memo.len(),
         0,
         "every entry must be evicted once nothing in the batch still needs it"
+    );
+    assert_eq!(
+        result.outcomes.len(),
+        total,
+        "no block may be silently absent"
+    );
+    assert!(
+        result
+            .outcomes
+            .iter()
+            .all(|outcome| matches!(outcome.status, BlockStateStatus::Verified)),
+        "every block in this fixture is genuinely clean: {:?}",
+        result.outcomes
     );
     assert!(
         peak <= BRANCHES + 2,
@@ -527,6 +541,98 @@ fn multi_branch_history_bounds_peak_memo_size_by_branch_count_not_block_count()
         peak < total,
         "peak ({peak}) should be far below total block count ({total}) -- proving the entries \
          were never all live at once, which is the whole point of §4.2"
+    );
+    Ok(())
+}
+
+/// DC-95 Stage 2 Level 2 acceptance criterion 1, at Phase B granularity: two independent bad blocks
+/// in unrelated trees (no shared ancestor in the batch) are both reported `Failed`, and neither
+/// suppresses the other or the rest of the batch.
+#[test]
+fn verify_blocks_topological_reports_two_independent_bad_blocks_in_different_subtrees()
+-> prikk_error::Result<()> {
+    let mut store = MemoryObjectStore::new();
+    // Distinct wrong roots -- two Root blocks with identical (empty) content would otherwise
+    // canonical-encode to the same bytes and collide on the same ObjectId.
+    let bad_root_a = write_block(&mut store, None, Vec::new(), WRONG_ROOT)?;
+    let bad_root_b = write_block(&mut store, None, Vec::new(), MerkleRoot([0xEF; 32]))?;
+    let blocks = vec![
+        (bad_root_a, block_payload_of(&store, bad_root_a)?),
+        (bad_root_b, block_payload_of(&store, bad_root_b)?),
+    ];
+
+    let mut memo = LineageStateMemo::new();
+    let result = verify_blocks_topological(&store, &blocks, &mut memo)?;
+
+    assert_eq!(result.outcomes.len(), 2, "no block may be silently absent");
+    for outcome in &result.outcomes {
+        assert!(
+            matches!(outcome.status, BlockStateStatus::Failed { .. }),
+            "expected block {} to be Failed, got: {:?}",
+            outcome.block_id,
+            outcome.status
+        );
+    }
+    Ok(())
+}
+
+/// The correctness fix the Level 2 handoff §7 Q2 ruling required: a descendant of a failed block is
+/// `NotEvaluated`, naming its own *immediate* state-derivation parent -- not the root cause, even
+/// when the root cause is further back in the chain. `root` (bad) -> `child` (real dependent) ->
+/// `grandchild` (real dependent of `child`, not of `root`).
+///
+/// **Cannot use `derive_next_state_root` for `child`/`grandchild`'s roots here** -- state derivation
+/// is chain-validating by construction (`resolved_parent_state` verifies a named parent's own root
+/// before deriving from it), so deriving *through* a deliberately-corrupted `root` would itself fail
+/// with the same error this test is trying to isolate downstream of. Every block in this fixture has
+/// zero patches, so the state never actually changes from genesis regardless of chain position --
+/// `child`/`grandchild` are given the correct *empty-state* root directly, bypassing the circularity,
+/// so if either is marked `NotEvaluated` it is because of this containment logic, not because its own
+/// root happened to be wrong too.
+#[test]
+fn verify_blocks_topological_names_immediate_parent_not_root_cause() -> prikk_error::Result<()> {
+    let mut store = MemoryObjectStore::new();
+    let correct_empty_root = compute_state_root(&entries_from_state(&NodeLifecycleState::new())?)?;
+    let root_id = write_block(&mut store, None, Vec::new(), WRONG_ROOT)?;
+    let child_id = write_block(&mut store, Some(root_id), Vec::new(), correct_empty_root)?;
+    let grandchild_id = write_block(&mut store, Some(child_id), Vec::new(), correct_empty_root)?;
+    let blocks = vec![
+        (root_id, block_payload_of(&store, root_id)?),
+        (child_id, block_payload_of(&store, child_id)?),
+        (grandchild_id, block_payload_of(&store, grandchild_id)?),
+    ];
+
+    let mut memo = LineageStateMemo::new();
+    let result = verify_blocks_topological(&store, &blocks, &mut memo)?;
+
+    assert_eq!(result.outcomes.len(), 3, "no block may be silently absent");
+    let status_of = |block_id: ObjectId| -> &BlockStateStatus {
+        &result
+            .outcomes
+            .iter()
+            .find(|outcome| outcome.block_id == block_id)
+            .unwrap_or_else(|| panic!("expected an outcome for block {block_id}, found none"))
+            .status
+    };
+    assert!(
+        matches!(status_of(root_id), BlockStateStatus::Failed { .. }),
+        "expected root to be Failed, got: {:?}",
+        status_of(root_id)
+    );
+    assert_eq!(
+        status_of(child_id),
+        &BlockStateStatus::NotEvaluated {
+            blocked_by: root_id
+        },
+        "child must name its own immediate parent (root), not attempt its own check"
+    );
+    assert_eq!(
+        status_of(grandchild_id),
+        &BlockStateStatus::NotEvaluated {
+            blocked_by: child_id
+        },
+        "grandchild must name its own immediate parent (child), not eagerly resolve to root -- \
+         the root cause is discoverable by following the chain one hop at a time"
     );
     Ok(())
 }

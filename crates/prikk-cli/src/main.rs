@@ -536,6 +536,11 @@ fn run_verify(args: Vec<String>) -> std::result::Result<(), String> {
             "repository verification did not complete every stage; see stage outcomes above"
                 .to_string(),
         )
+    } else if report.has_item_failure() {
+        Err(
+            "repository verification found at least one failed object, block, or ref; see item outcomes above"
+                .to_string(),
+        )
     } else if report.has_unverifiable_state_roots() {
         Err("format-1 scaffold roots are not verifiable state commitments".to_string())
     } else if report.has_active_wal_metadata_integrity_issue() {

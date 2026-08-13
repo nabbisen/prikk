@@ -75,7 +75,9 @@ pub use active::{
     write_active_ref_metadata,
 };
 pub use author_signing::{AuthorSigner, Ed25519AuthorSigner, author_signature};
-pub use block_state::{derive_next_state_root, validate_block_v2_shape};
+pub use block_state::{
+    BlockStateOutcome, BlockStateStatus, derive_next_state_root, validate_block_v2_shape,
+};
 pub use bundle::{
     BundleExportReport, BundleImportOptions, BundleImportReport, DEFAULT_BUNDLE_MAX_OBJECT_COUNT,
     DEFAULT_BUNDLE_MAX_TOTAL_BYTES, export_bundle, import_bundle,
@@ -119,9 +121,9 @@ pub use received::{
     ReceivedPointer, list_received_pointers, read_received_pointer, validate_received_ref,
 };
 pub use refs::{
-    RefLogRecord, RefLogReplay, RefPointerSummary, RefPublication, RefPublicationIssue,
-    RefRecoveryCandidate, RefRecoveryRepair, RefStore, validate_local_branch_ref,
-    validate_local_tag_ref,
+    RefFileOutcome, RefFileStatus, RefItemOutcome, RefItemStatus, RefLogRecord, RefLogReplay,
+    RefPointerSummary, RefPublication, RefPublicationIssue, RefRecoveryCandidate,
+    RefRecoveryRepair, RefStore, validate_local_branch_ref, validate_local_tag_ref,
 };
 pub use rollback_draft::{RollbackDraftReport, append_rollback_draft};
 pub use rollback_preview::{
@@ -138,9 +140,9 @@ pub use trust::{
     load_maintainer_trust_policy, verify_signer_trusted, verify_trusted_publication_envelope,
 };
 pub use verify::{
-    ActiveWalMetadataStatus, ActiveWalOrderingIssue, BlockSealVerification, ObjectVerification,
-    RepositoryVerification, StageOutcome, StageStatus, VerificationStage, VerifyOptions,
-    verify_repository, verify_repository_with_options,
+    ActiveWalMetadataStatus, ActiveWalOrderingIssue, BlockSealVerification, ObjectItemOutcome,
+    ObjectItemStatus, ObjectVerification, RepositoryVerification, StageOutcome, StageStatus,
+    VerificationStage, VerifyOptions, verify_repository, verify_repository_with_options,
 };
 pub use wal::{Wal, WalRecord, WalRepair, WalReplay};
 pub use worktree::{SnapshotMaterializationReport, materialize_snapshot_checkout};
