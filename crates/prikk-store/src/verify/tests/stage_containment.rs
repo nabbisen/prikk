@@ -378,13 +378,22 @@ fn verify_repository_does_not_treat_an_incomplete_objects_stage_as_proof_of_trus
 }
 
 /// `--stop-on-first-error` (`VerifyOptions::stop_on_first_error`), preserving today's bounded walk:
-/// once the *first* stage in pipeline order fails, every later stage becomes `NotEvaluated`, naming
-/// that first stage as the blocker -- even a stage that has no real dependency on it. Same fixture as
+/// once the *first* stage in pipeline order fails, every later stage becomes blocking. Same fixture as
 /// `verify_repository_reports_two_independent_stage_failures_together` (an id-mismatched Blob in
 /// `Objects`, a checksum-corrupted active WAL record in `WalReplay`), which proves the *opposite*
 /// under default options: both `Failed` independently. Here, with the flag set, `Objects` runs first,
 /// fails, and the halt suppresses `WalReplay` from ever attempting its own (also genuinely broken)
-/// check -- `WalReplay` must read `NotEvaluated { blocked_by: Objects }`, not `Failed`.
+/// check.
+///
+/// The required fix from `stage-2-level-1-implementation-review-v1.md` §4: a stage preempted by the
+/// halt is `Halted { after: Objects }`, not `NotEvaluated { blocked_by: Objects }` -- `Objects` is not
+/// a real dependency of, say, `LifecycleCache`, so naming it as a `blocked_by` would assert a
+/// dependency-graph edge that does not exist. Stages with a *real* dependency on something other than
+/// `Objects` still report that true dependency via `NotEvaluated`, even though the walk is halted: e.g.
+/// `WalPersistence` genuinely depends on `WalReplay`, and `WalReplay` itself never evaluated (it was
+/// pre-empted, `Halted { after: Objects }`) -- so `WalPersistence` is `NotEvaluated { blocked_by:
+/// WalReplay }`, an accurate claim regardless of *why* `WalReplay` didn't evaluate, discoverable by
+/// following the chain one stage at a time rather than by this stage reaching past its own dependency.
 #[test]
 fn verify_repository_with_options_halts_every_later_stage_when_stop_on_first_error_is_set()
 -> Result<()> {
@@ -432,33 +441,65 @@ fn verify_repository_with_options_halts_every_later_stage_when_stop_on_first_err
         find_stage(&report.stage_outcomes, VerificationStage::Objects).status,
         StageStatus::Failed { .. }
     ));
-    // Every stage after Objects in pipeline order is halted -- including WalReplay, which has no
-    // real dependency on Objects and would otherwise fail independently (per the default-mode test).
-    for later in [
+    // Stages with no real dependency of their own were simply pre-empted by the halt -- Halted, naming
+    // Objects as the stage that triggered the stop, not a fabricated dependency.
+    for halted in [
         VerificationStage::Refs,
-        VerificationStage::RefUpdateSchemaTrust,
         VerificationStage::WalReplay,
-        VerificationStage::WalPersistence,
-        VerificationStage::RollbackDrafts,
-        VerificationStage::WalRecordSchema,
-        VerificationStage::ActiveWalMetadata,
-        VerificationStage::PublicationReclassification,
         VerificationStage::CommitIndex,
         VerificationStage::LifecycleCache,
-        VerificationStage::WalOrdering,
     ] {
-        let outcome = find_stage(&report.stage_outcomes, later);
+        let outcome = find_stage(&report.stage_outcomes, halted);
+        match &outcome.status {
+            StageStatus::Halted { after } => {
+                assert_eq!(
+                    *after,
+                    VerificationStage::Objects,
+                    "stage {halted} should name Objects as the stage that halted the walk"
+                );
+            }
+            other => panic!("expected stage {halted} to be Halted, got: {other:?}"),
+        }
+    }
+    // Stages with a real dependency still name that true dependency, even though it was itself
+    // pre-empted rather than genuinely failed -- the claim "I could not run because WalReplay did not
+    // evaluate" remains true regardless of why WalReplay didn't evaluate.
+    for (dependent, dependency) in [
+        (
+            VerificationStage::RefUpdateSchemaTrust,
+            VerificationStage::Refs,
+        ),
+        (
+            VerificationStage::WalPersistence,
+            VerificationStage::WalReplay,
+        ),
+        (
+            VerificationStage::RollbackDrafts,
+            VerificationStage::WalReplay,
+        ),
+        (
+            VerificationStage::WalRecordSchema,
+            VerificationStage::WalReplay,
+        ),
+        (
+            VerificationStage::ActiveWalMetadata,
+            VerificationStage::WalReplay,
+        ),
+        (
+            VerificationStage::PublicationReclassification,
+            VerificationStage::WalReplay,
+        ),
+        (VerificationStage::WalOrdering, VerificationStage::WalReplay),
+    ] {
+        let outcome = find_stage(&report.stage_outcomes, dependent);
         match &outcome.status {
             StageStatus::NotEvaluated { blocked_by } => {
                 assert_eq!(
-                    *blocked_by,
-                    VerificationStage::Objects,
-                    "stage {later} should name Objects as its blocker under stop-on-first-error"
+                    *blocked_by, dependency,
+                    "stage {dependent} should name its real dependency {dependency}, not the stage that halted the walk"
                 );
             }
-            other => panic!(
-                "expected stage {later} to be NotEvaluated under stop-on-first-error, got: {other:?}"
-            ),
+            other => panic!("expected stage {dependent} to be NotEvaluated, got: {other:?}"),
         }
     }
 

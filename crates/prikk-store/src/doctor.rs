@@ -205,6 +205,12 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                             outcome.stage
                         )
                     }
+                    StageStatus::Halted { after } => {
+                        format!(
+                            "verification stage {} was not attempted because stage {after} failed and halted the walk (--stop-on-first-error)",
+                            outcome.stage
+                        )
+                    }
                 };
                 issues.push(DoctorIssue::error(
                     "PRIKK-DOCTOR-VERIFY-STAGE-INCOMPLETE",

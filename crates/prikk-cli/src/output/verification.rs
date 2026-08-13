@@ -56,6 +56,12 @@ pub(crate) fn print_verify_report(
                     outcome.stage
                 );
             }
+            StageStatus::Halted { after } => {
+                println!(
+                    "stage {}: not evaluated (walk halted after stage {after} failed, --stop-on-first-error)",
+                    outcome.stage
+                );
+            }
         }
     }
     println!("checked objects: {}", format_count(report.checked_objects));

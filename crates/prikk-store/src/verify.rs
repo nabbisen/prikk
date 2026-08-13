@@ -45,7 +45,14 @@
 //! pipeline continues to the remaining stages regardless. A `Failed` stage's own error becomes its
 //! `StageOutcome`'s message; a stage that could not run because a real dependency ([`StageStatus::
 //! NotEvaluated`], naming that dependency) is blocking on the same footing -- an incomplete
-//! verification is not a passing one, so `RepositoryVerification::has_stage_failure` covers both.
+//! verification is not a passing one, so `RepositoryVerification::has_stage_failure` covers both, plus
+//! a third state, [`StageStatus::Halted`], for `--stop-on-first-error`: a stage that was never attempted
+//! because an *unrelated* earlier stage's failure already stopped the walk. `Halted` is kept distinct
+//! from `NotEvaluated` because `blocked_by` is a dependency-graph claim -- reporting `NotEvaluated {
+//! blocked_by: Objects }` for `LifecycleCache`, which does not depend on `Objects` at all, would assert
+//! an edge that does not exist (implementation review v1 §4). The distinction only matters under
+//! `--stop-on-first-error`; in the default full-accumulation walk, every `NotEvaluated` names a real
+//! dependency and `Halted` never appears.
 //!
 //! **The Stage 1 classification table below is unchanged by this**: which checks are load-bearing,
 //! downstream-redundant, excluded, or unreachable is a fact about the checks themselves, not about how
@@ -276,8 +283,11 @@ impl std::fmt::Display for VerificationStage {
 /// Outcome of attempting to evaluate one verification stage (DC-95 Stage 2 Level 1). **No stage may be
 /// silently absent from a report.** A stage's own check raising an error is recorded as a blocking
 /// finding against its scope rather than aborting the rest of verification (`Failed`); a stage that
-/// could not run because a dependency did not evaluate is itself blocking, not silently skipped
-/// (`NotEvaluated`) — a repository whose verification is incomplete is not verified.
+/// could not run because a real dependency did not evaluate is itself blocking, not silently skipped
+/// (`NotEvaluated`); a stage that could have run on its own terms but was preempted by an operator-
+/// requested early stop is also blocking, but for a different reason it must not be confused with
+/// (`Halted`) — a repository whose verification is incomplete is not verified, regardless of which of
+/// the three non-`Evaluated` states explains the gap.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StageStatus {
     /// The stage ran to completion; its findings and counts are authoritative.
@@ -287,16 +297,30 @@ pub enum StageStatus {
         /// The error the stage raised.
         message: String,
     },
-    /// The stage could not run because a dependency did not evaluate.
+    /// The stage could not run because a *real* dependency did not evaluate — `blocked_by` names a
+    /// stage this one's own logic actually reads output from. This is a dependency-graph claim, and
+    /// must remain true of the graph even when `--stop-on-first-error` is in effect; see `Halted` for
+    /// the case where a stage merely followed an unrelated earlier stop.
     NotEvaluated {
         /// The earlier stage whose own non-evaluation is why this one could not run.
         blocked_by: VerificationStage,
     },
+    /// The stage was never attempted because an earlier, *unrelated* stage's failure already stopped
+    /// the walk under `--stop-on-first-error` (DC-95 Stage 2 Level 1 implementation review v1 §4) —
+    /// `after` names the stage whose failure triggered the stop, not a dependency of this stage. Kept
+    /// distinct from `NotEvaluated` because `blocked_by` is a dependency-graph claim: reporting
+    /// `NotEvaluated { blocked_by: Objects }` for a stage that does not actually depend on `Objects`
+    /// (e.g. `LifecycleCache`) would assert an edge that does not exist.
+    Halted {
+        /// The stage whose failure caused the walk to stop before this stage was reached.
+        after: VerificationStage,
+    },
 }
 
 impl StageStatus {
-    /// Return true for any status other than a clean, completed evaluation. `NotEvaluated` is
-    /// blocking on the same footing as `Failed` — an incomplete verification is not a passing one.
+    /// Return true for any status other than a clean, completed evaluation. `NotEvaluated` and
+    /// `Halted` are both blocking on the same footing as `Failed` — an incomplete verification is not
+    /// a passing one, whichever of the three explains the gap.
     #[must_use]
     pub const fn is_blocking(&self) -> bool {
         !matches!(self, Self::Evaluated)
@@ -579,14 +603,15 @@ impl StagePipeline {
     }
 
     /// Attempt a stage with no real dependency beyond a possible earlier halt. Returns the value on
-    /// success; `None` on failure, or if an earlier stage already halted the walk.
+    /// success; `None` on failure, or if an earlier stage already halted the walk. A stage reached
+    /// through `run` never has a real declared dependency (a stage that does is gated behind an
+    /// `if`/`else` at its call site and reaches `not_evaluated` instead when ungated) -- so an
+    /// already-halted walk is always reported as `Halted`, never a fabricated `NotEvaluated`.
     fn run<T>(&mut self, stage: VerificationStage, result: Result<T>) -> Option<T> {
         if let Some(halted_by) = self.halted_by {
             self.outcomes.push(StageOutcome {
                 stage,
-                status: StageStatus::NotEvaluated {
-                    blocked_by: halted_by,
-                },
+                status: StageStatus::Halted { after: halted_by },
             });
             return None;
         }
@@ -613,33 +638,31 @@ impl StagePipeline {
         }
     }
 
-    /// Record a stage that cannot run because `blocked_by` (a real dependency) did not evaluate --
-    /// or, under `--stop-on-first-error` with an earlier, unrelated stage already halting the walk,
-    /// names that earlier stage instead, since it is the more informative blocker once a halt is in
-    /// effect.
+    /// Record a stage that cannot run because `blocked_by` -- a real dependency -- did not evaluate.
+    /// Always reports `blocked_by` as given, never substituted: a caller only reaches this method when
+    /// `blocked_by`'s own stage failed to produce a usable value (DC-95 Stage 2 Level 1 implementation
+    /// review v1 §4), so the claim is true of the dependency graph regardless of *why* `blocked_by`
+    /// itself did not evaluate -- including when `blocked_by` was itself `Halted`, in which case this
+    /// stage is transitively halted too, discoverable by following the chain rather than by this call
+    /// reaching past its own real dependency to name an unrelated stage. `--stop-on-first-error` never
+    /// originates a fresh halt here: every halt traces back to a `Failed` outcome from `run`, which
+    /// already recorded it.
     fn not_evaluated(&mut self, stage: VerificationStage, blocked_by: VerificationStage) {
-        let effective_blocker = self.halted_by.unwrap_or(blocked_by);
         self.outcomes.push(StageOutcome {
             stage,
-            status: StageStatus::NotEvaluated {
-                blocked_by: effective_blocker,
-            },
+            status: StageStatus::NotEvaluated { blocked_by },
         });
-        if self.stop_on_first_error && self.halted_by.is_none() {
-            self.halted_by = Some(blocked_by);
-        }
     }
 
     /// Record a stage whose own check cannot fail (a pure function, or one that already converts
     /// errors into findings) -- still subject to an earlier halt. Returns whether the stage should
-    /// actually run its own work.
+    /// actually run its own work. Never a real dependency (see `run`), so an already-halted walk is
+    /// `Halted`, not `NotEvaluated`.
     fn run_infallible(&mut self, stage: VerificationStage) -> bool {
         if let Some(halted_by) = self.halted_by {
             self.outcomes.push(StageOutcome {
                 stage,
-                status: StageStatus::NotEvaluated {
-                    blocked_by: halted_by,
-                },
+                status: StageStatus::Halted { after: halted_by },
             });
             false
         } else {
