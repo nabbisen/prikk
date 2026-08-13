@@ -4,16 +4,25 @@ mod fixture;
 
 use crate::{
     ActiveLock, ActiveRefMetadata, ActiveSession, DEFAULT_ACTIVE_PATCH_LIMIT, DoctorSeverity,
-    RefStore, Wal, doctor_repository, finish_active_publication_cleanup, read_active_ref_metadata,
-    verify_repository,
+    RefStore, VerificationStage, Wal, doctor_repository, finish_active_publication_cleanup,
+    read_active_ref_metadata, verify_repository,
 };
 use fixture::{Fixture, PersistedState};
 
 #[derive(Clone, Copy)]
 enum VerifyExpectation {
-    Issue { code: &'static str, blocking: bool },
+    Issue {
+        code: &'static str,
+        blocking: bool,
+    },
     NoRefIssue,
-    Error,
+    /// DC-95 Stage 2 Level 1: what was a hard `Err` from `verify_repository` pre-Level-1 is now
+    /// contained as a `Failed` outcome against one specific stage, with `verify_repository` itself
+    /// returning `Ok`.
+    StageFailure {
+        stage: VerificationStage,
+        message_substring: &'static str,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -96,8 +105,11 @@ const CASES: &[StateCase] = &[
     },
     StateCase {
         state: PersistedState::Divergence,
-        verify: VerifyExpectation::Error,
-        doctor_code: "PRIKK-DOCTOR-VERIFY-ERROR",
+        verify: VerifyExpectation::StageFailure {
+            stage: VerificationStage::Refs,
+            message_substring: "ref-log chain or sequence diverges",
+        },
+        doctor_code: "PRIKK-DOCTOR-VERIFY-STAGE-INCOMPLETE",
         doctor_severity: DoctorSeverity::Error,
         recommendation: "preserve the repository",
         retry: RetryExpectation::Refuses,
@@ -132,7 +144,31 @@ fn every_state_has_explicit_verify_and_doctor_read_only_outcomes() -> prikk_erro
                 assert!(report.ref_publication_issues.is_empty());
                 assert!(report.has_active_wal_metadata_warning());
             }
-            (Err(_), VerifyExpectation::Error) => {}
+            (
+                Ok(report),
+                VerifyExpectation::StageFailure {
+                    stage,
+                    message_substring,
+                },
+            ) => {
+                assert!(report.has_stage_failure());
+                let outcome = report
+                    .stage_outcomes
+                    .iter()
+                    .find(|outcome| outcome.stage == stage)
+                    .ok_or_else(|| {
+                        prikk_error::PrikkError::Integrity(format!(
+                            "missing StageOutcome for {stage} in {:?}",
+                            case.state
+                        ))
+                    })?;
+                match &outcome.status {
+                    crate::StageStatus::Failed { message } => {
+                        assert!(message.contains(message_substring));
+                    }
+                    other => panic!("expected stage {stage} to be Failed, got: {other:?}"),
+                }
+            }
             (result, _) => panic!("unexpected verify result for {:?}: {result:?}", case.state),
         }
         let doctor = doctor_repository(&fixture.layout);

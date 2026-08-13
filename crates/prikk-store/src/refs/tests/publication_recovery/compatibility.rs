@@ -27,7 +27,7 @@ fn format2_legacy_timestamp_is_not_normalized_and_blocks_mutation() -> prikk_err
         log::encode_log_record_for_test(&envelope)?,
     )?;
 
-    assert!(verify_repository(&layout).is_err());
+    assert!(verify_repository(&layout)?.has_stage_failure());
     assert!(
         ActiveSession::new(layout.clone())
             .append_patch(&signed_patch_envelope(), DEFAULT_ACTIVE_PATCH_LIMIT)

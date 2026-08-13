@@ -49,7 +49,7 @@ fn rollback_draft_verify_matches_current_inverse_plan() {
         let repository = verify_repository(&layout);
         assert!(repository.is_ok());
         if let Ok(repository) = repository {
-            assert_eq!(repository.checked_rollback_draft_records, 1);
+            assert_eq!(repository.checked_rollback_draft_records, Some(1));
         }
     }
     let _ = std::fs::remove_dir_all(root);
@@ -231,8 +231,8 @@ fn sealed_history_classifies_payload_purpose_not_legacy_key_id() {
                 let verification = verify_repository(&layout);
                 assert!(verification.is_ok());
                 if let Ok(verification) = verification {
-                    assert_eq!(verification.checked_rollback_blocks, 1);
-                    assert_eq!(verification.checked_sealed_rollback_patches, 1);
+                    assert_eq!(verification.checked_rollback_blocks, Some(1));
+                    assert_eq!(verification.checked_sealed_rollback_patches, Some(1));
                 }
             }
         }
@@ -293,8 +293,8 @@ fn legacy_key_id_without_payload_purpose_is_not_classified() {
                 let verification = verify_repository(&layout);
                 assert!(verification.is_ok());
                 if let Ok(verification) = verification {
-                    assert_eq!(verification.checked_rollback_blocks, 0);
-                    assert_eq!(verification.checked_sealed_rollback_patches, 0);
+                    assert_eq!(verification.checked_rollback_blocks, Some(0));
+                    assert_eq!(verification.checked_sealed_rollback_patches, Some(0));
                 }
             }
         }

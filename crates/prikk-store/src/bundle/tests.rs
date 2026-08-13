@@ -262,7 +262,7 @@ fn import_refused_over_the_object_count_limit_writes_nothing() -> prikk_error::R
         before, after,
         "a refused import must leave the object store's checked-object count unchanged"
     );
-    assert_eq!(before, 0);
+    assert_eq!(before, Some(0));
 
     let _ = std::fs::remove_dir_all(source_root);
     let _ = std::fs::remove_dir_all(target_root);

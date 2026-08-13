@@ -2,6 +2,7 @@
 
 mod ref_cluster;
 mod root_authority;
+mod stage_containment;
 mod trust;
 mod wal_cluster;
 
@@ -15,14 +16,45 @@ use prikk_object::{
 use crate::maintainer_signing::MaintainerSigner;
 use crate::wal::{WalRecord, encode_record_for_test};
 use crate::{
-    ActiveWalMetadataStatus, FileObjectStore, ObjectWriter, RepositoryLayout, Wal,
-    derive_next_state_root, verify_repository, write_active_ref_metadata,
+    ActiveWalMetadataStatus, FileObjectStore, ObjectWriter, RepositoryLayout,
+    RepositoryVerification, StageStatus, VerificationStage, Wal, derive_next_state_root,
+    verify_repository, write_active_ref_metadata,
 };
 
 use crate::test_support::{
     dummy_signature, maintainer_signature, rollback_patch_envelope, sample_object_id,
     signed_patch_envelope, signed_ref_state_envelope, unique_temp_dir,
 };
+
+/// DC-95 Stage 2 Level 1: assert that `stage` resolved to `Failed` with a message containing
+/// `expected_substring`. Every fixture that used to assert `verify_repository(&layout).is_err()` for
+/// a specific check now asserts this instead -- the check's own reachability/probe reasoning
+/// (recorded in each fixture's own doc comment) is unchanged; only the shape of "did the defect get
+/// caught" moved from a bare `Result` to a per-stage outcome (DC-95 Stage 2 design).
+pub(super) fn assert_stage_failed(
+    report: &RepositoryVerification,
+    stage: VerificationStage,
+    expected_substring: &str,
+) {
+    assert!(
+        report.has_stage_failure(),
+        "expected at least one stage to fail, got: {report:?}"
+    );
+    let Some(outcome) = report
+        .stage_outcomes
+        .iter()
+        .find(|outcome| outcome.stage == stage)
+    else {
+        panic!("expected a StageOutcome for stage {stage}, found none in: {report:?}");
+    };
+    match &outcome.status {
+        StageStatus::Failed { message } => assert!(
+            message.contains(expected_substring),
+            "stage {stage} failed, but message {message:?} does not contain {expected_substring:?}"
+        ),
+        other => panic!("expected stage {stage} to be Failed, got: {other:?}"),
+    }
+}
 
 /// DC-95 Stage 1, round 2: the three "referenced object is missing" checks in `verify_block_payload`
 /// (`verify.rs`) -- parent block, patch, and snapshot blob. Supersedes the older, weaker `verify_
@@ -114,16 +146,8 @@ fn verify_repository_detects_every_missing_referenced_object() -> Result<()> {
         let (payload, expected_substring) = case_fn(&store, missing)?;
         write_signed_block(&mut store, &payload)?;
 
-        let error = match verify_repository(&layout) {
-            Ok(_) => {
-                panic!("case {name:?}: expected verify_repository to reject a missing reference")
-            }
-            Err(error) => error.to_string(),
-        };
-        assert!(
-            error.contains(expected_substring),
-            "case {name:?}: expected error containing {expected_substring:?}, got: {error}"
-        );
+        let report = verify_repository(&layout)?;
+        assert_stage_failed(&report, VerificationStage::Objects, expected_substring);
         let _ = std::fs::remove_dir_all(root);
     }
     Ok(())
@@ -160,7 +184,12 @@ fn verify_repository_detects_block_with_state_root_mismatch() -> Result<()> {
         },
     )?;
 
-    assert!(verify_repository(&layout).is_err());
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::Objects,
+        "state root does not match authoritative replay",
+    );
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -367,16 +396,8 @@ fn verify_repository_detects_every_block_shape_violation() -> Result<()> {
         let (payload, expected_substring) = case_fn(&store, genesis, parent_a, parent_b)?;
         write_signed_block(&mut store, &payload)?;
 
-        let error = match verify_repository(&layout) {
-            Ok(_) => {
-                panic!("case {name:?}: expected verify_repository to reject a shape violation")
-            }
-            Err(error) => error.to_string(),
-        };
-        assert!(
-            error.contains(expected_substring),
-            "case {name:?}: expected error containing {expected_substring:?}, got: {error}"
-        );
+        let report = verify_repository(&layout)?;
+        assert_stage_failed(&report, VerificationStage::Objects, expected_substring);
         let _ = std::fs::remove_dir_all(root);
     }
     Ok(())
@@ -560,18 +581,18 @@ fn verify_repository_counts_objects_and_wal_records() {
         let report = verify_repository(&layout);
         assert!(report.is_ok());
         if let Ok(report) = report {
-            assert_eq!(report.checked_objects, 1);
-            assert_eq!(report.checked_blocks, 0);
-            assert_eq!(report.checked_wal_records, 1);
-            assert_eq!(report.persisted_wal_patches, 0);
-            assert_eq!(report.checked_refs, 0);
-            assert_eq!(report.checked_ref_log_records, 0);
-            assert_eq!(report.trailing_partial_wal_bytes, 0);
+            assert_eq!(report.checked_objects, Some(1));
+            assert_eq!(report.checked_blocks, Some(0));
+            assert_eq!(report.checked_wal_records, Some(1));
+            assert_eq!(report.persisted_wal_patches, Some(0));
+            assert_eq!(report.checked_refs, Some(0));
+            assert_eq!(report.checked_ref_log_records, Some(0));
+            assert_eq!(report.trailing_partial_wal_bytes, Some(0));
             assert_eq!(
                 report.active_wal_metadata_status,
-                ActiveWalMetadataStatus::ValidForNonEmptyWal {
+                Some(ActiveWalMetadataStatus::ValidForNonEmptyWal {
                     ref_name: "heads/main".to_string()
-                }
+                })
             );
         }
     }
@@ -616,7 +637,7 @@ fn verify_repository_reports_active_wal_ordering_violation() {
         let report = verify_repository(&layout);
         assert!(report.is_ok());
         if let Ok(report) = report {
-            assert_eq!(report.checked_wal_records, 2);
+            assert_eq!(report.checked_wal_records, Some(2));
             assert!(report.has_active_wal_ordering_issue());
             assert_eq!(
                 report.active_wal_ordering_issues,
@@ -645,7 +666,7 @@ fn verify_repository_reports_missing_active_metadata_for_non_empty_wal() {
         if let Ok(report) = report {
             assert_eq!(
                 report.active_wal_metadata_status,
-                ActiveWalMetadataStatus::MissingForNonEmptyWal
+                Some(ActiveWalMetadataStatus::MissingForNonEmptyWal)
             );
             assert!(report.has_active_wal_metadata_integrity_issue());
         }
@@ -666,7 +687,7 @@ fn verify_repository_reports_malformed_empty_active_metadata_as_warning_state() 
         if let Ok(report) = report {
             assert!(matches!(
                 report.active_wal_metadata_status,
-                ActiveWalMetadataStatus::InvalidForEmptyWal { .. }
+                Some(ActiveWalMetadataStatus::InvalidForEmptyWal { .. })
             ));
             assert!(report.has_active_wal_metadata_warning());
             assert!(!report.has_active_wal_metadata_integrity_issue());
@@ -698,7 +719,7 @@ fn verify_repository_reports_malformed_active_metadata_for_non_empty_wal_as_inte
         if let Ok(report) = report {
             assert!(matches!(
                 report.active_wal_metadata_status,
-                ActiveWalMetadataStatus::InvalidForNonEmptyWal { .. }
+                Some(ActiveWalMetadataStatus::InvalidForNonEmptyWal { .. })
             ));
             assert!(report.has_active_wal_metadata_integrity_issue());
             assert!(!report.has_active_wal_metadata_warning());
@@ -723,7 +744,15 @@ fn verify_repository_detects_object_file_in_wrong_prefix() {
             assert!(std::fs::create_dir_all(&wrong_dir).is_ok());
             let wrong = wrong_dir.join(format!("{}.pobj", id.to_hex()));
             assert!(std::fs::rename(correct, wrong).is_ok());
-            assert!(verify_repository(&layout).is_err());
+            let report = verify_repository(&layout);
+            assert!(report.is_ok());
+            if let Ok(report) = report {
+                assert_stage_failed(
+                    &report,
+                    VerificationStage::Objects,
+                    "does not match canonical path",
+                );
+            }
         }
     }
     let _ = std::fs::remove_dir_all(root);
@@ -791,14 +820,8 @@ fn verify_repository_detects_envelope_type_mismatch() -> Result<()> {
         crate::file_codec::encode_envelope_file(&envelope)?,
     )?;
 
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject a type-mismatched object file"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("is under type") && error.contains("but envelope type is"),
-        "expected an envelope-type-mismatch error, got: {error}"
-    );
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(&report, VerificationStage::Objects, "is under type");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -835,14 +858,8 @@ fn verify_repository_detects_object_id_mismatch() -> Result<()> {
         crate::file_codec::encode_envelope_file(&envelope)?,
     )?;
 
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject an id-mismatched object file"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("has id") && error.contains("but computed id is"),
-        "expected an object-id-mismatch error, got: {error}"
-    );
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(&report, VerificationStage::Objects, "has id");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -872,15 +889,11 @@ fn verify_repository_detects_every_directory_shape_violation() -> Result<()> {
     ))?;
     let stray_file = layout.object_type_dir(ObjectType::Blob).join("zz");
     std::fs::write(&stray_file, b"not a prefix directory")?;
-    let error = match verify_repository(&layout) {
-        Ok(_) => {
-            panic!("expected verify_repository to reject a non-directory in the type directory")
-        }
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("unexpected non-directory in object type directory"),
-        "expected that specific error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::Objects,
+        "unexpected non-directory in object type directory",
     );
     let _ = std::fs::remove_dir_all(non_directory_root);
 
@@ -898,13 +911,11 @@ fn verify_repository_detects_every_directory_shape_violation() -> Result<()> {
         .ok_or_else(|| PrikkError::Io("object path has no parent".to_string()))?
         .to_path_buf();
     std::fs::create_dir_all(prefix_dir.join("stray-directory"))?;
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject a non-file in a prefix directory"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("unexpected non-file in object prefix directory"),
-        "expected that specific error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::Objects,
+        "unexpected non-file in object prefix directory",
     );
     let _ = std::fs::remove_dir_all(non_file_root);
     Ok(())
@@ -1147,13 +1158,11 @@ fn verify_repository_rejects_malformed_signature_shape() -> Result<()> {
         crate::file_codec::encode_envelope_file_structural(&envelope)?,
     )?;
 
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject a malformed-shape signature"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("malformed algorithm shape"),
-        "expected the strict-signature-shape rejection, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::Objects,
+        "malformed algorithm shape",
     );
 
     let _ = std::fs::remove_dir_all(root);

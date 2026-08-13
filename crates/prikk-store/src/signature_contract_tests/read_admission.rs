@@ -39,7 +39,7 @@ fn format2_object_reads_reject_every_strict_envelope_failure() -> prikk_error::R
         let objects = FileObjectStore::new(layout.clone());
 
         assert!(objects.read_object(object_id).is_err());
-        assert!(verify_repository(&layout).is_err());
+        assert!(verify_repository(&layout)?.has_stage_failure());
         let _ = std::fs::remove_dir_all(root);
     }
     Ok(())
@@ -64,7 +64,7 @@ fn format2_wal_reads_reject_every_strict_envelope_failure() -> prikk_error::Resu
         )?;
 
         assert!(Wal::for_layout(&layout).replay().is_err());
-        assert!(verify_repository(&layout).is_err());
+        assert!(verify_repository(&layout)?.has_stage_failure());
         let _ = std::fs::remove_dir_all(root);
     }
     Ok(())
@@ -96,7 +96,7 @@ fn format2_ref_log_reads_reject_every_strict_envelope_failure() -> prikk_error::
                 .replay_log("heads/main")
                 .is_err()
         );
-        assert!(verify_repository(&layout).is_err());
+        assert!(verify_repository(&layout)?.has_stage_failure());
         let _ = std::fs::remove_dir_all(root);
     }
     Ok(())
@@ -115,7 +115,7 @@ fn format2_authoritative_replay_rejects_every_strict_patch_failure() -> prikk_er
         let objects = FileObjectStore::new(layout.clone());
 
         assert!(derive_next_state_root(&objects, None, &[patch_id]).is_err());
-        assert!(verify_repository(&layout).is_err());
+        assert!(verify_repository(&layout)?.has_stage_failure());
         let _ = std::fs::remove_dir_all(root);
     }
     Ok(())

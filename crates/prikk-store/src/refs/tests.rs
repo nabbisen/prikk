@@ -135,8 +135,8 @@ fn ref_store_publishes_ref_state_and_log() {
         let report = verify_repository(&layout);
         assert!(report.is_ok());
         if let Ok(report) = report {
-            assert_eq!(report.checked_refs, 1);
-            assert_eq!(report.checked_ref_log_records, 1);
+            assert_eq!(report.checked_refs, Some(1));
+            assert_eq!(report.checked_ref_log_records, Some(1));
         }
     }
     let _ = std::fs::remove_dir_all(root);
@@ -415,7 +415,11 @@ fn verify_repository_detects_missing_ref_state_object() {
         assert!(store.publish(&publication).is_ok());
         let ref_state_path = layout.object_path(ObjectType::RefState, ref_state_id);
         assert!(std::fs::remove_file(ref_state_path).is_ok());
-        assert!(verify_repository(&layout).is_err());
+        let report = verify_repository(&layout);
+        assert!(report.is_ok());
+        if let Ok(report) = report {
+            assert!(report.has_stage_failure());
+        }
     }
     let _ = std::fs::remove_dir_all(root);
 }
@@ -490,8 +494,8 @@ fn ref_log_ahead_of_pointer_is_recoverable() {
         let report = verify_repository(&layout);
         assert!(report.is_ok());
         if let Ok(report) = report {
-            assert_eq!(report.checked_refs, 0);
-            assert_eq!(report.checked_ref_log_records, 1);
+            assert_eq!(report.checked_refs, Some(0));
+            assert_eq!(report.checked_ref_log_records, Some(1));
         }
 
         let repair = store.reconstruct_missing_ref_from_log("heads/topic");
