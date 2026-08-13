@@ -1,6 +1,6 @@
 //! DC-78 §D3 — `verify` must surface, per block, which MAINTAINER key sealed it. The key id already
 //! lives inside the block's own signature; this is reporting that fact, not new state
-//! (`rfcs/accepted/DC-78-HISTORY-EXCHANGE.md` §D3).
+//! (`rfcs/done/DC-78-HISTORY-EXCHANGE.md` §D3).
 
 #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
 

@@ -1,7 +1,7 @@
 //! Repository-local publication trust store: the set of MAINTAINER keys this repository accepts as
 //! having sealed a `Block`/`RefState` (DC-78 §D2). `required = 1` keeps its DC-11 meaning regardless
 //! of how many keys are adopted — a block needs *one* trusted signature, never a threshold of
-//! several (`rfcs/accepted/DC-78-HISTORY-EXCHANGE.md` §D2, confirmed against every existing
+//! several (`rfcs/done/DC-78-HISTORY-EXCHANGE.md` §D2, confirmed against every existing
 //! assumption at §D7.2). The parser stays strict and fixed-shape (DC-11); this module is not a
 //! general TOML implementation.
 
