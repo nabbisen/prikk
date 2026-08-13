@@ -139,7 +139,8 @@ pub use trust::{
 };
 pub use verify::{
     ActiveWalMetadataStatus, ActiveWalOrderingIssue, BlockSealVerification, ObjectVerification,
-    RepositoryVerification, verify_repository,
+    RepositoryVerification, StageOutcome, StageStatus, VerificationStage, VerifyOptions,
+    verify_repository, verify_repository_with_options,
 };
 pub use wal::{Wal, WalRecord, WalRepair, WalReplay};
 pub use worktree::{SnapshotMaterializationReport, materialize_snapshot_checkout};

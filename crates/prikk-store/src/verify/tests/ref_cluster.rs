@@ -60,6 +60,7 @@ use prikk_object::{
     RefKind, RefStatePayload, RefUpdatePayload,
 };
 
+use super::assert_stage_failed;
 use crate::maintainer_signing::MaintainerSigner;
 use crate::test_support::{
     sample_object_id, signed_empty_block_envelope, signed_patch_blob_envelope,
@@ -67,8 +68,8 @@ use crate::test_support::{
 };
 use crate::{
     Ed25519MaintainerSigner, FileObjectStore, ObjectWriter, RefPublication, RefStore,
-    RepositoryLayout, Wal, add_trusted_maintainer, derive_next_state_root, maintainer_signature,
-    verify_repository, write_active_ref_metadata,
+    RepositoryLayout, VerificationStage, Wal, add_trusted_maintainer, derive_next_state_root,
+    maintainer_signature, verify_repository, write_active_ref_metadata,
 };
 
 fn trusted_signer(seed_label: &str, byte: u8) -> Result<Ed25519MaintainerSigner> {
@@ -215,14 +216,8 @@ fn verify_repository_detects_dangling_ref_target() -> Result<()> {
         publish_ref_to_new_block_fake_signed_confounds_probes(&layout, &mut objects, "heads/main")?;
     std::fs::remove_file(layout.object_path(ObjectType::Block, block_id))?;
 
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject a dangling ref target"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("targets missing block"),
-        "expected a dangling-ref-target error, got: {error}"
-    );
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(&report, VerificationStage::Refs, "targets missing block");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -262,13 +257,11 @@ fn verify_repository_detects_noncanonical_ref_pointer_path() -> Result<()> {
         .join(format!("{}.ref", sample_object_id("misplaced-pointer")));
     std::fs::rename(&canonical, &misplaced)?;
 
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject a non-canonical ref pointer path"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("non-canonical ref pointer"),
-        "expected a non-canonical-ref-pointer error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::Refs,
+        "non-canonical ref pointer",
     );
     let _ = std::fs::remove_dir_all(root);
     Ok(())
@@ -316,13 +309,11 @@ fn verify_repository_detects_ref_state_name_pointer_mismatch() -> Result<()> {
         layout.ref_pointer_path("heads/other"),
     )?;
 
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject a RefState/pointer name mismatch"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("name differs from pointer ref"),
-        "expected a name-mismatch error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::Refs,
+        "name differs from pointer ref",
     );
     let _ = std::fs::remove_dir_all(root);
     Ok(())
@@ -365,13 +356,11 @@ fn verify_repository_detects_every_ref_path_shape_violation() -> Result<()> {
     let layout = RepositoryLayout::init(pointer_root.clone())?;
     let bad_pointer = layout.refs_dir().join("by-id").join("zz.ref");
     std::fs::write(&bad_pointer, b"not a valid length or content")?;
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject a badly-shaped pointer filename"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("ref path has invalid shape"),
-        "expected a ref-path-shape error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::Refs,
+        "ref path has invalid shape",
     );
     let _ = std::fs::remove_dir_all(pointer_root);
 
@@ -379,13 +368,11 @@ fn verify_repository_detects_every_ref_path_shape_violation() -> Result<()> {
     let layout = RepositoryLayout::init(log_root.clone())?;
     let bad_log = layout.refs_dir().join("logs").join("zz.log");
     std::fs::write(&bad_log, b"not a valid length or content")?;
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject a badly-shaped log filename"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("ref path has invalid shape"),
-        "expected a ref-path-shape error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::Refs,
+        "ref path has invalid shape",
     );
     let _ = std::fs::remove_dir_all(log_root);
     Ok(())
@@ -468,13 +455,11 @@ fn verify_repository_detects_ref_update_ref_state_mismatch() -> Result<()> {
         layout.ref_pointer_path("heads/main"),
     )?;
 
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject a RefState/RefUpdate mismatch"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("RefState disagrees with RefUpdate"),
-        "expected a RefState/RefUpdate mismatch error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::Refs,
+        "RefState disagrees with RefUpdate",
     );
     let _ = std::fs::remove_dir_all(root);
     Ok(())
@@ -549,14 +534,8 @@ fn verify_repository_detects_unsigned_ref_state() -> Result<()> {
         layout.ref_pointer_path("heads/main"),
     )?;
 
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject an unsigned RefState"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("is unsigned"),
-        "expected an unsigned-RefState error, got: {error}"
-    );
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(&report, VerificationStage::Refs, "is unsigned");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -612,13 +591,11 @@ fn verify_repository_detects_incomplete_log_tail_without_pointer_lead() -> Resul
     std::io::Write::write_all(&mut log_file, &[0xAB, 0xCD, 0xEF])?;
     drop(log_file);
 
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject an incomplete log tail"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("incomplete log tail without a pointer lead"),
-        "expected an incomplete-log-tail error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::Refs,
+        "incomplete log tail without a pointer lead",
     );
     let _ = std::fs::remove_dir_all(root);
     Ok(())
@@ -685,13 +662,11 @@ fn verify_repository_detects_nonzero_created_at_under_format2() -> Result<()> {
         crate::refs::encode_log_record_for_test(&update_envelope)?,
     )?;
 
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject a nonzero created_at under format-2"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("format-2 RefUpdate requires created_at == 0"),
-        "expected a nonzero-created_at error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::Refs,
+        "format-2 RefUpdate requires created_at == 0",
     );
     let _ = std::fs::remove_dir_all(root);
     Ok(())
@@ -772,13 +747,11 @@ fn verify_repository_detects_ref_log_sequence_gap() -> Result<()> {
         layout.ref_pointer_path("heads/main"),
     )?;
 
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject a ref-log sequence gap"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("ref-log chain or sequence diverges"),
-        "expected a sequence-gap error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::Refs,
+        "ref-log chain or sequence diverges",
     );
     let _ = std::fs::remove_dir_all(root);
     Ok(())
@@ -839,13 +812,11 @@ fn verify_repository_detects_unexplained_pointer_log_divergence() -> Result<()> 
         layout.ref_pointer_path("heads/main"),
     )?;
 
-    let error = match verify_repository(&layout) {
-        Ok(_) => panic!("expected verify_repository to reject an unexplained divergence"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("unexplained pointer/log divergence"),
-        "expected an unexplained-divergence error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::Refs,
+        "unexplained pointer/log divergence",
     );
     let _ = std::fs::remove_dir_all(root);
     Ok(())

@@ -17,6 +17,51 @@
 //! tracing its actual call path from `verify_repository`, not just constructing input shaped to match
 //! the check's own condition.
 //!
+//! **Do not report a result derived from a step that may not have run.** The general form of a rule
+//! found three times, from three directions, across DC-95 Stage 1 and Stage 2 (`stage-2-level-1-sweep-
+//! ruling-v1.md` §4): a check's presence in the source is not proof a defect reaches it (above); an
+//! empty accumulator is not "none found" if its producer did not run to completion; a partial count is
+//! not "this many verified" if the stage computing it stopped partway through. All three are the same
+//! error seen from different angles -- inferring a result from the absence of evidence when the
+//! evidence-gathering step itself may not have happened. `require_retained_evidence`'s own `trust_is_
+//! valid` (see [`VerificationStage::PublicationReclassification`] below) is the concrete instance the
+//! second form was caught in: `trust_verifier.issues.is_empty()` alone reads `true` when the `Objects`
+//! stage failed before checking a single Block or RefState, which is not the same fact as "every
+//! relevant object was checked and found trustworthy." It is `issues.is_empty() && objects_evaluated`
+//! for exactly this reason. The third form is why `RepositoryVerification`'s per-stage counts
+//! (`checked_objects` and its siblings) are `Option<usize>`, `None` rather than a partial number, when
+//! their producing stage did not evaluate to completion -- a partial count is a completeness claim in
+//! miniature, and `verify_objects`'s own topological pass over the whole object store means a partial
+//! per-type count says nothing about whether the objects it did see are individually sound.
+//!
+//! # DC-95 Stage 2, Level 1: scope containment
+//!
+//! `verify_repository`'s pipeline is twelve stages (see [`VerificationStage`]), each a `?`-propagating
+//! call in the pre-Stage-2 source. Stage 1 (above) proved which checks inside those stages are load-
+//! bearing; Stage 2 Level 1 changed what happens when one fails. **Before:** the first hard error
+//! anywhere aborted `verify_repository` entirely -- every later stage silently never ran, and
+//! `print_verify_report` never printed anything but the one error string. **After:** each stage's own
+//! `?` is caught at the boundary and recorded as a [`StageOutcome`] rather than propagated; the
+//! pipeline continues to the remaining stages regardless. A `Failed` stage's own error becomes its
+//! `StageOutcome`'s message; a stage that could not run because a real dependency ([`StageStatus::
+//! NotEvaluated`], naming that dependency) is blocking on the same footing -- an incomplete
+//! verification is not a passing one, so `RepositoryVerification::has_stage_failure` covers both, plus
+//! a third state, [`StageStatus::Halted`], for `--stop-on-first-error`: a stage that was never attempted
+//! because an *unrelated* earlier stage's failure already stopped the walk. `Halted` is kept distinct
+//! from `NotEvaluated` because `blocked_by` is a dependency-graph claim -- reporting `NotEvaluated {
+//! blocked_by: Objects }` for `LifecycleCache`, which does not depend on `Objects` at all, would assert
+//! an edge that does not exist (implementation review v1 §4). The distinction only matters under
+//! `--stop-on-first-error`; in the default full-accumulation walk, every `NotEvaluated` names a real
+//! dependency and `Halted` never appears.
+//!
+//! **The Stage 1 classification table below is unchanged by this**: which checks are load-bearing,
+//! downstream-redundant, excluded, or unreachable is a fact about the checks themselves, not about how
+//! their failures propagate out of `verify_repository`. What changed is the shape a reader (or
+//! `doctor_repository`, or `prikk verify`'s own exit-code chain) sees a failing check through: a
+//! `StageOutcome` against the owning stage, not a bare `Result::Err` from the whole function. Checks
+//! were not rewritten, moved, or deleted to get here -- only the twelve top-level boundaries around
+//! them.
+//!
 //! # DC-95 Stage 1: end-to-end coverage, by cluster
 //!
 //! Every check `verify_repository` performs, classified by whether disabling it lets a defective
@@ -174,43 +219,184 @@ pub struct BlockSealVerification {
     pub sealed_by_key_id: String,
 }
 
+/// One of the twelve top-level scopes `verify_repository`'s pipeline is organized into (DC-95 Stage 2
+/// Level 1: scope containment). Named in pipeline order; the order itself is load-bearing for
+/// `NotEvaluated` naming (`StageStatus::NotEvaluated`'s `blocked_by` is always an earlier stage).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum VerificationStage {
+    /// Persisted-object scan: identity, placement, envelope decoding, sealed block references,
+    /// publication trust for Block/RefState (shares `PublicationTrustVerifier` with
+    /// `RefUpdateSchemaTrust`).
+    Objects,
+    /// Joint ref pointer/log verification: structural shape, publication-state classification.
+    Refs,
+    /// Per-`RefUpdate`-envelope format-read-schema validation and publication trust (shares
+    /// `PublicationTrustVerifier` with `Objects`).
+    RefUpdateSchemaTrust,
+    /// Active-WAL replay: framing, checksums, envelope decoding.
+    WalReplay,
+    /// Active-WAL patch persistence cross-check against the object store.
+    WalPersistence,
+    /// Active-WAL rollback-draft classification and structural validation.
+    RollbackDrafts,
+    /// Per-active-WAL-record format-read-schema validation and signature-envelope classification.
+    WalRecordSchema,
+    /// Active-WAL ref-ownership metadata classification.
+    ActiveWalMetadata,
+    /// Retained-evidence reclassification of interrupted-publication ref issues.
+    PublicationReclassification,
+    /// DC-56 commit-index cache divergence check.
+    CommitIndex,
+    /// DC-64 incremental lifecycle-state cache divergence check.
+    LifecycleCache,
+    /// DC-66 active-WAL queue-ordering check.
+    WalOrdering,
+}
+
+impl VerificationStage {
+    /// Stable, lowercase-hyphenated scope name for diagnostics and CLI output.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Objects => "objects",
+            Self::Refs => "refs",
+            Self::RefUpdateSchemaTrust => "ref-update-schema-trust",
+            Self::WalReplay => "wal-replay",
+            Self::WalPersistence => "wal-persistence",
+            Self::RollbackDrafts => "rollback-drafts",
+            Self::WalRecordSchema => "wal-record-schema",
+            Self::ActiveWalMetadata => "active-wal-metadata",
+            Self::PublicationReclassification => "publication-reclassification",
+            Self::CommitIndex => "commit-index",
+            Self::LifecycleCache => "lifecycle-cache",
+            Self::WalOrdering => "wal-ordering",
+        }
+    }
+}
+
+impl std::fmt::Display for VerificationStage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+/// Outcome of attempting to evaluate one verification stage (DC-95 Stage 2 Level 1). **No stage may be
+/// silently absent from a report.** A stage's own check raising an error is recorded as a blocking
+/// finding against its scope rather than aborting the rest of verification (`Failed`); a stage that
+/// could not run because a real dependency did not evaluate is itself blocking, not silently skipped
+/// (`NotEvaluated`); a stage that could have run on its own terms but was preempted by an operator-
+/// requested early stop is also blocking, but for a different reason it must not be confused with
+/// (`Halted`) — a repository whose verification is incomplete is not verified, regardless of which of
+/// the three non-`Evaluated` states explains the gap.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StageStatus {
+    /// The stage ran to completion; its findings and counts are authoritative.
+    Evaluated,
+    /// The stage's own check raised an error.
+    Failed {
+        /// The error the stage raised.
+        message: String,
+    },
+    /// The stage could not run because a *real* dependency did not evaluate — `blocked_by` names a
+    /// stage this one's own logic actually reads output from. This is a dependency-graph claim, and
+    /// must remain true of the graph even when `--stop-on-first-error` is in effect; see `Halted` for
+    /// the case where a stage merely followed an unrelated earlier stop.
+    NotEvaluated {
+        /// The earlier stage whose own non-evaluation is why this one could not run.
+        blocked_by: VerificationStage,
+    },
+    /// The stage was never attempted because an earlier, *unrelated* stage's failure already stopped
+    /// the walk under `--stop-on-first-error` (DC-95 Stage 2 Level 1 implementation review v1 §4) —
+    /// `after` names the stage whose failure triggered the stop, not a dependency of this stage. Kept
+    /// distinct from `NotEvaluated` because `blocked_by` is a dependency-graph claim: reporting
+    /// `NotEvaluated { blocked_by: Objects }` for a stage that does not actually depend on `Objects`
+    /// (e.g. `LifecycleCache`) would assert an edge that does not exist.
+    Halted {
+        /// The stage whose failure caused the walk to stop before this stage was reached.
+        after: VerificationStage,
+    },
+}
+
+impl StageStatus {
+    /// Return true for any status other than a clean, completed evaluation. `NotEvaluated` and
+    /// `Halted` are both blocking on the same footing as `Failed` — an incomplete verification is not
+    /// a passing one, whichever of the three explains the gap.
+    #[must_use]
+    pub const fn is_blocking(&self) -> bool {
+        !matches!(self, Self::Evaluated)
+    }
+}
+
+/// One stage's resolved outcome.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StageOutcome {
+    /// Which of the twelve stages this outcome is for.
+    pub stage: VerificationStage,
+    /// How that stage resolved.
+    pub status: StageStatus,
+}
+
 /// Repository verification summary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepositoryVerification {
-    /// True when format-1 scaffold roots cannot be verified as clean-state commitments.
+    /// True when format-1 scaffold roots cannot be verified as clean-state commitments. A precondition
+    /// fact about the repository's format, not sourced from any stage — always known.
     pub legacy_state_roots_unverifiable: bool,
-    /// Number of persisted object files checked successfully.
-    pub checked_objects: usize,
-    /// Number of active WAL records replayed successfully.
-    pub checked_wal_records: usize,
-    /// Number of persisted block objects whose references were checked.
-    pub checked_blocks: usize,
-    /// Number of persisted Block objects classified as rollback blocks.
-    pub checked_rollback_blocks: usize,
-    /// Number of sealed rollback-marked Patch objects referenced by verified Blocks.
-    pub checked_sealed_rollback_patches: usize,
-    /// Number of active WAL patch records that already exist as persisted patch objects.
-    pub persisted_wal_patches: usize,
-    /// Number of ref pointer files checked successfully.
-    pub checked_refs: usize,
-    /// Number of inline ref-log records checked successfully.
-    pub checked_ref_log_records: usize,
-    /// Interrupted ref-publication and candidate-debris conditions found by joint verification.
+    /// Outcome of each of the twelve verification stages (DC-95 Stage 2 Level 1), in pipeline order.
+    /// Always exactly twelve entries — no stage may be silently absent.
+    pub stage_outcomes: Vec<StageOutcome>,
+    /// Number of persisted object files checked successfully. `None` when the objects stage did not
+    /// evaluate to completion — a partial count is not "this many verified" (DC-95 Stage 2 ruling):
+    /// object verification includes a whole-store topological pass that only runs after every object
+    /// has been scanned, so a count from a stage that failed partway through does not establish that
+    /// even the objects it did see are individually fine.
+    pub checked_objects: Option<usize>,
+    /// Number of active WAL records replayed successfully. `None` when the WAL-replay stage did not
+    /// evaluate to completion.
+    pub checked_wal_records: Option<usize>,
+    /// Number of persisted block objects whose references were checked. `None` when the objects stage
+    /// did not evaluate to completion.
+    pub checked_blocks: Option<usize>,
+    /// Number of persisted Block objects classified as rollback blocks. `None` when the objects stage
+    /// did not evaluate to completion.
+    pub checked_rollback_blocks: Option<usize>,
+    /// Number of sealed rollback-marked Patch objects referenced by verified Blocks. `None` when the
+    /// objects stage did not evaluate to completion.
+    pub checked_sealed_rollback_patches: Option<usize>,
+    /// Number of active WAL patch records that already exist as persisted patch objects. `None` when
+    /// the WAL-persistence stage did not evaluate to completion.
+    pub persisted_wal_patches: Option<usize>,
+    /// Number of ref pointer files checked successfully. `None` when the refs stage did not evaluate
+    /// to completion.
+    pub checked_refs: Option<usize>,
+    /// Number of inline ref-log records checked successfully. `None` when the refs stage did not
+    /// evaluate to completion.
+    pub checked_ref_log_records: Option<usize>,
+    /// Interrupted ref-publication and candidate-debris conditions found by joint verification. Stays
+    /// a plain `Vec` under stage containment: entries already pushed by a stage that later failed
+    /// remain real findings; only the count/emptiness-as-proof reasoning needed a stage-aware guard
+    /// (see `require_retained_evidence`'s own `trust_is_valid` computation).
     pub ref_publication_issues: Vec<crate::refs::RefPublicationIssue>,
     /// Warning-level format-1 signature-envelope compatibility findings in deterministic order.
     pub signature_envelope_issues: Vec<SignatureEnvelopeIssue>,
-    /// Number of active WAL records classified and decoded as rollback drafts.
-    pub checked_rollback_draft_records: usize,
-    /// Number of publication envelopes checked against repository-local trust.
-    pub checked_publication_trust_records: usize,
-    /// Publication-trust issues found while structural verification succeeded.
+    /// Number of active WAL records classified and decoded as rollback drafts. `None` when the
+    /// rollback-drafts stage did not evaluate to completion.
+    pub checked_rollback_draft_records: Option<usize>,
+    /// Number of publication envelopes checked against repository-local trust. `None` unless *both*
+    /// the objects stage and the ref-update schema/trust stage evaluated to completion — this count is
+    /// contributed to by both, sharing one `PublicationTrustVerifier` instance across them.
+    pub checked_publication_trust_records: Option<usize>,
+    /// Publication-trust issues found while structural verification succeeded. Stays a plain `Vec` —
+    /// entries genuinely found before an interrupting failure remain real findings.
     pub publication_trust_issues: Vec<PublicationTrustIssue>,
     /// Recognized non-authoritative object publication temps left for explicit maintenance.
     pub object_temp_paths: Vec<PathBuf>,
-    /// Number of trailing bytes in the active WAL that look like an incomplete final record.
-    pub trailing_partial_wal_bytes: usize,
-    /// Active-WAL ref metadata status relative to the replayed WAL.
-    pub active_wal_metadata_status: ActiveWalMetadataStatus,
+    /// Number of trailing bytes in the active WAL that look like an incomplete final record. `None`
+    /// when the WAL-replay stage did not evaluate to completion.
+    pub trailing_partial_wal_bytes: Option<usize>,
+    /// Active-WAL ref metadata status relative to the replayed WAL. `None` when the active-WAL-metadata
+    /// stage did not evaluate to completion.
+    pub active_wal_metadata_status: Option<ActiveWalMetadataStatus>,
     /// DC-56 commit-index entries whose recorded content hash disagrees with the worktree's actual
     /// current content despite a matching stat — a stale-but-trusted cache entry, reported per the
     /// cache-validity specification §6 rather than silently trusted by a future commit.
@@ -265,16 +451,31 @@ pub struct ActiveWalOrderingIssue {
 }
 
 impl RepositoryVerification {
+    /// Return true when any of the twelve verification stages did not evaluate cleanly — either its
+    /// own check raised an error (`Failed`) or a dependency's non-evaluation prevented it from running
+    /// at all (`NotEvaluated`). A repository whose verification did not run to completion is not
+    /// verified, regardless of what the stages that did run found. Checked first, ahead of every
+    /// finding-specific predicate below: those predicates' own backing data can itself be incomplete
+    /// precisely because a stage failed, so this is the more fundamental question.
+    #[must_use]
+    pub fn has_stage_failure(&self) -> bool {
+        self.stage_outcomes
+            .iter()
+            .any(|outcome| outcome.status.is_blocking())
+    }
+
     /// Return true when legacy scaffold roots prevent state-commitment verification.
     #[must_use]
     pub const fn has_unverifiable_state_roots(&self) -> bool {
         self.legacy_state_roots_unverifiable
     }
 
-    /// Return true if the active WAL contained an incomplete trailing record.
+    /// Return true if the active WAL contained an incomplete trailing record. `None` (the WAL-replay
+    /// stage did not evaluate) reads as false here — that condition is already surfaced, more
+    /// precisely, by `has_stage_failure`.
     #[must_use]
-    pub const fn has_trailing_partial_wal(&self) -> bool {
-        self.trailing_partial_wal_bytes != 0
+    pub fn has_trailing_partial_wal(&self) -> bool {
+        self.trailing_partial_wal_bytes.is_some_and(|n| n != 0)
     }
 
     /// Return true when all structurally verified publication objects also passed trust checks.
@@ -291,16 +492,22 @@ impl RepositoryVerification {
             .any(|issue| issue.blocking)
     }
 
-    /// Return true when a non-empty active WAL lacks valid ownership metadata.
+    /// Return true when a non-empty active WAL lacks valid ownership metadata. `None` (the
+    /// active-WAL-metadata stage did not evaluate) reads as false here — see `has_trailing_partial_wal`.
     #[must_use]
-    pub const fn has_active_wal_metadata_integrity_issue(&self) -> bool {
-        self.active_wal_metadata_status.has_integrity_issue()
+    pub fn has_active_wal_metadata_integrity_issue(&self) -> bool {
+        self.active_wal_metadata_status
+            .as_ref()
+            .is_some_and(ActiveWalMetadataStatus::has_integrity_issue)
     }
 
-    /// Return true when an empty active WAL has stale local metadata debris.
+    /// Return true when an empty active WAL has stale local metadata debris. `None` reads as false —
+    /// see `has_trailing_partial_wal`.
     #[must_use]
-    pub const fn has_active_wal_metadata_warning(&self) -> bool {
-        self.active_wal_metadata_status.has_local_debris_warning()
+    pub fn has_active_wal_metadata_warning(&self) -> bool {
+        self.active_wal_metadata_status
+            .as_ref()
+            .is_some_and(ActiveWalMetadataStatus::has_local_debris_warning)
     }
 
     /// Return true when the commit-index cache disagrees with the worktree for at least one path.
@@ -378,69 +585,371 @@ impl ActiveWalMetadataStatus {
     }
 }
 
-/// Verify a repository layout without modifying it.
+/// Threads stage outcomes, and (optionally) an early-halt decision, through `verify_repository`'s
+/// pipeline (DC-95 Stage 2 Level 1's `--stop-on-first-error`, design §7 and §12.3).
+struct StagePipeline {
+    outcomes: Vec<StageOutcome>,
+    stop_on_first_error: bool,
+    halted_by: Option<VerificationStage>,
+}
+
+impl StagePipeline {
+    fn new(stop_on_first_error: bool) -> Self {
+        Self {
+            outcomes: Vec::with_capacity(12),
+            stop_on_first_error,
+            halted_by: None,
+        }
+    }
+
+    /// Attempt a stage with no real dependency beyond a possible earlier halt. Returns the value on
+    /// success; `None` on failure, or if an earlier stage already halted the walk. A stage reached
+    /// through `run` never has a real declared dependency (a stage that does is gated behind an
+    /// `if`/`else` at its call site and reaches `not_evaluated` instead when ungated) -- so an
+    /// already-halted walk is always reported as `Halted`, never a fabricated `NotEvaluated`.
+    fn run<T>(&mut self, stage: VerificationStage, result: Result<T>) -> Option<T> {
+        if let Some(halted_by) = self.halted_by {
+            self.outcomes.push(StageOutcome {
+                stage,
+                status: StageStatus::Halted { after: halted_by },
+            });
+            return None;
+        }
+        match result {
+            Ok(value) => {
+                self.outcomes.push(StageOutcome {
+                    stage,
+                    status: StageStatus::Evaluated,
+                });
+                Some(value)
+            }
+            Err(err) => {
+                self.outcomes.push(StageOutcome {
+                    stage,
+                    status: StageStatus::Failed {
+                        message: err.to_string(),
+                    },
+                });
+                if self.stop_on_first_error {
+                    self.halted_by = Some(stage);
+                }
+                None
+            }
+        }
+    }
+
+    /// Record a stage that cannot run because `blocked_by` -- a real dependency -- did not evaluate.
+    /// Always reports `blocked_by` as given, never substituted: a caller only reaches this method when
+    /// `blocked_by`'s own stage failed to produce a usable value (DC-95 Stage 2 Level 1 implementation
+    /// review v1 §4), so the claim is true of the dependency graph regardless of *why* `blocked_by`
+    /// itself did not evaluate -- including when `blocked_by` was itself `Halted`, in which case this
+    /// stage is transitively halted too, discoverable by following the chain rather than by this call
+    /// reaching past its own real dependency to name an unrelated stage. `--stop-on-first-error` never
+    /// originates a fresh halt here: every halt traces back to a `Failed` outcome from `run`, which
+    /// already recorded it.
+    fn not_evaluated(&mut self, stage: VerificationStage, blocked_by: VerificationStage) {
+        self.outcomes.push(StageOutcome {
+            stage,
+            status: StageStatus::NotEvaluated { blocked_by },
+        });
+    }
+
+    /// Record a stage whose own check cannot fail (a pure function, or one that already converts
+    /// errors into findings) -- still subject to an earlier halt. Returns whether the stage should
+    /// actually run its own work. Never a real dependency (see `run`), so an already-halted walk is
+    /// `Halted`, not `NotEvaluated`.
+    fn run_infallible(&mut self, stage: VerificationStage) -> bool {
+        if let Some(halted_by) = self.halted_by {
+            self.outcomes.push(StageOutcome {
+                stage,
+                status: StageStatus::Halted { after: halted_by },
+            });
+            false
+        } else {
+            self.outcomes.push(StageOutcome {
+                stage,
+                status: StageStatus::Evaluated,
+            });
+            true
+        }
+    }
+}
+
+/// Options controlling how `verify_repository` walks its twelve stages (DC-95 Stage 2 Level 1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct VerifyOptions {
+    /// When true, stop at the first stage that fails or cannot evaluate, leaving every later stage
+    /// `NotEvaluated` (naming the first halting stage) rather than continuing to accumulate.
+    /// Preserves the pre-Stage-2 bounded-walk behavior for a large, badly-damaged repository where a
+    /// full accumulating scan would be costly (design §7) -- unbounded growth is concentrated in the
+    /// `Objects` stage's whole-store scan. Default `false` (full accumulation).
+    pub stop_on_first_error: bool,
+}
+
+/// Verify a repository layout without modifying it, with the default options (full accumulation
+/// across all twelve stages). See [`verify_repository_with_options`] for `--stop-on-first-error`.
 pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerification> {
+    verify_repository_with_options(layout, VerifyOptions::default())
+}
+
+/// Verify a repository layout without modifying it.
+pub fn verify_repository_with_options(
+    layout: &RepositoryLayout,
+    options: VerifyOptions,
+) -> Result<RepositoryVerification> {
     let object_store = FileObjectStore::new(layout.clone());
     let mut trust_verifier = PublicationTrustVerifier::new(layout);
-    let object_summary = verify_objects(layout, &object_store, &mut trust_verifier)?;
-    let ref_verification = verify_refs(layout)?;
-    for envelope in &ref_verification.ref_update_envelopes {
-        crate::format::validate_read_schema(layout.format(), envelope)?;
-        trust_verifier.verify(envelope)?;
-    }
+    let mut pipeline = StagePipeline::new(options.stop_on_first_error);
+
+    // Stage: Objects. No upstream stage dependency. `trust_verifier` is mutated by reference and its
+    // state survives a `Failed` outcome here, since it lives in this function's own frame rather than
+    // inside `verify_objects` -- reused safely by RefUpdateSchemaTrust and PublicationReclassification
+    // below (DC-95 Stage 2 Step 0 §3: `PublicationTrustVerifier` cannot manufacture a false "trusted"
+    // result from partial evaluation).
+    let object_summary = pipeline.run(
+        VerificationStage::Objects,
+        verify_objects(layout, &object_store, &mut trust_verifier),
+    );
+    let objects_evaluated = object_summary.is_some();
+    let (
+        checked_objects,
+        checked_blocks,
+        checked_rollback_blocks,
+        checked_sealed_rollback_patches,
+        object_temp_paths,
+        merge_baseline_divergences,
+        block_seals,
+        mut signature_envelope_issues,
+    ) = match object_summary {
+        Some(summary) => (
+            Some(summary.object_count),
+            Some(summary.block_count),
+            Some(summary.rollback_block_count),
+            Some(summary.rollback_patch_count),
+            summary.temp_paths,
+            summary.merge_baseline_divergences,
+            summary.block_seals,
+            summary.signature_issues,
+        ),
+        None => (
+            None,
+            None,
+            None,
+            None,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ),
+    };
+
+    // Stage: Refs. No upstream stage dependency.
+    let ref_verification = pipeline.run(VerificationStage::Refs, verify_refs(layout));
+
+    // Stage: RefUpdateSchemaTrust. Depends on Refs for the envelope list.
+    let ref_update_schema_trust_evaluated = if let Some(rv) = &ref_verification {
+        pipeline
+            .run(
+                VerificationStage::RefUpdateSchemaTrust,
+                (|| -> Result<()> {
+                    for envelope in &rv.ref_update_envelopes {
+                        crate::format::validate_read_schema(layout.format(), envelope)?;
+                        trust_verifier.verify(envelope)?;
+                    }
+                    Ok(())
+                })(),
+            )
+            .is_some()
+    } else {
+        pipeline.not_evaluated(
+            VerificationStage::RefUpdateSchemaTrust,
+            VerificationStage::Refs,
+        );
+        false
+    };
+
+    let refs_evaluated = ref_verification.is_some();
+    let (
+        checked_refs,
+        checked_ref_log_records,
+        mut ref_publication_issues,
+        refs_signature_envelope_issues,
+    ) = match ref_verification {
+        Some(rv) => (
+            Some(rv.pointer_count),
+            Some(rv.log_record_count),
+            rv.publication_issues,
+            rv.signature_envelope_issues,
+        ),
+        None => (None, None, Vec::new(), Vec::new()),
+    };
+
+    // Stage: WalReplay. No upstream stage dependency.
     let wal = Wal::for_layout(layout);
-    let replay = wal.replay()?;
-    let persisted_wal_patches = verify_wal_persistence(&object_store, &replay.records)?;
-    let checked_rollback_draft_records = verify_rollback_draft_wal_records(&replay.records)?;
-    let mut signature_envelope_issues = object_summary.signature_issues;
-    for record in &replay.records {
-        crate::format::validate_read_schema(layout.format(), &record.envelope)?;
-        signature_envelope_issues.extend(classify_signature_envelope(
-            &record.envelope,
-            SignatureEnvelopeSource::ActiveWal {
-                sequence: record.seq,
-                object_id: record.envelope.object_id(),
-            },
-        )?);
+    let replay = pipeline.run(VerificationStage::WalReplay, wal.replay());
+
+    // Stage: WalPersistence. Depends on WalReplay.
+    let persisted_wal_patches = if let Some(replay) = &replay {
+        pipeline.run(
+            VerificationStage::WalPersistence,
+            verify_wal_persistence(&object_store, &replay.records),
+        )
+    } else {
+        pipeline.not_evaluated(
+            VerificationStage::WalPersistence,
+            VerificationStage::WalReplay,
+        );
+        None
+    };
+
+    // Stage: RollbackDrafts. Depends on WalReplay.
+    let checked_rollback_draft_records = if let Some(replay) = &replay {
+        pipeline.run(
+            VerificationStage::RollbackDrafts,
+            verify_rollback_draft_wal_records(&replay.records),
+        )
+    } else {
+        pipeline.not_evaluated(
+            VerificationStage::RollbackDrafts,
+            VerificationStage::WalReplay,
+        );
+        None
+    };
+
+    // Stage: WalRecordSchema. Depends on WalReplay.
+    if let Some(replay) = &replay {
+        pipeline.run(
+            VerificationStage::WalRecordSchema,
+            (|| -> Result<()> {
+                for record in &replay.records {
+                    crate::format::validate_read_schema(layout.format(), &record.envelope)?;
+                    signature_envelope_issues.extend(classify_signature_envelope(
+                        &record.envelope,
+                        SignatureEnvelopeSource::ActiveWal {
+                            sequence: record.seq,
+                            object_id: record.envelope.object_id(),
+                        },
+                    )?);
+                }
+                Ok(())
+            })(),
+        );
+        // Matches the pre-Level-1 merge order (Objects, then WAL, then Refs) -- deferred until here,
+        // after the WAL per-record loop's own contributions, rather than appended immediately after
+        // the Refs stage above, purely to preserve that existing, asserted-on order.
+        signature_envelope_issues.extend(refs_signature_envelope_issues);
+    } else {
+        pipeline.not_evaluated(
+            VerificationStage::WalRecordSchema,
+            VerificationStage::WalReplay,
+        );
+        signature_envelope_issues.extend(refs_signature_envelope_issues);
     }
-    signature_envelope_issues.extend(ref_verification.signature_envelope_issues);
-    let active_wal_metadata_status =
-        classify_active_wal_metadata(layout, replay.records.is_empty())?;
-    let mut ref_publication_issues = ref_verification.publication_issues;
-    ref_publication::require_retained_evidence(
-        layout,
-        &replay.records,
-        &active_wal_metadata_status,
-        trust_verifier.issues.is_empty(),
-        &mut ref_publication_issues,
-    )?;
-    let commit_index_divergences = verify_divergence(layout)?;
-    let lifecycle_cache_divergences = verify_lifecycle_cache_divergence(&object_store, layout);
-    let active_wal_ordering_issues = check_active_wal_ordering(&replay.records);
-    let merge_baseline_divergences = object_summary.merge_baseline_divergences;
+
+    // Stage: ActiveWalMetadata. Depends on WalReplay.
+    let active_wal_metadata_status = if let Some(replay) = &replay {
+        pipeline.run(
+            VerificationStage::ActiveWalMetadata,
+            classify_active_wal_metadata(layout, replay.records.is_empty()),
+        )
+    } else {
+        pipeline.not_evaluated(
+            VerificationStage::ActiveWalMetadata,
+            VerificationStage::WalReplay,
+        );
+        None
+    };
+
+    // Stage: PublicationReclassification. Cannot run at all without Refs (needs `issues` to mutate),
+    // WalReplay (needs `records`), or ActiveWalMetadata (needs `metadata`) -- `NotEvaluated`, naming
+    // whichever of those three failed first, if any. Objects failing does *not* block this stage from
+    // running: it only degrades `trust_is_valid` to a safe `false` (DC-95 Stage 2 Step 0 ruling §2-§3
+    // -- an accumulator's emptiness means "none found" only if its producer ran to completion; reading
+    // `trust_verifier.issues.is_empty()` alone would silently claim "proved" from an unrun check).
+    match (&replay, refs_evaluated, &active_wal_metadata_status) {
+        (Some(replay), true, Some(metadata)) => {
+            let trust_is_valid = objects_evaluated && trust_verifier.issues.is_empty();
+            pipeline.run(
+                VerificationStage::PublicationReclassification,
+                ref_publication::require_retained_evidence(
+                    layout,
+                    &replay.records,
+                    metadata,
+                    trust_is_valid,
+                    &mut ref_publication_issues,
+                ),
+            );
+        }
+        _ => {
+            let blocked_by = if replay.is_none() {
+                VerificationStage::WalReplay
+            } else if !refs_evaluated {
+                VerificationStage::Refs
+            } else {
+                VerificationStage::ActiveWalMetadata
+            };
+            pipeline.not_evaluated(VerificationStage::PublicationReclassification, blocked_by);
+        }
+    }
+
+    // Stage: CommitIndex. No upstream stage dependency; contained like any other fallible stage --
+    // `commit_index::verify_divergence` does return `Result`, unlike `LifecycleCache`'s. An empty
+    // `Vec` on `Failed`/`NotEvaluated` is safe here (unlike a count): the stage's own outcome above
+    // already says whether "no divergences" was actually established.
+    let commit_index_divergences = pipeline
+        .run(VerificationStage::CommitIndex, verify_divergence(layout))
+        .unwrap_or_default();
+
+    // Stage: LifecycleCache. No upstream stage dependency; cannot fail by construction -- a replay
+    // error is itself converted into a divergence entry rather than propagated (DC-95 Stage 1 round
+    // 12). Still subject to an earlier halt under `--stop-on-first-error`.
+    let lifecycle_cache_divergences = if pipeline.run_infallible(VerificationStage::LifecycleCache)
+    {
+        verify_lifecycle_cache_divergence(&object_store, layout)
+    } else {
+        Vec::new()
+    };
+
+    // Stage: WalOrdering. Depends on WalReplay; the check itself cannot fail (a pure function).
+    let active_wal_ordering_issues = if let Some(replay) = &replay {
+        if pipeline.run_infallible(VerificationStage::WalOrdering) {
+            check_active_wal_ordering(&replay.records)
+        } else {
+            Vec::new()
+        }
+    } else {
+        pipeline.not_evaluated(VerificationStage::WalOrdering, VerificationStage::WalReplay);
+        Vec::new()
+    };
+
+    let checked_publication_trust_records = (objects_evaluated
+        && ref_update_schema_trust_evaluated)
+        .then_some(trust_verifier.checked_records);
+
     Ok(RepositoryVerification {
         legacy_state_roots_unverifiable: layout.format() == RepositoryFormat::LegacyV1,
-        checked_objects: object_summary.object_count,
-        checked_wal_records: replay.records.len(),
-        checked_blocks: object_summary.block_count,
-        checked_rollback_blocks: object_summary.rollback_block_count,
-        checked_sealed_rollback_patches: object_summary.rollback_patch_count,
+        stage_outcomes: pipeline.outcomes,
+        checked_objects,
+        checked_wal_records: replay.as_ref().map(|replay| replay.records.len()),
+        checked_blocks,
+        checked_rollback_blocks,
+        checked_sealed_rollback_patches,
         persisted_wal_patches,
-        checked_refs: ref_verification.pointer_count,
-        checked_ref_log_records: ref_verification.log_record_count,
+        checked_refs,
+        checked_ref_log_records,
         ref_publication_issues,
         signature_envelope_issues,
         checked_rollback_draft_records,
-        checked_publication_trust_records: trust_verifier.checked_records,
+        checked_publication_trust_records,
         publication_trust_issues: trust_verifier.issues,
-        object_temp_paths: object_summary.temp_paths,
-        trailing_partial_wal_bytes: replay.trailing_partial_bytes,
+        object_temp_paths,
+        trailing_partial_wal_bytes: replay.as_ref().map(|replay| replay.trailing_partial_bytes),
         active_wal_metadata_status,
         commit_index_divergences,
         lifecycle_cache_divergences,
         active_wal_ordering_issues,
         merge_baseline_divergences,
-        block_seals: object_summary.block_seals,
+        block_seals,
     })
 }
 

@@ -86,6 +86,40 @@ pub(crate) struct DoctorArgs {
     pub(crate) repair_main_ref: bool,
 }
 
+/// Parsed verify command arguments.
+pub(crate) struct VerifyArgs {
+    /// Repository root.
+    pub(crate) root: PathBuf,
+    /// DC-95 Stage 2 Level 1: stop at the first stage that fails or cannot evaluate, rather than
+    /// accumulating findings across all twelve. Preserves the pre-Stage-2 bounded-walk behavior for
+    /// a large, badly-damaged repository where a full accumulating scan would be costly.
+    pub(crate) stop_on_first_error: bool,
+}
+
+/// Parse `prikk verify` arguments.
+pub(crate) fn parse_verify_args(args: Vec<String>) -> std::result::Result<VerifyArgs, String> {
+    let mut stop_on_first_error = false;
+    let mut path = None;
+    for arg in args {
+        match arg.as_str() {
+            "--stop-on-first-error" => stop_on_first_error = true,
+            other if other.starts_with('-') => {
+                return Err(format!("unknown verify argument: {other}"));
+            }
+            _ => {
+                if path.is_some() {
+                    return Err("verify accepts at most one path".to_string());
+                }
+                path = Some(arg);
+            }
+        }
+    }
+    Ok(VerifyArgs {
+        root: optional_path_or_current(path)?,
+        stop_on_first_error,
+    })
+}
+
 /// Parse `prikk log` arguments.
 pub(crate) fn parse_log_args(args: Vec<String>) -> std::result::Result<LogArgs, String> {
     let mut path = None;

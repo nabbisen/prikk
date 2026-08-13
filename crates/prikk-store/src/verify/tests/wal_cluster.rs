@@ -41,12 +41,15 @@ use prikk_object::{
     SignatureAlgorithm, SignerRole,
 };
 
+use super::assert_stage_failed;
 use crate::test_support::{
     rollback_author_signature, rollback_patch_blob_envelope, signed_patch_blob_envelope,
     unique_temp_dir,
 };
 use crate::wal::{WalRecord, encode_record_for_test};
-use crate::{FileObjectStore, ObjectWriter, RepositoryLayout, Wal, verify_repository};
+use crate::{
+    FileObjectStore, ObjectWriter, RepositoryLayout, VerificationStage, Wal, verify_repository,
+};
 
 fn write_wal_records(wal: &Wal, records: &[WalRecord]) -> Result<()> {
     let mut bytes = Vec::new();
@@ -115,13 +118,11 @@ fn verify_repository_detects_wal_checksum_mismatch() -> Result<()> {
     *last_byte ^= 0x01;
     std::fs::write(wal.path(), &bytes)?;
 
-    let result = verify_repository(&layout);
-    let Err(error) = result else {
-        panic!("expected a checksum-mismatch error, got: {result:?}");
-    };
-    assert!(
-        error.to_string().contains("WAL checksum mismatch"),
-        "expected a WAL checksum mismatch error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::WalReplay,
+        "WAL checksum mismatch",
     );
 
     let _ = std::fs::remove_dir_all(root);
@@ -146,14 +147,8 @@ fn verify_repository_detects_non_patch_active_wal_record() -> Result<()> {
     };
     write_wal_records(&wal, &[record])?;
 
-    let result = verify_repository(&layout);
-    let Err(error) = result else {
-        panic!("expected an active-WAL Patch-type-mismatch error, got: {result:?}");
-    };
-    assert!(
-        error.to_string().contains("expected patch"),
-        "expected an active-WAL Patch-type-mismatch error, got: {error}"
-    );
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(&report, VerificationStage::WalPersistence, "expected patch");
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())
@@ -221,15 +216,11 @@ fn verify_repository_detects_rollback_draft_operation_sequence_mismatch() -> Res
 
     Wal::for_layout(&layout).append_patch(&envelope)?;
 
-    let result = verify_repository(&layout);
-    let Err(error) = result else {
-        panic!("expected an operation op_seq mismatch error, got: {result:?}");
-    };
-    assert!(
-        error
-            .to_string()
-            .contains("does not match physical position"),
-        "expected an operation op_seq mismatch error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::RollbackDrafts,
+        "does not match physical position",
     );
 
     let _ = std::fs::remove_dir_all(root);
@@ -268,13 +259,11 @@ fn verify_repository_detects_rollback_draft_unsupported_operation() -> Result<()
 
     Wal::for_layout(&layout).append_patch(&envelope)?;
 
-    let result = verify_repository(&layout);
-    let Err(error) = result else {
-        panic!("expected an unsupported-operation error, got: {result:?}");
-    };
-    assert!(
-        error.to_string().contains("DeleteNode(symlink)"),
-        "expected an unsupported DeleteNode(symlink) error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::RollbackDrafts,
+        "DeleteNode(symlink)",
     );
 
     let _ = std::fs::remove_dir_all(root);
@@ -312,13 +301,11 @@ fn verify_repository_detects_rollback_draft_missing_author_signature() -> Result
 
     Wal::for_layout(&layout).append_patch(&envelope)?;
 
-    let result = verify_repository(&layout);
-    let Err(error) = result else {
-        panic!("expected a missing-AUTHOR-signature error, got: {result:?}");
-    };
-    assert!(
-        error.to_string().contains("must carry an AUTHOR signature"),
-        "expected a missing-AUTHOR-signature error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::RollbackDrafts,
+        "must carry an AUTHOR signature",
     );
 
     let _ = std::fs::remove_dir_all(root);
@@ -349,13 +336,11 @@ fn verify_repository_detects_rollback_draft_legacy_marker_key_id() -> Result<()>
 
     Wal::for_layout(&layout).append_patch(&envelope)?;
 
-    let result = verify_repository(&layout);
-    let Err(error) = result else {
-        panic!("expected a legacy-marker-key-id error, got: {result:?}");
-    };
-    assert!(
-        error.to_string().contains("legacy rollback marker key id"),
-        "expected a legacy-marker-key-id error, got: {error}"
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::RollbackDrafts,
+        "legacy rollback marker key id",
     );
 
     let _ = std::fs::remove_dir_all(root);
@@ -418,14 +403,8 @@ fn verify_repository_detects_rollback_draft_wrong_signature_length() -> Result<(
     std::fs::write(layout.format_path(), b"1\n")?;
     let legacy_layout = RepositoryLayout::open(root.clone())?;
 
-    let result = verify_repository(&legacy_layout);
-    let Err(error) = result else {
-        panic!("expected a wrong-signature-length error, got: {result:?}");
-    };
-    assert!(
-        error.to_string().contains("must be"),
-        "expected a wrong-signature-length error, got: {error}"
-    );
+    let report = verify_repository(&legacy_layout)?;
+    assert_stage_failed(&report, VerificationStage::RollbackDrafts, "must be");
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

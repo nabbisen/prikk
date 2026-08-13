@@ -1,4 +1,15 @@
-use prikk_store::{ActiveWalMetadataStatus, DoctorSeverity, RepositoryLayout};
+use prikk_store::{ActiveWalMetadataStatus, DoctorSeverity, RepositoryLayout, StageStatus};
+
+/// Render a count sourced from one verification stage. `None` means that stage did not evaluate to
+/// completion -- printed as `unknown`, never as `0`, since zero is itself a claim ("checked, found
+/// none") this repository's verification does not get to make about a stage that did not finish
+/// (DC-95 Stage 2 ruling: a partial count is not "this many verified").
+fn format_count(count: Option<usize>) -> String {
+    match count {
+        Some(value) => value.to_string(),
+        None => "unknown (stage did not evaluate)".to_string(),
+    }
+}
 
 /// Print doctor results.
 pub(crate) fn print_doctor_report(layout: &RepositoryLayout, report: &prikk_store::DoctorReport) {
@@ -28,22 +39,53 @@ pub(crate) fn print_verify_report(
     report: &prikk_store::RepositoryVerification,
 ) {
     println!("verified repository: {}", layout.prikk_dir().display());
-    println!("checked objects: {}", report.checked_objects);
-    println!("checked blocks: {}", report.checked_blocks);
+    // DC-95 Stage 2 Level 1: the reader consults stage outcomes first, counts and findings second --
+    // a `Failed`/`NotEvaluated` stage's own counts below read `unknown`, not `0`, for the same reason.
+    println!("verification stages: {}", report.stage_outcomes.len());
+    for outcome in &report.stage_outcomes {
+        match &outcome.status {
+            StageStatus::Evaluated => {
+                println!("stage {}: evaluated", outcome.stage);
+            }
+            StageStatus::Failed { message } => {
+                println!("stage {}: failed: {message}", outcome.stage);
+            }
+            StageStatus::NotEvaluated { blocked_by } => {
+                println!(
+                    "stage {}: not evaluated (blocked by stage {blocked_by})",
+                    outcome.stage
+                );
+            }
+            StageStatus::Halted { after } => {
+                println!(
+                    "stage {}: not evaluated (walk halted after stage {after} failed, --stop-on-first-error)",
+                    outcome.stage
+                );
+            }
+        }
+    }
+    println!("checked objects: {}", format_count(report.checked_objects));
+    println!("checked blocks: {}", format_count(report.checked_blocks));
     println!(
         "checked rollback blocks: {}",
-        report.checked_rollback_blocks
+        format_count(report.checked_rollback_blocks)
     );
     println!(
         "checked sealed rollback patches: {}",
-        report.checked_sealed_rollback_patches
+        format_count(report.checked_sealed_rollback_patches)
     );
-    println!("checked WAL records: {}", report.checked_wal_records);
-    println!("persisted WAL patches: {}", report.persisted_wal_patches);
-    println!("checked refs: {}", report.checked_refs);
+    println!(
+        "checked WAL records: {}",
+        format_count(report.checked_wal_records)
+    );
+    println!(
+        "persisted WAL patches: {}",
+        format_count(report.persisted_wal_patches)
+    );
+    println!("checked refs: {}", format_count(report.checked_refs));
     println!(
         "checked ref-log records: {}",
-        report.checked_ref_log_records
+        format_count(report.checked_ref_log_records)
     );
     println!(
         "ref publication issues: {}",
@@ -64,11 +106,11 @@ pub(crate) fn print_verify_report(
     }
     println!(
         "checked rollback draft WAL records: {}",
-        report.checked_rollback_draft_records
+        format_count(report.checked_rollback_draft_records)
     );
     println!(
         "checked publication trust records: {}",
-        report.checked_publication_trust_records
+        format_count(report.checked_publication_trust_records)
     );
     println!(
         "publication trust issues: {}",
@@ -91,12 +133,15 @@ pub(crate) fn print_verify_report(
     }
     println!(
         "trailing partial WAL bytes: {}",
-        report.trailing_partial_wal_bytes
+        format_count(report.trailing_partial_wal_bytes)
     );
     if report.has_trailing_partial_wal() {
         println!("warning: active WAL contains an incomplete trailing record");
     }
-    print_active_wal_metadata_status(&report.active_wal_metadata_status);
+    match &report.active_wal_metadata_status {
+        Some(status) => print_active_wal_metadata_status(status),
+        None => println!("active WAL metadata: unknown (stage did not evaluate)"),
+    }
     println!(
         "commit-index divergences: {}",
         report.commit_index_divergences.len()

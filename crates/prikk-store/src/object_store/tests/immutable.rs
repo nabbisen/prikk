@@ -241,7 +241,7 @@ fn crash_left_temp_is_ignored_by_reads_and_warned_without_cleanup() -> prikk_err
     assert_eq!(store.read_object(id)?, None);
 
     let verification = verify_repository(&layout)?;
-    assert_eq!(verification.checked_objects, 0);
+    assert_eq!(verification.checked_objects, Some(0));
     assert_eq!(verification.object_temp_paths, temps);
     let doctor = doctor_repository(&layout);
     assert!(doctor.is_healthy());

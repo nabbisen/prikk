@@ -166,8 +166,8 @@ fn history_and_verify_classify_sealed_rollback_block() {
         let verification = verify_repository(&layout);
         assert!(verification.is_ok());
         if let Ok(verification) = verification {
-            assert_eq!(verification.checked_rollback_blocks, 1);
-            assert_eq!(verification.checked_sealed_rollback_patches, 1);
+            assert_eq!(verification.checked_rollback_blocks, Some(1));
+            assert_eq!(verification.checked_sealed_rollback_patches, Some(1));
         }
     }
     let _ = std::fs::remove_dir_all(root);

@@ -193,7 +193,7 @@ fn fully_framed_checksum_failure_is_never_truncated() -> prikk_error::Result<()>
     *last ^= 0xff;
     std::fs::write(path, bytes)?;
 
-    assert!(verify_repository(&layout).is_err());
+    assert!(verify_repository(&layout)?.has_stage_failure());
     assert!(!doctor_repository(&layout).is_healthy());
     assert!(
         store
@@ -288,7 +288,7 @@ fn duplicate_and_greater_than_one_log_divergence_fail_closed() -> prikk_error::R
             objects.write_object(&second.ref_state)?;
             log::append_log_record(&layout, "heads/main", &second.ref_update)?;
         }
-        assert!(verify_repository(&layout).is_err());
+        assert!(verify_repository(&layout)?.has_stage_failure());
         assert!(!doctor_repository(&layout).is_healthy());
         assert!(
             RefStore::new(layout.clone())
@@ -315,7 +315,7 @@ fn ref_log_sequence_gap_fails_closed() -> prikk_error::Result<()> {
     let gap_update = signed_ref_update_envelope("heads/main", Some(first_id), gap_id, target, 3);
     log::append_log_record(&layout, "heads/main", &gap_update)?;
 
-    assert!(verify_repository(&layout).is_err());
+    assert!(verify_repository(&layout)?.has_stage_failure());
     assert!(!doctor_repository(&layout).is_healthy());
     let _ = std::fs::remove_dir_all(root);
     Ok(())
