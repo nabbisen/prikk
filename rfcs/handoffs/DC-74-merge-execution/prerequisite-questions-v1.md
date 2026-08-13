@@ -1,7 +1,7 @@
 # DC-74 §1/§4 — Prerequisite Questions, Answered
 
 **Handoff followed:** `rfcs/handoffs/DC-74-merge-execution/implementation-handoff-v1.md`
-**Governing RFC:** `rfcs/accepted/DC-74-MERGE-EXECUTION.md`
+**Governing RFC:** `rfcs/done/DC-74-MERGE-EXECUTION.md`
 
 Per criterion 1 ("§4's four questions answered and reported **before** a design is proposed") this
 reports before designing anything. No source files are changed by this document. Q1 and Q2 were

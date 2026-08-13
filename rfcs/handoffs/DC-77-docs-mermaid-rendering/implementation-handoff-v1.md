@@ -1,7 +1,7 @@
 # DC-77 Docs Mermaid Rendering — Handoff v1
 
 **Cleared to start.** Accepted by the project owner 2026-08-08, at
-`rfcs/accepted/DC-77-DOCS-MERMAID-RENDERING.md`. **Authored by** the architect.
+`rfcs/done/DC-77-DOCS-MERMAID-RENDERING.md`. **Authored by** the architect.
 **Size:** small. **Docs and CI only — no product crate is touched.**
 
 ## 1. What to do

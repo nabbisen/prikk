@@ -68,6 +68,6 @@ accept it as such.
 
 ## 6. Then DC-82
 
-`rfcs/accepted/DC-82-MUTATION-DISPATCH-COLLAPSE.md` and its handoff are open, sequenced after DC-81
+`rfcs/done/DC-82-MUTATION-DISPATCH-COLLAPSE.md` and its handoff are open, sequenced after DC-81
 closes. §6's gate-reduction target is its subject — and, as recorded there, **DC-81 moving 110 → 135 was
 my notification failure, not your miss.**

@@ -1,7 +1,7 @@
 # DC-75 — Addendum-3 §3 Answered: Reachability and State Derivation Do Not Cleanly Split in Two
 
 **Handoff followed:** `implementation-handoff-v1-addendum-3.md` §3.
-**Governing RFC:** `rfcs/accepted/DC-75-MERGE-BLOCK-LINEAGE.md`
+**Governing RFC:** `rfcs/done/DC-75-MERGE-BLOCK-LINEAGE.md`
 
 Per §4's discipline, restated in addendum-3 ("Report... before any design... trace it explicitly...
 rather than reasoning about it"): this reports before any design or production code. All code below was

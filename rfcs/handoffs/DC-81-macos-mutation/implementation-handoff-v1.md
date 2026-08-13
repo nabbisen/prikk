@@ -1,6 +1,6 @@
 # DC-81 macOS Mutation — Handoff v1
 
-**Cleared to start on §1 only.** Accepted 2026-08-09, `rfcs/accepted/DC-81-MACOS-MUTATION.md`.
+**Cleared to start on §1 only.** Accepted 2026-08-09, `rfcs/done/DC-81-MACOS-MUTATION.md`.
 **Authored by** the architect. **This is the increment the owner's cross-platform priority points at**,
 and DC-76 exists to make it a port rather than a redesign.
 

@@ -1,7 +1,7 @@
 # DC-75 §4 — Prerequisite Investigation, With Measurements
 
 **Handoff followed:** `implementation-handoff-v1.md` + `implementation-handoff-v1-addendum.md`
-**Governing RFC:** `rfcs/accepted/DC-75-MERGE-BLOCK-LINEAGE.md`
+**Governing RFC:** `rfcs/done/DC-75-MERGE-BLOCK-LINEAGE.md`
 
 Per §4 ("blocking prerequisites... answered with measurements, not preference") and criterion 1, this
 reports before any design or production code. No source files are changed by this document.

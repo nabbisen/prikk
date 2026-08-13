@@ -47,7 +47,6 @@ These records are under design review. All proposed RFCs must respect the depend
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
 | DC-52 | [Python and Oracle Decommissioning](./archive/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | M2 / **0.20.0 (retargeted from 0.19.0, 2026-08-08)**; **UNBLOCKED 2026-08-08** — `DC-45:419`'s condition discharged by 0.19.0's release and its accepted post-release stability rerun; deletion remains a separate architect-reviewed change, and fixture compaction only after deletion review. Previously release-blocked — `DC-45:419` forbids deletion before the first Rust-gated 0.19.0 release |
 | DC-53 | [Repository-Wide AUTHOR Trust Verification](./proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md) | Post-M2, unscheduled |
-| DC-85 | [Merge From a Received Ref](./accepted/DC-85-MERGE-FROM-RECEIVED-REF.md) | **Accepted 2026-08-09.** Closes the gap DC-78 Stage 3 exposed: `execute_merge` rejects `remotes/`, so received history cannot be incorporated. **The architect's §D4 claim that this used existing machinery was false.** §3's four questions precede design |
 
 **None of these five is a live design-review candidate** — all are blocked or unscheduled. DC-66 was accepted 2026-08-02 and has moved to `accepted/`.
 DC-56, DC-60, DC-61, DC-62 and DC-63 have all moved to `accepted/`:
@@ -84,18 +83,6 @@ These reviewed designs may govern downstream work but have not yet released.
 | DC-50 | [First-Party SHA-256 ROI Decision](./accepted/DC-50-FIRST-PARTY-SHA256-ROI-DECISION.md) | M2; accepted by the project owner 2026-07-28 with the performance question and DC-51 allowlist collision folded in. **Closed at `4005efb` with a replace decision**; produces no code, so it stays here rather than moving to `done/`. Authorized DC-55 |
 | DC-51 | [Product Dependency Placement Gate](./accepted/DC-51-PRODUCT-DEPENDENCY-PLACEMENT-GATE.md) | M2; accepted by the project owner 2026-07-28 after the author's re-examination folded in the `[target.*]` and dependency-renaming amendments. Implementation complete at `d3e939b`, post-commit review accepted with one blocking finding, repaired at `4c8b7a3` |
 | DC-54 | [Operation Path Validation Symmetry](./accepted/DC-54-OPERATION-PATH-VALIDATION-SYMMETRY.md) | M2; accepted by the project owner 2026-07-28 after the author's design-completion self-critique. Implementation complete at `e8f780a`, architect post-commit review accepted 2026-07-28, no repair required. Opened by the DC-41 stage-4 campaign finding |
-| DC-74 | [Merge Execution](./accepted/DC-74-MERGE-EXECUTION.md) | Product **M3**, roadmap item B. **Accepted 2026-08-08.** Patches are context-free (stable `NodeId` + content anchors), so merged patches transport bit-identically and author signatures survive — a merge **adopts**, never synthesizes; the RFC's own original route was withdrawn on that ground. `parent_block_ids` is already `Vec`, so multi-parent lineage is a replay question deferred to its own increment. **§4 prerequisites must be answered before design**. **Release-conditioned 2026-08-08** — buildable now, not releasable until sealed history structurally records a merge; a one-way door, since history is immutable |
-| DC-75 | [Merge Block Lineage and the Structural Merge Record](./accepted/DC-75-MERGE-BLOCK-LINEAGE.md) | **Discharges DC-74's release condition.** Sized by the developer, verified by the architect: the blocking gate is `block_state.rs:13-26`, which rejects `BlockKind::Merge` outright — greenfield write-side design, not a read-side widening. Carries one open design question (mainline-authoritative vs both-parents-verified). **Accepted 2026-08-08.** §4's read-only prerequisite investigation may run in parallel with DC-74; implementation waits for DC-74 to merge, since both touch the seal path |
-| DC-76 | [Filesystem Durability Contract](./accepted/DC-76-FILESYSTEM-DURABILITY-CONTRACT.md) | **0.20.0, item 1.** Accepted 2026-08-08. Enabling increment for cross-platform mutation: states DC-37's guarantees as one explicit contract with a conformance suite, **Linux as sole implementation, no behaviour change**. Soundness proof is that Linux still passes unchanged. **Complete at `d568438`**, accepted 2026-08-09 |
-| DC-77 | [Docs Mermaid Rendering](./accepted/DC-77-DOCS-MERMAID-RENDERING.md) | **0.20.0**, small, docs and CI only. Accepted 2026-08-08. The two new reference documents' diagrams render as code blocks; enabling the preprocessor requires **one exact entry in the publication-boundary allowlist**, which is the only reviewed part |
-| DC-78 | [History Exchange](./accepted/DC-78-HISTORY-EXCHANGE.md) | **Status-claim criterion 1** — a distributed VCS that cannot distribute. Priority ruled 2026-08-09: next design work after DC-76, ahead of Windows mutation. Proposes separating **exchange** (trust, hard) from **transport** (dependency decision, deferrable). **Accepted 2026-08-09.** §4 investigation only; design gated on it, including whether DC-53 is a prerequisite |
-| DC-79 | [sha2 and getrandom Upgrade](./accepted/DC-79-SHA2-GETRANDOM-UPGRADE.md) | **0.20.0.** Accepted 2026-08-09. `sha2` derives every `ObjectId`; proof is DC-41's vectors passing **unchanged**. Not urgent — audit clean |
-| DC-80 | [ed25519-dalek Major Upgrade](./accepted/DC-80-ED25519-DALEK-UPGRADE.md) | **0.20.0, after DC-79.** Accepted 2026-08-09. Changes the library verifying **every** signature; a compatibility question about sealed artifacts, not a version move. Negative control required in **both** directions |
-| DC-81 | [macOS Mutation](./accepted/DC-81-MACOS-MUTATION.md) | **0.20.0 item 2, status-claim criterion 6.** Accepted 2026-08-09. A port, not a redesign — DC-76 settled that. **G3 uses `fcntl_fullfsync`**; dependency envelope unchanged. Carries a new verification problem: **CI is the only place this can be observed**, and no macOS mutation job exists yet |
-| DC-82 | [Mutation Dispatch Collapse](./accepted/DC-82-MUTATION-DISPATCH-COLLAPSE.md) | **0.20.0, after DC-81, before Windows.** Accepted 2026-08-09. DC-81 moved gates 110 → 135; ten call sites branching per platform does not scale. Collapses dispatch to one selection point, **preserving DC-71's runtime fallback**. No behaviour change |
-| DC-83 | [Test Temp-Directory Uniqueness](./accepted/DC-83-TEST-TEMP-DIR-UNIQUENESS.md) | **0.20.0, ahead of DC-80.** Accepted 2026-08-09. `format_transition.rs`'s temp root uses a nanosecond timestamp alone and collides under parallel execution — **confirmed flaky on `main`**. Test-only. A flaky gate undermines every acceptance resting on "CI green" |
-| DC-84 | [Test Helper Uniqueness Sweep](./accepted/DC-84-TEST-HELPER-UNIQUENESS-SWEEP.md) | **0.20.0, not urgent.** Accepted 2026-08-09 from DC-83's §2 finding. `unique_temp_dir` (backing 580 tests) and thirteen siblings use PID + clock with **no counter** — `monotonic_suffix` is a timestamp despite its name, which misled the architect into citing it as correct. Test-only |
-| DC-86 | [Bundle Decoder Hardening](./accepted/DC-86-BUNDLE-DECODER-HARDENING.md) | **0.20.0.** Accepted 2026-08-09 from the DC-78 Stage 3 review. The bundle decoder is **the only parser in the product consuming bytes from an untrusted party**, and has neither fuzz coverage nor a resource bound. Test and hardening only |
 | DC-55 | [First-Party SHA-256 Replacement](./accepted/DC-55-FIRST-PARTY-SHA256-REPLACEMENT.md) | M2; accepted by the project owner 2026-07-28 after design review v1's blocking finding and five notes were resolved in revision. Identity-bearing. Implementation complete at `753ebab` (swap `8c84bc4`, fixture repairs `083d6c0`, `753ebab`); implementation review v1 returned one blocking finding, repaired and accepted at re-review v1 2026-07-29, verified by fresh clone with a negative control |
 | DC-45 | [Release Policy Tooling Consolidation](./accepted/DC-45-RELEASE-POLICY-TOOLING-CONSOLIDATION.md) | M2 / 0.19.0; Rust command authoritative, later stability and Python retirement pending |
 | DC-46 | [Workspace Rust 1.85 Compatibility](./accepted/DC-46-WORKSPACE-RUST-1.85-COMPATIBILITY.md) | M2 / before 0.19.0 RC; complete at `0d221af`, post-commit evidence accepted |
@@ -118,11 +105,6 @@ These reviewed designs may govern downstream work but have not yet released.
 | DC-61 | [Branch Closure](./accepted/DC-61-BRANCH-CLOSURE.md) | §6.5 deletion half, as **closure** — the pointer stays. Redesigned from tombstones 2026-07-30 after review found `doctor` would resurrect deleted branches. **Complete.** Implemented `ca4c044`, reviewed 2026-07-31 — accepted with one non-blocking finding (N1, a fail-open WAL guard), **repaired `2394f1b`**. Open ref-state ObjectIds provably unmoved: the closed vector is the open bytes plus one appended field |
 | DC-60 | [Branch Management Surface](./accepted/DC-60-BRANCH-MANAGEMENT-SURFACE.md) | §6.5 list + create. Accepted 2026-07-30; **scope amended the same day** — deletion moved to DC-61 after implementation proved it blocks repository-wide commits at every record count. **Complete at `6c2b7a6`**, implementation review accepted with one non-blocking note |
 | DC-87 | [Windows Mutation](./accepted/DC-87-WINDOWS-MUTATION.md) | Product **M3**. Two stages behind six prerequisites. **Stage 2 deferred 2026-08-11 by the owner as "deferred but controlled"** — DC-38's ahead-log invariant cannot hold on Windows: the log append is achievable there, the pointer promotion is not |
-| DC-88 | [Durability Contract Requirement Shape](./accepted/DC-88-DURABILITY-CONTRACT-REQUIREMENT-SHAPE.md) | **Complete, merged 2026-08-11.** `durable_directory_entry` restated as a single-entry confirmation rather than directory-scoped batching. The architect's scope trade ("this blocks Stage 2") was **mispriced and withdrawn** — DC-38 never calls the method |
-| DC-89 | [Platform Claim Documentation Accuracy](./accepted/DC-89-PLATFORM-CLAIM-DOCS-ACCURACY.md) | **Complete, merged 2026-08-10.** Corrected the Linux-only mutation claim across eight sites in seven pages plus `README.md`. Criterion 1 amended mid-review after the architect's scope wrongly excluded `README.md` |
-| DC-90 | [Unsafe Code Boundary and Gate](./accepted/DC-90-UNSAFE-CODE-BOUNDARY-GATE.md) | **Complete, merged 2026-08-11.** Turns the owner's "`unsafe` allowed under control" ruling into a checked property. The guard is `forbid`, not `deny` — review found a `deny`-level lint can be silently overridden by the very crate it constrains |
-| DC-91 | [Publication Record Shape](./accepted/DC-91-PUBLICATION-RECORD-SHAPE.md) | **Complete (evaluation), 2026-08-11.** Answer: **partial**. A slot record removes one state class with a real detectability gain, but leaves pointer-log joint consistency untouched and **does not unblock new branch/tag creation on Windows at all** |
-| DC-92 | [Lineage Replay Memoization](./accepted/DC-92-LINEAGE-REPLAY-MEMOIZATION.md) | **Complete, merged 2026-08-11.** `verify` O(N³) → **O(N)** (46.4 s → 2.7 s at N=160); `seal` O(N²)-per-call → near-flat; peak memory **599 MB → 15.1 MB**, bounded by lineage frontier |
 | DC-93 | [Release Policy Python Retirement](./accepted/DC-93-RELEASE-POLICY-PYTHON-RETIREMENT.md) | **Accepted 2026-08-11.** Retires 18 unused Python files (2,895 lines) and the Rust command scanner's own Python-recognition path. Supersedes DC-52's obligations 3 and 4 |
 | DC-94 | [Responsibility Map Executable Binding](./accepted/DC-94-RESPONSIBILITY-MAP-EXECUTABLE-BINDING.md) | **Accepted 2026-08-11.** DC-52's obligations 1 and 2, **decoupled** — they no longer gate the retirement. May already be largely discharged, which is a complete outcome |
 | DC-95 | [Verify Coverage and Finding Accumulation](./accepted/DC-95-VERIFY-COVERAGE-AND-FINDING-ACCUMULATION.md) | Product **M1**. **Accepted 2026-08-11.** Two ordered stages: nothing proves `verify` state-checks blocks end to end (the architect disabled the wiring twice and the suite stayed green), and `verify` reports only the first hard error |
@@ -134,63 +116,81 @@ These reviewed designs may govern downstream work but have not yet released.
 
 These records currently live under `done/`.
 
-| ID | Title |
+| ID | Title | Status |
 |---|---|
-| RFC-000 | [RFC lifecycle policy](./done/000-rfc-lifecycle-policy.md) |
-| DC-10 | [Rollback Draft Identity and AUTHOR Signing](./done/DC-10-ROLLBACK-DRAFT-SIGNING.md) |
-| DC-11 | [Publication Signing and Minimal Trust Store](./done/DC-11-MAINTAINER-TRUST-STORE.md) |
-| DC-12 | [Arbitrary-Span Text Edits](./done/DC-12-ARBITRARY-SPAN-TEXT-EDITS.md) |
-| DC-13 | [Non-Default Ref Genesis](./done/DC-13-NONDEFAULT-REF-GENESIS.md) |
-| DC-14 | [Arbitrary-Span Text Direct Inverse and Rollback Exposure](./done/DC-14-ARBITRARY-SPAN-TEXT-INVERSE-ROLLBACK.md) |
-| DC-15 | [Active-Session Integrity and Verification Hardening](./done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md) |
-| DC-16 | [Patch Algebra Foundation](./done/DC-16-PATCH-ALGEBRA-FOUNDATION.md) |
-| DC-17 | [Patch Algebra Evidence Contract](./done/DC-17-PATCH-ALGEBRA-EVIDENCE-CONTRACT.md) |
-| DC-18 | [Patch Algebra Commutation and Confluence Contract](./done/DC-18-PATCH-ALGEBRA-COMMUTATION-CONFLUENCE.md) |
-| DC-19 | [Replay/Lifecycle Crate Boundary and Extraction Plan](./done/DC-19-REPLAY-LIFECYCLE-CRATE-BOUNDARY.md) |
-| DC-20 | [Replay Boundary Stabilization](./done/DC-20-REPLAY-BOUNDARY-STABILIZATION.md) |
-| DC-21 | [Merge Conflict Evidence Contract](./done/DC-21-MERGE-CONFLICT-EVIDENCE-CONTRACT.md) |
-| DC-22 | [Public Merge Evidence UX Boundary](./done/DC-22-PUBLIC-MERGE-EVIDENCE-UX.md) |
-| DC-23 | [Public Merge Evidence UX Stabilization](./done/DC-23-MERGE-EVIDENCE-UX-STABILIZATION.md) |
-| DC-24 | [Data Model and Trust/Threat Documentation](./done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md) |
-| DC-25 | [Merge Planning Surface](./done/DC-25-MERGE-PLANNING-SURFACE.md) |
-| DC-26 | [Documentation Home Correction](./done/DC-26-DOCUMENTATION-HOME-CORRECTION.md) |
-| DC-27 | [Patch Algebra and Merge-Evidence Concepts Reference](./done/DC-27-PATCH-ALGEBRA-MERGE-EVIDENCE-CONCEPTS.md) |
-| DC-28 | [Durability and Crash-Recovery Reference](./done/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md) |
-| DC-29 | [Verify and Doctor Integrity/Recovery Reference](./done/DC-29-VERIFY-DOCTOR-INTEGRITY-RECOVERY-REFERENCE.md) |
-| DC-30 | [Key Management and Signing Setup Guide](./done/DC-30-KEY-MANAGEMENT-SIGNING-SETUP-GUIDE.md) |
-| DC-31 | [Repository Layout and Authority Reference](./done/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
-| DC-32 | [Path and Worktree Safety Reference](./done/DC-32-PATH-WORKTREE-SAFETY-REFERENCE.md) |
-| DC-33 | [Concurrency and Locking Reference](./done/DC-33-CONCURRENCY-LOCKING-REFERENCE.md) |
-| PR-001 | [Implementation Handoff](./done/PR-001-IMPLEMENTATION-HANDOFF.md) |
-| PR-002 | [CI Fix Handoff](./done/PR-002-CI-FIX-HANDOFF.md) |
-| PR-003 | [Persistent Store Handoff](./done/PR-003-PERSISTENT-STORE-HANDOFF.md) |
-| PR-004 | [WAL Handoff](./done/PR-004-WAL-HANDOFF.md) |
-| PR-005 | [CI Fix Handoff](./done/PR-005-CI-FIX-HANDOFF.md) |
-| PR-006 | [Verification Handoff](./done/PR-006-VERIFY-HANDOFF.md) |
-| PR-007 | [Ref Publication Handoff](./done/PR-007-REF-PUBLICATION-HANDOFF.md) |
-| PR-008 | [Commit Scaffold Handoff](./done/PR-008-COMMIT-SCAFFOLD-HANDOFF.md) |
-| PR-009 | [Seal Scaffold Handoff](./done/PR-009-SEAL-SCAFFOLD-HANDOFF.md) |
-| PR-010 | [Verify Hardening Handoff](./done/PR-010-VERIFY-HARDENING-HANDOFF.md) |
-| PR-011 | [Doctor Diagnostics Handoff](./done/PR-011-DOCTOR-HANDOFF.md) |
-| PR-012 | [Doctor Repair Handoff](./done/PR-012-DOCTOR-REPAIR-HANDOFF.md) |
-| PR-013 | [Ref Recovery Handoff](./done/PR-013-REF-RECOVERY-HANDOFF.md) |
-| PR-014 | [History Inspection Handoff](./done/PR-014-HISTORY-HANDOFF.md) |
-| PR-015 | [Checkout Plan Handoff](./done/PR-015-CHECKOUT-PLAN-HANDOFF.md) |
-| PR-016 | [Snapshot Path-Safety Handoff](./done/PR-016-SNAPSHOT-PATH-SAFETY-HANDOFF.md) |
-| PR-017 | [Snapshot Materialization Handoff](./done/PR-017-SNAPSHOT-MATERIALIZATION-HANDOFF.md) |
-| PR-018 | [Worktree Status Handoff](./done/PR-018-WORKTREE-STATUS-HANDOFF.md) |
-| PR-019 | [Worktree Patch Draft Handoff](./done/PR-019-WORKTREE-PATCH-HANDOFF.md) |
-| PR-020 | [Patch Replay Handoff](./done/PR-020-PATCH-REPLAY-HANDOFF.md) |
-| PR-021 | [Patch Materialization Handoff](./done/PR-021-PATCH-MATERIALIZATION-HANDOFF.md) |
-| PR-022 | [Patch Deletion Handoff](./done/PR-022-PATCH-DELETION-HANDOFF.md) |
-| PR-023 | [Text Anchor Scaffold Handoff](./done/PR-023-TEXT-ANCHOR-HANDOFF.md) |
-| PR-024 | [Conservative Text Replay Handoff](./done/PR-024-TEXT-REPLAY-HANDOFF.md) |
-| PR-025 | [Opt-In Full-File Text Edit Generation Handoff](./done/PR-025-TEXT-GENERATION-HANDOFF.md) |
-| PR-026 | [Supported Patch Inverse Planning Handoff](./done/PR-026-INVERSE-PLAN-HANDOFF.md) |
-| PR-027 | [Non-Mutating Rollback Preview Handoff](./done/PR-027-ROLLBACK-PREVIEW-HANDOFF.md) |
-| PR-028 | [Rollback Draft Handoff](./done/PR-028-ROLLBACK-DRAFT-HANDOFF.md) |
-| PR-029 | [Rollback Draft Verification Handoff](./done/PR-029-ROLLBACK-DRAFT-VERIFY-HANDOFF.md) |
-| PR-030 | [Sealed Rollback History Classification Handoff](./done/PR-030-SEALED-ROLLBACK-HISTORY-HANDOFF.md) |
+| RFC-000 | [RFC lifecycle policy](./done/000-rfc-lifecycle-policy.md) | — |
+| DC-10 | [Rollback Draft Identity and AUTHOR Signing](./done/DC-10-ROLLBACK-DRAFT-SIGNING.md) | — |
+| DC-11 | [Publication Signing and Minimal Trust Store](./done/DC-11-MAINTAINER-TRUST-STORE.md) | — |
+| DC-12 | [Arbitrary-Span Text Edits](./done/DC-12-ARBITRARY-SPAN-TEXT-EDITS.md) | — |
+| DC-13 | [Non-Default Ref Genesis](./done/DC-13-NONDEFAULT-REF-GENESIS.md) | — |
+| DC-14 | [Arbitrary-Span Text Direct Inverse and Rollback Exposure](./done/DC-14-ARBITRARY-SPAN-TEXT-INVERSE-ROLLBACK.md) | — |
+| DC-15 | [Active-Session Integrity and Verification Hardening](./done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md) | — |
+| DC-16 | [Patch Algebra Foundation](./done/DC-16-PATCH-ALGEBRA-FOUNDATION.md) | — |
+| DC-17 | [Patch Algebra Evidence Contract](./done/DC-17-PATCH-ALGEBRA-EVIDENCE-CONTRACT.md) | — |
+| DC-18 | [Patch Algebra Commutation and Confluence Contract](./done/DC-18-PATCH-ALGEBRA-COMMUTATION-CONFLUENCE.md) | — |
+| DC-19 | [Replay/Lifecycle Crate Boundary and Extraction Plan](./done/DC-19-REPLAY-LIFECYCLE-CRATE-BOUNDARY.md) | — |
+| DC-20 | [Replay Boundary Stabilization](./done/DC-20-REPLAY-BOUNDARY-STABILIZATION.md) | — |
+| DC-21 | [Merge Conflict Evidence Contract](./done/DC-21-MERGE-CONFLICT-EVIDENCE-CONTRACT.md) | — |
+| DC-22 | [Public Merge Evidence UX Boundary](./done/DC-22-PUBLIC-MERGE-EVIDENCE-UX.md) | — |
+| DC-23 | [Public Merge Evidence UX Stabilization](./done/DC-23-MERGE-EVIDENCE-UX-STABILIZATION.md) | — |
+| DC-24 | [Data Model and Trust/Threat Documentation](./done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md) | — |
+| DC-25 | [Merge Planning Surface](./done/DC-25-MERGE-PLANNING-SURFACE.md) | — |
+| DC-26 | [Documentation Home Correction](./done/DC-26-DOCUMENTATION-HOME-CORRECTION.md) | — |
+| DC-27 | [Patch Algebra and Merge-Evidence Concepts Reference](./done/DC-27-PATCH-ALGEBRA-MERGE-EVIDENCE-CONCEPTS.md) | — |
+| DC-28 | [Durability and Crash-Recovery Reference](./done/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md) | — |
+| DC-29 | [Verify and Doctor Integrity/Recovery Reference](./done/DC-29-VERIFY-DOCTOR-INTEGRITY-RECOVERY-REFERENCE.md) | — |
+| DC-30 | [Key Management and Signing Setup Guide](./done/DC-30-KEY-MANAGEMENT-SIGNING-SETUP-GUIDE.md) | — |
+| DC-31 | [Repository Layout and Authority Reference](./done/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) | — |
+| DC-32 | [Path and Worktree Safety Reference](./done/DC-32-PATH-WORKTREE-SAFETY-REFERENCE.md) | — |
+| DC-33 | [Concurrency and Locking Reference](./done/DC-33-CONCURRENCY-LOCKING-REFERENCE.md) | — |
+| PR-001 | [Implementation Handoff](./done/PR-001-IMPLEMENTATION-HANDOFF.md) | — |
+| PR-002 | [CI Fix Handoff](./done/PR-002-CI-FIX-HANDOFF.md) | — |
+| PR-003 | [Persistent Store Handoff](./done/PR-003-PERSISTENT-STORE-HANDOFF.md) | — |
+| PR-004 | [WAL Handoff](./done/PR-004-WAL-HANDOFF.md) | — |
+| PR-005 | [CI Fix Handoff](./done/PR-005-CI-FIX-HANDOFF.md) | — |
+| PR-006 | [Verification Handoff](./done/PR-006-VERIFY-HANDOFF.md) | — |
+| PR-007 | [Ref Publication Handoff](./done/PR-007-REF-PUBLICATION-HANDOFF.md) | — |
+| PR-008 | [Commit Scaffold Handoff](./done/PR-008-COMMIT-SCAFFOLD-HANDOFF.md) | — |
+| PR-009 | [Seal Scaffold Handoff](./done/PR-009-SEAL-SCAFFOLD-HANDOFF.md) | — |
+| PR-010 | [Verify Hardening Handoff](./done/PR-010-VERIFY-HARDENING-HANDOFF.md) | — |
+| PR-011 | [Doctor Diagnostics Handoff](./done/PR-011-DOCTOR-HANDOFF.md) | — |
+| PR-012 | [Doctor Repair Handoff](./done/PR-012-DOCTOR-REPAIR-HANDOFF.md) | — |
+| PR-013 | [Ref Recovery Handoff](./done/PR-013-REF-RECOVERY-HANDOFF.md) | — |
+| PR-014 | [History Inspection Handoff](./done/PR-014-HISTORY-HANDOFF.md) | — |
+| PR-015 | [Checkout Plan Handoff](./done/PR-015-CHECKOUT-PLAN-HANDOFF.md) | — |
+| PR-016 | [Snapshot Path-Safety Handoff](./done/PR-016-SNAPSHOT-PATH-SAFETY-HANDOFF.md) | — |
+| PR-017 | [Snapshot Materialization Handoff](./done/PR-017-SNAPSHOT-MATERIALIZATION-HANDOFF.md) | — |
+| PR-018 | [Worktree Status Handoff](./done/PR-018-WORKTREE-STATUS-HANDOFF.md) | — |
+| PR-019 | [Worktree Patch Draft Handoff](./done/PR-019-WORKTREE-PATCH-HANDOFF.md) | — |
+| PR-020 | [Patch Replay Handoff](./done/PR-020-PATCH-REPLAY-HANDOFF.md) | — |
+| PR-021 | [Patch Materialization Handoff](./done/PR-021-PATCH-MATERIALIZATION-HANDOFF.md) | — |
+| PR-022 | [Patch Deletion Handoff](./done/PR-022-PATCH-DELETION-HANDOFF.md) | — |
+| PR-023 | [Text Anchor Scaffold Handoff](./done/PR-023-TEXT-ANCHOR-HANDOFF.md) | — |
+| PR-024 | [Conservative Text Replay Handoff](./done/PR-024-TEXT-REPLAY-HANDOFF.md) | — |
+| PR-025 | [Opt-In Full-File Text Edit Generation Handoff](./done/PR-025-TEXT-GENERATION-HANDOFF.md) | — |
+| PR-026 | [Supported Patch Inverse Planning Handoff](./done/PR-026-INVERSE-PLAN-HANDOFF.md) | — |
+| PR-027 | [Non-Mutating Rollback Preview Handoff](./done/PR-027-ROLLBACK-PREVIEW-HANDOFF.md) | — |
+| PR-028 | [Rollback Draft Handoff](./done/PR-028-ROLLBACK-DRAFT-HANDOFF.md) | — |
+| PR-029 | [Rollback Draft Verification Handoff](./done/PR-029-ROLLBACK-DRAFT-VERIFY-HANDOFF.md) | — |
+| PR-030 | [Sealed Rollback History Classification Handoff](./done/PR-030-SEALED-ROLLBACK-HISTORY-HANDOFF.md) | — |
+| DC-85 | [Merge From a Received Ref](./done/DC-85-MERGE-FROM-RECEIVED-REF.md) | **Accepted 2026-08-09.** Closes the gap DC-78 Stage 3 exposed: `execute_merge` rejects `remotes/`, so received history cannot be incorporated. **The architect's §D4 claim that this used existing machinery was false.** §3's four questions precede design |
+| DC-74 | [Merge Execution](./done/DC-74-MERGE-EXECUTION.md) | Product **M3**, roadmap item B. **Accepted 2026-08-08.** Patches are context-free (stable `NodeId` + content anchors), so merged patches transport bit-identically and author signatures survive — a merge **adopts**, never synthesizes; the RFC's own original route was withdrawn on that ground. `parent_block_ids` is already `Vec`, so multi-parent lineage is a replay question deferred to its own increment. **§4 prerequisites must be answered before design**. **Release-conditioned 2026-08-08** — buildable now, not releasable until sealed history structurally records a merge; a one-way door, since history is immutable |
+| DC-75 | [Merge Block Lineage and the Structural Merge Record](./done/DC-75-MERGE-BLOCK-LINEAGE.md) | **Discharges DC-74's release condition.** Sized by the developer, verified by the architect: the blocking gate is `block_state.rs:13-26`, which rejects `BlockKind::Merge` outright — greenfield write-side design, not a read-side widening. Carries one open design question (mainline-authoritative vs both-parents-verified). **Accepted 2026-08-08.** §4's read-only prerequisite investigation may run in parallel with DC-74; implementation waits for DC-74 to merge, since both touch the seal path |
+| DC-76 | [Filesystem Durability Contract](./done/DC-76-FILESYSTEM-DURABILITY-CONTRACT.md) | **0.20.0, item 1.** Accepted 2026-08-08. Enabling increment for cross-platform mutation: states DC-37's guarantees as one explicit contract with a conformance suite, **Linux as sole implementation, no behaviour change**. Soundness proof is that Linux still passes unchanged. **Complete at `d568438`**, accepted 2026-08-09 |
+| DC-77 | [Docs Mermaid Rendering](./done/DC-77-DOCS-MERMAID-RENDERING.md) | **0.20.0**, small, docs and CI only. Accepted 2026-08-08. The two new reference documents' diagrams render as code blocks; enabling the preprocessor requires **one exact entry in the publication-boundary allowlist**, which is the only reviewed part |
+| DC-78 | [History Exchange](./done/DC-78-HISTORY-EXCHANGE.md) | **Status-claim criterion 1** — a distributed VCS that cannot distribute. Priority ruled 2026-08-09: next design work after DC-76, ahead of Windows mutation. Proposes separating **exchange** (trust, hard) from **transport** (dependency decision, deferrable). **Accepted 2026-08-09.** §4 investigation only; design gated on it, including whether DC-53 is a prerequisite |
+| DC-79 | [sha2 and getrandom Upgrade](./done/DC-79-SHA2-GETRANDOM-UPGRADE.md) | **0.20.0.** Accepted 2026-08-09. `sha2` derives every `ObjectId`; proof is DC-41's vectors passing **unchanged**. Not urgent — audit clean |
+| DC-80 | [ed25519-dalek Major Upgrade](./done/DC-80-ED25519-DALEK-UPGRADE.md) | **0.20.0, after DC-79.** Accepted 2026-08-09. Changes the library verifying **every** signature; a compatibility question about sealed artifacts, not a version move. Negative control required in **both** directions |
+| DC-81 | [macOS Mutation](./done/DC-81-MACOS-MUTATION.md) | **0.20.0 item 2, status-claim criterion 6.** Accepted 2026-08-09. A port, not a redesign — DC-76 settled that. **G3 uses `fcntl_fullfsync`**; dependency envelope unchanged. Carries a new verification problem: **CI is the only place this can be observed**, and no macOS mutation job exists yet |
+| DC-82 | [Mutation Dispatch Collapse](./done/DC-82-MUTATION-DISPATCH-COLLAPSE.md) | **0.20.0, after DC-81, before Windows.** Accepted 2026-08-09. DC-81 moved gates 110 → 135; ten call sites branching per platform does not scale. Collapses dispatch to one selection point, **preserving DC-71's runtime fallback**. No behaviour change |
+| DC-83 | [Test Temp-Directory Uniqueness](./done/DC-83-TEST-TEMP-DIR-UNIQUENESS.md) | **0.20.0, ahead of DC-80.** Accepted 2026-08-09. `format_transition.rs`'s temp root uses a nanosecond timestamp alone and collides under parallel execution — **confirmed flaky on `main`**. Test-only. A flaky gate undermines every acceptance resting on "CI green" |
+| DC-84 | [Test Helper Uniqueness Sweep](./done/DC-84-TEST-HELPER-UNIQUENESS-SWEEP.md) | **0.20.0, not urgent.** Accepted 2026-08-09 from DC-83's §2 finding. `unique_temp_dir` (backing 580 tests) and thirteen siblings use PID + clock with **no counter** — `monotonic_suffix` is a timestamp despite its name, which misled the architect into citing it as correct. Test-only |
+| DC-86 | [Bundle Decoder Hardening](./done/DC-86-BUNDLE-DECODER-HARDENING.md) | **0.20.0.** Accepted 2026-08-09 from the DC-78 Stage 3 review. The bundle decoder is **the only parser in the product consuming bytes from an untrusted party**, and has neither fuzz coverage nor a resource bound. Test and hardening only |
+| DC-88 | [Durability Contract Requirement Shape](./done/DC-88-DURABILITY-CONTRACT-REQUIREMENT-SHAPE.md) | **Complete, merged 2026-08-11.** `durable_directory_entry` restated as a single-entry confirmation rather than directory-scoped batching. The architect's scope trade ("this blocks Stage 2") was **mispriced and withdrawn** — DC-38 never calls the method |
+| DC-89 | [Platform Claim Documentation Accuracy](./done/DC-89-PLATFORM-CLAIM-DOCS-ACCURACY.md) | **Complete, merged 2026-08-10.** Corrected the Linux-only mutation claim across eight sites in seven pages plus `README.md`. Criterion 1 amended mid-review after the architect's scope wrongly excluded `README.md` |
+| DC-90 | [Unsafe Code Boundary and Gate](./done/DC-90-UNSAFE-CODE-BOUNDARY-GATE.md) | **Complete, merged 2026-08-11.** Turns the owner's "`unsafe` allowed under control" ruling into a checked property. The guard is `forbid`, not `deny` — review found a `deny`-level lint can be silently overridden by the very crate it constrains |
+| DC-91 | [Publication Record Shape](./done/DC-91-PUBLICATION-RECORD-SHAPE.md) | **Complete (evaluation), 2026-08-11.** Answer: **partial**. A slot record removes one state class with a real detectability gain, but leaves pointer-log joint consistency untouched and **does not unblock new branch/tag creation on Windows at all** |
+| DC-92 | [Lineage Replay Memoization](./done/DC-92-LINEAGE-REPLAY-MEMOIZATION.md) | **Complete, merged 2026-08-11.** `verify` O(N³) → **O(N)** (46.4 s → 2.7 s at N=160); `seal` O(N²)-per-call → near-flat; peak memory **599 MB → 15.1 MB**, bounded by lineage frontier |
 
 `PR-*` files are legacy implementation handoff records retained as historical shipped records. New
 design-change records use `DC-*` RFCs plus optional `rfcs/handoffs/DC-*` companions.

@@ -1,7 +1,7 @@
 # DC-75 Merge Block Lineage — Handoff v1
 
 **Cleared to start on §1 only, and §1 may run now, in parallel with DC-74.** Accepted by the project
-owner 2026-08-08, at `rfcs/accepted/DC-75-MERGE-BLOCK-LINEAGE.md`. **Authored by** the architect.
+owner 2026-08-08, at `rfcs/done/DC-75-MERGE-BLOCK-LINEAGE.md`. **Authored by** the architect.
 **Origin: your own sizing finding** in `../DC-74-merge-execution/sequencing-recommendation-v1.md`. The
 RFC's §2 and §3 are your analysis, verified and adopted. **Touches:** `block_state.rs`, both
 `single_parent_chain` functions, `merge_evidence.rs`, `cache_ladder.rs`, `verify`.

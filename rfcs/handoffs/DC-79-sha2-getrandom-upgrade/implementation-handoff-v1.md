@@ -1,6 +1,6 @@
 # DC-79 sha2 and getrandom Upgrade — Handoff v1
 
-**Cleared to start on §1 only.** Accepted 2026-08-09, `rfcs/accepted/DC-79-SHA2-GETRANDOM-UPGRADE.md`.
+**Cleared to start on §1 only.** Accepted 2026-08-09, `rfcs/done/DC-79-SHA2-GETRANDOM-UPGRADE.md`.
 **Authored by** the architect. **Not urgent** — `cargo audit` is clean. **Sequenced behind DC-76 and
 DC-78**; take it when the queue reaches it, or earlier if you judge you have capacity, since it touches
 `prikk-hash`/`prikk-crypto` and cannot collide with either.

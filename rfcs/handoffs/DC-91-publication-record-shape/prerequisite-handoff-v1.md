@@ -1,7 +1,7 @@
 # DC-91 Publication Record Shape — Prerequisite Handoff v1
 
 **Cleared to answer §4's four questions only.** Accepted 2026-08-11,
-`rfcs/accepted/DC-91-PUBLICATION-RECORD-SHAPE.md`. **No design, no implementation, no production code.**
+`rfcs/done/DC-91-PUBLICATION-RECORD-SHAPE.md`. **No design, no implementation, no production code.**
 
 ## 1. What this is, and what it is not
 

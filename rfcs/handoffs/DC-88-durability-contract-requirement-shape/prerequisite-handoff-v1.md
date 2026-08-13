@@ -1,7 +1,7 @@
 # DC-88 Durability Contract Requirement Shape — Prerequisite Handoff v1
 
 **Cleared to answer §4's four questions only.** Accepted 2026-08-10,
-`rfcs/accepted/DC-88-DURABILITY-CONTRACT-REQUIREMENT-SHAPE.md`. **Design follows the answers.**
+`rfcs/done/DC-88-DURABILITY-CONTRACT-REQUIREMENT-SHAPE.md`. **Design follows the answers.**
 
 ## 1. Read this first, because it changes your sequencing
 

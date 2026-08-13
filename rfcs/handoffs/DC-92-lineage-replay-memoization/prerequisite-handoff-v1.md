@@ -1,7 +1,7 @@
 # DC-92 Lineage Replay Memoization — Prerequisite Handoff v1
 
 **Cleared to answer §4's five questions only.** Accepted 2026-08-11,
-`rfcs/accepted/DC-92-LINEAGE-REPLAY-MEMOIZATION.md`. **Design follows the answers.**
+`rfcs/done/DC-92-LINEAGE-REPLAY-MEMOIZATION.md`. **Design follows the answers.**
 
 ## 1. Why this one matters more than its size suggests
 

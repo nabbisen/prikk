@@ -1,6 +1,6 @@
 # DC-89 Platform Claim Documentation Accuracy — Handoff v1
 
-**Cleared to implement.** Accepted 2026-08-10, `rfcs/accepted/DC-89-PLATFORM-CLAIM-DOCS-ACCURACY.md`.
+**Cleared to implement.** Accepted 2026-08-10, `rfcs/done/DC-89-PLATFORM-CLAIM-DOCS-ACCURACY.md`.
 No prerequisite questions — §3 is the work.
 
 ## 1. What this is

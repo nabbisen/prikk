@@ -1,7 +1,7 @@
 # DC-76 §1 — Four Questions, Answered and Reported Before Design
 
 **Handoff followed:** `implementation-handoff-v1.md`. **Governing RFC:**
-`rfcs/accepted/DC-76-FILESYSTEM-DURABILITY-CONTRACT.md`. **Cleared scope:** §1 only.
+`rfcs/done/DC-76-FILESYSTEM-DURABILITY-CONTRACT.md`. **Cleared scope:** §1 only.
 
 Report only, per the handoff's explicit instruction. No production code changed. The 93-gate count
 (28/25/15/13/11/1 across `anchored.rs`/`directory.rs`/`read.rs`/`regular.rs`/`immutable.rs`/`failpoints.rs`)

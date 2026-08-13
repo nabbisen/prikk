@@ -2,7 +2,7 @@
 
 **Supersedes v1 and its two addenda for implementation purposes** — they remain the record of how the
 rulings were reached. **Design accepted by the project owner 2026-08-09** and is **§D of
-`rfcs/accepted/DC-78-HISTORY-EXCHANGE.md`**. **Authored by** the architect.
+`rfcs/done/DC-78-HISTORY-EXCHANGE.md`**. **Authored by** the architect.
 **Cleared to answer §D7's four questions only.** Implementation follows their acceptance.
 
 ## 1. Read §D first, and know why it is short on mechanism

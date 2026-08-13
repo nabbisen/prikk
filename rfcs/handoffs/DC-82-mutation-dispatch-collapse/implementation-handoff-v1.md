@@ -1,7 +1,7 @@
 # DC-82 Mutation Dispatch Collapse — Handoff v1
 
 **Cleared to start on §3 only.** Accepted 2026-08-09,
-`rfcs/accepted/DC-82-MUTATION-DISPATCH-COLLAPSE.md`. **Authored by** the architect.
+`rfcs/done/DC-82-MUTATION-DISPATCH-COLLAPSE.md`. **Authored by** the architect.
 **Sequenced after DC-81 closes** (it is blocked only on CI evidence), **before Windows.**
 
 ## 1. Why this exists, stated plainly

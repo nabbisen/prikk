@@ -1,7 +1,7 @@
 # DC-90 Unsafe Code Boundary and Gate — Prerequisite Handoff v1
 
 **Cleared to answer §4's four questions only.** Accepted 2026-08-10,
-`rfcs/accepted/DC-90-UNSAFE-CODE-BOUNDARY-GATE.md`. **Design follows the answers.**
+`rfcs/done/DC-90-UNSAFE-CODE-BOUNDARY-GATE.md`. **Design follows the answers.**
 
 ## 1. Why this exists
 

@@ -1,6 +1,6 @@
 # DC-86 Bundle Decoder Hardening — Handoff v1
 
-**Cleared to start.** Accepted 2026-08-09, `rfcs/accepted/DC-86-BUNDLE-DECODER-HARDENING.md`.
+**Cleared to start.** Accepted 2026-08-09, `rfcs/done/DC-86-BUNDLE-DECODER-HARDENING.md`.
 **Test and hardening only — no format change.**
 
 ## 1. Why this surface and not another

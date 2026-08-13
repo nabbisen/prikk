@@ -1,7 +1,7 @@
 # DC-76 Filesystem Durability Contract — Handoff v1
 
 **Cleared to start on §1 only.** Accepted by the project owner 2026-08-08, at
-`rfcs/accepted/DC-76-FILESYSTEM-DURABILITY-CONTRACT.md`. **Authored by** the architect.
+`rfcs/done/DC-76-FILESYSTEM-DURABILITY-CONTRACT.md`. **Authored by** the architect.
 **Touches:** `crates/prikk-store/src/fsutil/anchored*` and its callers. **Adds no platform.**
 
 ## 1. Four questions, answered and reported before any design

@@ -1,7 +1,7 @@
 # DC-78 History Exchange — Handoff v1
 
 **Cleared for §4's investigation only.** Accepted by the project owner 2026-08-09, at
-`rfcs/accepted/DC-78-HISTORY-EXCHANGE.md`. **Authored by** the architect.
+`rfcs/done/DC-78-HISTORY-EXCHANGE.md`. **Authored by** the architect.
 **No design, no production code, until §4 is answered and reported.**
 
 ## 1. Sequencing

@@ -1,7 +1,7 @@
 # DC-75 — §3 Answered: Baseline Recording and Verification
 
 **Handoff followed:** `implementation-handoff-v1-addendum-2.md` §3.
-**Governing RFC:** `rfcs/accepted/DC-75-MERGE-BLOCK-LINEAGE.md`
+**Governing RFC:** `rfcs/done/DC-75-MERGE-BLOCK-LINEAGE.md`
 
 Per addendum-2 §3 ("answer this in §4's discipline... measure it; do not take my lean as the answer"),
 this reports before any design or production code. No source files are changed by this document.

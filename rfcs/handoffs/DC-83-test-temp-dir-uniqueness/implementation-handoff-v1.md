@@ -1,7 +1,7 @@
 # DC-83 Test Temp-Directory Uniqueness — Handoff v1
 
 **Cleared to start immediately** — small, test-only. Accepted 2026-08-09,
-`rfcs/accepted/DC-83-TEST-TEMP-DIR-UNIQUENESS.md`. **Ahead of DC-80.**
+`rfcs/done/DC-83-TEST-TEMP-DIR-UNIQUENESS.md`. **Ahead of DC-80.**
 
 ## 1. The defect, already diagnosed
 

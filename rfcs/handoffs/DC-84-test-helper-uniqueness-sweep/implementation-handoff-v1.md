@@ -1,6 +1,6 @@
 # DC-84 Test Helper Uniqueness Sweep — Handoff v1
 
-**Cleared to start.** Accepted 2026-08-09, `rfcs/accepted/DC-84-TEST-HELPER-UNIQUENESS-SWEEP.md`.
+**Cleared to start.** Accepted 2026-08-09, `rfcs/done/DC-84-TEST-HELPER-UNIQUENESS-SWEEP.md`.
 **Small, test-only, not urgent** — after DC-80 unless you judge otherwise.
 
 ## 1. This is your DC-83 §2 finding, ruled in scope

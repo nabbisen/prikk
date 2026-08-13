@@ -1,6 +1,6 @@
 # DC-80 ed25519-dalek Major Upgrade — Handoff v1
 
-**Cleared to start on §1 only.** Accepted 2026-08-09, `rfcs/accepted/DC-80-ED25519-DALEK-UPGRADE.md`.
+**Cleared to start on §1 only.** Accepted 2026-08-09, `rfcs/done/DC-80-ED25519-DALEK-UPGRADE.md`.
 **Authored by** the architect. **Sequenced after DC-79.** Not urgent — no known vulnerability.
 **Not routine either.**
 

@@ -1,7 +1,7 @@
 # DC-74 Merge Execution - Handoff v1
 
 **Cleared to start — on §1, not on §3.** Accepted by the project owner 2026-08-08, at
-`rfcs/accepted/DC-74-MERGE-EXECUTION.md`. **Authored by** the architect.
+`rfcs/done/DC-74-MERGE-EXECUTION.md`. **Authored by** the architect.
 **Size:** the largest increment on the roadmap. §1 may shrink it substantially, or return it to the owner.
 **Touches:** `crates/prikk-store/src/` merge surfaces, the seal path, and `prikk-cli`.
 
@@ -59,7 +59,7 @@ represent merged content, it is wrong.**
 
 ## 4. Acceptance criteria
 
-`rfcs/accepted/DC-74-MERGE-EXECUTION.md` §5 governs. The two I will check hardest:
+`rfcs/done/DC-74-MERGE-EXECUTION.md` §5 governs. The two I will check hardest:
 
 - **Adopted patches are byte-identical to their originals** — same ObjectIds, same author signatures.
   Assert it in a test; do not argue it in prose.

@@ -1,7 +1,7 @@
 # DC-85 Merge From a Received Ref — Handoff v1
 
 **Cleared to answer §3's four questions only.** Accepted 2026-08-09,
-`rfcs/accepted/DC-85-MERGE-FROM-RECEIVED-REF.md`. **Design follows their acceptance.**
+`rfcs/done/DC-85-MERGE-FROM-RECEIVED-REF.md`. **Design follows their acceptance.**
 
 ## 1. This exists because you found my design claim false
 

@@ -29,7 +29,7 @@ whatever file the condition sits in.
 - **Discharge means the condition no longer blocks a release**, not that one is authorized. Activation
   stays the owner's three-authority commit.
 
-**Criterion 5 is amended in place** (`rfcs/accepted/DC-75-MERGE-BLOCK-LINEAGE.md`) to say this, with the
+**Criterion 5 is amended in place** (`rfcs/done/DC-75-MERGE-BLOCK-LINEAGE.md`) to say this, with the
 amendment and its reason in the text rather than silently corrected. **Nothing in your commit should
 touch `MILESTONES.md`.**
 
