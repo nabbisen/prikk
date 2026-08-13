@@ -9,7 +9,7 @@ use prikk_error::{PrikkError, Result};
 use crate::block_state::BlockStateStatus;
 use crate::layout::{RepositoryFormat, RepositoryLayout};
 use crate::lock::ActiveLock;
-use crate::refs::RefRecoveryRepair;
+use crate::refs::{RefFileStatus, RefItemStatus, RefRecoveryRepair};
 use crate::verify::{
     ActiveWalMetadataStatus, ObjectItemStatus, RepositoryVerification, StageStatus,
     verify_repository,
@@ -259,6 +259,31 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                     message,
                     "preserve the repository and inspect the failing block before attempting repair",
                 ));
+            }
+            // DC-95 Stage 2 Level 2 (refs half): same reasoning as the two loops above, one level
+            // in for `verify_refs`'s own items -- a single ref's pointer file, log file, or
+            // classification failing no longer fails the whole `Refs` stage.
+            for outcome in verification
+                .pointer_outcomes
+                .iter()
+                .chain(&verification.log_outcomes)
+            {
+                if let RefFileStatus::Failed { message } = &outcome.status {
+                    issues.push(DoctorIssue::error(
+                        "PRIKK-DOCTOR-VERIFY-REF-FILE-INCOMPLETE",
+                        format!("ref file {} failed verification: {message}", outcome.path.display()),
+                        "preserve the repository and inspect the failing ref file before attempting repair",
+                    ));
+                }
+            }
+            for outcome in &verification.ref_item_outcomes {
+                if let RefItemStatus::Failed { message } = &outcome.status {
+                    issues.push(DoctorIssue::error(
+                        "PRIKK-DOCTOR-VERIFY-REF-ITEM-INCOMPLETE",
+                        format!("ref {} failed verification: {message}", outcome.ref_name),
+                        "preserve the repository and inspect the failing ref before attempting repair",
+                    ));
+                }
             }
             if layout.format() == RepositoryFormat::LegacyV1 {
                 issues.push(DoctorIssue::warning(

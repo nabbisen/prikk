@@ -1,6 +1,6 @@
 use prikk_store::{
-    ActiveWalMetadataStatus, BlockStateStatus, DoctorSeverity, ObjectItemStatus, RepositoryLayout,
-    StageStatus,
+    ActiveWalMetadataStatus, BlockStateStatus, DoctorSeverity, ObjectItemStatus, RefFileStatus,
+    RefItemStatus, RepositoryLayout, StageStatus,
 };
 
 /// Render a count sourced from one verification stage. `None` means that stage did not evaluate to
@@ -111,6 +111,37 @@ pub(crate) fn print_verify_report(
                     outcome.block_id
                 );
             }
+        }
+    }
+    let failed_ref_files: Vec<_> = report
+        .pointer_outcomes
+        .iter()
+        .chain(&report.log_outcomes)
+        .filter(|outcome| matches!(outcome.status, RefFileStatus::Failed { .. }))
+        .collect();
+    println!(
+        "ref files: {} scanned, {} failed",
+        report.pointer_outcomes.len() + report.log_outcomes.len(),
+        failed_ref_files.len()
+    );
+    for outcome in failed_ref_files {
+        if let RefFileStatus::Failed { message } = &outcome.status {
+            println!("ref file {}: failed: {message}", outcome.path.display());
+        }
+    }
+    let failed_refs: Vec<_> = report
+        .ref_item_outcomes
+        .iter()
+        .filter(|outcome| matches!(outcome.status, RefItemStatus::Failed { .. }))
+        .collect();
+    println!(
+        "ref items: {} scanned, {} failed",
+        report.ref_item_outcomes.len(),
+        failed_refs.len()
+    );
+    for outcome in failed_refs {
+        if let RefItemStatus::Failed { message } = &outcome.status {
+            println!("ref {}: failed: {message}", outcome.ref_name);
         }
     }
     println!("checked objects: {}", format_count(report.checked_objects));

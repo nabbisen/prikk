@@ -538,7 +538,7 @@ fn run_verify(args: Vec<String>) -> std::result::Result<(), String> {
         )
     } else if report.has_item_failure() {
         Err(
-            "repository verification found at least one failed object or block; see item outcomes above"
+            "repository verification found at least one failed object, block, or ref; see item outcomes above"
                 .to_string(),
         )
     } else if report.has_unverifiable_state_roots() {
