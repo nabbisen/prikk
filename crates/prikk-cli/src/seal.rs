@@ -12,8 +12,7 @@ use prikk_object::{
 };
 use prikk_store::{
     ActiveLock, ActiveRefMetadata, FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication,
-    RefStore, RepositoryFormat, RepositoryLayout, Wal, derive_next_state_root,
-    finish_active_publication_cleanup, finish_legacy_active_publication_cleanup,
+    RefStore, RepositoryLayout, Wal, derive_next_state_root, finish_active_publication_cleanup,
     read_active_ref_metadata, remove_active_ref_metadata, validate_local_branch_ref,
     verify_signer_trusted,
 };
@@ -22,7 +21,7 @@ mod support;
 
 use support::{
     collect_wal_patch_ids, current_ref_state, current_tip_matches_wal_patches,
-    finish_current_publication, legacy_interrupted_ref_state, persist_wal_patches, signed_envelope,
+    finish_current_publication, persist_wal_patches, signed_envelope,
 };
 
 const DEFAULT_BRANCH_REF: &str = "heads/main";
@@ -48,11 +47,6 @@ pub fn run_seal(
 ) -> std::result::Result<SealCommandResult, String> {
     let ref_name = parse_seal_args(args)?;
     let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
-    if layout.format() == RepositoryFormat::LegacyV1 {
-        eprintln!(
-            "warning: format-1 repository opened in legacy read-only mode; only exact DC-34 interrupted-publication completion is writable"
-        );
-    }
     seal_active_no_audit(layout, &ref_name, signer)
 }
 
@@ -121,23 +115,14 @@ fn seal_active_no_audit(
 
     let mut object_store = FileObjectStore::new(layout.clone());
     let ref_store = RefStore::new(layout.clone());
-    let current = match legacy_interrupted_ref_state(&object_store, &ref_store, &ref_name)? {
-        Some(interrupted) => Some(interrupted),
-        None => current_ref_state(&object_store, &ref_store, &ref_name)?,
-    };
+    let current = current_ref_state(&object_store, &ref_store, &ref_name)?;
     let wal_patch_ids = collect_wal_patch_ids(&replay.records)?;
     if let Some(current) = current.as_ref() {
         if current_tip_matches_wal_patches(&object_store, current, &wal_patch_ids)? {
             verify_signer_trusted(&layout, signer).map_err(|err| err.to_string())?;
-            let legacy_cleanup =
-                finish_current_publication(&ref_store, &active_lock, &ref_name, current, signer)?;
-            if let Some(authorization) = legacy_cleanup {
-                finish_legacy_active_publication_cleanup(&layout, &active_lock, authorization)
-                    .map_err(|err| err.to_string())?;
-            } else {
-                finish_active_publication_cleanup(&layout, &active_lock)
-                    .map_err(|err| err.to_string())?;
-            }
+            finish_current_publication(&ref_store, &active_lock, &ref_name, current, signer)?;
+            finish_active_publication_cleanup(&layout, &active_lock)
+                .map_err(|err| err.to_string())?;
             return Ok(SealCommandResult {
                 ref_name,
                 patch_count: wal_patch_ids.len(),

@@ -1,4 +1,5 @@
-//! Format-1 compatibility diagnostics that remain read-only.
+//! `created_at == 0` malformed-data detection (RFC 103: unconditional since format-1 retirement,
+//! no longer "a format-2 repository contaminated by format-1 records").
 
 use prikk_object::{CanonicalEncode, ObjectEnvelope, ObjectType, RefUpdatePayload};
 

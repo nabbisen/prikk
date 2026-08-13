@@ -22,11 +22,17 @@
 //! in safe Rust, regardless of call path. Kept, untested, ruled on here rather than attempted —
 //! matching round 6's duplicate-pointer/log-identity precedent for genuinely impossible inputs.
 //!
-//! The remaining seven sub-checks are all end-to-end reachable and covered below, one fixture
+//! The remaining seven sub-checks were all end-to-end reachable and covered below, one fixture
 //! each: `Wal::replay()`'s checksum mismatch (`wal.rs`); `verify_wal_persistence`'s Patch-type
 //! check (`verify.rs`); `verify_rollback_patch_envelope`'s decode and apply-support arms
 //! (`rollback_verify.rs`, `patch_replay/decode.rs`); and `require_rollback_author_signature`'s
 //! missing-signature, legacy-marker-key-id, and wrong-length arms (`rollback_verify.rs`).
+//!
+//! **RFC 103: the wrong-length arm's end-to-end test is removed.** It was reachable only under
+//! format-1 (its own doc comment already said so); with format-1 retired, `RepositoryLayout::open`
+//! refuses the fixture before `verify_repository` is ever called. The arm itself is kept, per round
+//! 6's ruling on unreachable checks -- see its own comment in `rollback_verify.rs` -- so six of the
+//! seven remain covered here, not seven.
 //!
 //! Every raw-byte fixture below follows `verify/tests.rs`'s own established technique
 //! (`verify_repository_reports_active_wal_ordering_violation`): build a `WalRecord`, frame it with
@@ -342,69 +348,6 @@ fn verify_repository_detects_rollback_draft_legacy_marker_key_id() -> Result<()>
         VerificationStage::RollbackDrafts,
         "legacy rollback marker key id",
     );
-
-    let _ = std::fs::remove_dir_all(root);
-    Ok(())
-}
-
-/// DC-95 Stage 1, round 11: `require_rollback_author_signature`'s wrong-signature-length arm
-/// (`rollback_verify.rs`). Unit-tested directly
-/// (`rollback_purpose_with_short_ed25519_author_signature_is_rejected`), not end to end.
-///
-/// **A first construction attempt surfaced a real finding, the same shape as round 10's**: a
-/// malformed-length signature installed via raw WAL bytes (bypassing `Wal::append_patch`'s own
-/// `validate_strict` gate, since that's exactly the shape this defect has) does not reach
-/// `require_rollback_author_signature` at all under a genuinely current-format repository.
-/// `Wal::replay()` itself calls `crate::format::validate_read_schema` on every record before
-/// returning (`wal.rs`), and under `RepositoryFormat::CurrentV2` that function calls `envelope.
-/// validate_strict()` -- the same generic signature-shape gate `append_patch` enforces on write,
-/// now enforced on *every* read too. A malformed-length signature therefore makes `wal.replay()?`
-/// itself hard-error first, with the generic "malformed algorithm shape" message, before
-/// `verify_rollback_draft_wal_records` is ever called. Reading `validate_read_schema`
-/// (`format.rs`) shows the `LegacyV1` branch only checks `schema_version == 1` -- no signature-shape
-/// check at all -- so this defect *is* reachable, but only for a format-1 repository. Rebuilt with
-/// `format_transition.rs`'s own established flip technique (round 10's precedent): install the raw
-/// WAL bytes first (no format requirement, since this bypasses `append_patch` entirely), then flip
-/// `.prikk/FORMAT` to `"1\n"` and reopen before calling `verify_repository`.
-///
-/// Probed: relaxing the signature-length comparison does *not* produce a silently clean `Ok`.
-/// `verify_repository` still returns `Ok`, but `signature_envelope_issues` gains a generic
-/// `PRIKK-VERIFY-SIGNATURE-MALFORMED` entry from the unconditional per-record `classify_signature_
-/// envelope` pass (`verify.rs`) that runs after every WAL record, rollback or not. That entry backs
-/// no `has_*` blocking predicate (the same standing, still-open question this file's own module doc
-/// names for the `ActiveWal` source), so with the specific check disabled the defect would no
-/// longer flip `prikk verify`'s exit code -- exactly the "non-blocking-sibling mechanism" shape
-/// already established for `validate_read_schema`'s strict-signature-shape row (classified inventory
-/// §1). Load-bearing for that reason: this check, not the generic classifier, is what turns a
-/// malformed rollback AUTHOR signature into a hard failure rather than a diagnostic-only entry.
-/// Reachable end to end only for format-1 repositories; already unit-tested at the function level
-/// for both formats.
-#[test]
-fn verify_repository_detects_rollback_draft_wrong_signature_length() -> Result<()> {
-    let root = unique_temp_dir("verify-rollback-short-signature");
-    let layout = RepositoryLayout::init(root.clone())?;
-    let mut objects = FileObjectStore::new(layout.clone());
-    let blob = rollback_patch_blob_envelope();
-    objects.write_object(&blob)?;
-    let payload =
-        rollback_payload_with_operations(vec![create_file_operation(1, blob.object_id())?]);
-    let mut envelope =
-        ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);
-    envelope.signatures.push(Signature {
-        algorithm: SignatureAlgorithm::Ed25519,
-        key_id: "rollback-author-key".to_string(),
-        signature_bytes: vec![1],
-        created_at: 1,
-        signer_role: SignerRole::Author,
-    });
-
-    let wal = Wal::for_layout(&layout);
-    write_wal_records(&wal, &[WalRecord { seq: 1, envelope }])?;
-    std::fs::write(layout.format_path(), b"1\n")?;
-    let legacy_layout = RepositoryLayout::open(root.clone())?;
-
-    let report = verify_repository(&legacy_layout)?;
-    assert_stage_failed(&report, VerificationStage::RollbackDrafts, "must be");
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

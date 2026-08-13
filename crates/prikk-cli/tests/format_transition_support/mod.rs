@@ -34,14 +34,6 @@ pub(crate) enum StrictFailure {
     InvertedOrder,
 }
 
-pub(crate) struct LegacyFixture {
-    pub(crate) root_block: ObjectId,
-    pub(crate) left_block: ObjectId,
-    pub(crate) right_block: ObjectId,
-    pub(crate) block_path: std::path::PathBuf,
-    pub(crate) log_path: std::path::PathBuf,
-}
-
 mod fixture;
 
 pub(crate) use fixture::{build_format2_strict_wal_fixture, build_legacy_fixture};

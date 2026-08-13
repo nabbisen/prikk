@@ -62,6 +62,22 @@
 //! were not rewritten, moved, or deleted to get here -- only the twelve top-level boundaries around
 //! them.
 //!
+//! # RFC 103: format-1 retirement, and its effect on the table below
+//!
+//! `RepositoryFormat::LegacyV1` is deleted; a format-1 repository is now rejected at
+//! `RepositoryLayout::open`, before `verify_repository` (or anything else) can run against it. Three
+//! rows in the table below changed status as a direct consequence, all still classified, none left to
+//! drift: `LEGACY-LOG-LEADS` and `LEGACY-TIMESTAMP` (both format-1-gated branches that can now never
+//! execute, since the format they branched on no longer exists) are deleted outright rather than kept
+//! as unreachable, since deleting the dead branch was possible and cheaper than documenting it;
+//! rollback AUTHOR signature wrong-length moves from load-bearing to unreachable, since round 11 had
+//! already established format-1 as its only reachable path (`rollback_verify.rs` carries the argument
+//! at the check site, per round 6's ruling on unreachable checks). `legacy_state_roots_unverifiable`
+//! (a precondition fact, not a table row) is deleted with it. The three-row figure matches RFC 103's
+//! own accounting, corrected once during that RFC's own prerequisite investigation:
+//! `LEGACY-TIMESTAMP`'s status change was found only by re-reading this table, not carried in the
+//! RFC's original draft.
+//!
 //! # DC-95 Stage 1: end-to-end coverage, by cluster
 //!
 //! Every check `verify_repository` performs, classified by whether disabling it lets a defective
@@ -98,10 +114,8 @@
 //! | Check | Classification |
 //! |---|---|
 //! | Incomplete log tail without pointer lead | Load-bearing |
-//! | `LEGACY-LOG-LEADS` (format-1) | Downstream-redundant (format-2 `DIVERGENCE` sibling equally blocks) |
 //! | Catch-all "unexplained pointer/log divergence" | Load-bearing |
-//! | `LEGACY-TIMESTAMP` (format-1) | Excluded, non-blocking |
-//! | `created_at == 0` (format-2) | Load-bearing |
+//! | `created_at == 0` | Load-bearing |
 //! | `CANDIDATE-DEBRIS` | Non-blocking |
 //! | Duplicate pointer identity / duplicate ref-log identity | Unreachable, both (needs a genuine SHA-256 collision) |
 //! | Non-canonical ref pointer path | Load-bearing |
@@ -131,7 +145,7 @@
 //! | Rollback AUTHOR signature: missing | Load-bearing |
 //! | Rollback AUTHOR signature: wrong algorithm | Unreachable (`SignatureAlgorithm` has exactly one variant) |
 //! | Rollback AUTHOR signature: legacy marker key id | Load-bearing |
-//! | Rollback AUTHOR signature: wrong length | Load-bearing, via non-blocking-sibling mechanism; format-1 only |
+//! | Rollback AUTHOR signature: wrong length | Unreachable (RFC 103: was reachable only under format-1, now retired; kept, untested, argument recorded in `rollback_verify.rs`) |
 //! | Signature-envelope issues, `ActiveWal` source | Excluded (see caveat below) |
 //!
 //! ## Active-WAL metadata status + WAL ordering (DC-66, `verify/tests.rs`)
@@ -165,6 +179,14 @@
 //! "Excluded" row above that names this caveat, plus every "Load-bearing, via non-blocking-sibling
 //! mechanism" row, depends on this staying `false`. If it's ever answered the other way, those rows
 //! reopen.
+//!
+//! **RFC 103 note, not a status change:** `signature_diagnostics.rs::classify_signature_envelope`'s
+//! own doc records that its non-empty-result path is now provably unreachable through
+//! `verify_repository` at all (every call site runs it immediately after a `validate_read_schema`
+//! call that already hard-errors on the same three conditions, once format-1's lenient read branch is
+//! gone). This does not reopen anything above: every row this caveat covers was already "Excluded" --
+//! never blocking, for any source -- so a diagnostic layer becoming unreachable removes no coverage
+//! `verify` depended on.
 
 use std::path::PathBuf;
 
@@ -341,9 +363,6 @@ pub struct StageOutcome {
 /// Repository verification summary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepositoryVerification {
-    /// True when format-1 scaffold roots cannot be verified as clean-state commitments. A precondition
-    /// fact about the repository's format, not sourced from any stage — always known.
-    pub legacy_state_roots_unverifiable: bool,
     /// Outcome of each of the twelve verification stages (DC-95 Stage 2 Level 1), in pipeline order.
     /// Always exactly twelve entries — no stage may be silently absent.
     pub stage_outcomes: Vec<StageOutcome>,
@@ -542,12 +561,6 @@ impl RepositoryVerification {
     #[must_use]
     pub fn has_blocking_defect(&self) -> bool {
         self.has_stage_failure() || self.has_item_failure()
-    }
-
-    /// Return true when legacy scaffold roots prevent state-commitment verification.
-    #[must_use]
-    pub const fn has_unverifiable_state_roots(&self) -> bool {
-        self.legacy_state_roots_unverifiable
     }
 
     /// Return true if the active WAL contained an incomplete trailing record. `None` (the WAL-replay
@@ -1030,7 +1043,6 @@ pub fn verify_repository_with_options(
         .then_some(trust_verifier.checked_records);
 
     Ok(RepositoryVerification {
-        legacy_state_roots_unverifiable: layout.format() == RepositoryFormat::LegacyV1,
         stage_outcomes: pipeline.outcomes,
         object_outcomes,
         block_state_outcomes,

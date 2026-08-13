@@ -8,8 +8,8 @@
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectId, ObjectType,
-    RefKind, RefStatePayload, RefUpdatePayload,
+    BlockKind, BlockPayload, CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, RefKind,
+    RefStatePayload, RefUpdatePayload,
 };
 
 use crate::maintainer_signing::MaintainerSigner;
@@ -20,7 +20,7 @@ use crate::{
     Ed25519MaintainerSigner, FileObjectStore, ObjectWriter, RefPublication, RefStore,
     RepositoryLayout, StageOutcome, StageStatus, VerificationStage, VerifyOptions, Wal,
     add_trusted_maintainer, maintainer_signature, verify_repository,
-    verify_repository_with_options, write_active_ref_metadata,
+    verify_repository_with_options,
 };
 
 fn trusted_signer(seed_label: &str, byte: u8) -> Result<Ed25519MaintainerSigner> {
@@ -431,202 +431,6 @@ fn verify_repository_marks_every_wal_replay_dependent_as_not_evaluated() -> Resu
             "stage {independent} does not depend on WalReplay and should still evaluate"
         );
     }
-
-    let _ = std::fs::remove_dir_all(root);
-    Ok(())
-}
-
-/// **Superseded by Level 2's item containment.** Originally (Level 1) this proved `trust_is_valid`
-/// reads `false` whenever the whole `Objects` STAGE fails for *any* reason, including one unrelated
-/// to trust (Step 0 ruling §2-§3: an accumulator's emptiness proves "none found" only if its
-/// producer ran to completion). Under Level 2, a single unrelated item's failure no longer fails the
-/// whole `Objects` stage at all -- `objects_evaluated` now means "every item was independently
-/// attempted," which is what makes it *correctly* sufficient again, for a different reason than
-/// under Level 1: item containment means `PublicationTrustVerifier` sees every Block/RefState
-/// regardless of an unrelated object's own fate (Level 2 handoff §7's closing note -- "Level 2 will
-/// increase real trust coverage without touching trust code... that is the change working, not a
-/// regression").
-///
-/// **A closely related concern was checked and ruled out, not merely assumed away**:
-/// `require_retained_evidence` independently re-reads its specific target Block/RefState
-/// (`interrupted_target`/`block_matches_wal`, `ref_publication.rs`) rather than trusting
-/// `trust_verifier`'s own findings, which raised the question of whether that re-read might skip
-/// read-schema/signature-shape strictness the way `trust_verifier` itself would catch. It does not:
-/// both reads go through `FileObjectStore::read_typed`, which delegates to `read_object`
-/// (`object_store.rs:100`), which unconditionally calls `crate::format::validate_read_schema` for
-/// every object it returns -- there is no path to a schema-invalid object through either function.
-///
-/// Construction: the `LEGACY-LOG-LEADS` retained-evidence shape from DC-95 Stage 1 round 10 (real
-/// WAL/active-metadata evidence a Block's `patch_ids` genuinely match) -- normally enough for
-/// `require_retained_evidence` to leave the issue as `LEGACY-LOG-LEADS` rather than reclassifying
-/// it. An *unrelated* item failure -- an object-id-mismatched Blob, scanned after Patch/Block/
-/// RefState per `persisted_object_types`'s own order so it does not interrupt this fixture's own
-/// trust checks -- must not suppress a reclassification that is otherwise genuinely earned.
-#[test]
-fn verify_repository_reclassifies_despite_an_unrelated_item_failure() -> Result<()> {
-    let root = unique_temp_dir("stage2-trust-is-valid-fix");
-    let layout = RepositoryLayout::init(root.clone())?;
-    let signer = trusted_signer("stage2-trust-is-valid-fix", 0x18)?;
-    adopt(&layout, &signer)?;
-
-    let patch = signed_patch_envelope();
-    let patch_id = patch.object_id();
-    let mut objects = FileObjectStore::new(layout.clone());
-    objects.write_object(&signed_patch_blob_envelope())?;
-    objects.write_object(&patch)?;
-    write_active_ref_metadata(&layout, "heads/main")?;
-    Wal::for_layout(&layout).append_patch(&patch)?;
-
-    let block_payload = BlockPayload {
-        parent_block_ids: Vec::new(),
-        kind: BlockKind::Root,
-        patch_ids: vec![patch_id],
-        state_merkle_root: MerkleRoot([0; 32]),
-        snapshot_blob_ref: None,
-        mainline_parent_id: None,
-        merge_baseline_block_id: None,
-    };
-    let mut block_envelope =
-        ObjectEnvelope::unsigned(ObjectType::Block, 1, block_payload.to_canonical_bytes()?);
-    let block_id = block_envelope.object_id();
-    block_envelope.add_signature(maintainer_signature(&signer, ObjectType::Block, block_id)?)?;
-    let block_path = layout.object_path(ObjectType::Block, block_id);
-    std::fs::create_dir_all(
-        block_path
-            .parent()
-            .ok_or_else(|| PrikkError::Io("legacy Block path has no parent".to_string()))?,
-    )?;
-    std::fs::write(
-        &block_path,
-        crate::file_codec::encode_envelope_file(&block_envelope)?,
-    )?;
-
-    let state1 = RefStatePayload {
-        ref_name: "heads/main".to_string(),
-        kind: RefKind::Branch,
-        target_object_id: block_id,
-        update_seq: 1,
-        previous_ref_state_id: None,
-        required_attestation_ids: Vec::new(),
-        closed: false,
-    };
-    let mut ref_state1 =
-        ObjectEnvelope::unsigned(ObjectType::RefState, 1, state1.to_canonical_bytes()?);
-    let state1_id = ref_state1.object_id();
-    ref_state1.add_signature(maintainer_signature(
-        &signer,
-        ObjectType::RefState,
-        state1_id,
-    )?)?;
-    let update1 = build_signed_ref_update("heads/main", None, state1_id, block_id, 1, &signer)?;
-    RefStore::new(layout.clone()).publish(&RefPublication {
-        ref_name: "heads/main".to_string(),
-        expected_previous_ref_state_id: None,
-        ref_state: ref_state1,
-        ref_update: update1,
-    })?;
-    let pointer_after_first = std::fs::read(layout.ref_pointer_path("heads/main"))?;
-
-    let state2 = RefStatePayload {
-        ref_name: "heads/main".to_string(),
-        kind: RefKind::Branch,
-        target_object_id: block_id,
-        update_seq: 2,
-        previous_ref_state_id: Some(state1_id),
-        required_attestation_ids: Vec::new(),
-        closed: false,
-    };
-    let mut ref_state2 =
-        ObjectEnvelope::unsigned(ObjectType::RefState, 1, state2.to_canonical_bytes()?);
-    let state2_id = ref_state2.object_id();
-    ref_state2.add_signature(maintainer_signature(
-        &signer,
-        ObjectType::RefState,
-        state2_id,
-    )?)?;
-    let update2 = build_signed_ref_update(
-        "heads/main",
-        Some(state1_id),
-        state2_id,
-        block_id,
-        2,
-        &signer,
-    )?;
-    RefStore::new(layout.clone()).publish(&RefPublication {
-        ref_name: "heads/main".to_string(),
-        expected_previous_ref_state_id: Some(state1_id),
-        ref_state: ref_state2,
-        ref_update: update2,
-    })?;
-
-    std::fs::write(layout.ref_pointer_path("heads/main"), &pointer_after_first)?;
-    std::fs::write(layout.format_path(), b"1\n")?;
-
-    // Separately: an object-id-mismatched Blob, scanned after Patch/Block/RefState per
-    // `persisted_object_types`'s own order, so it does not interrupt this fixture's own trust
-    // checks -- it only makes the whole `Objects` stage `Failed` once those checks are done.
-    let stray_blob_payload =
-        prikk_object::BlobPayload::new(prikk_object::BlobKind::Text, b"unrelated".to_vec());
-    let mut stray_blob = ObjectEnvelope::unsigned(
-        ObjectType::Blob,
-        1,
-        stray_blob_payload.to_canonical_bytes()?,
-    );
-    stray_blob.add_signature(maintainer_signature(
-        &signer,
-        ObjectType::Blob,
-        stray_blob.object_id(),
-    )?)?;
-    let wrong_id = sample_object_id("stage2-trust-fix-wrong-id");
-    let misplaced = layout.object_path(ObjectType::Blob, wrong_id);
-    std::fs::create_dir_all(
-        misplaced
-            .parent()
-            .ok_or_else(|| PrikkError::Io("misplaced blob path has no parent".to_string()))?,
-    )?;
-    std::fs::write(
-        &misplaced,
-        crate::file_codec::encode_envelope_file(&stray_blob)?,
-    )?;
-
-    let legacy_layout = RepositoryLayout::open(root.clone())?;
-    let report = verify_repository(&legacy_layout)?;
-
-    // The Objects stage itself now evaluates -- the stray Blob's id mismatch is a per-item Failed
-    // entry, not a whole-stage failure (DC-95 Stage 2 Level 2).
-    assert!(matches!(
-        find_stage(&report.stage_outcomes, VerificationStage::Objects).status,
-        StageStatus::Evaluated
-    ));
-    assert!(
-        report.has_item_failure(),
-        "the stray Blob's id mismatch must still surface as an item failure: {report:?}"
-    );
-    assert!(matches!(
-        find_stage(
-            &report.stage_outcomes,
-            VerificationStage::PublicationReclassification
-        )
-        .status,
-        StageStatus::Evaluated
-    ));
-    assert!(
-        report
-            .ref_publication_issues
-            .iter()
-            .any(|issue| issue.code == "PRIKK-VERIFY-REF-LEGACY-LOG-LEADS"),
-        "the target Block's own trust was genuinely established; an unrelated item's failure must \
-         not suppress this reclassification: {:?}",
-        report.ref_publication_issues
-    );
-    assert!(
-        !report
-            .ref_publication_issues
-            .iter()
-            .any(|issue| issue.code == "PRIKK-VERIFY-REF-DIVERGENCE"),
-        "must not be reclassified to DIVERGENCE when trust was genuinely established: {:?}",
-        report.ref_publication_issues
-    );
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

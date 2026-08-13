@@ -16,10 +16,13 @@ const LEGACY_FORMAT_VERSION: &[u8] = b"1\n";
 const CURRENT_FORMAT_VERSION: &[u8] = b"2\n";
 
 /// Repository format selected by the authoritative `.prikk/FORMAT` marker.
+///
+/// RFC 103: format 1 is retired and rejected at open (`read_repository_format`), not merely
+/// unsupported for mutation -- there is no variant naming it here. The single remaining variant is
+/// kept as an enum rather than collapsed away; doing that is RFC 103 Increment B, not authorized by
+/// Increment A.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepositoryFormat {
-    /// Released format 1, opened for bounded legacy read-only use.
-    LegacyV1,
     /// Current format 2, writable under the DC-40 schema and state-root rules.
     CurrentV2,
 }
@@ -339,7 +342,12 @@ impl RepositoryLayout {
 fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
     let version = read_file_required(root, Path::new("FORMAT"))?;
     match version.as_slice() {
-        LEGACY_FORMAT_VERSION => Ok(RepositoryFormat::LegacyV1),
+        LEGACY_FORMAT_VERSION => Err(PrikkError::Integrity(
+            "this repository uses format 1, which prikk no longer supports (this version \
+             requires format 2). format-1 support was removed after 0.19.0. to migrate: use \
+             prikk 0.19.0 or earlier to `prikk bundle export`, then `prikk bundle import` here"
+                .to_string(),
+        )),
         CURRENT_FORMAT_VERSION => Ok(RepositoryFormat::CurrentV2),
         _ => Err(PrikkError::UnsupportedFormatVersion(0)),
     }

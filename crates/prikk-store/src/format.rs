@@ -11,7 +11,6 @@ pub(crate) fn validate_object_envelope(
 ) -> Result<()> {
     envelope.validate_strict()?;
     match format {
-        RepositoryFormat::LegacyV1 => Err(PrikkError::UnsupportedFormatVersion(1)),
         RepositoryFormat::CurrentV2 => validate_format2_schema(envelope),
     }
 }
@@ -50,15 +49,6 @@ pub(crate) fn validate_read_schema(
     envelope: &ObjectEnvelope,
 ) -> Result<()> {
     match format {
-        RepositoryFormat::LegacyV1 => {
-            if envelope.schema_version != 1 {
-                return Err(PrikkError::Integrity(format!(
-                    "format-1 {} requires envelope schema 1, got {}",
-                    envelope.object_type, envelope.schema_version
-                )));
-            }
-            Ok(())
-        }
         RepositoryFormat::CurrentV2 => {
             envelope.validate_strict()?;
             validate_format2_schema(envelope)

@@ -3,7 +3,6 @@
 mod candidate_cleanup;
 mod compatibility;
 mod failpoints;
-mod format_transition;
 mod partial_tail_refusal;
 mod state_matrix;
 
