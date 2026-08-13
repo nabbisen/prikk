@@ -27,12 +27,19 @@ use crate::lock::ActiveLock;
 use crate::object_store::{FileObjectStore, ObjectReader};
 
 pub use log::{RefLogRecord, RefLogReplay};
-pub use verify::RefPublicationIssue;
 pub(crate) use verify::verify_refs;
+pub use verify::{
+    RefFileOutcome, RefFileStatus, RefItemOutcome, RefItemStatus, RefPublicationIssue,
+};
 
 pub(crate) fn ensure_no_incomplete_publication(layout: &RepositoryLayout) -> Result<()> {
     let verification = verify_refs(layout)?;
+    // DC-95 Stage 2 Level 2: item containment means `verify_refs` now returns `Ok` for a single
+    // ref's own read/classification failure instead of aborting -- this gate must check for that
+    // directly (`has_item_failure`), the same reason `RepositoryVerification::has_stage_failure`
+    // alone stopped being sufficient once `verify_objects` gained the same containment.
     if verification.publication_issues.is_empty()
+        && !verification.has_item_failure()
         && !evidence::has_incomplete_active_cleanup(layout)?
     {
         return Ok(());

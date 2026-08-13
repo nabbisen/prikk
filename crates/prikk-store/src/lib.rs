@@ -121,9 +121,9 @@ pub use received::{
     ReceivedPointer, list_received_pointers, read_received_pointer, validate_received_ref,
 };
 pub use refs::{
-    RefLogRecord, RefLogReplay, RefPointerSummary, RefPublication, RefPublicationIssue,
-    RefRecoveryCandidate, RefRecoveryRepair, RefStore, validate_local_branch_ref,
-    validate_local_tag_ref,
+    RefFileOutcome, RefFileStatus, RefItemOutcome, RefItemStatus, RefLogRecord, RefLogReplay,
+    RefPointerSummary, RefPublication, RefPublicationIssue, RefRecoveryCandidate,
+    RefRecoveryRepair, RefStore, validate_local_branch_ref, validate_local_tag_ref,
 };
 pub use rollback_draft::{RollbackDraftReport, append_rollback_draft};
 pub use rollback_preview::{

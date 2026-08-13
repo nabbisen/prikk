@@ -382,17 +382,26 @@ pub struct RepositoryVerification {
     /// Number of active WAL patch records that already exist as persisted patch objects. `None` when
     /// the WAL-persistence stage did not evaluate to completion.
     pub persisted_wal_patches: Option<usize>,
-    /// Number of ref pointer files checked successfully. `None` when the refs stage did not evaluate
-    /// to completion.
+    /// Number of ref pointer files whose own Phase-A-equivalent read succeeded (DC-95 Stage 2
+    /// Level 2). `None` only when the `Refs` stage itself did not evaluate.
     pub checked_refs: Option<usize>,
-    /// Number of inline ref-log records checked successfully. `None` when the refs stage did not
-    /// evaluate to completion.
+    /// Number of inline ref-log records read successfully. `None` only when the `Refs` stage
+    /// itself did not evaluate.
     pub checked_ref_log_records: Option<usize>,
     /// Interrupted ref-publication and candidate-debris conditions found by joint verification. Stays
     /// a plain `Vec` under stage containment: entries already pushed by a stage that later failed
     /// remain real findings; only the count/emptiness-as-proof reasoning needed a stage-aware guard
     /// (see `require_retained_evidence`'s own `trust_is_valid` computation).
     pub ref_publication_issues: Vec<crate::refs::RefPublicationIssue>,
+    /// One outcome per ref pointer file scanned, in scan order (DC-95 Stage 2 Level 2). Empty when
+    /// the `Refs` stage itself did not evaluate.
+    pub pointer_outcomes: Vec<crate::refs::RefFileOutcome>,
+    /// One outcome per ref log file scanned, in scan order. Empty when the `Refs` stage itself did
+    /// not evaluate.
+    pub log_outcomes: Vec<crate::refs::RefFileOutcome>,
+    /// One outcome per ref name reached via a successfully-read pointer or log. Empty when the
+    /// `Refs` stage itself did not evaluate.
+    pub ref_item_outcomes: Vec<crate::refs::RefItemOutcome>,
     /// Warning-level format-1 signature-envelope compatibility findings in deterministic order.
     pub signature_envelope_issues: Vec<SignatureEnvelopeIssue>,
     /// Number of active WAL records classified and decoded as rollback drafts. `None` when the
@@ -487,14 +496,14 @@ impl RepositoryVerification {
     }
 
     /// Return true when any individual item did not evaluate cleanly (DC-95 Stage 2 Level 2) — a
-    /// Phase A object whose own check failed, or a Phase B `CurrentV2` Block whose state-root check
-    /// failed or could not be attempted because its own state-derivation parent did not evaluate.
-    /// Item containment means these no longer make [`Self::has_stage_failure`] true: the `Objects`
-    /// stage itself completed, so this is a genuinely separate question, not a more detailed view of
-    /// the same one. `object_outcomes`/`block_state_outcomes` are empty (not merely all-`Evaluated`)
-    /// when the `Objects` stage itself did not evaluate — this method reads that case as `false`,
-    /// same as every other item-backed predicate in this type; `has_stage_failure` is what is already
-    /// true for it.
+    /// Phase A object whose own check failed, a Phase B `CurrentV2` Block whose state-root check
+    /// failed or could not be attempted because its own state-derivation parent did not evaluate,
+    /// or a ref (its pointer file, log file, or classification) that failed. Item containment means
+    /// these no longer make [`Self::has_stage_failure`] true: the owning stage itself completed, so
+    /// this is a genuinely separate question, not a more detailed view of the same one. The backing
+    /// `Vec`s are empty (not merely all-`Evaluated`) when their owning stage itself did not
+    /// evaluate — this method reads that case as `false`, same as every other item-backed predicate
+    /// in this type; `has_stage_failure` is what is already true for it.
     #[must_use]
     pub fn has_item_failure(&self) -> bool {
         self.object_outcomes
@@ -504,6 +513,18 @@ impl RepositoryVerification {
                 .block_state_outcomes
                 .iter()
                 .any(|outcome| !matches!(outcome.status, BlockStateStatus::Verified))
+            || self
+                .pointer_outcomes
+                .iter()
+                .any(|outcome| matches!(outcome.status, crate::refs::RefFileStatus::Failed { .. }))
+            || self
+                .log_outcomes
+                .iter()
+                .any(|outcome| matches!(outcome.status, crate::refs::RefFileStatus::Failed { .. }))
+            || self
+                .ref_item_outcomes
+                .iter()
+                .any(|outcome| matches!(outcome.status, crate::refs::RefItemStatus::Failed { .. }))
     }
 
     /// Return true when this repository's verification found any blocking reason to refuse it --
@@ -842,14 +863,28 @@ pub fn verify_repository_with_options(
         checked_ref_log_records,
         mut ref_publication_issues,
         refs_signature_envelope_issues,
+        pointer_outcomes,
+        log_outcomes,
+        ref_item_outcomes,
     ) = match ref_verification {
         Some(rv) => (
             Some(rv.pointer_count),
             Some(rv.log_record_count),
             rv.publication_issues,
             rv.signature_envelope_issues,
+            rv.pointer_outcomes,
+            rv.log_outcomes,
+            rv.ref_item_outcomes,
         ),
-        None => (None, None, Vec::new(), Vec::new()),
+        None => (
+            None,
+            None,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ),
     };
 
     // Stage: WalReplay. No upstream stage dependency.
@@ -1008,6 +1043,9 @@ pub fn verify_repository_with_options(
         checked_refs,
         checked_ref_log_records,
         ref_publication_issues,
+        pointer_outcomes,
+        log_outcomes,
+        ref_item_outcomes,
         signature_envelope_issues,
         checked_rollback_draft_records,
         checked_publication_trust_records,

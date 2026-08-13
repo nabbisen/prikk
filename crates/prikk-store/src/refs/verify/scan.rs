@@ -1,7 +1,7 @@
 //! Ref pointer/log scanning and structural chain validation.
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
@@ -35,12 +35,42 @@ pub(super) struct RefLogEnvelope {
     pub(super) envelope: ObjectEnvelope,
 }
 
+/// Outcome of attempting to read one pointer or log file (DC-95 Stage 2 Level 2). File identity is
+/// a SHA-256 hash of the ref name (`ref_name_storage_key`) -- not reversible -- so a file whose
+/// content never decoded far enough to reveal its own claimed ref name genuinely has no identity to
+/// report beyond its path. A file that *did* reveal its name before some later check on it failed
+/// (e.g. "non-canonical ref pointer path") is still reported this way, by its path, not its claimed
+/// name: the claim comes from a file this check has already decided not to trust.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RefFileStatus {
+    /// The file was read and validated successfully.
+    Evaluated {
+        /// The ref name it resolved to.
+        ref_name: String,
+    },
+    /// Some check for this specific file failed.
+    Failed {
+        /// The error the check raised.
+        message: String,
+    },
+}
+
+/// One pointer or log file's resolved outcome.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefFileOutcome {
+    /// The file's path.
+    pub path: PathBuf,
+    /// How this file's own read/validation resolved.
+    pub status: RefFileStatus,
+}
+
 pub(super) fn read_pointers(
     layout: &RepositoryLayout,
     objects: &FileObjectStore,
-) -> Result<BTreeMap<String, PointerState>> {
+) -> Result<(BTreeMap<String, PointerState>, Vec<RefFileOutcome>)> {
     let dir = layout.refs_dir().join("by-id");
     let mut pointers = BTreeMap::new();
+    let mut outcomes = Vec::new();
     let relative_dir = layout.repository_relative(&dir)?;
     for entry in list_directory(layout.repository_mutation_root(), &relative_dir)? {
         let path = dir.join(&entry.name);
@@ -50,54 +80,85 @@ pub(super) fn read_pointers(
         if is_temporary_path(&path) {
             continue;
         }
-        ensure_ref_path_shape(&path, ".ref")?;
-        let pointer = read_ref_pointer(layout, &path)?.ok_or_else(|| {
-            PrikkError::Integrity("ref pointer disappeared during verification".to_string())
-        })?;
-        if path != layout.ref_pointer_path(&pointer.ref_name) {
-            return Err(unexpected_path("non-canonical ref pointer", &path));
-        }
-        let payload = verified_ref_state_payload(objects, pointer.ref_state_id)?;
-        if payload.ref_name != pointer.ref_name {
-            return Err(PrikkError::Integrity(format!(
-                "RefState {} name differs from pointer ref {}",
-                pointer.ref_state_id, pointer.ref_name
-            )));
-        }
-        ensure_ref_target_valid(
-            objects,
-            payload.kind,
-            payload.target_object_id,
-            pointer.ref_state_id,
-        )?;
-        if pointers
-            .insert(
-                pointer.ref_name.clone(),
-                PointerState {
-                    id: pointer.ref_state_id,
-                    payload,
-                },
-            )
-            .is_some()
-        {
-            return Err(PrikkError::Integrity(format!(
-                "duplicate pointer identity for {}",
-                pointer.ref_name
-            )));
+        // DC-95 Stage 2 Level 2: this pointer file's own failure is caught here, at the item
+        // boundary, rather than propagated -- every *other* pointer file is still attempted.
+        // "Duplicate pointer identity" stays a hard error: DC-95 Stage 1 round 6 ruled it provably
+        // unreachable today (needs a genuine SHA-256 collision), so its containment shape is moot.
+        match read_one_pointer(layout, objects, &path) {
+            Ok((ref_name, state)) => {
+                if pointers.insert(ref_name.clone(), state).is_some() {
+                    return Err(PrikkError::Integrity(format!(
+                        "duplicate pointer identity for {ref_name}"
+                    )));
+                }
+                outcomes.push(RefFileOutcome {
+                    path,
+                    status: RefFileStatus::Evaluated { ref_name },
+                });
+            }
+            Err(err) => {
+                outcomes.push(RefFileOutcome {
+                    path,
+                    status: RefFileStatus::Failed {
+                        message: err.to_string(),
+                    },
+                });
+            }
         }
     }
-    Ok(pointers)
+    Ok((pointers, outcomes))
 }
 
+fn read_one_pointer(
+    layout: &RepositoryLayout,
+    objects: &FileObjectStore,
+    path: &Path,
+) -> Result<(String, PointerState)> {
+    ensure_ref_path_shape(path, ".ref")?;
+    let pointer = read_ref_pointer(layout, path)?.ok_or_else(|| {
+        PrikkError::Integrity("ref pointer disappeared during verification".to_string())
+    })?;
+    if path != layout.ref_pointer_path(&pointer.ref_name) {
+        return Err(unexpected_path("non-canonical ref pointer", path));
+    }
+    let payload = verified_ref_state_payload(objects, pointer.ref_state_id)?;
+    if payload.ref_name != pointer.ref_name {
+        return Err(PrikkError::Integrity(format!(
+            "RefState {} name differs from pointer ref {}",
+            pointer.ref_state_id, pointer.ref_name
+        )));
+    }
+    ensure_ref_target_valid(
+        objects,
+        payload.kind,
+        payload.target_object_id,
+        pointer.ref_state_id,
+    )?;
+    Ok((
+        pointer.ref_name.clone(),
+        PointerState {
+            id: pointer.ref_state_id,
+            payload,
+        },
+    ))
+}
+
+#[allow(clippy::type_complexity)]
 pub(super) fn read_logs(
     layout: &RepositoryLayout,
     objects: &FileObjectStore,
     pointers: &BTreeMap<String, PointerState>,
-) -> Result<(BTreeMap<String, LogState>, usize, Vec<RefLogEnvelope>)> {
+) -> Result<(
+    BTreeMap<String, LogState>,
+    usize,
+    Vec<RefLogEnvelope>,
+    Vec<RefFileOutcome>,
+)> {
     let dir = layout.refs_dir().join("logs");
     let mut logs = BTreeMap::new();
     let mut total = 0_usize;
     let mut envelopes = Vec::new();
+    let mut outcomes = Vec::new();
     let relative_dir = layout.repository_relative(&dir)?;
     let pointer_names: Vec<_> = pointers.keys().cloned().collect();
     for entry in list_directory(layout.repository_mutation_root(), &relative_dir)? {
@@ -108,50 +169,40 @@ pub(super) fn read_logs(
         if is_temporary_path(&path) {
             continue;
         }
-        ensure_ref_path_shape(&path, ".log")?;
-        let relative = layout.repository_relative(&path)?;
-        let bytes = read_file_required(layout.repository_mutation_root(), &relative)?;
-        let replay = decode_log_file_bytes(layout.format(), &bytes)?;
-        if replay.records.is_empty() {
-            if replay.trailing_partial_bytes == 0 {
-                continue;
+        // DC-95 Stage 2 Level 2: this log file's own failure is caught here, at the item boundary,
+        // rather than propagated -- every *other* log file is still attempted. "Duplicate ref-log
+        // identity" stays a hard error for the same reason as pointers above.
+        match read_one_log(layout, objects, &path, &pointer_names) {
+            Ok(None) => {
+                // Legitimately empty, no trailing bytes -- not an item at all, matching the
+                // pre-Level-2 `continue`.
             }
-            let name = pointer_names
-                .iter()
-                .find(|name| layout.ref_log_path(name) == path)
-                .cloned()
-                .ok_or_else(|| unexpected_path("unowned partial ref log", &path))?;
-            logs.insert(
-                name,
-                LogState {
-                    tip: None,
-                    previous_tip: None,
-                    record_count: 0,
-                    trailing_partial_bytes: replay.trailing_partial_bytes,
-                    has_legacy_timestamp: false,
-                },
-            );
-            continue;
-        }
-        let (name, state) = validate_log(layout, objects, &path, &replay)?;
-        for (index, record) in replay.records.iter().enumerate() {
-            let sequence = u64::try_from(index)
-                .ok()
-                .and_then(|value| value.checked_add(1))
-                .ok_or_else(|| PrikkError::Integrity("ref-log sequence overflow".to_string()))?;
-            envelopes.push(RefLogEnvelope {
-                ref_name: name.clone(),
-                sequence,
-                envelope: record.envelope.clone(),
-            });
-        }
-        total = total
-            .checked_add(replay.records.len())
-            .ok_or_else(|| PrikkError::Integrity("ref-log count overflow".to_string()))?;
-        if logs.insert(name.clone(), state).is_some() {
-            return Err(PrikkError::Integrity(format!(
-                "duplicate ref-log identity for {name}"
-            )));
+            Ok(Some((ref_name, state, record_envelopes))) => {
+                total = match total.checked_add(record_envelopes.len()) {
+                    Some(value) => value,
+                    None => {
+                        return Err(PrikkError::Integrity("ref-log count overflow".to_string()));
+                    }
+                };
+                envelopes.extend(record_envelopes);
+                if logs.insert(ref_name.clone(), state).is_some() {
+                    return Err(PrikkError::Integrity(format!(
+                        "duplicate ref-log identity for {ref_name}"
+                    )));
+                }
+                outcomes.push(RefFileOutcome {
+                    path,
+                    status: RefFileStatus::Evaluated { ref_name },
+                });
+            }
+            Err(err) => {
+                outcomes.push(RefFileOutcome {
+                    path,
+                    status: RefFileStatus::Failed {
+                        message: err.to_string(),
+                    },
+                });
+            }
         }
     }
     envelopes.sort_by(|left, right| {
@@ -160,7 +211,55 @@ pub(super) fn read_logs(
             .cmp(right.ref_name.as_bytes())
             .then_with(|| left.sequence.cmp(&right.sequence))
     });
-    Ok((logs, total, envelopes))
+    Ok((logs, total, envelopes, outcomes))
+}
+
+#[allow(clippy::type_complexity)]
+fn read_one_log(
+    layout: &RepositoryLayout,
+    objects: &FileObjectStore,
+    path: &Path,
+    pointer_names: &[String],
+) -> Result<Option<(String, LogState, Vec<RefLogEnvelope>)>> {
+    ensure_ref_path_shape(path, ".log")?;
+    let relative = layout.repository_relative(path)?;
+    let bytes = read_file_required(layout.repository_mutation_root(), &relative)?;
+    let replay = decode_log_file_bytes(layout.format(), &bytes)?;
+    if replay.records.is_empty() {
+        if replay.trailing_partial_bytes == 0 {
+            return Ok(None);
+        }
+        let name = pointer_names
+            .iter()
+            .find(|name| layout.ref_log_path(name) == path)
+            .cloned()
+            .ok_or_else(|| unexpected_path("unowned partial ref log", path))?;
+        return Ok(Some((
+            name,
+            LogState {
+                tip: None,
+                previous_tip: None,
+                record_count: 0,
+                trailing_partial_bytes: replay.trailing_partial_bytes,
+                has_legacy_timestamp: false,
+            },
+            Vec::new(),
+        )));
+    }
+    let (name, state) = validate_log(layout, objects, path, &replay)?;
+    let mut record_envelopes = Vec::with_capacity(replay.records.len());
+    for (index, record) in replay.records.iter().enumerate() {
+        let sequence = u64::try_from(index)
+            .ok()
+            .and_then(|value| value.checked_add(1))
+            .ok_or_else(|| PrikkError::Integrity("ref-log sequence overflow".to_string()))?;
+        record_envelopes.push(RefLogEnvelope {
+            ref_name: name.clone(),
+            sequence,
+            envelope: record.envelope.clone(),
+        });
+    }
+    Ok(Some((name, state, record_envelopes)))
 }
 
 fn validate_log(
