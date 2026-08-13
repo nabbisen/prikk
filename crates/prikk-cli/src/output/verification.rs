@@ -1,4 +1,7 @@
-use prikk_store::{ActiveWalMetadataStatus, DoctorSeverity, RepositoryLayout, StageStatus};
+use prikk_store::{
+    ActiveWalMetadataStatus, BlockStateStatus, DoctorSeverity, ObjectItemStatus, RepositoryLayout,
+    StageStatus,
+};
 
 /// Render a count sourced from one verification stage. `None` means that stage did not evaluate to
 /// completion -- printed as `unknown`, never as `0`, since zero is itself a claim ("checked, found
@@ -60,6 +63,52 @@ pub(crate) fn print_verify_report(
                 println!(
                     "stage {}: not evaluated (walk halted after stage {after} failed, --stop-on-first-error)",
                     outcome.stage
+                );
+            }
+        }
+    }
+    // DC-95 Stage 2 Level 2: item outcomes are printed as a count plus only the non-clean entries --
+    // unlike the twelve stages above, there can be thousands of objects, so every `Evaluated` entry
+    // is not printed individually.
+    let failed_objects: Vec<_> = report
+        .object_outcomes
+        .iter()
+        .filter(|outcome| matches!(outcome.status, ObjectItemStatus::Failed { .. }))
+        .collect();
+    println!(
+        "object items: {} scanned, {} failed",
+        report.object_outcomes.len(),
+        failed_objects.len()
+    );
+    for outcome in failed_objects {
+        if let ObjectItemStatus::Failed { message } = &outcome.status {
+            println!(
+                "object {} ({}): failed: {message}",
+                outcome.path.display(),
+                outcome.object_type
+            );
+        }
+    }
+    let incomplete_blocks: Vec<_> = report
+        .block_state_outcomes
+        .iter()
+        .filter(|outcome| !matches!(outcome.status, BlockStateStatus::Verified))
+        .collect();
+    println!(
+        "block state items: {} checked, {} incomplete",
+        report.block_state_outcomes.len(),
+        incomplete_blocks.len()
+    );
+    for outcome in incomplete_blocks {
+        match &outcome.status {
+            BlockStateStatus::Verified => {}
+            BlockStateStatus::Failed { message } => {
+                println!("block {}: state-root failed: {message}", outcome.block_id);
+            }
+            BlockStateStatus::NotEvaluated { blocked_by } => {
+                println!(
+                    "block {}: state root not evaluated (blocked by block {blocked_by})",
+                    outcome.block_id
                 );
             }
         }

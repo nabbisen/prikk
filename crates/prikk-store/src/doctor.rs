@@ -6,11 +6,13 @@
 
 use prikk_error::{PrikkError, Result};
 
+use crate::block_state::BlockStateStatus;
 use crate::layout::{RepositoryFormat, RepositoryLayout};
 use crate::lock::ActiveLock;
 use crate::refs::RefRecoveryRepair;
 use crate::verify::{
-    ActiveWalMetadataStatus, RepositoryVerification, StageStatus, verify_repository,
+    ActiveWalMetadataStatus, ObjectItemStatus, RepositoryVerification, StageStatus,
+    verify_repository,
 };
 use crate::wal::{Wal, WalRepair};
 
@@ -216,6 +218,46 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                     "PRIKK-DOCTOR-VERIFY-STAGE-INCOMPLETE",
                     message,
                     "preserve the repository and inspect the failing stage before attempting repair",
+                ));
+            }
+            // DC-95 Stage 2 Level 2: item containment means the `Objects` stage above can be
+            // `Evaluated` even when one of its items individually failed -- these two loops are what
+            // preserve `repair_repository`'s refusal gate at item granularity, the same way the loop
+            // above preserves it at stage granularity.
+            for outcome in &verification.object_outcomes {
+                if let ObjectItemStatus::Failed { message } = &outcome.status {
+                    issues.push(DoctorIssue::error(
+                        "PRIKK-DOCTOR-VERIFY-OBJECT-INCOMPLETE",
+                        format!(
+                            "object {} ({}) failed verification: {message}",
+                            outcome.path.display(),
+                            outcome.object_type
+                        ),
+                        "preserve the repository and inspect the failing object before attempting repair",
+                    ));
+                }
+            }
+            for outcome in &verification.block_state_outcomes {
+                let message = match &outcome.status {
+                    BlockStateStatus::Verified => continue,
+                    BlockStateStatus::Failed { message } => {
+                        format!(
+                            "Block {} state-root verification failed: {message}",
+                            outcome.block_id
+                        )
+                    }
+                    BlockStateStatus::NotEvaluated { blocked_by } => {
+                        format!(
+                            "Block {} state root could not be verified because its state-derivation \
+                             parent {blocked_by} did not evaluate",
+                            outcome.block_id
+                        )
+                    }
+                };
+                issues.push(DoctorIssue::error(
+                    "PRIKK-DOCTOR-VERIFY-BLOCK-STATE-INCOMPLETE",
+                    message,
+                    "preserve the repository and inspect the failing block before attempting repair",
                 ));
             }
             if layout.format() == RepositoryFormat::LegacyV1 {
