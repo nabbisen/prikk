@@ -85,3 +85,20 @@ expected entry.
   saved a refactor.
 - Volatile review results now live in `.git-exclude/reviewed/` only; binding rulings go into the RFC or
   the code. Handoffs like this one stay here.
+
+---
+
+## Appendix — an unrelated two-line fix, bundled only for delivery
+
+**Not part of Level 2. Not reviewed with it. Commit separately.**
+
+The `accepted/`→`done/` migration (`677d121`) moved DC-78, leaving two `crates/` doc comments citing a
+path that no longer exists. `crates/` is not architect-writable, so they are yours:
+
+- `crates/prikk-cli/tests/dc78_seal_provenance.rs:3`
+- `crates/prikk-store/src/trust.rs:4`
+
+Both read `rfcs/accepted/DC-78-HISTORY-EXCHANGE.md`; both should read `rfcs/done/…`.
+
+**Do not sweep for others.** The nearby DC-72 citations in `path.rs`, `trust.rs:180` and
+`refs/publication.rs:141` are correct — DC-72 did not move. Exactly these two lines are wrong.
