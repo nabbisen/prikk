@@ -716,3 +716,44 @@ proof-suite migration is still open, and Stage 4 is already the largest stage in
 Stage 2 Level 1 built. **Fixing the test to match reality rather than the production code to match the
 guess** is the correct direction, and leaving the wrong assumption visible in the doc comment is better
 than erasing it.
+
+### 13.15 Two dropped production checks — ruled 2026-08-15
+
+**Both confirmed, and one is worse than "a check went missing."**
+
+- `created_at` appears **zero** times in `refs/container.rs`. The check dates to `8f565f2` — **DC-39's
+  implementation of a DC-34 ruling.** Dropping it regresses a corrective-program guarantee, not a test.
+- `refs/container.rs` has **zero** `validate_read_schema`/`validate_strict` calls; `object_store.rs` has
+  one. **The refs/objects asymmetry is itself the bug** — objects kept the check, refs lost it.
+
+**Placement 1 — `created_at`: in `append_ref_container_record`, not `publish_locked`.**
+
+The rule is the choke point no caller can bypass. The old check sat in `append_log_record`, the single
+write path; its successor is the append function. **`publish_locked` is the wrong layer** — any other
+caller of the append escapes the check, which is exactly how it was lost.
+
+**Their "makes a generic container function ref-log-aware" worry does not apply.** `refs/container.rs`
+is already ref-specific — 65 references to `ref_name_key`/`RefContainerRecord`. There is no generic
+container being contaminated; the module is the ref-log container.
+
+**Placement 2 — `validate_strict`: after frame acceptance, NOT inside `parse_frame_at`.**
+
+This is the part worth getting right. `parse_frame_at` is on the **resync path** (`container.rs:284`,
+inside the decode loop that `resync_to_next_magic` drives). **Frame validity and envelope validity are
+different questions**, and conflating them makes resynchronisation behave on semantic grounds:
+
+> A frame whose checksum is correct but whose envelope shape is malformed is **a real frame containing
+> a bad record** — not a false magic match. If `parse_frame_at` rejected it, resync would scan **past a
+> genuine frame boundary** looking for the next magic, and every record after it could be misattributed
+> or lost.
+
+**So validate in the decode loop's `FrameAttempt::Record` arm** (`container.rs:285-294`), where a frame
+has already been accepted as structurally sound, and record the failure as a per-record outcome — the
+same shape `require_signed_type` failures already take. **Checksum decides whether it is a frame;
+envelope validation decides whether the record is admissible.**
+
+**And the systemic point, which matters more than either fix.** DC-95's classified inventory covers
+`verify_repository`'s checks. **These two were write-path and decode-path checks — outside its scope
+entirely**, which is why a rewrite could drop them and every gate stay green. Both were found by tests
+that happened to survive, not by any systematic guard. **Registered in `FINDINGS.md`: there is no
+inventory for validation outside `verify`.**
