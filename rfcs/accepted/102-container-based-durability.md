@@ -8,6 +8,10 @@ implementation, no production code — and a stop-and-report on any of them ends
 model rather than its ref publication; and the owner's direction of 2026-08-12 that Windows read-only
 is not an acceptable permanent state.
 **Target.** Owner's call. **1.0-scale**, not 0.20.0 — see §9.
+**Prerequisites §6.1–§6.7: all complete and accepted.** **Design accepted by the project owner
+2026-08-13** — `handoffs/102-container-based-durability/design-v1.md`. Six stages; Stage 1 (worktree
+marker + the orphaned WAL-at-`init` fix) and Stage 2 (isolate-and-continue reading) change no storage
+format and stand alone. **No implementation authorized yet.**
 
 ## 1. The problem, stated correctly this time
 
