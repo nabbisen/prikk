@@ -500,3 +500,49 @@ been derived by surveying call sites should be stated as "at least N."
 blindly is right. If the paired rename is dead weight, deleting it is correct — **but confirm each test
 still tests what its name claims afterwards.** DC-95 round 9 found a test whose intent had been silently
 masked; a mechanical migration is exactly when that happens again.
+
+### 13.9 Two fixture-migration dispositions — ruled 2026-08-14
+
+**Question 1 — cross-crate test access: a `test-support` cargo feature, not a public method.**
+
+The five `prikk-cli` integration tests need to drop one ref's pointer entry while others survive.
+`remove_pointer_entries_for_test` does exactly that and is `pub(crate)` + `#[cfg(test)]`, invisible to a
+dependent crate.
+
+**Rejected — a genuinely `pub` method.** That ships production API whose only purpose is to damage a
+repository, in a product whose entire claim is that history is not silently lost. Discoverable,
+supported, and permanently in the surface. **The cost is not the code; it is what the code being public
+says.**
+
+**Rejected — moving the tests in-crate.** `branch_create_fails_closed_on_surviving_log_with_no_live_
+pointer` asserts *CLI* behaviour: `run_create`'s refusal via `recoverable_missing_ref`. Moving it keeps
+the setup and loses the thing under test.
+
+**Ruled: a non-default `test-support` cargo feature on `prikk-store`**, exposing the existing helper,
+enabled by `prikk-cli`'s dev-dependencies. Standard idiom, absent from the shipped build, and the gate
+set's `--all-features` keeps it compiled and linted rather than rotting.
+
+**This is the workspace's first cargo feature, and it carries a trap worth naming:** because every gate
+runs `--all-features`, **a build *without* the feature is never exercised**, so feature-gated code could
+silently become load-bearing for ordinary compilation and nobody would notice. **Condition: nothing
+outside `#[cfg(test)]` or the feature-gated module may reference it.** That is checkable by review and
+must be checked, not assumed.
+
+**Question 2 — `candidate_issues`/`refs/tmp/`: keep, and register a finding the proposal did not name.**
+
+Keeping is consistent with §12.3 and §13.3 — dormant diagnostics are not retired as a stage side
+effect. Both tests are rewritten to plant debris directly, with corrected doc comments saying the state
+is no longer reachable through any real crash.
+
+**But the two cases are not symmetric, and this is the part that matters.** `object_temp_paths` is
+*non-blocking*. `candidate_issues` pushes a non-blocking issue **into `publication_issues`**, and
+`ensure_no_incomplete_publication` refuses on **any** non-empty `publication_issues`, blocking or not.
+
+**So a stray file in a directory nothing writes to would refuse every mutation, permanently, with
+nothing left that clears it** — the candidate-cleanup path went with the mechanism. A dormant
+*diagnostic* is harmless; a dormant *wedge* is not.
+
+**Ruled: keep the scan, and register the blocking asymmetry as a finding for the deferred
+consolidation.** Do **not** change `ensure_no_incomplete_publication`'s semantics inside Stage 4 — that
+is DC-38 machinery and a behaviour change of its own. The consolidation decides whether the check is
+retired, made non-refusing, or given a clearing path.
