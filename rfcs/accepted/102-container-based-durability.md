@@ -204,12 +204,27 @@ asked. **It precedes the design, not the implementation.**
    container — as Git's `.idx` is regenerated from a packfile — it stays **off the durability path
    entirely**, and only concurrency remains. If it cannot, it is another container and inherits §3's
    append/truncate requirement. **This changes the size of the design materially and is not answered.**
-2. **Which publication shape?** Two fit constraints this RFC already imposes: an **append-only index**
-   (no in-place mutation, so no torn read — §3's own idiom) or **A/B slots with a single-field publish**
-   (§3.2 already mandates pre-created alternate slots for compaction). Report which the code can actually
-   support, and what each costs — do not pick on elegance.
-3. **What must a reader observe, and what must it never observe?** State the property that the design's
-   correctness proof will have to establish, before there is a design to prove it about.
+2. ~~**Which publication shape?** … append-only index … or A/B slots with a single-field publish …~~
+   **ANSWERED 2026-08-13: append-only is the only buildable shape, and my offering two was wrong.**
+   `DurabilityContract`'s **eleven** methods contain **no primitive that overwrites bytes at an offset
+   inside a file** — verified exhaustively, and `pwrite`/`write_at`/`seek` appear nowhere in `fsutil/`.
+   A single-field in-place publish is therefore not buildable. Forced through the real primitives, "A/B"
+   becomes *"append a generation → slot record, readers take the last complete one"* — **append-only
+   wearing an A/B costume, not a second option.**
+
+   Note this does **not** disturb §3.2's compaction ruling, which requires pre-created alternate
+   *names* — that stands. What is unbuildable is publishing the switch by overwriting a field.
+3. **ANSWERED 2026-08-13 — one property, in two parts, because there are two files:**
+
+   > A reader must never observe an index entry as complete unless **(a)** the entry's own framing is
+   > fully present — no torn or in-progress append attributed to a real entry, mirroring
+   > `trailing_partial_bytes` treatment — **and (b)** the object bytes its `(offset, length)` names are
+   > already durably present in the container at read time.
+
+   **(b) is the part no framing enforces.** There is no cross-file atomic primitive, so **the write
+   protocol carries it**: the container append must be durable before the index append. A design that
+   appends the index entry first lets a reader see a complete, checksummed entry pointing at bytes that
+   are not there.
 
 **A stop-and-report applies.** If neither publication shape can be made sound without a primitive this
 codebase lacks, that is the finding, and it returns the lookup decision to the owner.
