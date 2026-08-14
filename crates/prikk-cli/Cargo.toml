@@ -18,6 +18,12 @@ prikk-hash                  = { workspace = true }
 prikk-object                = { workspace = true }
 prikk-store                 = { workspace = true }
 
+# `test-support` is a non-default feature on `prikk-store` (design-v1.md §13.9): it is compiled only
+# because these integration tests need it, never in the shipped binary above -- Cargo unifies the
+# feature into the `prikk-store` build used by `tests/`, not into `src/`'s own build.
+[dev-dependencies]
+prikk-store                 = { workspace = true, features = ["test-support"] }
+
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/{ version }/prikk-{ target }.tar.gz"
 bin-dir = "{ bin }{ binary-ext }"

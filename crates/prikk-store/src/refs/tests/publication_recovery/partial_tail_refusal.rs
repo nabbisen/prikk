@@ -5,7 +5,8 @@ use std::io::Write;
 use prikk_object::RefUpdatePayload;
 
 use super::root_publication;
-use crate::fsutil::{TestFailPoint, fail_once_for_test};
+use crate::fsutil::{TestFailPoint, fail_after_for_test};
+use crate::layout::ContainerSlot;
 use crate::test_support::{sample_object_id, signed_ref_update_envelope, unique_temp_dir};
 use crate::{RefStore, RepositoryLayout};
 
@@ -32,7 +33,11 @@ fn divergent_complete_prefix_with_partial_tail_is_preserved_byte_for_byte()
         let layout = RepositoryLayout::init(root.clone())?;
         let publication = root_publication(&layout, "heads/main")?;
         let store = RefStore::new(layout.clone());
-        fail_once_for_test(TestFailPoint::PromotionDestinationSync);
+        // RFC 102 Stage 4: the candidate/promote mechanism `PromotionDestinationSync` instrumented
+        // is gone; the equivalent interruption today is failing the *fourth* `AppendWrite` of a
+        // publish -- lock-acquire, object-container-append, object-index-append, and
+        // pointer-index-append all precede the log-container-append this test needs to interrupt.
+        fail_after_for_test(TestFailPoint::AppendWrite, 3);
         assert!(store.publish(&publication).is_err());
 
         let proposed = publication.ref_state.object_id();
@@ -68,26 +73,30 @@ fn divergent_complete_prefix_with_partial_tail_is_preserved_byte_for_byte()
                 envelope
             }
         };
-        super::super::super::log::append_log_record(&layout, "heads/main", &divergent)?;
+        super::super::super::append_log_record_for_signature_test(&layout, "heads/main", &divergent)?;
+        let container_path = layout.ref_log_container_slot_path(ContainerSlot::A);
         if matches!(divergence, Divergence::DuplicateRecord) {
-            let bytes = std::fs::read(layout.ref_log_path("heads/main"))?;
+            // `heads/main` is the only ref in this fixture, so the whole container is exactly its
+            // own subsequence -- duplicating the whole file duplicates only this ref's own records.
+            let bytes = std::fs::read(&container_path)?;
             std::fs::OpenOptions::new()
                 .append(true)
-                .open(layout.ref_log_path("heads/main"))?
+                .open(&container_path)?
                 .write_all(&bytes)?;
         }
-        std::fs::OpenOptions::new()
-            .append(true)
-            .open(layout.ref_log_path("heads/main"))?
-            .write_all(b"PREF")?;
-        let before = std::fs::read(layout.ref_log_path("heads/main"))?;
+        super::super::super::append_torn_ref_log_tail_for_test(
+            &layout,
+            crate::layout::ref_name_key_bytes("heads/main"),
+            &divergent,
+        )?;
+        let before = std::fs::read(&container_path)?;
 
         assert!(
             store
                 .finish_interrupted_publication_for_test(&publication)
                 .is_err()
         );
-        assert_eq!(std::fs::read(layout.ref_log_path("heads/main"))?, before);
+        assert_eq!(std::fs::read(&container_path)?, before);
         let _ = std::fs::remove_dir_all(root);
     }
     Ok(())

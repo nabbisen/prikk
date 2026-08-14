@@ -11,7 +11,7 @@ use crate::{
     verify_repository,
 };
 
-use crate::fsutil::{TestFailPoint, fail_after_for_test, fail_once_for_test};
+use crate::fsutil::{TestFailPoint, fail_after_for_test};
 use crate::test_support::{
     sample_object_id, signed_empty_block_envelope, signed_ref_state_envelope,
     signed_ref_update_envelope, unique_temp_dir,
@@ -99,8 +99,10 @@ fn first_publication_retries_completed_log_sync_without_duplicate() -> prikk_err
 
         // RFC 102 Stage 3: an object write now durably appends to both its container and the
         // index (two matching sync calls, not one), preceded by the ref lock's own creation (a
-        // third) -- skip 3 to land the injected failure on the ref log's own completed append.
-        fail_after_for_test(point, 3);
+        // third). RFC 102 Stage 4 adds one more before the log append: the pointer-index append
+        // (a fourth). Skip 4, not 3, to land the injected failure on the ref log's own completed
+        // append.
+        fail_after_for_test(point, 4);
         assert!(store.publish(&publication).is_err());
         assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
         assert_eq!(store.publish(&publication)?, ref_state_id);
@@ -291,14 +293,15 @@ fn ref_store_rejects_unborn_publication_when_log_has_trailing_partial() {
         );
         assert!(framed.is_ok());
         if let Ok(framed) = framed {
-            let torn = &framed[..framed.len().saturating_sub(3)];
-            assert!(
-                std::fs::write(
-                    layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A),
-                    torn
-                )
-                .is_ok()
-            );
+            if let Some(torn) = framed.get(..framed.len().saturating_sub(3)) {
+                assert!(
+                    std::fs::write(
+                        layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A),
+                        torn
+                    )
+                    .is_ok()
+                );
+            }
         }
 
         let store = RefStore::new(layout.clone());

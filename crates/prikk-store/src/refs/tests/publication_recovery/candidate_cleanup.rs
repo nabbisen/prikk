@@ -5,7 +5,7 @@ use crate::test_support::unique_temp_dir;
 use crate::{RefStore, RepositoryLayout, verify_repository};
 
 #[test]
-fn malformed_same_prefix_candidate_remains_visible_and_blocks_retry() -> prikk_error::Result<()> {
+fn malformed_same_prefix_candidate_remains_visible_through_retry() -> prikk_error::Result<()> {
     let root = unique_temp_dir("dc38-malformed-candidate-temp");
     let layout = RepositoryLayout::init(root.clone())?;
     let publication = root_publication(&layout, "heads/main")?;
@@ -23,11 +23,14 @@ fn malformed_same_prefix_candidate_remains_visible_and_blocks_retry() -> prikk_e
     ));
     std::fs::write(&malformed, b"preserve")?;
 
-    assert!(
-        RefStore::new(layout.clone())
-            .finish_interrupted_publication_for_test(&publication)
-            .is_err()
-    );
+    // RFC 102 Stage 4: `finish_interrupted_publication` no longer inspects `refs/tmp/` at all --
+    // the candidate-write-then-promote mechanism it used to police there is gone, and the ref
+    // itself has no interrupted state (`root_publication` was never even published), so retry now
+    // *succeeds* rather than refusing on the malformed debris the way it used to. What survives
+    // from this test's original name is only "remains visible" -- nothing has ever cleared
+    // `refs/tmp/` debris since Stage 4, matching or malformed alike (the registered FINDINGS.md
+    // wedge, design-v1.md §13.9/§13.10).
+    RefStore::new(layout.clone()).publish(&publication)?;
     assert_eq!(std::fs::read(&malformed)?, b"preserve");
     assert!(
         verify_repository(&layout)?

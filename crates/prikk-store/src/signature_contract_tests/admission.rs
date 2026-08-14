@@ -70,7 +70,12 @@ fn wal_and_ref_log_reject_before_mutation() -> prikk_error::Result<()> {
         invalid.schema_version = update.schema_version;
         assert!(append_log_record_for_signature_test(&layout, "heads/main", &invalid).is_err());
     }
-    assert!(!layout.ref_log_path("heads/main").exists());
+    assert!(
+        RefStore::new(layout.clone())
+            .replay_log("heads/main")?
+            .records
+            .is_empty()
+    );
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())
@@ -91,10 +96,11 @@ fn publication_rejects_all_envelopes_before_first_mutation() -> prikk_error::Res
             ref_state: state.clone(),
             ref_update: invalid,
         };
-        assert!(RefStore::new(layout.clone()).publish(&publication).is_err());
+        let store = RefStore::new(layout.clone());
+        assert!(store.publish(&publication).is_err());
         assert!(!layout.object_path(ObjectType::RefState, state_id).exists());
-        assert!(!layout.ref_pointer_path("heads/main").exists());
-        assert!(!layout.ref_log_path("heads/main").exists());
+        assert_eq!(store.read_current_ref_state_id("heads/main")?, None);
+        assert!(store.replay_log("heads/main")?.records.is_empty());
     }
 
     let _ = std::fs::remove_dir_all(root);
@@ -141,9 +147,10 @@ fn refupdate_retry_preserves_zero_sentinel_and_exact_log_bytes() -> prikk_error:
     };
     let store = RefStore::new(layout.clone());
     store.publish(&publication)?;
-    let before = std::fs::read(layout.ref_log_path("heads/main"))?;
+    let container_path = layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A);
+    let before = std::fs::read(&container_path)?;
     store.publish(&publication)?;
-    let after = std::fs::read(layout.ref_log_path("heads/main"))?;
+    let after = std::fs::read(&container_path)?;
     assert_eq!(before, after);
     let replay = store.replay_log("heads/main")?;
     let record = replay.records.first().ok_or_else(|| {

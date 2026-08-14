@@ -12,9 +12,17 @@ mod publication;
 mod verify;
 
 #[cfg(test)]
-pub(crate) use container::{append_ref_container_record, encode_ref_container_record_for_test};
+pub(crate) use container::{
+    append_ref_container_record, append_torn_ref_log_tail_for_test,
+    encode_ref_container_record_for_test,
+};
 #[cfg(test)]
-pub(crate) use pointer_index::{remove_pointer_entries_for_test, write_ref_pointer_candidate_for_test as write_ref_pointer_candidate};
+pub(crate) use pointer_index::{remove_pointer_entries_for_test, write_ref_pointer_candidate_for_test as write_ref_pointer_candidate, write_ref_pointer_entry_with_explicit_key_for_test};
+#[cfg(feature = "test-support")]
+pub use pointer_index::{
+    force_ref_pointer_to_arbitrary_state_for_test_support,
+    remove_ref_pointer_entry_for_test_support,
+};
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, RefUpdatePayload};

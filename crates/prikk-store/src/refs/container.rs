@@ -31,7 +31,7 @@
 
 use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;
-use prikk_object::{ObjectEnvelope, ObjectType};
+use prikk_object::{ObjectEnvelope, ObjectType, RefUpdatePayload};
 
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_u16, push_u64};
@@ -286,11 +286,32 @@ pub(crate) fn decode_ref_container_records(bytes: &[u8]) -> Result<RefContainerR
                 record,
                 next_offset,
             } => {
-                record_outcomes.push(RefContainerRecordOutcome {
-                    offset,
-                    status: RefContainerRecordStatus::Evaluated,
-                });
-                records.push(record);
+                // RFC 102 Stage 4 checkpoint review, design-v1.md §13.15: checksum decides whether
+                // this is a frame; envelope validation decides whether the record it contains is
+                // admissible -- two different questions. A frame whose checksum matches but whose
+                // envelope fails `validate_strict` is a real frame with a bad record, not a false
+                // magic match, so it must not be routed through `resync_to_next_magic` (which would
+                // scan past a genuine frame boundary and put every record after it at risk of being
+                // lost or misattributed). Recorded as a per-record `Failed` outcome instead, offset
+                // still advances to this frame's own already-known `next_offset`.
+                match record.envelope.validate_strict() {
+                    Ok(()) => {
+                        record_outcomes.push(RefContainerRecordOutcome {
+                            offset,
+                            status: RefContainerRecordStatus::Evaluated,
+                        });
+                        records.push(record);
+                    }
+                    Err(err) => {
+                        record_outcomes.push(RefContainerRecordOutcome {
+                            offset,
+                            status: RefContainerRecordStatus::Failed {
+                                message: err.to_string(),
+                                claimed_ref_name_key: Some(record.ref_name_key),
+                            },
+                        });
+                    }
+                }
                 offset = next_offset;
             }
             FrameAttempt::TrailingPartial { remaining } => {
@@ -339,6 +360,18 @@ pub(crate) fn append_ref_container_record(
     ref_name_key: [u8; 32],
     envelope: &ObjectEnvelope,
 ) -> Result<()> {
+    // RFC 102 Stage 4 checkpoint review, design-v1.md §13.15: format-2 requires `created_at == 0`
+    // for a RefUpdate -- DC-39's implementation of a DC-34 ruling, carried from the retired
+    // `refs/log.rs::append_log_record`'s own write-time check. Placed here, the append function
+    // itself, because it is the one choke point every publish path (`Ready`/`PointerLeading`/
+    // `Complete`) already goes through -- anything upstream (e.g. `publish_locked`) is a layer a
+    // future caller could bypass, which is how this check was lost in the first place.
+    let update = RefUpdatePayload::decode_canonical(&envelope.canonical_payload)?;
+    if update.created_at != 0 {
+        return Err(PrikkError::MalformedData(
+            "format-2 RefUpdate requires created_at == 0".to_string(),
+        ));
+    }
     let relative = layout.repository_relative(&layout.ref_log_container_slot_path(
         crate::layout::ContainerSlot::A,
     ))?;
@@ -510,6 +543,32 @@ pub(crate) fn truncate_incomplete_tail(layout: &RepositoryLayout) -> Result<usiz
             .map_err(|_| PrikkError::Integrity("ref container length exceeds u64".to_string()))?,
     )?;
     Ok(replay.trailing_partial_bytes)
+}
+
+/// Append an attributable torn tail: encode `envelope` under `ref_name_key` exactly as a real
+/// publish would, then append only a truncated prefix of it (past the header, short of the full
+/// frame) -- the appended bytes carry a genuine, correctly-attributed `ref_name_key` without
+/// depending on any record already being durably present (a first-ever publish interrupted at its
+/// own log append has none). Fixture construction only -- see the CLI-side equivalent
+/// (`prikk-cli/tests/support/mod.rs::append_torn_ref_log_tail`, which instead duplicates whichever
+/// real record already sits last in the container, since CLI tests have no in-crate encoder) for why
+/// bare garbage bytes no longer simulate "this ref's own torn write" under the shared container: a
+/// tail shorter than `REF_CONTAINER_HEADER_LEN` cannot be attributed to any ref at all.
+#[cfg(test)]
+pub(crate) fn append_torn_ref_log_tail_for_test(
+    layout: &RepositoryLayout,
+    ref_name_key: [u8; 32],
+    envelope: &ObjectEnvelope,
+) -> Result<()> {
+    let relative = layout.repository_relative(&layout.ref_log_container_slot_path(
+        crate::layout::ContainerSlot::A,
+    ))?;
+    let full = encode_ref_container_record_for_test(ref_name_key, envelope)?;
+    let torn_len = (REF_CONTAINER_HEADER_LEN + 8).min(full.len().saturating_sub(1));
+    let torn = full
+        .get(..torn_len)
+        .ok_or_else(|| PrikkError::Integrity("torn tail length exceeds encoded record".to_string()))?;
+    crate::fsutil::append_file_required(layout.repository_mutation_root(), &relative, torn)
 }
 
 struct RefContainerHeader {

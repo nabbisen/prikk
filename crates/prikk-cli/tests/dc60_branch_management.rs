@@ -295,7 +295,7 @@ fn branch_create_fails_closed_on_surviving_log_with_no_live_pointer() {
         1,
         "sanity: heads/topic should have exactly one ref-log record"
     );
-    std::fs::remove_file(layout.ref_pointer_path("heads/topic")).unwrap();
+    prikk_store::remove_ref_pointer_entry_for_test_support(&layout, "heads/topic").unwrap();
     assert!(
         ref_store
             .read_current_ref_state_id("heads/topic")

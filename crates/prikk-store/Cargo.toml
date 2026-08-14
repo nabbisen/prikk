@@ -9,6 +9,17 @@ license.workspace       = true
 authors.workspace       = true
 repository.workspace    = true
 
+[features]
+# Non-default. Exposes storage-damaging simulation helpers (e.g. dropping one ref's pointer entry)
+# as genuinely `pub` API, for use by other crates' integration tests only -- never enabled in a
+# shipped build. RFC 102 Stage 4 design-v1.md §13.9: nothing outside `#[cfg(test)]` or the
+# feature-gated module itself may reference anything gated by this feature. Because the gate set's
+# `--all-features` run is the only build that ever compiles this feature, a build *without* it is
+# never exercised -- so a violation of that condition would silently make feature-gated code
+# load-bearing for ordinary compilation without any build ever failing to reveal it. Checkable only
+# by review; must be checked, not assumed.
+test-support = []
+
 [dependencies]
 prikk-crypto                = { workspace = true }
 prikk-error                 = { workspace = true }

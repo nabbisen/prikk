@@ -94,11 +94,12 @@ fn ref_log_parent_sync_failure_retains_one_update_and_retries() -> prikk_error::
         ref_state,
     };
     let store = RefStore::new(layout);
-    // RFC 102 Stage 3: skip 3 to land the injected failure on the log append's own directory
-    // sync, past the ref lock's own creation and the ref-state object's own container and index
-    // appends (each fires `RequiredDirectorySync` too -- see `refs::tests`'s equivalent fix for
-    // the full accounting).
-    fail_after_for_test(TestFailPoint::RequiredDirectorySync, 3);
+    // RFC 102 Stage 3: skip past the ref lock's own creation and the ref-state object's own
+    // container and index appends (each fires `RequiredDirectorySync` too). RFC 102 Stage 4 adds
+    // one more before the log append: the pointer-index append. Skip 4, not 3, to land the
+    // injected failure on the log append's own directory sync -- see `refs::tests`'s equivalent
+    // fix for the full accounting.
+    fail_after_for_test(TestFailPoint::RequiredDirectorySync, 4);
     assert!(store.publish(&publication).is_err());
     assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
     assert_eq!(store.publish(&publication)?, ref_state_id);

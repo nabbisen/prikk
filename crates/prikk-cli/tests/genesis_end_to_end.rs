@@ -275,7 +275,7 @@ fn seal_rejects_missing_pointer_with_ref_log_history() {
     ok(&out, "second commit --ref");
 
     let layout = RepositoryLayout::open(&repo).unwrap();
-    std::fs::remove_file(layout.ref_pointer_path("heads/topic")).unwrap();
+    prikk_store::remove_ref_pointer_entry_for_test_support(&layout, "heads/topic").unwrap();
     let out = prikk(&repo)
         .env("PRIKK_MAINTAINER_KEY_ID", "e2e-maintainer")
         .env("PRIKK_MAINTAINER_SEED", maintainer_seed())
@@ -332,14 +332,10 @@ fn seal_rejects_missing_pointer_with_partial_ref_log() {
     ok(&out, "second commit --ref");
 
     let layout = RepositoryLayout::open(&repo).unwrap();
-    std::fs::remove_file(layout.ref_pointer_path("heads/topic")).unwrap();
-    let mut ref_log = std::fs::OpenOptions::new()
-        .append(true)
-        .open(layout.ref_log_path("heads/topic"))
-        .unwrap();
-    use std::io::Write as _;
-    ref_log.write_all(b"partial").unwrap();
-    drop(ref_log);
+    prikk_store::remove_ref_pointer_entry_for_test_support(&layout, "heads/topic").unwrap();
+    support::append_torn_ref_log_tail(
+        &layout.ref_log_container_slot_path(prikk_store::ContainerSlot::A),
+    );
 
     let out = prikk(&repo)
         .env("PRIKK_MAINTAINER_KEY_ID", "e2e-maintainer")

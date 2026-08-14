@@ -106,14 +106,18 @@ fn format2_ref_log_reads_reject_every_strict_envelope_failure() -> prikk_error::
         let root = unique_temp_dir(&format!("dc40-strict-ref-log-read-{index}"));
         let layout = RepositoryLayout::init(root.clone())?;
         std::fs::write(
-            layout.ref_log_path("heads/main"),
+            layout.ref_log_container_slot_path(ContainerSlot::A),
             encode_log_record_for_test(&invalid)?,
         )?;
 
+        // RFC 102 Stage 4 checkpoint review, design-v1.md §13.15: isolate-and-continue means a
+        // malformed record is an item-level `Failed` outcome within an `Ok` replay, not a hard
+        // `Err` from `replay_log` itself -- the same item-containment discipline the next assertion
+        // already documents for `verify_repository`, now also true one layer down.
         assert!(
             RefStore::new(layout.clone())
-                .replay_log("heads/main")
-                .is_err()
+                .replay_log("heads/main")?
+                .has_item_failure()
         );
         // DC-95 Stage 2 Level 2: a single malformed ref-log record is now an item-level failure
         // (this ref's own log read), not a whole-`Refs`-stage failure.

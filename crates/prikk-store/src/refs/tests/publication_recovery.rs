@@ -8,8 +8,9 @@ mod state_matrix;
 
 use std::io::Write;
 
-use super::super::log;
-use crate::fsutil::{TestFailPoint, fail_after_for_test, fail_once_for_test};
+use super::super::{append_log_record_for_signature_test, append_torn_ref_log_tail_for_test};
+use crate::fsutil::{TestFailPoint, fail_after_for_test};
+use crate::layout::ref_name_key_bytes;
 use crate::test_support::{
     signed_empty_block_envelope, signed_patch_envelope, signed_ref_state_envelope,
     signed_ref_update_envelope, unique_temp_dir,
@@ -78,8 +79,15 @@ fn candidate_failure_warns_and_retry_publishes_once() -> prikk_error::Result<()>
     let layout = RepositoryLayout::init(root.clone())?;
     let publication = root_publication(&layout, "heads/main")?;
     let store = RefStore::new(layout.clone());
-    fail_once_for_test(TestFailPoint::MutableParentSync);
-    assert!(store.publish(&publication).is_err());
+    // RFC 102 Stage 4, design-v1.md §13.11: no real publish failure can leave `refs/tmp/` debris
+    // anymore (the candidate-write mechanism `MutableParentSync` instrumented is gone) -- plant it
+    // directly, matching `state_matrix::PersistedState::Candidate`'s own technique. This test's own
+    // claim never depended on *how* the debris got there, only that it blocks every mutation entry
+    // point below and that a normal publish still completes once it stops mattering to the ref
+    // itself (`state_matrix`'s own coverage is per-state, not per-entry-point -- this is what
+    // proves the wedge reaches `append_patch`, `add_trusted_maintainer`, and `repair_repository`,
+    // not just ref publication).
+    std::fs::write(layout.ref_tmp_path("heads/main"), b"candidate")?;
     let report = verify_repository(&layout)?;
     assert!(!report.has_blocking_ref_publication_issues());
     assert!(
@@ -112,35 +120,6 @@ fn candidate_failure_warns_and_retry_publishes_once() -> prikk_error::Result<()>
 }
 
 #[test]
-fn pointer_sync_failure_is_blocking_and_repeated_retry_appends_once() -> prikk_error::Result<()> {
-    let root = unique_temp_dir("dc38-pointer-leading");
-    let layout = RepositoryLayout::init(root.clone())?;
-    let publication = root_publication(&layout, "heads/main")?;
-    let state_id = publication.ref_state.object_id();
-    let store = RefStore::new(layout.clone());
-    fail_once_for_test(TestFailPoint::PromotionDestinationSync);
-    assert!(store.publish(&publication).is_err());
-    assert_eq!(
-        store.read_current_ref_state_id("heads/main")?,
-        Some(state_id)
-    );
-    assert_eq!(store.replay_log("heads/main")?.records.len(), 0);
-    assert_blocking_issue(&layout, "PRIKK-VERIFY-REF-DIVERGENCE")?;
-    assert_eq!(
-        store.finish_interrupted_publication_for_test(&publication)?,
-        state_id
-    );
-    assert_eq!(
-        store.finish_interrupted_publication_for_test(&publication)?,
-        state_id
-    );
-    assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
-    assert!(!verify_repository(&layout)?.has_blocking_ref_publication_issues());
-    let _ = std::fs::remove_dir_all(root);
-    Ok(())
-}
-
-#[test]
 fn complete_record_sync_failure_retries_without_duplicate() -> prikk_error::Result<()> {
     let root = unique_temp_dir("dc38-complete-log-retry");
     let layout = RepositoryLayout::init(root.clone())?;
@@ -148,10 +127,11 @@ fn complete_record_sync_failure_retries_without_duplicate() -> prikk_error::Resu
     let store = RefStore::new(layout.clone());
     // RFC 102 Stage 3: an object write now durably appends to both its container and the index
     // (two `RequiredFileSync` calls, not one), and precedes those with the ref lock's own creation
-    // (a third). Skip 3 to land the injected failure on the ref log's own append -- the "complete
-    // record" this test is named for -- so the object is already durably indexed by the time it
-    // fails, matching the scenario this test exists to prove.
-    fail_after_for_test(TestFailPoint::RequiredFileSync, 3);
+    // (a third). RFC 102 Stage 4 adds one more before the log append: the pointer-index append (a
+    // fourth `RequiredFileSync`). Skip 4 to land the injected failure on the ref log's own append --
+    // the "complete record" this test is named for -- so the object and pointer are already durably
+    // committed by the time it fails, matching the scenario this test exists to prove.
+    fail_after_for_test(TestFailPoint::RequiredFileSync, 4);
     assert!(store.publish(&publication).is_err());
     assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
     assert!(!verify_repository(&layout)?.has_blocking_ref_publication_issues());
@@ -169,14 +149,13 @@ fn pointer_lead_with_partial_tail_is_truncated_then_completed() -> prikk_error::
     let publication = root_publication(&layout, "heads/main")?;
     let store = RefStore::new(layout.clone());
     // RFC 102 Stage 3: the ref-state object's own container and index appends now precede the
-    // log append and each fire `AppendWrite` too -- skip 2 to land the torn write on the log's
-    // own append, matching the scenario this test exists to prove.
-    fail_after_for_test(TestFailPoint::AppendWrite, 2);
+    // log append and each fire `AppendWrite` too. RFC 102 Stage 4 adds one more: the pointer-index
+    // append. Skip 3, not 2, to land the torn write on the log's own append -- this is the ref's
+    // first-ever publish, so it leaves no real record behind to duplicate; encode the pending
+    // update directly instead (`append_torn_ref_log_tail_for_test`'s own doc).
+    fail_after_for_test(TestFailPoint::AppendWrite, 3);
     assert!(store.publish(&publication).is_err());
-    std::fs::OpenOptions::new()
-        .append(true)
-        .open(layout.ref_log_path("heads/main"))?
-        .write_all(b"PREF")?;
+    append_torn_ref_log_tail_for_test(&layout, ref_name_key_bytes("heads/main"), &publication.ref_update)?;
     assert_blocking_issue(&layout, "PRIKK-VERIFY-REF-DIVERGENCE")?;
     store.finish_interrupted_publication_for_test(&publication)?;
     assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
@@ -192,7 +171,9 @@ fn fully_framed_checksum_failure_is_never_truncated() -> prikk_error::Result<()>
     let publication = root_publication(&layout, "heads/main")?;
     let store = RefStore::new(layout.clone());
     store.publish(&publication)?;
-    let path = layout.ref_log_path("heads/main");
+    // `heads/main` is the only ref in this fixture, so the whole container is exactly its own
+    // subsequence.
+    let path = layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A);
     let mut bytes = std::fs::read(&path)?;
     let last = bytes.last_mut().ok_or_else(|| {
         prikk_error::PrikkError::Integrity("expected a complete ref-log record".to_string())
@@ -202,7 +183,17 @@ fn fully_framed_checksum_failure_is_never_truncated() -> prikk_error::Result<()>
 
     // DC-95 Stage 2 Level 2: a single ref's own checksum corruption is now an item-level failure
     // (its log file's own read), not a whole-`Refs`-stage failure.
-    assert!(verify_repository(&layout)?.has_item_failure());
+    let report = verify_repository(&layout)?;
+    assert!(report.has_item_failure());
+    // RFC 102 Stage 4 checkpoint review, design-v1.md §13.10: an explicit acceptance criterion for
+    // this migration -- checks the specific ref's own item outcome, not just that *some* item
+    // failed anywhere, since `has_item_failure()` alone stayed true through `log_outcomes` even
+    // while the ref-name cross-reference this exercises (`refs/verify.rs`'s `ref_name_key`-keyed
+    // lookup, fixed in `8098753`) was still broken.
+    assert!(report.ref_item_outcomes.iter().any(|outcome| {
+        outcome.ref_name == "heads/main"
+            && matches!(outcome.status, crate::RefItemStatus::Failed { .. })
+    }));
     assert!(!doctor_repository(&layout).is_healthy());
     assert!(
         store
@@ -220,7 +211,7 @@ fn format2_ahead_log_refuses_pointer_promotion() -> prikk_error::Result<()> {
     let publication = root_publication(&layout, "heads/main")?;
     let mut objects = FileObjectStore::new(layout.clone());
     objects.write_object(&publication.ref_state)?;
-    log::append_log_record(&layout, "heads/main", &publication.ref_update)?;
+    append_log_record_for_signature_test(&layout, "heads/main", &publication.ref_update)?;
     let store = RefStore::new(layout.clone());
     assert_blocking_issue(&layout, "PRIKK-VERIFY-REF-DIVERGENCE")?;
     assert!(
@@ -245,10 +236,18 @@ fn existing_ref_pointer_lead_finishes_but_format2_ahead_log_refuses() -> prikk_e
         let second = next_publication(&layout, &first)?;
         FileObjectStore::new(layout.clone()).write_object(&second.ref_state)?;
         if legacy_ahead {
-            log::append_log_record(&layout, "heads/main", &second.ref_update)?;
+            append_log_record_for_signature_test(&layout, "heads/main", &second.ref_update)?;
             assert_blocking_issue(&layout, "PRIKK-VERIFY-REF-DIVERGENCE")?;
         } else {
-            fail_once_for_test(TestFailPoint::PromotionDestinationSync);
+            // RFC 102 Stage 4, design-v1.md §13.11: unlike the root-publication tests elsewhere in
+            // this file, `second.ref_state` was already durably written above (line ~237) before
+            // this call -- `write_object_to_container`'s own same-id-same-bytes idempotency check
+            // makes `store.publish`'s own object write here a no-op, firing zero `AppendWrite`
+            // calls, not the usual two. Only the pointer-index append (1) and the log append (1)
+            // remain, so skip 1, not 3, to land the interruption on the log append -- this ref's
+            // *second* transition, exercising `classify_ref_state`'s arm 2 through a real `Some(log)`
+            // tip rather than the root case's `None`-log short-circuit.
+            fail_after_for_test(TestFailPoint::AppendWrite, 1);
             assert!(store.publish(&second).is_err());
             assert_blocking_issue(&layout, "PRIKK-VERIFY-REF-DIVERGENCE")?;
         }
@@ -284,9 +283,11 @@ fn duplicate_and_greater_than_one_log_divergence_fail_closed() -> prikk_error::R
         let first = root_publication(&layout, "heads/main")?;
         let mut objects = FileObjectStore::new(layout.clone());
         objects.write_object(&first.ref_state)?;
-        log::append_log_record(&layout, "heads/main", &first.ref_update)?;
+        append_log_record_for_signature_test(&layout, "heads/main", &first.ref_update)?;
         if duplicate {
-            let path = layout.ref_log_path("heads/main");
+            // `heads/main` is the only ref in this fixture, so the whole container is exactly its
+            // own subsequence -- duplicating the whole file duplicates only this ref's own record.
+            let path = layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A);
             let record = std::fs::read(&path)?;
             std::fs::OpenOptions::new()
                 .append(true)
@@ -295,7 +296,7 @@ fn duplicate_and_greater_than_one_log_divergence_fail_closed() -> prikk_error::R
         } else {
             let second = next_publication(&layout, &first)?;
             objects.write_object(&second.ref_state)?;
-            log::append_log_record(&layout, "heads/main", &second.ref_update)?;
+            append_log_record_for_signature_test(&layout, "heads/main", &second.ref_update)?;
         }
         // DC-95 Stage 2 Level 2: a single ref's own duplicate/divergent log record is now an
         // item-level failure (its log file's own read, or its own `classify_ref_state` call), not
@@ -320,12 +321,12 @@ fn ref_log_sequence_gap_fails_closed() -> prikk_error::Result<()> {
     let first_id = first.ref_state.object_id();
     let mut objects = FileObjectStore::new(layout.clone());
     objects.write_object(&first.ref_state)?;
-    log::append_log_record(&layout, "heads/main", &first.ref_update)?;
+    append_log_record_for_signature_test(&layout, "heads/main", &first.ref_update)?;
     let target = objects.write_object(&signed_empty_block_envelope())?;
     let gap_state = signed_ref_state_envelope("heads/main", Some(first_id), target, 3);
     let gap_id = objects.write_object(&gap_state)?;
     let gap_update = signed_ref_update_envelope("heads/main", Some(first_id), gap_id, target, 3);
-    log::append_log_record(&layout, "heads/main", &gap_update)?;
+    append_log_record_for_signature_test(&layout, "heads/main", &gap_update)?;
 
     // DC-95 Stage 2 Level 2: this ref's own sequence-gap defect is now an item-level failure (its
     // log file's own read), not a whole-`Refs`-stage failure.
@@ -341,7 +342,7 @@ fn doctor_missing_pointer_repair_is_refused() -> prikk_error::Result<()> {
     let layout = RepositoryLayout::init(root.clone())?;
     let publication = root_publication(&layout, "heads/main")?;
     FileObjectStore::new(layout.clone()).write_object(&publication.ref_state)?;
-    log::append_log_record(&layout, "heads/main", &publication.ref_update)?;
+    append_log_record_for_signature_test(&layout, "heads/main", &publication.ref_update)?;
     let error = repair_repository(&layout, DoctorRepairOptions::reconstruct_main_ref())
         .err()
         .ok_or_else(|| {

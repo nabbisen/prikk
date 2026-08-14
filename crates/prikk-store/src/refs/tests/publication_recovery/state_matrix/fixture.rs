@@ -8,7 +8,8 @@ use prikk_object::{
     RefUpdatePayload,
 };
 
-use crate::fsutil::{TestFailPoint, fail_after_for_test, fail_once_for_test};
+use crate::fsutil::{TestFailPoint, fail_after_for_test};
+use crate::layout::ContainerSlot;
 use crate::test_support::{
     rollback_patch_blob_envelope, rollback_patch_envelope, signed_patch_blob_envelope,
     signed_patch_envelope, unique_temp_dir,
@@ -74,8 +75,9 @@ impl Fixture {
     pub(super) fn state_bytes(&self) -> prikk_error::Result<Vec<Option<Vec<u8>>>> {
         [
             self.layout.ref_tmp_path("heads/main"),
-            self.layout.ref_pointer_path("heads/main"),
-            self.layout.ref_log_path("heads/main"),
+            self.layout.ref_pointer_index_path(),
+            self.layout
+                .ref_log_container_slot_path(ContainerSlot::A),
             self.layout.default_queue_wal_path(),
             self.layout.default_active_ref_name_path(),
         ]
@@ -97,29 +99,41 @@ fn construct_state(
     let store = RefStore::new(layout.clone());
     match state {
         PersistedState::Candidate => {
+            // RFC 102 Stage 4, design-v1.md §13.9: no real code path can leave a file under
+            // `refs/tmp/` anymore (the candidate-write-then-promote mechanism is gone), so this is
+            // no longer reachable through any real crash -- planted directly to keep exercising
+            // `candidate_issues`'s own dormant scan, kept per the ruling rather than retired.
             let path = layout.ref_tmp_path("heads/main");
             std::fs::write(path, b"candidate")?;
         }
         PersistedState::PointerLeading => {
-            fail_once_for_test(TestFailPoint::PromotionDestinationSync);
+            // RFC 102 Stage 4: the candidate/promote mechanism `PromotionDestinationSync`
+            // instrumented is gone; failing the fourth `AppendWrite` (after lock-acquire,
+            // object-container-append, object-index-append, and pointer-index-append) lands the
+            // interruption on the log-container-append instead, leaving the pointer committed and
+            // the log not yet appended -- the same state this variant is named for.
+            fail_after_for_test(TestFailPoint::AppendWrite, 3);
             assert!(store.publish(publication).is_err());
         }
         PersistedState::PartialTail => {
-            // RFC 102 Stage 3: skip the ref-state object's own container and index appends
-            // (each fires `AppendWrite` too) to land the torn write on the log's own append.
-            fail_after_for_test(TestFailPoint::AppendWrite, 2);
+            // RFC 102 Stage 4: one more `AppendWrite` precedes the log append than in Stage 3
+            // (the pointer-index append), so skip 3, not 2, to land on it. This is the ref's
+            // first-ever publish, so the interrupted log append leaves *no* real record behind to
+            // duplicate -- encode the pending update directly instead.
+            fail_after_for_test(TestFailPoint::AppendWrite, 3);
             assert!(store.publish(publication).is_err());
-            std::fs::OpenOptions::new()
-                .append(true)
-                .open(layout.ref_log_path("heads/main"))?
-                .write_all(b"PREF")?;
+            super::super::super::super::append_torn_ref_log_tail_for_test(
+                layout,
+                crate::layout::ref_name_key_bytes("heads/main"),
+                &publication.ref_update,
+            )?;
         }
         PersistedState::CompleteCleanup => {
             store.publish(publication)?;
         }
         PersistedState::LegacyLogLeading => {
             FileObjectStore::new(layout.clone()).write_object(&publication.ref_state)?;
-            super::super::super::super::log::append_log_record(
+            super::super::super::super::append_log_record_for_signature_test(
                 layout,
                 "heads/main",
                 &publication.ref_update,
@@ -127,10 +141,13 @@ fn construct_state(
         }
         PersistedState::Divergence => {
             store.publish(publication)?;
-            let bytes = std::fs::read(layout.ref_log_path("heads/main"))?;
+            // `heads/main` is the only ref in this fixture, so the whole container is exactly its
+            // own subsequence -- duplicating the whole file duplicates only this ref's own records.
+            let container_path = layout.ref_log_container_slot_path(ContainerSlot::A);
+            let bytes = std::fs::read(&container_path)?;
             std::fs::OpenOptions::new()
                 .append(true)
-                .open(layout.ref_log_path("heads/main"))?
+                .open(&container_path)?
                 .write_all(&bytes)?;
         }
         PersistedState::EmptyWalMetadata => {}

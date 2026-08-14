@@ -66,8 +66,8 @@ use prikk_object::{
 use super::{assert_ref_failed, assert_stage_failed};
 use crate::maintainer_signing::MaintainerSigner;
 use crate::test_support::{
-    sample_object_id, signed_empty_block_envelope, signed_ref_state_envelope,
-    signed_ref_update_envelope, unique_temp_dir,
+    signed_empty_block_envelope, signed_ref_state_envelope, signed_ref_update_envelope,
+    unique_temp_dir,
 };
 use crate::{
     Ed25519MaintainerSigner, FileObjectStore, ObjectWriter, RefPublication, RefStore,
@@ -228,43 +228,101 @@ fn verify_repository_detects_dangling_ref_target() -> Result<()> {
     Ok(())
 }
 
-/// The "non-canonical ref pointer" check (`refs/verify/scan.rs`) -- a pointer file whose own
-/// filename does not match `layout.ref_pointer_path` for the ref name *encoded inside it*, even
-/// though the encoded content is otherwise a perfectly valid, real pointer. Built by publishing
-/// `heads/aux` normally, then *moving* (not copying) the resulting real pointer file to a second,
-/// still validly-shaped (64 hex chars + `.ref`) filename elsewhere in `by-id/` -- leaving exactly
-/// one on-disk pointer for `heads/aux`, at the wrong path, and its ref-log untouched at its own
-/// correct location. **The move-not-copy choice is load-bearing for what this test actually
-/// proves, discovered by getting it wrong first**: an earlier version of this fixture *copied* the
-/// pointer bytes, leaving the original in place too -- disabling the canonical-path check then
-/// didn't produce a clean `Ok`, it produced a *different* hard `Err`, `"duplicate pointer identity
-/// for heads/aux"`, because both files decoded to the same ref name and the second `insert` into
-/// `read_pointers`' map collided with the first. That's a genuine finding about the copy
-/// construction, not about this check -- with only one pointer on disk (moved, not duplicated),
-/// disabling the check lets the misplaced, but otherwise perfectly coherent, entry insert cleanly
-/// and match its own untouched log with no divergence. This check runs immediately after decode,
-/// strictly before the RefState or log are even read (`scan.rs`'s `read_pointers`).
-/// **Probed, load-bearing, confirmed** (with the move-based fixture): disabling this check lets
-/// `verify_repository` return `Ok`. **Re-verified against a genuinely clean baseline**
-/// (DC-95-stage-1-round-5-review-v1 §2-4), for the same reason as `ensure_ref_target_valid` above:
-/// re-probed with a real, adopted signer behind the Block/RefState pair, disabling the check still
-/// returns `Ok` with every issue vector empty. Classification unchanged: load-bearing.
+/// RFC 102 Stage 4, design-v1.md §13.12: the old "non-canonical ref pointer" check (a pointer
+/// file's own filename disagreeing with the ref name encoded inside it) has no per-ref file left to
+/// check under the shared pointer-index model -- entries are located by offset within one shared
+/// file, not by filename. `refs/verify/scan.rs::read_one_pointer_entry`'s `ref_name_key_bytes(&entry.
+/// ref_name) != entry.ref_name_key` check is the direct successor: header-vs-content coherence
+/// replacing filename-vs-content coherence, the same underlying property ("this entry's own claimed
+/// identity disagrees with what it actually contains") through the new storage shape. Currently
+/// untested -- this redesign covers it, not a retirement.
+///
+/// **Construction direction matters, found by reasoning through attribution before writing it, not
+/// after a failed probe.** The entry's `ref_name_key` field is what both `read_pointers`' own
+/// last-entry-wins grouping *and* `verify_refs`' cross-reference lookup key on -- so it must stay
+/// the ref's real, correct key (`ref_name_key_bytes("heads/aux")`) for the failure to land under the
+/// name a reader would actually look it up by. Only the *content* (`ref_name` field) is wrong. The
+/// reverse (correct name, wrong key) would bury the failure under an unrelated bucket -- a real
+/// pointer entry that resolves to nothing findable by "heads/aux" at all, not evidence about this
+/// check specifically (the exact attribution trap the checkpoint review named for check 2).
 #[test]
-fn verify_repository_detects_noncanonical_ref_pointer_path() -> Result<()> {
-    let root = unique_temp_dir("verify-noncanonical-ref-pointer");
+fn verify_repository_detects_pointer_index_entry_key_mismatch() -> Result<()> {
+    let root = unique_temp_dir("verify-pointer-index-key-mismatch");
     let layout = RepositoryLayout::init(root.clone())?;
     let mut objects = FileObjectStore::new(layout.clone());
+    let signer = trusted_signer("verify-pointer-index-key-mismatch", 0x17)?;
+    adopt(&layout, &signer)?;
 
-    publish_ref_to_new_block_fake_signed_confounds_probes(&layout, &mut objects, "heads/aux")?;
-    let canonical = layout.ref_pointer_path("heads/aux");
-    let misplaced = layout
-        .refs_dir()
-        .join("by-id")
-        .join(format!("{}.ref", sample_object_id("misplaced-pointer")));
-    std::fs::rename(&canonical, &misplaced)?;
+    let target_block = write_trusted_block(&mut objects, &signer, None)?;
+    let ref_state_id = write_trusted_ref_state(
+        &mut objects,
+        "heads/aux",
+        target_block,
+        1,
+        None,
+        &signer,
+        true,
+    )?;
+    crate::refs::write_ref_pointer_entry_with_explicit_key_for_test(
+        &layout,
+        crate::layout::ref_name_key_bytes("heads/aux"),
+        "heads/not-aux",
+        ref_state_id,
+    )?;
 
     let report = verify_repository(&layout)?;
-    assert_ref_failed(&report, "non-canonical ref pointer");
+    assert_ref_failed(
+        &report,
+        "pointer index entry ref_name_key does not match sha256",
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 102 Stage 4, design-v1.md §13.12: the log-container half of the same coherence property --
+/// `refs/verify/scan.rs::validate_log_replay`'s `ref_name_key_bytes(&update.ref_name) != ref_name_key`
+/// check (the header's claimed key disagreeing with the decoded envelope's own `ref_name`). Also
+/// currently untested; also new coverage, not a retirement. Same attribution direction as the pointer
+/// test above and for the same reason: `read_logs`' discovery and `replay_ref_subsequence`'s grouping
+/// both key off the frame header's `ref_name_key`, so the header stays correct
+/// (`ref_name_key_bytes("heads/aux")`) and only the envelope's own internal `ref_name` field
+/// disagrees.
+#[test]
+fn verify_repository_detects_ref_container_record_key_mismatch() -> Result<()> {
+    let root = unique_temp_dir("verify-ref-container-key-mismatch");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let signer = trusted_signer("verify-ref-container-key-mismatch", 0x18)?;
+    adopt(&layout, &signer)?;
+
+    let target_block = write_trusted_block(&mut objects, &signer, None)?;
+    let ref_state_id = write_trusted_ref_state(
+        &mut objects,
+        "heads/aux",
+        target_block,
+        1,
+        None,
+        &signer,
+        true,
+    )?;
+    // Header key stays "heads/aux"'s own correct key (what `read_logs`' discovery and `replay_ref_
+    // subsequence`'s grouping both key off); the envelope's own internal `ref_name` disagrees.
+    let mismatched_update =
+        build_signed_ref_update("heads/not-aux", None, ref_state_id, target_block, 1, &signer)?;
+    let framed = crate::refs::encode_ref_container_record_for_test(
+        crate::layout::ref_name_key_bytes("heads/aux"),
+        &mismatched_update,
+    )?;
+    std::fs::write(
+        layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A),
+        framed,
+    )?;
+
+    let report = verify_repository(&layout)?;
+    assert_ref_failed(
+        &report,
+        "ref container record header ref_name_key does not match its own envelope",
+    );
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -305,11 +363,10 @@ fn verify_repository_detects_ref_state_name_pointer_mismatch() -> Result<()> {
 
     let (main_ref_state_id, _) =
         publish_ref_to_new_block_fake_signed_confounds_probes(&layout, &mut objects, "heads/main")?;
+    // RFC 102 Stage 4: `write_ref_pointer_candidate` durably appends straight to the shared
+    // pointer index now -- an append-only record has no candidate value to stage, so there is no
+    // longer a separate temp-then-rename promotion step to perform here at all.
     crate::refs::write_ref_pointer_candidate(&layout, "heads/other", main_ref_state_id)?;
-    std::fs::rename(
-        layout.ref_tmp_path("heads/other"),
-        layout.ref_pointer_path("heads/other"),
-    )?;
 
     let report = verify_repository(&layout)?;
     assert_ref_failed(&report, "name differs from pointer ref");
@@ -317,54 +374,66 @@ fn verify_repository_detects_ref_state_name_pointer_mismatch() -> Result<()> {
     Ok(())
 }
 
-/// DC-95 Stage 1, round 6: `ensure_ref_path_shape` (`refs/verify/scan.rs`) -- a directory entry
-/// under `by-id/` or `logs/` whose filename is not exactly 64 hex characters plus the expected
-/// extension. Called immediately after `list_directory`, strictly before any attempt to decode the
-/// entry's content (`read_pointers`/`read_logs`), so a completely bare, freshly-initialized
-/// repository is enough: `by-id/`/`logs/` both exist from `RepositoryLayout::init` itself
-/// (`layout.rs:206-207`), no publish needed, no Block/RefState object exists anywhere in either
-/// fixture. That also means `PublicationTrustVerifier` is never invoked here at all (it only checks
-/// `Block`/`RefState`, and there are none), so unlike round 5's Block/RefState-carrying checks, a
-/// real adopted signer isn't needed for a clean baseline -- confirmed by inspecting the full report
-/// on every probe below, not assumed from the parallel to round 3/4's already-immune fixtures.
+/// RFC 102 Stage 4 checkpoint review, design-v1.md §13.13: `ensure_ref_path_shape` (the check DC-95
+/// Stage 1 round 6 proved downstream-redundant against the old per-file canonical-path checks) no
+/// longer exists -- there is no per-ref file and no per-entry path under the shared pointer-index/
+/// log-container model to be non-canonically shaped. The log-side sub-case this test used to carry
+/// is genuinely redundant with `container/tests.rs`'s own attributed corruption coverage (traced all
+/// three frame shapes -- truncated header, short body, checksum mismatch -- to tested, attributed
+/// results; see the derivation document). The pointer-side sub-case was not: `pointer_index/tests.rs`
+/// had zero corruption coverage before this round, closed separately (three new tests: truncated
+/// entry, decode-level isolation, and the property below).
 ///
-/// **Probed, downstream-redundant -- provably so, not merely observed for one fixture.** Both
-/// sub-cases here use undecodable garbage bytes, which is enough to prove the check rejects in
-/// production (this file's own job), but disabling `ensure_ref_path_shape` with garbage content
-/// doesn't reach a clean `Ok` -- decode itself fails first (`"invalid ref pointer magic"` /
-/// equivalent for logs), a different check entirely. That alone would be a weak redundancy claim
-/// (maybe a *decodable* wrong-shaped file behaves differently), so it was checked directly: built a
-/// real, valid pointer via a normal publish, moved its real bytes verbatim to a wrong-length
-/// filename, and disabled the check. Result: `"non-canonical ref pointer: short.ref"` -- the
-/// canonical-path check (`scan.rs`, `path != layout.ref_pointer_path(&pointer.ref_name)`) catches
-/// it instead. Confirmed identically for logs (`"non-canonical ref log: short.log"` against `path
-/// != layout.ref_log_path(&name)`). **This redundancy is structural, not incidental**: `ref_pointer_
-/// path`/`ref_log_path` are deterministic functions that only ever produce correctly-shaped output,
-/// so no path failing the shape check can ever equal either function's result -- meaning the
-/// canonical-path check necessarily also rejects anything the shape check would have, whenever
-/// decode succeeds at all. `ensure_ref_path_shape` cannot be load-bearing against either canonical-
-/// path check by construction, only against a decode step that would otherwise have accepted
-/// malformed content -- and decode already rejects it independently, as the garbage-bytes fixtures
-/// above show. Kept as a regression guard on the friendlier, more specific "invalid shape" message
-/// (real diagnostic value: an operator sees *why* the file is wrong, not just that decode choked on
-/// it), not as a demonstration of Stage 1's rule.
+/// **What replaces this test**: not a like-for-like migration, but the full-stack proof of a
+/// safety property `pointer_index/tests.rs`'s own new low-level tests established but couldn't prove
+/// end-to-end -- unlike the log container (item-contained, one damaged ref never blocks another),
+/// the pointer index's "last entry wins" semantics make silent per-entry isolation dangerous: an
+/// unreadable *latest* entry must never let an older one for the same ref resolve as current instead.
+/// `read_pointers` (`refs/verify/scan.rs`) refuses the whole read on any damaged entry -- **not item-
+/// contained but not a hard top-level `Err` from `verify_repository` either, corrected after the
+/// first assertion attempt got the shape wrong**: `verify_repository` catches the propagated `Err`
+/// and reports it as a whole-`Refs`-stage `Failed` outcome (with `RefUpdateSchemaTrust`/
+/// `PublicationReclassification` correctly `NotEvaluated { blocked_by: Refs }`), the same stage-
+/// containment shape `verify_repository_detects_nonzero_created_at_under_format2` above already
+/// demonstrates for a different defect. No existing test proved this specific message reaches that
+/// shape before this (grepped the crate for "pointer index has a damaged entry": only `refs.rs` and
+/// `pointer_index.rs` themselves referenced it).
 #[test]
-fn verify_repository_detects_every_ref_path_shape_violation() -> Result<()> {
-    let pointer_root = unique_temp_dir("verify-ref-pointer-path-shape");
-    let layout = RepositoryLayout::init(pointer_root.clone())?;
-    let bad_pointer = layout.refs_dir().join("by-id").join("zz.ref");
-    std::fs::write(&bad_pointer, b"not a valid length or content")?;
-    let report = verify_repository(&layout)?;
-    assert_ref_failed(&report, "ref path has invalid shape");
-    let _ = std::fs::remove_dir_all(pointer_root);
+fn verify_repository_fails_closed_on_a_damaged_pointer_index_entry() -> Result<()> {
+    let root = unique_temp_dir("verify-pointer-index-fail-closed");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let signer = trusted_signer("verify-pointer-index-fail-closed", 0x19)?;
+    adopt(&layout, &signer)?;
 
-    let log_root = unique_temp_dir("verify-ref-log-path-shape");
-    let layout = RepositoryLayout::init(log_root.clone())?;
-    let bad_log = layout.refs_dir().join("logs").join("zz.log");
-    std::fs::write(&bad_log, b"not a valid length or content")?;
+    let target_block = write_trusted_block(&mut objects, &signer, None)?;
+    let ref_state_id = write_trusted_ref_state(
+        &mut objects,
+        "heads/main",
+        target_block,
+        1,
+        None,
+        &signer,
+        true,
+    )?;
+    crate::refs::write_ref_pointer_candidate(&layout, "heads/main", ref_state_id)?;
+    // Corrupt the just-written entry's own last byte (inside its checksum-covered region) --
+    // shape otherwise valid, only the content is damaged.
+    let path = layout.ref_pointer_index_path();
+    let mut bytes = std::fs::read(&path)?;
+    let last = bytes
+        .last_mut()
+        .ok_or_else(|| prikk_error::PrikkError::Integrity("expected a pointer entry".to_string()))?;
+    *last ^= 0x01;
+    std::fs::write(&path, bytes)?;
+
     let report = verify_repository(&layout)?;
-    assert_ref_failed(&report, "ref path has invalid shape");
-    let _ = std::fs::remove_dir_all(log_root);
+    assert_stage_failed(
+        &report,
+        VerificationStage::Refs,
+        "ref pointer index has a damaged entry",
+    );
+    let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
 
@@ -439,11 +508,8 @@ fn verify_repository_detects_ref_update_ref_state_mismatch() -> Result<()> {
     // A pointer matching ref_state_id, at its own canonical location -- otherwise, with no
     // pointer at all, classify_ref_state's own "pointer missing while log exists" arm fires
     // regardless of verify_update's state, confounding the probe below (found by running it).
+    // RFC 102 Stage 4: no candidate-then-rename step -- see the name-mismatch test above.
     crate::refs::write_ref_pointer_candidate(&layout, "heads/main", ref_state_id)?;
-    std::fs::rename(
-        layout.ref_tmp_path("heads/main"),
-        layout.ref_pointer_path("heads/main"),
-    )?;
 
     let report = verify_repository(&layout)?;
     assert_ref_failed(&report, "RefState disagrees with RefUpdate");
@@ -513,12 +579,9 @@ fn verify_repository_detects_unsigned_ref_state() -> Result<()> {
     crate::refs::append_log_record_for_signature_test(&layout, "heads/main", &update_envelope)?;
     // A matching pointer, for the same reason the RefUpdate/RefState mismatch test above needs
     // one: without it, disabling the check under test would still hit classify_ref_state's own
-    // "pointer missing while log exists" arm, confounding the probe.
+    // "pointer missing while log exists" arm, confounding the probe. RFC 102 Stage 4: no
+    // candidate-then-rename step -- see the name-mismatch test's own doc.
     crate::refs::write_ref_pointer_candidate(&layout, "heads/main", ref_state_id)?;
-    std::fs::rename(
-        layout.ref_tmp_path("heads/main"),
-        layout.ref_pointer_path("heads/main"),
-    )?;
 
     let report = verify_repository(&layout)?;
     assert_ref_failed(&report, "is unsigned");
@@ -565,17 +628,20 @@ fn verify_repository_detects_incomplete_log_tail_without_pointer_lead() -> Resul
     )?;
     let update = build_signed_ref_update("heads/main", None, state_id, target_block, 1, &signer)?;
     crate::refs::append_log_record_for_signature_test(&layout, "heads/main", &update)?;
+    // RFC 102 Stage 4: no candidate-then-rename step -- see the name-mismatch test's own doc.
     crate::refs::write_ref_pointer_candidate(&layout, "heads/main", state_id)?;
-    std::fs::rename(
-        layout.ref_tmp_path("heads/main"),
-        layout.ref_pointer_path("heads/main"),
-    )?;
 
-    let mut log_file = std::fs::OpenOptions::new()
-        .append(true)
-        .open(layout.ref_log_path("heads/main"))?;
-    std::io::Write::write_all(&mut log_file, &[0xAB, 0xCD, 0xEF])?;
-    drop(log_file);
+    // RFC 102 Stage 4: a torn tail shorter than the shared container's own frame header (82
+    // bytes) is unattributable to any ref (`container.rs`'s own `trailing_tail_ref_name_key`), so
+    // 3 bytes of bare garbage would no longer be attributed to "heads/main" the way appending to
+    // its own per-file log used to guarantee -- use the real encoder and duplicate a truncated
+    // prefix of the record just appended instead, matching `append_torn_ref_log_tail_for_test`'s
+    // own reasoning (`refs/container.rs`).
+    crate::refs::append_torn_ref_log_tail_for_test(
+        &layout,
+        crate::layout::ref_name_key_bytes("heads/main"),
+        &update,
+    )?;
 
     let report = verify_repository(&layout)?;
     assert_ref_failed(&report, "incomplete log tail without a pointer lead");
@@ -613,11 +679,8 @@ fn verify_repository_detects_nonzero_created_at_under_format2() -> Result<()> {
         &signer,
         true,
     )?;
+    // RFC 102 Stage 4: no candidate-then-rename step -- see the name-mismatch test's own doc.
     crate::refs::write_ref_pointer_candidate(&layout, "heads/main", ref_state_id)?;
-    std::fs::rename(
-        layout.ref_tmp_path("heads/main"),
-        layout.ref_pointer_path("heads/main"),
-    )?;
 
     let update_payload = RefUpdatePayload {
         ref_name: "heads/main".to_string(),
@@ -639,8 +702,11 @@ fn verify_repository_detects_nonzero_created_at_under_format2() -> Result<()> {
         ObjectType::RefUpdate,
         update_id,
     )?)?;
+    // `heads/main` is the only ref in this fixture, so the whole container is exactly its own
+    // subsequence -- overwriting the whole file with just this one record leaves no other ref's
+    // data to disturb.
     std::fs::write(
-        layout.ref_log_path("heads/main"),
+        layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A),
         crate::refs::encode_log_record_for_test(&update_envelope)?,
     )?;
 
@@ -696,11 +762,8 @@ fn verify_repository_detects_ref_log_sequence_gap() -> Result<()> {
     let first_update =
         build_signed_ref_update("heads/main", None, first_state_id, target_block, 1, &signer)?;
     crate::refs::append_log_record_for_signature_test(&layout, "heads/main", &first_update)?;
+    // RFC 102 Stage 4: no candidate-then-rename step -- see the name-mismatch test's own doc.
     crate::refs::write_ref_pointer_candidate(&layout, "heads/main", first_state_id)?;
-    std::fs::rename(
-        layout.ref_tmp_path("heads/main"),
-        layout.ref_pointer_path("heads/main"),
-    )?;
 
     // Second RefState/RefUpdate pair, self-consistent with each other, but the update_seq jumps
     // from 1 to 3 -- a gap validate_log's own chain check exists to catch.
@@ -727,11 +790,8 @@ fn verify_repository_detects_ref_log_sequence_gap() -> Result<()> {
     // the resulting pointer/log mismatch instead, which is a downstream-redundant finding about a
     // *different* defect (pointer left behind), not evidence about this check. With the pointer
     // kept in step, the only thing left to notice the broken sequence is the chain check itself.
+    // RFC 102 Stage 4: no candidate-then-rename step -- see the name-mismatch test's own doc.
     crate::refs::write_ref_pointer_candidate(&layout, "heads/main", gap_state_id)?;
-    std::fs::rename(
-        layout.ref_tmp_path("heads/main"),
-        layout.ref_pointer_path("heads/main"),
-    )?;
 
     let report = verify_repository(&layout)?;
     assert_ref_failed(&report, "ref-log chain or sequence diverges");
@@ -788,11 +848,8 @@ fn verify_repository_detects_unexplained_pointer_log_divergence() -> Result<()> 
         &signer,
         true,
     )?;
+    // RFC 102 Stage 4: no candidate-then-rename step -- see the name-mismatch test's own doc.
     crate::refs::write_ref_pointer_candidate(&layout, "heads/main", x_state_id)?;
-    std::fs::rename(
-        layout.ref_tmp_path("heads/main"),
-        layout.ref_pointer_path("heads/main"),
-    )?;
 
     let report = verify_repository(&layout)?;
     assert_ref_failed(&report, "unexplained pointer/log divergence");

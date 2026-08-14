@@ -84,7 +84,10 @@ fn full_verification_retains_wal_objects_trust_and_recovery_diagnosis_after_root
     })?;
     write_active_ref_metadata(&layout, "heads/main")?;
     Wal::for_layout(&layout).append_patch(&patch)?;
-    std::fs::remove_file(layout.ref_pointer_path("heads/main"))?;
+    crate::refs::remove_pointer_entries_for_test(
+        &layout,
+        crate::layout::ref_name_key_bytes("heads/main"),
+    )?;
 
     assert_retained_missing_pointer(&layout, patch_id)?;
 

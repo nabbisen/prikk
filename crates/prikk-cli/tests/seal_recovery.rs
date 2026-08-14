@@ -116,7 +116,14 @@ fn assert_verify_fails(root: &Path, expected_code: &str) -> TestResult {
 #[test]
 fn seal_finishes_pointer_leading_log_once() -> TestResult {
     let fixture = setup_sealed("pointer-leading")?;
-    std::fs::write(fixture.layout.ref_log_path("heads/main"), b"")?;
+    // `heads/main` is the only ref this fixture ever publishes, so emptying the whole shared log
+    // container is equivalent to emptying just its own subsequence.
+    std::fs::write(
+        fixture
+            .layout
+            .ref_log_container_slot_path(prikk_store::ContainerSlot::A),
+        b"",
+    )?;
     restore_active(&fixture)?;
     assert_verify_fails(&fixture.root, "PRIKK-VERIFY-REF-POINTER-LEADS-LOG")?;
     require_success(&run_seal(&fixture.root)?, "pointer-leading retry")?;
@@ -153,7 +160,16 @@ fn seal_cleans_matching_retained_active_state_without_append() -> TestResult {
 #[test]
 fn seal_truncates_only_partial_tail_before_completion() -> TestResult {
     let fixture = setup_sealed("partial-tail")?;
-    std::fs::write(fixture.layout.ref_log_path("heads/main"), b"PREF")?;
+    // `restore_active` rewinds the WAL/active-ref metadata to *before* the one real publish this
+    // fixture already completed -- unlike a torn *second* transition, this simulates the first
+    // transition's own log append never having landed at all, so the whole container goes back to
+    // an (unattributable, garbage) partial state rather than a real record plus a torn continuation.
+    std::fs::write(
+        fixture
+            .layout
+            .ref_log_container_slot_path(prikk_store::ContainerSlot::A),
+        b"PREF",
+    )?;
     restore_active(&fixture)?;
     assert_verify_fails(&fixture.root, "PRIKK-VERIFY-REF-POINTER-LEADS-LOG")?;
     require_success(&run_seal(&fixture.root)?, "partial-tail retry")?;
@@ -167,12 +183,15 @@ fn seal_truncates_only_partial_tail_before_completion() -> TestResult {
 #[test]
 fn seal_rejects_format2_missing_pointer_with_retained_state() -> TestResult {
     let fixture = setup_sealed("legacy-ahead")?;
-    std::fs::remove_file(fixture.layout.ref_pointer_path("heads/main"))?;
+    prikk_store::remove_ref_pointer_entry_for_test_support(&fixture.layout, "heads/main")?;
     restore_active(&fixture)?;
     assert_verify_fails(&fixture.root, "PRIKK-VERIFY-REF-DIVERGENCE")?;
     let output = run_seal(&fixture.root)?;
     assert!(!output.status.success());
-    assert!(!fixture.layout.ref_pointer_path("heads/main").exists());
+    assert_eq!(
+        RefStore::new(fixture.layout.clone()).read_current_ref_state_id("heads/main")?,
+        None
+    );
     assert_eq!(
         RefStore::new(fixture.layout.clone())
             .replay_log("heads/main")?
@@ -187,12 +206,15 @@ fn seal_rejects_format2_missing_pointer_with_retained_state() -> TestResult {
 #[test]
 fn missing_pointer_without_retained_active_evidence_is_divergence() -> TestResult {
     let fixture = setup_sealed("missing-pointer-no-evidence")?;
-    std::fs::remove_file(fixture.layout.ref_pointer_path("heads/main"))?;
+    prikk_store::remove_ref_pointer_entry_for_test_support(&fixture.layout, "heads/main")?;
 
     assert_verify_fails(&fixture.root, "PRIKK-VERIFY-REF-DIVERGENCE")?;
     let output = run_seal(&fixture.root)?;
     assert!(!output.status.success());
-    assert!(!fixture.layout.ref_pointer_path("heads/main").exists());
+    assert_eq!(
+        RefStore::new(fixture.layout.clone()).read_current_ref_state_id("heads/main")?,
+        None
+    );
     let _ = std::fs::remove_dir_all(fixture.root);
     Ok(())
 }
@@ -200,7 +222,7 @@ fn missing_pointer_without_retained_active_evidence_is_divergence() -> TestResul
 #[test]
 fn missing_pointer_with_mismatched_active_owner_is_divergence() -> TestResult {
     let fixture = setup_sealed("missing-pointer-wrong-owner")?;
-    std::fs::remove_file(fixture.layout.ref_pointer_path("heads/main"))?;
+    prikk_store::remove_ref_pointer_entry_for_test_support(&fixture.layout, "heads/main")?;
     restore_active(&fixture)?;
     std::fs::write(
         fixture.layout.default_active_ref_name_path(),
@@ -210,7 +232,10 @@ fn missing_pointer_with_mismatched_active_owner_is_divergence() -> TestResult {
     assert_verify_fails(&fixture.root, "PRIKK-VERIFY-REF-DIVERGENCE")?;
     let output = run_seal(&fixture.root)?;
     assert!(!output.status.success());
-    assert!(!fixture.layout.ref_pointer_path("heads/main").exists());
+    assert_eq!(
+        RefStore::new(fixture.layout.clone()).read_current_ref_state_id("heads/main")?,
+        None
+    );
     let _ = std::fs::remove_dir_all(fixture.root);
     Ok(())
 }
@@ -218,8 +243,9 @@ fn missing_pointer_with_mismatched_active_owner_is_divergence() -> TestResult {
 #[test]
 fn seal_rejects_format2_log_lead() -> TestResult {
     let fixture = setup_sealed("legacy-existing-ahead")?;
-    let pointer_path = fixture.layout.ref_pointer_path("heads/main");
-    let old_pointer = std::fs::read(&pointer_path)?;
+    let old_ref_state_id = RefStore::new(fixture.layout.clone())
+        .read_current_ref_state_id("heads/main")?
+        .ok_or("expected heads/main to already have a published ref state")?;
     std::fs::write(fixture.root.join("state.txt"), b"next state\n")?;
     require_success(
         &prikk(&fixture.root)
@@ -232,7 +258,14 @@ fn seal_rejects_format2_log_lead() -> TestResult {
     let retained_wal = std::fs::read(fixture.layout.default_queue_wal_path())?;
     let retained_metadata = std::fs::read(fixture.layout.default_active_ref_name_path())?;
     require_success(&run_seal(&fixture.root)?, "second seal")?;
-    std::fs::write(&pointer_path, old_pointer)?;
+    // Rewinds the pointer to a false-but-validly-shaped earlier state while the log has already
+    // advanced past it -- see the helper's own doc for why that is a materially different hazard
+    // than simply removing a pointer entry.
+    prikk_store::force_ref_pointer_to_arbitrary_state_for_test_support(
+        &fixture.layout,
+        "heads/main",
+        old_ref_state_id,
+    )?;
     std::fs::write(fixture.layout.default_queue_wal_path(), retained_wal)?;
     std::fs::write(
         fixture.layout.default_active_ref_name_path(),

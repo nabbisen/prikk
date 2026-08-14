@@ -216,7 +216,22 @@ fn every_state_has_explicit_production_retry_and_exact_post_state() -> prikk_err
                     ActiveRefMetadata::Missing
                 );
                 let report = verify_repository(&fixture.layout)?;
-                assert!(report.ref_publication_issues.is_empty());
+                // RFC 102 Stage 4: `Candidate` debris under `refs/tmp/` is never cleaned by
+                // anything anymore -- the candidate-write-then-promote mechanism whose retry path
+                // used to sweep it as a side effect of finishing *any* publish is gone entirely.
+                // The non-blocking `PRIKK-VERIFY-REF-CANDIDATE-DEBRIS` issue this leaves behind
+                // forever is the registered FINDINGS.md wedge (design-v1.md §13.9); this is not a
+                // regression to paper over here -- `ensure_no_incomplete_publication`'s own
+                // semantics are explicitly out of scope for Stage 4.
+                if matches!(case.state, PersistedState::Candidate) {
+                    assert_eq!(report.ref_publication_issues.len(), 1);
+                    assert_eq!(
+                        report.ref_publication_issues.first().map(|issue| issue.code),
+                        Some("PRIKK-VERIFY-REF-CANDIDATE-DEBRIS")
+                    );
+                } else {
+                    assert!(report.ref_publication_issues.is_empty());
+                }
                 assert!(report.publication_trust_issues.is_empty());
             }
             RetryExpectation::Refuses => {

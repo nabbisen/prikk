@@ -163,6 +163,43 @@ pub fn verify(repo: &Path) -> Output {
     prikk(repo).arg("verify").output().unwrap()
 }
 
+/// Append an attributable torn tail to the shared ref-log container, by duplicating (truncated) the
+/// header of whichever real record currently sits last in the file.
+///
+/// RFC 102 Stage 4: under the old per-ref-file model, appending *any* trailing garbage to a ref's own
+/// log file simulated "this ref's own torn write" -- the file's identity alone did the attribution.
+/// The shared container instead attributes a torn tail to a ref via the frame header's own
+/// `ref_name_key` field (`refs/container.rs`'s `trailing_tail_ref_name_key`), which requires at least
+/// a full header's worth of intact bytes (magic(8) + version(2) + ref_name_key(32) + body_len(8) +
+/// checksum(32) = 82) to even attempt reading. Bare garbage shorter than that is simply unattributable
+/// to any ref -- not a torn write for the ref under test, a torn write for nobody. This duplicates the
+/// last real frame's own header (plus a few body bytes, to stay a torn *record* rather than a torn
+/// *header*) so the appended bytes carry a genuine, correctly-attributed `ref_name_key` -- whichever
+/// ref actually owns the container's current last record, which every caller here has arranged to be
+/// the ref under test by publishing to it most recently.
+pub fn append_torn_ref_log_tail(container_path: &Path) {
+    const MAGIC: &[u8; 8] = b"PREFCON1";
+    const HEADER_LEN: usize = 8 + 2 + 32 + 8 + 32;
+    let bytes = std::fs::read(container_path).unwrap();
+    let start = bytes
+        .windows(MAGIC.len())
+        .rposition(|window| window == MAGIC)
+        .expect("ref log container has at least one real record to duplicate");
+    let end = (start + HEADER_LEN + 8).min(bytes.len());
+    assert!(
+        end < bytes.len(),
+        "duplicated span must land inside the real record's body, not consume it entirely, \
+         or the result would be a complete record rather than a torn one"
+    );
+    let torn = bytes[start..end].to_vec();
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(container_path)
+        .unwrap();
+    use std::io::Write as _;
+    file.write_all(&torn).unwrap();
+}
+
 pub fn copy_dir_recursive(src: &Path, dst: &Path) {
     std::fs::create_dir_all(dst).unwrap();
     for entry in std::fs::read_dir(src).unwrap() {

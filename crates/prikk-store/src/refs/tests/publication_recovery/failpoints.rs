@@ -1,11 +1,9 @@
 //! Candidate, pointer-promotion, and truncation failpoint cases.
 
-use std::io::Write;
-
 use super::root_publication;
 use crate::fsutil::{TestFailPoint, fail_after_for_test, fail_once_for_test};
 use crate::test_support::unique_temp_dir;
-use crate::{FileObjectStore, ObjectReader, RefStore, RepositoryLayout, verify_repository};
+use crate::{FileObjectStore, ObjectReader, RefStore, RepositoryLayout};
 
 #[test]
 fn object_finalization_failures_precede_pointer_and_log_mutation() -> prikk_error::Result<()> {
@@ -47,110 +45,22 @@ fn object_finalization_failures_precede_pointer_and_log_mutation() -> prikk_erro
 }
 
 #[test]
-fn candidate_atomic_write_failures_are_cleaned_by_retry() -> prikk_error::Result<()> {
-    for point in [TestFailPoint::MutableFileSync, TestFailPoint::MutableRename] {
-        let root = unique_temp_dir("dc38-candidate-atomic-retry");
-        let layout = RepositoryLayout::init(root.clone())?;
-        let publication = root_publication(&layout, "heads/main")?;
-        let store = RefStore::new(layout.clone());
-        fail_once_for_test(point);
-        assert!(store.publish(&publication).is_err());
-        assert!(
-            verify_repository(&layout)?
-                .ref_publication_issues
-                .iter()
-                .any(|issue| issue.code == "PRIKK-VERIFY-REF-CANDIDATE-DEBRIS")
-        );
-        store.finish_interrupted_publication_for_test(&publication)?;
-        assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
-        assert!(
-            verify_repository(&layout)?
-                .ref_publication_issues
-                .is_empty()
-        );
-        let _ = std::fs::remove_dir_all(root);
-    }
-    Ok(())
-}
-
-#[test]
-fn pointer_rename_failure_leaves_unmoved_pointer_with_candidate_debris() -> prikk_error::Result<()>
-{
-    let root = unique_temp_dir("dc38-pointer-rename-retry");
-    let layout = RepositoryLayout::init(root.clone())?;
-    let publication = root_publication(&layout, "heads/main")?;
-    let store = RefStore::new(layout.clone());
-    fail_once_for_test(TestFailPoint::PromotionRename);
-    assert!(store.publish(&publication).is_err());
-    assert_eq!(store.read_current_ref_state_id("heads/main")?, None);
-    assert!(
-        verify_repository(&layout)?
-            .ref_publication_issues
-            .iter()
-            .any(|issue| issue.code == "PRIKK-VERIFY-REF-CANDIDATE-DEBRIS" && !issue.blocking)
-    );
-    store.finish_interrupted_publication_for_test(&publication)?;
-    store.finish_interrupted_publication_for_test(&publication)?;
-    assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
-    assert_eq!(
-        store.read_current_ref_state_id("heads/main")?,
-        Some(publication.ref_state.object_id())
-    );
-    assert!(
-        verify_repository(&layout)?
-            .ref_publication_issues
-            .is_empty()
-    );
-    let _ = std::fs::remove_dir_all(root);
-    Ok(())
-}
-
-#[test]
-fn pointer_source_sync_failure_leaves_committed_pointer_ahead_of_log() -> prikk_error::Result<()> {
-    let root = unique_temp_dir("dc38-pointer-source-sync-retry");
-    let layout = RepositoryLayout::init(root.clone())?;
-    let publication = root_publication(&layout, "heads/main")?;
-    let state_id = publication.ref_state.object_id();
-    let store = RefStore::new(layout.clone());
-    fail_once_for_test(TestFailPoint::PromotionSourceSync);
-    assert!(store.publish(&publication).is_err());
-    assert_eq!(
-        store.read_current_ref_state_id("heads/main")?,
-        Some(state_id)
-    );
-    assert_eq!(store.replay_log("heads/main")?.records.len(), 0);
-    assert!(
-        verify_repository(&layout)?
-            .ref_publication_issues
-            .iter()
-            .any(|issue| issue.code == "PRIKK-VERIFY-REF-DIVERGENCE" && issue.blocking)
-    );
-    store.finish_interrupted_publication_for_test(&publication)?;
-    store.finish_interrupted_publication_for_test(&publication)?;
-    assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
-    assert_eq!(
-        store.read_current_ref_state_id("heads/main")?,
-        Some(state_id)
-    );
-    assert!(!verify_repository(&layout)?.has_blocking_ref_publication_issues());
-    let _ = std::fs::remove_dir_all(root);
-    Ok(())
-}
-
-#[test]
 fn partial_tail_truncate_failure_preserves_state_for_retry() -> prikk_error::Result<()> {
     let root = unique_temp_dir("dc38-partial-truncate-retry");
     let layout = RepositoryLayout::init(root.clone())?;
     let publication = root_publication(&layout, "heads/main")?;
     let store = RefStore::new(layout.clone());
-    // RFC 102 Stage 3: skip 2 to land the torn write on the log's own append, past the ref-state
-    // object's own container and index appends (see the sibling test above for the full count).
-    fail_after_for_test(TestFailPoint::AppendWrite, 2);
+    // RFC 102 Stage 3: skip past the ref-state object's own container and index appends (see the
+    // sibling test above for the full count). RFC 102 Stage 4 adds the pointer-index append before
+    // the log append too, so skip 3, not 2. First-ever publish, so no real record survives to
+    // duplicate -- encode the pending update directly (`append_torn_ref_log_tail_for_test`'s doc).
+    fail_after_for_test(TestFailPoint::AppendWrite, 3);
     assert!(store.publish(&publication).is_err());
-    std::fs::OpenOptions::new()
-        .append(true)
-        .open(layout.ref_log_path("heads/main"))?
-        .write_all(b"PREF")?;
+    super::super::super::append_torn_ref_log_tail_for_test(
+        &layout,
+        crate::layout::ref_name_key_bytes("heads/main"),
+        &publication.ref_update,
+    )?;
     fail_once_for_test(TestFailPoint::Truncate);
     assert!(
         store

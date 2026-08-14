@@ -3,14 +3,11 @@
 use std::path::Path;
 
 use crate::fsutil::{TestFailPoint, fail_once_for_test};
-use crate::test_support::{
-    signed_empty_block_envelope, signed_patch_envelope, signed_ref_state_envelope,
-    signed_ref_update_envelope, unique_temp_dir,
-};
+use crate::test_support::{signed_patch_envelope, unique_temp_dir};
 use crate::worktree::materialize_manifest_entries;
 use crate::{
-    FileObjectStore, ObjectWriter, RefPublication, RefStore, RepoPath, RepositoryLayout,
-    SnapshotEntry, SnapshotManifest, Wal, add_trusted_maintainer, write_active_ref_metadata,
+    RepoPath, RepositoryLayout, SnapshotEntry, SnapshotManifest, Wal, add_trusted_maintainer,
+    write_active_ref_metadata,
 };
 
 const COMPONENT_POINTS: [TestFailPoint; 2] = [
@@ -94,33 +91,13 @@ fn active_metadata_directory_component_matrix() -> prikk_error::Result<()> {
     Ok(())
 }
 
-#[test]
-fn ref_log_directory_component_matrix() -> prikk_error::Result<()> {
-    for point in COMPONENT_POINTS {
-        let root = unique_temp_dir("ref-component-matrix");
-        let layout = RepositoryLayout::init(root.clone())?;
-        let mut objects = FileObjectStore::new(layout.clone());
-        let target = objects.write_object(&signed_empty_block_envelope())?;
-        let ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
-        let ref_state_id = ref_state.object_id();
-        assert_eq!(objects.write_object(&ref_state)?, ref_state_id);
-        let publication = RefPublication {
-            ref_name: "heads/main".to_string(),
-            expected_previous_ref_state_id: None,
-            ref_update: signed_ref_update_envelope("heads/main", None, ref_state_id, target, 1),
-            ref_state,
-        };
-        let logs_dir = layout.refs_dir().join("logs");
-        remove_empty_directory(&logs_dir)?;
-        let store = RefStore::new(layout);
-        fail_once_for_test(point);
-        assert!(store.publish(&publication).is_err());
-        assert_retained_component(point, &logs_dir);
-        assert_eq!(store.publish(&publication)?, ref_state_id);
-        let _ = std::fs::remove_dir_all(root);
-    }
-    Ok(())
-}
+// RFC 102 Stage 4: `ref_log_directory_component_matrix` (proving a first-ref-publish directory
+// component failure on `refs/logs/` is retryable) has no container-era equivalent, retired the
+// same way and for the same reason `object_directory_component_matrix` was above. The ref-log
+// container is allocated once, at `init`, per `layout/tests.rs::init_allocates_every_ref_
+// container_name_once` -- a ref publish never creates a directory component at all anymore, so
+// this matrix's own `DirectoryCreate`/`CreatedDirectoryParentSync` failpoints are simply never
+// reached by `RefStore::publish`, and there is no analogous scenario left to prove here.
 
 #[test]
 fn trust_directory_component_matrix() -> prikk_error::Result<()> {

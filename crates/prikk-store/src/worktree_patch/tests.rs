@@ -1801,7 +1801,11 @@ fn genesis_missing_pointer_with_log_fails_closed() {
     let layout = RepositoryLayout::init(root.clone()).unwrap();
     // Publish a baseline (writes ref pointer + ref log), then remove only the pointer.
     publish_node_baseline(&layout, &[("readme.txt", b"hello\n", BlobKind::Text)]);
-    std::fs::remove_file(layout.ref_pointer_path("heads/main")).unwrap();
+    crate::refs::remove_pointer_entries_for_test(
+        &layout,
+        crate::layout::ref_name_key_bytes("heads/main"),
+    )
+    .unwrap();
     std::fs::write(root.join("readme.txt"), b"changed\n").unwrap();
 
     let mut generator = deterministic_generator();

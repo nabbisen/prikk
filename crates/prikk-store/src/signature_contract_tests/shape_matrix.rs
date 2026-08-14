@@ -125,7 +125,13 @@ fn wal_and_ref_log_shape_matrix_reject_before_mutation() -> prikk_error::Result<
             append_log_record_for_signature_test(&layout, "heads/main", &update).is_ok(),
             length == 64
         );
-        assert_eq!(layout.ref_log_path("heads/main").exists(), length == 64);
+        assert_eq!(
+            RefStore::new(layout.clone())
+                .replay_log("heads/main")?
+                .records
+                .len(),
+            usize::from(length == 64)
+        );
 
         let _ = std::fs::remove_dir_all(root);
     }
@@ -164,8 +170,19 @@ fn publication_shape_matrix_covers_both_governed_envelopes() -> prikk_error::Res
                     .contains_object(ObjectType::RefState, state_id),
                 length == 64
             );
-            assert_eq!(layout.ref_pointer_path("heads/main").exists(), length == 64);
-            assert_eq!(layout.ref_log_path("heads/main").exists(), length == 64);
+            assert_eq!(
+                RefStore::new(layout.clone())
+                    .read_current_ref_state_id("heads/main")?
+                    .is_some(),
+                length == 64
+            );
+            assert_eq!(
+                RefStore::new(layout.clone())
+                    .replay_log("heads/main")?
+                    .records
+                    .len(),
+                usize::from(length == 64)
+            );
 
             let _ = std::fs::remove_dir_all(root);
         }

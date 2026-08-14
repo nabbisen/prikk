@@ -287,7 +287,11 @@ pub(crate) fn lookup_ref_pointer(
 /// Test-only convenience matching the retired `refs/pointer.rs::write_ref_pointer_candidate`'s own
 /// 3-argument call shape exactly, for fixtures that need to plant a specific pointer state directly
 /// without going through a real publish. Computes `ref_name_key` itself.
-#[cfg(test)]
+///
+/// `cfg(any(test, feature = "test-support"))`, not just `cfg(test)`: the `test-support` half exists
+/// solely so `force_ref_pointer_to_arbitrary_state_for_test_support` below (design-v1.md §13.10) has
+/// something to call -- same reasoning as `remove_pointer_entries_for_test`'s own doc.
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn write_ref_pointer_candidate_for_test(
     layout: &RepositoryLayout,
     ref_name: &str,
@@ -297,6 +301,26 @@ pub(crate) fn write_ref_pointer_candidate_for_test(
         layout,
         &PointerIndexEntry {
             ref_name_key: crate::layout::ref_name_key_bytes(ref_name),
+            ref_name: ref_name.to_string(),
+            ref_state_id,
+        },
+    )
+}
+
+/// Test-only: like `write_ref_pointer_candidate_for_test`, but takes `ref_name_key` explicitly
+/// instead of deriving it from `ref_name` -- for fixtures that need the two to disagree
+/// (`read_one_pointer_entry`'s own coherence check, design-v1.md §13.12).
+#[cfg(test)]
+pub(crate) fn write_ref_pointer_entry_with_explicit_key_for_test(
+    layout: &RepositoryLayout,
+    ref_name_key: [u8; 32],
+    ref_name: &str,
+    ref_state_id: ObjectId,
+) -> Result<()> {
+    append_ref_pointer_entry(
+        layout,
+        &PointerIndexEntry {
+            ref_name_key,
             ref_name: ref_name.to_string(),
             ref_state_id,
         },
@@ -324,7 +348,13 @@ pub(crate) fn append_ref_pointer_entry(
 /// `remove_index_entry_for_test` (RFC 102 Stage 3) exactly in spirit. Entries here are
 /// variable-width (`ref_name`), so each record's own span is derived from consecutive outcome
 /// offsets rather than a fixed frame length.
-#[cfg(test)]
+///
+/// `cfg(any(test, feature = "test-support"))`, not just `cfg(test)`: the `test-support` half exists
+/// solely so `remove_ref_pointer_entry_for_test_support` below (the genuinely `pub`,
+/// cross-crate-visible wrapper, design-v1.md §13.9) has something to call. `#[cfg(test)]` alone would
+/// never be active when this crate is compiled as a normal dependency of another crate's integration
+/// tests -- see that function's own doc for why a `pub` method was rejected in favor of this feature.
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn remove_pointer_entries_for_test(
     layout: &RepositoryLayout,
     ref_name_key: [u8; 32],
@@ -362,6 +392,43 @@ pub(crate) fn remove_pointer_entries_for_test(
     );
     std::fs::write(&path, retained)?;
     Ok(())
+}
+
+/// Drop one ref's pointer entry, simulating the state left by a crash between "pointer promoted" and
+/// "before the next read" -- for use by another crate's own integration tests only (design-v1.md
+/// §13.9). Gated by the non-default `test-support` feature, never `#[cfg(test)]`: an integration test
+/// in a dependent crate compiles this crate as a normal (non-test) dependency, so a `#[cfg(test)]`
+/// item would never be visible to it regardless of feature flags.
+///
+/// **Deliberately not exposed without the feature.** This function's only purpose is to damage a
+/// repository -- a genuinely `pub`, always-available method with that purpose has no place in a
+/// product whose entire claim is that history is not silently lost. Nothing outside `#[cfg(test)]` or
+/// this feature-gated module may call it, checked by review each time this feature's surface changes.
+#[cfg(feature = "test-support")]
+pub fn remove_ref_pointer_entry_for_test_support(
+    layout: &RepositoryLayout,
+    ref_name: &str,
+) -> Result<()> {
+    remove_pointer_entries_for_test(layout, crate::layout::ref_name_key_bytes(ref_name))
+}
+
+/// Force-append a pointer entry for `ref_state_id`, bypassing publish's CAS check and the ref log
+/// entirely -- for use by another crate's own integration tests only (design-v1.md §13.10). This can
+/// point a ref at a **false but validly-shaped** state: any `ObjectId` accepted here, including one
+/// that does not name the ref's own current or next real transition, becomes the ref's current
+/// pointer the instant this returns. That is a materially different, and more dangerous, hazard than
+/// `remove_ref_pointer_entry_for_test_support`'s "make a pointer appear absent": a missing pointer is
+/// detectably wrong, a wrong-but-present one is not, until something cross-checks it against the log.
+/// The name says so on purpose -- see that function's own doc for why a bare `#[cfg(test)]` cannot
+/// reach a dependent crate's integration tests regardless of feature flags, and why this stays behind
+/// the same non-default `test-support` feature rather than becoming genuinely `pub`.
+#[cfg(feature = "test-support")]
+pub fn force_ref_pointer_to_arbitrary_state_for_test_support(
+    layout: &RepositoryLayout,
+    ref_name: &str,
+    ref_state_id: ObjectId,
+) -> Result<()> {
+    write_ref_pointer_candidate_for_test(layout, ref_name, ref_state_id)
 }
 
 #[cfg(test)]

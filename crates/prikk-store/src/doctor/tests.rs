@@ -283,7 +283,13 @@ fn doctor_refuses_missing_main_ref_pointer_reconstruction() {
             ref_update,
         };
         assert!(store.publish(&publication).is_ok());
-        assert!(std::fs::remove_file(layout.ref_pointer_path("heads/main")).is_ok());
+        assert!(
+            crate::refs::remove_pointer_entries_for_test(
+                &layout,
+                crate::layout::ref_name_key_bytes("heads/main"),
+            )
+            .is_ok()
+        );
 
         let before = doctor_repository(&layout);
         assert!(!before.is_healthy());

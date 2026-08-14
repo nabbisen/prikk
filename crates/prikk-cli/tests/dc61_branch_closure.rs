@@ -267,7 +267,7 @@ fn corruption_detection_for_pointer_loss_is_unchanged_by_dc61() {
             ref_store.replay_log("heads/topic").unwrap().records.len(),
             record_count
         );
-        std::fs::remove_file(layout.ref_pointer_path("heads/topic")).unwrap();
+        prikk_store::remove_ref_pointer_entry_for_test_support(&layout, "heads/topic").unwrap();
 
         let out = prikk(&repo).arg("verify").output().unwrap();
         fail(
