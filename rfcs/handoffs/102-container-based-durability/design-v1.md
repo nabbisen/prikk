@@ -685,3 +685,34 @@ different kind of item to it, not for.
 isolate-and-continue across multiple refs. A known shape, not novel design. **If it turns out
 `decode_pointer_index_records` does not have the same three-shape structure, that is a finding**, and a
 more important one than the tests.
+
+### 13.14 `ref_cluster.rs` closed, and the fail-closed asymmetry — ruled 2026-08-15
+
+**Accepted, with one thing reframed.**
+
+The third test is the round's real contribution: `read_pointers` **fails closed on the whole read** for
+any damaged pointer-index entry, rather than isolating it as the log container does. Their reasoning for
+why that is correct is right — the pointer index is *last-entry-wins*, so skipping a damaged **latest**
+entry could let an older entry for the same ref resolve as current. **Silent staleness is worse than
+unavailability**, and nothing proved this end to end before.
+
+**But it is not an inherent property, and calling it one would bank a regression as a design choice.**
+
+Verified: `container.rs:203-205`'s `FrameAttempt::Invalid` carries `claimed_ref_name_key:
+Option<[u8; 32]>`; `pointer_index.rs:159-161`'s carries **only `message`**. **Fail-closed is forced by
+that missing field**, not by last-entry-wins. With the key present, a damaged entry could fail *its own
+ref* while every other ref resolves — exactly the container side's behaviour.
+
+**So this is a blast-radius regression against amended constraint 5**: one corrupt per-ref pointer file
+used to affect one ref; one corrupt index entry now blocks every ref. **Accepted for Stage 4** — the
+behaviour is the safe direction and the alternative risks silent staleness — **but recorded as a known
+regression with a known fix, not as an accepted permanent property.** Registered in `FINDINGS.md`.
+
+**Not to be fixed inside Stage 4.** Adding the field changes `pointer_index`'s frame handling while the
+proof-suite migration is still open, and Stage 4 is already the largest stage in this RFC.
+
+**On the assertion they got wrong first:** assuming a hard top-level `Err` and finding a `Refs`-stage
+`Failed` with downstream `NotEvaluated { blocked_by: Refs }` is the stage-containment shape DC-95
+Stage 2 Level 1 built. **Fixing the test to match reality rather than the production code to match the
+guess** is the correct direction, and leaving the wrong assumption visible in the doc comment is better
+than erasing it.
