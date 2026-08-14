@@ -37,6 +37,28 @@ pub enum RepositoryFormat {
     CurrentV3,
 }
 
+/// One object-type container's pre-allocated alternate slot (RFC's §3.2 compaction requirement: a
+/// fixed A/B pair of names, never a rotated/new name). Stage 3 only ever writes `A`; `B` exists solely
+/// so its name is already allocated at `init` for Stage 6 compaction to use later.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContainerSlot {
+    /// The slot every Stage-3-era write and read targets.
+    A,
+    /// Reserved for compaction (Stage 6, not authorized). Never written by this stage.
+    B,
+}
+
+impl ContainerSlot {
+    /// Return a stable lower-case label used in the container's file name.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::A => "a",
+            Self::B => "b",
+        }
+    }
+}
+
 /// Repository layout paths.
 #[derive(Debug, Clone)]
 pub struct RepositoryLayout {
@@ -110,17 +132,27 @@ impl RepositoryLayout {
                 CURRENT_FORMAT_VERSION,
             )?;
         }
-        // RFC 102 Stage 1: both created at `init`, never later -- a missing file and an idempotent
+        // RFC 102 Stage 1: created at `init`, never later -- a missing file and an idempotent
         // re-`init` on an already-initialized repository must not clobber either.
-        let marker_relative =
-            layout.repository_relative(&layout.worktree_unclean_shutdown_marker_path())?;
-        if read_file_if_exists(layout.repository_mutation_root(), &marker_relative)?.is_none() {
-            create_new_file_required(layout.repository_mutation_root(), &marker_relative, &[])?;
+        create_empty_file_once(&layout, &layout.worktree_unclean_shutdown_marker_path())?;
+        create_empty_file_once(&layout, &layout.default_queue_wal_path())?;
+        // RFC 102 Stage 3, design-v1.md §2: every container name, both slots, plus the index and the
+        // (currently unused) compaction generation log -- all allocated here, at `init`, and nowhere
+        // else, for the life of the repository. This is the acceptance test itself (handoff §5
+        // criterion 1): enumerate every one of these paths and confirm none of them is ever created
+        // by any other code path.
+        for object_type in persisted_object_types() {
+            create_empty_file_once(
+                &layout,
+                &layout.container_slot_path(object_type, ContainerSlot::A),
+            )?;
+            create_empty_file_once(
+                &layout,
+                &layout.container_slot_path(object_type, ContainerSlot::B),
+            )?;
         }
-        let wal_relative = layout.repository_relative(&layout.default_queue_wal_path())?;
-        if read_file_if_exists(layout.repository_mutation_root(), &wal_relative)?.is_none() {
-            create_new_file_required(layout.repository_mutation_root(), &wal_relative, &[])?;
-        }
+        create_empty_file_once(&layout, &layout.container_index_path())?;
+        create_empty_file_once(&layout, &layout.container_generation_log_path())?;
         Ok(layout)
     }
 
@@ -236,6 +268,50 @@ impl RepositoryLayout {
         self.prikk_dir.join("quarantine")
     }
 
+    /// Return the container root directory (RFC 102 Stage 3, design-v1.md §2).
+    #[must_use]
+    pub fn containers_dir(&self) -> PathBuf {
+        self.prikk_dir.join("containers")
+    }
+
+    /// Return the container directory for a persisted object type.
+    #[must_use]
+    pub fn container_type_dir(&self, object_type: ObjectType) -> PathBuf {
+        self.containers_dir()
+            .join(object_type_directory_name(object_type))
+    }
+
+    /// Return one object type's container file for a given slot. **Every slot's name is allocated
+    /// at `init`, including B, even though Stage 3 only ever writes A** -- compaction (Stage 6, not
+    /// authorized) is what would ever target B; the RFC's §3.2 fixed-name-set requirement applies to
+    /// the whole RFC, not per stage, so the name exists now regardless of when it is first used.
+    #[must_use]
+    pub fn container_slot_path(&self, object_type: ObjectType, slot: ContainerSlot) -> PathBuf {
+        self.container_type_dir(object_type)
+            .join(format!("{}.container", slot.as_str()))
+    }
+
+    /// Return the object index's container path. Single file, no A/B slot -- design-v1.md §4 /
+    /// RFC 102's own §6.7 answer #2: the index's publication shape is plain append-only ("A/B" for an
+    /// index reduces to "append-only wearing an A/B costume, not a second option" once forced through
+    /// this codebase's real primitives), so unlike the six object-type containers it needs only one
+    /// name.
+    #[must_use]
+    pub fn container_index_path(&self) -> PathBuf {
+        self.containers_dir().join("index.container")
+    }
+
+    /// Return the small, fixed-name compaction generation log (design-v1.md §4: "compaction publishes
+    /// by appending a generation record to a small fixed-name log; readers take the last complete
+    /// generation record"). **Reserved, not used, by Stage 3** -- its name must still be allocated at
+    /// `init` because compaction (Stage 6) is not authorized to create any name later. Absent any
+    /// generation record (the only state Stage 3 ever produces), every container type's slot A is
+    /// live by construction -- there is nothing for an empty log to disambiguate yet.
+    #[must_use]
+    pub fn container_generation_log_path(&self) -> PathBuf {
+        self.containers_dir().join("generations.log")
+    }
+
     /// Return all required directories for layout creation.
     #[must_use]
     pub fn required_directories(&self) -> Vec<PathBuf> {
@@ -243,6 +319,10 @@ impl RepositoryLayout {
         dirs.push(self.objects_dir());
         for object_type in persisted_object_types() {
             dirs.push(self.object_type_dir(object_type));
+        }
+        dirs.push(self.containers_dir());
+        for object_type in persisted_object_types() {
+            dirs.push(self.container_type_dir(object_type));
         }
         dirs.push(self.active_dir());
         dirs.push(self.default_active_dir());
@@ -379,6 +459,21 @@ impl RepositoryLayout {
         self.trust_dir().join("policy.toml")
     }
 }
+
+/// Create `path` empty if it does not already exist. Idempotent, so a retried or re-run `init`
+/// against an already-initialized repository never clobbers it -- the same rule RFC 102 Stage 1
+/// established for the worktree marker and the active WAL, now shared by every `init`-time file this
+/// layout creates.
+fn create_empty_file_once(layout: &RepositoryLayout, path: &Path) -> Result<()> {
+    let relative = layout.repository_relative(path)?;
+    if read_file_if_exists(layout.repository_mutation_root(), &relative)?.is_none() {
+        create_new_file_required(layout.repository_mutation_root(), &relative, &[])?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests;
 
 fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
     let version = read_file_required(root, Path::new("FORMAT"))?;
