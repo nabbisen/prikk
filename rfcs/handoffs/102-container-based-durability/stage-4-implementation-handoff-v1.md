@@ -60,3 +60,24 @@ loses it loses DC-38's audit trail.**
   something in Step 0 that would have been expensive later.
 - A stop-and-report remains a complete outcome.
 - Stage 4 merges before Stage 5 is scoped.
+
+---
+
+## 7. An eighth acceptance criterion, added 2026-08-15
+
+**8. `docs/src/reference/` reflects the format and storage model this stage ships.**
+
+**Added because its absence already caused a live defect.** `repository-layout.md:63` still says *"New
+repositories contain `2` in `FORMAT`"* — false since RFC 103 Increment A merged — and **no reference
+doc mentions containers at all**, though objects moved into them in Stage 3. Two merged format changes
+passed every gate with the published reference untouched.
+
+**That is my omission, not yours:** neither RFC 103's nor Stage 3's criteria required it, so nothing
+caught it. Registered in `FINDINGS.md`.
+
+**Scope for Stage 4:** the format version, the container layout under `refs/`, and any statement about
+per-ref pointer/log files that Stage 4 makes false. **Not** a general documentation rewrite — the
+criterion is *"no statement in `docs/src/reference/` is false about what this stage ships."*
+
+**Retrospective scope is mine, not this stage's.** Stage 3's and RFC 103's own doc debt is registered
+separately; do not widen Stage 4 to absorb it.
