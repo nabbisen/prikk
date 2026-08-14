@@ -11,10 +11,16 @@ mod pointer_index;
 mod publication;
 mod verify;
 
+// `append_ref_container_record`'s own sole consumer via this re-export is `refs::tests`
+// (DC-71-gated to `target_os = "linux"`, real repository mutation) -- gated to match it exactly,
+// not the broader `#[cfg(test)]` the other two names here still need for their own cross-platform
+// consumers in `verify::tests::ref_cluster`. A cross-target clippy run caught this as unused on
+// Windows before it shipped; see `EXECUTION-ORDER.md` §6 rule 9's own cross-target amendment.
+#[cfg(all(test, target_os = "linux"))]
+pub(crate) use container::append_ref_container_record;
 #[cfg(test)]
 pub(crate) use container::{
-    append_ref_container_record, append_torn_ref_log_tail_for_test,
-    encode_ref_container_record_for_test,
+    append_torn_ref_log_tail_for_test, encode_ref_container_record_for_test,
 };
 #[cfg(feature = "test-support")]
 pub use pointer_index::{
