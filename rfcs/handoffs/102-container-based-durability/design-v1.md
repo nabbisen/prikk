@@ -381,3 +381,50 @@ matching today's granularity where one ref's file failing never touched another'
 
 **Added to Stage 4's acceptance criteria**, proven the DC-95 way: damage one ref's record, confirm the
 specific ref-scoped failure, confirm every unrelated ref stays clean.
+
+### 13.6 The torn tail under a shared container — ruled 2026-08-14
+
+A fifth question, found while implementing and asked before `publish_locked` was written. **Both
+premises verified:** `refs/log.rs:92-96` refuses to append when `trailing_partial_bytes != 0`, and
+`index.rs`'s four `trailing_partial` references are all *reporting* — Stage 3's object containers have
+no equivalent pre-append refusal at all.
+
+**1. No pre-append refusal on the shared log container. Accepted — and here is why it is safe, which
+the proposal did not state.**
+
+**A torn tail contributes no record.** Ref A's interrupted write leaves bytes that do not parse, so
+they never enter A's filtered subsequence. A's records remain `[1, 2]`; the retry appends `update_seq
+3` and lands at filtered position 2, so `update_seq == index + 1` still holds. **There is no sequence
+gap, because the torn bytes were never a position.**
+
+So today's refusal was never protecting sequence integrity. It enforced *hygiene* — truncate, then
+retry — which was cheap when one file was one ref, and is neither available nor necessary once the
+container is shared. **That is the same reason Stage 3's objects need no such check**, and the
+symmetry is the argument, not the convenience.
+
+**Without this, one ref's crash blocks every other ref's publishes** — an availability regression, and
+exactly the blast-radius shape amended constraint 5 exists to catch.
+
+**2. Ref-scoped partial-tail attribution via the header-carried `ref_name_key`. Accepted, with one
+thing that must be checked rather than assumed.**
+
+An unattributable torn tail — too few bytes to read a `ref_name_key`, or one naming a different ref —
+means the classifying ref proceeds as if no partial tail exists. **Correct for writes**, by (1).
+
+**But `classify_state`'s `PointerLeading`-with-partial-tail branch uses that tail as *evidence* that
+this ref's own publication was interrupted.** Losing the attribution loses the evidence, which can
+shift a classification away from "interrupted publication" toward something else. **That is a
+diagnostic-accuracy consequence and must be traced against DC-38's state machine, not assumed benign.**
+
+This is the third time this exact shape has appeared — DC-95 round 10's `require_retained_evidence`
+reclassification and Stage 2 Level 1's `trust_is_valid` were the first two. **Each time, the mechanism
+was sound and the *reason reported* was wrong.** Check what the classification says, not just whether
+it blocks.
+
+**3. Repair path. Agreed, and derive it.** Truncating a container's physical tail to clear one ref's
+torn bytes is safe by the definition of "trailing" — but `truncate_incomplete_tail` today truncates a
+whole per-ref *file*, and its shared-container equivalent must be derived from the code rather than
+assumed identical.
+
+**Asking before building was right.** This is DC-38's machinery, and a wrong call here is the kind that
+needs a DC-41-grade proof merely to discover.
