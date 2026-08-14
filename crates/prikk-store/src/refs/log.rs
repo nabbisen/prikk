@@ -231,7 +231,11 @@ fn parse_log_frame_at(bytes: &[u8], offset: usize) -> LogFrameAttempt {
         return LogFrameAttempt::TrailingPartial { remaining };
     }
     let header_end = offset + REF_LOG_HEADER_LEN;
-    let header = &bytes[offset..header_end];
+    // In range by construction: `remaining >= REF_LOG_HEADER_LEN` was just checked above --
+    // `.get()` used anyway to satisfy `clippy::indexing_slicing`, not because this can fail.
+    let Some(header) = bytes.get(offset..header_end) else {
+        return LogFrameAttempt::TrailingPartial { remaining };
+    };
     let header_values = match parse_log_header(header) {
         Ok(values) => values,
         Err(err) => {

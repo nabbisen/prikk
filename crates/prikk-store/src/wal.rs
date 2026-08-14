@@ -380,8 +380,11 @@ fn parse_frame_at(bytes: &[u8], offset: usize) -> FrameAttempt {
         return FrameAttempt::TrailingPartial { remaining };
     }
     let header_end = offset + WAL_HEADER_LEN;
-    // In range by construction: `remaining >= WAL_HEADER_LEN` was just checked above.
-    let header = &bytes[offset..header_end];
+    // In range by construction: `remaining >= WAL_HEADER_LEN` was just checked above -- `.get()`
+    // used anyway to satisfy `clippy::indexing_slicing`, not because this can fail.
+    let Some(header) = bytes.get(offset..header_end) else {
+        return FrameAttempt::TrailingPartial { remaining };
+    };
     let header_values = match parse_header(header) {
         Ok(values) => values,
         Err(err) => {

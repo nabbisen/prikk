@@ -40,6 +40,8 @@
 //! whenever the fixture's defect is exactly the kind of malformed shape `append_patch` would
 //! itself refuse), and `std::fs::write` it directly to `Wal::path()`.
 
+#![allow(clippy::indexing_slicing)]
+
 use prikk_error::Result;
 use prikk_object::{
     CanonicalEncode, DeleteNode, DeleteNodePreimage, NodeId, NodeKind, ObjectEnvelope, ObjectId,
