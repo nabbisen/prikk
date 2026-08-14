@@ -133,6 +133,13 @@ pub fn append_rollback_draft(
             replay.trailing_partial_bytes
         )));
     }
+    // RFC 102 Stage 2: `replay.records.is_empty()` below would read a WAL whose only record was
+    // damaged as genuinely empty, letting rollback-draft proceed against a WAL that is not empty.
+    if replay.has_item_failure() {
+        return Err(PrikkError::Integrity(
+            "active WAL has a damaged record; run doctor before rollback-draft".to_string(),
+        ));
+    }
     // DC-66: deliberately unchanged. Composing a correct inverse against a queue's chained,
     // not-yet-sealed baseline is an unaddressed correctness question this increment's acceptance
     // criteria never ask it to answer — see

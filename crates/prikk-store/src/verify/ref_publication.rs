@@ -98,6 +98,14 @@ fn interrupted_target(
         })?
     } else {
         let replay = store.replay_log(ref_name)?;
+        // RFC 102 Stage 2: a damaged record silently missing from `replay.records` could make
+        // `.last()` below resolve to a stale earlier record instead of the true (but corrupted)
+        // tip, misidentifying the interrupted-publication target this evidence check is proving.
+        if replay.has_item_failure() {
+            return Err(PrikkError::Integrity(format!(
+                "interrupted ref {ref_name} log has a damaged record"
+            )));
+        }
         let record = replay.records.last().ok_or_else(|| {
             PrikkError::Integrity(format!("interrupted ref {ref_name} has no log record"))
         })?;

@@ -65,6 +65,13 @@ impl ActiveSession {
                 replay.trailing_partial_bytes
             )));
         }
+        // RFC 102 Stage 2: `replay.records` below (the active-patch-limit count, and the
+        // empty-vs-non-empty branch) silently omits a damaged record rather than erroring now.
+        if replay.has_item_failure() {
+            return Err(PrikkError::Integrity(
+                "active WAL has a damaged record; run doctor before appending".to_string(),
+            ));
+        }
         if crate::worktree_patch::active_patch_limit_exceeded(
             replay.records.len(),
             active_patch_limit,

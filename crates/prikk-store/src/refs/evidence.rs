@@ -15,6 +15,17 @@ pub(super) fn has_incomplete_active_cleanup(layout: &RepositoryLayout) -> Result
     let ActiveRefMetadata::Valid(ref_name) = read_active_ref_metadata(layout)? else {
         return Ok(false);
     };
+    // RFC 102 Stage 2: a damaged record silently missing from `replay.records` could make the
+    // `patch_ids` comparison below pass or fail for the wrong reason -- fail closed instead of
+    // reasoning from a reduced view of the WAL. Checked after the metadata check above (matching
+    // this function's own established shape: only report on an issue once metadata already
+    // implicates this WAL), before the emptiness check below.
+    if replay.has_item_failure() {
+        return Err(PrikkError::Integrity(
+            "active WAL has a damaged record; run doctor before mutating this repository"
+                .to_string(),
+        ));
+    }
     if replay.records.is_empty() {
         return Ok(false);
     }
@@ -57,6 +68,15 @@ pub(super) fn validate_signer_backed_recovery(
     if replay.records.is_empty() || replay.trailing_partial_bytes != 0 {
         return Err(PrikkError::Integrity(
             "signer-backed ref recovery requires a complete non-empty active WAL".to_string(),
+        ));
+    }
+    // RFC 102 Stage 2: `wal_patch_ids` below is built from `replay.records` alone -- a damaged
+    // record silently missing from it could make the `patch_ids` comparison pass or fail for the
+    // wrong reason.
+    if replay.has_item_failure() {
+        return Err(PrikkError::Integrity(
+            "active WAL has a damaged record; run doctor before signer-backed ref recovery"
+                .to_string(),
         ));
     }
     let state = RefStatePayload::decode_canonical(

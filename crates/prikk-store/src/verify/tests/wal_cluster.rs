@@ -40,6 +40,8 @@
 //! whenever the fixture's defect is exactly the kind of malformed shape `append_patch` would
 //! itself refuse), and `std::fs::write` it directly to `Wal::path()`.
 
+#![allow(clippy::indexing_slicing)]
+
 use prikk_error::Result;
 use prikk_object::{
     CanonicalEncode, DeleteNode, DeleteNodePreimage, NodeId, NodeKind, ObjectEnvelope, ObjectId,
@@ -47,14 +49,15 @@ use prikk_object::{
     SignatureAlgorithm, SignerRole,
 };
 
-use super::assert_stage_failed;
+use super::{assert_stage_failed, assert_wal_item_failed};
 use crate::test_support::{
-    rollback_author_signature, rollback_patch_blob_envelope, signed_patch_blob_envelope,
-    unique_temp_dir,
+    rollback_author_signature, rollback_patch_blob_envelope, sample_object_id,
+    signed_patch_blob_envelope, unique_temp_dir,
 };
-use crate::wal::{WalRecord, encode_record_for_test};
+use crate::wal::{WalRecord, WalRecordStatus, encode_record_for_test};
 use crate::{
-    FileObjectStore, ObjectWriter, RepositoryLayout, VerificationStage, Wal, verify_repository,
+    DoctorRepairOptions, FileObjectStore, ObjectWriter, RepositoryLayout, VerificationStage, Wal,
+    repair_repository, verify_repository,
 };
 
 fn write_wal_records(wal: &Wal, records: &[WalRecord]) -> Result<()> {
@@ -125,11 +128,9 @@ fn verify_repository_detects_wal_checksum_mismatch() -> Result<()> {
     std::fs::write(wal.path(), &bytes)?;
 
     let report = verify_repository(&layout)?;
-    assert_stage_failed(
-        &report,
-        VerificationStage::WalReplay,
-        "WAL checksum mismatch",
-    );
+    // RFC 102 Stage 2: isolate-and-continue reading means this is now an item finding, not a
+    // WalReplay stage failure -- the stage itself evaluates cleanly around the one damaged record.
+    assert_wal_item_failed(&report, "WAL checksum mismatch");
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())
@@ -347,6 +348,217 @@ fn verify_repository_detects_rollback_draft_legacy_marker_key_id() -> Result<()>
         &report,
         VerificationStage::RollbackDrafts,
         "legacy rollback marker key id",
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 102 Stage 2 acceptance criteria (`stage-2-implementation-handoff-v1.md`): a `Normal`-purpose
+/// Patch envelope, distinguished from the `RollbackDraft` payloads above only by `purpose` and the
+/// referenced blob id -- `is_rollback_draft_envelope` (`rollback_draft.rs`) returns `Ok(false)` for
+/// `Normal`, so the `RollbackDrafts` stage skips these entirely and this fixture exercises
+/// `WalReplay`/`WalPersistence`/`WalRecordSchema` alone, without also depending on rollback-specific
+/// decode/apply-support validation staying satisfied.
+fn normal_patch_envelope(label: &str) -> Result<ObjectEnvelope> {
+    let payload = PatchPayload {
+        operations: vec![create_file_operation(1, sample_object_id(label))?],
+        parent_patch_ids: Vec::new(),
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+    };
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);
+    envelope.add_signature(rollback_author_signature())?;
+    Ok(envelope)
+}
+
+/// Append `labels.len()` distinct, well-formed patch records to `wal` via the real
+/// `Wal::append_patch` path (not raw byte construction) -- guarantees the fixture is genuinely
+/// valid by construction, the same way `verify_repository_detects_wal_checksum_mismatch` above
+/// earns its one real record. Returns each record's own starting byte offset in file order, found by
+/// measuring the file's length immediately before each append (append is the only writer here, so
+/// this is exact, not an estimate).
+fn append_distinct_records(wal: &Wal, labels: &[&str]) -> Result<Vec<usize>> {
+    let mut offsets = Vec::with_capacity(labels.len());
+    for label in labels {
+        let before = std::fs::read(wal.path())
+            .map(|bytes| bytes.len())
+            .unwrap_or(0);
+        offsets.push(before);
+        wal.append_patch(&normal_patch_envelope(label)?)?;
+    }
+    Ok(offsets)
+}
+
+/// Flip the last byte of each `bytes[bounds[i]]` record's own span, for every `i` in `damaged` --
+/// stays inside that record's body (well past the fixed 58-byte header), so magic/version/seq/
+/// body_len all still parse and `parse_frame_at` reaches the checksum comparison, exactly like
+/// `verify_repository_detects_wal_checksum_mismatch`'s single-record fixture above. `bounds` gives
+/// each record's own `(start, stop)` span, `stop` exclusive.
+fn corrupt_records_last_byte(bytes: &mut [u8], bounds: &[(usize, usize)], damaged: &[usize]) {
+    for &index in damaged {
+        let (_, stop) = bounds[index];
+        bytes[stop - 1] ^= 0x01;
+    }
+}
+
+fn record_bounds(offsets: &[usize], total_len: usize) -> Vec<(usize, usize)> {
+    offsets
+        .iter()
+        .enumerate()
+        .map(|(index, &start)| {
+            let stop = offsets.get(index + 1).copied().unwrap_or(total_len);
+            (start, stop)
+        })
+        .collect()
+}
+
+/// RFC 102 Stage 2 acceptance criterion 1 ("two independently damaged records in one WAL are both
+/// reported, with their offsets") and criterion 2 ("every sound record after a damaged one is still
+/// read"), asserted directly against `Wal::replay()` -- the most precise level to check exact
+/// offsets and which records survive, one level below `verify_repository`'s own reporting (covered
+/// separately by `verify_repository_reports_two_independently_damaged_wal_records_with_offsets`
+/// below, per the acceptance criteria's own end-to-end wording).
+///
+/// Five records; index 1 ("two") and index 3 ("four") are damaged, leaving index 0/2/4 sound --
+/// deliberately not a single damaged-then-sound pair, so a bug that only handles resync-then-stop
+/// (rather than resync-then-keep-going) cannot pass by accident.
+#[test]
+fn wal_replay_isolates_two_damaged_records_and_reads_every_sound_record() -> Result<()> {
+    let root = unique_temp_dir("wal-replay-two-damaged");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let wal = Wal::for_layout(&layout);
+
+    let offsets = append_distinct_records(&wal, &["one", "two", "three", "four", "five"])?;
+    let mut bytes = std::fs::read(wal.path())?;
+    let bounds = record_bounds(&offsets, bytes.len());
+    corrupt_records_last_byte(&mut bytes, &bounds, &[1, 3]);
+    std::fs::write(wal.path(), &bytes)?;
+
+    let replay = wal.replay()?;
+    assert!(replay.has_item_failure());
+    assert_eq!(
+        replay.trailing_partial_bytes, 0,
+        "the last record is sound and complete; nothing should be left over"
+    );
+
+    let failed_offsets: Vec<usize> = replay
+        .record_outcomes
+        .iter()
+        .filter_map(|outcome| match &outcome.status {
+            WalRecordStatus::Failed { .. } => Some(outcome.offset),
+            WalRecordStatus::Evaluated => None,
+        })
+        .collect();
+    assert_eq!(
+        failed_offsets,
+        vec![bounds[1].0, bounds[3].0],
+        "expected exactly the two damaged records' own starting offsets, got {failed_offsets:?} against bounds {bounds:?}"
+    );
+
+    let sound_seqs: Vec<u64> = replay.records.iter().map(|record| record.seq).collect();
+    assert_eq!(
+        sound_seqs,
+        vec![1, 3, 5],
+        "every sound record -- including the ones immediately after each damaged record -- must \
+         still be read, in file order"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 102 Stage 2 acceptance criteria 1, 2, 3, and 5, asserted end to end through
+/// `verify_repository`/`repair_repository` -- the acceptance criteria's own literal level, layered
+/// on top of the unit-level proof in `wal_replay_isolates_two_damaged_records_and_reads_every_sound_
+/// record` above. Also confirms containment explicitly: `WalReplay` and its dependent stages stay
+/// `Evaluated` (criterion true even though the repository's overall verification still fails --
+/// criterion 3, "a repository that failed verification before still fails it" -- just via
+/// `has_item_failure()` now, not a stage abort).
+#[test]
+fn verify_repository_reports_two_independently_damaged_wal_records_with_offsets() -> Result<()> {
+    let root = unique_temp_dir("verify-wal-two-damaged");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let wal = Wal::for_layout(&layout);
+
+    let offsets = append_distinct_records(&wal, &["alpha", "beta", "gamma"])?;
+    let mut bytes = std::fs::read(wal.path())?;
+    let bounds = record_bounds(&offsets, bytes.len());
+    corrupt_records_last_byte(&mut bytes, &bounds, &[0, 2]);
+    std::fs::write(wal.path(), &bytes)?;
+
+    let report = verify_repository(&layout)?;
+    assert!(
+        report.has_item_failure(),
+        "criterion 3: a repository with a damaged WAL record must still fail verification"
+    );
+    assert!(
+        !report.has_stage_failure(),
+        "item containment means WalReplay and its dependent stages stay Evaluated around the two \
+         damaged records: {report:?}"
+    );
+
+    let mut failed_offsets: Vec<usize> = report
+        .wal_record_outcomes
+        .iter()
+        .filter_map(|outcome| match &outcome.status {
+            WalRecordStatus::Failed { .. } => Some(outcome.offset),
+            WalRecordStatus::Evaluated => None,
+        })
+        .collect();
+    failed_offsets.sort_unstable();
+    let mut expected_offsets = vec![bounds[0].0, bounds[2].0];
+    expected_offsets.sort_unstable();
+    assert_eq!(
+        failed_offsets, expected_offsets,
+        "criterion 1: both damaged records must be reported, each with its own offset"
+    );
+
+    assert!(
+        repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail()).is_err(),
+        "criterion 5: repair_repository must still refuse on a WAL carrying a damaged record"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 102 Stage 2 acceptance criterion 4: a trailing partial frame is still tolerated unchanged --
+/// resync/item-containment must never engage for a genuinely incomplete final record. `parse_frame_
+/// at`'s own `remaining < WAL_HEADER_LEN` branch (`wal.rs`) makes this unconditional on content: any
+/// tail shorter than one full 58-byte header is `TrailingPartial`, regardless of what bytes it holds,
+/// so a plain zero-filled short tail already exercises the real code path -- no need to construct a
+/// realistically-interrupted frame to prove this.
+#[test]
+fn wal_replay_still_tolerates_a_trailing_partial_frame_unchanged() -> Result<()> {
+    let root = unique_temp_dir("wal-replay-trailing-partial");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let wal = Wal::for_layout(&layout);
+
+    wal.append_patch(&normal_patch_envelope("one")?)?;
+    wal.append_patch(&normal_patch_envelope("two")?)?;
+
+    let mut bytes = std::fs::read(wal.path())?;
+    let torn_tail = vec![0_u8; 30];
+    bytes.extend_from_slice(&torn_tail);
+    std::fs::write(wal.path(), &bytes)?;
+
+    let replay = wal.replay()?;
+    assert!(
+        !replay.has_item_failure(),
+        "a torn tail is not corruption and must not surface as an item failure: {replay:?}"
+    );
+    assert_eq!(replay.records.len(), 2);
+    assert_eq!(replay.trailing_partial_bytes, torn_tail.len());
+    assert!(
+        replay
+            .record_outcomes
+            .iter()
+            .all(|outcome| matches!(outcome.status, WalRecordStatus::Evaluated)),
+        "a torn tail must not produce a Failed record_outcomes entry: {:?}",
+        replay.record_outcomes
     );
 
     let _ = std::fs::remove_dir_all(root);

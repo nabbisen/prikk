@@ -14,7 +14,7 @@ use crate::verify::{
     ActiveWalMetadataStatus, ObjectItemStatus, RepositoryVerification, StageStatus,
     verify_repository,
 };
-use crate::wal::{Wal, WalRepair};
+use crate::wal::{Wal, WalRecordStatus, WalRepair};
 
 /// Severity assigned to a doctor diagnostic issue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -282,6 +282,21 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                         "PRIKK-DOCTOR-VERIFY-REF-ITEM-INCOMPLETE",
                         format!("ref {} failed verification: {message}", outcome.ref_name),
                         "preserve the repository and inspect the failing ref before attempting repair",
+                    ));
+                }
+            }
+            // RFC 102 Stage 2: isolate-and-continue reading means a damaged WAL record no longer
+            // fails the whole `WalReplay` stage -- same shape as the two ref loops above, one level
+            // in for the WAL's own records.
+            for outcome in &verification.wal_record_outcomes {
+                if let WalRecordStatus::Failed { message } = &outcome.status {
+                    issues.push(DoctorIssue::error(
+                        "PRIKK-DOCTOR-VERIFY-WAL-RECORD-INCOMPLETE",
+                        format!(
+                            "WAL record at offset {} failed verification: {message}",
+                            outcome.offset
+                        ),
+                        "preserve the repository and inspect the failing WAL record before attempting repair",
                     ));
                 }
             }

@@ -24,13 +24,50 @@ pub struct RefLogRecord {
     pub envelope: ObjectEnvelope,
 }
 
+/// Outcome of attempting to decode one ref-log record frame (RFC 102 Stage 2: isolate-and-continue
+/// reading). Mirrors `wal::WalRecordOutcome`; see its doc for the reasoning this shares.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RefLogRecordStatus {
+    /// The frame at this offset was read and validated successfully.
+    Evaluated,
+    /// The frame at this offset failed to validate (bad magic/version, checksum mismatch, or a
+    /// malformed/unsigned envelope) -- resync moved past it byte-wise to find the next candidate.
+    Failed {
+        /// The error this frame's own validation raised.
+        message: String,
+    },
+}
+
+/// One attempted ref-log record frame's resolved outcome.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefLogRecordOutcome {
+    /// The byte offset within this ref log the frame attempt started at.
+    pub offset: usize,
+    /// How this frame's own read/validation resolved.
+    pub status: RefLogRecordStatus,
+}
+
 /// Ref-log replay result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RefLogReplay {
-    /// Valid records read from the start of the log.
+    /// Valid records read from the log, in file order -- includes records found after a damaged
+    /// one (RFC 102 Stage 2), not merely a prefix up to the first failure.
     pub records: Vec<RefLogRecord>,
-    /// Number of trailing bytes ignored as an incomplete final record.
+    /// Number of trailing bytes ignored as an incomplete final record. Zero when the log's end was
+    /// reached via resync after unrecoverable corruption rather than a genuinely incomplete tail.
     pub trailing_partial_bytes: usize,
+    /// One outcome per attempted frame, in scan order -- both `Evaluated` and `Failed`.
+    pub record_outcomes: Vec<RefLogRecordOutcome>,
+}
+
+impl RefLogReplay {
+    /// Return true when any attempted frame failed to validate.
+    #[must_use]
+    pub fn has_item_failure(&self) -> bool {
+        self.record_outcomes
+            .iter()
+            .any(|outcome| matches!(outcome.status, RefLogRecordStatus::Failed { .. }))
+    }
 }
 
 /// Append one signed RefUpdate envelope to the ref log and fsync it.
@@ -73,6 +110,7 @@ pub(crate) fn replay_log(layout: &RepositoryLayout, ref_name: &str) -> Result<Re
         return Ok(RefLogReplay {
             records: Vec::new(),
             trailing_partial_bytes: 0,
+            record_outcomes: Vec::new(),
         });
     };
     decode_log_file_bytes(layout.format(), &bytes)
@@ -170,51 +208,143 @@ fn frame_log_record(body: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// Result of attempting to parse one ref-log frame at a given offset. Mirrors `wal::FrameAttempt`.
+enum LogFrameAttempt {
+    Record {
+        record: RefLogRecord,
+        next_offset: usize,
+    },
+    TrailingPartial {
+        remaining: usize,
+    },
+    Invalid {
+        message: String,
+    },
+}
+
+/// Attempt to parse one ref-log frame at `offset`. Mirrors `wal::parse_frame_at` -- never trusts a
+/// not-yet-checksum-validated header's own `body_len` for anything beyond locating where its
+/// claimed body would end.
+fn parse_log_frame_at(bytes: &[u8], offset: usize) -> LogFrameAttempt {
+    let remaining = bytes.len().saturating_sub(offset);
+    if remaining < REF_LOG_HEADER_LEN {
+        return LogFrameAttempt::TrailingPartial { remaining };
+    }
+    let header_end = offset + REF_LOG_HEADER_LEN;
+    // In range by construction: `remaining >= REF_LOG_HEADER_LEN` was just checked above --
+    // `.get()` used anyway to satisfy `clippy::indexing_slicing`, not because this can fail.
+    let Some(header) = bytes.get(offset..header_end) else {
+        return LogFrameAttempt::TrailingPartial { remaining };
+    };
+    let header_values = match parse_log_header(header) {
+        Ok(values) => values,
+        Err(err) => {
+            return LogFrameAttempt::Invalid {
+                message: err.to_string(),
+            };
+        }
+    };
+    let Ok(body_len) = usize::try_from(header_values.body_len) else {
+        return LogFrameAttempt::Invalid {
+            message: "ref-log body length does not fit usize".to_string(),
+        };
+    };
+    let Some(body_end) = header_end.checked_add(body_len) else {
+        return LogFrameAttempt::Invalid {
+            message: "ref-log body end overflow".to_string(),
+        };
+    };
+    let Some(body) = bytes.get(header_end..body_end) else {
+        return LogFrameAttempt::TrailingPartial { remaining };
+    };
+    let expected = log_record_checksum(header_values.body_len, body);
+    if expected != header_values.checksum {
+        return LogFrameAttempt::Invalid {
+            message: format!("ref-log checksum mismatch at byte offset {offset}"),
+        };
+    }
+    let envelope = match decode_envelope_file(body) {
+        Ok(envelope) => envelope,
+        Err(err) => {
+            return LogFrameAttempt::Invalid {
+                message: err.to_string(),
+            };
+        }
+    };
+    if let Err(err) = require_signed_type(&envelope, ObjectType::RefUpdate) {
+        return LogFrameAttempt::Invalid {
+            message: err.to_string(),
+        };
+    }
+    LogFrameAttempt::Record {
+        record: RefLogRecord { envelope },
+        next_offset: body_end,
+    }
+}
+
+/// Scan forward byte-by-byte from `start` for the next occurrence of the ref-log record magic.
+/// Mirrors `wal::resync_offset` -- never skips based on any not-yet-validated candidate's fields.
+fn resync_log_offset(bytes: &[u8], start: usize) -> Option<usize> {
+    let magic_len = REF_LOG_MAGIC.len();
+    let mut cursor = start;
+    while cursor
+        .checked_add(magic_len)
+        .is_some_and(|end| end <= bytes.len())
+    {
+        if bytes.get(cursor..cursor + magic_len) == Some(REF_LOG_MAGIC.as_slice()) {
+            return Some(cursor);
+        }
+        cursor += 1;
+    }
+    None
+}
+
+/// RFC 102 Stage 2: isolate-and-continue reading, mirroring `wal::decode_records`. A frame that
+/// fails to validate no longer aborts replay -- its offset and error are recorded as a `Failed`
+/// outcome, and `resync_log_offset` finds the next candidate frame so every subsequent sound
+/// record is still read.
 fn decode_log_records(bytes: &[u8]) -> Result<RefLogReplay> {
     let mut records = Vec::new();
+    let mut record_outcomes = Vec::new();
     let mut offset = 0_usize;
-    while offset < bytes.len() {
-        let remaining = bytes.len().saturating_sub(offset);
-        if remaining < REF_LOG_HEADER_LEN {
-            return Ok(RefLogReplay {
-                records,
-                trailing_partial_bytes: remaining,
-            });
+    loop {
+        match parse_log_frame_at(bytes, offset) {
+            LogFrameAttempt::Record {
+                record,
+                next_offset,
+            } => {
+                record_outcomes.push(RefLogRecordOutcome {
+                    offset,
+                    status: RefLogRecordStatus::Evaluated,
+                });
+                records.push(record);
+                offset = next_offset;
+            }
+            LogFrameAttempt::TrailingPartial { remaining } => {
+                return Ok(RefLogReplay {
+                    records,
+                    trailing_partial_bytes: remaining,
+                    record_outcomes,
+                });
+            }
+            LogFrameAttempt::Invalid { message } => {
+                record_outcomes.push(RefLogRecordOutcome {
+                    offset,
+                    status: RefLogRecordStatus::Failed { message },
+                });
+                match resync_log_offset(bytes, offset + 1) {
+                    Some(next) => offset = next,
+                    None => {
+                        return Ok(RefLogReplay {
+                            records,
+                            trailing_partial_bytes: 0,
+                            record_outcomes,
+                        });
+                    }
+                }
+            }
         }
-        let header_end = offset
-            .checked_add(REF_LOG_HEADER_LEN)
-            .ok_or_else(|| PrikkError::MalformedData("ref-log header overflow".to_string()))?;
-        let header = bytes.get(offset..header_end).ok_or_else(|| {
-            PrikkError::MalformedData("ref-log header range overflow".to_string())
-        })?;
-        let header_values = parse_log_header(header)?;
-        let body_len = usize::try_from(header_values.body_len).map_err(|_| {
-            PrikkError::MalformedData("ref-log body length does not fit usize".to_string())
-        })?;
-        let body_end = header_end
-            .checked_add(body_len)
-            .ok_or_else(|| PrikkError::MalformedData("ref-log body end overflow".to_string()))?;
-        let Some(body) = bytes.get(header_end..body_end) else {
-            return Ok(RefLogReplay {
-                records,
-                trailing_partial_bytes: remaining,
-            });
-        };
-        let expected = log_record_checksum(header_values.body_len, body);
-        if expected != header_values.checksum {
-            return Err(PrikkError::Integrity(format!(
-                "ref-log checksum mismatch at byte offset {offset}"
-            )));
-        }
-        let envelope = decode_envelope_file(body)?;
-        require_signed_type(&envelope, ObjectType::RefUpdate)?;
-        records.push(RefLogRecord { envelope });
-        offset = body_end;
     }
-    Ok(RefLogReplay {
-        records,
-        trailing_partial_bytes: 0,
-    })
 }
 
 struct RefLogHeader {

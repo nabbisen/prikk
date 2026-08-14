@@ -78,6 +78,31 @@
 //! `LEGACY-TIMESTAMP`'s status change was found only by re-reading this table, not carried in the
 //! RFC's original draft.
 //!
+//! # RFC 102 Stage 2: isolate-and-continue reading, and its effect on the table below
+//!
+//! A mid-stream checksum mismatch in the active WAL or a ref log no longer aborts the whole read: the
+//! frame at that offset is recorded as a failed item (`wal::WalRecordOutcome` /
+//! `refs::log::RefLogRecordOutcome`) and a byte-wise resync finds the next candidate frame, so every
+//! sound record after the damaged one is still read (RFC 102 §3, `wal.rs`'s `decode_records` and
+//! `refs/log.rs`'s `decode_log_records`). **The two rows this changes stay Load-bearing** -- disabling
+//! either check still lets a defective repository pass with no trace, exactly the property this table
+//! tracks -- but the failure they produce is now item-level (`RepositoryVerification::has_item_failure`,
+//! via the new `wal_record_outcomes` field), not a `WalReplay` stage failure, the same shift DC-95 Stage
+//! 2 Level 2 already made for `verify_objects` and `verify_refs`. `Wal::replay()`'s own post-decode
+//! `validate_read_schema` call is deliberately untouched -- a schema-shape defect is a different concern
+//! from physical corruption and stays a hard stage failure, out of this stage's scope (`stage-2-
+//! implementation-handoff-v1.md` §2's own boundary). Ref-log record corruption is exposed at file
+//! granularity (`refs::RefFileStatus::Failed` in `log_outcomes`, unchanged shape), not per-record like
+//! the WAL's `wal_record_outcomes` -- a deliberate, narrower scope decision for this round, recorded in
+//! the implementation's own review submission. **Every mutation-authorizing caller of `Wal::replay`/
+//! `RefStore::replay_log` that read `records`/`trailing_partial_bytes` without also checking the new
+//! `has_item_failure()` was audited and fixed in the same increment** -- the same discipline DC-95 Stage
+//! 2's ref-item-containment round established for `ensure_no_incomplete_publication`, applied here to a
+//! substantially larger caller set (`wal.rs`, `active.rs`, `rollback_draft.rs`,
+//! `worktree_patch/node_authoring.rs`, `seal.rs`, `branch.rs`, `refs/evidence.rs`, `rollback_verify.rs`,
+//! `refs/publication.rs`, `refs.rs`, `patch_replay.rs`, `seal/support.rs`,
+//! `verify/ref_publication.rs`).
+//!
 //! # DC-95 Stage 1: end-to-end coverage, by cluster
 //!
 //! Every check `verify_repository` performs, classified by whether disabling it lets a defective
@@ -122,6 +147,7 @@
 //! | RefState name mismatches pointer | Downstream-redundant (`classify_ref_state`'s own coherence arm) |
 //! | `ensure_ref_target_valid` (dangling Branch/Tag target) | Load-bearing |
 //! | Ref-log chain/sequence divergence | Load-bearing |
+//! | Ref-log checksum mismatch (`RefStore::replay_log`, via `refs/verify/scan.rs::read_one_log`) | Load-bearing; RFC 102 Stage 2 made this item-level internally (`RefLogRecordOutcome`) but `read_one_log` still translates any damaged record to the same file-level `RefFileStatus::Failed` this row always meant -- see the RFC 102 Stage 2 section above |
 //! | `verify_update` RefState/RefUpdate coherence | Load-bearing |
 //! | RefState unsigned | Downstream-redundant (`PublicationTrustVerifier`) |
 //! | `ensure_ref_path_shape` (`by-id/`, `logs/`) | Downstream-redundant, provably, both |
@@ -136,7 +162,7 @@
 //!
 //! | Check | Classification |
 //! |---|---|
-//! | `Wal::replay()` checksum mismatch | Load-bearing |
+//! | `Wal::replay()` checksum mismatch | Load-bearing; RFC 102 Stage 2 made the failure item-level (`wal_record_outcomes`) rather than a whole-`WalReplay`-stage abort -- see the RFC 102 Stage 2 section above |
 //! | `verify_wal_persistence` type mismatch | Load-bearing |
 //! | Rollback WAL envelope type | Unreachable (`is_rollback_draft_envelope` already guarantees Patch type before this check runs) |
 //! | Rollback WAL decode (op_seq contiguity) | Load-bearing |
@@ -386,6 +412,9 @@ pub struct RepositoryVerification {
     /// Number of active WAL records replayed successfully. `None` when the WAL-replay stage did not
     /// evaluate to completion.
     pub checked_wal_records: Option<usize>,
+    /// One outcome per attempted WAL record frame, in scan order (RFC 102 Stage 2: isolate-and-
+    /// continue reading). Empty when the `WalReplay` stage itself did not evaluate.
+    pub wal_record_outcomes: Vec<crate::wal::WalRecordOutcome>,
     /// Number of persisted Block objects whose references (parent, patch, snapshot existence, merge
     /// baseline) were checked successfully — a Phase A claim only, never a claim about state-root
     /// soundness (see `block_state_outcomes`). `None` only when the `Objects` stage itself did not
@@ -544,6 +573,10 @@ impl RepositoryVerification {
                 .ref_item_outcomes
                 .iter()
                 .any(|outcome| matches!(outcome.status, crate::refs::RefItemStatus::Failed { .. }))
+            || self
+                .wal_record_outcomes
+                .iter()
+                .any(|outcome| matches!(outcome.status, crate::wal::WalRecordStatus::Failed { .. }))
     }
 
     /// Return true when this repository's verification found any blocking reason to refuse it --
@@ -1048,6 +1081,10 @@ pub fn verify_repository_with_options(
         block_state_outcomes,
         checked_objects,
         checked_wal_records: replay.as_ref().map(|replay| replay.records.len()),
+        wal_record_outcomes: replay
+            .as_ref()
+            .map(|replay| replay.record_outcomes.clone())
+            .unwrap_or_default(),
         checked_blocks,
         checked_rollback_blocks,
         checked_sealed_rollback_patches,

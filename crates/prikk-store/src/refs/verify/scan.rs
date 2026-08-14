@@ -225,6 +225,29 @@ fn read_one_log(
     let relative = layout.repository_relative(path)?;
     let bytes = read_file_required(layout.repository_mutation_root(), &relative)?;
     let replay = decode_log_file_bytes(layout.format(), &bytes)?;
+    // RFC 102 Stage 2: isolate-and-continue reading means a damaged record no longer makes
+    // `decode_log_file_bytes` return `Err` -- this file's own item containment (the caller,
+    // `read_logs`, already catches an `Err` here into `RefFileStatus::Failed`) must be preserved
+    // explicitly, or `replay.records.is_empty()` below could read a log with only a damaged record
+    // as legitimately empty rather than as a file whose content could not be fully trusted. Kept at
+    // file granularity (not the WAL's per-record `wal_record_outcomes` exposure) deliberately --
+    // see the review submission for the scope reasoning.
+    if replay.has_item_failure() {
+        let failed = replay
+            .record_outcomes
+            .iter()
+            .filter_map(|outcome| match &outcome.status {
+                crate::refs::log::RefLogRecordStatus::Failed { message } => {
+                    Some(format!("offset {}: {message}", outcome.offset))
+                }
+                crate::refs::log::RefLogRecordStatus::Evaluated => None,
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        return Err(PrikkError::Integrity(format!(
+            "ref log has damaged record(s): {failed}"
+        )));
+    }
     if replay.records.is_empty() {
         if replay.trailing_partial_bytes == 0 {
             return Ok(None);
