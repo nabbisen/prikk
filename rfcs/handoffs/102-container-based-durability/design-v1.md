@@ -577,3 +577,37 @@ tautologies. **Both were silent, and in both cases the suite stayed green.**
 can go vacuous when the path stops being written. **Every remaining migrated comparison must be checked
 for whether it can still fail**, not merely for whether it passes. A test that cannot fail is worse than
 a deleted one, because it reports coverage.
+
+### 13.11 Bucket R disposition — approved 2026-08-14
+
+**All four retirements and both redesigns are approved. The categorization was checked, not accepted.**
+
+**Verified independently:** `state_matrix/fixture.rs:56-60` builds every state except `LegacyLogLeading`
+via `root_publication` — so the matrix's `PointerLeading` is the **root/sequence-1 case only**, and the
+existing-ref/sequence-2 path through `classify_ref_state`'s arm 2 is genuinely uncovered. And its three
+tests are verify/doctor read-only, production retry, and **one representative** command mutation per
+state.
+
+**Both of those facts are what make the categorization correct**, and they are the two that would have
+made it wrong if they had gone the other way:
+
+- The four retirements are redundant **because the matrix covers their end state at the root case**,
+  which is the case they build.
+- `existing_ref_pointer_lead_finishes_but_format2_ahead_log_refuses` survives **because the matrix does
+  not build a second publication** — a genuinely different path, not a different name for the same one.
+- `candidate_failure_warns_and_retry_publishes_once` survives **because the matrix checks one
+  representative mutation**, while this test proves the wedge reaches `append_patch`,
+  `add_trusted_maintainer` *and* `repair_repository`.
+
+**On the near-miss, which is the more important half of the report.** The first read categorized that
+test by name and opening lines and would have retired it, quietly narrowing coverage of the wedge while
+believing the migration was neutral. It was caught by reading the whole body.
+
+**That is the third time in this migration that a name matched and the body did not** — the
+`seal_truncates_only_partial_tail` pattern-match, `state_bytes()`'s vacuous comparisons, and now this.
+**Standing condition for the remaining buckets: categorize from the body, never from the name plus the
+opening lines.**
+
+**And an explicit answer to the process question: silence is not consent for deleting a test.** Every
+retirement needs an affirmative ruling. The near-miss is the argument — a categorization that looked
+obvious was wrong, and the only thing that caught it was someone being required to justify it out loud.
