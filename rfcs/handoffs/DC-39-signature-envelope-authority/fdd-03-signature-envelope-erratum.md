@@ -2,7 +2,7 @@
 
 **Status.** Accepted companion authority inherited from DC-39 after architect design re-review on
 2026-07-22; implementation evidence remains pending.
-**Parent RFC.** `../../accepted/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md`.
+**Parent RFC.** `../../done/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md`.
 **Upstream authority.** `../../accepted/DC-34-PUBLICATION-IDENTITY-AUTHORITY.md`.
 
 ## Purpose

@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-28
 **Handoff followed:** `implementation-handoff-v1.md`, cleared to start after project-owner acceptance
-of `rfcs/accepted/DC-55-FIRST-PARTY-SHA256-REPLACEMENT.md` (commit `a01e628`).
+of `rfcs/done/DC-55-FIRST-PARTY-SHA256-REPLACEMENT.md` (commit `a01e628`).
 **Reproducibility note:** every claim below is written so a reviewer can reproduce it from the
 repository alone — the seed for Step 3a, the exact commands for both backend runs, and the fixture
 for the end-to-end check are all in the tree. This is what compensates for the design-review

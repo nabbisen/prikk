@@ -1,7 +1,7 @@
 # DC-62 Commit Benchmark Memory Axis - Handoff
 
 **Cleared to start.** Accepted by the project owner on 2026-07-30, at
-`rfcs/accepted/DC-62-COMMIT-BENCHMARK-MEMORY-AXIS.md`. No gate remains.
+`rfcs/done/DC-62-COMMIT-BENCHMARK-MEMORY-AXIS.md`. No gate remains.
 **Authored by** the architect.
 **Size:** small. One axis added to an existing harness, plus a report section.
 **Touches:** `crates/prikk-cli/tests/dc59_commit_benchmark.rs` and its committed report.

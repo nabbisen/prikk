@@ -1,7 +1,7 @@
 # DC-55 First-Party SHA-256 Replacement - Handoff
 
 **Cleared to start.** DC-55 was accepted by the project owner on 2026-07-28 and now lives at
-`rfcs/accepted/DC-55-FIRST-PARTY-SHA256-REPLACEMENT.md`. No gate remains — begin at Step 0.
+`rfcs/done/DC-55-FIRST-PARTY-SHA256-REPLACEMENT.md`. No gate remains — begin at Step 0.
 
 **Authored by** the architect (function-designer role). Design review v1 was an author re-examination,
 not an independent review; the RFC's Status field records why and what compensates for it. Review of your
