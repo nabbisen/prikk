@@ -14,27 +14,36 @@ use crate::fsutil::{
 const REPO_DIR: &str = ".prikk";
 const LEGACY_FORMAT_VERSION: &[u8] = b"1\n";
 const LEGACY_FORMAT_2_VERSION: &[u8] = b"2\n";
-const CURRENT_FORMAT_VERSION: &[u8] = b"3\n";
+const LEGACY_FORMAT_3_VERSION: &[u8] = b"3\n";
+const CURRENT_FORMAT_VERSION: &[u8] = b"4\n";
 
 /// Repository format selected by the authoritative `.prikk/FORMAT` marker.
 ///
-/// RFC 103 retired format 1; RFC 102 Stage 3 retires format 2 the same way -- rejected at open
-/// (`read_repository_format`), not merely unsupported for mutation, no variant naming it here. The
-/// single remaining variant is kept as an enum rather than collapsed away, per design-v1.md §12.1's
-/// own note: `require_current_format`'s disk re-read is a real runtime check (RFC 103 Increment B was
-/// abandoned specifically because of it), so the enum's *shape* still carries meaning and is not free
-/// to simplify away.
+/// RFC 103 retired format 1; RFC 102 Stage 3 retired format 2 the same way, and RFC 102 Stage 4 does
+/// the same again for format 3 -- rejected at open (`read_repository_format`), not merely unsupported
+/// for mutation, no variant naming it here. **No fresh owner ruling was sought for this specific
+/// bump**: Stage 3's own Step 0 item 1 (design-v1.md §12.1) already settled the general policy --
+/// "prikk is in early stage of development and is not in production use. We don't have to care about
+/// such migration yet" -- stated about the project's lifecycle, not scoped to that one transition, and
+/// nothing about the project's stage changed between Stage 3 and Stage 4. Refs moving from loose files
+/// to containers is the same class of incompatible on-disk change objects moving to containers was;
+/// applying the same standing policy rather than re-asking it. The single remaining variant is kept as
+/// an enum rather than collapsed away, per design-v1.md §12.1's own note: `require_current_format`'s
+/// disk re-read is a real runtime check (RFC 103 Increment B was abandoned specifically because of
+/// it), so the enum's *shape* still carries meaning and is not free to simplify away.
 ///
-/// **"Format 2"/"format 3" here name the on-disk repository layout** (loose objects vs. RFC 102's
-/// containers) **-- a different axis from DC-40's "format-2" wire schema** (`block_state.rs`,
-/// `state_root.rs`, `format.rs`'s Block/Patch shape and Merkle rules), which Stage 3 does not touch
-/// and which keeps its own "format-2" name regardless of what this enum's current variant is called
-/// (design §8: "format-2's rejection of the ahead-log state" is explicitly unchanged).
+/// **"Format 2"/"format 3"/"format 4" here name the on-disk repository layout** (loose objects/refs
+/// vs. RFC 102's containers) **-- a different axis from DC-40's "format-2" wire schema**
+/// (`block_state.rs`, `state_root.rs`, `format.rs`'s Block/Patch shape and Merkle rules), which
+/// neither Stage 3 nor Stage 4 touches and which keeps its own "format-2" name regardless of what this
+/// enum's current variant is called (design §8: "format-2's rejection of the ahead-log state" is
+/// explicitly unchanged).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepositoryFormat {
-    /// Current format 3: RFC 102 Stage 3's container-based object storage, still writable under the
-    /// unchanged DC-40 schema and state-root rules.
-    CurrentV3,
+    /// Current format 4: RFC 102 Stage 4's container-based ref storage, layered on Stage 3's
+    /// container-based object storage, still writable under the unchanged DC-40 schema and
+    /// state-root rules.
+    CurrentV4,
 }
 
 /// One object-type container's pre-allocated alternate slot (RFC's §3.2 compaction requirement: a
@@ -102,14 +111,14 @@ impl RepositoryLayout {
         let repository_mutation = worktree_mutation.ensure_root(Path::new(REPO_DIR))?;
         if let Some(version) = read_file_if_exists(&repository_mutation, Path::new("FORMAT"))? {
             if version != CURRENT_FORMAT_VERSION {
-                // RFC 102 Stage 3, design-v1.md §12.1: this refusal inherits the format-2 -> 3 bump.
-                // Audited, not just the constant swapped: unlike `read_repository_format`'s own
-                // rejection (reached via `open`), this fires only on a redundant `init` against an
-                // already-initialized repository of some other format, so it stays terse and points
-                // at `open` (any other command) for the detailed migration message rather than
-                // duplicating it here.
+                // RFC 102 Stage 3, design-v1.md §12.1: this refusal inherited the format-2 -> 3 bump;
+                // RFC 102 Stage 4 carries the same policy forward for format-3 -> 4. Audited, not just
+                // the constant swapped: unlike `read_repository_format`'s own rejection (reached via
+                // `open`), this fires only on a redundant `init` against an already-initialized
+                // repository of some other format, so it stays terse and points at `open` (any other
+                // command) for the detailed migration message rather than duplicating it here.
                 return Err(PrikkError::Integrity(
-                    "refusing to initialize an existing non-format-3 Prikk repository (open it \
+                    "refusing to initialize an existing non-format-4 Prikk repository (open it \
                      with any other command for a detailed unsupported-format message)"
                         .to_string(),
                 ));
@@ -120,7 +129,7 @@ impl RepositoryLayout {
             prikk_dir,
             worktree_mutation,
             repository_mutation,
-            format: RepositoryFormat::CurrentV3,
+            format: RepositoryFormat::CurrentV4,
         };
         for dir in layout.required_repository_directories()? {
             ensure_directory_required(layout.repository_mutation_root(), &dir)?;
@@ -153,6 +162,18 @@ impl RepositoryLayout {
         }
         create_empty_file_once(&layout, &layout.container_index_path())?;
         create_empty_file_once(&layout, &layout.container_generation_log_path())?;
+        // RFC 102 Stage 4, Step 0 §13.2/§13.4: the shared ref-log container's both slots, plus the
+        // separate ref-pointer-index container -- allocated here, at `init`, and nowhere else, the
+        // same acceptance-criterion-1 discipline Stage 3 established.
+        create_empty_file_once(
+            &layout,
+            &layout.ref_log_container_slot_path(ContainerSlot::A),
+        )?;
+        create_empty_file_once(
+            &layout,
+            &layout.ref_log_container_slot_path(ContainerSlot::B),
+        )?;
+        create_empty_file_once(&layout, &layout.ref_pointer_index_path())?;
         Ok(layout)
     }
 
@@ -178,7 +199,7 @@ impl RepositoryLayout {
     /// Refuse ordinary repository/worktree mutation in legacy format 1.
     pub fn require_current_format(&self) -> Result<()> {
         self.validate_format()?;
-        if self.format == RepositoryFormat::CurrentV3 {
+        if self.format == RepositoryFormat::CurrentV4 {
             return Ok(());
         }
         Err(PrikkError::UnsupportedFormatVersion(1))
@@ -312,6 +333,35 @@ impl RepositoryLayout {
         self.containers_dir().join("generations.log")
     }
 
+    /// Return the ref-container root directory (RFC 102 Stage 4). Kept under `refs/`, sibling to the
+    /// now-vestigial `by-id/`/`logs/`/`tmp/`/`locks/` directories, rather than under the object
+    /// `containers/` tree -- ref containers are not object containers and the two are never confused
+    /// for the same purpose.
+    #[must_use]
+    pub fn refs_containers_dir(&self) -> PathBuf {
+        self.refs_dir().join("containers")
+    }
+
+    /// Return the shared ref-log container file for a given slot (Step 0 §13.2: one container holds
+    /// every ref's log records, forced by acceptance criterion 1 -- ref names do not exist at `init`,
+    /// so a per-ref container is architecturally impossible). **Both slots allocated at `init`**,
+    /// matching Stage 3's own A/B convention exactly (`container_slot_path`'s own doc comment) --
+    /// Stage 4 only ever writes `A`.
+    #[must_use]
+    pub fn ref_log_container_slot_path(&self, slot: ContainerSlot) -> PathBuf {
+        self.refs_containers_dir()
+            .join(format!("log-{}.container", slot.as_str()))
+    }
+
+    /// Return the ref-pointer-index container path (Step 0 §13.4, ruled in design-v1.md §13.4: a
+    /// *separate* ref index, its own type and its own container -- `index.rs`'s already-shipped object
+    /// index schema is never widened). Single file, no A/B slot, same reasoning as
+    /// `container_index_path`: an index's publication shape is plain append-only.
+    #[must_use]
+    pub fn ref_pointer_index_path(&self) -> PathBuf {
+        self.refs_containers_dir().join("pointer-index.container")
+    }
+
     /// Return all required directories for layout creation.
     #[must_use]
     pub fn required_directories(&self) -> Vec<PathBuf> {
@@ -331,6 +381,7 @@ impl RepositoryLayout {
         dirs.push(self.refs_dir().join("logs"));
         dirs.push(self.refs_dir().join("locks"));
         dirs.push(self.refs_dir().join("tmp"));
+        dirs.push(self.refs_containers_dir());
         dirs.push(self.trust_dir());
         dirs.push(self.trust_keys_dir());
         dirs.push(self.maintainer_trust_keys_dir());
@@ -480,7 +531,7 @@ fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
     match version.as_slice() {
         LEGACY_FORMAT_VERSION => Err(PrikkError::Integrity(
             "this repository uses format 1, which prikk no longer supports (this version \
-             requires format 3). format-1 support was removed after 0.19.0. to migrate: use \
+             requires format 4). format-1 support was removed after 0.19.0. to migrate: use \
              prikk 0.19.0 or earlier to `prikk bundle export`, then `prikk bundle import` here"
                 .to_string(),
         )),
@@ -491,11 +542,24 @@ fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
         // (`CHANGELOG.md`, `git tag`), not guessed.
         LEGACY_FORMAT_2_VERSION => Err(PrikkError::Integrity(
             "this repository uses format 2, which prikk no longer supports (this version \
-             requires format 3). format-2 support was removed after 0.19.0. to migrate: use \
+             requires format 4). format-2 support was removed after 0.19.0. to migrate: use \
              prikk 0.19.0 or earlier to `prikk bundle export`, then `prikk bundle import` here"
                 .to_string(),
         )),
-        CURRENT_FORMAT_VERSION => Ok(RepositoryFormat::CurrentV3),
+        // RFC 102 Stage 4: bump to format 4, reject format-3 at open, no dual-layout bridge --
+        // applying Stage 3's own already-ruled policy (design-v1.md §12.1), not a fresh decision (see
+        // `RepositoryFormat`'s own doc comment). Unlike format 2, format 3 was never itself the
+        // subject of a tagged release (Stage 3 was still pending three-platform CI when Stage 4
+        // began) -- no specific "removed after X.Y.Z" version is named here, since none can be
+        // verified from the release record yet; naming one would be guessing, which this project's
+        // own discipline for these messages does not do.
+        LEGACY_FORMAT_3_VERSION => Err(PrikkError::Integrity(
+            "this repository uses format 3, which prikk no longer supports (this version \
+             requires format 4). to migrate: use a prikk version that supports format 3 to \
+             `prikk bundle export`, then `prikk bundle import` here"
+                .to_string(),
+        )),
+        CURRENT_FORMAT_VERSION => Ok(RepositoryFormat::CurrentV4),
         _ => Err(PrikkError::UnsupportedFormatVersion(0)),
     }
 }
@@ -539,5 +603,14 @@ fn hex_prefix(hex: &str) -> String {
 }
 
 pub(crate) fn ref_name_storage_key(ref_name: &str) -> String {
-    to_hex(&sha256(ref_name.as_bytes()))
+    to_hex(&ref_name_key_bytes(ref_name))
+}
+
+/// The raw 32-byte form of [`ref_name_storage_key`] (RFC 102 Stage 4, Step 0 §13.4 / design-v1.md
+/// §13.4's ruling): a fixed-width key already used to name every ref pointer/log file today, reused
+/// as the ref-pointer-index's own key rather than inventing a second one -- the "new key shape"
+/// objection Step 0 raised dissolved specifically because this already existed.
+#[must_use]
+pub(crate) fn ref_name_key_bytes(ref_name: &str) -> [u8; 32] {
+    sha256(ref_name.as_bytes())
 }

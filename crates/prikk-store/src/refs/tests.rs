@@ -5,7 +5,7 @@ mod publication_recovery;
 
 use prikk_object::ObjectType;
 
-use super::log;
+use crate::layout::ref_name_key_bytes;
 use crate::{
     FileObjectStore, ObjectWriter, RefLock, RefPublication, RefStore, RepositoryLayout,
     verify_repository,
@@ -32,72 +32,6 @@ fn ref_lock_rejects_second_writer() {
         assert!(third.is_ok());
     }
     let _ = std::fs::remove_dir_all(root);
-}
-
-#[test]
-fn ref_log_first_append_failure_is_retryable() -> prikk_error::Result<()> {
-    let root = unique_temp_dir("ref-log-append-failure");
-    let layout = RepositoryLayout::init(root.clone())?;
-    let target = sample_object_id("target");
-    let state = sample_object_id("state");
-    let envelope = signed_ref_update_envelope("heads/main", None, state, target, 1);
-
-    fail_once_for_test(TestFailPoint::AppendWrite);
-    assert!(log::append_log_record(&layout, "heads/main", &envelope).is_err());
-    assert_eq!(log::replay_log(&layout, "heads/main")?.records.len(), 0);
-    assert!(log::append_log_record(&layout, "heads/main", &envelope).is_ok());
-    assert_eq!(log::replay_log(&layout, "heads/main")?.records.len(), 1);
-
-    let _ = std::fs::remove_dir_all(root);
-    Ok(())
-}
-
-#[test]
-fn existing_ref_log_append_failure_is_retryable() -> prikk_error::Result<()> {
-    let root = unique_temp_dir("ref-log-existing-append-failure");
-    let layout = RepositoryLayout::init(root.clone())?;
-    let target = sample_object_id("target");
-    let first_state = sample_object_id("state-1");
-    let second_state = sample_object_id("state-2");
-    let first = signed_ref_update_envelope("heads/main", None, first_state, target, 1);
-    let second =
-        signed_ref_update_envelope("heads/main", Some(first_state), second_state, target, 2);
-    assert!(log::append_log_record(&layout, "heads/main", &first).is_ok());
-
-    fail_once_for_test(TestFailPoint::AppendWrite);
-    assert!(log::append_log_record(&layout, "heads/main", &second).is_err());
-    assert_eq!(log::replay_log(&layout, "heads/main")?.records.len(), 1);
-    assert!(log::append_log_record(&layout, "heads/main", &second).is_ok());
-    assert_eq!(log::replay_log(&layout, "heads/main")?.records.len(), 2);
-
-    let _ = std::fs::remove_dir_all(root);
-    Ok(())
-}
-
-#[test]
-fn ref_log_file_and_first_directory_sync_failures_retry_without_duplication()
--> prikk_error::Result<()> {
-    for point in [
-        TestFailPoint::RequiredFileSync,
-        TestFailPoint::RequiredDirectorySync,
-    ] {
-        let root = unique_temp_dir("ref-log-sync-failure");
-        let layout = RepositoryLayout::init(root.clone())?;
-        let envelope = signed_ref_update_envelope(
-            "heads/main",
-            None,
-            sample_object_id("state"),
-            sample_object_id("target"),
-            1,
-        );
-        fail_once_for_test(point);
-        assert!(log::append_log_record(&layout, "heads/main", &envelope).is_err());
-        assert_eq!(log::replay_log(&layout, "heads/main")?.records.len(), 1);
-        assert!(log::append_log_record(&layout, "heads/main", &envelope).is_ok());
-        assert_eq!(log::replay_log(&layout, "heads/main")?.records.len(), 1);
-        let _ = std::fs::remove_dir_all(root);
-    }
-    Ok(())
 }
 
 #[test]
@@ -305,7 +239,9 @@ fn ref_store_rejects_unborn_publication_when_log_has_history() {
             ref_update,
         };
         assert!(store.publish(&first).is_ok());
-        assert!(std::fs::remove_file(layout.ref_pointer_path("heads/main")).is_ok());
+        // Containers are append-only, so there is no direct "delete the pointer file" equivalent
+        // to the pre-Stage-4 `std::fs::remove_file` this replaces.
+        assert!(super::remove_pointer_entries_for_test(&layout, ref_name_key_bytes("heads/main")).is_ok());
 
         let second_target = sample_object_id("different-target");
         let second_ref_state = signed_ref_state_envelope("heads/main", None, second_target, 1);
@@ -339,7 +275,31 @@ fn ref_store_rejects_unborn_publication_when_log_has_trailing_partial() {
         let block = signed_empty_block_envelope();
         let target = block.object_id();
         assert!(object_store.write_object(&block).is_ok());
-        assert!(std::fs::write(layout.ref_log_path("heads/main"), b"partial").is_ok());
+        // Containers are append-only, so a raw torn write now targets the shared container
+        // directly, attributed to "heads/main" via the frame's own header-carried `ref_name_key`
+        // (design-v1.md §13.6) rather than a per-ref file.
+        let torn_source = signed_ref_update_envelope(
+            "heads/main",
+            None,
+            sample_object_id("torn-state"),
+            sample_object_id("torn-target"),
+            1,
+        );
+        let framed = super::encode_ref_container_record_for_test(
+            ref_name_key_bytes("heads/main"),
+            &torn_source,
+        );
+        assert!(framed.is_ok());
+        if let Ok(framed) = framed {
+            let torn = &framed[..framed.len().saturating_sub(3)];
+            assert!(
+                std::fs::write(
+                    layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A),
+                    torn
+                )
+                .is_ok()
+            );
+        }
 
         let store = RefStore::new(layout.clone());
         let ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
@@ -496,7 +456,7 @@ fn ref_store_refuses_unsigned_missing_pointer_reconstruction() {
             ref_update,
         };
         assert!(store.publish(&publication).is_ok());
-        assert!(std::fs::remove_file(layout.ref_pointer_path("heads/main")).is_ok());
+        assert!(super::remove_pointer_entries_for_test(&layout, ref_name_key_bytes("heads/main")).is_ok());
         assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(None));
         let candidate = store.recoverable_missing_ref("heads/main");
         assert!(candidate.is_ok());
@@ -528,7 +488,14 @@ fn ref_log_ahead_of_pointer_is_recoverable() {
         let ref_state_id = ref_state.object_id();
         assert!(object_store.write_object(&ref_state).is_ok());
         let ref_update = signed_ref_update_envelope("heads/topic", None, ref_state_id, target, 1);
-        assert!(log::append_log_record(&layout, "heads/topic", &ref_update).is_ok());
+        assert!(
+            super::append_ref_container_record(
+                &layout,
+                ref_name_key_bytes("heads/topic"),
+                &ref_update
+            )
+            .is_ok()
+        );
 
         let store = RefStore::new(layout.clone());
         assert_eq!(store.read_current_ref_state_id("heads/topic"), Ok(None));

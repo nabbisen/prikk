@@ -67,7 +67,7 @@ fn init_allocates_every_container_index_and_generation_log_name_once() -> Result
         assert!(path.is_file());
         assert_eq!(std::fs::metadata(path)?.len(), 0);
     }
-    assert_eq!(reopened.format(), RepositoryFormat::CurrentV3);
+    assert_eq!(reopened.format(), RepositoryFormat::CurrentV4);
 
     let expected: HashSet<PathBuf> = container_paths.into_iter().collect();
     assert_eq!(files_under(&layout.containers_dir())?, expected);
@@ -89,6 +89,43 @@ fn init_allocates_every_container_index_and_generation_log_name_once() -> Result
         expected,
         "ordinary object writes must grow existing container/index files, never create a new one"
     );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 102 Stage 4 acceptance criterion 1 (handoff §4): "every new container name created at
+/// `init`" -- the shared ref-log container's both slots, plus the ref-pointer-index container.
+/// Mirrors `init_allocates_every_container_index_and_generation_log_name_once` exactly; the "ordinary
+/// writes never add a name" half is proven once the write protocol exists (task 143), not here.
+#[test]
+fn init_allocates_every_ref_container_name_once() -> Result<()> {
+    let root = unique_temp_dir("layout-ref-container-allocation");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    let ref_container_paths = vec![
+        layout.ref_log_container_slot_path(ContainerSlot::A),
+        layout.ref_log_container_slot_path(ContainerSlot::B),
+        layout.ref_pointer_index_path(),
+    ];
+    for path in &ref_container_paths {
+        assert!(path.is_file(), "expected {path:?} to exist after init");
+        assert_eq!(
+            std::fs::metadata(path)?.len(),
+            0,
+            "expected {path:?} to be created empty"
+        );
+    }
+
+    let reopened = RepositoryLayout::init(root.clone())?;
+    for path in &ref_container_paths {
+        assert!(path.is_file());
+        assert_eq!(std::fs::metadata(path)?.len(), 0);
+    }
+    assert_eq!(reopened.format(), RepositoryFormat::CurrentV4);
+
+    let expected: HashSet<PathBuf> = ref_container_paths.into_iter().collect();
+    assert_eq!(files_under(&layout.refs_containers_dir())?, expected);
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

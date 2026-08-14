@@ -1,9 +1,10 @@
-//! Release-facing retired-format rejection proof: RFC 103 (format 1) and RFC 102 Stage 3 (format 2,
-//! design-v1.md §12.1) each retire a repository format by refusing it at open, not reading it in a
-//! bounded legacy mode -- there is no dual-path behavior left to exercise across a command matrix,
-//! for either format. `build_legacy_fixture` remains load-bearing here: design-v1.md §5 acceptance
-//! criterion 2 requires the rejection proven against a real fixture, not a hand-built one, for both
-//! retired formats.
+//! Release-facing retired-format rejection proof: RFC 103 (format 1), RFC 102 Stage 3 (format 2,
+//! design-v1.md §12.1), and RFC 102 Stage 4 (format 3, applying the same already-ruled policy -- see
+//! `layout.rs`'s own `RepositoryFormat` doc comment) each retire a repository format by refusing it at
+//! open, not reading it in a bounded legacy mode -- there is no dual-path behavior left to exercise
+//! across a command matrix, for any of the three. `build_legacy_fixture` remains load-bearing here:
+//! design-v1.md §5 acceptance criterion 2 requires the rejection proven against a real fixture, not a
+//! hand-built one, for every retired format.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -94,7 +95,12 @@ fn snapshot_tree(root: &Path) -> TestResult<BTreeMap<PathBuf, Vec<u8>>> {
     Ok(snapshot)
 }
 
-fn assert_rejection_contract(args: &[&str], output: &Output, detected_format: &str) {
+fn assert_rejection_contract(
+    args: &[&str],
+    output: &Output,
+    detected_format: &str,
+    version_claim: Option<&str>,
+) {
     assert!(
         !output.status.success(),
         "{args:?} unexpectedly succeeded: stdout={} stderr={}",
@@ -102,13 +108,14 @@ fn assert_rejection_contract(args: &[&str], output: &Output, detected_format: &s
         String::from_utf8_lossy(&output.stderr)
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
-    for expected in [
-        detected_format,
-        "requires format 3",
-        "removed after 0.19.0",
-        "bundle export",
-        "bundle import",
-    ] {
+    // `version_claim` is `None` for a format never itself the subject of a tagged release (format 3,
+    // RFC 102 Stage 4's own bump target) -- its rejection message names no specific "removed after
+    // X.Y.Z" version, since none could be verified from the release record (`layout.rs`'s
+    // `LEGACY_FORMAT_3_VERSION` arm doc comment).
+    for expected in [detected_format, "requires format 4", "bundle export", "bundle import"]
+        .into_iter()
+        .chain(version_claim)
+    {
         assert!(
             stderr.contains(expected),
             "{args:?}: rejection message missing {expected:?}: {stderr}"
@@ -116,18 +123,30 @@ fn assert_rejection_contract(args: &[&str], output: &Output, detected_format: &s
     }
 }
 
-/// RFC 103 §4/design-v1.md §2 (format 1) and RFC 102 Stage 3, design-v1.md §12.1 (format 2, the same
-/// proof re-run one format later): a retired-format repository is rejected at
-/// `RepositoryLayout::open`, with a message naming the detected format, the required format, the
-/// last supporting version, and the bundle export/import remedy — for every command, not a
-/// command-specific subset, since rejection now happens before any command-specific logic runs.
-/// Proven against real fixtures (`build_legacy_fixture`, differing only in what kind of active-session
-/// state they carry and which format byte was flipped), not hand-built ones.
+/// RFC 103 §4/design-v1.md §2 (format 1), RFC 102 Stage 3, design-v1.md §12.1 (format 2), and RFC 102
+/// Stage 4 (format 3, the same proof re-run one format later again): a retired-format repository is
+/// rejected at `RepositoryLayout::open`, with a message naming the detected format, the required
+/// format, and the bundle export/import remedy (format 3's own message omits "the last supporting
+/// version" specifically -- see `layout.rs`'s `LEGACY_FORMAT_3_VERSION` arm: unlike formats 1 and 2,
+/// format 3 was never itself the subject of a tagged release, so no specific version can be named
+/// without guessing) — for every command, not a command-specific subset, since rejection now happens
+/// before any command-specific logic runs. Proven against real fixtures (`build_legacy_fixture`,
+/// differing only in what kind of active-session state they carry and which format byte was flipped),
+/// not hand-built ones.
 #[test]
 fn retired_format_repository_is_rejected_at_open_for_every_command() -> TestResult {
-    for (target_format, detected_format) in [
-        (b"1\n".as_slice(), "this repository uses format 1"),
-        (b"2\n".as_slice(), "this repository uses format 2"),
+    for (target_format, detected_format, version_claim) in [
+        (
+            b"1\n".as_slice(),
+            "this repository uses format 1",
+            Some("removed after 0.19.0"),
+        ),
+        (
+            b"2\n".as_slice(),
+            "this repository uses format 2",
+            Some("removed after 0.19.0"),
+        ),
+        (b"3\n".as_slice(), "this repository uses format 3", None),
     ] {
         for active in [
             ActiveFixture::RollbackDraft,
@@ -162,7 +181,7 @@ fn retired_format_repository_is_rejected_at_open_for_every_command() -> TestResu
                 // construction and never reaches (or proves) the rejection this test is checking.
                 let owned_args = args.iter().map(ToString::to_string).collect::<Vec<_>>();
                 let output = run_owned(&root, &owned_args)?;
-                assert_rejection_contract(&args, &output, detected_format);
+                assert_rejection_contract(&args, &output, detected_format, version_claim);
                 assert_eq!(
                     snapshot_tree(&root)?,
                     before,
@@ -176,7 +195,7 @@ fn retired_format_repository_is_rejected_at_open_for_every_command() -> TestResu
     Ok(())
 }
 
-/// `RepositoryLayout::init` refuses to initialize over an existing non-format-3 repository through
+/// `RepositoryLayout::init` refuses to initialize over an existing non-format-4 repository through
 /// its own, separate check (`layout.rs::init`, not `read_repository_format`) — out of RFC 103's scope
 /// since it never opens the repository for use, but still a real safety property worth keeping under
 /// regression coverage: it must not silently reformat or clobber a format-1 repository in place.

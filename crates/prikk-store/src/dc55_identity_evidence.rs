@@ -14,9 +14,15 @@
 //! not a convenience. Every assertion below reads its bytes directly and calls the lowest-level
 //! production function available for each site, bypassing `RepositoryLayout::open` entirely --
 //! `Wal::new` (a bare, layout-free constructor, already used this way by
-//! `active/tests/format_transition.rs`), and two `pub(crate)` functions widened from private to
-//! `pub(crate)` (`refs::log::decode_log_records`, matching `file_codec::decode_envelope_file`'s
-//! existing level) specifically so this test can reach them without a `RepositoryLayout`.
+//! `active/tests/format_transition.rs`), `file_codec::decode_envelope_file` (widened from private to
+//! `pub(crate)`), and, for the frozen ref log specifically, a **self-contained decoder local to this
+//! file** (`decode_frozen_ref_log_records` below) -- RFC 102 Stage 4 retired `refs/log.rs`'s own
+//! per-file `PREFLOG1` codec entirely (ref logs now live in a shared container under a different
+//! frame shape, `refs/container.rs`'s `PREFCON1`), but this fixture's bytes were written by the
+//! pre-swap binary using the *old* shape and must never be regenerated -- so the *old* decoder is
+//! reproduced here, narrowly, for this one frozen file, rather than kept alive as shared
+//! infrastructure nothing else needs. Same principle as Stage 3's own G5 (`publish_immutable_file`):
+//! evidence for a retired mechanism is kept, not deleted, but scoped to exactly what still needs it.
 //!
 //! **One site does not hold, corrected from design-v1.md §12.2's claim, not silently absorbed (its
 //! own rule 5): the WAL is not observable here.** `queue.wal` in this fixture has been the empty blob
@@ -35,8 +41,95 @@ use prikk_hash::{sha256, to_hex};
 
 use crate::file_codec::decode_envelope_file;
 use crate::layout::ref_name_storage_key;
-use crate::refs::decode_log_records;
 use crate::wal::Wal;
+
+const FROZEN_REF_LOG_MAGIC: &[u8; 8] = b"PREFLOG1";
+const FROZEN_REF_LOG_VERSION: u16 = 1;
+/// magic(8) + version(2) + body_len(8) + checksum(32) -- `refs/log.rs`'s own retired frame shape,
+/// reproduced exactly (no `ref_name_key` field: that only exists in the *new* shared-container
+/// frame this fixture predates).
+const FROZEN_REF_LOG_HEADER_LEN: usize = 8 + 2 + 8 + 32;
+
+struct FrozenRefLogReplay {
+    record_count: usize,
+    trailing_partial_bytes: usize,
+    all_checksums_verified: bool,
+}
+
+/// Reproduces `refs/log.rs::decode_log_records`'s exact validation for the one frozen file that
+/// still needs it -- see this module's own doc for why the retired codec is not kept as shared
+/// infrastructure. No isolate-and-continue resync: the frozen fixture is known-good evidence, not a
+/// corruption-recovery scenario, so a first checksum failure here is itself a finding, not something
+/// to scan past.
+fn decode_frozen_ref_log_records(bytes: &[u8]) -> FrozenRefLogReplay {
+    let mut offset = 0_usize;
+    let mut record_count = 0_usize;
+    let mut all_checksums_verified = true;
+    loop {
+        let remaining = bytes.len().saturating_sub(offset);
+        if remaining < FROZEN_REF_LOG_HEADER_LEN {
+            return FrozenRefLogReplay {
+                record_count,
+                trailing_partial_bytes: remaining,
+                all_checksums_verified,
+            };
+        }
+        let header_end = offset + FROZEN_REF_LOG_HEADER_LEN;
+        let Some(header) = bytes.get(offset..header_end) else {
+            return FrozenRefLogReplay {
+                record_count,
+                trailing_partial_bytes: remaining,
+                all_checksums_verified,
+            };
+        };
+        let Some(magic) = header.get(0..8) else {
+            all_checksums_verified = false;
+            break;
+        };
+        if magic != FROZEN_REF_LOG_MAGIC {
+            all_checksums_verified = false;
+            break;
+        }
+        let version = u16::from_be_bytes(header.get(8..10).unwrap_or(&[0, 0]).try_into().unwrap_or([0, 0]));
+        if version != FROZEN_REF_LOG_VERSION {
+            all_checksums_verified = false;
+            break;
+        }
+        let body_len_bytes: [u8; 8] = header.get(10..18).unwrap_or(&[0; 8]).try_into().unwrap_or([0; 8]);
+        let body_len = u64::from_be_bytes(body_len_bytes);
+        let Ok(body_len) = usize::try_from(body_len) else {
+            all_checksums_verified = false;
+            break;
+        };
+        let checksum: [u8; 32] = header.get(18..50).unwrap_or(&[0; 32]).try_into().unwrap_or([0; 32]);
+        let Some(body_end) = header_end.checked_add(body_len) else {
+            all_checksums_verified = false;
+            break;
+        };
+        let Some(body) = bytes.get(header_end..body_end) else {
+            return FrozenRefLogReplay {
+                record_count,
+                trailing_partial_bytes: remaining,
+                all_checksums_verified,
+            };
+        };
+        let mut preimage = Vec::new();
+        preimage.extend_from_slice(FROZEN_REF_LOG_MAGIC);
+        preimage.extend_from_slice(&FROZEN_REF_LOG_VERSION.to_be_bytes());
+        preimage.extend_from_slice(&(body_len as u64).to_be_bytes());
+        preimage.extend_from_slice(body);
+        if sha256(&preimage) != checksum {
+            all_checksums_verified = false;
+        }
+        record_count += 1;
+        offset = body_end;
+    }
+    FrozenRefLogReplay {
+        record_count,
+        trailing_partial_bytes: 0,
+        all_checksums_verified,
+    }
+}
 
 fn fixture_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -119,21 +212,21 @@ fn collect_files(dir: &Path) -> Vec<PathBuf> {
 }
 
 /// The frozen ref log (743 bytes, two records -- matching the original test's "checked ref-log
-/// records: 2") carries real per-record SHA-256 checksums. `decode_log_records` (called directly,
-/// widened from private to `pub(crate)` for this test) exercises `refs/log.rs`'s checksum
-/// verification on those exact persisted bytes.
+/// records: 2") carries real per-record SHA-256 checksums, in `refs/log.rs`'s retired per-file frame
+/// shape. `decode_frozen_ref_log_records` (this file's own reproduction of that shape, see the
+/// module doc) exercises checksum verification on those exact persisted bytes.
 #[test]
 fn frozen_ref_log_checksums_verify_and_decode_cleanly() {
     let path = fixture_root()
         .join("refs/logs/c316ccb36a95a977918874d43e722a5a7d9ef74b138f3b76078f6993c14a799f.log");
     let bytes = std::fs::read(&path).expect("read frozen ref log");
-    let replay = decode_log_records(&bytes).expect("decode frozen ref log");
+    let replay = decode_frozen_ref_log_records(&bytes);
     assert!(
-        !replay.has_item_failure(),
-        "a checksum in the frozen ref log no longer verifies: {replay:?}"
+        replay.all_checksums_verified,
+        "a checksum in the frozen ref log no longer verifies"
     );
     assert_eq!(replay.trailing_partial_bytes, 0);
-    assert_eq!(replay.records.len(), 2);
+    assert_eq!(replay.record_count, 2);
 }
 
 /// Negative control for `every_frozen_object_id_matches_its_own_filename`, run against a **temporary

@@ -11,7 +11,7 @@
 //! 11): `ref_publication::require_retained_evidence` reclassifies several `refs/verify.rs` codes before
 //! they're returned, so a raw pointer/log-shape fixture can silently land on a different code than the
 //! one under test; `crate::format::validate_read_schema`, called from `Wal::replay()` itself, already
-//! rejects a malformed-shape signature under `RepositoryFormat::CurrentV3` before
+//! rejects a malformed-shape signature under `RepositoryFormat::CurrentV4` before
 //! `rollback_verify::verify_rollback_draft_wal_records` is ever reached, so the same defect is reachable
 //! only under `RepositoryFormat::LegacyV1`. Building a fixture for a specific check in this module means
 //! tracing its actual call path from `verify_repository`, not just constructing input shaped to match
@@ -447,9 +447,9 @@ pub struct RepositoryVerification {
     /// Empty when the `Objects` stage itself did not evaluate (a structural directory-shape error) —
     /// nothing was attempted, distinct from a non-empty set where every entry happens to be `Failed`.
     pub object_outcomes: Vec<ObjectItemOutcome>,
-    /// Phase B: one outcome per `CurrentV3` Block whose Phase A check succeeded, in the
+    /// Phase B: one outcome per `CurrentV4` Block whose Phase A check succeeded, in the
     /// state-dependency order `verify_blocks_topological` resolved them — not scan order (DC-92
-    /// §4.2). Empty when the `Objects` stage did not evaluate, or when no `CurrentV3` Block passed
+    /// §4.2). Empty when the `Objects` stage did not evaluate, or when no `CurrentV4` Block passed
     /// Phase A at all.
     pub block_state_outcomes: Vec<BlockStateOutcome>,
     /// Number of persisted object files whose own Phase A checks ran to completion (DC-95 Stage 2
@@ -595,7 +595,7 @@ impl RepositoryVerification {
     }
 
     /// Return true when any individual item did not evaluate cleanly (DC-95 Stage 2 Level 2) — a
-    /// Phase A object whose own check failed, a Phase B `CurrentV3` Block whose state-root check
+    /// Phase A object whose own check failed, a Phase B `CurrentV4` Block whose state-root check
     /// failed or could not be attempted because its own state-derivation parent did not evaluate,
     /// or a ref (its pointer file, log file, or classification) that failed. Item containment means
     /// these no longer make [`Self::has_stage_failure`] true: the owning stage itself completed, so
@@ -1254,7 +1254,7 @@ fn classify_active_wal_metadata(
 
 /// Phase A (DC-92 §4.2): every check that does not depend on lineage-state derivation order —
 /// existence of referenced objects, rollback-patch counting, and (independent of the shared memo)
-/// the merge-baseline re-derivation. A `CurrentV3` block's own state-root verification is
+/// the merge-baseline re-derivation. A `CurrentV4` block's own state-root verification is
 /// deliberately **not** done here; it is deferred to a batch, dependency-ordered pass
 /// (`crate::block_state::verify_blocks_topological`) run once after every object type has been
 /// scanned, so `pending_v3_blocks` collects this block's already-decoded payload rather than
@@ -1300,12 +1300,12 @@ fn verify_block_payload(
             block_id,
         )?;
     }
-    let merge_baseline_divergence = if format == RepositoryFormat::CurrentV3 {
+    let merge_baseline_divergence = if format == RepositoryFormat::CurrentV4 {
         verify_merge_baseline(object_store, block_id, &payload)?
     } else {
         None
     };
-    if format == RepositoryFormat::CurrentV3 {
+    if format == RepositoryFormat::CurrentV4 {
         pending_v3_blocks.push((block_id, payload));
     }
     Ok((rollback_patch_count, merge_baseline_divergence))

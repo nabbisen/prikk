@@ -211,7 +211,7 @@ pub(crate) fn verify_block_v2_state(
     Ok(())
 }
 
-/// Outcome of attempting to verify one `CurrentV3` Block's state root during
+/// Outcome of attempting to verify one `CurrentV4` Block's state root during
 /// [`verify_blocks_topological`]'s whole-batch pass (DC-95 Stage 2 Level 2). Distinct from
 /// `verify::StageOutcome`/`StageStatus` (Level 1): there is no operator-requested halt at block
 /// granularity, so there is no `Halted` analogue — a block's non-evaluation is always because its

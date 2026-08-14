@@ -3,11 +3,12 @@
 use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectId, RefKind, RefStatePayload, RefUpdatePayload, ascii_fold};
 
+use super::pointer_index::{PointerIndexEntry, append_ref_pointer_entry};
 use super::{
-    RefPublication, RefStore, log, validate_local_branch_ref, validate_local_tag_ref,
+    RefPublication, RefStore, container, validate_local_branch_ref, validate_local_tag_ref,
     validate_publication,
 };
-use crate::layout::RepositoryFormat;
+use crate::layout::{RepositoryFormat, ref_name_key_bytes};
 use crate::lock::RefLock;
 use crate::object_store::{FileObjectStore, ObjectWriter};
 
@@ -43,11 +44,16 @@ fn publish_locked(
         validate_no_ref_name_collision(store, &publication.ref_name)?;
     }
     let ref_state_id = publication.ref_state.object_id();
+    let ref_name_key = ref_name_key_bytes(&publication.ref_name);
     let ref_lock = RefLock::acquire(&store.layout, &publication.ref_name)?;
-    super::pointer::remove_candidate_write_temps(&store.layout, &publication.ref_name)?;
+    // Step 0 §13.3, ruled in design-v1.md §13.3: the candidate-write-then-promote mechanism
+    // (`refs/pointer.rs`'s old `write_ref_pointer_candidate`/`promote_ref_pointer_candidate`,
+    // `remove_candidate_write_temps` here) has no equivalent under an append-only pointer index --
+    // an append-only record has no candidate value to stage, the append *is* the publish. `refs/tmp/`
+    // is never written by this function again.
     let mut object_store = FileObjectStore::new(store.layout.clone());
     match store.layout.format() {
-        RepositoryFormat::CurrentV3 => {
+        RepositoryFormat::CurrentV4 => {
             object_store.write_object(&publication.ref_state)?;
         }
     }
@@ -56,9 +62,9 @@ fn publish_locked(
     if trailing_partial_bytes != 0 {
         if !allow_partial_tail_repair
             || state != PublicationState::PointerLeading
-            || !log::incomplete_tail_matches(
+            || !container::incomplete_tail_matches(
                 &store.layout,
-                &publication.ref_name,
+                ref_name_key,
                 &publication.ref_update,
             )?
         {
@@ -67,33 +73,44 @@ fn publish_locked(
                 publication.ref_name
             )));
         }
-        log::truncate_incomplete_tail(&store.layout, &publication.ref_name)?;
+        container::truncate_incomplete_tail(&store.layout)?;
     }
     match state {
         PublicationState::Ready => {
-            store.write_ref_pointer_candidate(&publication.ref_name, ref_state_id)?;
+            // Design-v1.md §13.6: no candidate/promote dance, and the write order is otherwise
+            // unchanged from today's pointer-first publication -- the CAS check happens immediately
+            // before the pointer-index append, both still inside the same `RefLock` this function
+            // already holds for its whole duration, so no other writer for this exact ref name can
+            // observe or race between the check and the append.
             store.ensure_current_matches(
                 &publication.ref_name,
                 publication.expected_previous_ref_state_id,
             )?;
-            store.promote_ref_pointer_candidate(&publication.ref_name)?;
-            log::append_log_record(
+            append_ref_pointer_entry(
                 &store.layout,
-                &publication.ref_name,
+                &PointerIndexEntry {
+                    ref_name_key,
+                    ref_name: publication.ref_name.clone(),
+                    ref_state_id,
+                },
+            )?;
+            container::append_ref_container_record(
+                &store.layout,
+                ref_name_key,
                 &publication.ref_update,
             )?;
         }
         PublicationState::PointerLeading => {
-            log::append_log_record(
+            container::append_ref_container_record(
                 &store.layout,
-                &publication.ref_name,
+                ref_name_key,
                 &publication.ref_update,
             )?;
         }
         PublicationState::Complete => {
-            log::append_log_record(
+            container::append_ref_container_record(
                 &store.layout,
-                &publication.ref_name,
+                ref_name_key,
                 &publication.ref_update,
             )?;
         }

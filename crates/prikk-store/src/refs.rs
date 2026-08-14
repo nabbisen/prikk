@@ -5,29 +5,54 @@
 //! and RefUpdate entries are stored inline in an append-only log. The module does not yet perform
 //! publication-policy evaluation or patch/block sealing.
 
+mod container;
 mod evidence;
-mod log;
-mod pointer;
+mod pointer_index;
 mod publication;
 mod verify;
 
 #[cfg(test)]
-pub(crate) use log::{
-    append_log_record as append_log_record_for_signature_test, decode_log_records,
-    encode_log_record_for_test,
-};
+pub(crate) use container::{append_ref_container_record, encode_ref_container_record_for_test};
 #[cfg(test)]
-pub(crate) use pointer::write_ref_pointer_candidate;
+pub(crate) use pointer_index::{remove_pointer_entries_for_test, write_ref_pointer_candidate_for_test as write_ref_pointer_candidate};
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, RefUpdatePayload};
 
-use crate::fsutil::{EntryKind, ensure_directory_required, list_directory, promote_file_required};
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
 use crate::object_store::{FileObjectStore, ObjectReader};
 
-pub use log::{RefLogRecord, RefLogReplay};
+/// Test-only convenience matching the retired `refs/log.rs::append_log_record`'s own 3-argument
+/// call shape exactly, for fixtures that need to plant a specific log record directly without going
+/// through a real publish. Computes `ref_name_key` itself.
+#[cfg(test)]
+pub(crate) fn append_log_record_for_signature_test(
+    layout: &RepositoryLayout,
+    ref_name: &str,
+    envelope: &ObjectEnvelope,
+) -> Result<()> {
+    container::append_ref_container_record(
+        layout,
+        crate::layout::ref_name_key_bytes(ref_name),
+        envelope,
+    )
+}
+
+/// Test-only convenience matching the retired `refs/log.rs::encode_log_record_for_test`'s own
+/// single-argument call shape: derives `ref_name_key` from the envelope's own decoded
+/// `RefUpdatePayload.ref_name` rather than taking it as a separate parameter, since every caller
+/// already has an envelope whose payload names its own ref.
+#[cfg(test)]
+pub(crate) fn encode_log_record_for_test(envelope: &ObjectEnvelope) -> Result<Vec<u8>> {
+    let update = RefUpdatePayload::decode_canonical(&envelope.canonical_payload)?;
+    container::encode_ref_container_record_for_test(
+        crate::layout::ref_name_key_bytes(&update.ref_name),
+        envelope,
+    )
+}
+
+pub use container::{RefLogRecord, RefLogReplay};
 pub(crate) use verify::verify_refs;
 pub use verify::{
     RefFileOutcome, RefFileStatus, RefItemOutcome, RefItemStatus, RefPublicationIssue,
@@ -148,54 +173,48 @@ impl RefStore {
 
     /// Read the current RefState object ID for a ref name.
     pub fn read_current_ref_state_id(&self, ref_name: &str) -> Result<Option<ObjectId>> {
-        let path = self.layout.ref_pointer_path(ref_name);
-        let Some(pointer) = pointer::read_ref_pointer(&self.layout, &path)? else {
+        let key = crate::layout::ref_name_key_bytes(ref_name);
+        let Some(entry) = pointer_index::lookup_ref_pointer(&self.layout, key)? else {
             return Ok(None);
         };
-        if pointer.ref_name != ref_name {
+        if entry.ref_name != ref_name {
             return Err(PrikkError::Integrity(format!(
                 "ref pointer name mismatch: expected {ref_name}, got {}",
-                pointer.ref_name
+                entry.ref_name
             )));
         }
-        Ok(Some(pointer.ref_state_id))
+        Ok(Some(entry.ref_state_id))
     }
 
     /// Replay the inline ref-update log for a ref name.
     pub fn replay_log(&self, ref_name: &str) -> Result<RefLogReplay> {
-        log::replay_log(&self.layout, ref_name)
+        let key = crate::layout::ref_name_key_bytes(ref_name);
+        container::replay_ref_subsequence(&self.layout, key)
     }
 
-    /// Enumerate every ref pointer under `by-id/`, sorted by name. `by-id/` is the complete set of
-    /// ref pointers; logs, locks, and tmp files live elsewhere and are not pointers.
+    /// Enumerate every published ref pointer, sorted by name. Reads the ref-pointer index's own
+    /// last-entry-per-`ref_name_key` view (RFC 102 Stage 4) -- the container-era equivalent of the
+    /// old `by-id/` directory listing, which named the complete set of ref pointers directly; the
+    /// index now does.
     pub fn list_ref_pointers(&self) -> Result<Vec<RefPointerSummary>> {
-        let by_id_dir = self.layout.refs_dir().join("by-id");
-        let relative = self.layout.repository_relative(&by_id_dir)?;
-        let entries = list_directory(self.layout.repository_mutation_root(), &relative)?;
-        let mut summaries = Vec::with_capacity(entries.len());
-        for entry in entries {
-            if entry.kind != EntryKind::Regular {
-                continue;
-            }
-            let Some(name) = entry.name.to_str() else {
-                return Err(PrikkError::Integrity(
-                    "ref pointer file name is not valid UTF-8".to_string(),
-                ));
-            };
-            if !name.ends_with(".ref") {
-                continue;
-            }
-            let path = by_id_dir.join(name);
-            let Some(pointer) = pointer::read_ref_pointer(&self.layout, &path)? else {
-                return Err(PrikkError::Integrity(format!(
-                    "ref pointer file disappeared during listing: {name}"
-                )));
-            };
-            summaries.push(RefPointerSummary {
-                ref_name: pointer.ref_name,
-                ref_state_id: pointer.ref_state_id,
-            });
+        let replay = pointer_index::replay_pointer_index(&self.layout)?;
+        if replay.has_item_failure() {
+            return Err(PrikkError::Integrity(
+                "ref pointer index has a damaged entry; run doctor before listing".to_string(),
+            ));
         }
+        let mut latest: std::collections::BTreeMap<[u8; 32], pointer_index::PointerIndexEntry> =
+            std::collections::BTreeMap::new();
+        for entry in replay.entries {
+            latest.insert(entry.ref_name_key, entry);
+        }
+        let mut summaries: Vec<RefPointerSummary> = latest
+            .into_values()
+            .map(|entry| RefPointerSummary {
+                ref_name: entry.ref_name,
+                ref_state_id: entry.ref_state_id,
+            })
+            .collect();
         summaries.sort_by(|left, right| left.ref_name.cmp(&right.ref_name));
         Ok(summaries)
     }
@@ -288,25 +307,6 @@ impl RefStore {
         Ok(())
     }
 
-    fn write_ref_pointer_candidate(&self, ref_name: &str, ref_state_id: ObjectId) -> Result<()> {
-        pointer::write_ref_pointer_candidate(&self.layout, ref_name, ref_state_id)
-    }
-
-    fn promote_ref_pointer_candidate(&self, ref_name: &str) -> Result<()> {
-        let candidate = self
-            .layout
-            .repository_relative(&self.layout.ref_tmp_path(ref_name))?;
-        let pointer = self
-            .layout
-            .repository_relative(&self.layout.ref_pointer_path(ref_name))?;
-        let Some(parent) = pointer.parent() else {
-            return Err(PrikkError::Io(
-                "ref pointer path has no parent directory".to_string(),
-            ));
-        };
-        ensure_directory_required(self.layout.repository_mutation_root(), parent)?;
-        promote_file_required(self.layout.repository_mutation_root(), &candidate, &pointer)
-    }
 }
 
 fn verified_ref_state_payload(

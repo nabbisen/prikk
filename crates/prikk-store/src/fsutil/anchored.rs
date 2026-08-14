@@ -140,6 +140,15 @@ pub(crate) fn remove_worktree_file_required(root: &MutationRoot, relative: &Path
 }
 
 /// Rename within one root, syncing destination before source.
+///
+/// RFC 102 Stage 4: orphaned by the same shape of rewire that orphaned G5 in Stage 3 --
+/// `refs/publication.rs`'s candidate-write-then-promote dance (`refs/pointer.rs`'s old
+/// `write_ref_pointer_candidate`/`promote_ref_pointer_candidate`) was this function's only
+/// production caller, and Step 0 §13.3's ruling retired that whole mechanism (an append-only
+/// pointer record has no candidate value to stage). Kept, not deleted: retiring a durability
+/// primitive is the same RFC-level act it was for G5, not a stage side effect. Reported, not
+/// decided -- see the review submission.
+#[allow(dead_code)]
 pub(crate) fn promote_file_required(
     root: &MutationRoot,
     source: &Path,

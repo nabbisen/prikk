@@ -1,18 +1,21 @@
-//! Ref pointer/log scanning and structural chain validation.
+//! Ref pointer/log scanning and structural chain validation (RFC 102 Stage 4: rewritten onto the
+//! shared ref-pointer-index and ref-log containers; see `refs/container.rs` and
+//! `refs/pointer_index.rs` for the storage this now reads).
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{
-    ObjectEnvelope, ObjectId, ObjectType, RefKind, RefStatePayload, RefUpdatePayload, TagPayload,
-};
+use prikk_object::{ObjectEnvelope, ObjectId, RefKind, RefStatePayload, RefUpdatePayload, TagPayload};
 
-use crate::fsutil::{EntryKind, list_directory, read_file_required};
-use crate::layout::RepositoryLayout;
+use crate::layout::{ContainerSlot, RepositoryLayout, ref_name_key_bytes};
 use crate::object_store::FileObjectStore;
-use crate::refs::log::decode_log_file_bytes;
-use crate::refs::pointer::read_ref_pointer;
+use crate::refs::container::{
+    RefContainerRecordStatus, RefLogRecordStatus, RefLogReplay, decode_ref_container_records,
+    replay_ref_subsequence,
+};
+use crate::refs::pointer_index::{PointerIndexEntry, PointerIndexRecordStatus, replay_pointer_index};
+use prikk_object::ObjectType;
 
 #[derive(Debug, Clone)]
 pub(super) struct PointerState {
@@ -35,70 +38,86 @@ pub(super) struct RefLogEnvelope {
     pub(super) envelope: ObjectEnvelope,
 }
 
-/// Outcome of attempting to read one pointer or log file (DC-95 Stage 2 Level 2). File identity is
-/// a SHA-256 hash of the ref name (`ref_name_storage_key`) -- not reversible -- so a file whose
-/// content never decoded far enough to reveal its own claimed ref name genuinely has no identity to
-/// report beyond its path. A file that *did* reveal its name before some later check on it failed
-/// (e.g. "non-canonical ref pointer path") is still reported this way, by its path, not its claimed
-/// name: the claim comes from a file this check has already decided not to trust.
+/// Outcome of attempting to read one pointer or log entry (DC-95 Stage 2 Level 2). `path` is a
+/// display-only locator (the owning container's own path, plus the specific record's byte offset
+/// where one exists) -- not a real per-ref filesystem path, the same repurposing Stage 3 already made
+/// for `ObjectItemOutcome::path`, since a container holds many refs' records, not one file per ref.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RefFileStatus {
-    /// The file was read and validated successfully.
+    /// The entry was read and validated successfully.
     Evaluated {
         /// The ref name it resolved to.
         ref_name: String,
     },
-    /// Some check for this specific file failed.
+    /// Some check for this specific entry failed.
     Failed {
         /// The error the check raised.
         message: String,
     },
 }
 
-/// One pointer or log file's resolved outcome.
+/// One pointer or log entry's resolved outcome.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RefFileOutcome {
-    /// The file's path.
+    /// A display-only locator -- see the type's own doc.
     pub path: PathBuf,
-    /// How this file's own read/validation resolved.
+    /// How this entry's own read/validation resolved.
     pub status: RefFileStatus,
 }
 
+fn pointer_locator(layout: &RepositoryLayout, offset: usize) -> PathBuf {
+    layout
+        .ref_pointer_index_path()
+        .join(format!("#{offset}"))
+}
+
+fn log_locator(layout: &RepositoryLayout, offset: usize) -> PathBuf {
+    layout
+        .ref_log_container_slot_path(ContainerSlot::A)
+        .join(format!("#{offset}"))
+}
+
+/// Read every published ref pointer: the ref-pointer index's own last-entry-per-`ref_name_key` view
+/// (RFC 102 Stage 4), each cross-validated against its named RefState object exactly as before.
 pub(super) fn read_pointers(
     layout: &RepositoryLayout,
     objects: &FileObjectStore,
 ) -> Result<(BTreeMap<String, PointerState>, Vec<RefFileOutcome>)> {
-    let dir = layout.refs_dir().join("by-id");
-    let mut pointers = BTreeMap::new();
-    let mut outcomes = Vec::new();
-    let relative_dir = layout.repository_relative(&dir)?;
-    for entry in list_directory(layout.repository_mutation_root(), &relative_dir)? {
-        let path = dir.join(&entry.name);
-        if entry.kind != EntryKind::Regular {
-            return Err(unexpected_path("directory in ref pointer directory", &path));
-        }
-        if is_temporary_path(&path) {
+    let replay = replay_pointer_index(layout)?;
+    if replay.has_item_failure() {
+        return Err(PrikkError::Integrity(
+            "ref pointer index has a damaged entry; run doctor before verify can classify \
+             publication state"
+                .to_string(),
+        ));
+    }
+    // "Last entry wins" (Step 0 §13.4): iterate in append order, keep overwriting -- the final
+    // value per `ref_name_key` after the loop is the same one `lookup_ref_pointer`'s reverse scan
+    // would find, and each entry also carries the offset it was found at, for the locator.
+    let mut latest: BTreeMap<[u8; 32], (usize, PointerIndexEntry)> = BTreeMap::new();
+    for outcome in replay.record_outcomes.iter().zip(replay.entries) {
+        let (record_outcome, entry) = outcome;
+        if !matches!(record_outcome.status, PointerIndexRecordStatus::Evaluated) {
             continue;
         }
-        // DC-95 Stage 2 Level 2: this pointer file's own failure is caught here, at the item
-        // boundary, rather than propagated -- every *other* pointer file is still attempted.
-        // "Duplicate pointer identity" stays a hard error: DC-95 Stage 1 round 6 ruled it provably
-        // unreachable today (needs a genuine SHA-256 collision), so its containment shape is moot.
-        match read_one_pointer(layout, objects, &path) {
+        latest.insert(entry.ref_name_key, (record_outcome.offset, entry));
+    }
+
+    let mut pointers = BTreeMap::new();
+    let mut outcomes = Vec::new();
+    for (offset, entry) in latest.into_values() {
+        let locator = pointer_locator(layout, offset);
+        match read_one_pointer_entry(objects, &entry) {
             Ok((ref_name, state)) => {
-                if pointers.insert(ref_name.clone(), state).is_some() {
-                    return Err(PrikkError::Integrity(format!(
-                        "duplicate pointer identity for {ref_name}"
-                    )));
-                }
+                pointers.insert(ref_name.clone(), state);
                 outcomes.push(RefFileOutcome {
-                    path,
+                    path: locator,
                     status: RefFileStatus::Evaluated { ref_name },
                 });
             }
             Err(err) => {
                 outcomes.push(RefFileOutcome {
-                    path,
+                    path: locator,
                     status: RefFileStatus::Failed {
                         message: err.to_string(),
                     },
@@ -109,74 +128,110 @@ pub(super) fn read_pointers(
     Ok((pointers, outcomes))
 }
 
-fn read_one_pointer(
-    layout: &RepositoryLayout,
+fn read_one_pointer_entry(
     objects: &FileObjectStore,
-    path: &Path,
+    entry: &PointerIndexEntry,
 ) -> Result<(String, PointerState)> {
-    ensure_ref_path_shape(path, ".ref")?;
-    let pointer = read_ref_pointer(layout, path)?.ok_or_else(|| {
-        PrikkError::Integrity("ref pointer disappeared during verification".to_string())
-    })?;
-    if path != layout.ref_pointer_path(&pointer.ref_name) {
-        return Err(unexpected_path("non-canonical ref pointer", path));
-    }
-    let payload = verified_ref_state_payload(objects, pointer.ref_state_id)?;
-    if payload.ref_name != pointer.ref_name {
+    // The entry's own internal coherence: its claimed `ref_name_key` must actually be
+    // `sha256(ref_name)` -- the same defense-in-depth `verify_object_file` already applies by
+    // recomputing an object's own id from its decoded bytes.
+    if ref_name_key_bytes(&entry.ref_name) != entry.ref_name_key {
         return Err(PrikkError::Integrity(format!(
-            "RefState {} name differs from pointer ref {}",
-            pointer.ref_state_id, pointer.ref_name
+            "pointer index entry ref_name_key does not match sha256({})",
+            entry.ref_name
         )));
     }
-    ensure_ref_target_valid(
-        objects,
-        payload.kind,
-        payload.target_object_id,
-        pointer.ref_state_id,
-    )?;
+    let payload = verified_ref_state_payload(objects, entry.ref_state_id)?;
+    if payload.ref_name != entry.ref_name {
+        return Err(PrikkError::Integrity(format!(
+            "RefState {} name differs from pointer ref {}",
+            entry.ref_state_id, entry.ref_name
+        )));
+    }
+    ensure_ref_target_valid(objects, payload.kind, payload.target_object_id, entry.ref_state_id)?;
     Ok((
-        pointer.ref_name.clone(),
+        entry.ref_name.clone(),
         PointerState {
-            id: pointer.ref_state_id,
+            id: entry.ref_state_id,
             payload,
         },
     ))
 }
 
+/// Read every ref's own log subsequence from the shared log container, grouped by `ref_name_key`
+/// (Step 0 §13.1/§13.2). One full-container decode discovers which keys exist at all; each key's own
+/// subsequence is then replayed through `container::replay_ref_subsequence` -- the same function
+/// `RefStore::replay_log` itself uses -- so the ref-scoped `trailing_partial_bytes` attribution
+/// (design-v1.md §13.6) is computed exactly once, in one place, not re-derived here.
 #[allow(clippy::type_complexity)]
 pub(super) fn read_logs(
     layout: &RepositoryLayout,
     objects: &FileObjectStore,
-    pointers: &BTreeMap<String, PointerState>,
+    _pointers: &BTreeMap<String, PointerState>,
 ) -> Result<(
     BTreeMap<String, LogState>,
     usize,
     Vec<RefLogEnvelope>,
     Vec<RefFileOutcome>,
 )> {
-    let dir = layout.refs_dir().join("logs");
+    let relative = layout.repository_relative(&layout.ref_log_container_slot_path(
+        ContainerSlot::A,
+    ))?;
+    let Some(bytes) =
+        crate::fsutil::read_file_if_exists(layout.repository_mutation_root(), &relative)?
+    else {
+        return Ok((BTreeMap::new(), 0, Vec::new(), Vec::new()));
+    };
+    let discovery = decode_ref_container_records(&bytes)?;
+    let mut keys: std::collections::BTreeSet<[u8; 32]> = discovery
+        .records
+        .iter()
+        .map(|record| record.ref_name_key)
+        .collect();
+    keys.extend(discovery.record_outcomes.iter().filter_map(|outcome| {
+        match &outcome.status {
+            RefContainerRecordStatus::Failed {
+                claimed_ref_name_key: Some(key),
+                ..
+            } => Some(*key),
+            _ => None,
+        }
+    }));
+
     let mut logs = BTreeMap::new();
     let mut total = 0_usize;
     let mut envelopes = Vec::new();
     let mut outcomes = Vec::new();
-    let relative_dir = layout.repository_relative(&dir)?;
-    let pointer_names: Vec<_> = pointers.keys().cloned().collect();
-    for entry in list_directory(layout.repository_mutation_root(), &relative_dir)? {
-        let path = dir.join(&entry.name);
-        if entry.kind != EntryKind::Regular {
-            return Err(unexpected_path("directory in ref-log directory", &path));
-        }
-        if is_temporary_path(&path) {
+    for key in keys {
+        let replay = replay_ref_subsequence(layout, key)?;
+        let first_offset = replay
+            .record_outcomes
+            .first()
+            .map_or(0, |outcome| outcome.offset);
+        // A key with any damaged record is reported as one failed outcome for that ref -- matching
+        // today's file-granularity semantics (a ref's own log failing is one item-level defect, not
+        // one per damaged record within it).
+        if replay.has_item_failure() {
+            let joined = replay
+                .record_outcomes
+                .iter()
+                .filter_map(|outcome| match &outcome.status {
+                    RefLogRecordStatus::Failed { message } => {
+                        Some(format!("offset {}: {message}", outcome.offset))
+                    }
+                    RefLogRecordStatus::Evaluated => None,
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
+            outcomes.push(RefFileOutcome {
+                path: log_locator(layout, first_offset),
+                status: RefFileStatus::Failed {
+                    message: format!("ref log has damaged record(s): {joined}"),
+                },
+            });
             continue;
         }
-        // DC-95 Stage 2 Level 2: this log file's own failure is caught here, at the item boundary,
-        // rather than propagated -- every *other* log file is still attempted. "Duplicate ref-log
-        // identity" stays a hard error for the same reason as pointers above.
-        match read_one_log(layout, objects, &path, &pointer_names) {
-            Ok(None) => {
-                // Legitimately empty, no trailing bytes -- not an item at all, matching the
-                // pre-Level-2 `continue`.
-            }
+        match validate_log_replay(objects, key, &replay) {
             Ok(Some((ref_name, state, record_envelopes))) => {
                 total = match total.checked_add(record_envelopes.len()) {
                     Some(value) => value,
@@ -185,19 +240,16 @@ pub(super) fn read_logs(
                     }
                 };
                 envelopes.extend(record_envelopes);
-                if logs.insert(ref_name.clone(), state).is_some() {
-                    return Err(PrikkError::Integrity(format!(
-                        "duplicate ref-log identity for {ref_name}"
-                    )));
-                }
+                logs.insert(ref_name.clone(), state);
                 outcomes.push(RefFileOutcome {
-                    path,
+                    path: log_locator(layout, first_offset),
                     status: RefFileStatus::Evaluated { ref_name },
                 });
             }
+            Ok(None) => {}
             Err(err) => {
                 outcomes.push(RefFileOutcome {
-                    path,
+                    path: log_locator(layout, first_offset),
                     status: RefFileStatus::Failed {
                         message: err.to_string(),
                     },
@@ -205,98 +257,39 @@ pub(super) fn read_logs(
             }
         }
     }
-    envelopes.sort_by(|left, right| {
-        left.ref_name
-            .as_bytes()
-            .cmp(right.ref_name.as_bytes())
-            .then_with(|| left.sequence.cmp(&right.sequence))
-    });
     Ok((logs, total, envelopes, outcomes))
 }
 
 #[allow(clippy::type_complexity)]
-fn read_one_log(
-    layout: &RepositoryLayout,
+fn validate_log_replay(
     objects: &FileObjectStore,
-    path: &Path,
-    pointer_names: &[String],
+    ref_name_key: [u8; 32],
+    replay: &RefLogReplay,
 ) -> Result<Option<(String, LogState, Vec<RefLogEnvelope>)>> {
-    ensure_ref_path_shape(path, ".log")?;
-    let relative = layout.repository_relative(path)?;
-    let bytes = read_file_required(layout.repository_mutation_root(), &relative)?;
-    let replay = decode_log_file_bytes(layout.format(), &bytes)?;
-    // RFC 102 Stage 2: isolate-and-continue reading means a damaged record no longer makes
-    // `decode_log_file_bytes` return `Err` -- this file's own item containment (the caller,
-    // `read_logs`, already catches an `Err` here into `RefFileStatus::Failed`) must be preserved
-    // explicitly, or `replay.records.is_empty()` below could read a log with only a damaged record
-    // as legitimately empty rather than as a file whose content could not be fully trusted. Kept at
-    // file granularity (not the WAL's per-record `wal_record_outcomes` exposure) deliberately --
-    // see the review submission for the scope reasoning.
-    if replay.has_item_failure() {
-        let failed = replay
-            .record_outcomes
-            .iter()
-            .filter_map(|outcome| match &outcome.status {
-                crate::refs::log::RefLogRecordStatus::Failed { message } => {
-                    Some(format!("offset {}: {message}", outcome.offset))
-                }
-                crate::refs::log::RefLogRecordStatus::Evaluated => None,
-            })
-            .collect::<Vec<_>>()
-            .join("; ");
-        return Err(PrikkError::Integrity(format!(
-            "ref log has damaged record(s): {failed}"
-        )));
-    }
     if replay.records.is_empty() {
         if replay.trailing_partial_bytes == 0 {
             return Ok(None);
         }
-        let name = pointer_names
-            .iter()
-            .find(|name| layout.ref_log_path(name) == path)
-            .cloned()
-            .ok_or_else(|| unexpected_path("unowned partial ref log", path))?;
-        return Ok(Some((
-            name,
-            LogState {
-                tip: None,
-                previous_tip: None,
-                record_count: 0,
-                trailing_partial_bytes: replay.trailing_partial_bytes,
-                has_legacy_timestamp: false,
-            },
-            Vec::new(),
-        )));
+        return Err(PrikkError::Integrity(
+            "ref log has a trailing partial record with no sound records of its own".to_string(),
+        ));
     }
-    let (name, state) = validate_log(layout, objects, path, &replay)?;
-    let mut record_envelopes = Vec::with_capacity(replay.records.len());
-    for (index, record) in replay.records.iter().enumerate() {
-        let sequence = u64::try_from(index)
-            .ok()
-            .and_then(|value| value.checked_add(1))
-            .ok_or_else(|| PrikkError::Integrity("ref-log sequence overflow".to_string()))?;
-        record_envelopes.push(RefLogEnvelope {
-            ref_name: name.clone(),
-            sequence,
-            envelope: record.envelope.clone(),
-        });
-    }
-    Ok(Some((name, state, record_envelopes)))
-}
-
-fn validate_log(
-    layout: &RepositoryLayout,
-    objects: &FileObjectStore,
-    path: &Path,
-    replay: &super::super::log::RefLogReplay,
-) -> Result<(String, LogState)> {
     let mut previous = None;
     let mut previous_tip = None;
     let mut ref_name = None;
     let mut has_legacy_timestamp = false;
+    let mut record_envelopes = Vec::with_capacity(replay.records.len());
     for (index, record) in replay.records.iter().enumerate() {
         let update = RefUpdatePayload::decode_canonical(&record.envelope.canonical_payload)?;
+        // Coherence: this record's own header claimed `ref_name_key`; its decoded payload's own
+        // `ref_name` must hash to the same key, the log-side equivalent of `read_one_pointer_entry`'s
+        // own check.
+        if crate::layout::ref_name_key_bytes(&update.ref_name) != ref_name_key {
+            return Err(PrikkError::Integrity(
+                "ref container record header ref_name_key does not match its own envelope"
+                    .to_string(),
+            ));
+        }
         let expected_seq = u64::try_from(index)
             .ok()
             .and_then(|value| value.checked_add(1))
@@ -317,13 +310,15 @@ fn validate_log(
         ref_name.get_or_insert_with(|| update.ref_name.clone());
         previous_tip = previous;
         previous = Some(update.new_ref_state_id);
+        record_envelopes.push(RefLogEnvelope {
+            ref_name: update.ref_name.clone(),
+            sequence: update.update_seq,
+            envelope: record.envelope.clone(),
+        });
     }
     let name = ref_name
         .ok_or_else(|| PrikkError::Integrity("non-empty ref log has no identity".to_string()))?;
-    if path != layout.ref_log_path(&name) {
-        return Err(unexpected_path("non-canonical ref log", path));
-    }
-    Ok((
+    Ok(Some((
         name,
         LogState {
             tip: previous,
@@ -332,7 +327,8 @@ fn validate_log(
             trailing_partial_bytes: replay.trailing_partial_bytes,
             has_legacy_timestamp,
         },
-    ))
+        record_envelopes,
+    )))
 }
 
 fn verify_update(objects: &FileObjectStore, update: &RefUpdatePayload) -> Result<()> {
@@ -409,32 +405,4 @@ fn ensure_block_exists(
     Err(PrikkError::Integrity(format!(
         "ref object {owner} targets missing block {block_id}"
     )))
-}
-
-fn ensure_ref_path_shape(path: &Path, extension: &str) -> Result<()> {
-    let name = path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .ok_or_else(|| PrikkError::Integrity("ref path is not valid UTF-8".to_string()))?;
-    let expected_len = 64_usize
-        .checked_add(extension.len())
-        .ok_or_else(|| PrikkError::Integrity("ref extension length overflow".to_string()))?;
-    if name.len() != expected_len || !name.ends_with(extension) {
-        return Err(unexpected_path("ref path has invalid shape", path));
-    }
-    Ok(())
-}
-
-fn is_temporary_path(path: &Path) -> bool {
-    path.file_name()
-        .and_then(|value| value.to_str())
-        .is_some_and(|value| value.contains(".tmp"))
-}
-
-fn unexpected_path(label: &str, path: &Path) -> PrikkError {
-    let name = path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or("<non-UTF-8>");
-    PrikkError::Integrity(format!("{label}: {name}"))
 }

@@ -171,7 +171,7 @@ pub(super) fn assert_wal_item_failed(report: &RepositoryVerification, expected_s
 /// block, via `validate_v2_lineage`'s own independent "format-2 parent Block {id} is missing" read in
 /// Phase B; disabling the patch-existence check still rejects it, via the lifecycle-replay layer's own
 /// "patch {id} is malformed (patch object is missing)" when Phase B tries to replay it. **Both are
-/// redundant with a downstream read for `CurrentV3` blocks specifically** -- disabling `verify_block_
+/// redundant with a downstream read for `CurrentV4` blocks specifically** -- disabling `verify_block_
 /// payload`'s own explicit check does not let a bad repository verify clean, because something else
 /// already reads the same reference and fails closed too. That is a real property of the current design,
 /// not a gap this round's test can paper over with a placeholder root, and it is why these two rows are
