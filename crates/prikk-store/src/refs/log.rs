@@ -234,9 +234,11 @@ fn parse_log_frame_at(bytes: &[u8], offset: usize) -> LogFrameAttempt {
     let header = &bytes[offset..header_end];
     let header_values = match parse_log_header(header) {
         Ok(values) => values,
-        Err(err) => return LogFrameAttempt::Invalid {
-            message: err.to_string(),
-        },
+        Err(err) => {
+            return LogFrameAttempt::Invalid {
+                message: err.to_string(),
+            };
+        }
     };
     let Ok(body_len) = usize::try_from(header_values.body_len) else {
         return LogFrameAttempt::Invalid {
@@ -281,7 +283,10 @@ fn parse_log_frame_at(bytes: &[u8], offset: usize) -> LogFrameAttempt {
 fn resync_log_offset(bytes: &[u8], start: usize) -> Option<usize> {
     let magic_len = REF_LOG_MAGIC.len();
     let mut cursor = start;
-    while cursor.checked_add(magic_len).is_some_and(|end| end <= bytes.len()) {
+    while cursor
+        .checked_add(magic_len)
+        .is_some_and(|end| end <= bytes.len())
+    {
         if bytes.get(cursor..cursor + magic_len) == Some(REF_LOG_MAGIC.as_slice()) {
             return Some(cursor);
         }

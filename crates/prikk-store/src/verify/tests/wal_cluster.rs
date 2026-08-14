@@ -366,7 +366,8 @@ fn normal_patch_envelope(label: &str) -> Result<ObjectEnvelope> {
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
     };
-    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);
     envelope.add_signature(rollback_author_signature())?;
     Ok(envelope)
 }
@@ -380,7 +381,9 @@ fn normal_patch_envelope(label: &str) -> Result<ObjectEnvelope> {
 fn append_distinct_records(wal: &Wal, labels: &[&str]) -> Result<Vec<usize>> {
     let mut offsets = Vec::with_capacity(labels.len());
     for label in labels {
-        let before = std::fs::read(wal.path()).map(|bytes| bytes.len()).unwrap_or(0);
+        let before = std::fs::read(wal.path())
+            .map(|bytes| bytes.len())
+            .unwrap_or(0);
         offsets.push(before);
         wal.append_patch(&normal_patch_envelope(label)?)?;
     }

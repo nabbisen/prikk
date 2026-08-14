@@ -384,9 +384,11 @@ fn parse_frame_at(bytes: &[u8], offset: usize) -> FrameAttempt {
     let header = &bytes[offset..header_end];
     let header_values = match parse_header(header) {
         Ok(values) => values,
-        Err(err) => return FrameAttempt::Invalid {
-            message: err.to_string(),
-        },
+        Err(err) => {
+            return FrameAttempt::Invalid {
+                message: err.to_string(),
+            };
+        }
     };
     let Ok(body_len) = usize::try_from(header_values.body_len) else {
         return FrameAttempt::Invalid {
@@ -430,7 +432,10 @@ fn parse_frame_at(bytes: &[u8], offset: usize) -> FrameAttempt {
 fn resync_offset(bytes: &[u8], start: usize) -> Option<usize> {
     let magic_len = WAL_RECORD_MAGIC.len();
     let mut cursor = start;
-    while cursor.checked_add(magic_len).is_some_and(|end| end <= bytes.len()) {
+    while cursor
+        .checked_add(magic_len)
+        .is_some_and(|end| end <= bytes.len())
+    {
         if bytes.get(cursor..cursor + magic_len) == Some(WAL_RECORD_MAGIC.as_slice()) {
             return Some(cursor);
         }
