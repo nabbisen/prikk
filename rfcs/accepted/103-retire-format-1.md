@@ -166,3 +166,23 @@ recorded here rather than left implicit, per the register's rule that significan
 accepted. If the owner wants it reduced, the cheapest mitigation is a **detection-only** stub retained
 indefinitely: enough format-1 knowledge to recognise and explain, never enough to read. That is §4's
 contract and it is already the minimum this RFC requires.
+
+## 11. Increment B — abandoned 2026-08-13
+
+**Authorized, investigated, and abandoned on its own Step 0 — which is the outcome that handoff named as
+complete.**
+
+`require_current_format` is **not plumbing.** `layout.rs:120-126`'s `validate_format` **re-reads
+`.prikk/FORMAT` from disk on every call** rather than trusting the `self.format` cached at construction —
+a TOCTOU re-validation catching the on-disk format changing between when a layout handle was opened and
+when a mutation is attempted through it. `RepositoryLayout` derives `Clone` (`layout.rs:31`), so
+long-held and cloned handles are real.
+
+**The distinction that settles it:** the `format != self.format` *comparison* is now dead, but the
+`read_repository_format(...)?` *immediately before it* is live. Collapsing the enum would either preserve
+that re-read under another name — meaning Increment B is not the mechanical, no-behaviour-change diff its
+design promised — or drop it, which is a real regression in defence against on-disk tampering.
+
+**Increment B is closed. Its 25 `require_current_format` call sites stay.** RFC 103 is complete with
+Increment A alone.
+
