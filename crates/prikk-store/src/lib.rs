@@ -66,6 +66,8 @@ mod worktree_patch;
 mod worktree_status;
 
 #[cfg(test)]
+mod dc55_identity_evidence;
+#[cfg(test)]
 mod signature_contract_tests;
 #[cfg(test)]
 mod test_support;

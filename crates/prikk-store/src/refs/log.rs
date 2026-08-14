@@ -288,7 +288,7 @@ fn parse_log_frame_at(bytes: &[u8], offset: usize) -> LogFrameAttempt {
 /// outcome, and `frame_resync::resync_to_next_magic` (RFC 102 Stage 3: shared with `wal.rs` and the
 /// container read path, not a third copy) finds the next candidate frame so every subsequent sound
 /// record is still read.
-fn decode_log_records(bytes: &[u8]) -> Result<RefLogReplay> {
+pub(crate) fn decode_log_records(bytes: &[u8]) -> Result<RefLogReplay> {
     let mut records = Vec::new();
     let mut record_outcomes = Vec::new();
     let mut offset = 0_usize;

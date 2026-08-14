@@ -13,7 +13,8 @@ mod verify;
 
 #[cfg(test)]
 pub(crate) use log::{
-    append_log_record as append_log_record_for_signature_test, encode_log_record_for_test,
+    append_log_record as append_log_record_for_signature_test, decode_log_records,
+    encode_log_record_for_test,
 };
 #[cfg(test)]
 pub(crate) use pointer::write_ref_pointer_candidate;
