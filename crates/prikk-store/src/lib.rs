@@ -30,6 +30,7 @@ mod format;
 mod frame_resync;
 mod fsutil;
 mod history;
+mod index;
 mod layout;
 mod lifecycle_cache;
 mod lock;

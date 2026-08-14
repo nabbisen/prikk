@@ -67,6 +67,10 @@ pub(crate) enum ContainerRecordStatus {
         /// "rebuild is not a new operation ... a rebuild is that, iterated over a scan") reads it
         /// straight from a replay rather than re-parsing to recover it.
         frame_len: usize,
+        /// This frame's own checksum bytes, as persisted in its header -- the index's own
+        /// `container_checksum` field is this value, so rebuild-by-scan reads it directly rather
+        /// than re-deriving it.
+        checksum: [u8; 32],
     },
     /// The frame at this offset failed to validate (bad magic/version, checksum mismatch, or a
     /// malformed envelope) -- resync moved past it byte-wise to find the next candidate frame.
@@ -144,6 +148,7 @@ enum FrameAttempt {
     Record {
         record: ContainerRecord,
         next_offset: usize,
+        checksum: [u8; 32],
     },
     TrailingPartial {
         remaining: usize,
@@ -197,6 +202,7 @@ fn parse_frame_at(magic: &[u8; 8], bytes: &[u8], offset: usize) -> FrameAttempt 
         Ok(envelope) => FrameAttempt::Record {
             record: ContainerRecord { envelope },
             next_offset: body_end,
+            checksum: header_values.checksum,
         },
         Err(err) => FrameAttempt::Invalid {
             message: err.to_string(),
@@ -223,11 +229,13 @@ pub(crate) fn decode_container_records(
             FrameAttempt::Record {
                 record,
                 next_offset,
+                checksum,
             } => {
                 record_outcomes.push(ContainerRecordOutcome {
                     offset,
                     status: ContainerRecordStatus::Evaluated {
                         frame_len: next_offset - offset,
+                        checksum,
                     },
                 });
                 records.push(record);
