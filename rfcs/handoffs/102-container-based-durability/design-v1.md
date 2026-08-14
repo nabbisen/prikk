@@ -305,3 +305,79 @@ the evidence for what was traded away; deleting them removes the record of the t
 **Consolidation:** these four are one decision wearing four hats — *does prikk retire loose-file
 publication entirely?* It should be asked once, after Stages 4 and 5 have shown whether refs and trust
 containerization removes the last uses. **Not now, and not piecemeal.**
+
+---
+
+## 13. Stage 4 Step 0 rulings — 2026-08-14
+
+Three questions asked, four answered. The fourth is the one that matters.
+
+### 13.1 What must be ordered — their finding, sharpened
+
+`validate_log`'s single condition (`scan.rs:298-312`) carries **three** properties, not one:
+
+1. **ref-name uniformity** — every record in this file names the same ref;
+2. **the chain link** — `old_ref_state_id == previous`, purely relational;
+3. **the positional check** — `update_seq == index + 1`.
+
+**Their split is right and understated it by one.** Under a shared container, (1) becomes *vacuous* —
+records of different refs interleave by design, and uniformity holds only within a filtered group,
+where it is true by construction of the filter. (2) is unaffected. (3) is positional **only as a
+shortcut**, holding today because one file happens to be exactly one ref's subsequence.
+
+**Ruled:** `expected_seq` is computed from a record's position **within its own ref's filtered
+subsequence**, never within the container. The container guarantees nothing beyond Stage 3's plain
+append-only. **`RefLock` already serializes per-ref publication and does not change.**
+
+### 13.2 One shared container — forced, not chosen
+
+Correct, and the argument is the strong form: **acceptance criterion 1 makes a per-ref container
+architecturally impossible.** Ref names do not exist at `init`; `branch create`/`tag create` mint them
+later as ordinary recurring operations. There is no second option to weigh.
+
+### 13.3 The candidate mechanism and `refs/tmp/`
+
+**Accepted.** `write_ref_pointer_candidate` exists because a *mutable* per-ref file needs a scratch
+name to update crash-safely. An append-only record has no candidate value to stage — the append **is**
+the publish. `refs/tmp/` stops being written, unconditionally.
+
+**`PRIKK-VERIFY-REF-CANDIDATE-DEBRIS`: kept, dormant, not pruned** — matching §12.3 item 3 exactly, for
+the same reason. It joins the same deferred consolidation.
+
+### 13.4 The fourth question — an index is required, and the key already exists
+
+**This is the round's real finding.** `read_current_ref_state_id`/`replay_log` are called from **13
+production sites** — `checkout`, `history`, `merge`, not administrative paths. Today they cost O(1) and
+O(this ref's own log). Under a shared container with no further structure they become **O(total history
+across every ref)**.
+
+**That is linear scan, which the owner already rejected** — *"bad for maintenance and does not fit a big
+project"* — when choosing indexed lookup for objects. **The same decision governs here; it is not a new
+one.** An index is required.
+
+**On their "new key shape" concern, which dissolves:** they observe `IndexEntry` is keyed by a fixed
+32-byte `ObjectId` while ref names are variable-length UTF-8. **But this project already has a canonical
+fixed-width ref key** — `layout.rs:541-543`'s `ref_name_storage_key` is `sha256(ref_name)`, which is
+what names every ref file on disk today. **32 bytes, same width, already the project's own convention.**
+
+**Ruled:**
+
+- **A separate ref index container**, keyed by `sha256(ref_name)`. Same *pattern* as `index.rs` —
+  append-only, last-entry-wins, rebuildable by scan, off the durability path — with its own type and
+  its own container.
+- **Do not widen `index.rs`'s schema.** The object index shipped in Stage 3; changing it means another
+  format change and re-proving Stage 3's guarantees for no gain.
+- **The log has the same question independently**, and the same answer: the ref index records where a
+  ref's records live, or every `checkout` pays for the whole repository's ref history.
+
+**They were right to report rather than choose.** The key-shape objection was real on its face and
+resolved only by knowing the codebase already had the key — which is exactly the kind of thing that
+should be ruled, not guessed at during implementation.
+
+### 13.5 Corruption isolation, promoted to an acceptance criterion
+
+Their §2 raises it unasked: a damaged record belonging to ref A must be attributed **only** to ref A,
+matching today's granularity where one ref's file failing never touched another's outcome.
+
+**Added to Stage 4's acceptance criteria**, proven the DC-95 way: damage one ref's record, confirm the
+specific ref-scoped failure, confirm every unrelated ref stays clean.
