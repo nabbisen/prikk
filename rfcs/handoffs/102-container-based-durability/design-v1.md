@@ -428,3 +428,33 @@ assumed identical.
 
 **Asking before building was right.** This is DC-38's machinery, and a wrong call here is the kind that
 needs a DC-41-grade proof merely to discover.
+
+### 13.7 The DC-38 proof-suite migration — scope ruled 2026-08-14
+
+**It is in Stage 4, and it cannot be split out.** Gates cannot be green while the tests do not compile,
+and **shimming `publication_recovery` would leave DC-38's crash-recovery proof exercising a storage path
+that no longer exists** — a suite that proves nothing while appearing to pass. That is the failure DC-95
+Stage 1 spent twelve rounds making visible.
+
+**But commit it as its own unit.** Core write/read protocol and proof-suite migration are separately
+reviewable, and bundling them means a reviewer cannot tell which half a failure came from — the same
+split applied to DC-95 Stage 2's levels and RFC 103's increments.
+
+**The failpoint counts are evidence, not configuration.**
+
+Stage 3's task 131 was fixture *construction*; this is re-deriving DC-41-grade evidence for the most
+safety-critical machinery in the product. **A changed count is a finding to explain, not a number to
+update.** In particular, the candidate/promote dance disappearing means fewer steps per publish, so
+counts will drop — and a drop has two possible meanings:
+
+- **genuinely fewer crash windows**, because the new protocol has fewer places to be interrupted; or
+- **a window that existed and is no longer being tested.**
+
+**Those are opposite conclusions and the derivation must say which, per count.** Adjusting a number
+until the suite is green would silently convert the second into the first.
+
+**On carrying this across a context boundary:** write the derivation down as it goes, not at the end.
+DC-95's classified inventory was required to be *"assembled as Stage 1 goes, not reconstructed at the
+end from seven review documents"* for exactly this reason, and it is the reason that inventory survived
+twelve rounds. A count whose justification lives only in working memory is a count that will be
+re-adjusted rather than re-derived.
