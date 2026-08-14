@@ -227,3 +227,34 @@ Stage 3 ships.** That consequence was stated before the decision, not discovered
 is renamed. That is implementation judgment — but note RFC 103 Increment B was abandoned precisely
 because `require_current_format`'s disk re-read is live, so the enum's *shape* still carries a real
 runtime check and is not free to collapse.
+
+### 12.2 The DC-55 frozen fixture — ruled 2026-08-14
+
+Stage 3's format-2 rejection makes `tests/fixtures/dc55_pre_swap_repo` permanently unopenable, and
+`dc55_sha256_identity_end_to_end.rs` with it. **Deleting the test was the right immediate action and
+accepting the coverage loss is not.**
+
+That test's own doc states what it is: *"the one check that exercises every production call site against
+genuinely persisted bytes"*, and specifically the only guard on a changed digest at **`layout.rs`,
+`wal.rs` and `refs/log.rs`** — three sites the unit-level equivalence campaign cannot observe. It also
+says, of the fixture: *"Do not regenerate this fixture … it is the evidence, not a convenience."*
+
+**Ruled:**
+
+1. **Keep the fixture.** Regenerating it as format-3 would destroy exactly the cross-version property it
+   exists to prove. It stays frozen.
+2. **Re-target the test at the bytes, do not retire the coverage.** The evidence is in the persisted
+   bytes, not in `verify` returning `Ok` — so it does not need `RepositoryLayout::open`, which is the
+   only thing format-3 takes away.
+3. **Demonstrated, not assumed:** `sha256("heads/main")` is exactly the frozen ref filename
+   `c316ccb36a95a977918874d43e722a5a7d9ef74b138f3b76078f6993c14a799f`. `layout.rs`'s ref-name storage-key
+   digest is therefore recomputable from the frozen filename alone. Object ids are `.pobj` filenames;
+   WAL and ref-log record checksums are inside the frozen files. **All three otherwise-unobservable
+   sites are reachable without opening the repository.**
+4. **Asserting the digest is stronger than the old test was**, which inferred correctness from a clean
+   `verify` pass. This is an upgrade taken under duress, not a salvage.
+5. **If any site turns out genuinely unrecoverable from the bytes, report it.** Do not absorb the loss
+   silently — it is registered in `FINDINGS.md` until the re-targeted test lands.
+
+**Scope note:** this is Stage 3 work because Stage 3 causes it. It is not a licence to touch other
+DC-55 material.
