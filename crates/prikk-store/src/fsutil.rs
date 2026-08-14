@@ -26,10 +26,12 @@ pub(crate) use anchored::{
 };
 
 // RFC 102 Stage 3, design-v1.md §12.3: G5 (`publish_immutable`) has no production caller left, but
-// stays reachable for its own conformance tests (`object_store/tests/immutable.rs`, `races.rs`,
-// `fsutil/tests.rs`) -- ruled "keep, record, decide separately" rather than retired as a stage side
-// effect.
-#[cfg(test)]
+// stays reachable for its own conformance tests (`object_store/tests/immutable.rs`, `races.rs`) --
+// ruled "keep, record, decide separately" rather than retired as a stage side effect. Gated to match
+// those tests' own Linux/macOS-only gate (`object_store.rs:123`), not just `#[cfg(test)]` -- see
+// `anchored.rs`'s own doc comment on `publish_immutable_file` for why a bare `#[cfg(test)]` here is
+// wrong.
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 pub(crate) use anchored::publish_immutable_file;
 
 #[cfg(all(test, target_os = "linux"))]
