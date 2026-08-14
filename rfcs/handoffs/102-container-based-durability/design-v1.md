@@ -611,3 +611,42 @@ opening lines.**
 **And an explicit answer to the process question: silence is not consent for deleting a test.** Every
 retirement needs an affirmative ruling. The near-miss is the argument — a categorization that looked
 obvious was wrong, and the only thing that caught it was someone being required to justify it out loud.
+
+### 13.12 The two removed ref-path checks — ruled 2026-08-15
+
+**Check 1 — `verify_repository_detects_noncanonical_ref_pointer_path`: redesign approved, and widen it.**
+
+Their analogue is real and verified: `scan.rs:151-153`'s
+`ref_name_key_bytes(&entry.ref_name) != entry.ref_name_key` is the same property the old check proved —
+*identifier and content disagree* — with filename-vs-content replaced by header-vs-content. **It has no
+test at all.**
+
+**Widen, because there are two, not one.** `scan.rs:311` carries the same coherence check on the
+**log-container** side — *"ref container record header ref_name_key does not match its own envelope"* —
+and it is **equally untested**. They named only the pointer-index one. **Cover both.**
+
+So this is not coverage preserved through a rewrite; it is **coverage that does not exist today**, on
+two checks the container rewrite introduced. That makes the redesign strictly better than what it
+replaces, and it is the reason to do it now rather than file it.
+
+**Check 2 — `verify_repository_detects_every_ref_path_shape_violation`: not yet. Establish the claim
+first.**
+
+The retirement rests on *"every malformed-record shape converges on already-tested decode-failure
+coverage"* — and they say plainly they checked only checksum corruption, not a too-short or too-long
+framed record. **That is the claim, and it is unestablished by their own account.**
+
+**Round 6's precedent governs**: `ensure_ref_path_shape` was ruled downstream-redundant *and kept*,
+because redundancy was demonstrated rather than assumed. The same standard applies to its successor's
+absence. **Before retiring, show what covers each malformed shape:**
+
+- a record whose framed length is shorter than its header claims;
+- one longer than its header claims;
+- a truncated header — fewer bytes than the fixed header size.
+
+For each: does it produce a tested failure, and is it **attributed to the right ref**? Attribution
+matters here specifically — §13.6 established that an unattributable torn tail is not this ref's
+problem, and a malformed record that fails to decode may land in the same unattributed bucket.
+
+**If all three converge on tested coverage, retire it and say which test covers each. If any does not,
+that is a gap the old test was inadvertently holding**, and it needs coverage rather than a deletion.
