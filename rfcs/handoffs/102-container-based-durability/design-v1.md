@@ -236,7 +236,12 @@ accepting the coverage loss is not.**
 
 That test's own doc states what it is: *"the one check that exercises every production call site against
 genuinely persisted bytes"*, and specifically the only guard on a changed digest at **`layout.rs`,
-`wal.rs` and `refs/log.rs`** — three sites the unit-level equivalence campaign cannot observe. It also
+`wal.rs` and `refs/log.rs`** — three sites the unit-level equivalence campaign cannot observe.
+
+> **Corrected 2026-08-14 by the Stage 3 re-targeting: it guarded two, not three.** The fixture's
+> `queue.wal` is **0 bytes**, and has been since the commit that added it (`01bbefb`) — verified. So
+> `wal.rs`'s `record_checksum` was never exercised by this fixture at all, and the deleted test's own
+> doc overclaimed. **I repeated that claim from the doc instead of checking the fixture.** It also
 says, of the fixture: *"Do not regenerate this fixture … it is the evidence, not a convenience."*
 
 **Ruled:**
