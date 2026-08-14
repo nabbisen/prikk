@@ -314,7 +314,7 @@ deployment as passed unless observed for that exact release.
 |---|---|
 | Compatibility, state, signer-governance, and distribution rules | [DC-35](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-35-RELEASE-COMPATIBILITY-STATUS-CORRECTION.md) |
 | Identity changes require new explicit version/domain authority | [DC-34](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-34-PUBLICATION-IDENTITY-AUTHORITY.md) |
-| Format-1/format-2 compatibility and refusal boundary | [DC-40](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md) |
+| Format-1/format-2 compatibility and refusal boundary | [DC-40](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md) |
 | RFC lifecycle and same-release transition | [RFC-000](https://github.com/nabbisen/prikk/blob/main/rfcs/done/000-rfc-lifecycle-policy.md) |
 | Strict signer/evidence policy data and fixtures | [release policy data](https://github.com/nabbisen/prikk/tree/main/release) |
 | Released change history | [CHANGELOG](https://github.com/nabbisen/prikk/blob/main/CHANGELOG.md) |
