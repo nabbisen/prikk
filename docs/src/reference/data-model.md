@@ -8,7 +8,7 @@ status records listed in the anchor table at the foot of the page.
 
 - Prikk is early implementation software and is not a production Git replacement.
 - `.prikk/` is Prikk's native repository format and is not Git-compatible storage.
-- Ref files are mutable pointers for convenience and recovery, not roots of trust.
+- Ref pointers are mutable, for convenience and recovery, not roots of trust.
 - Durability and recovery claims are supported by current unit and integration tests, not by a
   completed crash-matrix or fuzzing campaign.
 - Repository *mutation* is exercised by project gates on Linux and macOS; Windows mutation remains
@@ -73,17 +73,18 @@ caches may be used only as checked auxiliary data; they cannot override replay.
 
 ## Refs and Publication
 
-RefState is the content-addressed state for a branch or tag ref. A ref pointer file stores the current
-RefState id for convenience and recovery, but the pointer file is not itself the root of trust.
-RefUpdate records are signed envelope entries in append-only ref logs and link old and new RefState
-ids, target Block id, update sequence, a schema-1 no-clock sentinel, and maintainer key id. The
-`created_at` field is exactly zero for current writes and is not a trusted creation or event timestamp.
+RefState is the content-addressed state for a branch or tag ref. A ref pointer entry, in a shared
+append-only container holding every ref's current pointer, stores the current RefState id for
+convenience and recovery, but the pointer is not itself the root of trust. RefUpdate records are
+signed envelope entries in a shared append-only ref-log container and link old and new RefState ids,
+target Block id, update sequence, a schema-1 no-clock sentinel, and maintainer key id. The `created_at`
+field is exactly zero for current writes and is not a trusted creation or event timestamp.
 
 Publication is guarded by ref-specific locking and compare-and-swap checks. The
 [concurrency and locking](./concurrency-locking.md) reference owns the detailed lock/CAS behavior.
-Seal persists WAL Patch envelopes, creates a signed Block and RefState, promotes the authoritative ref
-pointer as the publication commit point, appends exactly one signed RefUpdate log entry, confirms
-pointer/log agreement, then drains the active WAL and active ref metadata.
+Seal persists WAL Patch envelopes, creates a signed Block and RefState, durably appends the
+authoritative ref pointer as the publication commit point, appends exactly one signed RefUpdate log
+entry, confirms pointer/log agreement, then drains the active WAL and active ref metadata.
 
 ## Active WAL and Recovery Boundary
 
@@ -134,8 +135,8 @@ filesystem validation.
 | Patch payloads require non-empty contiguous operations and carry identity-bearing purpose. | [`patch.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/patch.rs), [DC-10](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-10-ROLLBACK-DRAFT-SIGNING.md) |
 | Worktree authoring derives baselines from authoritative replay or valid genesis. | [`node_authoring.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/worktree_patch/node_authoring.rs), [DC-13](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-13-NONDEFAULT-REF-GENESIS.md), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
 | Blocks contain parent ids, kind, Patch ids, state root, and optional snapshot Blob ref. | [`block.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/block.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs) |
-| RefState is content-addressed state and ref pointer files are mutable pointers. | [`refs.rs` payload](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/refs.rs), [`refs.rs` store](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [DC-11](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-11-MAINTAINER-TRUST-STORE.md) |
-| RefUpdate is append-only publication evidence stored inline in ref logs; schema-1 writes use zero as a no-clock sentinel. | [`refs.rs` payload](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/refs.rs), [`refs.rs` store](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-39](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md) |
+| RefState is content-addressed state and ref pointers are mutable entries in a shared container. | [`refs.rs` payload](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/refs.rs), [`refs/pointer_index.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer_index.rs), [DC-11](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-11-MAINTAINER-TRUST-STORE.md) |
+| RefUpdate is append-only publication evidence stored inline in a shared ref-log container; schema-1 writes use zero as a no-clock sentinel. | [`refs.rs` payload](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/refs.rs), [`refs/container.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/container.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-39](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md) |
 | Active WAL records exact signed Patch envelopes and detects trailing partial bytes. | [`wal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/wal.rs), [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [DC-15](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md) |
 | Verification is read-only and bounded to structural, WAL, ref, rollback, and publication-trust checks. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
 | `prikk-replay` is internally scoped and not a stable external API. | [DC-19](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-19-REPLAY-LIFECYCLE-CRATE-BOUNDARY.md), [DC-20](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-20-REPLAY-BOUNDARY-STABILIZATION.md), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |

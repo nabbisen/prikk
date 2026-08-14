@@ -40,11 +40,8 @@ active/default/active.lock
 refs/locks/<ref-name-storage-key>.lock
 ```
 
-It also uses temporary ref pointer candidates during ref publication and repair:
-
-```text
-refs/tmp/<ref-name-storage-key>.tmp
-```
+There is no temporary-candidate mechanism: ref publication writes into a shared, append-only pointer
+container directly, and an append-only record has no candidate value to stage before becoming durable.
 
 The lock primitive is the same for active-session and ref locks. The store creates the lock file with
 exclusive file creation. If the file already exists, acquisition fails with `LockConflict`. When
@@ -109,15 +106,15 @@ Current ref publication is scoped to one ref:
 
 1. Validate the publication inputs.
 2. Acquire `refs/locks/<ref-name-storage-key>.lock`.
-3. Validate pointer/log state, including the empty state required for unborn-ref creation.
-4. Persist the signed RefState object and validate the deterministic signed RefUpdate.
+3. Persist the signed RefState object into its container.
+4. Validate pointer/log state, including the empty state required for unborn-ref creation.
 5. Check the current ref pointer against `expected_previous_ref_state_id`.
-6. Write and required-sync a candidate pointer under `refs/tmp/`.
-7. Check the current ref pointer against `expected_previous_ref_state_id` again.
-8. Rename the candidate pointer into `refs/by-id/`, required-sync the destination directory, then
-   required-sync `refs/tmp/` for durable candidate removal.
-9. Append and required-sync exactly one signed RefUpdate record.
-10. Confirm pointer/log agreement before active state is removed.
+6. Append and required-sync the new pointer entry to the shared pointer-index container — the
+   publication commit point. An append-only record has no candidate value to stage first, so this one
+   durable append is both the check-then-write step and the promotion step the pre-container design
+   needed two for.
+7. Append and required-sync exactly one signed RefUpdate record to the shared log container.
+8. Confirm pointer/log agreement before active state is removed.
 
 Those checks prevent silent overwrite when the on-disk ref pointer has moved away from the caller's
 expected baseline. They are not a global repository transaction, a distributed consensus protocol, or a
@@ -128,11 +125,14 @@ code does not acquire those locks in the reverse order.
 
 ## Interrupted Publication Locking
 
-Pointer promotion is the publication commit point. If interruption leaves the pointer exactly one
-transition ahead of the log, only signer-backed `seal` retry may finish publication. It takes the
+The pointer-index append is the publication commit point. If interruption leaves the pointer exactly
+one transition ahead of the log, only signer-backed `seal` retry may finish publication. It takes the
 active lock and the same ref-specific lock, revalidates retained WAL, RefState, Block, sequence,
 old/new ids, and maintainer trust, then appends the exact deterministic RefUpdate. A structurally
-incomplete final log frame may be truncated only by that path after the complete prefix verifies.
+incomplete final log frame may be truncated only by that path after the complete prefix verifies; the
+shared log container has no pre-append refusal on an existing incomplete tail (unlike the pointer-first
+check above), since a torn tail belonging to one ref never enters any other ref's own filtered
+subsequence and so cannot block a different ref's publish.
 
 Doctor diagnoses interrupted publication but does not sign, append, promote, or reconstruct a
 missing pointer. The former format-1 missing-pointer repair is refused in 0.18.0. The sole bounded
@@ -184,7 +184,7 @@ and production-readiness claims.
 | Rollback-draft append acquires `active.lock` before appending rollback-draft state. | [`rollback_draft.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/rollback_draft.rs), [DC-10](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-10-ROLLBACK-DRAFT-SIGNING.md) |
 | Seal acquires `active.lock`, validates active ref metadata, publishes through the ref store, then drains active state after successful publication. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [durability and crash recovery](./durability-recovery.md) |
 | Non-empty active WALs require valid active ref metadata; missing or malformed metadata is an integrity issue. | [`active.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/active.rs), [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [integrity and recovery diagnostics](./integrity-recovery.md) |
-| Ref publication uses a per-ref lock, expected-current checks, signed RefState persistence, candidate pointer promotion as the commit point, then exactly one signed RefUpdate append. | [`refs/publication.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/publication.rs), [`refs/log.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/log.rs), [`refs/pointer.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
+| Ref publication uses a per-ref lock, expected-current checks, signed RefState persistence, a durable pointer-index append as the commit point, then exactly one signed RefUpdate append to the shared log container. | [`refs/publication.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/publication.rs), [`refs/pointer_index.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer_index.rs), [`refs/container.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/container.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
 | Ref CAS mismatch returns `LockConflict` and is distinct from an existing lock-file conflict. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`lock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/lock.rs) |
 | Unborn ref publication is allowed only when the pointer is absent and the ref log is empty with no trailing partial bytes. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-13](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-13-NONDEFAULT-REF-GENESIS.md) |
 | Doctor refuses format-1 missing-pointer reconstruction; exact interrupted publication completion requires signer-backed seal under the active and ref locks. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |

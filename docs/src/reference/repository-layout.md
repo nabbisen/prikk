@@ -33,8 +33,11 @@ For format stability, migration limits, and release identity, see
 ## Initialized Layout
 
 A fresh `prikk init` creates the repository directory, the initialized directories below, and the
-format marker file. It does not create runtime leaf files such as WALs, ref pointers, ref logs, trust
-policy files, or maintainer key files.
+format marker file. It does not create runtime leaf files such as WALs, trust policy files, or
+maintainer key files. Ref pointer and ref-log storage is the exception: unlike WALs and trust files,
+the ref-pointer index and ref-log containers are fixed, named files allocated by `init` itself, empty
+until a ref is first published — there is no ref-specific directory or file created later, since ref
+names do not exist at `init` time and a per-ref file would have to be.
 
 ```text
 .prikk/
@@ -49,9 +52,13 @@ policy files, or maintainer key files.
   active/
     default/
   refs/
+    containers/
+      log-a.container
+      log-b.container
+      pointer-index.container
+    locks/
     by-id/
     logs/
-    locks/
     tmp/
   trust/
     keys/
@@ -117,29 +124,45 @@ Canonical reads ignore them; `verify` and `doctor` warn without deleting them or
 
 ## Refs and Ref Logs
 
-Ref storage paths use a storage key derived from the human-readable ref name:
+Ref pointer and ref-log storage is shared, not per-ref: every ref's own pointer entry and log records
+live in containers allocated once at `init`, not in a file named for that ref. A ref name does not
+exist until `branch create`/`tag create` mints it, well after `init` — a per-ref file could never be
+one of `init`'s own fixed names, so pointers and logs for every ref instead interleave inside:
 
 ```text
-refs/by-id/<ref-name-storage-key>.ref
-refs/logs/<ref-name-storage-key>.log
+refs/containers/pointer-index.container
+refs/containers/log-a.container
+refs/containers/log-b.container
 refs/locks/<ref-name-storage-key>.lock
-refs/tmp/<ref-name-storage-key>.tmp
 ```
 
-The storage key is the hex SHA-256 digest of the ref name bytes.
+Locks remain per-ref files, one per ref name actually in use, unaffected by this: the storage key is
+the hex SHA-256 digest of the ref name bytes, the same digest used internally to attribute each
+container entry to its own ref.
 
-`refs/by-id/*.ref` files are mutable pointer files. A ref pointer stores the human-readable ref name
-and the current RefState object id. It is useful for lookup and recovery, but is not trusted alone.
-Verification and repair check pointer content against RefState objects and ref-log evidence.
+`pointer-index.container` is an append-only, checksum-framed sequence of pointer entries; each entry
+records one ref's human-readable name, its published RefState object id, and the SHA-256 key derived
+from that name. A ref's current pointer is its *last* matching entry — republishing a ref appends a
+new entry rather than rewriting the old one. It is useful for lookup and recovery, but is not trusted
+alone: verification checks pointer content against RefState objects and ref-log evidence, the same as
+before.
 
-`refs/logs/*.log` files contain append-only RefUpdate log records. Each record carries a signed
-RefUpdate envelope inline with log framing, versioning, length, and checksum. Ref logs are publication
-evidence when their record chain, referenced RefState objects, target Blocks, signatures, and trust
-policy checks all hold.
+`log-a.container`/`log-b.container` hold every ref's RefUpdate log records, interleaved by append
+order; a reader filters to one ref's own subsequence by that same per-record key. Each record carries
+a signed RefUpdate envelope inline with frame magic, versioning, length, and checksum. Ref logs are
+publication evidence when their record chain, referenced RefState objects, target Blocks, signatures,
+and trust policy checks all hold — unchanged in meaning, only in storage shape. (Slot `b` is allocated
+alongside slot `a` for future container rotation; current writes always target slot `a`.)
 
-`refs/locks/*.lock` files are local synchronization files for ref-specific publication and repair.
-`refs/tmp/*.tmp` files are temporary pointer candidates used during pointer promotion. Neither is a
-root of trust.
+`refs/locks/*.lock` files are local synchronization files for ref-specific publication and repair, not
+a root of trust. There is no longer a temporary-candidate mechanism: an append-only pointer entry has
+no candidate value to stage before becoming durable, so a publish that used to write, sync, and
+promote a candidate now durably appends the pointer entry directly, in one step.
+
+`refs/by-id/`, `refs/logs/`, and `refs/tmp/` are still initialized directories — join `cache/` and
+`quarantine/` above as present-but-not-authoritative: nothing writes into any of the three anymore, but
+`init` still allocates them, and current released behavior does not remove them or treat their
+presence as meaningful.
 
 ## Active Session
 
@@ -189,14 +212,13 @@ identity, key rotation, key revocation, hosted forge policy, or a multi-maintain
 |---|---|---|
 | `.prikk/FORMAT` | Format gate | Required by repository open; `2` is current writable format and `1` is bounded legacy read-only mode. |
 | `objects/<type>/<prefix>/<id>.pobj` | Content-addressed object authority | Authority when the envelope validates and its computed id/type match the path and expected object. |
-| `refs/logs/*.log` | Publication evidence | Append-only signed RefUpdate records; authoritative only with valid chain, object, signature, and trust checks. |
+| `refs/containers/log-a.container` (`log-b.container` reserved) | Publication evidence | Shared, append-only signed RefUpdate records for every ref, interleaved; authoritative only with valid chain, object, signature, and trust checks. |
 | `trust/policy.toml` and `trust/keys/maintainer/*.pub` | Repository-local trust authority | Current local MAINTAINER trust input for seal and verify publication-trust checks. |
 | `active/default/queue.wal` | Local active-session state | Pending signed Patch envelopes before seal; load-bearing for the active session, not sealed history. |
 | `active/default/ref-name` | Local active-session metadata | Identifies which ref owns a non-empty active WAL; not sealed history. |
-| `refs/by-id/*.ref` | Mutable convenience pointer | Fast current RefState lookup and recovery target; not trusted without RefState/ref-log checks. |
+| `refs/containers/pointer-index.container` | Mutable convenience pointer | Shared, append-only, last-entry-wins RefState pointer for every ref; fast current-state lookup and recovery target; not trusted without RefState/ref-log checks. |
 | `active/default/active.lock` and `refs/locks/*.lock` | Local synchronization | Prevent concurrent writers; not history or trust evidence. |
-| `refs/tmp/*.tmp` | Local promotion workspace | Temporary ref pointer candidate during publication or repair. |
-| `cache/` and `quarantine/` | Initialized but non-root | Present after init; not current roots of trust and not used for current verify/publication authority. |
+| `cache/`, `quarantine/`, `refs/by-id/`, `refs/logs/`, `refs/tmp/` | Initialized but non-root | Present after init; not current roots of trust and not used for current verify/publication authority. The last three are dead: nothing writes into them since ref publication state moved into containers. |
 | `gc/` | Deferred/not present | No current initialized directory or released behavior. |
 
 ## Deferred and Not Stable
@@ -218,10 +240,10 @@ validation.
 | Repository initialization creates the listed directories and writes `.prikk/FORMAT`. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-31](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
 | `.prikk/FORMAT` selects current writable format 2 or bounded legacy format 1. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-40](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md) |
 | Persistent object placement uses object-type directories, two-hex fanout, and `.pobj` files. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`object_store.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/object_store.rs) |
-| Six object types currently have initialized persistent object directories; `RefUpdate` is inline-only in ref logs. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`object_store.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/object_store.rs), [`refs/log.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/log.rs) |
-| Ref storage keys are SHA-256 hex digests of human-readable ref names. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs) |
-| Ref pointer files are mutable pointer files containing the ref name and RefState id. | [`refs/pointer.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [data model](./data-model.md) |
-| Ref logs contain signed RefUpdate envelopes inline with log framing, checksums, and replay semantics. | [`refs/log.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/log.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [durability and crash recovery](./durability-recovery.md) |
+| Six object types currently have initialized persistent object directories; `RefUpdate` is inline-only in ref logs. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`object_store.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/object_store.rs), [`refs/container.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/container.rs) |
+| Ref storage keys are SHA-256 hex digests of human-readable ref names, shared by the pointer index, the log container, and per-ref lock files. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs) |
+| The ref-pointer index is a shared, append-only, last-entry-wins container holding every ref's own current-pointer entry (name, RefState id, storage key). | [`refs/pointer_index.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer_index.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [data model](./data-model.md) |
+| The ref-log container is a shared, append-only sequence holding every ref's own signed RefUpdate envelopes, interleaved, with frame magic, checksums, and per-ref replay semantics. | [`refs/container.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/container.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [durability and crash recovery](./durability-recovery.md) |
 | Active WAL and active ref metadata are runtime active-session state, not fresh-init files. | [`active.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/active.rs), [`wal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/wal.rs), [durability and crash recovery](./durability-recovery.md) |
 | Trust policy and maintainer public-key files are written by the trust command and define current repository-local MAINTAINER trust. | [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [security and signing setup](../guide/security-setup.md) |
 | Verification checks object placement, ref pointer/log consistency, active WAL state, and publication trust within current limits. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [integrity and recovery diagnostics](./integrity-recovery.md), [trust and threat model](./trust-threat-model.md) |

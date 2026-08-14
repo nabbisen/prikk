@@ -8,7 +8,7 @@ implementation status records listed in the anchor table at the foot of the page
 
 - Prikk is early implementation software and is not a production Git replacement.
 - `.prikk/` is Prikk's native repository format and is not Git-compatible storage.
-- Ref files are pointers, not roots of trust.
+- Ref pointers are mutable, not roots of trust.
 - Maintainer trust is repository-local with the current minimal `required = 1` policy.
 - `verify` is not a global trust proof.
 - There is no key rotation, revocation, hardware signing, remote trust, sync trust, or stable migration
@@ -69,7 +69,7 @@ removes it out-of-band. There is no remote trust distribution.
 Seal requires `--allow-no-audit`, a valid local branch ref, a non-empty active WAL, valid active ref
 metadata matching the requested ref, and no trailing partial WAL bytes. It verifies that the configured
 MAINTAINER signer matches the repository-local trust policy before publication. It then persists Patch
-objects, signs and writes the Block and RefState, promotes the ref pointer as the commit point, appends
+objects, signs and writes the Block and RefState, durably appends the ref pointer as the commit point, appends
 exactly one signed RefUpdate, confirms pointer/log agreement, and clears active state. Signer-backed
 retry is also the only authority that may finish an exact interrupted publication.
 

@@ -91,9 +91,8 @@ Under `.prikk/`:
 | Directory | Holds | Trust |
 |---|---|---|
 | `objects/` | Content-addressed objects, named by `ObjectId` | **Authoritative** |
-| `refs/` | Ref states, the ref log, and recovery notes | **Authoritative** |
+| `refs/containers/` | Every ref's own pointer entry and ref-log records, in shared append-only containers | **Authoritative** |
 | `trust/` | Maintainer trust store — which keys may seal | **Authoritative** |
-| `logs/` | Ref-log journal and log records | **Authoritative** |
 | `cache/` | Rebuildable derived state | **Never a root of trust** |
 
 The last row is a requirement, not an observation: **NFR-PERF-04** states that caches are rebuildable

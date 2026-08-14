@@ -16,7 +16,7 @@ with another type's id.
 | `0x01` | **Patch** | An authored change: an ordered list of operations | `objects/` |
 | `0x02` | **Block** | A sealed group of patches, linked into lineage | `objects/` |
 | `0x03` | **RefState** | A ref's state at one point: which block it names | `objects/` |
-| `0x04` | **RefUpdate** | The event advancing a ref from one state to the next | `refs/logs/` |
+| `0x04` | **RefUpdate** | The event advancing a ref from one state to the next | `refs/containers/` |
 | `0x05` | **Tag** | A named, signed pointer into history | `objects/` |
 | `0x06` | **Attestation** | A policy/plugin scan result about one block | `objects/` |
 | `0x07` | **Blob** | File content, addressed by hash | `objects/` |

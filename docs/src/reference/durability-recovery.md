@@ -22,7 +22,8 @@ Release-transaction durability, artifact identity, and evidence limits are docum
   [platform support](./platform-support.md) for exactly which commands that covers and how it is
   CI-verified.
 - `.prikk/` is not a stable repository format and there is no stable migration policy yet.
-- Ref pointer files are mutable convenience pointers, not roots of trust.
+- The ref pointer is a mutable convenience pointer (an entry in a shared, append-only container, not a
+  file of its own), not a root of trust.
 - `doctor` repairs are opt-in and narrow; they do not synthesize missing objects, signatures, trust
   policy, or key material.
 - Stale `active.lock` cleanup after a crash is manual today; the current lock/CAS boundary is covered
@@ -72,9 +73,10 @@ order:
 6. Persist the signed Patch envelopes from the WAL into the object store.
 7. Create a signed Block envelope.
 8. Create a signed RefState envelope.
-9. Construct the deterministic signed RefUpdate and durably write a pointer candidate.
-10. Promote and required-sync the authoritative ref pointer as the publication commit point.
-11. Append and required-sync exactly one signed RefUpdate log record.
+9. Construct the deterministic signed RefUpdate.
+10. Append and required-sync the new pointer entry to the shared pointer-index container — the
+    publication commit point. An append-only entry has no candidate value to stage first.
+11. Append and required-sync exactly one signed RefUpdate record to the shared log container.
 12. Confirm pointer/log agreement, then drain the active WAL and remove active ref metadata.
 
 The implementation is designed so interruption recovery lands on a checkable previous ref state or a
@@ -118,24 +120,22 @@ from a guard destructor remains explicitly best-effort because destruction canno
 ## Ref Pointer and Ref Log Recovery
 
 Ref publication uses a signed RefState object, a signed inline RefUpdate log record, and a mutable ref
-pointer file. The pointer is useful for fast lookup, but it is not trusted by itself.
+pointer entry in a shared, append-only container. The pointer is useful for fast lookup, but it is not
+trusted by itself.
 
 The ref store validates branch ref names, holds a ref-specific lock, rechecks the expected current
-RefState ID, writes and syncs a candidate pointer, and promotes it before appending committed log
-evidence. It required-syncs `refs/by-id/` to establish the pointer commit point and then required-syncs
-`refs/tmp/` to establish candidate removal. Only after pointer promotion does it append and sync the
-already-constructed signed RefUpdate.
+RefState ID, then durably appends the new pointer entry — the publication commit point — before
+appending the committed log record. An append-only entry has no candidate value to stage first, so
+there is no separate write-then-promote step and no candidate-cleanup diagnostic anymore: the append
+either lands durably or it does not.
 
-Verification jointly classifies pointer and log state. A candidate left before promotion is warning
-debris but blocks unrelated mutation. Signer-backed retry may replace the complete candidate and
-removes only uniquely named candidate-write temps belonging to that ref under its lock. Cleanup
-requires the generated `.tmp.<decimal-pid>.<32-lowercase-hex>` suffix; malformed same-prefix or
-unrelated names remain visible and mutation-blocking. A pointer
-leading the log by exactly one expected transition is an interrupted publication and makes `verify`
-fail. Signer-backed `seal` retry may append the exact deterministic RefUpdate after revalidating
-retained WAL and trust. If the final log frame is structurally incomplete, that same path may truncate
-and sync only the incomplete suffix before the append. Fully framed checksum-invalid or malformed
-records are never truncation-safe.
+Verification jointly classifies pointer and log state. A pointer leading the log by exactly one
+expected transition is an interrupted publication and makes `verify` fail. Signer-backed `seal` retry
+may append the exact deterministic RefUpdate after revalidating retained WAL and trust. If the final
+log frame is structurally incomplete, that same path may truncate and sync only the container's own
+trailing incomplete suffix before the append; a torn tail belonging to one ref never enters any other
+ref's own filtered record sequence, so it cannot block a different ref's own publish or repair. Fully
+framed checksum-invalid or malformed records are never truncation-safe.
 
 For released format-1 repositories, one exact already-signed log-ahead transition may be completed by
 signer-backed seal without another append when retained active state proves the transition. Other
@@ -185,13 +185,13 @@ stable repository-format migration, and production-readiness claims.
 | WAL-tail repair truncates only incomplete trailing bytes and refuses complete-record integrity failures. | [`wal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/wal.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [PR-012](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-012-DOCTOR-REPAIR-HANDOFF.md) |
 | Non-empty active WALs require valid active-ref ownership metadata; empty-WAL metadata debris is separate local debris. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [DC-15](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md) |
 | Seal rejects trailing partial WAL bytes, missing/malformed active ref metadata, and mismatched active ref ownership before publication. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-15](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md) |
-| Seal persists WAL Patches, creates signed Block and RefState objects, promotes the pointer commit point, appends exactly one signed RefUpdate, confirms agreement, then drains active state. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`refs/publication.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/publication.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
+| Seal persists WAL Patches, creates signed Block and RefState objects, durably appends the pointer commit point, appends exactly one signed RefUpdate, confirms agreement, then drains active state. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`refs/publication.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/publication.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
 | Seal verifies the configured MAINTAINER signer against repository-local trust before publication. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [DC-11](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-11-MAINTAINER-TRUST-STORE.md) |
-| Ref publication uses ref-specific locking, compare-and-swap checks, signed RefState/RefUpdate envelopes, pointer-first commit, and an idempotent exact log append. | [`refs/publication.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/publication.rs), [`pointer.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer.rs), [`log.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/log.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
+| Ref publication uses ref-specific locking, compare-and-swap checks, signed RefState/RefUpdate envelopes, pointer-first commit, and an idempotent exact log append. | [`refs/publication.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/publication.rs), [`refs/pointer_index.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer_index.rs), [`refs/container.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/container.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
 | Immutable object publication never replaces an existing final name; existing or concurrent winners require valid identity/type and exact persisted-byte equality, while recognized crash-left temps remain warning-only debris. | [`object_store.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/object_store.rs), [`immutable.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/fsutil/anchored/immutable.rs), [DC-36](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-36-EXISTING-OBJECT-PUBLICATION-INTEGRITY.md) |
 | Doctor refuses format-1 missing-pointer reconstruction; exact interrupted ref publication completion requires retained active evidence and a trusted signer. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
 | Doctor began as read-only diagnostics, and current mutating repairs remain opt-in and narrow. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [PR-011](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-011-DOCTOR-HANDOFF.md), [PR-012](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-012-DOCTOR-REPAIR-HANDOFF.md), [PR-013](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-013-REF-RECOVERY-HANDOFF.md) |
-| Ref pointer files are mutable pointers, not roots of trust. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`pointer.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer.rs), [data model](./data-model.md) |
+| Ref pointers are mutable, not roots of trust. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`refs/pointer_index.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer_index.rs), [data model](./data-model.md) |
 | Durability/platform claims remain limited by current test evidence and gates exercised on Linux and macOS only. | [DC-24 baseline recap](https://github.com/nabbisen/prikk/blob/main/rfcs/handoffs/DC-24-data-model-trust-threat-docs/baseline-recap.md), [DC-24](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md), [DC-28](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md) |
 
 ## Provenance
