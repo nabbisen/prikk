@@ -200,3 +200,30 @@ performance hedge, and a violation is an error rather than a slower path.
 or truncated — makes first-run cost unacceptable for a CLI. That is a *recovery* path, not steady state,
 but it should be measured rather than assumed once containers exist. `dc59_commit_benchmark.rs` is the
 existing precedent for taking n=10,000 seriously.
+
+### 12.1 Step 0 item 1 — decided by the project owner, 2026-08-14
+
+**Bump to format 3; reject format-2 at open. No dual-layout bridge.**
+
+Owner's words: *"prikk is in early stage of development and is not in production use. We don't have to
+care about such migration yet."* **Every existing format-2 repository becomes unopenable the moment
+Stage 3 ships.** That consequence was stated before the decision, not discovered after it.
+
+**Consequences that follow, and are not separately decidable:**
+
+- **One storage mechanism, as the RFC's constraint 1 requires.** Reading both layouts was the only
+  alternative and it reintroduces the dual-path shape RFC 103 spent an increment deleting.
+- **The rejection reuses format-1's proven shape** (`layout.rs:365-377`): a named arm, a message stating
+  the detected and required formats, and a migration route. **The catch-all
+  `Err(UnsupportedFormatVersion(0))` is not acceptable for format 2** — it names nothing, and format 2
+  is the format essentially every existing repository is in.
+- **The message must name a real route.** Format-1's points at `0.19.0` bundle export. Format-2's must
+  name whichever release last supported it — **established from the release record at implementation
+  time, not guessed**, exactly as RFC 103 Increment A did rather than trusting my placeholder.
+- **`init` already refuses a mismatched existing `FORMAT`**; that refusal inherits the bump and needs its
+  own message audit, not just a constant change.
+
+**Not decided here:** whether `RepositoryFormat` gains a `CurrentV3` variant or the sole existing variant
+is renamed. That is implementation judgment — but note RFC 103 Increment B was abandoned precisely
+because `require_current_format`'s disk re-read is live, so the enum's *shape* still carries a real
+runtime check and is not free to collapse.
