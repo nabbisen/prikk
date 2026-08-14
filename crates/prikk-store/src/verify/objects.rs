@@ -52,7 +52,7 @@ pub struct ObjectItemOutcome {
 pub(super) struct ObjectSummary {
     /// Phase A: one outcome per object file scanned, in scan order.
     pub(super) item_outcomes: Vec<ObjectItemOutcome>,
-    /// Phase B: one outcome per `CurrentV2` Block whose Phase A check succeeded, in the
+    /// Phase B: one outcome per `CurrentV3` Block whose Phase A check succeeded, in the
     /// state-dependency order `verify_blocks_topological` resolved them (DC-92 §4.2) -- not scan
     /// order.
     pub(super) topological_outcomes: Vec<BlockStateOutcome>,
@@ -90,7 +90,7 @@ pub(super) fn verify_objects(
     object_store: &FileObjectStore,
     trust_verifier: &mut PublicationTrustVerifier<'_>,
 ) -> Result<ObjectSummary> {
-    // DC-92 §4.2: Phase A (below) collects every CurrentV2 Block's already-decoded payload instead
+    // DC-92 §4.2: Phase A (below) collects every CurrentV3 Block's already-decoded payload instead
     // of verifying its state inline, in whatever order the generic scan visits objects (ObjectId
     // order — unrelated to lineage). Phase B (`verify_blocks_topological`, after the loop) verifies
     // them in state-dependency order instead, against one shared memo constructed here and evicted

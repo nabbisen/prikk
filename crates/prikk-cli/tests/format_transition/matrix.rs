@@ -1,14 +1,14 @@
 use super::*;
 
 #[test]
-fn format2_seal_rejects_every_strict_wal_read_failure_without_mutation() -> TestResult {
+fn current_format_seal_rejects_every_strict_wal_read_failure_without_mutation() -> TestResult {
     for failure in [
         StrictFailure::MalformedLength,
         StrictFailure::Duplicate,
         StrictFailure::InvertedOrder,
     ] {
         let root = unique_root()?;
-        build_format2_strict_wal_fixture(&root, failure)?;
+        build_current_format_strict_wal_fixture(&root, failure)?;
         let before = snapshot_tree(&root)?;
         let output = run_owned(&root, &["seal".to_string(), "--allow-no-audit".to_string()])?;
         assert!(

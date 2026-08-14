@@ -47,7 +47,7 @@ fn publish_locked(
     super::pointer::remove_candidate_write_temps(&store.layout, &publication.ref_name)?;
     let mut object_store = FileObjectStore::new(store.layout.clone());
     match store.layout.format() {
-        RepositoryFormat::CurrentV2 => {
+        RepositoryFormat::CurrentV3 => {
             object_store.write_object(&publication.ref_state)?;
         }
     }

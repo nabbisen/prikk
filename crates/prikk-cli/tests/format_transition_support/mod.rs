@@ -36,4 +36,4 @@ pub(crate) enum StrictFailure {
 
 mod fixture;
 
-pub(crate) use fixture::{build_format2_strict_wal_fixture, build_legacy_fixture};
+pub(crate) use fixture::{build_current_format_strict_wal_fixture, build_legacy_fixture};

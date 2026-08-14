@@ -9,6 +9,7 @@ use prikk_object::{ObjectEnvelope, ObjectId, ObjectType};
 
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_u16, push_u64};
+use crate::frame_resync::resync_to_next_magic;
 use crate::fsutil::{
     MutationRoot, append_file_required, ensure_directory_required, len_to_u64, read_file_if_exists,
     truncate_existing_file_required, truncate_file_empty_required,
@@ -426,35 +427,16 @@ fn parse_frame_at(bytes: &[u8], offset: usize) -> FrameAttempt {
     }
 }
 
-/// Scan forward byte-by-byte from `start` for the next occurrence of the WAL record magic.
-/// Deliberately never skips based on any not-yet-validated candidate's own fields -- a corrupted
-/// length field inside a false-positive magic match (the magic appearing inside record bytes)
-/// cannot cause this to leap past a genuine following record, because every candidate is found by
-/// raw byte position, one at a time, independent of what any header claims. Returns `None` when no
-/// further magic occurs in the remaining bytes.
-fn resync_offset(bytes: &[u8], start: usize) -> Option<usize> {
-    let magic_len = WAL_RECORD_MAGIC.len();
-    let mut cursor = start;
-    while cursor
-        .checked_add(magic_len)
-        .is_some_and(|end| end <= bytes.len())
-    {
-        if bytes.get(cursor..cursor + magic_len) == Some(WAL_RECORD_MAGIC.as_slice()) {
-            return Some(cursor);
-        }
-        cursor += 1;
-    }
-    None
-}
-
 /// RFC 102 Stage 2: isolate-and-continue reading. A frame that fails to validate no longer aborts
-/// replay -- its offset and error are recorded as a `Failed` outcome, and `resync_offset` finds the
-/// next candidate frame so every subsequent sound record is still read. Corruption is therefore
-/// confined to the records it actually damaged, matching amended constraint 5's blast-radius
-/// requirement (RFC 102 §3, §6.3a). This never returns `Err` for a decode-level problem -- only for
-/// conditions that are not about this WAL's own content, which is why the return type stays
-/// `Result` at all: none exist below, `decode_records` cannot fail, kept fallible for API stability
-/// and because `parse_header`'s errors are folded into `FrameAttempt::Invalid` rather than raised.
+/// replay -- its offset and error are recorded as a `Failed` outcome, and
+/// `frame_resync::resync_to_next_magic` (RFC 102 Stage 3: extracted here, reused by `refs/log.rs`
+/// and by the container read path rather than a third copy) finds the next candidate frame so every
+/// subsequent sound record is still read. Corruption is therefore confined to the records it
+/// actually damaged, matching amended constraint 5's blast-radius requirement (RFC 102 §3, §6.3a).
+/// This never returns `Err` for a decode-level problem -- only for conditions that are not about
+/// this WAL's own content, which is why the return type stays `Result` at all: none exist below,
+/// `decode_records` cannot fail, kept fallible for API stability and because `parse_header`'s errors
+/// are folded into `FrameAttempt::Invalid` rather than raised.
 fn decode_records(bytes: &[u8]) -> Result<WalReplay> {
     let mut records = Vec::new();
     let mut record_outcomes = Vec::new();
@@ -484,7 +466,7 @@ fn decode_records(bytes: &[u8]) -> Result<WalReplay> {
                     offset,
                     status: WalRecordStatus::Failed { message },
                 });
-                match resync_offset(bytes, offset + 1) {
+                match resync_to_next_magic(bytes, offset + 1, WAL_RECORD_MAGIC.as_slice()) {
                     Some(next) => offset = next,
                     None => {
                         return Ok(WalReplay {

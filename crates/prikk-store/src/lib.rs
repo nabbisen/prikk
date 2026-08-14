@@ -26,6 +26,7 @@ mod commit_index;
 mod doctor;
 mod file_codec;
 mod format;
+mod frame_resync;
 mod fsutil;
 mod history;
 mod layout;
