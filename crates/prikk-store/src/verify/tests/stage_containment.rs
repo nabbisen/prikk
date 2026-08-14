@@ -98,18 +98,20 @@ fn verify_repository_reports_two_independent_stage_failures_together() -> Result
         .to_path_buf();
     std::fs::create_dir_all(prefix_dir.join("stray-directory"))?;
 
-    // WalReplay: a real, well-formed patch, then a corrupted checksum byte, same technique as
-    // `verify_repository_detects_wal_checksum_mismatch` (`wal_cluster.rs`).
+    // WalReplay: RFC 102 Stage 2 contains a checksum-damaged record to an item finding, not a
+    // stage failure (`verify_repository_detects_wal_checksum_mismatch`,
+    // `verify_repository_marks_every_wal_replay_dependent_as_not_evaluated` now cover that shape).
+    // A genuine stage-level `WalReplay` failure still needs a schema-shape defect, which Stage 2
+    // deliberately leaves a hard error (out of its own scope -- see `wal.rs::Wal::replay`).
     let mut objects = FileObjectStore::new(layout.clone());
     objects.write_object(&signed_patch_blob_envelope())?;
-    let patch = signed_patch_envelope();
+    let mut patch = signed_patch_envelope();
+    patch.schema_version = 99;
     let wal = Wal::for_layout(&layout);
-    wal.append_patch(&patch)?;
-    let mut bytes = std::fs::read(wal.path())?;
-    let last_byte = bytes
-        .last_mut()
-        .ok_or_else(|| PrikkError::Io("WAL file unexpectedly empty".to_string()))?;
-    *last_byte ^= 0x01;
+    let bytes = crate::wal::encode_record_for_test(&crate::wal::WalRecord {
+        seq: 1,
+        envelope: patch,
+    })?;
     std::fs::write(wal.path(), &bytes)?;
 
     let report = verify_repository(&layout)?;
@@ -379,14 +381,21 @@ fn verify_repository_marks_every_wal_replay_dependent_as_not_evaluated() -> Resu
     let layout = RepositoryLayout::init(root.clone())?;
     let mut objects = FileObjectStore::new(layout.clone());
     objects.write_object(&signed_patch_blob_envelope())?;
-    let patch = signed_patch_envelope();
+    // RFC 102 Stage 2: a checksum-damaged record no longer fails the whole `WalReplay` stage --
+    // isolate-and-continue reading contains it to an item finding instead (`wal_cluster.rs`'s own
+    // `verify_repository_detects_wal_checksum_mismatch` now proves that). This test is about the
+    // dependency-graph machinery itself, which still needs a genuine stage-level `WalReplay`
+    // failure to exercise -- `validate_read_schema` (called after `decode_records` inside
+    // `Wal::replay()` itself, deliberately left a hard error by Stage 2: a schema-shape defect is a
+    // different concern from physical corruption, out of this stage's scope) still produces one, so
+    // a record encoded with a wrong schema version is the new fixture.
+    let mut patch = signed_patch_envelope();
+    patch.schema_version = 99;
     let wal = Wal::for_layout(&layout);
-    wal.append_patch(&patch)?;
-    let mut bytes = std::fs::read(wal.path())?;
-    let last_byte = bytes
-        .last_mut()
-        .ok_or_else(|| PrikkError::Io("WAL file unexpectedly empty".to_string()))?;
-    *last_byte ^= 0x01;
+    let bytes = crate::wal::encode_record_for_test(&crate::wal::WalRecord {
+        seq: 1,
+        envelope: patch,
+    })?;
     std::fs::write(wal.path(), &bytes)?;
 
     let report = verify_repository(&layout)?;

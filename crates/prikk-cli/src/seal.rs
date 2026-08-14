@@ -87,6 +87,13 @@ fn seal_active_no_audit(
             replay.trailing_partial_bytes
         ));
     }
+    // RFC 102 Stage 2: a damaged record no longer makes `replay()` return `Err` -- without this,
+    // `replay.records` below silently omits the damaged one, and `persist_wal_patches`/the sealed
+    // Block's `patch_ids` would seal exactly that reduced set, permanently, with no refusal and no
+    // trace of the dropped patch in history.
+    if replay.has_item_failure() {
+        return Err("active WAL has a damaged record; run verify/doctor before seal".to_string());
+    }
     if replay.records.is_empty() {
         match read_active_ref_metadata(&layout).map_err(|err| err.to_string())? {
             ActiveRefMetadata::Missing => {}

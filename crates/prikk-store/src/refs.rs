@@ -205,6 +205,14 @@ impl RefStore {
             return Ok(None);
         }
         let replay = self.replay_log(ref_name)?;
+        // RFC 102 Stage 2: checked before the emptiness check below -- a log whose only record is
+        // damaged would otherwise read as `replay.records.is_empty()`, and this function's whole
+        // purpose is detecting exactly this kind of condition, not passing over it.
+        if replay.has_item_failure() {
+            return Err(PrikkError::Integrity(format!(
+                "ref log for {ref_name} has a damaged record"
+            )));
+        }
         if replay.records.is_empty() {
             return Ok(None);
         }

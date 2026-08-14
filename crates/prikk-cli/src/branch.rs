@@ -255,6 +255,13 @@ fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
     let replay = Wal::for_layout(&layout)
         .replay()
         .map_err(|err| err.to_string())?;
+    // RFC 102 Stage 2: a WAL whose only record is damaged would otherwise read as
+    // `replay.records.is_empty()`, letting close proceed as if no active WAL owns anything here.
+    if replay.has_item_failure() {
+        return Err(
+            "active WAL has a damaged record; run doctor before closing a branch".to_string(),
+        );
+    }
     if !replay.records.is_empty() {
         match require_active_ref_for_non_empty_wal(&layout, &canonical) {
             Ok(_) => {

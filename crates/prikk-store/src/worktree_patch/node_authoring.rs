@@ -217,6 +217,15 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
             active_replay.trailing_partial_bytes
         ))));
     }
+    // RFC 102 Stage 2: a damaged record no longer makes `replay()` itself return `Err` -- refuse
+    // explicitly, since `active_replay.records` below (the active-patch-limit count, and the
+    // empty-vs-non-empty branch just past it) is computed from the surviving records alone and
+    // would silently under-count a damaged one out of existence otherwise.
+    if active_replay.has_item_failure() {
+        return Err(AuthorError::Store(PrikkError::Integrity(
+            "active WAL has a damaged record; run doctor before committing".to_string(),
+        )));
+    }
     // DC-57 (NFR-PERF-02): the hard block fires here — before any ref-metadata write, baseline
     // resolution, blob write, or WAL append below. "Active patches" has exactly one definition and
     // computation site: the active WAL's record count, read once above. `>=` (not `>`) is deliberate:

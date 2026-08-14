@@ -76,6 +76,14 @@ pub(super) fn current_ref_state(
         let log = ref_store
             .replay_log(ref_name)
             .map_err(|err| err.to_string())?;
+        // RFC 102 Stage 2: a damaged sole record would otherwise read as `log.records.is_empty()`
+        // below, misclassifying a ref with corrupted history as one with none at all (genesis).
+        if log.has_item_failure() {
+            return Err(format!(
+                "ref {ref_name} pointer is missing and its log has a damaged record; \
+                 run `prikk doctor` before seal"
+            ));
+        }
         if log.trailing_partial_bytes != 0 {
             return Err(format!(
                 "ref {ref_name} pointer is missing and its log has trailing partial bytes; \

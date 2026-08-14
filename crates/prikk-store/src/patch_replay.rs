@@ -267,6 +267,16 @@ pub(crate) fn resolve_worktree_baseline(
              run `prikk doctor` (this is not a genesis repository)"
         )));
     }
+    // RFC 102 Stage 2: checked before the emptiness check below -- a damaged sole record would
+    // otherwise read as `log.records.is_empty()`, and the worst possible misclassification here is
+    // exactly that: authoring against an empty (Genesis) baseline for a ref that actually has
+    // history.
+    if log.has_item_failure() {
+        return Err(PrikkError::Integrity(format!(
+            "ref {canonical_ref} pointer is missing and its log has a damaged record; \
+             run `prikk doctor` (this is not a genesis repository)"
+        )));
+    }
     if !log.records.is_empty() {
         return Err(PrikkError::Integrity(format!(
             "ref {canonical_ref} pointer is missing but ref-log history exists; \

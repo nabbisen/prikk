@@ -61,6 +61,14 @@ pub fn verify_active_rollback_draft(
             replay.trailing_partial_bytes
         )));
     }
+    // RFC 102 Stage 2: `single_wal_record` below only sees the surviving records -- a genuinely
+    // two-record WAL with one damaged record would otherwise pass as "exactly one," and this
+    // function's result is trusted to authorize seal.
+    if replay.has_item_failure() {
+        return Err(PrikkError::Integrity(
+            "active WAL has a damaged record; run doctor before rollback-draft-verify".to_string(),
+        ));
+    }
     let Some(record) = single_wal_record(&replay.records)? else {
         return Err(PrikkError::Integrity(
             "rollback-draft-verify requires exactly one active WAL record".to_string(),

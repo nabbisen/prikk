@@ -28,13 +28,57 @@ pub struct WalRecord {
     pub envelope: ObjectEnvelope,
 }
 
+/// Outcome of attempting to decode one WAL record frame (RFC 102 Stage 2: isolate-and-continue
+/// reading). File identity here is the byte offset a frame attempt started at, not a stored id --
+/// a frame that failed to validate has no other identity to report.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WalRecordStatus {
+    /// The frame at this offset was read and validated successfully.
+    Evaluated,
+    /// The frame at this offset failed to validate (bad magic/version, checksum mismatch, or a
+    /// malformed envelope) -- resync moved past it byte-wise to find the next candidate frame.
+    Failed {
+        /// The error this frame's own validation raised.
+        message: String,
+    },
+}
+
+/// One attempted WAL record frame's resolved outcome.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WalRecordOutcome {
+    /// The byte offset within the WAL this frame attempt started at.
+    pub offset: usize,
+    /// How this frame's own read/validation resolved.
+    pub status: WalRecordStatus,
+}
+
 /// WAL replay result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WalReplay {
-    /// Valid records read from the start of the WAL.
+    /// Valid records read from the WAL, in file order -- includes records found after a damaged
+    /// one (RFC 102 Stage 2), not merely a prefix up to the first failure.
     pub records: Vec<WalRecord>,
-    /// Number of trailing bytes ignored as an incomplete final record.
+    /// Number of trailing bytes ignored as an incomplete final record -- a legitimate torn tail
+    /// from an interrupted append, unchanged in meaning from before Stage 2. Zero when the WAL's
+    /// end was reached via resync after unrecoverable corruption (see `record_outcomes`) rather
+    /// than a genuinely incomplete final frame.
     pub trailing_partial_bytes: usize,
+    /// One outcome per attempted frame, in scan order -- both `Evaluated` and `Failed`. A frame
+    /// that failed and was then found again via resync (a false-positive magic match inside
+    /// corrupted bytes) gets its own entry too; this is deliberately not deduplicated into "one
+    /// finding per corrupted region", since each is an independently true statement about what was
+    /// attempted at that offset.
+    pub record_outcomes: Vec<WalRecordOutcome>,
+}
+
+impl WalReplay {
+    /// Return true when any attempted frame failed to validate.
+    #[must_use]
+    pub fn has_item_failure(&self) -> bool {
+        self.record_outcomes
+            .iter()
+            .any(|outcome| matches!(outcome.status, WalRecordStatus::Failed { .. }))
+    }
 }
 
 /// Result of a safe WAL tail truncation.
@@ -114,6 +158,15 @@ impl Wal {
                 "cannot append after an incomplete WAL tail".to_string(),
             ));
         }
+        // RFC 102 Stage 2: isolate-and-continue reading means a damaged record no longer makes
+        // `replay()` itself return `Err` -- append must refuse explicitly, since `next_seq` and
+        // "does the last record already match" below are both computed from `replay.records`,
+        // which silently omits a damaged record rather than surfacing it as an error here.
+        if replay.has_item_failure() {
+            return Err(PrikkError::Integrity(
+                "cannot append after a damaged WAL record; run doctor before appending".to_string(),
+            ));
+        }
         let (root, relative) = self.mutation()?;
         match replay.records.last() {
             Some(last) if last.envelope == *envelope => {
@@ -148,6 +201,7 @@ impl Wal {
             return Ok(WalReplay {
                 records: Vec::new(),
                 trailing_partial_bytes: 0,
+                record_outcomes: Vec::new(),
             });
         };
         let replay = decode_records(&bytes)?;
@@ -162,8 +216,12 @@ impl Wal {
     /// Safely truncate an incomplete trailing WAL record, if one exists.
     ///
     /// This repairs only the case that FDD-02 defines as safe: valid records followed by an
-    /// incomplete final record. Checksum mismatches in complete records still return an error and
-    /// are not modified.
+    /// incomplete final record. **RFC 102 Stage 2**: a mid-stream checksum mismatch in a complete
+    /// record no longer makes `decode_records` return `Err` -- it is now an item finding
+    /// (`WalReplay::has_item_failure`), which this function refuses on explicitly below rather than
+    /// silently truncating around. The only production caller (`doctor.rs`'s `repair_repository`)
+    /// already refuses earlier via `doctor_repository`'s own item-outcome reporting; this check is
+    /// defense in depth for this function's own contract, not the only thing enforcing it.
     pub fn truncate_trailing_partial(&self) -> Result<WalRepair> {
         self.require_current_format()?;
         let Some(bytes) = self.read_bytes()? else {
@@ -174,6 +232,11 @@ impl Wal {
             });
         };
         let replay = decode_records(&bytes)?;
+        if replay.has_item_failure() {
+            return Err(PrikkError::Integrity(
+                "WAL has a damaged record; repair does not modify it".to_string(),
+            ));
+        }
         let preserved_patch_ids: Vec<ObjectId> = replay
             .records
             .iter()
@@ -290,51 +353,142 @@ fn frame_record(sequence: u64, body: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// Result of attempting to parse one frame at a given offset.
+enum FrameAttempt {
+    /// A complete, checksummed, decodable record.
+    Record {
+        record: WalRecord,
+        next_offset: usize,
+    },
+    /// A structurally incomplete final frame -- too few bytes remain for a full header, or the
+    /// header parsed but its claimed body does not fully fit the remaining bytes. Legitimate torn
+    /// tail from an interrupted append; unchanged in meaning from before Stage 2. Only ever reached
+    /// when `offset` is within one frame's length of the true end of `bytes` (see the module doc on
+    /// `WalReplay::trailing_partial_bytes`), so there is nothing left to resync into either way.
+    TrailingPartial { remaining: usize },
+    /// The frame at this offset failed to validate for a reason that is not "ran out of bytes":
+    /// bad magic/version, checksum mismatch, or a malformed envelope after the checksum passed.
+    Invalid { message: String },
+}
+
+/// Attempt to parse one frame at `offset`. Never trusts a not-yet-checksum-validated header's own
+/// `body_len` for anything beyond locating where its claimed body would end -- the checksum, not
+/// the length field, is what makes a `Record` result trustworthy.
+fn parse_frame_at(bytes: &[u8], offset: usize) -> FrameAttempt {
+    let remaining = bytes.len().saturating_sub(offset);
+    if remaining < WAL_HEADER_LEN {
+        return FrameAttempt::TrailingPartial { remaining };
+    }
+    let header_end = offset + WAL_HEADER_LEN;
+    // In range by construction: `remaining >= WAL_HEADER_LEN` was just checked above.
+    let header = &bytes[offset..header_end];
+    let header_values = match parse_header(header) {
+        Ok(values) => values,
+        Err(err) => return FrameAttempt::Invalid {
+            message: err.to_string(),
+        },
+    };
+    let Ok(body_len) = usize::try_from(header_values.body_len) else {
+        return FrameAttempt::Invalid {
+            message: "WAL body length does not fit usize".to_string(),
+        };
+    };
+    let Some(body_end) = header_end.checked_add(body_len) else {
+        return FrameAttempt::Invalid {
+            message: "WAL body end overflow".to_string(),
+        };
+    };
+    let Some(body) = bytes.get(header_end..body_end) else {
+        return FrameAttempt::TrailingPartial { remaining };
+    };
+    let expected = record_checksum(header_values.seq, header_values.body_len, body);
+    if expected != header_values.checksum {
+        return FrameAttempt::Invalid {
+            message: format!("WAL checksum mismatch at byte offset {offset}"),
+        };
+    }
+    match decode_envelope_file(body) {
+        Ok(envelope) => FrameAttempt::Record {
+            record: WalRecord {
+                seq: header_values.seq,
+                envelope,
+            },
+            next_offset: body_end,
+        },
+        Err(err) => FrameAttempt::Invalid {
+            message: err.to_string(),
+        },
+    }
+}
+
+/// Scan forward byte-by-byte from `start` for the next occurrence of the WAL record magic.
+/// Deliberately never skips based on any not-yet-validated candidate's own fields -- a corrupted
+/// length field inside a false-positive magic match (the magic appearing inside record bytes)
+/// cannot cause this to leap past a genuine following record, because every candidate is found by
+/// raw byte position, one at a time, independent of what any header claims. Returns `None` when no
+/// further magic occurs in the remaining bytes.
+fn resync_offset(bytes: &[u8], start: usize) -> Option<usize> {
+    let magic_len = WAL_RECORD_MAGIC.len();
+    let mut cursor = start;
+    while cursor.checked_add(magic_len).is_some_and(|end| end <= bytes.len()) {
+        if bytes.get(cursor..cursor + magic_len) == Some(WAL_RECORD_MAGIC.as_slice()) {
+            return Some(cursor);
+        }
+        cursor += 1;
+    }
+    None
+}
+
+/// RFC 102 Stage 2: isolate-and-continue reading. A frame that fails to validate no longer aborts
+/// replay -- its offset and error are recorded as a `Failed` outcome, and `resync_offset` finds the
+/// next candidate frame so every subsequent sound record is still read. Corruption is therefore
+/// confined to the records it actually damaged, matching amended constraint 5's blast-radius
+/// requirement (RFC 102 §3, §6.3a). This never returns `Err` for a decode-level problem -- only for
+/// conditions that are not about this WAL's own content, which is why the return type stays
+/// `Result` at all: none exist below, `decode_records` cannot fail, kept fallible for API stability
+/// and because `parse_header`'s errors are folded into `FrameAttempt::Invalid` rather than raised.
 fn decode_records(bytes: &[u8]) -> Result<WalReplay> {
     let mut records = Vec::new();
+    let mut record_outcomes = Vec::new();
     let mut offset = 0_usize;
-    while offset < bytes.len() {
-        let remaining = bytes.len().saturating_sub(offset);
-        if remaining < WAL_HEADER_LEN {
-            return Ok(WalReplay {
-                records,
-                trailing_partial_bytes: remaining,
-            });
+    loop {
+        match parse_frame_at(bytes, offset) {
+            FrameAttempt::Record {
+                record,
+                next_offset,
+            } => {
+                record_outcomes.push(WalRecordOutcome {
+                    offset,
+                    status: WalRecordStatus::Evaluated,
+                });
+                records.push(record);
+                offset = next_offset;
+            }
+            FrameAttempt::TrailingPartial { remaining } => {
+                return Ok(WalReplay {
+                    records,
+                    trailing_partial_bytes: remaining,
+                    record_outcomes,
+                });
+            }
+            FrameAttempt::Invalid { message } => {
+                record_outcomes.push(WalRecordOutcome {
+                    offset,
+                    status: WalRecordStatus::Failed { message },
+                });
+                match resync_offset(bytes, offset + 1) {
+                    Some(next) => offset = next,
+                    None => {
+                        return Ok(WalReplay {
+                            records,
+                            trailing_partial_bytes: 0,
+                            record_outcomes,
+                        });
+                    }
+                }
+            }
         }
-        let header_end = offset + WAL_HEADER_LEN;
-        let header = bytes
-            .get(offset..header_end)
-            .ok_or_else(|| PrikkError::MalformedData("WAL header range overflow".to_string()))?;
-        let header_values = parse_header(header)?;
-        let body_len = usize::try_from(header_values.body_len).map_err(|_| {
-            PrikkError::MalformedData("WAL body length does not fit usize".to_string())
-        })?;
-        let body_end = header_end
-            .checked_add(body_len)
-            .ok_or_else(|| PrikkError::MalformedData("WAL body end overflow".to_string()))?;
-        let Some(body) = bytes.get(header_end..body_end) else {
-            return Ok(WalReplay {
-                records,
-                trailing_partial_bytes: remaining,
-            });
-        };
-        let expected = record_checksum(header_values.seq, header_values.body_len, body);
-        if expected != header_values.checksum {
-            return Err(PrikkError::Integrity(format!(
-                "WAL checksum mismatch at byte offset {offset}"
-            )));
-        }
-        let envelope = decode_envelope_file(body)?;
-        records.push(WalRecord {
-            seq: header_values.seq,
-            envelope,
-        });
-        offset = body_end;
     }
-    Ok(WalReplay {
-        records,
-        trailing_partial_bytes: 0,
-    })
 }
 
 struct WalHeader {

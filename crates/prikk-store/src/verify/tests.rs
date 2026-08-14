@@ -127,6 +127,24 @@ pub(super) fn assert_ref_failed(report: &RepositoryVerification, expected_substr
     );
 }
 
+/// RFC 102 Stage 2: isolate-and-continue reading means a damaged WAL record is an item finding, not
+/// a `WalReplay` stage failure -- the stage itself now evaluates cleanly around it. Mirrors
+/// `assert_ref_failed`'s shape for `wal_record_outcomes`.
+pub(super) fn assert_wal_item_failed(report: &RepositoryVerification, expected_substring: &str) {
+    assert!(
+        report.has_item_failure(),
+        "expected at least one item to fail, got: {report:?}"
+    );
+    let found = report.wal_record_outcomes.iter().any(|outcome| {
+        matches!(&outcome.status, crate::wal::WalRecordStatus::Failed { message } if message.contains(expected_substring))
+    });
+    assert!(
+        found,
+        "expected a wal_record_outcomes entry Failed with a message containing {expected_substring:?}, got: {:?}",
+        report.wal_record_outcomes
+    );
+}
+
 /// DC-95 Stage 1, round 2: the three "referenced object is missing" checks in `verify_block_payload`
 /// (`verify.rs`) -- parent block, patch, and snapshot blob. Supersedes the older, weaker `verify_
 /// repository_detects_block_with_missing_patch` (asserted only `.is_err()`) with a table asserting

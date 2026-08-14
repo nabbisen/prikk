@@ -173,6 +173,15 @@ fn classify_state(
 ) -> Result<(PublicationState, usize)> {
     let current = store.read_current_ref_state_id(&publication.ref_name)?;
     let replay = store.replay_log(&publication.ref_name)?;
+    // RFC 102 Stage 2: a damaged record silently missing from `replay.records` could make
+    // `log_position` below classify a corrupted log as a shorter, sound one -- refuse explicitly
+    // rather than let a publication proceed against a chain that isn't what it appears to be.
+    if replay.has_item_failure() {
+        return Err(PrikkError::Integrity(format!(
+            "ref log for {} has a damaged record; run doctor before publishing",
+            publication.ref_name
+        )));
+    }
     let (log_tip, exact_last, previous_log_tip) = log_position(&replay, publication)?;
     let expected = publication.expected_previous_ref_state_id;
     let proposed = Some(update.new_ref_state_id);
@@ -238,7 +247,12 @@ fn ensure_agreement(
     let current = store.read_current_ref_state_id(&publication.ref_name)?;
     let replay = store.replay_log(&publication.ref_name)?;
     let last = replay.records.last().map(|record| &record.envelope);
-    if current != Some(update.new_ref_state_id)
+    // RFC 102 Stage 2: already naturally caught below in practice (a damaged just-appended record
+    // makes `last` disagree with `publication.ref_update`), named explicitly rather than left
+    // incidental -- this is the final agreement check after a write, and its refusal should not
+    // depend on the corrupted record happening to be the very last one.
+    if replay.has_item_failure()
+        || current != Some(update.new_ref_state_id)
         || replay.trailing_partial_bytes != 0
         || last != Some(&publication.ref_update)
     {
