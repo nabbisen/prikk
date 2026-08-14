@@ -34,6 +34,122 @@ fn ref_lock_rejects_second_writer() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// RFC 102 Stage 4 acceptance criterion 2 (handoff §4): "no durability-bearing write uses
+/// `atomic_replace`." Demonstrated rather than merely inspected, the same technique `index/
+/// tests.rs::container_and_index_writes_append_rather_than_replace` used for RFC 102 Stage 3's own
+/// version of this criterion: `atomic_replace`/`write_file_atomically` would overwrite each file's
+/// content outright on every write, so a second publish landing in the pointer index and the log
+/// container as exactly the first publish's bytes with the second's appended after is only possible
+/// if both files are genuinely appended to -- confirming by observed behavior what `append_ref_
+/// pointer_entry`/`append_ref_container_record`'s own imports (`append_file_required`, never
+/// `write_file_atomically`) already show by inspection. Covers both containers a publish touches,
+/// since Step 0 §13.3's ruling ("an append-only record has no candidate value to stage") applies to
+/// both identically -- `refs/tmp/`'s candidate mechanism is gone from this path entirely, not just
+/// narrowed.
+#[test]
+fn publish_writes_append_rather_than_replace() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("ref-publish-append-not-replace");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let pointer_index_path = layout.ref_pointer_index_path();
+    let log_path = layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A);
+    let mut objects = FileObjectStore::new(layout.clone());
+    let store = RefStore::new(layout.clone());
+
+    let first_target = objects.write_object(&signed_empty_block_envelope())?;
+    let first_state = signed_ref_state_envelope("heads/main", None, first_target, 1);
+    let first_state_id = first_state.object_id();
+    store.publish(&RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_update: signed_ref_update_envelope("heads/main", None, first_state_id, first_target, 1),
+        ref_state: first_state,
+    })?;
+    let pointer_index_after_first = std::fs::read(&pointer_index_path)?;
+    let log_after_first = std::fs::read(&log_path)?;
+    assert!(!pointer_index_after_first.is_empty());
+    assert!(!log_after_first.is_empty());
+
+    let second_target = objects.write_object(&signed_empty_block_envelope())?;
+    let second_state = signed_ref_state_envelope("heads/topic", None, second_target, 1);
+    let second_state_id = second_state.object_id();
+    store.publish(&RefPublication {
+        ref_name: "heads/topic".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_update: signed_ref_update_envelope(
+            "heads/topic",
+            None,
+            second_state_id,
+            second_target,
+            1,
+        ),
+        ref_state: second_state,
+    })?;
+    let pointer_index_after_second = std::fs::read(&pointer_index_path)?;
+    let log_after_second = std::fs::read(&log_path)?;
+
+    assert!(pointer_index_after_second.len() > pointer_index_after_first.len());
+    assert!(pointer_index_after_second.starts_with(&pointer_index_after_first));
+    assert!(log_after_second.len() > log_after_first.len());
+    assert!(log_after_second.starts_with(&log_after_first));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 102 Stage 4 acceptance criterion 3 (handoff §4): "per-ref sequence order survives -- a log
+/// whose records are correct but reordered must still be rejected." Two individually valid,
+/// chain-consistent records (`state2.old_ref_state_id == state1.new_ref_state_id`, exactly what a
+/// real `update_seq: 1` then `update_seq: 2` publish would produce) are appended to the shared
+/// container in reversed physical order -- `state2`'s record lands first, `state1`'s second. Step 0
+/// §13.1's own ruling is what this proves: `expected_seq` is computed from a record's position
+/// *within its own ref's filtered subsequence*, not trusted from the record's own claimed `update_
+/// seq` field or inferred purely from the chain link, so a chain that is internally consistent but
+/// physically out of order is still caught. `RefStore::replay_log` (`container::replay_ref_
+/// subsequence`) performs no sequence validation at all -- it is `verify_repository` (`refs/verify/
+/// scan.rs::validate_log_replay`) that carries this check, confirmed by testing both and finding
+/// only one catches it, not assumed from which module the ruling names.
+#[test]
+fn reordered_but_individually_valid_log_records_are_rejected() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("ref-log-reordered");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let target = objects.write_object(&signed_empty_block_envelope())?;
+
+    let state1 = signed_ref_state_envelope("heads/main", None, target, 1);
+    let state1_id = state1.object_id();
+    objects.write_object(&state1)?;
+    let update1 = signed_ref_update_envelope("heads/main", None, state1_id, target, 1);
+
+    let state2 = signed_ref_state_envelope("heads/main", Some(state1_id), target, 2);
+    let state2_id = state2.object_id();
+    objects.write_object(&state2)?;
+    let update2 = signed_ref_update_envelope("heads/main", Some(state1_id), state2_id, target, 2);
+
+    // Physically reversed: update2 (the second transition) lands first in the container, update1
+    // second -- both records are individually well-formed and chain-consistent with each other,
+    // only their physical order is wrong.
+    super::append_log_record_for_signature_test(&layout, "heads/main", &update2)?;
+    super::append_log_record_for_signature_test(&layout, "heads/main", &update1)?;
+    crate::refs::write_ref_pointer_candidate(&layout, "heads/main", state2_id)?;
+
+    // `RefStore::replay_log` performs no sequence validation -- confirmed, not assumed: it returns
+    // both records with no item failure, in their physical (reversed) order.
+    let replay = RefStore::new(layout.clone()).replay_log("heads/main")?;
+    assert!(!replay.has_item_failure());
+    assert_eq!(replay.records.len(), 2);
+
+    // `verify_repository` is what actually carries the per-ref sequence check.
+    let report = verify_repository(&layout)?;
+    assert!(report.has_item_failure());
+    assert!(report.log_outcomes.iter().any(|outcome| {
+        matches!(&outcome.status, crate::refs::RefFileStatus::Failed { message }
+            if message.contains("ref-log chain or sequence diverges"))
+    }));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 #[test]
 fn ref_store_publishes_ref_state_and_log() {
     let root = unique_temp_dir("ref-store");
@@ -436,6 +552,44 @@ fn ensure_no_incomplete_publication_refuses_when_a_ref_item_fails() {
         assert!(super::ensure_no_incomplete_publication(&layout).is_err());
     }
     let _ = std::fs::remove_dir_all(root);
+}
+
+/// RFC 102 Stage 4 acceptance criterion 5 (handoff §4): "`ensure_no_incomplete_publication` still
+/// refuses on a damaged ref container." `ensure_no_incomplete_publication_refuses_when_a_ref_item_
+/// fails` above already proves the gate's own `has_item_failure()` wiring using a missing-object
+/// defect; this proves the same gate refuses when the *container itself* is damaged (a checksum-
+/// corrupted log-container record), not just when it is coherent but references something missing --
+/// the container-corruption half of "damaged ref container," not merely a name for the same fixture.
+#[test]
+fn ensure_no_incomplete_publication_refuses_on_a_corrupted_log_container_record(
+) -> prikk_error::Result<()> {
+    let root = unique_temp_dir("ref-mutation-gate-container-corruption");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let target = objects.write_object(&signed_empty_block_envelope())?;
+    let ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
+    let ref_state_id = ref_state.object_id();
+    let publication = RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_update: signed_ref_update_envelope("heads/main", None, ref_state_id, target, 1),
+        ref_state,
+    };
+    RefStore::new(layout.clone()).publish(&publication)?;
+
+    // `heads/main` is the only ref in this fixture, so the whole container is exactly its own
+    // subsequence; flip the last byte to corrupt the checksum of its one record.
+    let path = layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A);
+    let mut bytes = std::fs::read(&path)?;
+    let last = bytes
+        .last_mut()
+        .ok_or_else(|| prikk_error::PrikkError::Integrity("expected a record".to_string()))?;
+    *last ^= 0xff;
+    std::fs::write(path, bytes)?;
+
+    assert!(super::ensure_no_incomplete_publication(&layout).is_err());
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
 }
 
 #[test]

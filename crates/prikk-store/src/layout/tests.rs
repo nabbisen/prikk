@@ -2,8 +2,11 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use super::*;
-use crate::test_support::unique_temp_dir;
-use crate::{FileObjectStore, ObjectWriter};
+use crate::test_support::{
+    signed_empty_block_envelope, signed_ref_state_envelope, signed_ref_update_envelope,
+    unique_temp_dir,
+};
+use crate::{FileObjectStore, ObjectWriter, RefPublication, RefStore};
 use prikk_object::{ObjectEnvelope, ObjectType};
 
 /// Recursively lists every regular file under `dir` (there is no directory nesting deeper than
@@ -96,8 +99,12 @@ fn init_allocates_every_container_index_and_generation_log_name_once() -> Result
 
 /// RFC 102 Stage 4 acceptance criterion 1 (handoff §4): "every new container name created at
 /// `init`" -- the shared ref-log container's both slots, plus the ref-pointer-index container.
-/// Mirrors `init_allocates_every_container_index_and_generation_log_name_once` exactly; the "ordinary
-/// writes never add a name" half is proven once the write protocol exists (task 143), not here.
+/// Mirrors `init_allocates_every_container_index_and_generation_log_name_once` exactly, including
+/// the third phase that test's own doc calls out by name: real publishes through `RefStore`
+/// (ordinary use, not just re-`init`), then the whole `refs/containers/` tree re-enumerated from the
+/// filesystem itself to confirm the file *set* is still exactly those 3 -- not just that
+/// `RepositoryLayout`'s own three named paths still exist, which a call site bug could satisfy while
+/// a real fourth file sat unnoticed alongside them.
 #[test]
 fn init_allocates_every_ref_container_name_once() -> Result<()> {
     let root = unique_temp_dir("layout-ref-container-allocation");
@@ -126,6 +133,42 @@ fn init_allocates_every_ref_container_name_once() -> Result<()> {
 
     let expected: HashSet<PathBuf> = ref_container_paths.into_iter().collect();
     assert_eq!(files_under(&layout.refs_containers_dir())?, expected);
+
+    let mut objects = FileObjectStore::new(layout.clone());
+    let target = objects.write_object(&signed_empty_block_envelope())?;
+    let ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
+    let ref_state_id = ref_state.object_id();
+    let first = RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_update: signed_ref_update_envelope("heads/main", None, ref_state_id, target, 1),
+        ref_state,
+    };
+    let store = RefStore::new(layout.clone());
+    store.publish(&first)?;
+    // A second ref name, minted well after `init` -- exactly the "branch create mints one later"
+    // scenario acceptance criterion 1 is about, not just a second publish to the same name.
+    let second_target = objects.write_object(&signed_empty_block_envelope())?;
+    let second_ref_state = signed_ref_state_envelope("heads/topic", None, second_target, 1);
+    let second_ref_state_id = second_ref_state.object_id();
+    store.publish(&RefPublication {
+        ref_name: "heads/topic".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_update: signed_ref_update_envelope(
+            "heads/topic",
+            None,
+            second_ref_state_id,
+            second_target,
+            1,
+        ),
+        ref_state: second_ref_state,
+    })?;
+    assert_eq!(
+        files_under(&layout.refs_containers_dir())?,
+        expected,
+        "ordinary publishes -- including minting a brand-new ref name well after init -- must grow \
+         existing container/index files, never create a new one"
+    );
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

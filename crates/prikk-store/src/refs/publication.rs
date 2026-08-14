@@ -82,6 +82,18 @@ fn publish_locked(
             // before the pointer-index append, both still inside the same `RefLock` this function
             // already holds for its whole duration, so no other writer for this exact ref name can
             // observe or race between the check and the append.
+            //
+            // Stage 4 acceptance criterion 4 (handoff §4), probed in a detached worktree and
+            // reverted, not left as a toggle: this pointer-then-log order is *why* DC-38's invariant
+            // ("format publication never permits an ahead log") holds, not incidental to it.
+            // Reversing it (log append first, pointer second) and interrupting between the two with
+            // a failpoint left a real log record with no corresponding pointer -- a genuine ahead-log
+            // state. `verify_repository` correctly classified it as blocking `PRIKK-VERIFY-REF-
+            // DIVERGENCE` ("format-2 ref pointer is missing while committed log history exists"),
+            // but `finish_interrupted_publication` refused to recover it (unlike an ordinary
+            // `PointerLeading` retry, which completes cleanly) -- confirming this is the one state
+            // DC-38's design treats as unrecoverable, not merely diagnosed. The pointer-first order
+            // below is what prevents a crash from ever producing it through normal publish.
             store.ensure_current_matches(
                 &publication.ref_name,
                 publication.expected_previous_ref_state_id,

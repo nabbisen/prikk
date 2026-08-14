@@ -187,22 +187,50 @@
 //!
 //! ## `refs/verify.rs` + `refs/verify/scan.rs` (`verify/tests/ref_cluster.rs`)
 //!
+//! **RFC 102 Stage 4 (design-v1.md §13.12-§13.15) moved ref publication state from one loose file
+//! per pointer/log to two shared containers** (a ref-pointer index, a ref-log container), the shape
+//! Stage 3 established for objects. Two of this cluster's sixteen original checks had no per-file
+//! path left to be non-canonical or wrong-shaped, and are genuinely retired -- not merely renamed --
+//! confirmed by grepping the rewritten `scan.rs`/`container.rs` for their own diagnostic strings and
+//! finding neither. A third pair (duplicate identity) describes a scenario the new "last entry wins"
+//! model makes structurally impossible to even attempt, not merely astronomically unlikely. All three
+//! retirements are marked below rather than silently dropped -- **the sixteen are still all sixteen,
+//! four now retired with a named reason and, where one exists, a named replacement**, not thirteen.
+//!
+//! - **Non-canonical ref pointer path** and **`ensure_ref_path_shape`** (`by-id/`, `logs/`, both
+//!   sub-arms) retired: there is no per-ref file and no per-entry path under the shared-container
+//!   model to be non-canonical or wrong-shaped -- entries are located by offset within one shared
+//!   file, discovered by replaying it, never by listing a directory and checking a filename.
+//!   **Replaced, not merely removed**: `read_one_pointer_entry`'s `ref_name_key_bytes(&entry.ref_name)
+//!   != entry.ref_name_key` check and `validate_log_replay`'s identical check on the log-container
+//!   side are the direct successors -- header/key-vs-content coherence replacing filename-vs-content
+//!   coherence, the same underlying property ("this record's own claimed identity disagrees with what
+//!   it actually contains") through the new storage shape. Both new rows below.
+//! - **Duplicate pointer identity / duplicate ref-log identity** retired: under "last entry wins,"
+//!   multiple entries sharing a `ref_name_key` are the ordinary republish mechanism, not a collision
+//!   to detect -- there is no "second insert into a name-keyed map" operation left to collide, so the
+//!   scenario these two rows described cannot be attempted at all under the current design, not merely
+//!   requiring a SHA-256 collision to reach as before.
+//!
 //! | Check | Classification |
 //! |---|---|
-//! | Incomplete log tail without pointer lead | Load-bearing |
-//! | Catch-all "unexplained pointer/log divergence" | Load-bearing |
-//! | `created_at == 0` | Load-bearing |
-//! | `CANDIDATE-DEBRIS` | Non-blocking |
-//! | Duplicate pointer identity / duplicate ref-log identity | Unreachable, both (needs a genuine SHA-256 collision) |
-//! | Non-canonical ref pointer path | Load-bearing |
-//! | RefState name mismatches pointer | Downstream-redundant (`classify_ref_state`'s own coherence arm) |
-//! | `ensure_ref_target_valid` (dangling Branch/Tag target) | Load-bearing |
-//! | Ref-log chain/sequence divergence | Load-bearing |
-//! | Ref-log checksum mismatch (`RefStore::replay_log`, via `refs/verify/scan.rs::read_one_log`) | Load-bearing; RFC 102 Stage 2 made this item-level internally (`RefLogRecordOutcome`) but `read_one_log` still translates any damaged record to the same file-level `RefFileStatus::Failed` this row always meant -- see the RFC 102 Stage 2 section above |
-//! | `verify_update` RefState/RefUpdate coherence | Load-bearing |
-//! | RefState unsigned | Downstream-redundant (`PublicationTrustVerifier`) |
-//! | `ensure_ref_path_shape` (`by-id/`, `logs/`) | Downstream-redundant, provably, both |
-//! | Signature-envelope issues, `RefLog` source | Excluded (see `signature_envelope_issues` caveat below) |
+//! | Incomplete log tail without pointer lead | Load-bearing (unchanged mechanism, container-based replay) |
+//! | Catch-all "unexplained pointer/log divergence" | Load-bearing (unchanged mechanism) |
+//! | `created_at == 0` | Load-bearing -- **now enforced at write time too** (`container::append_ref_container_record`, design-v1.md §13.15), not only at read time; a real production gap in the Stage 4 rewrite, found and closed |
+//! | `CANDIDATE-DEBRIS` | Non-blocking -- **now reachable only via a directly-planted fixture, never a real crash** (the candidate-write mechanism it detected is gone entirely); registered in `FINDINGS.md` as a dormant mutation wedge (design-v1.md §13.14), not fixed here |
+//! | Duplicate pointer identity / duplicate ref-log identity | **Retired** (design-v1.md §13.12-13.13) -- see prose above |
+//! | Non-canonical ref pointer path | **Retired**, replaced by "Pointer-index entry key mismatch" below |
+//! | RefState name mismatches pointer | Downstream-redundant (`classify_ref_state`'s own coherence arm), unchanged |
+//! | Pointer-index entry key mismatch (new, RFC 102 Stage 4) | Load-bearing (`refs/pointer_index.rs::read_one_pointer_entry`), design-v1.md §13.13 -- was untested before this stage's own checkpoint review found it, not merely newly added |
+//! | Log-container record key mismatch (new, RFC 102 Stage 4) | Load-bearing (`refs/verify/scan.rs::validate_log_replay`) |
+//! | Pointer index fails closed on any damaged entry (new, RFC 102 Stage 4) | Load-bearing -- deliberately asymmetric with the log container's own item-contained isolation: "last entry wins" makes silently skipping a damaged *latest* entry dangerous (an older entry for the same ref could resolve as current instead), so `read_pointers` refuses the whole read rather than isolating the damage. Design-v1.md §13.14 accepts this for Stage 4 but registers the wider blast radius (one bad entry now blocks every ref, not just its own) as a known regression against amended constraint 5, not a design choice -- not to be changed inside this stage |
+//! | `ensure_ref_target_valid` (dangling Branch/Tag target) | Load-bearing, unchanged |
+//! | Ref-log chain/sequence divergence | Load-bearing -- `expected_seq` now computed from a record's position within its own ref's *filtered subsequence* of the shared container (design-v1.md §13.1), not the container's raw physical position; re-proven directly against a physically reordered, individually-valid pair of records (Stage 4 acceptance criterion 3), not assumed carried over |
+//! | Ref-log checksum mismatch | Load-bearing -- mechanism moved from the retired `refs/log.rs::read_one_log` to `refs/container.rs`'s own frame decode (`parse_frame_at`) plus `refs/verify/scan.rs::read_logs`; same classification, new code |
+//! | `verify_update` RefState/RefUpdate coherence | Load-bearing, unchanged |
+//! | RefState unsigned | Downstream-redundant (`PublicationTrustVerifier`), unchanged |
+//! | `ensure_ref_path_shape` (`by-id/`, `logs/`) | **Retired**, both sub-arms -- see prose above; the log-container half's coverage is subsumed by `container/tests.rs`'s own corruption-isolation tests, the pointer-index half's by the fail-closed row above and `pointer_index/tests.rs`'s new corruption-isolation tests (a genuine coverage gap this stage's checkpoint review found and closed, design-v1.md §13.13, not merely a redundancy claim carried over) |
+//! | Signature-envelope issues, `RefLog` source | Excluded (see `signature_envelope_issues` caveat below), unchanged |
 //!
 //! ## `verify/ref_publication.rs`
 //!
