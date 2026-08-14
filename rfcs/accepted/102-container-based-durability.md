@@ -216,6 +216,21 @@ doc comment and an unrelated enum variant. Do not enumerate it as a container.
   requiring a fencing-read primitive with no precedent in this codebase.** An O(1)→O(n) change to every
   object read is a shape change, not tuning, and filing it under "performance" would under-weight it.
   **It is an owner-level cost to accept explicitly, not a non-goal.**
+
+  **DECIDED by the project owner 2026-08-13: indexed lookup.** Linear scan was rejected as bad for
+  maintenance and unfit for a project of this size; a self-validating advisory index was rejected for
+  lacking correctness and therefore reliability. **Object lookup stays sub-linear; the design owes a
+  publication scheme for the index.**
+
+  **The architect's stated cost for this option was overstated and is corrected here.** It was framed as
+  *"requires inventing a lock-free reader/writer coordination primitive with zero precedent in this
+  codebase."* No precedent *here* is not the same as unprecedented: SQLite's WAL-index and LMDB's
+  dual-meta-page solve this exact problem, and §6.1's survey already found those systems on container
+  storage. **Two known shapes fit constraints this RFC already imposes** — an **append-only index** (the
+  WAL idiom §3 mandates: no in-place mutation, so no torn read) and **A/B slots with a single-field
+  publish** (§3.2 already requires pre-created alternate slots for compaction). **The real cost is design
+  plus a correctness proof at DC-41 grade — that readers can never observe a partial index — not the
+  invention of a primitive.**
 - **Changing what a ref log is** — DC-38's append-only audit trail.
 
 ## 9. The cost, and the staging consequence
