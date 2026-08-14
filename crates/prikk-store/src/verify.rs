@@ -11,7 +11,7 @@
 //! 11): `ref_publication::require_retained_evidence` reclassifies several `refs/verify.rs` codes before
 //! they're returned, so a raw pointer/log-shape fixture can silently land on a different code than the
 //! one under test; `crate::format::validate_read_schema`, called from `Wal::replay()` itself, already
-//! rejects a malformed-shape signature under `RepositoryFormat::CurrentV2` before
+//! rejects a malformed-shape signature under `RepositoryFormat::CurrentV3` before
 //! `rollback_verify::verify_rollback_draft_wal_records` is ever reached, so the same defect is reachable
 //! only under `RepositoryFormat::LegacyV1`. Building a fixture for a specific check in this module means
 //! tracing its actual call path from `verify_repository`, not just constructing input shaped to match
@@ -103,6 +103,56 @@
 //! `refs/publication.rs`, `refs.rs`, `patch_replay.rs`, `seal/support.rs`,
 //! `verify/ref_publication.rs`).
 //!
+//! # RFC 102 Stage 3: container/index storage, and its effect on the table below
+//!
+//! Persisted-object storage moved from one loose file per object to per-type append-only containers
+//! plus one append-only index (design-v1.md §2/§4/§5); `verify_objects` (`verify/objects.rs`) now
+//! scans containers instead of listing directories. **Every check inside `verify_object_record` itself
+//! is untouched** -- schema validation, signature-envelope classification, publication trust, and
+//! `verify_block_payload` all still run on the same decoded `ObjectEnvelope`, just fed from a container
+//! record instead of a loose-file read. Rows whose check reads an object only through
+//! `FileObjectStore`'s public API (`ObjectReader`/`ObjectWriter`) are unaffected: that API's behavior
+//! toward callers is unchanged (task 129 of this stage confirmed this directly, not assumed from the
+//! type signature alone) -- only its internal storage moved. Three rows are not covered by that blanket
+//! statement, because their own mechanism is specifically about object *storage structure*, not about
+//! what a decoded envelope contains:
+//!
+//! - **Envelope type mismatch** (half of the row above) moved, and in moving exposed a real gap: a
+//!   container's magic constrains which container a frame's bytes live in, but nothing already
+//!   enforced that the frame's own decoded `envelope.object_type` agreed with it -- a well-formed,
+//!   correctly checksummed Blob-container frame could hold a validly encoded Patch envelope
+//!   undetected. Found and fixed during this stage's own test migration (not assumed correct from the
+//!   design alone), at the one place every container reader passes through:
+//!   `container::parse_frame_at`. **Stays Load-bearing** -- proven at the container level
+//!   (`container::tests::envelope_type_disagreeing_with_its_own_containers_type_is_rejected`) and end
+//!   to end (`verify_repository_rejects_envelope_type_mismatch`, `assert_object_item_failed(&report,
+//!   "is under type")`).
+//! - **Object id mismatch** (the other half) is now enforced in two places instead of one: ordinary
+//!   reads (`FileObjectStore::read_object`, unchanged in shape -- still a lazy, per-id check) and,
+//!   newly, `verify_objects`'s own proactive full-scan cross-validation of every index entry against
+//!   what its own claimed location actually decodes to (design §12/§10.2's "the bytes found are
+//!   validated by recomputing the content hash... `verify` does the full scan" ruling, read as
+//!   including index-to-container consistency, not just container enumeration in isolation). A decode
+//!   *failure* at an entry's location is deliberately not escalated by this new check -- it is already
+//!   an item-level `Failed` outcome from the per-record container scan (Stage 2's own containment) --
+//!   only "decodes fine but to the wrong id" is, and that is treated as a genuine index-integrity
+//!   defect, propagated as a stage-level `Err`, not an isolable item defect (an index that lies about
+//!   content is corruption at a different scale than one damaged record). **This is a new row, not
+//!   merely this stage's proof of the old one: Load-bearing**, proven end to end by
+//!   `verify_repository_detects_index_entry_resolving_to_a_different_object`.
+//! - **Directory/file shape structural errors** keeps its exact code, unmoved and unchanged
+//!   (`scan_loose_file_temp_debris`, design-v1.md §12.3 item 3's ruling: the loose-file tree's
+//!   temp-debris scan is kept, dormant, since retiring diagnostic surface is an RFC-level act, not a
+//!   stage side effect) -- but that tree is no longer written by anything under format-3, so the row's
+//!   own downstream-redundant partners (`list_directory`'s own directory-vs-file rejection;
+//!   `object_id_from_path`'s own extension check) are reachable today only by a fixture that plants the
+//!   stray entry directly, never as a byproduct of an ordinary write. **Classification unchanged**
+//!   (still Downstream-redundant, both sub-arms -- the redundant partners are generic filesystem-safety
+//!   checks, not specific to which tree is live), re-confirmed passing unmodified:
+//!   `verify_repository_detects_every_directory_shape_violation` already used `FileObjectStore::
+//!   write_object` only to produce a real object elsewhere in the fixture, and planted its two stray
+//!   entries directly at the loose-file paths either way, so this row needed no test change at all.
+//!
 //! # DC-95 Stage 1: end-to-end coverage, by cluster
 //!
 //! Every check `verify_repository` performs, classified by whether disabling it lets a defective
@@ -129,10 +179,11 @@
 //! | Block snapshot-blob existence | Load-bearing |
 //! | Block format-2 shape validation (8 arms) | Load-bearing, all 8 |
 //! | Topological cycle detection | Unreachable (needs a SHA-256 fixed point; unit-level substitute in `block_state/tests.rs`) |
-//! | Envelope type mismatch / object id mismatch | Load-bearing, both |
+//! | Envelope type mismatch / object id mismatch | Load-bearing, both -- RFC 102 Stage 3 moved the type-mismatch half into `container::parse_frame_at`; see the section above |
+//! | Index entry resolves to the wrong object (RFC 102 Stage 3) | Load-bearing -- new this stage; see the section above |
 //! | `validate_read_schema` strict-signature-shape | Load-bearing, via non-blocking-sibling mechanism |
 //! | Publication-trust failure (Block/RefState) | Demonstrated via trusted/untrusted contrast |
-//! | Directory/file shape structural errors | Downstream-redundant, both sub-arms |
+//! | Directory/file shape structural errors | Downstream-redundant, both sub-arms -- RFC 102 Stage 3 made the tree it scans dormant; see the section above |
 //!
 //! ## `refs/verify.rs` + `refs/verify/scan.rs` (`verify/tests/ref_cluster.rs`)
 //!
@@ -396,9 +447,9 @@ pub struct RepositoryVerification {
     /// Empty when the `Objects` stage itself did not evaluate (a structural directory-shape error) —
     /// nothing was attempted, distinct from a non-empty set where every entry happens to be `Failed`.
     pub object_outcomes: Vec<ObjectItemOutcome>,
-    /// Phase B: one outcome per `CurrentV2` Block whose Phase A check succeeded, in the
+    /// Phase B: one outcome per `CurrentV3` Block whose Phase A check succeeded, in the
     /// state-dependency order `verify_blocks_topological` resolved them — not scan order (DC-92
-    /// §4.2). Empty when the `Objects` stage did not evaluate, or when no `CurrentV2` Block passed
+    /// §4.2). Empty when the `Objects` stage did not evaluate, or when no `CurrentV3` Block passed
     /// Phase A at all.
     pub block_state_outcomes: Vec<BlockStateOutcome>,
     /// Number of persisted object files whose own Phase A checks ran to completion (DC-95 Stage 2
@@ -544,7 +595,7 @@ impl RepositoryVerification {
     }
 
     /// Return true when any individual item did not evaluate cleanly (DC-95 Stage 2 Level 2) — a
-    /// Phase A object whose own check failed, a Phase B `CurrentV2` Block whose state-root check
+    /// Phase A object whose own check failed, a Phase B `CurrentV3` Block whose state-root check
     /// failed or could not be attempted because its own state-derivation parent did not evaluate,
     /// or a ref (its pointer file, log file, or classification) that failed. Item containment means
     /// these no longer make [`Self::has_stage_failure`] true: the owning stage itself completed, so
@@ -1126,8 +1177,13 @@ fn phase_a_counts(object_outcomes: &[ObjectItemOutcome]) -> Result<PhaseACounts>
     let mut rollback_blocks = 0_usize;
     let mut rollback_patches = 0_usize;
     for outcome in object_outcomes {
-        let ObjectItemStatus::Evaluated(verification) = &outcome.status else {
-            continue;
+        // RFC 102 Stage 3: an `Unindexed` object is just as real and sound as an `Evaluated` one --
+        // design-v1.md §12/§10.2's ruling that it is not a failure means it belongs in every count a
+        // healthy object contributes to, not only in `has_item_failure()`'s exclusion.
+        let verification = match &outcome.status {
+            ObjectItemStatus::Evaluated(verification)
+            | ObjectItemStatus::Unindexed(verification) => verification,
+            ObjectItemStatus::Failed { .. } => continue,
         };
         objects = objects.checked_add(1).ok_or_else(|| {
             PrikkError::Integrity("object verification count overflow".to_string())
@@ -1198,10 +1254,10 @@ fn classify_active_wal_metadata(
 
 /// Phase A (DC-92 §4.2): every check that does not depend on lineage-state derivation order —
 /// existence of referenced objects, rollback-patch counting, and (independent of the shared memo)
-/// the merge-baseline re-derivation. A `CurrentV2` block's own state-root verification is
+/// the merge-baseline re-derivation. A `CurrentV3` block's own state-root verification is
 /// deliberately **not** done here; it is deferred to a batch, dependency-ordered pass
 /// (`crate::block_state::verify_blocks_topological`) run once after every object type has been
-/// scanned, so `pending_v2_blocks` collects this block's already-decoded payload rather than
+/// scanned, so `pending_v3_blocks` collects this block's already-decoded payload rather than
 /// discarding it. See that function's own doc for why deferring is what bounds
 /// `LineageStateMemo`'s memory instead of merely avoiding redundant re-derivation.
 fn verify_block_payload(
@@ -1209,7 +1265,7 @@ fn verify_block_payload(
     block_id: ObjectId,
     format: RepositoryFormat,
     canonical_payload: &[u8],
-    pending_v2_blocks: &mut Vec<(ObjectId, BlockPayload)>,
+    pending_v3_blocks: &mut Vec<(ObjectId, BlockPayload)>,
 ) -> Result<(usize, Option<MergeBaselineDivergence>)> {
     let payload = BlockPayload::decode_canonical(canonical_payload)?;
     for parent in &payload.parent_block_ids {
@@ -1244,13 +1300,13 @@ fn verify_block_payload(
             block_id,
         )?;
     }
-    let merge_baseline_divergence = if format == RepositoryFormat::CurrentV2 {
+    let merge_baseline_divergence = if format == RepositoryFormat::CurrentV3 {
         verify_merge_baseline(object_store, block_id, &payload)?
     } else {
         None
     };
-    if format == RepositoryFormat::CurrentV2 {
-        pending_v2_blocks.push((block_id, payload));
+    if format == RepositoryFormat::CurrentV3 {
+        pending_v3_blocks.push((block_id, payload));
     }
     Ok((rollback_patch_count, merge_baseline_divergence))
 }

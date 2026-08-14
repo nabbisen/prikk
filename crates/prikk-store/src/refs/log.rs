@@ -6,6 +6,7 @@ use prikk_object::{ObjectEnvelope, ObjectType, RefUpdatePayload};
 
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_u16, push_u64};
+use crate::frame_resync::resync_to_next_magic;
 use crate::fsutil::{
     append_file_required, ensure_directory_required, len_to_u64, read_file_if_exists,
     truncate_existing_file_required,
@@ -282,28 +283,12 @@ fn parse_log_frame_at(bytes: &[u8], offset: usize) -> LogFrameAttempt {
     }
 }
 
-/// Scan forward byte-by-byte from `start` for the next occurrence of the ref-log record magic.
-/// Mirrors `wal::resync_offset` -- never skips based on any not-yet-validated candidate's fields.
-fn resync_log_offset(bytes: &[u8], start: usize) -> Option<usize> {
-    let magic_len = REF_LOG_MAGIC.len();
-    let mut cursor = start;
-    while cursor
-        .checked_add(magic_len)
-        .is_some_and(|end| end <= bytes.len())
-    {
-        if bytes.get(cursor..cursor + magic_len) == Some(REF_LOG_MAGIC.as_slice()) {
-            return Some(cursor);
-        }
-        cursor += 1;
-    }
-    None
-}
-
 /// RFC 102 Stage 2: isolate-and-continue reading, mirroring `wal::decode_records`. A frame that
 /// fails to validate no longer aborts replay -- its offset and error are recorded as a `Failed`
-/// outcome, and `resync_log_offset` finds the next candidate frame so every subsequent sound
+/// outcome, and `frame_resync::resync_to_next_magic` (RFC 102 Stage 3: shared with `wal.rs` and the
+/// container read path, not a third copy) finds the next candidate frame so every subsequent sound
 /// record is still read.
-fn decode_log_records(bytes: &[u8]) -> Result<RefLogReplay> {
+pub(crate) fn decode_log_records(bytes: &[u8]) -> Result<RefLogReplay> {
     let mut records = Vec::new();
     let mut record_outcomes = Vec::new();
     let mut offset = 0_usize;
@@ -332,7 +317,7 @@ fn decode_log_records(bytes: &[u8]) -> Result<RefLogReplay> {
                     offset,
                     status: RefLogRecordStatus::Failed { message },
                 });
-                match resync_log_offset(bytes, offset + 1) {
+                match resync_to_next_magic(bytes, offset + 1, REF_LOG_MAGIC.as_slice()) {
                     Some(next) => offset = next,
                     None => {
                         return Ok(RefLogReplay {

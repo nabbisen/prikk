@@ -1,7 +1,7 @@
 use prikk_object::{ObjectEnvelope, ObjectType};
 
 use super::admission::strict_rejection_variants;
-use crate::file_codec::encode_envelope_file_structural;
+use crate::layout::ContainerSlot;
 use crate::refs::encode_log_record_for_test;
 use crate::test_support::{
     signed_patch_blob_envelope, signed_patch_envelope, signed_ref_update_envelope, unique_temp_dir,
@@ -12,17 +12,34 @@ use crate::{
     derive_next_state_root, verify_repository,
 };
 
+/// Plants a structurally invalid envelope directly at its container-and-index location,
+/// bypassing `FileObjectStore::write_object`'s own validation (which would refuse it) -- the
+/// container-era equivalent of writing raw bytes at a loose object path. `read_object_envelope_at`
+/// does not consult `container_checksum` (it recomputes the checksum from the frame itself), so a
+/// placeholder value is fine.
 fn write_structural_object(
     layout: &RepositoryLayout,
     envelope: &ObjectEnvelope,
 ) -> prikk_error::Result<prikk_object::ObjectId> {
     let object_id = envelope.object_id();
-    let path = layout.object_path(envelope.object_type, object_id);
-    let parent = path
-        .parent()
-        .ok_or_else(|| prikk_error::PrikkError::Io("test object path has no parent".to_string()))?;
-    std::fs::create_dir_all(parent)?;
-    std::fs::write(path, encode_envelope_file_structural(envelope)?)?;
+    let object_type = envelope.object_type;
+    let record_bytes = crate::container::encode_container_record_for_test(object_type, envelope)?;
+    std::fs::write(
+        layout.container_slot_path(object_type, ContainerSlot::A),
+        &record_bytes,
+    )?;
+    let entry = crate::index::IndexEntry {
+        object_id,
+        object_type,
+        slot: ContainerSlot::A,
+        offset: 0,
+        length: record_bytes.len() as u64,
+        container_checksum: [0_u8; 32],
+    };
+    std::fs::write(
+        layout.container_index_path(),
+        crate::index::encode_index_record(&entry)?,
+    )?;
     Ok(object_id)
 }
 

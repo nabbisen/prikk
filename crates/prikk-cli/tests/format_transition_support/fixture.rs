@@ -1,10 +1,15 @@
 use super::*;
 
-/// Builds a real format-1 repository on disk: real signed objects, blocks, and refs, published
-/// through the same primitives an ordinary repository uses, with `.prikk/FORMAT` flipped to `1\n`
-/// only as the final step. RFC 103 design-v1.md §5 acceptance criterion 2 requires the open-time
-/// rejection proven against a fixture like this, not a hand-built one.
-pub(crate) fn build_legacy_fixture(root: &Path, active: ActiveFixture) -> TestResult {
+/// Builds a real repository on disk: real signed objects, blocks, and refs, published through the
+/// same primitives an ordinary repository uses, with `.prikk/FORMAT` flipped to `target_format`
+/// (`b"1\n"` or `b"2\n"`) only as the final step. RFC 103 design-v1.md §5 acceptance criterion 2 /
+/// RFC 102 Stage 3, design-v1.md §12.1 both require the open-time rejection proven against a fixture
+/// like this, not a hand-built one -- one real fixture builder shared by both retired formats.
+pub(crate) fn build_legacy_fixture(
+    root: &Path,
+    active: ActiveFixture,
+    target_format: &[u8],
+) -> TestResult {
     let layout = RepositoryLayout::init(root.to_path_buf())?;
     let author = Ed25519AuthorSigner::from_seed("legacy-author", &[0x36; 32])?;
     let maintainer = Ed25519MaintainerSigner::from_seed(MAINTAINER_KEY_ID, &[0x35; 32])?;
@@ -144,11 +149,14 @@ pub(crate) fn build_legacy_fixture(root: &Path, active: ActiveFixture) -> TestRe
 
     std::fs::write(root.join("README.md"), b"hello\n")?;
     std::fs::write(root.join("old.txt"), b"old\n")?;
-    std::fs::write(layout.format_path(), b"1\n")?;
+    std::fs::write(layout.format_path(), target_format)?;
     Ok(())
 }
 
-pub(crate) fn build_format2_strict_wal_fixture(root: &Path, failure: StrictFailure) -> TestResult {
+pub(crate) fn build_current_format_strict_wal_fixture(
+    root: &Path,
+    failure: StrictFailure,
+) -> TestResult {
     let layout = RepositoryLayout::init(root.to_path_buf())?;
     let payload = PatchPayload {
         operations: vec![operation(

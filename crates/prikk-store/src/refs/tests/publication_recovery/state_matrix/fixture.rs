@@ -8,7 +8,7 @@ use prikk_object::{
     RefUpdatePayload,
 };
 
-use crate::fsutil::{TestFailPoint, fail_once_for_test};
+use crate::fsutil::{TestFailPoint, fail_after_for_test, fail_once_for_test};
 use crate::test_support::{
     rollback_patch_blob_envelope, rollback_patch_envelope, signed_patch_blob_envelope,
     signed_patch_envelope, unique_temp_dir,
@@ -105,7 +105,9 @@ fn construct_state(
             assert!(store.publish(publication).is_err());
         }
         PersistedState::PartialTail => {
-            fail_once_for_test(TestFailPoint::AppendWrite);
+            // RFC 102 Stage 3: skip the ref-state object's own container and index appends
+            // (each fires `AppendWrite` too) to land the torn write on the log's own append.
+            fail_after_for_test(TestFailPoint::AppendWrite, 2);
             assert!(store.publish(publication).is_err());
             std::fs::OpenOptions::new()
                 .append(true)

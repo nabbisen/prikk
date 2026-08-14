@@ -1,7 +1,9 @@
-//! Release-facing format-1 rejection proof (RFC 103): a format-1 repository is refused at open, not
-//! read in a bounded legacy mode -- there is no dual-path behavior left to exercise across a command
-//! matrix. `build_legacy_fixture` remains load-bearing here: design-v1.md §5 acceptance criterion 2
-//! requires the rejection proven against a real format-1 fixture, not a hand-built one.
+//! Release-facing retired-format rejection proof: RFC 103 (format 1) and RFC 102 Stage 3 (format 2,
+//! design-v1.md §12.1) each retire a repository format by refusing it at open, not reading it in a
+//! bounded legacy mode -- there is no dual-path behavior left to exercise across a command matrix,
+//! for either format. `build_legacy_fixture` remains load-bearing here: design-v1.md §5 acceptance
+//! criterion 2 requires the rejection proven against a real fixture, not a hand-built one, for both
+//! retired formats.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -11,7 +13,7 @@ mod format_transition_support;
 
 use format_transition_support::{
     ActiveFixture, MAINTAINER_KEY_ID, MAINTAINER_SEED_HEX, StrictFailure,
-    build_format2_strict_wal_fixture, build_legacy_fixture,
+    build_current_format_strict_wal_fixture, build_legacy_fixture,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
@@ -92,7 +94,7 @@ fn snapshot_tree(root: &Path) -> TestResult<BTreeMap<PathBuf, Vec<u8>>> {
     Ok(snapshot)
 }
 
-fn assert_rejection_contract(args: &[&str], output: &Output) {
+fn assert_rejection_contract(args: &[&str], output: &Output, detected_format: &str) {
     assert!(
         !output.status.success(),
         "{args:?} unexpectedly succeeded: stdout={} stderr={}",
@@ -101,8 +103,8 @@ fn assert_rejection_contract(args: &[&str], output: &Output) {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     for expected in [
-        "this repository uses format 1",
-        "requires format 2",
+        detected_format,
+        "requires format 3",
         "removed after 0.19.0",
         "bundle export",
         "bundle import",
@@ -114,68 +116,74 @@ fn assert_rejection_contract(args: &[&str], output: &Output) {
     }
 }
 
-/// RFC 103 §4/design-v1.md §2: a format-1 repository is rejected at `RepositoryLayout::open`, with a
-/// message naming the detected format, the required format, the last supporting version, and the
-/// bundle export/import remedy — for every command, not a command-specific subset, since rejection now
-/// happens before any command-specific logic runs. Proven against two independently-built real
-/// format-1 fixtures (differing only in what kind of active-session state they carry), not a
-/// hand-built one.
+/// RFC 103 §4/design-v1.md §2 (format 1) and RFC 102 Stage 3, design-v1.md §12.1 (format 2, the same
+/// proof re-run one format later): a retired-format repository is rejected at
+/// `RepositoryLayout::open`, with a message naming the detected format, the required format, the
+/// last supporting version, and the bundle export/import remedy — for every command, not a
+/// command-specific subset, since rejection now happens before any command-specific logic runs.
+/// Proven against real fixtures (`build_legacy_fixture`, differing only in what kind of active-session
+/// state they carry and which format byte was flipped), not hand-built ones.
 #[test]
-fn format1_repository_is_rejected_at_open_for_every_command() -> TestResult {
-    for active in [
-        ActiveFixture::RollbackDraft,
-        ActiveFixture::InterruptedPublication,
+fn retired_format_repository_is_rejected_at_open_for_every_command() -> TestResult {
+    for (target_format, detected_format) in [
+        (b"1\n".as_slice(), "this repository uses format 1"),
+        (b"2\n".as_slice(), "this repository uses format 2"),
     ] {
-        let root = unique_root()?;
-        build_legacy_fixture(&root, active)?;
-        let before = snapshot_tree(&root)?;
-
-        for args in [
-            vec!["status"],
-            vec!["log"],
-            vec!["worktree-status"],
-            vec!["verify"],
-            vec!["doctor"],
-            vec!["checkout", "--plan-only"],
-            vec!["rollback-preview"],
-            vec!["commit", "-m", "must refuse"],
-            vec!["seal", "--allow-no-audit"],
-            vec![
-                "trust",
-                "maintainer",
-                "add",
-                "--key-id",
-                "legacy-refused",
-                "--public-key",
-                "0000000000000000000000000000000000000000000000000000000000000000",
-            ],
+        for active in [
+            ActiveFixture::RollbackDraft,
+            ActiveFixture::InterruptedPublication,
         ] {
-            // `run_owned`, not `run`: `seal` in particular constructs its signer from these env
-            // vars before it ever opens the repository, so without them it fails at signer
-            // construction and never reaches (or proves) the rejection this test is checking.
-            let owned_args = args.iter().map(ToString::to_string).collect::<Vec<_>>();
-            let output = run_owned(&root, &owned_args)?;
-            assert_rejection_contract(&args, &output);
-            assert_eq!(
-                snapshot_tree(&root)?,
-                before,
-                "{args:?} must not mutate a rejected repository"
-            );
-        }
+            let root = unique_root()?;
+            build_legacy_fixture(&root, active, target_format)?;
+            let before = snapshot_tree(&root)?;
 
-        let _ = std::fs::remove_dir_all(root);
+            for args in [
+                vec!["status"],
+                vec!["log"],
+                vec!["worktree-status"],
+                vec!["verify"],
+                vec!["doctor"],
+                vec!["checkout", "--plan-only"],
+                vec!["rollback-preview"],
+                vec!["commit", "-m", "must refuse"],
+                vec!["seal", "--allow-no-audit"],
+                vec![
+                    "trust",
+                    "maintainer",
+                    "add",
+                    "--key-id",
+                    "legacy-refused",
+                    "--public-key",
+                    "0000000000000000000000000000000000000000000000000000000000000000",
+                ],
+            ] {
+                // `run_owned`, not `run`: `seal` in particular constructs its signer from these env
+                // vars before it ever opens the repository, so without them it fails at signer
+                // construction and never reaches (or proves) the rejection this test is checking.
+                let owned_args = args.iter().map(ToString::to_string).collect::<Vec<_>>();
+                let output = run_owned(&root, &owned_args)?;
+                assert_rejection_contract(&args, &output, detected_format);
+                assert_eq!(
+                    snapshot_tree(&root)?,
+                    before,
+                    "{args:?} must not mutate a rejected repository"
+                );
+            }
+
+            let _ = std::fs::remove_dir_all(root);
+        }
     }
     Ok(())
 }
 
-/// `RepositoryLayout::init` refuses to initialize over an existing non-format-2 repository through
+/// `RepositoryLayout::init` refuses to initialize over an existing non-format-3 repository through
 /// its own, separate check (`layout.rs::init`, not `read_repository_format`) — out of RFC 103's scope
 /// since it never opens the repository for use, but still a real safety property worth keeping under
 /// regression coverage: it must not silently reformat or clobber a format-1 repository in place.
 #[test]
 fn reinit_over_a_format1_repository_refuses_and_preserves_it() -> TestResult {
     let root = unique_root()?;
-    build_legacy_fixture(&root, ActiveFixture::InterruptedPublication)?;
+    build_legacy_fixture(&root, ActiveFixture::InterruptedPublication, b"1\n")?;
     let before = snapshot_tree(&root)?;
 
     let reinit = run(&root, &["init"])?;

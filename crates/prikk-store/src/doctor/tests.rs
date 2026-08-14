@@ -438,8 +438,10 @@ fn repair_repository_still_refuses_when_the_refs_stage_fails() -> prikk_error::R
         ref_update,
     };
     assert!(store.publish(&publication).is_ok());
-    // A dangling ref target: delete the Block the just-published RefState still names.
-    assert!(std::fs::remove_file(layout.object_path(ObjectType::Block, target)).is_ok());
+    // A dangling ref target: remove the just-published RefState's target Block's index entry.
+    // Containers are append-only, so there is no direct "delete one object" equivalent to the
+    // pre-Stage-3 `std::fs::remove_file` this replaces.
+    assert!(crate::index::remove_index_entry_for_test(&layout, target).is_ok());
 
     let before = doctor_repository(&layout);
     assert!(!before.is_healthy());

@@ -2,11 +2,9 @@
 
 use std::path::Path;
 
-use prikk_object::{ObjectEnvelope, ObjectType};
-
 use crate::fsutil::{TestFailPoint, fail_once_for_test};
 use crate::test_support::{
-    dummy_signature, signed_empty_block_envelope, signed_patch_envelope, signed_ref_state_envelope,
+    signed_empty_block_envelope, signed_patch_envelope, signed_ref_state_envelope,
     signed_ref_update_envelope, unique_temp_dir,
 };
 use crate::worktree::materialize_manifest_entries;
@@ -46,28 +44,13 @@ fn repository_initialization_component_matrix() -> prikk_error::Result<()> {
     Ok(())
 }
 
-#[test]
-fn object_directory_component_matrix() -> prikk_error::Result<()> {
-    for point in COMPONENT_POINTS {
-        let root = unique_temp_dir("object-component-matrix");
-        let layout = RepositoryLayout::init(root.clone())?;
-        let mut object = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"matrix".to_vec());
-        object.add_signature(dummy_signature())?;
-        let object_dir = layout
-            .object_path(ObjectType::Blob, object.object_id())
-            .parent()
-            .ok_or_else(|| prikk_error::PrikkError::Io("object path has no parent".to_string()))?
-            .to_path_buf();
-        assert!(!object_dir.exists());
-        let mut store = FileObjectStore::new(layout);
-        fail_once_for_test(point);
-        assert!(store.write_object(&object).is_err());
-        assert_retained_component(point, &object_dir);
-        assert_eq!(store.write_object(&object)?, object.object_id());
-        let _ = std::fs::remove_dir_all(root);
-    }
-    Ok(())
-}
+// RFC 102 Stage 3: `object_directory_component_matrix` (proving a first-object-write directory
+// component failure is retryable) has no container-era equivalent and was removed rather than
+// retargeted. Every container and index file is allocated once, at `init`, per
+// `layout/tests.rs::init_allocates_every_container_index_and_generation_log_name_once` -- an
+// object write never creates a directory component at all anymore, so this matrix's own
+// `DirectoryCreate`/`CreatedDirectoryParentSync` failpoints are simply never reached by
+// `FileObjectStore::write_object`, and there is no analogous scenario left to prove here.
 
 #[test]
 fn wal_directory_component_matrix() -> prikk_error::Result<()> {

@@ -23,11 +23,14 @@ mod bundle;
 mod byte_cursor;
 mod checkout;
 mod commit_index;
+mod container;
 mod doctor;
 mod file_codec;
 mod format;
+mod frame_resync;
 mod fsutil;
 mod history;
+mod index;
 mod layout;
 mod lifecycle_cache;
 mod lock;
@@ -64,6 +67,8 @@ mod worktree_marker;
 mod worktree_patch;
 mod worktree_status;
 
+#[cfg(test)]
+mod dc55_identity_evidence;
 #[cfg(test)]
 mod signature_contract_tests;
 #[cfg(test)]

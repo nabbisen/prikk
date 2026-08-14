@@ -1,12 +1,23 @@
-//! Same-ID immutable publication race tests.
+//! `DurabilityContract::publish_immutable` (G5) race conformance tests.
+//!
+//! **Re-targeted for RFC 102 Stage 3** (design-v1.md §12.3, same rationale as `immutable.rs`):
+//! `FileObjectStore::write_object` no longer routes through this primitive, so these races are
+//! driven directly through `publish_immutable_file` at a fixed test-only relative path.
 
+use std::path::Path;
 use std::sync::{Arc, Barrier};
 
 use prikk_object::{ObjectEnvelope, ObjectType};
 
-use crate::fsutil::{TestFailPoint, fail_once_for_test, set_immutable_install_barrier_for_test};
+use crate::RepositoryLayout;
+use crate::file_codec::{decode_envelope_file, encode_envelope_file};
+use crate::fsutil::{
+    TestFailPoint, fail_once_for_test, publish_immutable_file,
+    set_immutable_install_barrier_for_test,
+};
 use crate::test_support::{dummy_signature, unique_temp_dir};
-use crate::{FileObjectStore, ObjectWriter, RepositoryLayout};
+
+const TEST_OBJECT_RELATIVE: &str = "objects/g5-race-test.pobj";
 
 fn transport(variant: u8) -> prikk_error::Result<ObjectEnvelope> {
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"shared-payload".to_vec());
@@ -19,10 +30,57 @@ fn transport(variant: u8) -> prikk_error::Result<ObjectEnvelope> {
     Ok(envelope)
 }
 
+fn init_with_object_dir(root: &std::path::Path) -> prikk_error::Result<RepositoryLayout> {
+    let layout = RepositoryLayout::init(root.to_path_buf())?;
+    std::fs::create_dir_all(layout.prikk_dir().join("objects"))?;
+    Ok(layout)
+}
+
+fn validate_existing_test_object(
+    bytes: &[u8],
+    expected_type: ObjectType,
+    expected_id: prikk_object::ObjectId,
+) -> prikk_error::Result<()> {
+    let envelope = decode_envelope_file(bytes).map_err(|error| {
+        prikk_error::PrikkError::Integrity(format!(
+            "existing immutable object is malformed: {error}"
+        ))
+    })?;
+    if envelope.object_type != expected_type {
+        return Err(prikk_error::PrikkError::Integrity(format!(
+            "existing object type {} differs from path type {expected_type}",
+            envelope.object_type
+        )));
+    }
+    let actual_id = envelope.object_id();
+    if actual_id != expected_id {
+        return Err(prikk_error::PrikkError::Integrity(format!(
+            "existing object id {actual_id} differs from path id {expected_id}"
+        )));
+    }
+    Ok(())
+}
+
+fn publish(layout: &RepositoryLayout, envelope: &ObjectEnvelope) -> prikk_error::Result<()> {
+    let candidate = encode_envelope_file(envelope)?;
+    let object_type = envelope.object_type;
+    let object_id = envelope.object_id();
+    publish_immutable_file(
+        layout.repository_mutation_root(),
+        Path::new(TEST_OBJECT_RELATIVE),
+        &candidate,
+        move |existing| validate_existing_test_object(existing, object_type, object_id),
+    )
+}
+
+fn absolute_test_object_path(layout: &RepositoryLayout) -> std::path::PathBuf {
+    layout.prikk_dir().join(TEST_OBJECT_RELATIVE)
+}
+
 #[test]
 fn same_process_race_never_overwrites_winning_transport() -> prikk_error::Result<()> {
     let root = unique_temp_dir("object-thread-race");
-    let layout = RepositoryLayout::init(root.clone())?;
+    let layout = init_with_object_dir(&root)?;
     let left = transport(1)?;
     let right = transport(2)?;
     assert_eq!(left.object_id(), right.object_id());
@@ -32,9 +90,8 @@ fn same_process_race_never_overwrites_winning_transport() -> prikk_error::Result
         let thread_layout = layout.clone();
         let thread_barrier = Arc::clone(&barrier);
         handles.push(std::thread::spawn(move || {
-            let mut store = FileObjectStore::new(thread_layout);
             set_immutable_install_barrier_for_test(thread_barrier);
-            store.write_object(&envelope)
+            publish(&thread_layout, &envelope)
         }));
     }
     let results: Vec<_> = handles
@@ -47,9 +104,9 @@ fn same_process_race_never_overwrites_winning_transport() -> prikk_error::Result
         .collect::<prikk_error::Result<_>>()?;
     assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
     assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
-    let bytes = std::fs::read(layout.object_path(ObjectType::Blob, left.object_id()))?;
-    let left_bytes = crate::file_codec::encode_envelope_file(&left)?;
-    let right_bytes = crate::file_codec::encode_envelope_file(&right)?;
+    let bytes = std::fs::read(absolute_test_object_path(&layout))?;
+    let left_bytes = encode_envelope_file(&left)?;
+    let right_bytes = encode_envelope_file(&right)?;
     assert!(bytes == left_bytes || bytes == right_bytes);
     let _ = std::fs::remove_dir_all(root);
     Ok(())
@@ -58,7 +115,7 @@ fn same_process_race_never_overwrites_winning_transport() -> prikk_error::Result
 #[test]
 fn same_transport_race_is_idempotent_and_leaves_no_temp() -> prikk_error::Result<()> {
     let root = unique_temp_dir("object-equal-thread-race");
-    let layout = RepositoryLayout::init(root.clone())?;
+    let layout = init_with_object_dir(&root)?;
     let envelope = transport(1)?;
     let barrier = Arc::new(Barrier::new(2));
     let mut handles = Vec::new();
@@ -67,27 +124,20 @@ fn same_transport_race_is_idempotent_and_leaves_no_temp() -> prikk_error::Result
         let thread_envelope = envelope.clone();
         let thread_barrier = Arc::clone(&barrier);
         handles.push(std::thread::spawn(move || {
-            let mut store = FileObjectStore::new(thread_layout);
             set_immutable_install_barrier_for_test(thread_barrier);
-            store.write_object(&thread_envelope)
+            publish(&thread_layout, &thread_envelope)
         }));
     }
     for handle in handles {
-        assert_eq!(
-            handle.join().map_err(|_| {
-                prikk_error::PrikkError::Io("object race thread panicked".to_string())
-            })??,
-            envelope.object_id()
-        );
+        handle.join().map_err(|_| {
+            prikk_error::PrikkError::Io("object race thread panicked".to_string())
+        })??;
     }
-    let path = layout.object_path(ObjectType::Blob, envelope.object_id());
+    let path = absolute_test_object_path(&layout);
     let shard = path
         .parent()
         .ok_or_else(|| prikk_error::PrikkError::Io("object path has no parent".to_string()))?;
-    assert_eq!(
-        std::fs::read(&path)?,
-        crate::file_codec::encode_envelope_file(&envelope)?
-    );
+    assert_eq!(std::fs::read(&path)?, encode_envelope_file(&envelope)?);
     for entry in std::fs::read_dir(shard)? {
         assert!(!entry?.file_name().to_string_lossy().contains(".tmp."));
     }
@@ -98,7 +148,7 @@ fn same_transport_race_is_idempotent_and_leaves_no_temp() -> prikk_error::Result
 #[test]
 fn separate_process_race_never_overwrites_winning_transport() -> prikk_error::Result<()> {
     let root = unique_temp_dir("object-process-race");
-    RepositoryLayout::init(root.clone())?;
+    init_with_object_dir(&root)?;
     let executable = std::env::current_exe()?;
     let test_name = "object_store::tests::races::object_writer_process_helper";
     let mut children = Vec::new();
@@ -121,13 +171,11 @@ fn separate_process_race_never_overwrites_winning_transport() -> prikk_error::Re
         1
     );
 
-    let envelope = transport(1)?;
-    let path =
-        RepositoryLayout::open(root.clone())?.object_path(ObjectType::Blob, envelope.object_id());
-    let bytes = std::fs::read(path)?;
+    let layout = RepositoryLayout::open(root.clone())?;
+    let bytes = std::fs::read(absolute_test_object_path(&layout))?;
     assert!(
-        bytes == crate::file_codec::encode_envelope_file(&transport(1)?)?
-            || bytes == crate::file_codec::encode_envelope_file(&transport(2)?)?
+        bytes == encode_envelope_file(&transport(1)?)?
+            || bytes == encode_envelope_file(&transport(2)?)?
     );
     let _ = std::fs::remove_dir_all(root);
     Ok(())
@@ -137,12 +185,11 @@ fn separate_process_race_never_overwrites_winning_transport() -> prikk_error::Re
 fn fresh_process_retry_resyncs_installed_final_without_cleaning_old_temp() -> prikk_error::Result<()>
 {
     let root = unique_temp_dir("object-process-retry");
-    let layout = RepositoryLayout::init(root.clone())?;
+    let layout = init_with_object_dir(&root)?;
     let executable = std::env::current_exe()?;
     let first = run_child(&executable, &root, 1, Some("install-sync"))?;
     assert!(!first.success());
-    let envelope = transport(1)?;
-    let path = layout.object_path(ObjectType::Blob, envelope.object_id());
+    let path = absolute_test_object_path(&layout);
     assert!(path.is_file());
     let shard = path
         .parent()
@@ -201,7 +248,7 @@ fn object_writer_process_helper() {
     }
     let result = RepositoryLayout::open(root)
         .and_then(|layout| transport(variant).map(|envelope| (layout, envelope)))
-        .and_then(|(layout, envelope)| FileObjectStore::new(layout).write_object(&envelope));
+        .and_then(|(layout, envelope)| publish(&layout, &envelope));
     if result.is_err() {
         std::process::exit(23);
     }

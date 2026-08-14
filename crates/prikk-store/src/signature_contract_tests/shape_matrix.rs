@@ -93,7 +93,7 @@ fn object_writer_shape_matrix_rejects_before_mutation() -> prikk_error::Result<(
         assert_eq!(memory.len(), usize::from(length == 64));
         assert_eq!(file.write_object(&envelope).is_ok(), length == 64);
         assert_eq!(
-            layout.object_path(ObjectType::Blob, object_id).exists(),
+            file.contains_object(ObjectType::Blob, object_id),
             length == 64
         );
 
@@ -160,7 +160,8 @@ fn publication_shape_matrix_covers_both_governed_envelopes() -> prikk_error::Res
                 "state={mutate_state}, length={length}"
             );
             assert_eq!(
-                layout.object_path(ObjectType::RefState, state_id).exists(),
+                FileObjectStore::new(layout.clone())
+                    .contains_object(ObjectType::RefState, state_id),
                 length == 64
             );
             assert_eq!(layout.ref_pointer_path("heads/main").exists(), length == 64);

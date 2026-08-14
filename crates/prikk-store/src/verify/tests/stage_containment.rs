@@ -13,9 +13,7 @@ use prikk_object::{
 };
 
 use crate::maintainer_signing::MaintainerSigner;
-use crate::test_support::{
-    sample_object_id, signed_patch_blob_envelope, signed_patch_envelope, unique_temp_dir,
-};
+use crate::test_support::{signed_patch_blob_envelope, signed_patch_envelope, unique_temp_dir};
 use crate::{
     Ed25519MaintainerSigner, FileObjectStore, ObjectWriter, RefPublication, RefStore,
     RepositoryLayout, StageOutcome, StageStatus, VerificationStage, VerifyOptions, Wal,
@@ -130,52 +128,82 @@ fn verify_repository_reports_two_independent_stage_failures_together() -> Result
 }
 
 /// DC-95 Stage 2 Level 2 acceptance criterion 1, at Phase A granularity (the criterion Level 1
-/// could not satisfy one level in): two independent bad objects with nothing in common -- two
-/// id-mismatched Blobs, distinguished by different wrong ids -- are both reported `Failed` in
-/// `object_outcomes`, and neither suppresses the other, the `Objects` stage itself, or any other
-/// item. Whole-map assertion (handoff §4), not presence-of-one-expected-entry: the outcome set is
-/// walked and every entry classified, the same pattern that caught Level 1's own `CommitIndex` and
-/// `blocked_by` regressions.
+/// could not satisfy one level in), re-targeted for RFC 102 Stage 3 at container scale: two
+/// independent bad objects with nothing in common -- two checksum-corrupted Blob container records,
+/// distinguished by different byte offsets -- are both reported `Failed` in `object_outcomes`, and
+/// neither suppresses the other, the `Objects` stage itself, or a third, genuinely clean object.
+/// (The pre-Stage-3 construction -- two id-mismatched loose files -- has no direct container
+/// equivalent: an index entry resolving to the wrong object is a *stage*-level index-integrity
+/// defect under containers, not an item-level one; see `verify_repository_detects_index_entry_
+/// resolving_to_a_different_object` in the parent module for that shape instead.) Whole-map
+/// assertion (handoff §4), not presence-of-one-expected-entry: the outcome set is walked and every
+/// entry classified, the same pattern that caught Level 1's own `CommitIndex` and `blocked_by`
+/// regressions.
+///
+/// **Also the end-to-end proof for the RFC 102 Stage 3 handoff's own acceptance criteria 4 and 5**,
+/// through `verify_repository` rather than `container::decode_container_records` directly
+/// (`container/tests.rs::isolates_a_damaged_record_and_reads_every_sound_record_around_it` is the
+/// unit-level proof, mirroring `wal_cluster.rs`'s own pairing of the two levels): criterion 4
+/// ("corruption isolation... re-proven at container scale") in the `Objects` stage staying
+/// `Evaluated` with the third, undamaged object still `Evaluated` in `object_outcomes`; criterion 5
+/// ("a repository that failed verification before still fails it") in `report.has_item_failure()`.
 #[test]
 fn verify_repository_reports_two_independent_bad_objects_in_the_same_stage() -> Result<()> {
     let root = unique_temp_dir("stage2-two-independent-bad-objects");
     let layout = RepositoryLayout::init(root.clone())?;
 
-    let plant_id_mismatched_blob =
-        |label: &str| -> Result<()> {
-            let blob = prikk_object::BlobPayload::new(prikk_object::BlobKind::Text, label.into());
-            let mut envelope =
-                ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob.to_canonical_bytes()?);
-            envelope.add_signature(maintainer_signature(
-                &trusted_signer("stage2-two-bad-objects", 0x1c)?,
-                ObjectType::Blob,
-                envelope.object_id(),
-            )?)?;
-            let wrong_id = sample_object_id(&format!("stage2-two-bad-objects-{label}"));
-            let misplaced = layout.object_path(ObjectType::Blob, wrong_id);
-            std::fs::create_dir_all(misplaced.parent().ok_or_else(|| {
-                PrikkError::Io("misplaced object path has no parent".to_string())
-            })?)?;
-            std::fs::write(
-                &misplaced,
-                crate::file_codec::encode_envelope_file(&envelope)?,
-            )?;
-            Ok(())
-        };
-    plant_id_mismatched_blob("first")?;
-    plant_id_mismatched_blob("second")?;
-
-    // One genuinely clean object too, so the test also confirms a bad item does not suppress a
-    // good one's own Evaluated outcome.
     let mut objects = FileObjectStore::new(layout.clone());
-    objects.write_object(&signed_patch_blob_envelope())?;
+    let mut offsets = Vec::new();
+    let container_path =
+        layout.container_slot_path(ObjectType::Blob, crate::layout::ContainerSlot::A);
+    for label in ["first", "second", "third"] {
+        let before = std::fs::read(&container_path)
+            .map(|bytes| bytes.len())
+            .unwrap_or(0);
+        offsets.push(before);
+        let blob = prikk_object::BlobPayload::new(prikk_object::BlobKind::Text, label.into());
+        let mut envelope =
+            ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob.to_canonical_bytes()?);
+        envelope.add_signature(maintainer_signature(
+            &trusted_signer("stage2-two-bad-objects", 0x1c)?,
+            ObjectType::Blob,
+            envelope.object_id(),
+        )?)?;
+        objects.write_object(&envelope)?;
+    }
+    // Corrupt the first two records' own last byte -- stays inside the body, past the fixed header,
+    // so the frame's magic/version/body_len all still parse and decode reaches the checksum
+    // compare, mirroring `wal_cluster.rs`'s established two-damaged-records technique.
+    let mut bytes = std::fs::read(&container_path)?;
+    let end = bytes.len();
+    let bounds: Vec<(usize, usize)> = offsets
+        .iter()
+        .enumerate()
+        .map(|(i, &start)| (start, offsets.get(i + 1).copied().unwrap_or(end)))
+        .collect();
+    for &damaged in &[0_usize, 1_usize] {
+        let (_, stop) = *bounds
+            .get(damaged)
+            .ok_or_else(|| PrikkError::Integrity("damaged index out of bounds".to_string()))?;
+        let byte = bytes
+            .get_mut(stop - 1)
+            .ok_or_else(|| PrikkError::Integrity("record end out of bounds".to_string()))?;
+        *byte ^= 0x01;
+    }
+    std::fs::write(&container_path, &bytes)?;
 
     let report = verify_repository(&layout)?;
-    assert!(matches!(
-        find_stage(&report.stage_outcomes, VerificationStage::Objects).status,
-        StageStatus::Evaluated
-    ));
-    assert!(report.has_item_failure());
+    assert!(
+        matches!(
+            find_stage(&report.stage_outcomes, VerificationStage::Objects).status,
+            StageStatus::Evaluated
+        ),
+        "criterion 4: corruption isolation must keep the Objects stage itself Evaluated"
+    );
+    assert!(
+        report.has_item_failure(),
+        "criterion 5: a repository with a damaged container record must still fail verification"
+    );
     assert_eq!(
         report.object_outcomes.len(),
         3,
@@ -282,9 +310,12 @@ fn verify_repository_reports_two_independent_bad_refs_in_the_same_stage() -> Res
             ref_update: update,
         })?;
 
-        // Delete the target Block after publishing -- a genuinely dangling reference, same
-        // technique as `verify_repository_detects_dangling_ref_target` (`ref_cluster.rs`).
-        std::fs::remove_file(layout.object_path(ObjectType::Block, block_id))?;
+        // Remove the target Block's index entry after publishing -- containers are append-only, so
+        // there is no direct "delete one object" equivalent to the pre-Stage-3 `std::fs::remove_file`
+        // this replaces; a genuinely dangling reference under containers is an object whose index
+        // entry is gone, not a container record that was ever removed (same technique as
+        // `verify_repository_detects_dangling_ref_target`, `ref_cluster.rs`).
+        crate::index::remove_index_entry_for_test(&layout, block_id)?;
         Ok(())
     };
     publish_dangling_ref(&mut objects, "heads/first")?;
