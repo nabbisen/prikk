@@ -90,18 +90,32 @@ fn decode_frozen_ref_log_records(bytes: &[u8]) -> FrozenRefLogReplay {
             all_checksums_verified = false;
             break;
         }
-        let version = u16::from_be_bytes(header.get(8..10).unwrap_or(&[0, 0]).try_into().unwrap_or([0, 0]));
+        let version = u16::from_be_bytes(
+            header
+                .get(8..10)
+                .unwrap_or(&[0, 0])
+                .try_into()
+                .unwrap_or([0, 0]),
+        );
         if version != FROZEN_REF_LOG_VERSION {
             all_checksums_verified = false;
             break;
         }
-        let body_len_bytes: [u8; 8] = header.get(10..18).unwrap_or(&[0; 8]).try_into().unwrap_or([0; 8]);
+        let body_len_bytes: [u8; 8] = header
+            .get(10..18)
+            .unwrap_or(&[0; 8])
+            .try_into()
+            .unwrap_or([0; 8]);
         let body_len = u64::from_be_bytes(body_len_bytes);
         let Ok(body_len) = usize::try_from(body_len) else {
             all_checksums_verified = false;
             break;
         };
-        let checksum: [u8; 32] = header.get(18..50).unwrap_or(&[0; 32]).try_into().unwrap_or([0; 32]);
+        let checksum: [u8; 32] = header
+            .get(18..50)
+            .unwrap_or(&[0; 32])
+            .try_into()
+            .unwrap_or([0; 32]);
         let Some(body_end) = header_end.checked_add(body_len) else {
             all_checksums_verified = false;
             break;

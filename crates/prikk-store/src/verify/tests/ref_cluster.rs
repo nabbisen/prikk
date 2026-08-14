@@ -307,8 +307,14 @@ fn verify_repository_detects_ref_container_record_key_mismatch() -> Result<()> {
     )?;
     // Header key stays "heads/aux"'s own correct key (what `read_logs`' discovery and `replay_ref_
     // subsequence`'s grouping both key off); the envelope's own internal `ref_name` disagrees.
-    let mismatched_update =
-        build_signed_ref_update("heads/not-aux", None, ref_state_id, target_block, 1, &signer)?;
+    let mismatched_update = build_signed_ref_update(
+        "heads/not-aux",
+        None,
+        ref_state_id,
+        target_block,
+        1,
+        &signer,
+    )?;
     let framed = crate::refs::encode_ref_container_record_for_test(
         crate::layout::ref_name_key_bytes("heads/aux"),
         &mismatched_update,
@@ -421,9 +427,9 @@ fn verify_repository_fails_closed_on_a_damaged_pointer_index_entry() -> Result<(
     // shape otherwise valid, only the content is damaged.
     let path = layout.ref_pointer_index_path();
     let mut bytes = std::fs::read(&path)?;
-    let last = bytes
-        .last_mut()
-        .ok_or_else(|| prikk_error::PrikkError::Integrity("expected a pointer entry".to_string()))?;
+    let last = bytes.last_mut().ok_or_else(|| {
+        prikk_error::PrikkError::Integrity("expected a pointer entry".to_string())
+    })?;
     *last ^= 0x01;
     std::fs::write(&path, bytes)?;
 

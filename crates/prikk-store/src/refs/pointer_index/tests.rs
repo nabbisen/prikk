@@ -24,7 +24,10 @@ fn write_then_lookup_round_trips() -> Result<()> {
 
     let found = lookup_ref_pointer(&layout, key)?;
     assert_eq!(found, Some(entry));
-    assert_eq!(lookup_ref_pointer(&layout, ref_name_key_bytes("heads/other"))?, None);
+    assert_eq!(
+        lookup_ref_pointer(&layout, ref_name_key_bytes("heads/other"))?,
+        None
+    );
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

@@ -372,9 +372,9 @@ pub(crate) fn append_ref_container_record(
             "format-2 RefUpdate requires created_at == 0".to_string(),
         ));
     }
-    let relative = layout.repository_relative(&layout.ref_log_container_slot_path(
-        crate::layout::ContainerSlot::A,
-    ))?;
+    let relative = layout.repository_relative(
+        &layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A),
+    )?;
     // Idempotency, preserved from `refs/log.rs::append_log_record`'s exact behavior (retired, not
     // dropped): a retry whose own ref-scoped subsequence already ends in this exact envelope is a
     // no-op sync, not a second record -- `publish_locked`'s `PointerLeading`/`Complete` branches
@@ -409,9 +409,9 @@ pub(crate) fn replay_ref_subsequence(
     layout: &RepositoryLayout,
     ref_name_key: [u8; 32],
 ) -> Result<RefLogReplay> {
-    let relative = layout.repository_relative(&layout.ref_log_container_slot_path(
-        crate::layout::ContainerSlot::A,
-    ))?;
+    let relative = layout.repository_relative(
+        &layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A),
+    )?;
     let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &relative)? else {
         return Ok(RefLogReplay {
             records: Vec::new(),
@@ -497,11 +497,11 @@ pub(crate) fn incomplete_tail_matches(
     ref_name_key: [u8; 32],
     expected: &ObjectEnvelope,
 ) -> Result<bool> {
-    let relative = layout.repository_relative(&layout.ref_log_container_slot_path(
-        crate::layout::ContainerSlot::A,
-    ))?;
-    let bytes = read_file_if_exists(layout.repository_mutation_root(), &relative)?
-        .unwrap_or_default();
+    let relative = layout.repository_relative(
+        &layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A),
+    )?;
+    let bytes =
+        read_file_if_exists(layout.repository_mutation_root(), &relative)?.unwrap_or_default();
     let replay = decode_ref_container_records(&bytes)?;
     if replay.trailing_partial_bytes == 0 {
         return Ok(false);
@@ -509,7 +509,9 @@ pub(crate) fn incomplete_tail_matches(
     let retained = bytes
         .len()
         .checked_sub(replay.trailing_partial_bytes)
-        .ok_or_else(|| PrikkError::Integrity("ref container retained length underflow".to_string()))?;
+        .ok_or_else(|| {
+            PrikkError::Integrity("ref container retained length underflow".to_string())
+        })?;
     let expected_record = encode_ref_container_record(ref_name_key, expected)?;
     let suffix = bytes.get(retained..).ok_or_else(|| {
         PrikkError::Integrity("ref container incomplete suffix range overflow".to_string())
@@ -523,11 +525,11 @@ pub(crate) fn incomplete_tail_matches(
 /// nothing sound is ever removed. Mirrors `refs::log::truncate_incomplete_tail`, generalized from a
 /// per-ref file to the shared container.
 pub(crate) fn truncate_incomplete_tail(layout: &RepositoryLayout) -> Result<usize> {
-    let relative = layout.repository_relative(&layout.ref_log_container_slot_path(
-        crate::layout::ContainerSlot::A,
-    ))?;
-    let bytes = read_file_if_exists(layout.repository_mutation_root(), &relative)?
-        .unwrap_or_default();
+    let relative = layout.repository_relative(
+        &layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A),
+    )?;
+    let bytes =
+        read_file_if_exists(layout.repository_mutation_root(), &relative)?.unwrap_or_default();
     let replay = decode_ref_container_records(&bytes)?;
     if replay.trailing_partial_bytes == 0 {
         return Ok(0);
@@ -535,7 +537,9 @@ pub(crate) fn truncate_incomplete_tail(layout: &RepositoryLayout) -> Result<usiz
     let retained = bytes
         .len()
         .checked_sub(replay.trailing_partial_bytes)
-        .ok_or_else(|| PrikkError::Integrity("ref container retained length underflow".to_string()))?;
+        .ok_or_else(|| {
+            PrikkError::Integrity("ref container retained length underflow".to_string())
+        })?;
     crate::fsutil::truncate_existing_file_required(
         layout.repository_mutation_root(),
         &relative,
@@ -560,14 +564,14 @@ pub(crate) fn append_torn_ref_log_tail_for_test(
     ref_name_key: [u8; 32],
     envelope: &ObjectEnvelope,
 ) -> Result<()> {
-    let relative = layout.repository_relative(&layout.ref_log_container_slot_path(
-        crate::layout::ContainerSlot::A,
-    ))?;
+    let relative = layout.repository_relative(
+        &layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A),
+    )?;
     let full = encode_ref_container_record_for_test(ref_name_key, envelope)?;
     let torn_len = (REF_CONTAINER_HEADER_LEN + 8).min(full.len().saturating_sub(1));
-    let torn = full
-        .get(..torn_len)
-        .ok_or_else(|| PrikkError::Integrity("torn tail length exceeds encoded record".to_string()))?;
+    let torn = full.get(..torn_len).ok_or_else(|| {
+        PrikkError::Integrity("torn tail length exceeds encoded record".to_string())
+    })?;
     crate::fsutil::append_file_required(layout.repository_mutation_root(), &relative, torn)
 }
 

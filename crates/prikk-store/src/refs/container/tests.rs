@@ -65,7 +65,11 @@ fn isolates_a_damaged_record_and_reads_every_sound_record_around_it_across_refs(
         .iter()
         .enumerate()
         .map(|(index, ref_name)| {
-            let seq = if *ref_name == "heads/topic" { 1 } else { index as u64 + 1 };
+            let seq = if *ref_name == "heads/topic" {
+                1
+            } else {
+                index as u64 + 1
+            };
             signed_ref_update_envelope(
                 ref_name,
                 None,
@@ -107,7 +111,11 @@ fn isolates_a_damaged_record_and_reads_every_sound_record_around_it_across_refs(
         "the damaged record must be named at its own offset, attributed to its own ref"
     );
     assert_eq!(
-        replay.records.iter().map(|r| &r.envelope).collect::<Vec<_>>(),
+        replay
+            .records
+            .iter()
+            .map(|r| &r.envelope)
+            .collect::<Vec<_>>(),
         vec![&envelopes[0], &envelopes[2]],
         "both sound records -- for heads/main, on either side of the damaged heads/topic record -- \
          must still be read"
@@ -175,12 +183,20 @@ fn replay_ref_subsequence_filters_correctly_across_interleaved_refs() -> Result<
 
     let main_replay = replay_ref_subsequence(&layout, main_key)?;
     assert_eq!(
-        main_replay.records.iter().map(|r| &r.envelope).collect::<Vec<_>>(),
+        main_replay
+            .records
+            .iter()
+            .map(|r| &r.envelope)
+            .collect::<Vec<_>>(),
         vec![&main_1, &main_2]
     );
     let topic_replay = replay_ref_subsequence(&layout, topic_key)?;
     assert_eq!(
-        topic_replay.records.iter().map(|r| &r.envelope).collect::<Vec<_>>(),
+        topic_replay
+            .records
+            .iter()
+            .map(|r| &r.envelope)
+            .collect::<Vec<_>>(),
         vec![&topic_1]
     );
 

@@ -359,7 +359,10 @@ fn ref_store_rejects_unborn_publication_when_log_has_history() {
         assert!(store.publish(&first).is_ok());
         // Containers are append-only, so there is no direct "delete the pointer file" equivalent
         // to the pre-Stage-4 `std::fs::remove_file` this replaces.
-        assert!(super::remove_pointer_entries_for_test(&layout, ref_name_key_bytes("heads/main")).is_ok());
+        assert!(
+            super::remove_pointer_entries_for_test(&layout, ref_name_key_bytes("heads/main"))
+                .is_ok()
+        );
 
         let second_target = sample_object_id("different-target");
         let second_ref_state = signed_ref_state_envelope("heads/main", None, second_target, 1);
@@ -561,8 +564,8 @@ fn ensure_no_incomplete_publication_refuses_when_a_ref_item_fails() {
 /// corrupted log-container record), not just when it is coherent but references something missing --
 /// the container-corruption half of "damaged ref container," not merely a name for the same fixture.
 #[test]
-fn ensure_no_incomplete_publication_refuses_on_a_corrupted_log_container_record(
-) -> prikk_error::Result<()> {
+fn ensure_no_incomplete_publication_refuses_on_a_corrupted_log_container_record()
+-> prikk_error::Result<()> {
     let root = unique_temp_dir("ref-mutation-gate-container-corruption");
     let layout = RepositoryLayout::init(root.clone())?;
     let mut objects = FileObjectStore::new(layout.clone());
@@ -613,7 +616,10 @@ fn ref_store_refuses_unsigned_missing_pointer_reconstruction() {
             ref_update,
         };
         assert!(store.publish(&publication).is_ok());
-        assert!(super::remove_pointer_entries_for_test(&layout, ref_name_key_bytes("heads/main")).is_ok());
+        assert!(
+            super::remove_pointer_entries_for_test(&layout, ref_name_key_bytes("heads/main"))
+                .is_ok()
+        );
         assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(None));
         let candidate = store.recoverable_missing_ref("heads/main");
         assert!(candidate.is_ok());

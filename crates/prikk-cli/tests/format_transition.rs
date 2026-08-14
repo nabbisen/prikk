@@ -112,9 +112,14 @@ fn assert_rejection_contract(
     // RFC 102 Stage 4's own bump target) -- its rejection message names no specific "removed after
     // X.Y.Z" version, since none could be verified from the release record (`layout.rs`'s
     // `LEGACY_FORMAT_3_VERSION` arm doc comment).
-    for expected in [detected_format, "requires format 4", "bundle export", "bundle import"]
-        .into_iter()
-        .chain(version_claim)
+    for expected in [
+        detected_format,
+        "requires format 4",
+        "bundle export",
+        "bundle import",
+    ]
+    .into_iter()
+    .chain(version_claim)
     {
         assert!(
             stderr.contains(expected),

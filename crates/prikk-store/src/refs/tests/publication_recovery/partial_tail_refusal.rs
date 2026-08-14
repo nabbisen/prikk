@@ -73,7 +73,11 @@ fn divergent_complete_prefix_with_partial_tail_is_preserved_byte_for_byte()
                 envelope
             }
         };
-        super::super::super::append_log_record_for_signature_test(&layout, "heads/main", &divergent)?;
+        super::super::super::append_log_record_for_signature_test(
+            &layout,
+            "heads/main",
+            &divergent,
+        )?;
         let container_path = layout.ref_log_container_slot_path(ContainerSlot::A);
         if matches!(divergence, Divergence::DuplicateRecord) {
             // `heads/main` is the only ref in this fixture, so the whole container is exactly its

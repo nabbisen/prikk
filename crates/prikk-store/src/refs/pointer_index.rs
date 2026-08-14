@@ -199,7 +199,10 @@ fn parse_frame_at(bytes: &[u8], offset: usize) -> FrameAttempt {
         };
     }
     match decode_entry_body(body) {
-        Ok(entry) => FrameAttempt::Record { entry, next_offset: body_end },
+        Ok(entry) => FrameAttempt::Record {
+            entry,
+            next_offset: body_end,
+        },
         Err(err) => FrameAttempt::Invalid {
             message: err.to_string(),
         },
@@ -368,7 +371,9 @@ pub(crate) fn remove_pointer_entries_for_test(
         let end = replay
             .record_outcomes
             .get(index + 1)
-            .map_or(bytes.len() - replay.trailing_partial_bytes, |next| next.offset);
+            .map_or(bytes.len() - replay.trailing_partial_bytes, |next| {
+                next.offset
+            });
         let span = bytes.get(outcome.offset..end).unwrap_or_default();
         match &outcome.status {
             PointerIndexRecordStatus::Evaluated => {

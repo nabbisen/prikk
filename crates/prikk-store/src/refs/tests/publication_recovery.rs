@@ -155,7 +155,11 @@ fn pointer_lead_with_partial_tail_is_truncated_then_completed() -> prikk_error::
     // update directly instead (`append_torn_ref_log_tail_for_test`'s own doc).
     fail_after_for_test(TestFailPoint::AppendWrite, 3);
     assert!(store.publish(&publication).is_err());
-    append_torn_ref_log_tail_for_test(&layout, ref_name_key_bytes("heads/main"), &publication.ref_update)?;
+    append_torn_ref_log_tail_for_test(
+        &layout,
+        ref_name_key_bytes("heads/main"),
+        &publication.ref_update,
+    )?;
     assert_blocking_issue(&layout, "PRIKK-VERIFY-REF-DIVERGENCE")?;
     store.finish_interrupted_publication_for_test(&publication)?;
     assert_eq!(store.replay_log("heads/main")?.records.len(), 1);

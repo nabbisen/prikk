@@ -6,7 +6,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{ObjectEnvelope, ObjectId, RefKind, RefStatePayload, RefUpdatePayload, TagPayload};
+use prikk_object::{
+    ObjectEnvelope, ObjectId, RefKind, RefStatePayload, RefUpdatePayload, TagPayload,
+};
 
 use crate::layout::{ContainerSlot, RepositoryLayout, ref_name_key_bytes};
 use crate::object_store::FileObjectStore;
@@ -14,7 +16,9 @@ use crate::refs::container::{
     RefContainerRecordStatus, RefLogRecordStatus, RefLogReplay, decode_ref_container_records,
     replay_ref_subsequence,
 };
-use crate::refs::pointer_index::{PointerIndexEntry, PointerIndexRecordStatus, replay_pointer_index};
+use crate::refs::pointer_index::{
+    PointerIndexEntry, PointerIndexRecordStatus, replay_pointer_index,
+};
 use prikk_object::ObjectType;
 
 #[derive(Debug, Clone)]
@@ -66,9 +70,7 @@ pub struct RefFileOutcome {
 }
 
 fn pointer_locator(layout: &RepositoryLayout, offset: usize) -> PathBuf {
-    layout
-        .ref_pointer_index_path()
-        .join(format!("#{offset}"))
+    layout.ref_pointer_index_path().join(format!("#{offset}"))
 }
 
 fn log_locator(layout: &RepositoryLayout, offset: usize) -> PathBuf {
@@ -161,7 +163,12 @@ fn read_one_pointer_entry(
             entry.ref_state_id, entry.ref_name
         )));
     }
-    ensure_ref_target_valid(objects, payload.kind, payload.target_object_id, entry.ref_state_id)?;
+    ensure_ref_target_valid(
+        objects,
+        payload.kind,
+        payload.target_object_id,
+        entry.ref_state_id,
+    )?;
     Ok((
         entry.ref_name.clone(),
         PointerState {
@@ -188,19 +195,12 @@ pub(super) fn read_logs(
     BTreeMap<[u8; 32], String>,
     Vec<RefFileOutcome>,
 )> {
-    let relative = layout.repository_relative(&layout.ref_log_container_slot_path(
-        ContainerSlot::A,
-    ))?;
+    let relative =
+        layout.repository_relative(&layout.ref_log_container_slot_path(ContainerSlot::A))?;
     let Some(bytes) =
         crate::fsutil::read_file_if_exists(layout.repository_mutation_root(), &relative)?
     else {
-        return Ok((
-            BTreeMap::new(),
-            0,
-            Vec::new(),
-            BTreeMap::new(),
-            Vec::new(),
-        ));
+        return Ok((BTreeMap::new(), 0, Vec::new(), BTreeMap::new(), Vec::new()));
     };
     let discovery = decode_ref_container_records(&bytes)?;
     let mut keys: std::collections::BTreeSet<[u8; 32]> = discovery
@@ -208,15 +208,18 @@ pub(super) fn read_logs(
         .iter()
         .map(|record| record.ref_name_key)
         .collect();
-    keys.extend(discovery.record_outcomes.iter().filter_map(|outcome| {
-        match &outcome.status {
-            RefContainerRecordStatus::Failed {
-                claimed_ref_name_key: Some(key),
-                ..
-            } => Some(*key),
-            _ => None,
-        }
-    }));
+    keys.extend(
+        discovery
+            .record_outcomes
+            .iter()
+            .filter_map(|outcome| match &outcome.status {
+                RefContainerRecordStatus::Failed {
+                    claimed_ref_name_key: Some(key),
+                    ..
+                } => Some(*key),
+                _ => None,
+            }),
+    );
 
     let mut logs = BTreeMap::new();
     let mut total = 0_usize;

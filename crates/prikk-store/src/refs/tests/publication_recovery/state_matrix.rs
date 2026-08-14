@@ -226,7 +226,10 @@ fn every_state_has_explicit_production_retry_and_exact_post_state() -> prikk_err
                 if matches!(case.state, PersistedState::Candidate) {
                     assert_eq!(report.ref_publication_issues.len(), 1);
                     assert_eq!(
-                        report.ref_publication_issues.first().map(|issue| issue.code),
+                        report
+                            .ref_publication_issues
+                            .first()
+                            .map(|issue| issue.code),
                         Some("PRIKK-VERIFY-REF-CANDIDATE-DEBRIS")
                     );
                 } else {
