@@ -546,3 +546,34 @@ nothing left that clears it** — the candidate-cleanup path went with the mecha
 consolidation.** Do **not** change `ensure_no_incomplete_publication`'s semantics inside Stage 4 — that
 is DC-38 machinery and a behaviour change of its own. The consolidation decides whether the check is
 retired, made non-refusing, or given a clearing path.
+
+### 13.10 Two rulings from the migration checkpoint — 2026-08-14
+
+**1. The second `test-support` capability is allowed, on the same terms.**
+
+`seal_recovery.rs::seal_rejects_format2_log_lead` needs to restore a pointer's raw bytes so a ref points
+backwards — deferred rather than added unilaterally, correctly.
+
+**Allowed, behind the same feature gate.** The reasoning that rejected a genuinely `pub` method was
+about *what ships*, and the feature boundary already answers that; a second helper behind it does not
+move the boundary. That the state it creates is "valid but wrong" rather than "missing" makes it more
+dangerous to *misuse*, not more dangerous to *ship* — and misuse is what the gate prevents.
+
+**Condition, from DC-95's own precedent:** name it so the hazard is legible at the call site. The
+fake-signed helper cost four rounds because `publish_ref_to_new_block` read as ordinary. A helper that
+rewinds a ref to a false-but-valid state should say so in its name.
+
+**2. `state_matrix/fixture.rs`'s vacuous comparisons are the checkpoint's most important find.**
+
+`state_bytes()` was reading `ref_pointer_path`/`ref_log_path` — locations nothing writes to after
+Stage 4 — so three downstream tests' before/after snapshot comparisons were **`None == None`,
+vacuously true**. They compiled, passed, and asserted nothing.
+
+**This is DC-95 round 9's pattern, arriving through a different door.** There, containment exposed a
+`doctor` test whose intent had been masked; here, a storage change turned three comparisons into
+tautologies. **Both were silent, and in both cases the suite stayed green.**
+
+**Standing consequence for the rest of this migration:** a fixture that reads a *path* is a fixture that
+can go vacuous when the path stops being written. **Every remaining migrated comparison must be checked
+for whether it can still fail**, not merely for whether it passes. A test that cannot fail is worse than
+a deleted one, because it reports coverage.
