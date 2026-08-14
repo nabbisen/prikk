@@ -650,3 +650,38 @@ problem, and a malformed record that fails to decode may land in the same unattr
 
 **If all three converge on tested coverage, retire it and say which test covers each. If any does not,
 that is a gap the old test was inadvertently holding**, and it needs coverage rather than a deletion.
+
+### 13.13 Check 2's convergence, and the pointer-index gap — ruled 2026-08-15
+
+**The hold was worth it: the convergence claim is true on one side and false on the other.**
+
+**Log side — genuinely redundant, retire it.** All three shapes traced to tested, *attributed* coverage:
+truncated header and short-body both reach `FrameAttempt::TrailingPartial` with best-effort attribution
+(`own_torn_tail_is_attributed_and_repairable`, `foreign_torn_tail_does_not_block_or_misattribute_an_
+unrelated_ref`); a complete frame with a bad checksum reaches `FrameAttempt::Invalid` carrying
+`claimed_ref_name_key`, covered with attribution by
+`isolates_a_damaged_record_and_reads_every_sound_record_around_it_across_refs`. **Attribution shown, not
+assumed** — which is the part §13.12 said not to take on trust.
+
+**Pointer side — not redundant, because there is nothing to be redundant with.** Verified:
+`pointer_index/tests.rs` has **2 tests**, both happy-path round-trip, against `container/tests.rs`'s
+**7**. Nothing constructs a truncated entry, a checksum mismatch, or checks attribution.
+
+**Write the coverage now. This is option 1, and it is not discretionary.**
+
+**Amended constraint 5 already decides it**: *"corruption isolation must not regress… demonstrated, not
+asserted."* The pointer index **replaces per-ref pointer files**. The old path-shape test's `by-id/`
+sub-case was — unintentionally — the only thing in the suite touching pointer-index decode-failure
+behaviour. **Retiring it and filing the gap would ship the replacement with less corruption coverage
+than the thing it replaced**, which is precisely what constraint 5 forbids.
+
+**Why filing it is the wrong instrument here, specifically.** The deferred list — G5,
+`object_temp_paths`, the `refs/tmp` wedge, the dead `refs/` directories — is entirely *dormant or
+retired mechanisms*, where deferral costs nothing operationally. **This is live new code with no
+corruption coverage.** Different category, and the list's length is an argument against adding a
+different kind of item to it, not for.
+
+**Scope: mirror `container/tests.rs`'s shape** — truncated entry, checksum mismatch with attribution,
+isolate-and-continue across multiple refs. A known shape, not novel design. **If it turns out
+`decode_pointer_index_records` does not have the same three-shape structure, that is a finding**, and a
+more important one than the tests.
