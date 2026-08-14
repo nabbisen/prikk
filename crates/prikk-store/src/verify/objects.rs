@@ -132,6 +132,33 @@ pub(super) fn verify_objects(
         .map(|entry| entry.object_id)
         .collect();
 
+    // design-v1.md §12/§10.2's ruling: "the bytes found are validated by recomputing the content
+    // hash... a mismatch is a reported defect." Ordinary reads (`FileObjectStore::read_object`) check
+    // this lazily, one id at a time. `verify`'s own job is the full, proactive scan (the same ruling:
+    // "`verify` does the full scan") -- so every index entry is cross-checked here against what its
+    // own claimed location actually decodes to, not left to be discovered only if and when something
+    // happens to read that exact id later.
+    //
+    // A *decode* failure at the entry's own location (checksum mismatch, malformed envelope) is
+    // deliberately **not** escalated here -- it is already reported as its own item-level
+    // `ObjectItemStatus::Failed` by the per-record container scan below (RFC 102 Stage 2's
+    // isolate-and-continue containment), and re-erroring on it here would turn an already-contained
+    // item defect into a whole-stage abort. Only a location that decodes *successfully but to the
+    // wrong id* is a genuine index-integrity defect, not merely a damaged record the index happens to
+    // point at.
+    for entry in &index_replay.entries {
+        let Ok(envelope) = crate::index::read_object_envelope_at(layout, entry) else {
+            continue;
+        };
+        let computed = envelope.object_id();
+        if computed != entry.object_id {
+            return Err(PrikkError::Integrity(format!(
+                "index entry for {} resolves to an envelope with computed id {computed}",
+                entry.object_id
+            )));
+        }
+    }
+
     for object_type in persisted_object_types() {
         summary.add(verify_object_type_container(
             layout,
@@ -255,10 +282,10 @@ fn verify_object_record(
     Vec<SignatureEnvelopeIssue>,
     Option<super::MergeBaselineDivergence>,
 )> {
-    // `object_type` mismatch is already impossible to reach here: `container::decode_container_records`
-    // validates every frame against `container_magic(object_type)`, so a frame that decoded to a
-    // *different* type's envelope would already have failed the magic check and surfaced as
-    // `ContainerRecordStatus::Failed`, never reaching this function at all.
+    // `object_type` mismatch is impossible to reach here: `container::parse_frame_at` checks
+    // `envelope.object_type != object_type` itself, right after decoding, so a frame whose body
+    // claims a different type than the container it lives in already surfaced as
+    // `ContainerRecordStatus::Failed` and never reaches this function at all.
     crate::format::validate_read_schema(layout.format(), envelope)?;
     let object_id = envelope.object_id();
     let signature_issues = classify_signature_envelope(

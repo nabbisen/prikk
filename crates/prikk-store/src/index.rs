@@ -128,7 +128,7 @@ fn decode_entry_body(body: &[u8]) -> Result<IndexEntry> {
     })
 }
 
-fn encode_index_record(entry: &IndexEntry) -> Result<Vec<u8>> {
+pub(crate) fn encode_index_record(entry: &IndexEntry) -> Result<Vec<u8>> {
     let body = encode_entry_body(entry);
     let body_len = len_to_u64(body.len())?;
     let checksum = index_record_checksum(body_len, &body);
@@ -485,6 +485,47 @@ pub(crate) fn rebuild_index_from_containers(layout: &RepositoryLayout) -> Result
         }
     }
     Ok(entries)
+}
+
+/// Remove exactly one object's index entry, leaving its container bytes untouched -- the container-
+/// native way to simulate "this object is genuinely missing" (as opposed to "damaged"): the object
+/// exists nowhere the read path will find it, but nothing decodes incorrectly if directly scanned. No
+/// production code ever does this (the index is append-only); it exists only so tests that used to
+/// simulate a missing object via `std::fs::remove_file` on a loose object path have an equivalent
+/// under containers. Every index entry frame is exactly `INDEX_HEADER_LEN + INDEX_BODY_LEN` bytes
+/// (fixed-width body, unlike `wal.rs`/`container.rs`'s variable-length envelope bodies), so removal
+/// is a direct byte-range splice, not a rewrite-and-reindex.
+#[cfg(test)]
+pub(crate) fn remove_index_entry_for_test(
+    layout: &RepositoryLayout,
+    object_id: ObjectId,
+) -> Result<()> {
+    let path = layout.container_index_path();
+    let bytes = std::fs::read(&path)?;
+    let replay = decode_index_records(&bytes)?;
+    let mut entries = replay.entries.iter();
+    for outcome in &replay.record_outcomes {
+        let IndexRecordStatus::Evaluated = &outcome.status else {
+            continue;
+        };
+        let Some(entry) = entries.next() else {
+            return Err(PrikkError::Integrity(
+                "index replay outcome/entry count mismatch".to_string(),
+            ));
+        };
+        if entry.object_id != object_id {
+            continue;
+        }
+        let frame_len = INDEX_HEADER_LEN + INDEX_BODY_LEN;
+        let end = outcome.offset + frame_len;
+        let mut retained = bytes.get(..outcome.offset).unwrap_or_default().to_vec();
+        retained.extend_from_slice(bytes.get(end..).unwrap_or_default());
+        std::fs::write(&path, retained)?;
+        return Ok(());
+    }
+    Err(PrikkError::Integrity(format!(
+        "no index entry for {object_id} to remove"
+    )))
 }
 
 #[cfg(test)]

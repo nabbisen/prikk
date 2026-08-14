@@ -1,11 +1,12 @@
 //! DC-36 publication refusal when immutable object bytes disagree.
 
-use crate::file_codec::encode_envelope_file;
 use crate::test_support::{
     signed_empty_block_envelope, signed_ref_state_envelope, signed_ref_update_envelope,
     unique_temp_dir,
 };
-use crate::{FileObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout};
+use crate::{
+    FileObjectStore, ObjectReader, ObjectWriter, RefPublication, RefStore, RepositoryLayout,
+};
 
 #[test]
 fn ref_publication_does_not_advance_after_existing_object_mismatch() -> prikk_error::Result<()> {
@@ -25,12 +26,10 @@ fn ref_publication_does_not_advance_after_existing_object_mismatch() -> prikk_er
         })?;
     *signature_byte ^= 0xff;
     assert_eq!(different_transport.object_id(), ref_state_id);
-    let path = layout.object_path(ref_state.object_type, ref_state_id);
-    std::fs::create_dir_all(
-        path.parent()
-            .ok_or_else(|| prikk_error::PrikkError::Io("object path has no parent".to_string()))?,
-    )?;
-    std::fs::write(&path, encode_envelope_file(&different_transport)?)?;
+    // Plant the conflicting transport through the real write path (a container-based equivalent of
+    // the pre-Stage-3 raw `std::fs::write` at the RefState's own loose canonical path) -- proves the
+    // same-id-different-bytes conflict `index.rs::write_object_to_container` detects.
+    objects.write_object(&different_transport)?;
 
     let publication = RefPublication {
         ref_name: "heads/main".to_string(),
@@ -42,9 +41,10 @@ fn ref_publication_does_not_advance_after_existing_object_mismatch() -> prikk_er
     assert!(refs.publish(&publication).is_err());
     assert_eq!(refs.read_current_ref_state_id("heads/main")?, None);
     assert!(refs.replay_log("heads/main")?.records.is_empty());
+    // The already-stored conflicting transport is unchanged by the failed publish attempt.
     assert_eq!(
-        std::fs::read(path)?,
-        encode_envelope_file(&different_transport)?
+        objects.read_object(ref_state_id)?,
+        Some(different_transport)
     );
 
     let _ = std::fs::remove_dir_all(root);

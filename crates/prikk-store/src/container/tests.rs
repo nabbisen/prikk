@@ -108,6 +108,24 @@ fn non_persisted_type_has_no_container_magic() {
     assert!(container_magic(ObjectType::RefUpdate).is_err());
 }
 
+/// A frame's magic proves only which *container* a byte range belongs to -- nothing about the header
+/// constrains what `object_type` the body's own envelope claims. A well-formed, correctly checksummed
+/// Blob-container frame whose body happens to be a valid Patch envelope must still be rejected, not
+/// silently accepted as a Blob (the pre-Stage-3 loose-file `verify_object_file`'s own
+/// `envelope.object_type != object_type` check, now enforced here instead). Found and fixed while
+/// investigating a re-targeted `verify` test, not assumed correct from the type-per-magic design
+/// alone.
+#[test]
+fn envelope_type_disagreeing_with_its_own_containers_type_is_rejected() -> Result<()> {
+    let patch_envelope = signed_patch_envelope();
+    assert_eq!(patch_envelope.object_type, ObjectType::Patch);
+    let bytes = encode_container_record(ObjectType::Blob, &patch_envelope)?;
+    let replay = decode_container_records(ObjectType::Blob, &bytes)?;
+    assert!(replay.has_item_failure());
+    assert!(replay.records.is_empty());
+    Ok(())
+}
+
 /// `encode_container_record_for_test` bypasses the strict-signature validation
 /// `encode_container_record` applies (`envelope.validate_strict()`, inside `encode_envelope_file`),
 /// needed by later Stage 3 fixtures whose whole point is a malformed shape `encode_container_record`

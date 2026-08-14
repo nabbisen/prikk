@@ -146,7 +146,12 @@ fn complete_record_sync_failure_retries_without_duplicate() -> prikk_error::Resu
     let layout = RepositoryLayout::init(root.clone())?;
     let publication = root_publication(&layout, "heads/main")?;
     let store = RefStore::new(layout.clone());
-    fail_after_for_test(TestFailPoint::RequiredFileSync, 1);
+    // RFC 102 Stage 3: an object write now durably appends to both its container and the index
+    // (two `RequiredFileSync` calls, not one), and precedes those with the ref lock's own creation
+    // (a third). Skip 3 to land the injected failure on the ref log's own append -- the "complete
+    // record" this test is named for -- so the object is already durably indexed by the time it
+    // fails, matching the scenario this test exists to prove.
+    fail_after_for_test(TestFailPoint::RequiredFileSync, 3);
     assert!(store.publish(&publication).is_err());
     assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
     assert!(!verify_repository(&layout)?.has_blocking_ref_publication_issues());
@@ -163,7 +168,10 @@ fn pointer_lead_with_partial_tail_is_truncated_then_completed() -> prikk_error::
     let layout = RepositoryLayout::init(root.clone())?;
     let publication = root_publication(&layout, "heads/main")?;
     let store = RefStore::new(layout.clone());
-    fail_once_for_test(TestFailPoint::AppendWrite);
+    // RFC 102 Stage 3: the ref-state object's own container and index appends now precede the
+    // log append and each fire `AppendWrite` too -- skip 2 to land the torn write on the log's
+    // own append, matching the scenario this test exists to prove.
+    fail_after_for_test(TestFailPoint::AppendWrite, 2);
     assert!(store.publish(&publication).is_err());
     std::fs::OpenOptions::new()
         .append(true)

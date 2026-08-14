@@ -813,134 +813,82 @@ fn verify_repository_reports_malformed_active_metadata_for_non_empty_wal_as_inte
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// RFC 102 Stage 3 re-target: under the pre-Stage-3 loose-file layout, "an object stored under the
+/// wrong path" meant a file's location disagreed with its own content-derived id. Containers have no
+/// per-object path, so the equivalent defect is an **index entry naming a location whose bytes
+/// decode to a different object entirely** -- caught by `verify_objects`'s own index cross-validation
+/// pass (`verify/objects.rs`: "the bytes found are validated by recomputing the content hash",
+/// design-v1.md §12/§10.2), constructed here by pointing a synthetic index entry at a real, correctly
+/// framed record for a *different* object.
 #[test]
-fn verify_repository_detects_object_file_in_wrong_prefix() {
-    let root = unique_temp_dir("verify-wrong-prefix");
-    let layout = RepositoryLayout::init(root.clone());
-    assert!(layout.is_ok());
-    if let Ok(layout) = layout {
-        let mut store = FileObjectStore::new(layout.clone());
-        let envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"payload".to_vec());
-        let id = store.write_object(&envelope);
-        assert!(id.is_ok());
-        if let Ok(id) = id {
-            let correct = layout.object_path(ObjectType::Blob, id);
-            let wrong_dir = layout.object_type_dir(ObjectType::Blob).join("ff");
-            assert!(std::fs::create_dir_all(&wrong_dir).is_ok());
-            let wrong = wrong_dir.join(format!("{}.pobj", id.to_hex()));
-            assert!(std::fs::rename(correct, wrong).is_ok());
-            let report = verify_repository(&layout);
-            assert!(report.is_ok());
-            if let Ok(report) = report {
-                assert_object_item_failed(&report, "does not match canonical path");
-            }
-        }
-    }
+fn verify_repository_detects_index_entry_resolving_to_a_different_object() -> Result<()> {
+    let root = unique_temp_dir("verify-index-wrong-location");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let real_envelope = signed_patch_envelope();
+    let real_id = real_envelope.object_id();
+    let record_bytes =
+        crate::container::encode_container_record_for_test(ObjectType::Patch, &real_envelope)?;
+    std::fs::write(
+        layout.container_slot_path(ObjectType::Patch, crate::layout::ContainerSlot::A),
+        &record_bytes,
+    )?;
+    let wrong_id = sample_object_id("not-this-patch-s-real-id");
+    let bad_entry = crate::index::IndexEntry {
+        object_id: wrong_id,
+        object_type: ObjectType::Patch,
+        slot: crate::layout::ContainerSlot::A,
+        offset: 0,
+        length: record_bytes.len() as u64,
+        container_checksum: [0_u8; 32],
+    };
+    std::fs::write(
+        layout.container_index_path(),
+        crate::index::encode_index_record(&bad_entry)?,
+    )?;
+    assert_ne!(wrong_id, real_id);
+
+    let report = verify_repository(&layout)?;
+    assert_stage_failed(
+        &report,
+        VerificationStage::Objects,
+        "resolves to an envelope with computed id",
+    );
     let _ = std::fs::remove_dir_all(root);
+    Ok(())
 }
 
-/// DC-95 Stage 1, round 3: `verify_object_file`'s envelope-type-mismatch check
-/// (`verify/objects.rs:230-237`) -- a file physically placed under one type's directory whose decoded
-/// envelope names a different `ObjectType`. Placed via a raw `std::fs::write` at the type-mismatched
-/// directory's own canonical path for the *envelope's real id* (so the file's id and the envelope's
-/// computed id agree -- isolating the type mismatch from the id-mismatch check the next test covers),
-/// bypassing `store.write_object`, which can never produce this fixture since it always derives the
-/// write path from `envelope.object_type` itself. **Probed, load-bearing, confirmed**: disabling the
-/// check (commenting out the `if envelope.object_type != object_type` arm) lets `verify_repository`
-/// return `Ok` -- nothing downstream re-checks that a directory's contents match its own declared type,
-/// unlike the two missing-reference checks round 2 found redundant. **Re-verified against a
-/// genuinely clean baseline** (DC-95-stage-1-round-5-review-v1 §2-4): unlike the Block-carrying
-/// fixtures elsewhere in this file, this fixture writes only a `Blob` and a `Patch` -- neither type
-/// `PublicationTrustVerifier::verify` ever checks (`verify/objects.rs`'s `matches!(object_type,
-/// Block | RefState)` gate) -- so no trust policy was ever consulted here and the original probe's
-/// `Ok` result was never confounded by `PRIKK-TRUST-POLICY-INVALID` the way the Block-carrying
-/// fixtures were. Confirmed by re-probing with the full report printed: every issue vector is
-/// empty. Classification unchanged: load-bearing.
+/// DC-95 Stage 1, round 3, re-targeted for RFC 102 Stage 3: `verify_object_file`'s envelope-type-
+/// mismatch check moved into `container::parse_frame_at` itself (found and fixed during this very
+/// re-target -- the container magic alone does not constrain what `object_type` the body's own
+/// envelope claims, a real gap the original loose-file check closed and this container rewrite had
+/// silently dropped until this test's own migration surfaced it). Constructed by framing a `Patch`
+/// envelope under the `Blob` container's magic -- correct checksum, correct framing, wrong type. See
+/// `container::tests::envelope_type_disagreeing_with_its_own_containers_type_is_rejected` for the
+/// same defect proven at the container level directly; this is the same defect proven reachable end
+/// to end through `verify_repository`, DC-95's own established standard for this file.
+///
+/// **Doubles as this round's re-target of the retired `verify_repository_detects_object_id_mismatch`**
+/// (DC-95 Stage 1 round 3): that test's own defect -- a stored id disagreeing with its content -- has
+/// no loose-file-shaped equivalent under containers (there is no filename to disagree with), and its
+/// closest container-native analog (an index entry naming a location that decodes to a different id)
+/// is now proven by `verify_repository_detects_index_entry_resolving_to_a_different_object` above,
+/// not duplicated here.
 #[test]
 fn verify_repository_detects_envelope_type_mismatch() -> Result<()> {
     let root = unique_temp_dir("verify-envelope-type-mismatch");
     let layout = RepositoryLayout::init(root.clone())?;
 
-    let blob = BlobPayload::new(BlobKind::Text, b"type-mismatch-fixture\n".to_vec());
-    let mut blob_env = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob.to_canonical_bytes()?);
-    blob_env.add_signature(maintainer_signature())?;
-    let mut store = FileObjectStore::new(layout.clone());
-    let blob_id = store.write_object(&blob_env)?;
-
-    let patch = PatchPayload {
-        operations: vec![Operation {
-            op_seq: 1,
-            op_id: None,
-            preconditions: Vec::new(),
-            kind: OperationKind::CreateFile(CreateFile {
-                path: "type-mismatch-fixture.txt".to_string(),
-                node_id: NodeId::from_bytes([0x71; 32]),
-                blob_id,
-                mode: 0o100_644,
-            }),
-        }],
-        parent_patch_ids: Vec::new(),
-        intent: None,
-        preconditions: Vec::new(),
-        purpose: PatchPurpose::Normal,
-    };
-    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch.to_canonical_bytes()?);
-    envelope.add_signature(maintainer_signature())?;
-    let patch_id = envelope.object_id();
-
-    // Placed under the Blob directory, at the path that id would canonically occupy there --
-    // self-consistent in id, wrong only in which directory holds it.
-    let misplaced = layout.object_path(ObjectType::Blob, patch_id);
-    std::fs::create_dir_all(
-        misplaced
-            .parent()
-            .ok_or_else(|| PrikkError::Io("misplaced object path has no parent".to_string()))?,
-    )?;
+    let patch_envelope = signed_patch_envelope();
+    assert_eq!(patch_envelope.object_type, ObjectType::Patch);
+    let record_bytes =
+        crate::container::encode_container_record(ObjectType::Blob, &patch_envelope)?;
     std::fs::write(
-        &misplaced,
-        crate::file_codec::encode_envelope_file(&envelope)?,
+        layout.container_slot_path(ObjectType::Blob, crate::layout::ContainerSlot::A),
+        &record_bytes,
     )?;
 
     let report = verify_repository(&layout)?;
     assert_object_item_failed(&report, "is under type");
-    let _ = std::fs::remove_dir_all(root);
-    Ok(())
-}
-
-/// DC-95 Stage 1, round 3: `verify_object_file`'s object-id-mismatch check
-/// (`verify/objects.rs:239-246`) -- a file's filename-derived id disagreeing with its envelope's own
-/// computed content hash. Placed at the canonical path for an *arbitrary* id (not the envelope's real
-/// one) within the *correct* type directory, so the type check passes and only the id disagrees.
-/// **Probed, load-bearing, confirmed**: disabling the check lets `verify_repository` return `Ok` --
-/// content addressing is enforced only by this one explicit comparison at read time, nothing else
-/// re-derives a stored file's id independently. **Re-verified against a genuinely clean baseline**
-/// (DC-95-stage-1-round-5-review-v1 §2-4), for the same reason the type-mismatch test above is: a
-/// lone `Blob`, never checked by `PublicationTrustVerifier`, so the original probe was never
-/// confounded by an absent trust policy. Re-probed with the full report printed: every issue vector
-/// is empty. Classification unchanged: load-bearing.
-#[test]
-fn verify_repository_detects_object_id_mismatch() -> Result<()> {
-    let root = unique_temp_dir("verify-object-id-mismatch");
-    let layout = RepositoryLayout::init(root.clone())?;
-
-    let blob = BlobPayload::new(BlobKind::Text, b"payload".to_vec());
-    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob.to_canonical_bytes()?);
-    envelope.add_signature(maintainer_signature())?;
-
-    let wrong_id = sample_object_id("not-this-blob-s-real-id");
-    let misplaced = layout.object_path(ObjectType::Blob, wrong_id);
-    std::fs::create_dir_all(
-        misplaced
-            .parent()
-            .ok_or_else(|| PrikkError::Io("misplaced object path has no parent".to_string()))?,
-    )?;
-    std::fs::write(
-        &misplaced,
-        crate::file_codec::encode_envelope_file(&envelope)?,
-    )?;
-
-    let report = verify_repository(&layout)?;
-    assert_object_item_failed(&report, "has id");
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -1228,15 +1176,11 @@ fn verify_repository_rejects_malformed_signature_shape() -> Result<()> {
         signer_role: prikk_object::SignerRole::Maintainer,
     }];
 
-    let object_id = envelope.object_id();
-    let path = layout.object_path(envelope.object_type, object_id);
-    std::fs::create_dir_all(
-        path.parent()
-            .ok_or_else(|| PrikkError::Io("test object path has no parent".to_string()))?,
-    )?;
+    let record_bytes =
+        crate::container::encode_container_record_for_test(ObjectType::Blob, &envelope)?;
     std::fs::write(
-        &path,
-        crate::file_codec::encode_envelope_file_structural(&envelope)?,
+        layout.container_slot_path(ObjectType::Blob, crate::layout::ContainerSlot::A),
+        &record_bytes,
     )?;
 
     let report = verify_repository(&layout)?;

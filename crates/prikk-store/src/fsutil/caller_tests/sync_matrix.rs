@@ -25,19 +25,30 @@ fn repository_format_parent_sync_failure_retains_and_retries() -> prikk_error::R
 }
 
 #[test]
-fn immutable_object_install_sync_failure_retains_and_classifies() -> prikk_error::Result<()> {
-    let root = unique_temp_dir("object-sync-matrix");
-    let layout = RepositoryLayout::init(root.clone())?;
-    let mut object = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"sync".to_vec());
-    object.add_signature(dummy_signature())?;
-    let object_id = object.object_id();
-    let object_path = layout.object_path(ObjectType::Blob, object_id);
-    let mut store = FileObjectStore::new(layout);
-    fail_once_for_test(TestFailPoint::ImmutableInstallSync);
-    assert!(store.write_object(&object).is_err());
-    assert!(object_path.is_file());
-    assert_eq!(store.write_object(&object)?, object_id);
-    let _ = std::fs::remove_dir_all(root);
+fn object_write_sync_failure_retains_and_classifies() -> prikk_error::Result<()> {
+    // RFC 102 Stage 3: an object write no longer goes through the old immutable-install
+    // primitive -- it durably appends to its container, then to the index, both through
+    // `RequiredFileSync`. Skip 0 to fail the container append itself (the object is not durably
+    // indexed at all); skip 1 to fail the index append instead (the container record and the
+    // index entry's own bytes are both already on disk -- only the index append's own sync is
+    // interrupted -- so the object is already visible to a same-process read).
+    for (skip, indexed_after_error) in [(0, false), (1, true)] {
+        let root = unique_temp_dir("object-sync-matrix");
+        let layout = RepositoryLayout::init(root.clone())?;
+        let mut object = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"sync".to_vec());
+        object.add_signature(dummy_signature())?;
+        let object_id = object.object_id();
+        let mut store = FileObjectStore::new(layout);
+        fail_after_for_test(TestFailPoint::RequiredFileSync, skip);
+        assert!(store.write_object(&object).is_err());
+        assert_eq!(
+            store.contains_object(ObjectType::Blob, object_id),
+            indexed_after_error
+        );
+        assert_eq!(store.write_object(&object)?, object_id);
+        assert!(store.contains_object(ObjectType::Blob, object_id));
+        let _ = std::fs::remove_dir_all(root);
+    }
     Ok(())
 }
 
@@ -83,7 +94,11 @@ fn ref_log_parent_sync_failure_retains_one_update_and_retries() -> prikk_error::
         ref_state,
     };
     let store = RefStore::new(layout);
-    fail_after_for_test(TestFailPoint::RequiredDirectorySync, 1);
+    // RFC 102 Stage 3: skip 3 to land the injected failure on the log append's own directory
+    // sync, past the ref lock's own creation and the ref-state object's own container and index
+    // appends (each fires `RequiredDirectorySync` too -- see `refs::tests`'s equivalent fix for
+    // the full accounting).
+    fail_after_for_test(TestFailPoint::RequiredDirectorySync, 3);
     assert!(store.publish(&publication).is_err());
     assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
     assert_eq!(store.publish(&publication)?, ref_state_id);

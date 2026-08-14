@@ -163,7 +163,10 @@ fn first_publication_retries_completed_log_sync_without_duplicate() -> prikk_err
         };
         let store = RefStore::new(layout);
 
-        fail_after_for_test(point, 1);
+        // RFC 102 Stage 3: an object write now durably appends to both its container and the
+        // index (two matching sync calls, not one), preceded by the ref lock's own creation (a
+        // third) -- skip 3 to land the injected failure on the ref log's own completed append.
+        fail_after_for_test(point, 3);
         assert!(store.publish(&publication).is_err());
         assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
         assert_eq!(store.publish(&publication)?, ref_state_id);
@@ -382,11 +385,7 @@ fn ref_store_rejects_non_local_branch_publication() {
         };
 
         assert!(store.publish(&publication).is_err());
-        assert!(
-            !layout
-                .object_path(ObjectType::RefState, ref_state_id)
-                .exists()
-        );
+        assert!(!object_store.contains_object(ObjectType::RefState, ref_state_id));
         assert_eq!(store.read_current_ref_state_id("tags/v1"), Ok(None));
     }
     let _ = std::fs::remove_dir_all(root);
@@ -413,8 +412,9 @@ fn verify_repository_detects_missing_ref_state_object() {
             ref_update,
         };
         assert!(store.publish(&publication).is_ok());
-        let ref_state_path = layout.object_path(ObjectType::RefState, ref_state_id);
-        assert!(std::fs::remove_file(ref_state_path).is_ok());
+        // Containers are append-only, so there is no direct "delete one object" equivalent to the
+        // pre-Stage-3 `std::fs::remove_file` this replaces.
+        assert!(crate::index::remove_index_entry_for_test(&layout, ref_state_id).is_ok());
         let report = verify_repository(&layout);
         assert!(report.is_ok());
         if let Ok(report) = report {
@@ -462,8 +462,9 @@ fn ensure_no_incomplete_publication_refuses_when_a_ref_item_fails() {
             ref_update,
         };
         assert!(store.publish(&publication).is_ok());
-        let ref_state_path = layout.object_path(ObjectType::RefState, ref_state_id);
-        assert!(std::fs::remove_file(ref_state_path).is_ok());
+        // Containers are append-only, so there is no direct "delete one object" equivalent to the
+        // pre-Stage-3 `std::fs::remove_file` this replaces.
+        assert!(crate::index::remove_index_entry_for_test(&layout, ref_state_id).is_ok());
 
         // Confirm the premise first: `verify_refs` itself no longer returns `Err` for this fixture
         // (item containment), so `ensure_no_incomplete_publication`'s own refusal cannot be coming

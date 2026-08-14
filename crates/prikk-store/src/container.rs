@@ -159,7 +159,12 @@ enum FrameAttempt {
 
 /// Attempt to parse one container frame at `offset`. Never trusts a not-yet-checksum-validated
 /// header's own `body_len` for anything beyond locating where its claimed body would end.
-fn parse_frame_at(magic: &[u8; 8], bytes: &[u8], offset: usize) -> FrameAttempt {
+fn parse_frame_at(
+    object_type: ObjectType,
+    magic: &[u8; 8],
+    bytes: &[u8],
+    offset: usize,
+) -> FrameAttempt {
     let remaining = bytes.len().saturating_sub(offset);
     if remaining < CONTAINER_HEADER_LEN {
         return FrameAttempt::TrailingPartial { remaining };
@@ -197,15 +202,33 @@ fn parse_frame_at(magic: &[u8; 8], bytes: &[u8], offset: usize) -> FrameAttempt 
             message: format!("container checksum mismatch at byte offset {offset}"),
         };
     }
-    match decode_envelope_file(body) {
-        Ok(envelope) => FrameAttempt::Record {
-            record: ContainerRecord { envelope },
-            next_offset: body_end,
-            checksum: header_values.checksum,
-        },
-        Err(err) => FrameAttempt::Invalid {
-            message: err.to_string(),
-        },
+    let envelope = match decode_envelope_file(body) {
+        Ok(envelope) => envelope,
+        Err(err) => {
+            return FrameAttempt::Invalid {
+                message: err.to_string(),
+            };
+        }
+    };
+    // The frame's magic only proves which *container* this byte range belongs to; nothing about the
+    // header constrains what `object_type` the body's own envelope claims. A well-formed, correctly
+    // checksummed frame can still decode to a mismatched envelope (e.g. a Blob container frame whose
+    // body is a valid Patch envelope) -- checked explicitly here, at the one place every reader of
+    // this container passes through, matching the pre-Stage-3 loose-file `verify_object_file`'s own
+    // `envelope.object_type != object_type` check it replaces.
+    if envelope.object_type != object_type {
+        return FrameAttempt::Invalid {
+            message: format!(
+                "container record at byte offset {offset} is under type {object_type} but \
+                 envelope type is {}",
+                envelope.object_type
+            ),
+        };
+    }
+    FrameAttempt::Record {
+        record: ContainerRecord { envelope },
+        next_offset: body_end,
+        checksum: header_values.checksum,
     }
 }
 
@@ -224,7 +247,7 @@ pub(crate) fn decode_container_record_at(
     offset: usize,
 ) -> Result<Option<ContainerRecord>> {
     let magic = container_magic(object_type)?;
-    match parse_frame_at(magic, bytes, offset) {
+    match parse_frame_at(object_type, magic, bytes, offset) {
         FrameAttempt::Record { record, .. } => Ok(Some(record)),
         FrameAttempt::TrailingPartial { .. } => Ok(None),
         FrameAttempt::Invalid { message } => Err(PrikkError::Integrity(format!(
@@ -248,7 +271,7 @@ pub(crate) fn decode_container_records(
     let mut record_outcomes = Vec::new();
     let mut offset = 0_usize;
     loop {
-        match parse_frame_at(magic, bytes, offset) {
+        match parse_frame_at(object_type, magic, bytes, offset) {
             FrameAttempt::Record {
                 record,
                 next_offset,

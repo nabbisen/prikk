@@ -217,7 +217,10 @@ fn verify_repository_detects_dangling_ref_target() -> Result<()> {
 
     let (_, block_id) =
         publish_ref_to_new_block_fake_signed_confounds_probes(&layout, &mut objects, "heads/main")?;
-    std::fs::remove_file(layout.object_path(ObjectType::Block, block_id))?;
+    // Containers are append-only, so there is no direct "delete one object" equivalent to the
+    // pre-Stage-3 `std::fs::remove_file` this replaces -- a genuinely dangling reference under
+    // containers is an object whose index entry is gone, not a container record that was removed.
+    crate::index::remove_index_entry_for_test(&layout, block_id)?;
 
     let report = verify_repository(&layout)?;
     assert_ref_failed(&report, "targets missing block");

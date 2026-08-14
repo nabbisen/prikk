@@ -3,23 +3,28 @@
 use std::io::Write;
 
 use super::root_publication;
-use crate::fsutil::{TestFailPoint, fail_once_for_test};
+use crate::fsutil::{TestFailPoint, fail_after_for_test, fail_once_for_test};
 use crate::test_support::unique_temp_dir;
 use crate::{FileObjectStore, ObjectReader, RefStore, RepositoryLayout, verify_repository};
 
 #[test]
 fn object_finalization_failures_precede_pointer_and_log_mutation() -> prikk_error::Result<()> {
-    for (point, installed_after_error) in [
-        (TestFailPoint::ImmutableFileSync, false),
-        (TestFailPoint::ImmutableInstallSync, true),
-    ] {
+    // RFC 102 Stage 3: the ref-state object write no longer goes through the old immutable-install
+    // primitive (`ImmutableFileSync`/`ImmutableInstallSync`) at all -- it durably appends to its
+    // container, then to the index, both through the same `RequiredFileSync` point the ref lock's
+    // own creation already uses once. Skip 1 to land on the container append (the object is not
+    // even durably present); skip 2 to land on the index append instead (the container record is
+    // already durable, and the index write's own bytes are already on disk -- only its own sync is
+    // interrupted -- so the object is visible to a same-process read exactly as the old
+    // ImmutableInstallSync case's post-install cleanup-sync failure left it visible).
+    for (skip, installed_after_error) in [(1, false), (2, true)] {
         let root = unique_temp_dir("dc38-object-finalization-retry");
         let layout = RepositoryLayout::init(root.clone())?;
         let publication = root_publication(&layout, "heads/main")?;
         let state_id = publication.ref_state.object_id();
         let store = RefStore::new(layout.clone());
 
-        fail_once_for_test(point);
+        fail_after_for_test(TestFailPoint::RequiredFileSync, skip);
         assert!(store.publish(&publication).is_err());
         assert_eq!(
             FileObjectStore::new(layout.clone())
@@ -138,7 +143,9 @@ fn partial_tail_truncate_failure_preserves_state_for_retry() -> prikk_error::Res
     let layout = RepositoryLayout::init(root.clone())?;
     let publication = root_publication(&layout, "heads/main")?;
     let store = RefStore::new(layout.clone());
-    fail_once_for_test(TestFailPoint::AppendWrite);
+    // RFC 102 Stage 3: skip 2 to land the torn write on the log's own append, past the ref-state
+    // object's own container and index appends (see the sibling test above for the full count).
+    fail_after_for_test(TestFailPoint::AppendWrite, 2);
     assert!(store.publish(&publication).is_err());
     std::fs::OpenOptions::new()
         .append(true)
