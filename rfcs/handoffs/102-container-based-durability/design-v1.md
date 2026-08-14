@@ -458,3 +458,45 @@ DC-95's classified inventory was required to be *"assembled as Stage 1 goes, not
 end from seven review documents"* for exactly this reason, and it is the reason that inventory survived
 twelve rounds. A count whose justification lives only in working memory is a count that will be
 re-adjusted rather than re-derived.
+
+### 13.8 The stale cross-reference defect, and a scope correction — 2026-08-14
+
+**The defect is real. The reason given for it is partly wrong, and the difference matters.**
+
+Their report says the comparison can never match because `refs/by-id`/`refs/logs` are *"directories
+`init()` no longer creates at all under Stage 4's container model."* **They are still created** —
+`layout.rs:380-381` still pushes both into `required_directories()`.
+
+**The correct reason is the second one they give:** `RefFileOutcome::path` is now a display-only
+container-offset locator, not a per-ref path, so comparing it against `layout.ref_pointer_path(...)`
+cannot match regardless of what exists on disk. **Keying by `ref_name_key_bytes` is the right fix and
+is unaffected** — but anyone acting on the stated reason would go and delete two directories that are
+still allocated, which is a different change with its own consequences.
+
+**Follow-on this exposes, not yet decided:** if nothing writes under `refs/by-id`, `refs/logs` or
+`refs/tmp` after Stage 4, they are dead allocations in the same sense `quarantine/` is (§12.3's own
+note). **They join the deferred consolidation** with G5, `object_temp_paths` and
+`PRIKK-VERIFY-REF-CANDIDATE-DEBRIS` — not removed as a stage side effect.
+
+**The tracing-only proof is a condition, not a completion.** The fix is verified by hand-tracing and
+`cargo check`/`clippy` because the crate's test target does not compile until the migration lands.
+**That is acceptable now and must not be forgotten**: `fully_framed_checksum_failure_is_never_truncated`
+reporting the correct code is an explicit acceptance criterion for the migration commit, not something
+to assume once things go green. **A green suite proves the suite compiles; it does not prove this
+particular diagnostic was re-checked.**
+
+**Scope: ~20 files, not 7. Accepted, and the pattern is now a property of this codebase.**
+
+Their 7-file figure came from a narrower grep, corrected by surveying every
+`ref_pointer_path`/`ref_log_path`/`ref_tmp_path` call site. **This is the same failure as my own
+"22 `LegacyV1` sites" estimate in RFC 103**, which missed `PublicationState::LegacyLogLeading`, a whole
+diagnostics module, and a dead subsystem — none of which carried the token.
+
+**Standing consequence: a first-pass grep is a lower bound in this codebase, never a count.** Identifiers
+and idioms routinely do not share a token with the concept they implement. Any scope figure that has not
+been derived by surveying call sites should be stated as "at least N."
+
+**On `ref_cluster.rs`'s nine candidate-then-rename idioms:** checking per-site rather than retargeting
+blindly is right. If the paired rename is dead weight, deleting it is correct — **but confirm each test
+still tests what its name claims afterwards.** DC-95 round 9 found a test whose intent had been silently
+masked; a mechanical migration is exactly when that happens again.
