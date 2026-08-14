@@ -51,6 +51,26 @@ Appending to or updating a file that already has a name requires only content du
 provides. If no new directory entry sits on the durability path, the gap closes — with **no
 vendor-specific primitive, no deprecated API, and no weakened invariant.**
 
+> **CORRECTED 2026-08-13 by §6.5. The sentence above conflates two primitives and, read literally,
+> permits an unsound construction.**
+>
+> - **`atomic_replace` / `write_file_atomically` is NOT sufficient.** `fsutil/anchored/linux.rs:30-46`:
+>   it calls `open_new_regular` on a temp name, writes, fsyncs, then `renameat`s onto the destination —
+>   **a new-name event plus a rename, unconditionally, even when the destination already exists.** Rename
+>   durability on Windows is DC-87 §3.4's still-open question, and RFC 101 §5.5 already refuted
+>   `ReplaceFile` and ruled out TxF, which are what would have covered it.
+> - **`durable_append` / `durable_truncate` / `durable_truncate_to_empty` are sufficient.** They open the
+>   existing file directly and contain **no rename call at all** — the WAL's and ref log's own idiom.
+>
+> **Ruled: containers use the append/truncate idiom. A container whose updates go through
+> `atomic_replace` does not satisfy this RFC**, and would silently reintroduce the exact Windows question
+> the RFC exists to close.
+>
+> **This reaches past the containers.** Seven production sites use `atomic_replace` today — including
+> **the ref pointer itself** (`refs/pointer.rs:51`), which is precisely what §6.3 proposes to
+> containerize. Any design that "containerizes" them while keeping the rename-based update mechanism has
+> changed the file layout and not the durability property.
+
 It is uniform across Linux, macOS and Windows, so it **satisfies** the one-mechanism constraint rather
 than straining it. Packed object storage is well-trodden; this is not a novel storage idea.
 
@@ -95,9 +115,13 @@ format changes that.
 the commit-authoring path treats any baseline path missing from the worktree as a user deletion, so a
 file whose name failed to become durable is re-authored and **signed** as a deletion the user never made.
 
-**Candidate remedy, to be evaluated in §6.5 rather than assumed:** a fixed-name unclean-shutdown marker
-— itself a content update, therefore durable — after which prikk refuses to infer deletion until the
-worktree has been re-verified against its baseline. That converts silent signed data loss into a
+**Remedy, evaluated in §6.5 and confirmed sound 2026-08-13 — with one construction requirement:** a
+fixed-name unclean-shutdown marker, **created at `init` and updated by append/truncate, never by
+`atomic_replace`** (see §3's correction — the marker is the first thing that would have been built the
+unsound way). After it is set, prikk refuses to infer deletion until the worktree has been re-verified
+against its baseline. §6.5 confirmed the deletion inference has exactly one choke point
+(`worktree_patch/node_authoring.rs:441-446`) and that the marker's own failure modes fall toward
+*"still dirty"* — a spurious refusal, never a missed dirty state. That converts silent signed data loss into a
 detected condition requiring explicit user action.
 
 **Note the asymmetry that makes this tractable:** the worktree is rebuildable from sealed history; the
@@ -186,7 +210,12 @@ doc comment and an unrelated enum variant. Do not enumerate it as a container.
   as it was for 101.
 - **Windows read-only support**, which works today and is CI-gated.
 - **Performance work.** If a container improves object-write throughput that is welcome, not a
-  justification, and not a criterion.
+  justification, and not a criterion. **Clarified 2026-08-13 after §6.4:** this non-goal must **not** be
+  read as having pre-settled object-lookup cost. §6.4 established that preserving lock-free concurrent
+  reads costs either **linear-scan lookup (O(1) → O(container size) per read)** or an **indexed lookup
+  requiring a fencing-read primitive with no precedent in this codebase.** An O(1)→O(n) change to every
+  object read is a shape change, not tuning, and filing it under "performance" would under-weight it.
+  **It is an owner-level cost to accept explicitly, not a non-goal.**
 - **Changing what a ref log is** — DC-38's append-only audit trail.
 
 ## 9. The cost, and the staging consequence
