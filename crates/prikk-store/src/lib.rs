@@ -60,6 +60,7 @@ mod trust;
 mod verify;
 mod wal;
 mod worktree;
+mod worktree_marker;
 mod worktree_patch;
 mod worktree_status;
 

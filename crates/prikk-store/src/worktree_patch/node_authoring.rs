@@ -39,6 +39,7 @@ use crate::patch_replay::{WorktreeBaseline, resolve_worktree_baseline};
 use crate::path::RepoPath;
 use crate::text_span;
 use crate::wal::Wal;
+use crate::worktree_marker::worktree_is_dirty;
 use crate::worktree_patch::{
     WorktreePatchCommitOptions, WorktreePatchCommitReport, WorktreePatchOperationKind,
     WorktreePatchOperationSummary, next_op_seq,
@@ -193,6 +194,19 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     // raw WAL under this held lock (not `ActiveSession::append_patch`, which would re-acquire).
     let _active_lock = ActiveLock::acquire(layout).map_err(AuthorError::Store)?;
     crate::refs::ensure_no_incomplete_publication(layout).map_err(AuthorError::Store)?;
+
+    // RFC 102 Stage 1: a dirty worktree marker means a prior materialization call did not complete
+    // durably -- this function's own deletion-inference loop (below) cannot distinguish "the user
+    // deleted this file" from "this file's name never survived a crash," so it must not run at all
+    // until the worktree has been re-verified against its baseline. Checked before any worktree
+    // read below, not only before the deletion loop specifically, since nothing here re-verifies.
+    if worktree_is_dirty(layout).map_err(AuthorError::Store)? {
+        return Err(AuthorError::Store(PrikkError::Integrity(
+            "worktree materialization was interrupted; the worktree must be re-verified against \
+             its baseline before committing (re-run checkout materialization to complete it)"
+                .to_string(),
+        )));
+    }
 
     let wal = Wal::for_layout(layout);
     let active_replay = wal.replay().map_err(AuthorError::Store)?;

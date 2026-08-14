@@ -13,6 +13,7 @@ use crate::layout::RepositoryLayout;
 use crate::patch_replay::{PatchReplayDeletedFile, replay_supported_patch_chain};
 use crate::path::join_repo_path_to_root;
 use crate::worktree::materialize_replay_manifest_entries;
+use crate::worktree_marker::{clear_worktree_dirty, mark_worktree_dirty};
 
 /// Result of an opt-in patch replay materialization.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,6 +143,14 @@ fn materialize_patch_checkout_inner(
         )));
     }
 
+    // RFC 102 Stage 1: brackets the write phase *and* the deletion phase in one dirty/clean cycle,
+    // deliberately, not just the writes. `apply_deletions`' own targets are precondition-verified
+    // against sealed history (`analyze_deletions`), not inferred from absence, so an interrupted
+    // deletion is not itself a T12-class false-signed-deletion risk -- but a worktree left partway
+    // through either phase does not match either the pre- or post-checkout baseline, and bracketing
+    // both under one marker cycle is simpler to reason about than two different granularities with
+    // two different soundness arguments.
+    mark_worktree_dirty(layout)?;
     let write_report = materialize_replay_manifest_entries(layout, &snapshot.manifest)?;
     let deleted_files = if delete_removed {
         apply_deletions(
@@ -152,6 +161,7 @@ fn materialize_patch_checkout_inner(
     } else {
         0
     };
+    clear_worktree_dirty(layout)?;
     let paths = snapshot
         .manifest
         .files

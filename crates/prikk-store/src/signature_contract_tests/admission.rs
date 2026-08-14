@@ -59,7 +59,9 @@ fn wal_and_ref_log_reject_before_mutation() -> prikk_error::Result<()> {
     for patch in strict_rejection_variants(ObjectType::Patch, b"patch") {
         assert!(wal.append_patch(&patch).is_err());
     }
-    assert!(!wal.path().exists());
+    // RFC 102 Stage 1: the WAL file now exists from `init` onward (created empty), so "no mutation
+    // happened" is proven by emptiness, not by absence.
+    assert!(wal.replay().is_ok_and(|replay| replay.records.is_empty()));
 
     let target = sample_object_id("target");
     let state = sample_object_id("state");

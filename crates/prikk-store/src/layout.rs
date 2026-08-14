@@ -7,8 +7,8 @@ use prikk_hash::{sha256, to_hex};
 use prikk_object::{ObjectId, ObjectType, is_windows_reserved_name};
 
 use crate::fsutil::{
-    MutationRoot, ensure_directory_required, read_file_if_exists, read_file_required,
-    write_file_atomically,
+    MutationRoot, create_new_file_required, ensure_directory_required, read_file_if_exists,
+    read_file_required, write_file_atomically,
 };
 
 const REPO_DIR: &str = ".prikk";
@@ -92,6 +92,17 @@ impl RepositoryLayout {
                 CURRENT_FORMAT_VERSION,
             )?;
         }
+        // RFC 102 Stage 1: both created at `init`, never later -- a missing file and an idempotent
+        // re-`init` on an already-initialized repository must not clobber either.
+        let marker_relative =
+            layout.repository_relative(&layout.worktree_unclean_shutdown_marker_path())?;
+        if read_file_if_exists(layout.repository_mutation_root(), &marker_relative)?.is_none() {
+            create_new_file_required(layout.repository_mutation_root(), &marker_relative, &[])?;
+        }
+        let wal_relative = layout.repository_relative(&layout.default_queue_wal_path())?;
+        if read_file_if_exists(layout.repository_mutation_root(), &wal_relative)?.is_none() {
+            create_new_file_required(layout.repository_mutation_root(), &wal_relative, &[])?;
+        }
         Ok(layout)
     }
 
@@ -139,6 +150,18 @@ impl RepositoryLayout {
     #[must_use]
     pub fn format_path(&self) -> PathBuf {
         self.prikk_dir.join("FORMAT")
+    }
+
+    /// Return the unclean-shutdown worktree marker path (RFC 102 Stage 1). Created empty at `init`;
+    /// non-empty means worktree materialization was interrupted and commit-authoring must refuse to
+    /// infer deletion from absence until the worktree is re-verified against its baseline. Always
+    /// updated by append/truncate (`fsutil::append_file_required`/`truncate_file_empty_required`),
+    /// never by `atomic_replace` -- RFC 102 §3's correction: `atomic_replace` renames over the
+    /// destination unconditionally, which is a new-name event whose Windows durability is DC-87
+    /// §3.4's still-open question, exactly the gap this marker exists to close.
+    #[must_use]
+    pub fn worktree_unclean_shutdown_marker_path(&self) -> PathBuf {
+        self.prikk_dir.join("worktree.marker")
     }
 
     /// Return the object root directory.

@@ -75,6 +75,10 @@ fn wal_directory_component_matrix() -> prikk_error::Result<()> {
         let root = unique_temp_dir("wal-component-matrix");
         let layout = RepositoryLayout::init(root.clone())?;
         let active_dir = layout.default_active_dir();
+        // RFC 102 Stage 1: `init` now creates `queue.wal` itself, so the directory this test needs
+        // empty (to exercise `ensure_directory_required`'s own recreation, not the WAL's presence)
+        // must have it removed first.
+        std::fs::remove_file(layout.default_queue_wal_path())?;
         remove_empty_directory(&active_dir)?;
         let wal = Wal::for_layout(&layout);
         let patch = signed_patch_envelope();
@@ -93,6 +97,10 @@ fn active_metadata_directory_component_matrix() -> prikk_error::Result<()> {
         let root = unique_temp_dir("active-component-matrix");
         let layout = RepositoryLayout::init(root.clone())?;
         let active_dir = layout.default_active_dir();
+        // RFC 102 Stage 1: `init` now creates `queue.wal` itself, so the directory this test needs
+        // empty (to exercise `ensure_directory_required`'s own recreation, not the WAL's presence)
+        // must have it removed first.
+        std::fs::remove_file(layout.default_queue_wal_path())?;
         remove_empty_directory(&active_dir)?;
         fail_once_for_test(point);
         assert!(write_active_ref_metadata(&layout, "heads/main").is_err());
