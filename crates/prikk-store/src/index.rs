@@ -20,11 +20,6 @@
 //! a silent fallback to scanning. `verify` (a different call path, not this one) is what does the
 //! full container scan.
 
-// RFC 102 Stage 3: complete and independently tested but not yet wired into any production caller --
-// `object_store.rs`'s rewrite onto containers+index is the next step in this same increment. Remove
-// once that wiring lands.
-#![allow(dead_code)]
-
 use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectEnvelope, ObjectId, ObjectType};
 
@@ -321,6 +316,37 @@ pub(crate) fn lookup_object_location(
         .find(|entry| entry.object_id == object_id))
 }
 
+/// Read exactly the container record `entry` names, decoding at its known offset ("one seek", design
+/// §12/§10.3) rather than scanning its container from the start. Does **not** validate the decoded
+/// envelope's recomputed id against `entry.object_id` -- callers that need that check (an ordinary
+/// object read) do it themselves, since the error message differs by context (a read reports it
+/// against the id the caller asked for; the write-time idempotency check above reports it as a
+/// same-id-different-bytes conflict).
+pub(crate) fn read_object_envelope_at(
+    layout: &RepositoryLayout,
+    entry: &IndexEntry,
+) -> Result<ObjectEnvelope> {
+    let container_relative =
+        layout.repository_relative(&layout.container_slot_path(entry.object_type, entry.slot))?;
+    let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &container_relative)?
+    else {
+        return Err(PrikkError::Integrity(format!(
+            "index names container {:?} slot {:?}, which does not exist",
+            entry.object_type, entry.slot
+        )));
+    };
+    let offset = usize::try_from(entry.offset)
+        .map_err(|_| PrikkError::Integrity("index entry offset exceeds usize".to_string()))?;
+    let record = container::decode_container_record_at(entry.object_type, &bytes, offset)?
+        .ok_or_else(|| {
+            PrikkError::Integrity(format!(
+                "index entry for {} names an offset past its container's end",
+                entry.object_id
+            ))
+        })?;
+    Ok(record.envelope)
+}
+
 /// The write protocol (design §5, handoff §3): append the object record to its container and make
 /// it durable, **then and only then** append the index entry. Never `atomic_replace` -- both appends
 /// go through `append_file_required` (`durable_append`), matching every other durability-bearing
@@ -336,6 +362,17 @@ pub(crate) fn write_object_to_container(
             return Err(PrikkError::Integrity(format!(
                 "existing index entry for {object_id} has type {}, expected {object_type}",
                 existing.object_type
+            )));
+        }
+        // RFC 102 Stage 3 preserves `publish_immutable_file`'s exact idempotency contract (the
+        // loose-file mechanism this replaces): a same-id rewrite is a silent no-op only when its
+        // full envelope bytes match what is already stored -- signatures included, which `object_id`
+        // itself does not cover. A same-id rewrite with different bytes is an error, not a silent
+        // accept, exactly as `compare_existing`'s `bytes != candidate` check already enforced.
+        let existing_envelope = read_object_envelope_at(layout, &existing)?;
+        if existing_envelope != *envelope {
+            return Err(PrikkError::Integrity(format!(
+                "existing container record for {object_id} differs from candidate"
             )));
         }
         return Ok(object_id);
@@ -405,6 +442,12 @@ fn frame_checksum(object_type: ObjectType, record_bytes: &[u8]) -> Result<[u8; 3
 /// skipping damaged ones (they are `verify`'s job to report, not rebuild's job to paper over) --
 /// callers that need to know about damage should inspect the container replay themselves, not rely
 /// on this function's silence about it.
+///
+/// **No `doctor` repair caller yet.** Proven correct by its own tests (including the crash-ordering
+/// acceptance criterion, handoff §5 criterion 3), but wiring an actual `prikk doctor --repair`
+/// rebuild command is not required by this round's acceptance criteria and was not assumed into
+/// scope.
+#[allow(dead_code)]
 pub(crate) fn rebuild_index_from_containers(layout: &RepositoryLayout) -> Result<Vec<IndexEntry>> {
     let mut entries = Vec::new();
     for object_type in persisted_object_types() {

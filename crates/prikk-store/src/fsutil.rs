@@ -19,12 +19,18 @@ mod tests;
 pub(crate) use anchored::{
     EntryKind, MutationRoot, RootFileStat, append_file_required, create_new_file_required,
     ensure_directory_required, inspect_entry, list_directory, promote_file_required,
-    publish_immutable_file, read_file_if_exists, read_file_required,
-    remove_file_cleanup_best_effort, remove_file_if_present_required,
-    remove_worktree_file_required, set_regular_file_mode_required, stat_file_state_if_exists,
-    sync_directory_required, truncate_existing_file_required, truncate_file_empty_required,
-    write_file_atomically, write_worktree_file_atomically,
+    read_file_if_exists, read_file_required, remove_file_cleanup_best_effort,
+    remove_file_if_present_required, remove_worktree_file_required, set_regular_file_mode_required,
+    stat_file_state_if_exists, sync_directory_required, truncate_existing_file_required,
+    truncate_file_empty_required, write_file_atomically, write_worktree_file_atomically,
 };
+
+// RFC 102 Stage 3, design-v1.md §12.3: G5 (`publish_immutable`) has no production caller left, but
+// stays reachable for its own conformance tests (`object_store/tests/immutable.rs`, `races.rs`,
+// `fsutil/tests.rs`) -- ruled "keep, record, decide separately" rather than retired as a stage side
+// effect.
+#[cfg(test)]
+pub(crate) use anchored::publish_immutable_file;
 
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) use anchored::LinuxDurability;

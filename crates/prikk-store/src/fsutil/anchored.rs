@@ -150,6 +150,13 @@ pub(crate) fn promote_file_required(
 
 /// Publish immutable, content-addressed bytes at `relative` without ever replacing existing
 /// content — see `DurabilityContract::publish_immutable` for the guarantee.
+///
+/// RFC 102 Stage 3, design-v1.md §12.3: G5 has no production caller now that object writes go
+/// through `index.rs`'s container append protocol instead. Kept as the clean, cross-platform entry
+/// point `object_store/tests/immutable.rs` and `races.rs` re-target onto directly (naming
+/// `LinuxDurability`/`MacosDurability` by hand in a test that runs on both would defeat the point of
+/// `ACTIVE_DURABILITY` picking the right one).
+#[cfg(test)]
 pub(crate) fn publish_immutable_file(
     root: &MutationRoot,
     relative: &Path,

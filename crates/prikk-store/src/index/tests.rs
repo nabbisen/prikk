@@ -135,6 +135,37 @@ fn crash_between_container_and_index_append_leaves_the_object_unindexed_and_reco
     Ok(())
 }
 
+/// Preserves `publish_immutable_file`'s exact idempotency contract (the loose-file mechanism this
+/// replaces): a same-`object_id` rewrite is a silent no-op only when its full envelope bytes match
+/// what is already stored. `object_id` does not cover signatures, so two envelopes can share an id
+/// while differing in signature content -- that must still be a reported conflict, not silently
+/// accepted, exactly as the old `compare_existing`'s `bytes != candidate` check enforced.
+#[test]
+fn rewriting_the_same_object_id_with_different_signatures_is_an_error() -> Result<()> {
+    let root = crate::test_support::unique_temp_dir("index-conflicting-rewrite");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let first = signed_patch_envelope();
+    write_object_to_container(&layout, ObjectType::Patch, &first)?;
+
+    // Same canonical_payload/type/schema -- hence the same object_id, which does not cover
+    // signatures -- but a different signature.
+    let mut second = first.clone();
+    second.signatures.clear();
+    let mut signature = crate::test_support::rollback_author_signature();
+    signature.signature_bytes[0] ^= 0x01;
+    second.add_signature(signature)?;
+    assert_eq!(
+        second.object_id(),
+        first.object_id(),
+        "the two envelopes must share an object_id for this test to prove anything"
+    );
+
+    assert!(write_object_to_container(&layout, ObjectType::Patch, &second).is_err());
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 #[test]
 fn a_damaged_index_entry_blocks_lookup_as_a_reported_defect() -> Result<()> {
     let root = crate::test_support::unique_temp_dir("index-damaged-entry");

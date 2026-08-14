@@ -14,12 +14,6 @@
 //! The byte-wise resync scan itself is `frame_resync::resync_to_next_magic`, shared with `wal.rs` and
 //! `refs/log.rs`, not a third copy of the same logic.
 
-// RFC 102 Stage 3: this module is complete and independently tested but not yet wired into any
-// production caller -- `object_store.rs`'s rewrite onto containers is the next step in this same
-// increment. Remove this once that wiring lands; until then every item here is exercised only from
-// `#[cfg(test)]`, which a plain (non-test) build/clippy pass sees as dead code.
-#![allow(dead_code)]
-
 use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;
 use prikk_object::{ObjectEnvelope, ObjectType};
@@ -103,7 +97,12 @@ pub(crate) struct ContainerReplay {
 }
 
 impl ContainerReplay {
-    /// Return true when any attempted frame failed to validate.
+    /// Return true when any attempted frame failed to validate. `verify/objects.rs` inspects
+    /// `record_outcomes` directly instead (item-level, matching each entry to `Evaluated`/
+    /// `Unindexed`/`Failed`), so this aggregate has no production caller yet -- kept for parity with
+    /// `WalReplay`/`RefLogReplay`'s equivalent, and for whatever repair/CLI tooling next needs "is
+    /// this container damaged at all" without walking every outcome itself.
+    #[allow(dead_code)]
     #[must_use]
     pub(crate) fn has_item_failure(&self) -> bool {
         self.record_outcomes
@@ -207,6 +206,30 @@ fn parse_frame_at(magic: &[u8; 8], bytes: &[u8], offset: usize) -> FrameAttempt 
         Err(err) => FrameAttempt::Invalid {
             message: err.to_string(),
         },
+    }
+}
+
+/// Decode exactly the frame at `offset` -- the "one seek" side of item 4's ruling (design §12/§10.3):
+/// a reader that already knows an object's location (from the index) validates and decodes directly
+/// at that offset, rather than scanning every record before it via [`decode_container_records`]. A
+/// frame that fails to validate here (bad magic, checksum mismatch, an offset that does not land on a
+/// real frame boundary) is exactly the "index points somewhere wrong" case the ruling calls a
+/// reported defect, not a silent fallback to scanning -- so this returns `Err`, never `Ok(None)`,
+/// for a bad frame. Only "not enough bytes remain" (`TrailingPartial`) is folded into `Ok(None)`,
+/// since a location that runs off the end of the file is the same class of defect stated slightly
+/// differently.
+pub(crate) fn decode_container_record_at(
+    object_type: ObjectType,
+    bytes: &[u8],
+    offset: usize,
+) -> Result<Option<ContainerRecord>> {
+    let magic = container_magic(object_type)?;
+    match parse_frame_at(magic, bytes, offset) {
+        FrameAttempt::Record { record, .. } => Ok(Some(record)),
+        FrameAttempt::TrailingPartial { .. } => Ok(None),
+        FrameAttempt::Invalid { message } => Err(PrikkError::Integrity(format!(
+            "container record at offset {offset} failed to validate: {message}"
+        ))),
     }
 }
 

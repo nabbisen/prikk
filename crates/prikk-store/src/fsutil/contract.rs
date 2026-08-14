@@ -133,6 +133,16 @@ pub(crate) trait DurabilityContract {
     /// existing bytes against `candidate`; if the same content wins a creation race against
     /// another process, both processes converge is on the same durable result rather than either
     /// silently overwriting the other.
+    ///
+    /// **G5's only production caller was `object_store.rs`'s loose-file writes, retired by RFC 102
+    /// Stage 3's container cutover** (object storage now goes through `index.rs`'s append-only write
+    /// protocol instead). **Ruled (design-v1.md §12.3): keep it.** Retiring a documented durability
+    /// guarantee that has been through DC-71, DC-76, DC-81 and DC-82 is an RFC-level act, not a
+    /// stage's side effect -- revisit once Stages 4-5 (refs/trust containerization) show whether any
+    /// loose-file use remains at all, not piecemeal. Exercised by its own conformance tests
+    /// (`fsutil/tests.rs`, `object_store/tests/immutable.rs`, `races.rs`), so not fully dead -- only
+    /// unreachable from production code.
+    #[allow(dead_code)]
     fn publish_immutable(
         &self,
         root: &MutationRoot,

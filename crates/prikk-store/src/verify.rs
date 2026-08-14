@@ -1126,8 +1126,13 @@ fn phase_a_counts(object_outcomes: &[ObjectItemOutcome]) -> Result<PhaseACounts>
     let mut rollback_blocks = 0_usize;
     let mut rollback_patches = 0_usize;
     for outcome in object_outcomes {
-        let ObjectItemStatus::Evaluated(verification) = &outcome.status else {
-            continue;
+        // RFC 102 Stage 3: an `Unindexed` object is just as real and sound as an `Evaluated` one --
+        // design-v1.md §12/§10.2's ruling that it is not a failure means it belongs in every count a
+        // healthy object contributes to, not only in `has_item_failure()`'s exclusion.
+        let verification = match &outcome.status {
+            ObjectItemStatus::Evaluated(verification)
+            | ObjectItemStatus::Unindexed(verification) => verification,
+            ObjectItemStatus::Failed { .. } => continue,
         };
         objects = objects.checked_add(1).ok_or_else(|| {
             PrikkError::Integrity("object verification count overflow".to_string())
