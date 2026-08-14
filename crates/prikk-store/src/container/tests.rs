@@ -88,6 +88,23 @@ fn isolates_a_damaged_record_and_reads_every_sound_record_around_it() -> Result<
         })
         .collect();
     assert_eq!(failed_offsets, vec![bounds[1].0]);
+
+    // Handoff §5 acceptance criterion 4: "every other record still readable", not just "not
+    // failed" -- assert the sound records themselves, matching the bar RFC 102 Stage 2's own WAL
+    // proof set (`wal_cluster.rs::wal_replay_isolates_two_damaged_records_and_reads_every_sound_
+    // record`'s `sound_seqs` assertion), not merely their count.
+    assert_eq!(
+        replay.records,
+        vec![
+            super::ContainerRecord {
+                envelope: envelopes[0].clone()
+            },
+            super::ContainerRecord {
+                envelope: envelopes[2].clone()
+            },
+        ],
+        "the two sound records around the damaged one must still be read, in file order"
+    );
     Ok(())
 }
 

@@ -103,6 +103,56 @@
 //! `refs/publication.rs`, `refs.rs`, `patch_replay.rs`, `seal/support.rs`,
 //! `verify/ref_publication.rs`).
 //!
+//! # RFC 102 Stage 3: container/index storage, and its effect on the table below
+//!
+//! Persisted-object storage moved from one loose file per object to per-type append-only containers
+//! plus one append-only index (design-v1.md §2/§4/§5); `verify_objects` (`verify/objects.rs`) now
+//! scans containers instead of listing directories. **Every check inside `verify_object_record` itself
+//! is untouched** -- schema validation, signature-envelope classification, publication trust, and
+//! `verify_block_payload` all still run on the same decoded `ObjectEnvelope`, just fed from a container
+//! record instead of a loose-file read. Rows whose check reads an object only through
+//! `FileObjectStore`'s public API (`ObjectReader`/`ObjectWriter`) are unaffected: that API's behavior
+//! toward callers is unchanged (task 129 of this stage confirmed this directly, not assumed from the
+//! type signature alone) -- only its internal storage moved. Three rows are not covered by that blanket
+//! statement, because their own mechanism is specifically about object *storage structure*, not about
+//! what a decoded envelope contains:
+//!
+//! - **Envelope type mismatch** (half of the row above) moved, and in moving exposed a real gap: a
+//!   container's magic constrains which container a frame's bytes live in, but nothing already
+//!   enforced that the frame's own decoded `envelope.object_type` agreed with it -- a well-formed,
+//!   correctly checksummed Blob-container frame could hold a validly encoded Patch envelope
+//!   undetected. Found and fixed during this stage's own test migration (not assumed correct from the
+//!   design alone), at the one place every container reader passes through:
+//!   `container::parse_frame_at`. **Stays Load-bearing** -- proven at the container level
+//!   (`container::tests::envelope_type_disagreeing_with_its_own_containers_type_is_rejected`) and end
+//!   to end (`verify_repository_rejects_envelope_type_mismatch`, `assert_object_item_failed(&report,
+//!   "is under type")`).
+//! - **Object id mismatch** (the other half) is now enforced in two places instead of one: ordinary
+//!   reads (`FileObjectStore::read_object`, unchanged in shape -- still a lazy, per-id check) and,
+//!   newly, `verify_objects`'s own proactive full-scan cross-validation of every index entry against
+//!   what its own claimed location actually decodes to (design §12/§10.2's "the bytes found are
+//!   validated by recomputing the content hash... `verify` does the full scan" ruling, read as
+//!   including index-to-container consistency, not just container enumeration in isolation). A decode
+//!   *failure* at an entry's location is deliberately not escalated by this new check -- it is already
+//!   an item-level `Failed` outcome from the per-record container scan (Stage 2's own containment) --
+//!   only "decodes fine but to the wrong id" is, and that is treated as a genuine index-integrity
+//!   defect, propagated as a stage-level `Err`, not an isolable item defect (an index that lies about
+//!   content is corruption at a different scale than one damaged record). **This is a new row, not
+//!   merely this stage's proof of the old one: Load-bearing**, proven end to end by
+//!   `verify_repository_detects_index_entry_resolving_to_a_different_object`.
+//! - **Directory/file shape structural errors** keeps its exact code, unmoved and unchanged
+//!   (`scan_loose_file_temp_debris`, design-v1.md §12.3 item 3's ruling: the loose-file tree's
+//!   temp-debris scan is kept, dormant, since retiring diagnostic surface is an RFC-level act, not a
+//!   stage side effect) -- but that tree is no longer written by anything under format-3, so the row's
+//!   own downstream-redundant partners (`list_directory`'s own directory-vs-file rejection;
+//!   `object_id_from_path`'s own extension check) are reachable today only by a fixture that plants the
+//!   stray entry directly, never as a byproduct of an ordinary write. **Classification unchanged**
+//!   (still Downstream-redundant, both sub-arms -- the redundant partners are generic filesystem-safety
+//!   checks, not specific to which tree is live), re-confirmed passing unmodified:
+//!   `verify_repository_detects_every_directory_shape_violation` already used `FileObjectStore::
+//!   write_object` only to produce a real object elsewhere in the fixture, and planted its two stray
+//!   entries directly at the loose-file paths either way, so this row needed no test change at all.
+//!
 //! # DC-95 Stage 1: end-to-end coverage, by cluster
 //!
 //! Every check `verify_repository` performs, classified by whether disabling it lets a defective
@@ -129,10 +179,11 @@
 //! | Block snapshot-blob existence | Load-bearing |
 //! | Block format-2 shape validation (8 arms) | Load-bearing, all 8 |
 //! | Topological cycle detection | Unreachable (needs a SHA-256 fixed point; unit-level substitute in `block_state/tests.rs`) |
-//! | Envelope type mismatch / object id mismatch | Load-bearing, both |
+//! | Envelope type mismatch / object id mismatch | Load-bearing, both -- RFC 102 Stage 3 moved the type-mismatch half into `container::parse_frame_at`; see the section above |
+//! | Index entry resolves to the wrong object (RFC 102 Stage 3) | Load-bearing -- new this stage; see the section above |
 //! | `validate_read_schema` strict-signature-shape | Load-bearing, via non-blocking-sibling mechanism |
 //! | Publication-trust failure (Block/RefState) | Demonstrated via trusted/untrusted contrast |
-//! | Directory/file shape structural errors | Downstream-redundant, both sub-arms |
+//! | Directory/file shape structural errors | Downstream-redundant, both sub-arms -- RFC 102 Stage 3 made the tree it scans dormant; see the section above |
 //!
 //! ## `refs/verify.rs` + `refs/verify/scan.rs` (`verify/tests/ref_cluster.rs`)
 //!

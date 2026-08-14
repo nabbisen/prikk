@@ -139,6 +139,14 @@ fn verify_repository_reports_two_independent_stage_failures_together() -> Result
 /// assertion (handoff §4), not presence-of-one-expected-entry: the outcome set is walked and every
 /// entry classified, the same pattern that caught Level 1's own `CommitIndex` and `blocked_by`
 /// regressions.
+///
+/// **Also the end-to-end proof for the RFC 102 Stage 3 handoff's own acceptance criteria 4 and 5**,
+/// through `verify_repository` rather than `container::decode_container_records` directly
+/// (`container/tests.rs::isolates_a_damaged_record_and_reads_every_sound_record_around_it` is the
+/// unit-level proof, mirroring `wal_cluster.rs`'s own pairing of the two levels): criterion 4
+/// ("corruption isolation... re-proven at container scale") in the `Objects` stage staying
+/// `Evaluated` with the third, undamaged object still `Evaluated` in `object_outcomes`; criterion 5
+/// ("a repository that failed verification before still fails it") in `report.has_item_failure()`.
 #[test]
 fn verify_repository_reports_two_independent_bad_objects_in_the_same_stage() -> Result<()> {
     let root = unique_temp_dir("stage2-two-independent-bad-objects");
@@ -185,11 +193,17 @@ fn verify_repository_reports_two_independent_bad_objects_in_the_same_stage() -> 
     std::fs::write(&container_path, &bytes)?;
 
     let report = verify_repository(&layout)?;
-    assert!(matches!(
-        find_stage(&report.stage_outcomes, VerificationStage::Objects).status,
-        StageStatus::Evaluated
-    ));
-    assert!(report.has_item_failure());
+    assert!(
+        matches!(
+            find_stage(&report.stage_outcomes, VerificationStage::Objects).status,
+            StageStatus::Evaluated
+        ),
+        "criterion 4: corruption isolation must keep the Objects stage itself Evaluated"
+    );
+    assert!(
+        report.has_item_failure(),
+        "criterion 5: a repository with a damaged container record must still fail verification"
+    );
     assert_eq!(
         report.object_outcomes.len(),
         3,

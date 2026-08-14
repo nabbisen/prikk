@@ -54,6 +54,43 @@ fn write_then_lookup_round_trips() -> Result<()> {
     Ok(())
 }
 
+/// Handoff §4 / §5 acceptance criterion 2, demonstrated rather than merely inspected (the same
+/// technique `worktree_marker/tests.rs::marker_dirty_set_appends_rather_than_replaces` used for RFC
+/// 102 Stage 1's own version of this criterion): `atomic_replace` would overwrite each file's content
+/// outright on every write, so a second, distinct object landing in a container/index file that is
+/// exactly the first object's bytes with the second's appended after is only possible if both files
+/// are genuinely appended to -- confirming by observed behavior what `write_object_to_container`'s own
+/// imports (`append_file_required`, never `write_file_atomically`) already show by inspection.
+#[test]
+fn container_and_index_writes_append_rather_than_replace() -> Result<()> {
+    let root = crate::test_support::unique_temp_dir("index-append-not-replace");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let container_path = layout.container_slot_path(ObjectType::Patch, ContainerSlot::A);
+    let index_path = layout.container_index_path();
+
+    write_object_to_container(&layout, ObjectType::Patch, &normal_patch_envelope("first")?)?;
+    let container_after_first = std::fs::read(&container_path)?;
+    let index_after_first = std::fs::read(&index_path)?;
+    assert!(!container_after_first.is_empty());
+    assert!(!index_after_first.is_empty());
+
+    write_object_to_container(
+        &layout,
+        ObjectType::Patch,
+        &normal_patch_envelope("second")?,
+    )?;
+    let container_after_second = std::fs::read(&container_path)?;
+    let index_after_second = std::fs::read(&index_path)?;
+
+    assert!(container_after_second.len() > container_after_first.len());
+    assert!(container_after_second.starts_with(&container_after_first));
+    assert!(index_after_second.len() > index_after_first.len());
+    assert!(index_after_second.starts_with(&index_after_first));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 #[test]
 fn rewriting_the_same_object_is_idempotent_not_a_second_entry() -> Result<()> {
     let root = crate::test_support::unique_temp_dir("index-idempotent-rewrite");
