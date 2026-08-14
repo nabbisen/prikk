@@ -962,6 +962,59 @@ fn missing_baseline_file_authors_delete_node() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// RFC 102 Stage 1, acceptance criterion 2: the assertion is the *refusal*, not the presence of a
+/// finding. Same fixture as `missing_baseline_file_authors_delete_node` above -- a baseline file
+/// genuinely missing from the worktree, which would ordinarily author a `DeleteFile` -- with the
+/// worktree marker independently marked dirty first, simulating a materialization call that did not
+/// complete. Confirms the refusal is caused specifically by the dirty marker, not some other
+/// confound, by clearing it and showing the identical scenario then succeeds exactly as the
+/// unmarked test above does.
+#[test]
+fn dirty_worktree_marker_refuses_to_infer_deletion() {
+    let root = unique_temp_dir("wt-dirty-marker");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    publish_node_baseline(
+        &layout,
+        &[
+            ("keep.txt", b"keep\n", BlobKind::Text),
+            ("gone.txt", b"gone\n", BlobKind::Text),
+        ],
+    );
+    std::fs::remove_file(root.join("gone.txt")).unwrap();
+
+    crate::worktree_marker::mark_worktree_dirty(&layout).unwrap();
+
+    let mut generator = deterministic_generator();
+    let refused = commit_worktree_changes_with_generator(
+        &layout,
+        "heads/main",
+        "delete gone",
+        WorktreePatchCommitOptions::file_level(),
+        &mut generator,
+        &test_signer(),
+    );
+    assert!(refused.is_err());
+
+    crate::worktree_marker::clear_worktree_dirty(&layout).unwrap();
+    let mut generator = deterministic_generator();
+    let report = commit_worktree_changes_with_generator(
+        &layout,
+        "heads/main",
+        "delete gone",
+        WorktreePatchCommitOptions::file_level(),
+        &mut generator,
+        &test_signer(),
+    )
+    .unwrap();
+    assert_eq!(report.operation_count, 1);
+    assert_eq!(
+        report.changes[0].operation,
+        WorktreePatchOperationKind::DeleteFile
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
 #[test]
 fn authored_edit_text_locates_and_splices_arbitrary_span_through_shared_text_span() {
     // Authoring↔replay symmetry: the authored arbitrary-span EditText, localized and spliced through the

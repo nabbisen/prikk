@@ -19,6 +19,7 @@ use crate::object_store::{FileObjectStore, ObjectReader};
 use crate::patch_replay::{ReplayManifest, ReplayManifestEntry};
 use crate::path::join_repo_path_to_root;
 use crate::snapshot::{SnapshotEntry, SnapshotManifest};
+use crate::worktree_marker::{clear_worktree_dirty, mark_worktree_dirty};
 
 /// Result of an opt-in snapshot worktree materialization.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,7 +54,12 @@ pub fn materialize_snapshot_checkout(
     layout.require_current_format()?;
     let plan = prepare_snapshot_checkout_plan(layout, ref_name)?;
     let manifest = load_snapshot_manifest(layout, plan.snapshot_blob_id)?;
+    // RFC 102 Stage 1: dirty before the first possible worktree write, cleared only after every
+    // write in this call has durably completed -- see `worktree_marker`'s own doc for why the
+    // ordering, not just the primitive, is what closes T12.
+    mark_worktree_dirty(layout)?;
     let write_report = materialize_manifest_entries(layout, &manifest)?;
+    clear_worktree_dirty(layout)?;
     Ok(SnapshotMaterializationReport {
         ref_name: ref_name.to_string(),
         planned_files: manifest.files.len(),

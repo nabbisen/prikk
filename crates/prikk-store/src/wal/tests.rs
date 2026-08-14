@@ -7,6 +7,30 @@ use crate::{RepositoryLayout, Wal};
 use crate::fsutil::{TestFailPoint, fail_once_for_test};
 use crate::test_support::{rollback_patch_envelope, signed_patch_envelope, unique_temp_dir};
 
+/// RFC 102 Stage 1 acceptance criterion 4: the WAL exists after `init`, not only after the first
+/// append. Behaviour-neutral per RFC 101 §5.1's inherited evidence -- `Wal::replay()` on a freshly
+/// initialized layout must be byte-identical to what it already returns for a missing file
+/// (`records: []`, `trailing_partial_bytes: 0`), confirmed directly against `decode_records`'s own
+/// empty-input path rather than assumed from the inherited proof.
+#[test]
+fn wal_file_exists_after_init_and_replays_identically_to_missing() {
+    let root = unique_temp_dir("wal-exists-after-init");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        assert!(layout.default_queue_wal_path().exists());
+        assert!(std::fs::read(layout.default_queue_wal_path()).is_ok_and(|bytes| bytes.is_empty()));
+        let wal = Wal::for_layout(&layout);
+        let replay = wal.replay();
+        assert!(replay.is_ok());
+        if let Ok(replay) = replay {
+            assert!(replay.records.is_empty());
+            assert_eq!(replay.trailing_partial_bytes, 0);
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
 #[test]
 fn wal_roundtrips_signed_patch_envelope() {
     let root = unique_temp_dir("wal");

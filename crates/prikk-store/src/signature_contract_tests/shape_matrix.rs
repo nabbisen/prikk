@@ -110,7 +110,12 @@ fn wal_and_ref_log_shape_matrix_reject_before_mutation() -> prikk_error::Result<
         let patch = malformed_envelope(ObjectType::Patch, &[length as u8], length);
         let wal = Wal::for_layout(&layout);
         assert_eq!(wal.append_patch(&patch).is_ok(), length == 64);
-        assert_eq!(wal.path().exists(), length == 64);
+        // RFC 102 Stage 1: the WAL file now exists from `init` onward (created empty), so success is
+        // proven by a replayed record existing, not by the file's existence.
+        assert_eq!(
+            wal.replay().is_ok_and(|replay| !replay.records.is_empty()),
+            length == 64
+        );
 
         let target = sample_object_id("target");
         let state = sample_object_id("state");
