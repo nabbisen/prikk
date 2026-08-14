@@ -258,3 +258,45 @@ says, of the fixture: *"Do not regenerate this fixture … it is the evidence, n
 
 **Scope note:** this is Stage 3 work because Stage 3 causes it. It is not a licence to touch other
 DC-55 material.
+
+### 12.3 What containers retire — ruled 2026-08-14
+
+Stage 3's rewire orphans the loose-file publication mechanism. Three consequences were reported rather
+than absorbed, which was right. **All three are ruled the same way: keep, record, decide separately.**
+
+**1. `DurabilityContract::publish_immutable` (G5, "race-safe no-clobber publication") — keep it.**
+Confirmed: after the rewire it has **zero production callers** — only the two trait impls and one test.
+**But retiring a documented durability guarantee that has been through DC-71, DC-76, DC-81 and DC-82 is
+an RFC-level act, not a stage's side effect.** Keeping it with a doc note, and removing only the
+zero-caller pass-through wrapper, is the correct split. Registered in `FINDINGS.md` as orphaned.
+
+**2. The duplicate-append property change — accepted, and narrower than it first reads.**
+
+The race is **reachable, not theoretical**: `bundle.rs` writes objects without holding the active lock,
+so two concurrent imports can each append a content-identical duplicate record.
+
+**What is genuinely lost:** "exactly one physical copy, ever." That is storage efficiency.
+
+**What is *not* lost, and matters more:** `publish_immutable_file`'s validator errored when a name
+resolved to *different* bytes — a same-id-different-bytes detector. **That detection survives under
+containers**, by a different mechanism already ruled in §12's item 4: reads validate by recomputing the
+content hash, and a mismatch is a reported defect rather than a silent fallback. A shadowed divergent
+record is caught at read.
+
+**Ruled: the property change is accepted, and must be stated in the RFC rather than left as a silent
+difference.** Two content-identical duplicates are not corruption; two same-id-different-bytes records
+are, and are still caught.
+
+**3. `object_temp_paths` / `PRIKK-DOCTOR-OBJECT-TEMP-DEBRIS` — keep, dormant.**
+They detect debris from an interrupted loose-file publish, which a format-3 repository can no longer
+produce. **Removing diagnostic surface inside the largest and riskiest stage is exactly the bundling
+this project avoids** — Stage 3 is already changing the storage format, the read path, and the write
+protocol. Retire them with G5, in one pass, or not at all.
+
+**4. `object_store/tests/immutable.rs` and `races.rs` — do not delete.** They test the primitive, which
+still exists, and the concurrent-write scenario, which is the very property change ruled in (2). They are
+the evidence for what was traded away; deleting them removes the record of the trade.
+
+**Consolidation:** these four are one decision wearing four hats — *does prikk retire loose-file
+publication entirely?* It should be asked once, after Stages 4 and 5 have shown whether refs and trust
+containerization removes the last uses. **Not now, and not piecemeal.**
