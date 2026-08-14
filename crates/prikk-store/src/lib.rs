@@ -23,6 +23,7 @@ mod bundle;
 mod byte_cursor;
 mod checkout;
 mod commit_index;
+mod container;
 mod doctor;
 mod file_codec;
 mod format;
