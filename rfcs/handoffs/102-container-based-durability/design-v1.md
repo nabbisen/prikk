@@ -44,8 +44,15 @@ a blast-radius regression for a container of unrelated objects (amended constrai
 2. Corrupt → **emit a finding naming the record's offset**, then scan forward byte-wise for the next
    magic.
 3. At each candidate, validate the full frame including checksum. **A false positive — the magic
-   appearing inside object bytes — fails the checksum and the scan continues.** The checksum is what makes
-   resync safe; the magic only makes it cheap.
+   appearing inside object bytes — is rejected by the checksum with overwhelming probability, and the scan
+   continues.** The checksum is what makes resync safe; the magic only makes it cheap.
+
+   **Stated as probability, not certainty, deliberately.** `record_checksum` covers
+   `(sequence, body_len, body)` — **not** the magic or version bytes — so a false positive is rejected
+   because forging a matching SHA-256 by accident is negligible, not because the format forbids it. This
+   project's standard is invariants over probabilities, so **if a resync guarantee must be absolute, the
+   framing has to change to cover the header** — and that would be a format change, which Stage 2 is not.
+   Report it if you conclude the probabilistic bound is insufficient.
 4. A trailing partial frame at EOF stays *tolerated*, exactly as today.
 
 **Corruption is therefore confined to the records it actually damaged**, and `verify` names them — which
@@ -79,7 +86,7 @@ publish mechanism changes.
 direction. The reverse ordering lets a reader see a valid, checksummed entry pointing at bytes that are
 not there. **This ordering is load-bearing and must be stated at the call site, not only here.**
 
-## 6. The worktree marker
+## 6. The worktree marker — **IMPLEMENTED, Stage 1, merged `6d10185`**
 
 Not containerizable; the danger is the *inference from absence* (T12), not the lost file.
 
@@ -89,12 +96,12 @@ have been built the unsound way). Set before any worktree write begins; cleared 
 completes. While dirty, commit-authoring refuses to infer deletion until the worktree is re-verified
 against its baseline.
 
-§6.5 confirmed one choke point (`worktree_patch/node_authoring.rs:441-446`), and that the marker's own
+the RFC's §6.5 confirmed one choke point (`worktree_patch/node_authoring.rs`'s `plan_delete` loop — cited as `:441-446` when this was written, **now `:458` after Stage 1**; cite the symbol, not the line), and that the marker's own
 failure modes fall toward *"still dirty"* — a spurious refusal, never a missed dirty state.
 
 ## 7. Staging — and the first two stages change no storage format at all
 
-**Stage 1 — the marker, plus WAL-at-`init`.** Closes T12's signed-deletion risk and lands RFC 101 §5.1's
+**Stage 1 — the marker, plus WAL-at-`init`. DONE, merged `6d10185` 2026-08-14.** Closes T12's signed-deletion risk and lands RFC 101 §5.1's
 orphaned fix (§6.3a). **No container, no format change.**
 
 **Stage 2 — isolate-and-continue reading, on today's WAL and ref log.** Earns §3's read behaviour against

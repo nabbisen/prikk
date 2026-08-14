@@ -9,7 +9,7 @@
 production — before anything new depends on it.**
 
 Today both hard-`Err` on a mid-stream checksum mismatch (`wal.rs:323-324`, *"WAL checksum mismatch at
-byte offset {offset}"*, and the ref log's equivalent). **That is correct for a single-purpose queue and a
+byte offset {offset}"*, and `refs/log.rs:206`, *"ref-log checksum mismatch at byte offset {offset}"*). **That is correct for a single-purpose queue and a
 blast-radius regression for a container of unrelated objects** — the amended constraint 5 that the RFC's §6.2
 found and its §6.3a recorded.
 
