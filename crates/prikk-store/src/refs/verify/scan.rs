@@ -79,10 +79,21 @@ fn log_locator(layout: &RepositoryLayout, offset: usize) -> PathBuf {
 
 /// Read every published ref pointer: the ref-pointer index's own last-entry-per-`ref_name_key` view
 /// (RFC 102 Stage 4), each cross-validated against its named RefState object exactly as before.
+///
+/// Returns, alongside the display-only `outcomes`, a `ref_name_key -> failure message` map for
+/// internal cross-referencing. `RefFileOutcome`'s own `path` is a display locator (a container
+/// offset now, not a per-ref file path — see the type's doc), so it can no longer be used to
+/// attribute a failed entry back to the ref name that owns it the way a per-ref filename could;
+/// `ref_name_key_bytes(ref_name)` is the only key both sides can compute independently.
+#[allow(clippy::type_complexity)]
 pub(super) fn read_pointers(
     layout: &RepositoryLayout,
     objects: &FileObjectStore,
-) -> Result<(BTreeMap<String, PointerState>, Vec<RefFileOutcome>)> {
+) -> Result<(
+    BTreeMap<String, PointerState>,
+    BTreeMap<[u8; 32], String>,
+    Vec<RefFileOutcome>,
+)> {
     let replay = replay_pointer_index(layout)?;
     if replay.has_item_failure() {
         return Err(PrikkError::Integrity(
@@ -104,8 +115,9 @@ pub(super) fn read_pointers(
     }
 
     let mut pointers = BTreeMap::new();
+    let mut failures_by_key = BTreeMap::new();
     let mut outcomes = Vec::new();
-    for (offset, entry) in latest.into_values() {
+    for (key, (offset, entry)) in latest {
         let locator = pointer_locator(layout, offset);
         match read_one_pointer_entry(objects, &entry) {
             Ok((ref_name, state)) => {
@@ -116,6 +128,7 @@ pub(super) fn read_pointers(
                 });
             }
             Err(err) => {
+                failures_by_key.insert(key, err.to_string());
                 outcomes.push(RefFileOutcome {
                     path: locator,
                     status: RefFileStatus::Failed {
@@ -125,7 +138,7 @@ pub(super) fn read_pointers(
             }
         }
     }
-    Ok((pointers, outcomes))
+    Ok((pointers, failures_by_key, outcomes))
 }
 
 fn read_one_pointer_entry(
@@ -172,6 +185,7 @@ pub(super) fn read_logs(
     BTreeMap<String, LogState>,
     usize,
     Vec<RefLogEnvelope>,
+    BTreeMap<[u8; 32], String>,
     Vec<RefFileOutcome>,
 )> {
     let relative = layout.repository_relative(&layout.ref_log_container_slot_path(
@@ -180,7 +194,13 @@ pub(super) fn read_logs(
     let Some(bytes) =
         crate::fsutil::read_file_if_exists(layout.repository_mutation_root(), &relative)?
     else {
-        return Ok((BTreeMap::new(), 0, Vec::new(), Vec::new()));
+        return Ok((
+            BTreeMap::new(),
+            0,
+            Vec::new(),
+            BTreeMap::new(),
+            Vec::new(),
+        ));
     };
     let discovery = decode_ref_container_records(&bytes)?;
     let mut keys: std::collections::BTreeSet<[u8; 32]> = discovery
@@ -201,6 +221,7 @@ pub(super) fn read_logs(
     let mut logs = BTreeMap::new();
     let mut total = 0_usize;
     let mut envelopes = Vec::new();
+    let mut failures_by_key = BTreeMap::new();
     let mut outcomes = Vec::new();
     for key in keys {
         let replay = replay_ref_subsequence(layout, key)?;
@@ -223,11 +244,11 @@ pub(super) fn read_logs(
                 })
                 .collect::<Vec<_>>()
                 .join("; ");
+            let message = format!("ref log has damaged record(s): {joined}");
+            failures_by_key.insert(key, message.clone());
             outcomes.push(RefFileOutcome {
                 path: log_locator(layout, first_offset),
-                status: RefFileStatus::Failed {
-                    message: format!("ref log has damaged record(s): {joined}"),
-                },
+                status: RefFileStatus::Failed { message },
             });
             continue;
         }
@@ -248,6 +269,7 @@ pub(super) fn read_logs(
             }
             Ok(None) => {}
             Err(err) => {
+                failures_by_key.insert(key, err.to_string());
                 outcomes.push(RefFileOutcome {
                     path: log_locator(layout, first_offset),
                     status: RefFileStatus::Failed {
@@ -257,7 +279,7 @@ pub(super) fn read_logs(
             }
         }
     }
-    Ok((logs, total, envelopes, outcomes))
+    Ok((logs, total, envelopes, failures_by_key, outcomes))
 }
 
 #[allow(clippy::type_complexity)]
