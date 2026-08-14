@@ -156,3 +156,47 @@ The compensation is that §9's criteria are falsifiable properties, and that §1
 not derive rather than presenting the design as complete. **§2's per-type choice and §3's resync scheme
 are the two places I would look first for an error** — both are mine, and neither has been checked by
 anyone else.
+
+---
+
+## 12. Stage 3 Step 0 rulings — 2026-08-14
+
+**§10's three open items, answered.** §10.1 and §10.2 by the investigation; §10.3 by me, because it is
+a design question and they correctly declined to decide it.
+
+**§10.1 — container-record ordering: none required.** Objects are immutable and content-addressed;
+`read_object` resolves by computed path per type, never by scan or by recency, and nothing downstream
+consults write order. **Containerizing changes physical location, not that property.** The index need
+not encode or preserve ordering, because none exists to preserve.
+
+**Their scoping note is the important half and I am adopting it:** this is about *object* containers
+only. Ref logs carry real sequence semantics today, so Stage 4 inherits nothing from this ruling.
+
+**§10.2 — the present-but-unindexed state is named `Unindexed`, and is non-blocking.** An
+`ObjectItemStatus::Unindexed(ObjectVerification)` carrying the same successful per-object data
+`Evaluated` does — the object is sound, only its index entry is missing — explicitly excluded from
+`has_item_failure()`. `doctor` reports it at `DoctorSeverity::Info` (*"does not require user action"*),
+so the health gate is unaffected. Exact enum shape is implementation judgment; the name and the
+non-blocking status are the ruling.
+
+**§10.3 — the index is trusted, and validated at the point of use.**
+
+Every CLI invocation re-verifying the index against its containers would be O(n) per command and would
+defeat the point of having an index. Blanket trust is also wrong. **The resolution is neither:**
+
+1. **Ordinary reads trust the index** for location — one index read, one seek. No scan.
+2. **The bytes found are validated by recomputing the content hash**, which is free of extra I/O because
+   the object must be decoded anyway. Content-addressing makes a wrong location *detectable at use*.
+3. **A mismatch is a reported defect, not a silent fallback to scanning.** The index is maintained by
+   the write protocol (§5); a mismatch means something is wrong and must be said, not worked around.
+4. **`verify` does the full scan.** That is what `verify` is for, and it is where rebuild belongs.
+
+**This is deliberately not the advisory-index option the owner rejected.** That one treated a wrong
+answer as routine and fell back to scanning, making O(n) the ordinary case and correctness a
+best-effort. Here the index is authoritative, the hash check is a correctness assertion rather than a
+performance hedge, and a violation is an error rather than a slower path.
+
+**Open, and not settled by this:** whether a cold index — one that must be rebuilt because it is absent
+or truncated — makes first-run cost unacceptable for a CLI. That is a *recovery* path, not steady state,
+but it should be measured rather than assumed once containers exist. `dc59_commit_benchmark.rs` is the
+existing precedent for taking n=10,000 seriously.
