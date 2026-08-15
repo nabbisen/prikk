@@ -84,28 +84,6 @@ pub(super) fn open_existing_regular_if_exists(
     Ok(Some(fd))
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub(super) fn open_existing_or_create_regular(
-    directory: impl AsFd,
-    name: &std::ffi::OsStr,
-    flags: OFlags,
-) -> Result<OwnedFd> {
-    failpoints::required_open()?;
-    match fs::openat(
-        directory.as_fd(),
-        name,
-        flags | OFlags::NONBLOCK | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-        Mode::empty(),
-    ) {
-        Ok(fd) => {
-            validate_regular(&fd)?;
-            Ok(fd)
-        }
-        Err(rustix::io::Errno::NOENT) => open_new_regular(directory, name).map_err(io_error),
-        Err(error) => Err(io_error(error)),
-    }
-}
-
 /// RFC 102 Stage 5, design-v1.md §14.3/§14.5: requires an existing file rather than falling back to
 /// creation on `EEXIST`, matching `open_existing_regular`'s own use by `durable_truncate`
 /// (`anchored/linux.rs:63-64`). A create-on-append is a new-directory-entry event on every append --

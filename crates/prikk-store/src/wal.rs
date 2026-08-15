@@ -275,12 +275,11 @@ impl Wal {
 
     fn truncate_empty_authorized(&self) -> Result<()> {
         let (root, relative) = self.mutation()?;
-        let Some(parent) = relative.parent() else {
-            return Err(PrikkError::Io(
-                "WAL path has no parent directory".to_string(),
-            ));
-        };
-        ensure_directory_required(root, parent)?;
+        // RFC 102 Stage 5, design-v1.md §14.8: no `ensure_directory_required` here -- unlike
+        // `append_patch`'s own call (a separate, not-yet-ruled-on finding from this same round, left
+        // untouched), this one is established dead rather than assumed: `default_active_dir()` is in
+        // `required_repository_directories()` (`layout.rs:389`), permanent from `init`, and
+        // `durable_truncate_to_empty` no longer creates a missing directory to paper over its absence.
         truncate_file_empty_required(root, relative)
     }
 

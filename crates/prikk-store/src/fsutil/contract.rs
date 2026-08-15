@@ -88,13 +88,18 @@ pub(crate) trait DurabilityContract {
     /// new content, never a mix.
     fn atomic_replace(&self, root: &MutationRoot, relative: &Path, bytes: &[u8]) -> Result<()>;
 
-    /// Durably append `bytes` to an existing regular file, creating it first if absent.
+    /// Durably append `bytes` to an existing regular file. RFC 102 Stage 5, design-v1.md §14.3/§14.5:
+    /// requires the file to already exist -- does not create it, unlike this trait's other two
+    /// "existing" methods' shared name might suggest before this note. This doc was stale from
+    /// `d8f5240` until Stage 5 round 3 caught it; see that commit for why creating on append is unsafe.
     fn durable_append(&self, root: &MutationRoot, relative: &Path, bytes: &[u8]) -> Result<()>;
 
     /// Durably truncate an existing regular file to `len`.
     fn durable_truncate(&self, root: &MutationRoot, relative: &Path, len: u64) -> Result<()>;
 
-    /// Durably create-or-truncate `relative` to empty.
+    /// Durably truncate an existing regular file to empty. RFC 102 Stage 5, design-v1.md §14.8:
+    /// requires the file (and its parent directory) to already exist -- does not create either, the
+    /// same discipline `durable_append` follows and `durable_truncate` already did.
     fn durable_truncate_to_empty(&self, root: &MutationRoot, relative: &Path) -> Result<()>;
 
     /// Create `relative` **exclusively** — refuses if any entry already exists there — write

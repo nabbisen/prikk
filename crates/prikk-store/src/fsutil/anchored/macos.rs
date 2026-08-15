@@ -20,8 +20,8 @@ use super::directory::{
     MutationRoot, open_existing_directory_required, prepare_directory_required,
 };
 use super::regular::{
-    open_append_regular, open_existing_or_create_regular, open_existing_regular, open_new_regular,
-    required_file_name, required_parent,
+    open_append_regular, open_existing_regular, open_new_regular, required_file_name,
+    required_parent,
 };
 use super::{failpoints, immutable, io_error, prikk_to_io};
 use crate::fsutil::contract::DurabilityContract;
@@ -79,12 +79,9 @@ impl DurabilityContract for MacosDurability {
     }
 
     fn durable_truncate_to_empty(&self, root: &MutationRoot, relative: &Path) -> Result<()> {
-        let directory = prepare_directory_required(root, required_parent(relative)?)?;
-        let fd = open_existing_or_create_regular(
-            &directory.fd,
-            required_file_name(relative)?,
-            OFlags::WRONLY,
-        )?;
+        let directory = open_existing_directory_required(root, required_parent(relative)?)?;
+        let fd =
+            open_existing_regular(&directory.fd, required_file_name(relative)?, OFlags::WRONLY)?;
         let file = File::from(fd);
         failpoints::truncate()?;
         file.set_len(0)?;

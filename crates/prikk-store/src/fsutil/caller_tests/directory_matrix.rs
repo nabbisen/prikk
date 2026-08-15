@@ -5,10 +5,7 @@ use std::path::Path;
 use crate::fsutil::{TestFailPoint, fail_once_for_test};
 use crate::test_support::unique_temp_dir;
 use crate::worktree::materialize_manifest_entries;
-use crate::{
-    RepoPath, RepositoryLayout, SnapshotEntry, SnapshotManifest, add_trusted_maintainer,
-    write_active_ref_metadata,
-};
+use crate::{RepoPath, RepositoryLayout, SnapshotEntry, SnapshotManifest, add_trusted_maintainer};
 
 const COMPONENT_POINTS: [TestFailPoint; 2] = [
     TestFailPoint::DirectoryCreate,
@@ -68,35 +65,15 @@ fn repository_initialization_component_matrix() -> prikk_error::Result<()> {
 // Flagged as a finding for the same reason those two were: verified from the code, not assumed,
 // and reported for an affirmative ruling rather than retired silently.
 
-/// RFC 102 Stage 5, design-v1.md §14.6: `init` now also creates `default_active_ref_name_path()`
-/// (`active/default/ref-name`) in this same directory, so it must be removed alongside `queue.wal`
-/// before the directory is genuinely empty -- the same discipline the `queue.wal` removal below
-/// already documents for itself. Still a live scenario, unlike `wal_directory_component_matrix`'s
-/// retirement above: `write_active_ref_metadata`'s truncate step goes through `durable_truncate_to_
-/// empty`, which (unlike strict `durable_append`) still creates a missing directory via `prepare_
-/// directory_required` -- confirmed by reading `linux.rs`'s two truncate primitives side by side, not
-/// assumed symmetric with `durable_append`. See the standing finding on that asymmetry in this round's
-/// own report.
-#[test]
-fn active_metadata_directory_component_matrix() -> prikk_error::Result<()> {
-    for point in COMPONENT_POINTS {
-        let root = unique_temp_dir("active-component-matrix");
-        let layout = RepositoryLayout::init(root.clone())?;
-        let active_dir = layout.default_active_dir();
-        // RFC 102 Stage 1: `init` now creates `queue.wal` itself, so the directory this test needs
-        // empty (to exercise `ensure_directory_required`'s own recreation, not the WAL's presence)
-        // must have it removed first.
-        std::fs::remove_file(layout.default_queue_wal_path())?;
-        std::fs::remove_file(layout.default_active_ref_name_path())?;
-        remove_empty_directory(&active_dir)?;
-        fail_once_for_test(point);
-        assert!(write_active_ref_metadata(&layout, "heads/main").is_err());
-        assert_retained_component(point, &active_dir);
-        assert!(write_active_ref_metadata(&layout, "heads/main").is_ok());
-        let _ = std::fs::remove_dir_all(root);
-    }
-    Ok(())
-}
+// RFC 102 Stage 5, design-v1.md §14.8: `active_metadata_directory_component_matrix` (proving a
+// missing-`active/default/`-directory failure during `write_active_ref_metadata` was retryable) has
+// no strict-`durable_truncate_to_empty`-era equivalent, and is retired the same way and for the same
+// reason `wal_directory_component_matrix` was in round 2 -- the asymmetry that kept this one alive a
+// round longer (`durable_truncate_to_empty` tolerated a missing directory/file when strict
+// `durable_append` already did not) is exactly what §14.8 closed. `default_active_dir()` is
+// permanent from `init` (`layout.rs:389`) and nothing removes it, so the fixture's constructed
+// state -- directory absent -- is no longer one `write_active_ref_metadata` can recover from, and is
+// not reachable from a correctly-`init`ed repository in the first place.
 
 // RFC 102 Stage 4: `ref_log_directory_component_matrix` (proving a first-ref-publish directory
 // component failure on `refs/logs/` is retryable) has no container-era equivalent, retired the
