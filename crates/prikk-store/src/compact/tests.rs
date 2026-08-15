@@ -207,6 +207,153 @@ fn a_crash_before_the_generation_record_lands_leaves_the_old_generation_authorit
     Ok(())
 }
 
+/// DC-41 crash window 1: the compactor crashes *while writing the new slot's own bytes*, before they
+/// are durable -- earlier than the previous test's window (which lets the slot write complete and
+/// only fails the generation record). The old generation must still be authoritative and every read
+/// still correct, exactly as when the crash lands later -- retrying from scratch is the same recovery
+/// either way.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn a_crash_while_writing_the_new_slots_own_bytes_leaves_the_old_generation_authoritative()
+-> Result<()> {
+    let root = unique_temp_dir("compact-pointer-index-crash-during-slot-write");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let store = RefStore::new(layout.clone());
+    let first = publish_update(&store, &mut objects, "heads/main", None, 1)?;
+    let second = publish_update(&store, &mut objects, "heads/main", Some(first), 2)?;
+
+    let generation_log_path = layout.ref_pointer_index_generation_log_path();
+
+    // Skip 0 to fail on the *first* `AppendWrite` -- the compacted slot's own bytes, before a single
+    // byte of it is durable. The target slot was already truncated (a separate primitive, unaffected
+    // by this failpoint) but never receives the new content.
+    fail_after_for_test(TestFailPoint::AppendWrite, 0);
+    assert!(compact_ref_pointer_index(&layout).is_err());
+
+    assert_eq!(
+        resolve_live_slot(&layout, &generation_log_path)?,
+        ContainerSlot::A
+    );
+    assert_eq!(store.read_current_ref_state_id("heads/main")?, Some(second));
+
+    let report = compact_ref_pointer_index(&layout)?;
+    assert_eq!(report.entries_after, 1);
+    assert_eq!(
+        resolve_live_slot(&layout, &generation_log_path)?,
+        ContainerSlot::B
+    );
+    assert_eq!(store.read_current_ref_state_id("heads/main")?, Some(second));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-41 crash window 3: the compactor crashes while truncating its *target* slot -- the retired slot
+/// from a previous compaction, being reclaimed for reuse. This always happens before this run's own
+/// generation switch, so the *previous* run's generation must still be authoritative regardless.
+/// Exercised against a genuinely second compaction (slot `A` already retired once) rather than the
+/// first, so the truncate is reclaiming real stale bytes, not a pristine empty file from `init`.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn a_crash_while_truncating_the_retired_slot_leaves_the_previous_generation_authoritative()
+-> Result<()> {
+    let root = unique_temp_dir("compact-pointer-index-crash-during-truncate");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let store = RefStore::new(layout.clone());
+    let first = publish_update(&store, &mut objects, "heads/main", None, 1)?;
+    let second = publish_update(&store, &mut objects, "heads/main", Some(first), 2)?;
+
+    // First compaction: A (live) -> B (live), A now retired with stale bytes.
+    compact_ref_pointer_index(&layout)?;
+    let generation_log_path = layout.ref_pointer_index_generation_log_path();
+    assert_eq!(
+        resolve_live_slot(&layout, &generation_log_path)?,
+        ContainerSlot::B
+    );
+
+    let third = publish_update(&store, &mut objects, "heads/main", Some(second), 3)?;
+
+    // Second compaction targets A (retired, stale) -- skip 0 to fail its own single `Truncate` call,
+    // before the reclaim even starts.
+    fail_after_for_test(TestFailPoint::Truncate, 0);
+    assert!(compact_ref_pointer_index(&layout).is_err());
+
+    // The first compaction's generation (B) is still authoritative -- the second never got far enough
+    // to publish anything.
+    assert_eq!(
+        resolve_live_slot(&layout, &generation_log_path)?,
+        ContainerSlot::B
+    );
+    assert_eq!(store.read_current_ref_state_id("heads/main")?, Some(third));
+
+    let report = compact_ref_pointer_index(&layout)?;
+    assert_eq!(report.entries_after, 1);
+    assert_eq!(
+        resolve_live_slot(&layout, &generation_log_path)?,
+        ContainerSlot::A
+    );
+    assert_eq!(store.read_current_ref_state_id("heads/main")?, Some(third));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-41 crash window 5: a container lock held by one side (compactor or writer) makes the other side
+/// fail immediately with no partial write, from *both* directions -- not just the writer-blocked-by-
+/// compactor shape rounds 2-3 already proved, but the reverse too, so neither side can leave a torn
+/// state regardless of which one is "in the way."
+#[test]
+fn writer_and_compactor_lock_contention_leaves_no_partial_write_from_either_side() -> Result<()> {
+    let root = unique_temp_dir("compact-pointer-index-lock-race-both-directions");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let store = RefStore::new(layout.clone());
+    let first = publish_update(&store, &mut objects, "heads/main", None, 1)?;
+
+    // Direction 1: the compactor's own lock (simulated held, as a real compaction mid-flight would
+    // hold it) blocks a writer. The writer's attempt must fail cleanly -- no new pointer entry lands.
+    let entries_before_attempt =
+        std::fs::read(layout.ref_pointer_index_slot_path(ContainerSlot::A))?;
+    let compactor_lock = acquire_container_locks(&layout, &[LockableContainer::RefPointerIndex])?;
+    assert!(publish_update(&store, &mut objects, "heads/main", Some(first), 2).is_err());
+    assert_eq!(
+        std::fs::read(layout.ref_pointer_index_slot_path(ContainerSlot::A))?,
+        entries_before_attempt,
+        "a writer blocked by the compactor's lock must not have appended anything"
+    );
+    drop(compactor_lock);
+
+    // Direction 2: a writer's own lock (simulated held the same way) blocks the compactor. Its
+    // attempt must fail cleanly -- neither slot nor the generation log changes.
+    let generation_log_path = layout.ref_pointer_index_generation_log_path();
+    let slot_a_before = std::fs::read(layout.ref_pointer_index_slot_path(ContainerSlot::A))?;
+    let slot_b_before = std::fs::read(layout.ref_pointer_index_slot_path(ContainerSlot::B))?;
+    let generation_log_before = std::fs::read(&generation_log_path)?;
+    let writer_lock = acquire_container_locks(&layout, &[LockableContainer::RefPointerIndex])?;
+    assert!(compact_ref_pointer_index(&layout).is_err());
+    assert_eq!(
+        std::fs::read(layout.ref_pointer_index_slot_path(ContainerSlot::A))?,
+        slot_a_before
+    );
+    assert_eq!(
+        std::fs::read(layout.ref_pointer_index_slot_path(ContainerSlot::B))?,
+        slot_b_before
+    );
+    assert_eq!(std::fs::read(&generation_log_path)?, generation_log_before);
+    drop(writer_lock);
+
+    // Both sides work normally once uncontended.
+    let second = publish_update(&store, &mut objects, "heads/main", Some(first), 2)?;
+    assert_eq!(store.read_current_ref_state_id("heads/main")?, Some(second));
+    let report = compact_ref_pointer_index(&layout)?;
+    assert_eq!(report.entries_after, 1);
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 /// The §15.3 ruling, non-negotiable: compaction refuses to run on a container with a known-corrupt
 /// record, rather than silently compacting around the damage. Damage a record's checksum-covered
 /// body, observe the refusal, restore the bytes, observe compaction then succeeds.

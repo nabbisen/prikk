@@ -105,3 +105,37 @@ fn a_malformed_lock_body_reports_unknown_liveness() -> Result<()> {
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
+
+/// DC-41 crash window 4, end to end: a container lock survives a simulated crash (the in-process
+/// guard never runs `Drop`, matching what a real crash leaves behind), wedging both the compactor and
+/// its writer -- and this module's own recovery path is what un-wedges it, not a special case for
+/// container locks. Ties `unlock.rs` and `compact.rs` together rather than testing either in
+/// isolation, since that is the actual recovery story an operator lives through.
+#[test]
+fn a_wedged_container_lock_blocks_compaction_until_unlock_clears_it() -> Result<()> {
+    let root = unique_temp_dir("unlock-wedged-container-lock");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    let held = acquire_container_locks(&layout, &[LockableContainer::RefPointerIndex])?;
+    let path = layout.lockable_container_lock_path(LockableContainer::RefPointerIndex);
+    // Simulate a crash: the lock file survives, but nothing still holds it in-process -- exactly
+    // what a real crash leaves, not a synthetic shortcut.
+    std::mem::forget(held);
+
+    assert!(crate::compact_ref_pointer_index(&layout).is_err());
+    assert!(crate::plan_compact_ref_pointer_index(&layout).is_err());
+
+    let locks = list_held_locks(&layout)?;
+    assert_eq!(locks.len(), 1);
+    assert_eq!(locks[0].path, path);
+    assert_eq!(locks[0].kind, "container:ref-pointer-index");
+
+    clear_lock(&layout, &path)?;
+    assert!(list_held_locks(&layout)?.is_empty());
+
+    let report = crate::compact_ref_pointer_index(&layout)?;
+    assert_eq!(report.entries_before, 0);
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
