@@ -5,7 +5,7 @@ use std::path::Path;
 use crate::fsutil::{TestFailPoint, fail_once_for_test};
 use crate::test_support::unique_temp_dir;
 use crate::worktree::materialize_manifest_entries;
-use crate::{RepoPath, RepositoryLayout, SnapshotEntry, SnapshotManifest, add_trusted_maintainer};
+use crate::{RepoPath, RepositoryLayout, SnapshotEntry, SnapshotManifest};
 
 const COMPONENT_POINTS: [TestFailPoint; 2] = [
     TestFailPoint::DirectoryCreate,
@@ -83,22 +83,13 @@ fn repository_initialization_component_matrix() -> prikk_error::Result<()> {
 // this matrix's own `DirectoryCreate`/`CreatedDirectoryParentSync` failpoints are simply never
 // reached by `RefStore::publish`, and there is no analogous scenario left to prove here.
 
-#[test]
-fn trust_directory_component_matrix() -> prikk_error::Result<()> {
-    for point in COMPONENT_POINTS {
-        let root = unique_temp_dir("trust-component-matrix");
-        let layout = RepositoryLayout::init(root.clone())?;
-        let keys_dir = layout.maintainer_trust_keys_dir();
-        remove_empty_directory(&keys_dir)?;
-        let key = "0707070707070707070707070707070707070707070707070707070707070707";
-        fail_once_for_test(point);
-        assert!(add_trusted_maintainer(&layout, "maintainer", key).is_err());
-        assert_retained_component(point, &keys_dir);
-        assert!(add_trusted_maintainer(&layout, "maintainer", key).is_ok());
-        let _ = std::fs::remove_dir_all(root);
-    }
-    Ok(())
-}
+// RFC 102 Stage 5, design-v1.md §14.9: `trust_directory_component_matrix` (proving a missing-
+// `trust/keys/maintainer/`-directory failure during `add_trusted_maintainer` was retryable) has no
+// container-era equivalent, retired the same way and for the same reason `active_metadata_directory_
+// component_matrix` was. `maintainer_trust_keys_dir()` doesn't exist as a concept anymore --
+// `add_trusted_maintainer` now appends into `trust_dir()` directly, which is permanent from `init`
+// (`layout.rs`'s own `required_directories()`) via strict `durable_append`, so there is no nested
+// directory left to go missing in the first place.
 
 #[test]
 fn lock_directory_component_matrix() -> prikk_error::Result<()> {

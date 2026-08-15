@@ -45,8 +45,8 @@ use prikk_store::{
     plan_patch_checkout_deletions, prepare_checkout_plan, prepare_merge_evidence,
     prepare_merge_plan, prepare_patch_inverse_plan, prepare_patch_replay_plan,
     prepare_rollback_preview, prepare_snapshot_checkout_plan, read_active_ref_metadata,
-    repair_repository, verify_active_rollback_draft, verify_repository_with_options,
-    worktree_status,
+    remove_trusted_maintainer, repair_repository, verify_active_rollback_draft,
+    verify_repository_with_options, worktree_status,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -232,8 +232,42 @@ fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {
             println!("policy: required=1");
             Ok(())
         }
+        // RFC 102 Stage 5, design-v1.md §14.9: a supported interface for the revocation capability
+        // that already existed as an undocumented hand-edit of the retired `policy.toml`. Not a new
+        // capability -- see `trust_index.rs`'s own module doc for why the snapshot-container shape
+        // makes this representable without a tombstone record.
+        (Some("maintainer"), Some("remove")) => {
+            let mut key_id = None;
+            while let Some(arg) = args.next() {
+                match arg.as_str() {
+                    "--key-id" => {
+                        key_id = Some(
+                            args.next()
+                                .ok_or_else(|| "--key-id requires a value".to_string())?,
+                        );
+                    }
+                    other => {
+                        return Err(format!("unknown trust maintainer remove argument: {other}"));
+                    }
+                }
+            }
+            let key_id =
+                key_id.ok_or_else(|| "trust maintainer remove requires --key-id".to_string())?;
+            let root = current_dir()?;
+            let layout = open_repository(root)?;
+            let removed =
+                remove_trusted_maintainer(&layout, &key_id).map_err(|err| err.to_string())?;
+            if removed {
+                println!("revoked maintainer key: {key_id}");
+            } else {
+                println!("maintainer key was not trusted: {key_id}");
+            }
+            Ok(())
+        }
         _ => Err(
-            "usage: prikk trust maintainer add --key-id <key-id> --public-key <64-hex>".to_string(),
+            "usage: prikk trust maintainer add --key-id <key-id> --public-key <64-hex>\n       \
+             prikk trust maintainer remove --key-id <key-id>"
+                .to_string(),
         ),
     }
 }

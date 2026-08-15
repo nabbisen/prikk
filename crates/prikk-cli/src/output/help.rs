@@ -7,6 +7,7 @@ pub(crate) fn print_help(version: &str) {
     println!("Usage:");
     println!("  prikk init [path]                         Create a .prikk repository layout");
     println!("  prikk trust maintainer add --key-id ID --public-key HEX  Trust one MAINTAINER key");
+    println!("  prikk trust maintainer remove --key-id ID Revoke one MAINTAINER key");
     println!(
         "  prikk commit --from-worktree [--text-edits] [--ref REF] -m <message> Append worktree changes"
     );

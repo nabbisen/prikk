@@ -176,3 +176,104 @@ fn init_allocates_every_ref_container_name_once() -> Result<()> {
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
+
+/// RFC 102 Stage 5 acceptance criterion 1, folded in per round 4's review §3: the trust key and
+/// policy containers, mirroring `init_allocates_every_ref_container_name_once`'s exact shape --
+/// existence and emptiness immediately after `init`, idempotent re-`init`, then real writes
+/// (`add_trusted_maintainer`, not just re-`init`) followed by re-enumerating `trust_dir()` from the
+/// filesystem itself to confirm the file set is still exactly those 2.
+#[test]
+fn init_allocates_every_trust_container_name_once() -> Result<()> {
+    let root = unique_temp_dir("layout-trust-container-allocation");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    let trust_container_paths = vec![
+        layout.trust_key_container_path(),
+        layout.trust_policy_container_path(),
+    ];
+    for path in &trust_container_paths {
+        assert!(path.is_file(), "expected {path:?} to exist after init");
+        assert_eq!(
+            std::fs::metadata(path)?.len(),
+            0,
+            "expected {path:?} to be created empty"
+        );
+    }
+
+    let reopened = RepositoryLayout::init(root.clone())?;
+    for path in &trust_container_paths {
+        assert!(path.is_file());
+        assert_eq!(std::fs::metadata(path)?.len(), 0);
+    }
+    assert_eq!(reopened.format(), RepositoryFormat::CurrentV5);
+
+    let expected: HashSet<PathBuf> = trust_container_paths.into_iter().collect();
+    assert_eq!(files_under(&layout.trust_dir())?, expected);
+
+    let key = "0707070707070707070707070707070707070707070707070707070707070707";
+    crate::add_trusted_maintainer(&layout, "maintainer", key)?;
+    // A second key id, adopted well after init -- the same "mints one later" scenario the ref
+    // container test proves, applied here.
+    crate::add_trusted_maintainer(&layout, "second", key)?;
+    assert_eq!(
+        files_under(&layout.trust_dir())?,
+        expected,
+        "ordinary adoptions -- including a second key id well after init -- must grow existing \
+         container files, never create a new one"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 102 Stage 5 acceptance criterion 1, folded in per round 4's review §3: `active/default/`'s
+/// `init`-allocated names (`queue.wal`, `ref-name`) enumerated the same way, with the one real
+/// complication the review named directly -- `active.lock` is created at runtime by `ActiveLock::
+/// acquire`, not `init`, and correctly so (a lock file lost to a crash is harmless; its holder is
+/// gone too). Not a criterion-1 violation, but it does mean this directory's membership isn't a
+/// plain fixed set the way `refs_containers_dir()`'s or `trust_dir()`'s is -- asserted here as "the
+/// non-lock members are exactly these two names," both before and after the lock exists.
+#[test]
+fn init_allocates_every_active_default_container_name_once_excluding_the_runtime_lock() -> Result<()>
+{
+    let root = unique_temp_dir("layout-active-default-allocation");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    let active_container_paths = vec![
+        layout.default_queue_wal_path(),
+        layout.default_active_ref_name_path(),
+    ];
+    for path in &active_container_paths {
+        assert!(path.is_file(), "expected {path:?} to exist after init");
+        assert_eq!(
+            std::fs::metadata(path)?.len(),
+            0,
+            "expected {path:?} to be created empty"
+        );
+    }
+
+    let expected: HashSet<PathBuf> = active_container_paths.into_iter().collect();
+    assert_eq!(
+        files_under(&layout.default_active_dir())?,
+        expected,
+        "before any lock is ever acquired, active/default/ must contain exactly the two init-\
+         allocated names"
+    );
+
+    let lock_path = layout.default_active_lock_path();
+    let lock = crate::ActiveLock::acquire(&layout)?;
+    assert!(lock_path.is_file(), "expected the lock file to now exist");
+    let mut with_lock = files_under(&layout.default_active_dir())?;
+    assert!(
+        with_lock.remove(&lock_path),
+        "the lock must be the only addition"
+    );
+    assert_eq!(
+        with_lock, expected,
+        "excluding the runtime lock, the set is still exactly the two init-allocated names"
+    );
+    drop(lock);
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}

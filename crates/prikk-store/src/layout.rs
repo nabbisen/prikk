@@ -175,6 +175,8 @@ impl RepositoryLayout {
         )?;
         create_empty_file_once(&layout, &layout.ref_pointer_index_path())?;
         create_empty_file_once(&layout, &layout.received_index_path())?;
+        create_empty_file_once(&layout, &layout.trust_key_container_path())?;
+        create_empty_file_once(&layout, &layout.trust_policy_container_path())?;
         // RFC 102 Stage 5, design-v1.md §14.2: written last, once every container/marker/WAL name
         // above is confirmed present. `FORMAT`'s presence is what certifies `init` completed --
         // written first (the old order), a crash between it and the containers left a repository
@@ -413,8 +415,6 @@ impl RepositoryLayout {
         dirs.push(self.refs_dir().join("tmp"));
         dirs.push(self.refs_containers_dir());
         dirs.push(self.trust_dir());
-        dirs.push(self.trust_keys_dir());
-        dirs.push(self.maintainer_trust_keys_dir());
         dirs.push(self.cache_dir());
         dirs.push(self.quarantine_dir());
         dirs
@@ -498,47 +498,49 @@ impl RepositoryLayout {
         self.prikk_dir.join("trust")
     }
 
-    /// Return the trust-store key directory.
+    /// Return the trust key-material container path (RFC 102 Stage 5, design-v1.md §14/§14.9).
+    /// Replaces the one-file-per-key-id `trust/keys/maintainer/*.pub` directory entirely -- format 5
+    /// rejects every repository old enough to have one, so no repository this code can open ever
+    /// contains that directory's contents (§14.9 §3's own reasoning, applied here as it was to
+    /// `refs/received/`, not Stage 4's "keep, dead" precedent).
     #[must_use]
-    pub fn trust_keys_dir(&self) -> PathBuf {
-        self.trust_dir().join("keys")
+    pub fn trust_key_container_path(&self) -> PathBuf {
+        self.trust_dir().join("keys.container")
     }
 
-    /// Return the trusted MAINTAINER public-key directory.
+    /// Return the trust policy container path (RFC 102 Stage 5, design-v1.md §14/§14.9). Replaces
+    /// `trust/policy.toml`. Each append is a **complete snapshot** of the adopted key id list, not an
+    /// incremental log entry -- see `trust_index.rs`'s own module doc for why that is what makes
+    /// revocation representable without a tombstone record.
     #[must_use]
-    pub fn maintainer_trust_keys_dir(&self) -> PathBuf {
-        self.trust_keys_dir().join("maintainer")
+    pub fn trust_policy_container_path(&self) -> PathBuf {
+        self.trust_dir().join("policy.container")
     }
+}
 
-    /// Return the trusted MAINTAINER public-key path for a storage-safe key id.
-    pub fn maintainer_trust_key_path(&self, key_id: &str) -> Result<PathBuf> {
-        if key_id.is_empty()
-            || !key_id
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
-        {
-            return Err(PrikkError::InvalidName(
-                "maintainer key id is not storage-safe".to_string(),
-            ));
-        }
-        // DC-72: the allowlist above is character-shape only and does not exclude Windows-reserved
-        // device stems (`CON`, `PRN`, ...) — `CON` is all ASCII-alphanumeric and would otherwise
-        // pass. Checked regardless of host OS, matching `RepoPath`'s equivalent rule.
-        if is_windows_reserved_name(key_id) {
-            return Err(PrikkError::InvalidName(format!(
-                "maintainer key id is a Windows reserved device name: {key_id}"
-            )));
-        }
-        Ok(self
-            .maintainer_trust_keys_dir()
-            .join(format!("{key_id}.pub")))
+/// Validate a maintainer key id's storage safety: ASCII alphanumeric/`-`/`_` only, and not a
+/// Windows-reserved device stem. Split out from the retired `maintainer_trust_key_path` (which paired
+/// this check with building a per-key-id file path that no longer exists under the container model) --
+/// the validation itself is unchanged and still required before a key id is accepted.
+pub(crate) fn validate_maintainer_key_id_storage_safety(key_id: &str) -> Result<()> {
+    if key_id.is_empty()
+        || !key_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+    {
+        return Err(PrikkError::InvalidName(
+            "maintainer key id is not storage-safe".to_string(),
+        ));
     }
-
-    /// Return the trust policy path.
-    #[must_use]
-    pub fn trust_policy_path(&self) -> PathBuf {
-        self.trust_dir().join("policy.toml")
+    // DC-72: the allowlist above is character-shape only and does not exclude Windows-reserved
+    // device stems (`CON`, `PRN`, ...) — `CON` is all ASCII-alphanumeric and would otherwise
+    // pass. Checked regardless of host OS, matching `RepoPath`'s equivalent rule.
+    if is_windows_reserved_name(key_id) {
+        return Err(PrikkError::InvalidName(format!(
+            "maintainer key id is a Windows reserved device name: {key_id}"
+        )));
     }
+    Ok(())
 }
 
 /// Create `path` empty if it does not already exist. Idempotent, so a retried or re-run `init`

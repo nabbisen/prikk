@@ -61,6 +61,7 @@ mod snapshot;
 mod state_root;
 mod text_span;
 mod trust;
+mod trust_index;
 mod verify;
 mod wal;
 mod worktree;
@@ -148,7 +149,8 @@ pub use state_root::{
 };
 pub use trust::{
     AdoptedMaintainerKey, MaintainerTrustPolicy, PublicationTrustIssue, add_trusted_maintainer,
-    load_maintainer_trust_policy, verify_signer_trusted, verify_trusted_publication_envelope,
+    load_maintainer_trust_policy, remove_trusted_maintainer, verify_signer_trusted,
+    verify_trusted_publication_envelope,
 };
 pub use verify::{
     ActiveWalMetadataStatus, ActiveWalOrderingIssue, BlockSealVerification, ObjectItemOutcome,

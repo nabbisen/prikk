@@ -1244,8 +1244,8 @@ fn verify_repository_detects_invalid_trust_policy() -> Result<()> {
     let malformed_root = unique_temp_dir("verify-trust-policy-malformed");
     let layout = RepositoryLayout::init(malformed_root.clone())?;
     std::fs::write(
-        layout.trust_policy_path(),
-        "[maintainer]\nrequired = 2\nkeys = []\n",
+        layout.trust_policy_container_path(),
+        b"not a valid trust policy container at all",
     )?;
     let mut store = FileObjectStore::new(layout.clone());
     let state_merkle_root = derive_next_state_root(&store, None, &[])?;

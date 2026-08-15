@@ -2,21 +2,26 @@
 //! having sealed a `Block`/`RefState` (DC-78 §D2). `required = 1` keeps its DC-11 meaning regardless
 //! of how many keys are adopted — a block needs *one* trusted signature, never a threshold of
 //! several (`rfcs/done/DC-78-HISTORY-EXCHANGE.md` §D2, confirmed against every existing
-//! assumption at §D7.2). The parser stays strict and fixed-shape (DC-11); this module is not a
-//! general TOML implementation.
+//! assumption at §D7.2). `required` is never stored anywhere -- it is a constant, and storing it
+//! would let it drift into a count (design-v1.md §14 constraint 4).
+//!
+//! RFC 102 Stage 5, design-v1.md §14/§14.9: key material and policy are each on their own container
+//! (`trust_index.rs`), replacing `trust/keys/maintainer/*.pub` and `trust/policy.toml` outright. The
+//! policy is snapshot-based -- each write is the *complete* adopted-key-id list, not an incremental
+//! append -- which is what makes `remove_trusted_maintainer` representable natively: append a snapshot
+//! with the id absent, the same operation `add_trusted_maintainer` already performs, just shorter.
 
 use prikk_crypto::{ED25519_KEY_LEN, verify_ed25519};
 use prikk_error::{PrikkError, Result};
-use prikk_hash::to_hex;
 use prikk_object::{ObjectEnvelope, Signature, SignatureAlgorithm, SignerRole, ascii_fold};
 
-use crate::fsutil::{
-    EntryKind, ensure_directory_required, list_directory, read_file_if_exists, read_file_required,
-    write_file_atomically,
-};
-use crate::layout::RepositoryLayout;
+use crate::layout::{RepositoryLayout, validate_maintainer_key_id_storage_safety};
 use crate::lock::ActiveLock;
 use crate::maintainer_signing::MaintainerSigner;
+use crate::trust_index::{
+    TrustKeyEntry, append_trust_key_entry, append_trust_policy_snapshot, lookup_trust_key_entry,
+    read_current_trust_policy_snapshot,
+};
 
 /// One publication-trust issue found during repository verification.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,7 +74,11 @@ impl MaintainerTrustPolicy {
 /// changing nothing, if it is already adopted with the *same* public key; **refuse** if it is
 /// already adopted with a *different* public key. This is DC-78's TOFU enforcement — "a changed key
 /// for a known key id is refused, not re-prompted" — not just the create path for a fresh key id.
-/// Returns the adopted key and whether this call actually wrote anything.
+/// **TOFU history persists across removal**: the key-material container is never pruned, so
+/// re-adopting a key id that was previously removed from the active policy with a *different* public
+/// key is still refused — the identity was seen once, and a changed key under a familiar id is exactly
+/// what TOFU exists to catch, active policy membership or not. Returns the adopted key and whether
+/// this call actually wrote anything.
 pub fn add_trusted_maintainer(
     layout: &RepositoryLayout,
     key_id: &str,
@@ -79,39 +88,36 @@ pub fn add_trusted_maintainer(
     let _active_lock = ActiveLock::acquire(layout)?;
     crate::refs::ensure_no_incomplete_publication(layout)?;
     Signature::validate_key_id(key_id)?;
+    validate_maintainer_key_id_storage_safety(key_id)?;
     let public_key = decode_public_key_hex(public_key_hex)?;
-    let keys_dir = layout.repository_relative(&layout.maintainer_trust_keys_dir())?;
-    ensure_directory_required(layout.repository_mutation_root(), &keys_dir)?;
 
-    // Runs before read_existing_key, and unconditionally, so a case-insensitive filesystem's own
-    // folding (APFS) can never stand in for this check: read_existing_key("dev-maintainer") returning
-    // "Dev-Maintainer"'s file would otherwise be indistinguishable from a genuine idempotent re-add,
-    // silently conflating two key ids under one physical file (found on macOS CI after Stage 1 merged
-    // — dc72_path_safety_collisions.rs::maintainer_key_id_rejects_case_insensitive_collision).
-    // Excludes exact self-matches, so a real idempotent or TOFU-refusal re-add of the same key id is
-    // unaffected.
-    validate_no_maintainer_key_id_collision(layout, &keys_dir, key_id)?;
+    let mut key_ids = current_adopted_key_ids(layout)?;
 
-    match read_existing_key(layout, key_id)? {
-        Some(existing) if existing == public_key => {}
+    // Runs before the key-material lookup, and unconditionally, so a case-insensitive collision can
+    // never stand in for this check — see the function's own doc for why it now checks *active
+    // policy membership*, not key-material presence (design-v1.md §14.9 §4: a removed key's identity
+    // must not go on reserving its case-folded name). Excludes exact self-matches, so a real
+    // idempotent or TOFU-refusal re-add of the same key id is unaffected.
+    validate_no_maintainer_key_id_collision(&key_ids, key_id)?;
+
+    match lookup_trust_key_entry(layout, key_id)? {
+        Some(existing) if existing.public_key == public_key => {}
         Some(_) => {
             return Err(PrikkError::InvalidSignature(format!(
                 "maintainer key id {key_id} is already adopted with a different public key"
             )));
         }
         None => {
-            let key_path = layout.maintainer_trust_key_path(key_id)?;
-            let key_relative = layout.repository_relative(&key_path)?;
-            let public_key_text = format!("{}\n", to_hex(&public_key));
-            write_file_atomically(
-                layout.repository_mutation_root(),
-                &key_relative,
-                public_key_text.as_bytes(),
+            append_trust_key_entry(
+                layout,
+                &TrustKeyEntry {
+                    key_id: key_id.to_string(),
+                    public_key,
+                },
             )?;
         }
     }
 
-    let mut key_ids = load_policy_key_ids(layout)?;
     let adopted = AdoptedMaintainerKey {
         key_id: key_id.to_string(),
         public_key,
@@ -120,81 +126,64 @@ pub fn add_trusted_maintainer(
         return Ok((adopted, false));
     }
     key_ids.push(key_id.to_string());
-    let policy_text = format!(
-        "[maintainer]\nrequired = 1\nkeys = [{}]\n",
-        key_ids
-            .iter()
-            .map(|id| format!("\"{id}\""))
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-    let policy_relative = layout.repository_relative(&layout.trust_policy_path())?;
-    write_file_atomically(
-        layout.repository_mutation_root(),
-        &policy_relative,
-        policy_text.as_bytes(),
-    )?;
+    append_trust_policy_snapshot(layout, &key_ids)?;
     Ok((adopted, true))
 }
 
-/// Read `key_id`'s adopted public key from its own key file, if one has already been written.
-fn read_existing_key(
-    layout: &RepositoryLayout,
-    key_id: &str,
-) -> Result<Option<[u8; ED25519_KEY_LEN]>> {
-    let key_path = layout.maintainer_trust_key_path(key_id)?;
-    let key_relative = layout.repository_relative(&key_path)?;
-    let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &key_relative)? else {
-        return Ok(None);
-    };
-    let text = String::from_utf8(bytes).map_err(|err| {
-        PrikkError::Integrity(format!(
-            "adopted maintainer key {key_id} is not valid UTF-8: {err}"
-        ))
-    })?;
-    Ok(Some(decode_public_key_hex(text.trim_end_matches('\n'))?))
+/// Revoke a MAINTAINER key id: remove it from the active policy by appending a new snapshot without
+/// it (design-v1.md §14.9 -- the same operation `add_trusted_maintainer` already performs, just
+/// shorter; no tombstone record, no new format concept). The key's own material is never removed from
+/// the key-material container -- it stays as TOFU history, so a future re-add with a *different*
+/// public key under the same id is still refused. Returns whether the key was actually adopted (a
+/// no-op removal of an unadopted id returns `false`, matching `add`'s own idempotent-no-op shape).
+/// **Refuses to remove the last adopted key**: an explicitly-empty-but-present policy is a state the
+/// old TOML parser could never represent either (`keys = []` was rejected as malformed), and
+/// introducing it now would be a new state `verify`'s trust classification does not account for.
+pub fn remove_trusted_maintainer(layout: &RepositoryLayout, key_id: &str) -> Result<bool> {
+    layout.require_current_format()?;
+    let _active_lock = ActiveLock::acquire(layout)?;
+    crate::refs::ensure_no_incomplete_publication(layout)?;
+    let mut key_ids = current_adopted_key_ids(layout)?;
+    let original_len = key_ids.len();
+    key_ids.retain(|existing| existing != key_id);
+    if key_ids.len() == original_len {
+        return Ok(false);
+    }
+    if key_ids.is_empty() {
+        return Err(PrikkError::Integrity(
+            "cannot remove the last trusted maintainer key; a repository policy must not be \
+             explicitly empty"
+                .to_string(),
+        ));
+    }
+    append_trust_policy_snapshot(layout, &key_ids)?;
+    Ok(true)
 }
 
-/// The current policy's key ids, in on-disk order — empty if no policy file exists yet (the first
-/// key ever adopted in this repository).
-fn load_policy_key_ids(layout: &RepositoryLayout) -> Result<Vec<String>> {
-    let policy_relative = layout.repository_relative(&layout.trust_policy_path())?;
-    let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &policy_relative)?
-    else {
-        return Ok(Vec::new());
-    };
-    let policy_text = String::from_utf8(bytes).map_err(|err| {
-        PrikkError::Integrity(format!(
-            "publication trust policy is not valid UTF-8: {err}"
-        ))
-    })?;
-    parse_policy_keys(&policy_text)
+/// The currently-adopted key ids, in adoption order — empty if no policy snapshot has ever been
+/// appended (the first key ever adopted in this repository). Distinct from `load_maintainer_trust_
+/// policy`'s own "missing policy" error: adding the *first* key in a fresh repository is not a trust
+/// failure, so this treats "never configured" and "add" as compatible, while `load_maintainer_trust_
+/// policy` (read-only callers, `verify`) must keep treating it as a hard error.
+fn current_adopted_key_ids(layout: &RepositoryLayout) -> Result<Vec<String>> {
+    Ok(read_current_trust_policy_snapshot(layout)?.unwrap_or_default())
 }
 
-/// Reject a maintainer key id whose ASCII-folded form collides with an existing key file other than
-/// itself (DC-72). Runs unconditionally, before any filesystem lookup keyed on `key_id` — a
-/// case-insensitive filesystem (APFS) can fold a genuinely different id onto an existing key's file,
-/// which must never be mistaken for that id's own idempotent or TOFU-refusal re-add. Re-adopting
-/// `key_id` unchanged (same exact string) is not a collision with itself; every other case-insensitive
-/// match is. Folds through `prikk_object::ascii_fold`, the one shared folding definition (DC-72 design
-/// ruling, `rfcs/accepted/DC-72-PATH-SAFETY-CONFORMANCE.md` §3.5) — see its doc comment for the
-/// recorded NFC/NFD limitation this inherits.
-fn validate_no_maintainer_key_id_collision(
-    layout: &RepositoryLayout,
-    keys_dir_relative: &std::path::Path,
-    key_id: &str,
-) -> Result<()> {
+/// Reject a maintainer key id whose ASCII-folded form collides with a *currently adopted* key id
+/// other than itself (DC-72). `key_ids` is the resolved active-policy set, not the key-material
+/// container's own full history — design-v1.md §14.9 §4's deliberate behavior change: a removed key
+/// no longer reserves its case-folded name. This check's rationale also changed with the container
+/// migration: the original hazard was a case-insensitive *filesystem* silently folding two `.pub`
+/// filenames onto one (APFS; found on macOS CI after Stage 1 merged —
+/// `dc72_path_safety_collisions.rs::maintainer_key_id_rejects_case_insensitive_collision`). A
+/// container has no filenames, so that hazard's root cause is gone; this is now a semantic guard
+/// against operator confusion and ambiguous audit trails, not a filesystem workaround, which is why
+/// its tests were rewritten rather than ported. Folds through `prikk_object::ascii_fold`, the one
+/// shared folding definition (DC-72 design ruling, `rfcs/accepted/DC-72-PATH-SAFETY-CONFORMANCE.md`
+/// §3.5) — see its doc comment for the recorded NFC/NFD limitation this inherits.
+fn validate_no_maintainer_key_id_collision(key_ids: &[String], key_id: &str) -> Result<()> {
     let folded = ascii_fold(key_id);
-    for entry in list_directory(layout.repository_mutation_root(), keys_dir_relative)? {
-        if entry.kind != EntryKind::Regular {
-            continue;
-        }
-        let Some(name) = entry.name.to_str() else {
-            continue;
-        };
-        let Some(existing_id) = name.strip_suffix(".pub") else {
-            continue;
-        };
+    for existing_id in key_ids {
         if existing_id != key_id && ascii_fold(existing_id) == folded {
             return Err(PrikkError::InvalidName(format!(
                 "case-insensitive maintainer key id collision involving: {existing_id}"
@@ -204,34 +193,25 @@ fn validate_no_maintainer_key_id_collision(
     Ok(())
 }
 
-/// Load and validate the repository-local set of adopted MAINTAINER keys.
+/// Load and validate the repository-local set of adopted MAINTAINER keys. Errors if no policy
+/// snapshot has ever been appended — a repository with no adopted maintainer is a trust failure for
+/// every publication, exactly as the old missing-`policy.toml` case was
+/// (`PublicationTrustVerifier`'s `PRIKK-TRUST-POLICY-INVALID`).
 pub fn load_maintainer_trust_policy(layout: &RepositoryLayout) -> Result<MaintainerTrustPolicy> {
-    let policy_relative = layout.repository_relative(&layout.trust_policy_path())?;
-    let policy_text = String::from_utf8(read_file_required(
-        layout.repository_mutation_root(),
-        &policy_relative,
-    )?)
-    .map_err(|err| {
-        PrikkError::Integrity(format!(
-            "publication trust policy is missing or unreadable: {err}"
-        ))
+    let key_ids = read_current_trust_policy_snapshot(layout)?.ok_or_else(|| {
+        PrikkError::Integrity("publication trust policy is missing or unreadable".to_string())
     })?;
-    let key_ids = parse_policy_keys(&policy_text)?;
     let mut keys = Vec::with_capacity(key_ids.len());
     for key_id in key_ids {
-        let key_path = layout.maintainer_trust_key_path(&key_id)?;
-        let key_relative = layout.repository_relative(&key_path)?;
-        let public_key_text = String::from_utf8(read_file_required(
-            layout.repository_mutation_root(),
-            &key_relative,
-        )?)
-        .map_err(|err| {
+        let entry = lookup_trust_key_entry(layout, &key_id)?.ok_or_else(|| {
             PrikkError::Integrity(format!(
-                "trusted maintainer key {key_id} is missing or unreadable: {err}"
+                "trusted maintainer key {key_id} is missing or unreadable"
             ))
         })?;
-        let public_key = decode_public_key_hex(public_key_text.trim_end_matches('\n'))?;
-        keys.push(AdoptedMaintainerKey { key_id, public_key });
+        keys.push(AdoptedMaintainerKey {
+            key_id: entry.key_id,
+            public_key: entry.public_key,
+        });
     }
     Ok(MaintainerTrustPolicy { keys })
 }
@@ -316,84 +296,6 @@ fn verify_trusted_signature(
         &signature.key_id,
     )?;
     verify_ed25519(&matched.public_key, &preimage, &signature.signature_bytes)
-}
-
-/// Parse the policy file's `[maintainer]` / `required = 1` / `keys = [...]` lines into an ordered
-/// list of key ids. Still hand-rolled and fixed-shape (DC-11): exactly 3 non-empty lines, the first
-/// two literal, only the `keys` line's bracket contents grow from DC-78 — split on `", "` and
-/// individually validated, never a general list grammar. `Signature::validate_key_id` restricts key
-/// ids to ASCII alphanumeric/`-`/`_`, so no valid key id can ever contain the `", "` separator or a
-/// `"` character, making the split-then-validate order safe.
-fn parse_policy_keys(policy_text: &str) -> Result<Vec<String>> {
-    let lines: Vec<&str> = policy_text
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect();
-    if lines.len() != 3 {
-        return Err(PrikkError::MalformedData(
-            "trust policy must contain exactly [maintainer], required, and keys lines".to_string(),
-        ));
-    }
-    let Some(section) = lines.first() else {
-        return Err(PrikkError::MalformedData(
-            "trust policy is empty".to_string(),
-        ));
-    };
-    if *section != "[maintainer]" {
-        return Err(PrikkError::MalformedData(
-            "trust policy must start with [maintainer]".to_string(),
-        ));
-    }
-    let Some(required) = lines.get(1) else {
-        return Err(PrikkError::MalformedData(
-            "trust policy missing required line".to_string(),
-        ));
-    };
-    if *required != "required = 1" {
-        return Err(PrikkError::MalformedData(
-            "trust policy must set required = 1".to_string(),
-        ));
-    }
-    let Some(keys_line) = lines.get(2) else {
-        return Err(PrikkError::MalformedData(
-            "trust policy missing keys line".to_string(),
-        ));
-    };
-    let Some(rest) = keys_line.strip_prefix("keys = [") else {
-        return Err(PrikkError::MalformedData(
-            "trust policy keys line must be keys = [\"<key-id>\", ...]".to_string(),
-        ));
-    };
-    let Some(inner) = rest.strip_suffix(']') else {
-        return Err(PrikkError::MalformedData(
-            "trust policy keys line must be keys = [\"<key-id>\", ...]".to_string(),
-        ));
-    };
-    if inner.is_empty() {
-        return Err(PrikkError::MalformedData(
-            "trust policy keys list must not be empty".to_string(),
-        ));
-    }
-    let mut key_ids: Vec<String> = Vec::new();
-    for candidate in inner.split(", ") {
-        let Some(key_id) = candidate
-            .strip_prefix('"')
-            .and_then(|value| value.strip_suffix('"'))
-        else {
-            return Err(PrikkError::MalformedData(
-                "trust policy keys entries must be double-quoted".to_string(),
-            ));
-        };
-        Signature::validate_key_id(key_id)?;
-        if key_ids.iter().any(|existing| existing == key_id) {
-            return Err(PrikkError::MalformedData(format!(
-                "trust policy lists key id {key_id} more than once"
-            )));
-        }
-        key_ids.push(key_id.to_string());
-    }
-    Ok(key_ids)
 }
 
 fn decode_public_key_hex(hex: &str) -> Result<[u8; ED25519_KEY_LEN]> {

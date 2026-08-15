@@ -5,13 +5,22 @@
 //! previously exercised "adding a second key id replaces the first" or "re-adding the same key id
 //! with a different public key replaces it" has been rewritten, not merely patched: those behaviors
 //! no longer exist, on purpose (§D5's TOFU enforcement).
+//!
+//! RFC 102 Stage 5, design-v1.md §14/§14.9: key material and policy moved onto `trust_index.rs`'s
+//! containers, replacing `trust/keys/maintainer/*.pub` and `trust/policy.toml` outright. Tests that
+//! directly manipulated those paths, or relied on `atomic_replace`'s own failpoints
+//! (`MutableParentSync`/`MutableFileSync`/`MutableRename`), are redesigned onto the container paths
+//! and `durable_append`'s own failpoints (`AppendWrite`/`RequiredFileSync`/`RequiredDirectorySync`) --
+//! not ported, since the underlying primitive changed. Pure-behavior tests (through the public API
+//! only) are unchanged.
 
 #![allow(clippy::indexing_slicing)]
 
 use prikk_crypto::Ed25519KeyPair;
 
 use crate::{
-    RepositoryLayout, add_trusted_maintainer, load_maintainer_trust_policy, verify_signer_trusted,
+    RepositoryLayout, add_trusted_maintainer, load_maintainer_trust_policy,
+    remove_trusted_maintainer, verify_signer_trusted,
 };
 
 use crate::fsutil::{TestFailPoint, fail_after_for_test, fail_once_for_test};
@@ -155,57 +164,33 @@ fn policy_rejects_unsafe_key_id() {
     let _ = std::fs::remove_dir_all(root);
 }
 
-/// DC-78 §D7.1: the multi-key parser stays strict and fixed-shape. Two keys are now accepted;
-/// malformed two-key syntax is still rejected — this is the inverse of the pre-DC-78 test of the
-/// same name, kept as the same test identity because the property worth protecting (malformed
-/// syntax fails closed) is the same, only the boundary of "malformed" moved.
+/// RFC 102 Stage 5: replaces `policy_accepts_two_keys_and_rejects_malformed_two_key_syntax`, which
+/// hand-wrote TOML text of various malformed shapes -- there is no TOML anymore to malform the same
+/// way. The well-formed half is already covered by `adopting_a_second_key_id_keeps_the_first_trusted`;
+/// the property worth protecting here is the container-era equivalent of "malformed input fails
+/// closed" -- corrupt bytes in the policy container must not silently resolve to a stale or empty
+/// policy. Decode-level corruption isolation (checksum mismatch, duplicate key id) has its own
+/// dedicated coverage in `trust_index/tests.rs`; this proves the property end to end through the
+/// public `load_maintainer_trust_policy` API.
 #[test]
-fn policy_accepts_two_keys_and_rejects_malformed_two_key_syntax() {
-    let root = unique_temp_dir("trust-multikey");
+fn a_corrupt_policy_container_fails_closed_rather_than_resolving_stale_or_empty() {
+    let root = unique_temp_dir("trust-corrupt-policy");
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let keys_dir = layout.maintainer_trust_keys_dir();
-        assert!(std::fs::create_dir_all(&keys_dir).is_ok());
+        let key = public_key_hex(&[1_u8; 32]);
+        assert!(add_trusted_maintainer(&layout, "alice", &key).is_ok());
         assert!(
             std::fs::write(
-                keys_dir.join("a.pub"),
-                format!("{}\n", public_key_hex(&[1_u8; 32]))
+                layout.trust_policy_container_path(),
+                b"not a valid trust policy container at all",
             )
             .is_ok()
         );
         assert!(
-            std::fs::write(
-                keys_dir.join("b.pub"),
-                format!("{}\n", public_key_hex(&[2_u8; 32]))
-            )
-            .is_ok()
+            load_maintainer_trust_policy(&layout).is_err(),
+            "a corrupt policy container must fail closed, not resolve to the prior snapshot or empty"
         );
-        assert!(
-            std::fs::write(
-                layout.trust_policy_path(),
-                "[maintainer]\nrequired = 1\nkeys = [\"a\", \"b\"]\n",
-            )
-            .is_ok()
-        );
-        let loaded = load_maintainer_trust_policy(&layout);
-        assert!(loaded.is_ok(), "well-formed two-key policy must load");
-        if let Ok(loaded) = loaded {
-            assert_eq!(loaded.keys.len(), 2);
-        }
-
-        for malformed in [
-            "[maintainer]\nrequired = 1\nkeys = [\"a\",\"b\"]\n",
-            "[maintainer]\nrequired = 1\nkeys = [\"a\", \"a\"]\n",
-            "[maintainer]\nrequired = 1\nkeys = [\"a\", ]\n",
-            "[maintainer]\nrequired = 1\nkeys = []\n",
-        ] {
-            assert!(std::fs::write(layout.trust_policy_path(), malformed).is_ok());
-            assert!(
-                load_maintainer_trust_policy(&layout).is_err(),
-                "malformed policy must be rejected: {malformed:?}"
-            );
-        }
     }
     let _ = std::fs::remove_dir_all(root);
 }
@@ -229,16 +214,25 @@ fn signer_trust_binding_rejects_seed_public_key_mismatch() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// The key-material append (the first of the two `add_trusted_maintainer` performs for a genuinely
+/// new key) fails: neither the key material nor the policy snapshot changes, since the policy append
+/// is never reached.
 #[test]
-fn failed_key_parent_sync_keeps_previous_effective_policy() {
-    let root = unique_temp_dir("trust-key-sync-failure");
+fn failed_key_append_keeps_previous_effective_policy() {
+    let root = unique_temp_dir("trust-key-append-failure");
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
         let old_key = public_key_hex(&[7_u8; 32]);
         let new_key = public_key_hex(&[8_u8; 32]);
         assert!(add_trusted_maintainer(&layout, "old", &old_key).is_ok());
-        fail_once_for_test(TestFailPoint::MutableParentSync);
+        // `AppendWrite` (not `RequiredDirectorySync`/`RequiredFileSync`) -- those two are shared with
+        // `create_exclusive`, which `ActiveLock::acquire`'s own lock-file creation also calls, so a
+        // one-shot failpoint on either would consume on the *lock*, not the key append, and leave the
+        // lock file itself as orphaned debris from a "failed but landed" create (found empirically:
+        // the retry below failed with the wrong failpoint choice). `AppendWrite` is exclusive to
+        // `durable_append` and fires before any bytes are written, so nothing lands either way.
+        fail_once_for_test(TestFailPoint::AppendWrite);
         assert!(add_trusted_maintainer(&layout, "new", &new_key).is_err());
         let loaded = load_maintainer_trust_policy(&layout);
         assert!(loaded.is_ok());
@@ -258,23 +252,25 @@ fn failed_key_parent_sync_keeps_previous_effective_policy() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// The policy snapshot append (the third `RequiredDirectorySync` checkpoint this call reaches --
+/// `ActiveLock::acquire`'s own lock-file creation is the first, since `create_exclusive` shares this
+/// failpoint too, and the key material append is the second) fails at its own directory-sync
+/// confirmation: the new snapshot's bytes are already physically appended by then (`durable_append`'s
+/// write/file-sync steps both precede the directory sync), so the failed call already exposes the new
+/// effective policy on a fresh read -- the failure is honestly reported (durability wasn't confirmed),
+/// but the content already moved. Same "operation happened, confirmation failed" shape the retired
+/// `atomic_replace`-based test proved for `MutableParentSync`. The skip count of 2 (not 1) is the
+/// direct consequence of the shared-failpoint fact this module's other test found the hard way.
 #[test]
-fn failed_policy_parent_sync_exposes_retryable_new_effective_policy() {
-    let root = unique_temp_dir("trust-policy-sync-failure");
+fn failed_policy_append_exposes_retryable_new_effective_policy() {
+    let root = unique_temp_dir("trust-policy-append-failure");
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
         let old_key = public_key_hex(&[7_u8; 32]);
         let new_key = public_key_hex(&[8_u8; 32]);
         assert!(add_trusted_maintainer(&layout, "old", &old_key).is_ok());
-        // Fail on the *second* MutableParentSync this add triggers: the key file's own sync
-        // succeeds (skip = 1 means the first call is allowed through), so "new"'s key file lands on
-        // disk, and the policy rewrite's *rename* also completes — parent-directory sync happens
-        // strictly after rename in `write_file_atomically`, so a sync failure there reports an
-        // error without undoing the rename that already made "new" the effective policy content.
-        // That is what "exposes retryable new effective policy" names: the failure is honestly
-        // reported (durability wasn't confirmed), but the content already moved.
-        fail_after_for_test(TestFailPoint::MutableParentSync, 1);
+        fail_after_for_test(TestFailPoint::RequiredDirectorySync, 2);
         assert!(add_trusted_maintainer(&layout, "new", &new_key).is_err());
         let loaded = load_maintainer_trust_policy(&layout);
         assert!(loaded.is_ok());
@@ -282,7 +278,7 @@ fn failed_policy_parent_sync_exposes_retryable_new_effective_policy() {
             assert_eq!(
                 loaded.keys.len(),
                 2,
-                "the policy rename already completed before the parent sync failed"
+                "the policy append already landed before the directory sync failed"
             );
             assert_eq!(loaded.keys[1].key_id, "new");
         }
@@ -306,10 +302,14 @@ fn trust_reads_and_updates_remain_on_retained_repository_root() -> prikk_error::
     assert!(add_trusted_maintainer(&layout, "maintainer", &first).is_ok());
     let displaced = root.join(".prikk-displaced");
     std::fs::rename(layout.prikk_dir(), &displaced)?;
-    std::fs::create_dir_all(root.join(".prikk/trust/keys/maintainer"))?;
-    std::fs::write(
-        root.join(".prikk/trust/policy.toml"),
-        "[maintainer]\nrequired = 1\nkeys = [\"replacement\"]\n",
+    std::fs::create_dir_all(root.join(".prikk/trust"))?;
+    std::fs::copy(
+        displaced.join("trust/keys.container"),
+        root.join(".prikk/trust/keys.container"),
+    )?;
+    std::fs::copy(
+        displaced.join("trust/policy.container"),
+        root.join(".prikk/trust/policy.container"),
     )?;
 
     assert_eq!(
@@ -324,38 +324,151 @@ fn trust_reads_and_updates_remain_on_retained_repository_root() -> prikk_error::
         loaded.keys[1].public_key,
         Ed25519KeyPair::from_seed(&[8_u8; 32]).public_key_bytes()
     );
-    assert!(root.join(".prikk/trust/policy.toml").is_file());
+    assert!(root.join(".prikk/trust/policy.container").is_file());
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
 
 #[test]
-fn trust_file_sync_and_rename_failures_pin_effective_state_and_retry() -> prikk_error::Result<()> {
-    for point in [TestFailPoint::MutableFileSync, TestFailPoint::MutableRename] {
-        for (boundary, skip) in [("key", 0), ("policy", 1)] {
-            let root = unique_temp_dir(&format!("trust-{boundary}-{point:?}"));
-            let layout = RepositoryLayout::init(root.clone())?;
-            let old_key = public_key_hex(&[7_u8; 32]);
-            let new_key = public_key_hex(&[8_u8; 32]);
-            assert!(add_trusted_maintainer(&layout, "old", &old_key).is_ok());
+fn trust_append_failures_pin_effective_state_and_retry() -> prikk_error::Result<()> {
+    for (boundary, skip) in [("key", 0), ("policy", 1)] {
+        let root = unique_temp_dir(&format!("trust-append-failure-{boundary}"));
+        let layout = RepositoryLayout::init(root.clone())?;
+        let old_key = public_key_hex(&[7_u8; 32]);
+        let new_key = public_key_hex(&[8_u8; 32]);
+        assert!(add_trusted_maintainer(&layout, "old", &old_key).is_ok());
 
-            fail_after_for_test(point, skip);
-            assert!(add_trusted_maintainer(&layout, "new", &new_key).is_err());
-            let retained = load_maintainer_trust_policy(&layout)?;
-            assert_eq!(retained.keys.len(), 1, "boundary {boundary}");
-            assert_eq!(retained.keys[0].key_id, "old");
-            assert_eq!(
-                retained.keys[0].public_key,
-                Ed25519KeyPair::from_seed(&[7_u8; 32]).public_key_bytes()
-            );
-            assert!(add_trusted_maintainer(&layout, "new", &new_key).is_ok());
-            let retried = load_maintainer_trust_policy(&layout)?;
-            assert_eq!(retried.keys.len(), 2, "boundary {boundary}");
-            assert_eq!(retried.keys[1].key_id, "new");
+        fail_after_for_test(TestFailPoint::AppendWrite, skip);
+        assert!(add_trusted_maintainer(&layout, "new", &new_key).is_err());
+        let retained = load_maintainer_trust_policy(&layout)?;
+        assert_eq!(retained.keys.len(), 1, "boundary {boundary}");
+        assert_eq!(retained.keys[0].key_id, "old");
+        assert_eq!(
+            retained.keys[0].public_key,
+            Ed25519KeyPair::from_seed(&[7_u8; 32]).public_key_bytes()
+        );
+        assert!(add_trusted_maintainer(&layout, "new", &new_key).is_ok());
+        let retried = load_maintainer_trust_policy(&layout)?;
+        assert_eq!(retried.keys.len(), 2, "boundary {boundary}");
+        assert_eq!(retried.keys[1].key_id, "new");
 
-            let _ = std::fs::remove_dir_all(root);
-        }
+        let _ = std::fs::remove_dir_all(root);
     }
     Ok(())
+}
+
+/// design-v1.md §14.9: revocation is representable natively -- `remove_trusted_maintainer` appends a
+/// shorter snapshot, and the removed key stops verifying while every other adopted key is unaffected.
+#[test]
+fn remove_revokes_a_key_without_disturbing_others() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("trust-remove-basic");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let alice_key = public_key_hex(&[1_u8; 32]);
+    let bob_key = public_key_hex(&[2_u8; 32]);
+    add_trusted_maintainer(&layout, "alice", &alice_key)?;
+    add_trusted_maintainer(&layout, "bob", &bob_key)?;
+
+    assert!(remove_trusted_maintainer(&layout, "alice")?);
+    let loaded = load_maintainer_trust_policy(&layout)?;
+    assert_eq!(loaded.keys.len(), 1);
+    assert_eq!(loaded.keys[0].key_id, "bob");
+
+    let alice_signer = Ed25519MaintainerSigner::from_seed("alice", &[1_u8; 32])?;
+    assert!(verify_signer_trusted(&layout, &alice_signer).is_err());
+    let bob_signer = Ed25519MaintainerSigner::from_seed("bob", &[2_u8; 32])?;
+    assert!(verify_signer_trusted(&layout, &bob_signer).is_ok());
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// Removing a key id that was never adopted is a no-op reported as such, matching `add`'s own
+/// idempotent-no-op shape.
+#[test]
+fn remove_of_an_unadopted_key_id_is_a_reported_no_op() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("trust-remove-noop");
+    let layout = RepositoryLayout::init(root.clone())?;
+    add_trusted_maintainer(&layout, "alice", &public_key_hex(&[1_u8; 32]))?;
+
+    assert!(!remove_trusted_maintainer(&layout, "never-adopted")?);
+    let loaded = load_maintainer_trust_policy(&layout)?;
+    assert_eq!(loaded.keys.len(), 1);
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// design-v1.md §14.9's own note: an explicitly-empty policy is a state the old TOML parser could
+/// never represent either (`keys = []` was rejected as malformed), so removing the last adopted key
+/// is refused rather than introducing it now.
+#[test]
+fn remove_of_the_last_adopted_key_is_refused() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("trust-remove-last");
+    let layout = RepositoryLayout::init(root.clone())?;
+    add_trusted_maintainer(&layout, "alice", &public_key_hex(&[1_u8; 32]))?;
+
+    assert!(remove_trusted_maintainer(&layout, "alice").is_err());
+    let loaded = load_maintainer_trust_policy(&layout)?;
+    assert_eq!(
+        loaded.keys.len(),
+        1,
+        "the refused removal must not have changed anything"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// design-v1.md §14.9 §4's deliberate behavior change, stated and proven rather than left to surface
+/// later: after removal, a case-insensitive variant of the removed id is addable -- the DC-72 collision
+/// check is judged against the *active* policy now, not the key-material container's full history, so
+/// a removed key's identity no longer goes on reserving its case-folded name.
+#[test]
+fn a_removed_keys_case_variant_becomes_addable() {
+    let root = unique_temp_dir("trust-remove-case-variant");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let original_key = public_key_hex(&[1_u8; 32]);
+        let other_key = public_key_hex(&[2_u8; 32]);
+        assert!(add_trusted_maintainer(&layout, "Dev-Maintainer", &original_key).is_ok());
+        // A second, unrelated key must exist so removing "Dev-Maintainer" isn't refused as "the
+        // last adopted key."
+        assert!(add_trusted_maintainer(&layout, "someone-else", &other_key).is_ok());
+        assert!(remove_trusted_maintainer(&layout, "Dev-Maintainer").is_ok());
+
+        // The case-folded variant is now addable -- the removed identity no longer reserves its name.
+        assert!(add_trusted_maintainer(&layout, "dev-maintainer", &other_key).is_ok());
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// The other half of the same ruling: TOFU history persists across removal, independent of the
+/// collision check above -- re-adopting the *exact same* id (no case-fold collision to trip, since it
+/// is absent from the active set after removal) with a *different* key is still refused, because the
+/// key-material container is never pruned.
+#[test]
+fn a_changed_key_under_a_removed_and_readded_id_is_still_refused() {
+    let root = unique_temp_dir("trust-remove-tofu-persists");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let original_key = public_key_hex(&[1_u8; 32]);
+        let other_key = public_key_hex(&[2_u8; 32]);
+        assert!(add_trusted_maintainer(&layout, "maintainer", &original_key).is_ok());
+        assert!(add_trusted_maintainer(&layout, "someone-else", &other_key).is_ok());
+        assert!(remove_trusted_maintainer(&layout, "maintainer").is_ok());
+
+        let changed_key = public_key_hex(&[3_u8; 32]);
+        assert!(add_trusted_maintainer(&layout, "maintainer", &changed_key).is_err());
+        // Re-adopting with the *original* key, by contrast, is the ordinary idempotent-material case.
+        assert!(add_trusted_maintainer(&layout, "maintainer", &original_key).is_ok());
+        let loaded = load_maintainer_trust_policy(&layout);
+        assert!(loaded.is_ok());
+        if let Ok(loaded) = loaded {
+            assert!(loaded.keys.iter().any(|key| key.key_id == "maintainer"));
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
 }

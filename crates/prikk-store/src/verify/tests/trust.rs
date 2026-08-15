@@ -18,7 +18,7 @@ fn missing_policy_is_reported_once_while_count_advances() -> prikk_error::Result
 fn malformed_policy_is_reported_once_while_count_advances() -> prikk_error::Result<()> {
     assert_invalid_policy_sequence(
         "verify-trust-malformed-policy",
-        Some("[maintainer]\nrequired = 2\nkeys = []\n"),
+        Some(b"not a valid trust policy container at all"),
     )
 }
 
@@ -90,12 +90,12 @@ fn verify_returns_the_matched_key_id_on_success() -> prikk_error::Result<()> {
 
 fn assert_invalid_policy_sequence(
     fixture_name: &str,
-    malformed_policy: Option<&str>,
+    malformed_policy: Option<&[u8]>,
 ) -> prikk_error::Result<()> {
     let root = unique_temp_dir(fixture_name);
     let layout = RepositoryLayout::init(root.clone())?;
     if let Some(policy) = malformed_policy {
-        std::fs::write(layout.trust_policy_path(), policy)?;
+        std::fs::write(layout.trust_policy_container_path(), policy)?;
     }
 
     let first = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"first".to_vec());
