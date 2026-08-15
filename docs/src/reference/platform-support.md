@@ -19,6 +19,23 @@ Every mutation function's *signature* compiles on every platform; only its *body
 implementor on Linux and macOS, and a caller on any other platform receives a clean runtime error
 rather than a build failure or a silent no-op.
 
+**What a Windows implementation would and would not be able to guarantee.** This is stated here rather
+than left to be discovered, because it is a real difference and not a coverage gap. Anchored resolution
+on Linux and macOS opens each path component with `openat(dirfd, name, O_NOFOLLOW)`, so the handle for a
+component is bound to the object that was checked — the next open is scoped to that handle, not to a
+re-walked path string. **Windows has no equivalent**: no Win32 primitive takes a directory handle as a
+resolution root for opening a child by name, and the natural mitigation — confirming two opens landed on
+the same object via a file-index/volume-serial pair — sits behind an unstable Rust API.
+
+A Windows implementation can refuse a reparse point at each component as it is opened, which defeats a
+symlink or junction that is already in place. **It cannot close the window between checking a component
+and opening the next one.** So a concurrent local process that substitutes a reparse point mid-walk,
+timed into that window, is not provably defeated on Windows, while it is on Linux and macOS. A passive,
+already-planted reparse point is caught on every platform.
+
+Prikk does not claim otherwise, and this difference is the reason Windows mutation is not shipped on the
+strength of the primitives alone.
+
 **Read-only commands build and run everywhere.** They never reach a mutation primitive — verified by
 tracing every command's call graph to `crates/prikk-store/src/fsutil`'s mutation set (`ensure_root`,
 `write_file_atomically`, `write_worktree_file_atomically`, `append_file_required`,
