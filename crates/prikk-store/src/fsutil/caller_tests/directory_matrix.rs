@@ -51,19 +51,18 @@ fn repository_initialization_component_matrix() -> prikk_error::Result<()> {
 // strict-`durable_append`-era equivalent, and was removed rather than retargeted -- the same
 // disposition Stage 3 and Stage 4 gave the two retirement notes above, for the same underlying
 // reason arriving through a third door. Its setup deleted `queue.wal` and then its now-empty
-// parent directory to force `wal.rs:194`'s defensive `ensure_directory_required` to recreate a
-// directory from nothing; under the old lenient `durable_append`, the subsequent append also
-// transparently recreated the deleted file. Strict `durable_append` closes exactly that
-// transparent recreation (design-v1.md §14.3's own point: it "silently repairs" an interrupted-
-// init-shaped state into an undetectable one), so the fixture's constructed state --
+// parent directory to force what was then `wal.rs:194`'s defensive `ensure_directory_required`
+// to recreate a directory from nothing; under the old lenient `durable_append`, the subsequent
+// append also transparently recreated the deleted file. Strict `durable_append` closes exactly
+// that transparent recreation (design-v1.md §14.3's own point: it "silently repairs" an
+// interrupted-init-shaped state into an undetectable one), so the fixture's constructed state --
 // directory absent, file absent -- is no longer one `wal.append_patch` can recover from, and is
 // not a state a correctly-`init`ed repository can reach in the first place:
 // `default_active_dir()` is in `required_directories()` (`layout.rs:378`) and nothing in this
-// codebase ever removes a required directory. `wal.rs:194`'s `ensure_directory_required` call
-// is therefore defensive-only for a directory that cannot legitimately be absent, the same
-// conclusion already reached for object containers (Stage 3) and ref containers (Stage 4).
-// Flagged as a finding for the same reason those two were: verified from the code, not assumed,
-// and reported for an affirmative ruling rather than retired silently.
+// codebase ever removes a required directory. This was flagged as a finding rather than retired
+// silently -- the same disposition Stage 3 and Stage 4 gave their own analogous calls -- and the
+// dead-surface consolidation handoff (`rfcs/handoffs/consolidation/`) ruled it dead by the same
+// reasoning and removed the `wal.rs` call outright.
 
 // RFC 102 Stage 5, design-v1.md §14.8: `active_metadata_directory_component_matrix` (proving a
 // missing-`active/default/`-directory failure during `write_active_ref_metadata` was retryable) has

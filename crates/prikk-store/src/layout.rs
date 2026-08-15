@@ -350,8 +350,16 @@ impl RepositoryLayout {
     }
 
     /// Return the object root directory.
+    ///
+    /// Dead-surface consolidation: no longer in `required_directories()` (RFC-format-3 repositories
+    /// write containers, not loose object files, so a fresh repository never gets this tree). Kept
+    /// `pub(crate)`, not removed, because `verify/objects.rs`'s `scan_loose_file_temp_debris` still
+    /// reads it on every `verify` -- a dormant, format-3-only-relevant diagnostic (design-v1.md §12.3
+    /// item 3) whose own retirement was explicitly reserved for an RFC-level act, not a side effect of
+    /// this consolidation. `inspect_entry` tolerates the tree's absence, so a repository that never had
+    /// it (or an old one that did) both verify cleanly.
     #[must_use]
-    pub fn objects_dir(&self) -> PathBuf {
+    pub(crate) fn objects_dir(&self) -> PathBuf {
         self.prikk_dir.join("objects")
     }
 
@@ -395,12 +403,6 @@ impl RepositoryLayout {
     #[must_use]
     pub fn cache_dir(&self) -> PathBuf {
         self.prikk_dir.join("cache")
-    }
-
-    /// Return the quarantine directory.
-    #[must_use]
-    pub fn quarantine_dir(&self) -> PathBuf {
-        self.prikk_dir.join("quarantine")
     }
 
     /// Return the container root directory (RFC 102 Stage 3, design-v1.md §2).
@@ -514,13 +516,17 @@ impl RepositoryLayout {
     }
 
     /// Return all required directories for layout creation.
+    ///
+    /// Dead-surface consolidation: `objects/` and its six type subdirectories, `refs/by-id/`,
+    /// `refs/logs/`, and `quarantine/` are no longer created here -- nothing in a format-3 repository
+    /// writes into any of them (containers replaced loose objects and per-ref files years ago). This is
+    /// not a format change: `required_directories()` is consulted only here, at `init`; nothing
+    /// validates it at `open`, so an existing repository keeps its now-unused directories harmlessly,
+    /// and only a newly initialized one has fewer. `refs/tmp/` stays -- `refs/verify.rs`'s
+    /// `candidate_issues` still scans it on every `verify`.
     #[must_use]
     pub fn required_directories(&self) -> Vec<PathBuf> {
         let mut dirs = Vec::new();
-        dirs.push(self.objects_dir());
-        for object_type in persisted_object_types() {
-            dirs.push(self.object_type_dir(object_type));
-        }
         dirs.push(self.containers_dir());
         for object_type in persisted_object_types() {
             dirs.push(self.container_type_dir(object_type));
@@ -528,14 +534,11 @@ impl RepositoryLayout {
         dirs.push(self.active_dir());
         dirs.push(self.default_active_dir());
         dirs.push(self.refs_dir());
-        dirs.push(self.refs_dir().join("by-id"));
-        dirs.push(self.refs_dir().join("logs"));
         dirs.push(self.refs_dir().join("locks"));
         dirs.push(self.refs_dir().join("tmp"));
         dirs.push(self.refs_containers_dir());
         dirs.push(self.trust_dir());
         dirs.push(self.cache_dir());
-        dirs.push(self.quarantine_dir());
         dirs
     }
 
@@ -563,13 +566,22 @@ impl RepositoryLayout {
     }
 
     /// Return the object directory for a persisted object type.
+    ///
+    /// `pub(crate)`, not public: its only reader is `verify/objects.rs`'s
+    /// `scan_loose_file_temp_debris`, a dormant format-3-only diagnostic (see `objects_dir`'s own doc).
     #[must_use]
-    pub fn object_type_dir(&self, object_type: ObjectType) -> PathBuf {
+    pub(crate) fn object_type_dir(&self, object_type: ObjectType) -> PathBuf {
         self.objects_dir()
             .join(object_type_directory_name(object_type))
     }
 
     /// Return the storage path for a persisted object ID and type.
+    ///
+    /// No production caller by design, not by omission: this addresses the pre-container, format-1/2
+    /// loose-object layout, which nothing in a live format-3 repository writes or reads. Kept `pub`
+    /// specifically so `prikk-cli`'s format-transition fixtures (`tests/format_transition_support/`, a
+    /// different crate) can construct legacy-shaped repositories without duplicating the private
+    /// hex-prefixing scheme (`hex_prefix`, `layout.rs`) this method wraps.
     #[must_use]
     pub fn object_path(&self, object_type: ObjectType, id: ObjectId) -> PathBuf {
         let hex = id.to_hex();
@@ -580,6 +592,12 @@ impl RepositoryLayout {
     }
 
     /// Return the flat ref pointer path for a human-readable ref name.
+    ///
+    /// No production caller by design: this addresses the pre-container, format-1/2 flat-pointer-file
+    /// layout containers replaced. Kept `pub` so `prikk-cli`'s format-transition fixtures (a different
+    /// crate) can construct legacy-shaped repositories without reimplementing the private
+    /// `ref_name_storage_key` hash this method wraps -- that helper is `pub(crate)`, unreachable from
+    /// outside this crate.
     #[must_use]
     pub fn ref_pointer_path(&self, ref_name: &str) -> PathBuf {
         self.refs_dir()
@@ -588,6 +606,9 @@ impl RepositoryLayout {
     }
 
     /// Return the ref log path for a human-readable ref name.
+    ///
+    /// No production caller by design, for the same reason as `ref_pointer_path`: a legacy-format path
+    /// builder kept `pub` for `prikk-cli`'s cross-crate format-transition fixtures.
     #[must_use]
     pub fn ref_log_path(&self, ref_name: &str) -> PathBuf {
         self.refs_dir()
@@ -604,6 +625,12 @@ impl RepositoryLayout {
     }
 
     /// Return the ref temporary candidate path for a human-readable ref name.
+    ///
+    /// No production writer since Stage 4 removed the candidate-write-then-promote mechanism, but this
+    /// is not dead the way `ref_pointer_path`/`ref_log_path` are: `refs/tmp/` itself stays in
+    /// `required_directories()` because `refs/verify.rs`'s `candidate_issues` scans it on every
+    /// `verify`, and this accessor is what several of that scan's own regression tests
+    /// (`refs/tests/publication_recovery/candidate_cleanup.rs`) use to construct debris inside it.
     #[must_use]
     pub fn ref_tmp_path(&self, ref_name: &str) -> PathBuf {
         self.refs_dir()

@@ -9,7 +9,7 @@ use prikk_error::{PrikkError, Result};
 use crate::block_state::BlockStateStatus;
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
-use crate::refs::{RefFileStatus, RefItemStatus, RefRecoveryRepair};
+use crate::refs::{RefFileStatus, RefItemStatus};
 use crate::verify::{
     ActiveWalMetadataStatus, ObjectItemStatus, RepositoryVerification, StageStatus,
     verify_repository,
@@ -174,8 +174,6 @@ pub struct DoctorRepairReport {
     pub before: DoctorReport,
     /// WAL repair summary.
     pub wal_repair: WalRepair,
-    /// Ref pointer reconstruction summary, if requested.
-    pub ref_repair: Option<RefRecoveryRepair>,
     /// Doctor report after repair action.
     pub after: DoctorReport,
 }
@@ -420,12 +418,10 @@ pub fn repair_repository(
             preserved_patch_ids: Vec::new(),
         }
     };
-    let ref_repair = None;
     let after = doctor_repository(layout);
     Ok(DoctorRepairReport {
         before,
         wal_repair,
-        ref_repair,
         after,
     })
 }

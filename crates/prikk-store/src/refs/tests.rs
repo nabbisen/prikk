@@ -646,8 +646,13 @@ fn ensure_no_incomplete_publication_refuses_on_a_corrupted_log_container_record(
     Ok(())
 }
 
+/// `reconstruct_missing_ref_from_log` (the format-1 doctor repair path) was removed by the
+/// dead-surface consolidation as superseded -- DC-38's crash recovery made it unreachable years
+/// before removal, and this test's own two assertions on it always passed trivially (the function
+/// was already hardcoded to refuse unconditionally). What remains and still matters: a missing
+/// pointer is detected as a recoverable candidate, and `verify` reports it as blocking.
 #[test]
-fn ref_store_refuses_unsigned_missing_pointer_reconstruction() {
+fn missing_ref_pointer_is_recoverable_and_verify_flags_it_as_blocking() {
     let root = unique_temp_dir("ref-reconstruct");
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
@@ -678,9 +683,6 @@ fn ref_store_refuses_unsigned_missing_pointer_reconstruction() {
             candidate.ok().flatten().map(|value| value.ref_state_id),
             Some(ref_state_id)
         );
-        let repair = store.reconstruct_missing_ref_from_log("heads/main");
-        assert!(repair.is_err());
-        assert_eq!(store.read_current_ref_state_id("heads/main"), Ok(None));
         let report = verify_repository(&layout);
         assert!(report.is_ok());
         assert!(report.is_ok_and(|report| report.has_blocking_ref_publication_issues()));
@@ -729,10 +731,6 @@ fn ref_log_ahead_of_pointer_is_recoverable() {
             assert_eq!(report.checked_refs, Some(0));
             assert_eq!(report.checked_ref_log_records, Some(1));
         }
-
-        let repair = store.reconstruct_missing_ref_from_log("heads/topic");
-        assert!(repair.is_err());
-        assert_eq!(store.read_current_ref_state_id("heads/topic"), Ok(None));
     }
     let _ = std::fs::remove_dir_all(root);
 }

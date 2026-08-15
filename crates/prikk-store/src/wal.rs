@@ -11,7 +11,7 @@ use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_u16, push_u64};
 use crate::frame_resync::resync_to_next_magic;
 use crate::fsutil::{
-    MutationRoot, append_file_required, ensure_directory_required, len_to_u64, read_file_if_exists,
+    MutationRoot, append_file_required, len_to_u64, read_file_if_exists,
     truncate_existing_file_required, truncate_file_empty_required,
 };
 use crate::layout::RepositoryLayout;
@@ -186,12 +186,17 @@ impl Wal {
             envelope: envelope.clone(),
         };
         let bytes = encode_record(&record)?;
-        let Some(parent) = relative.parent() else {
+        // No `ensure_directory_required` here -- same justification as `truncate_empty_authorized`
+        // below (RFC 102 Stage 5, design-v1.md §14.8): `default_active_dir()` is in
+        // `required_repository_directories()`, permanent from `init`, and since `d8f5240` made
+        // `durable_append` strict, the WAL file must already exist for the append to succeed, so it
+        // cannot exist without its directory -- this call could not help even if the directory were
+        // somehow absent.
+        if relative.parent().is_none() {
             return Err(PrikkError::Io(
                 "WAL path has no parent directory".to_string(),
             ));
-        };
-        ensure_directory_required(root, parent)?;
+        }
         append_file_required(root, relative, &bytes)?;
         Ok(next_seq)
     }

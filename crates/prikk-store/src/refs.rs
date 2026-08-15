@@ -123,17 +123,6 @@ pub struct RefPointerSummary {
     pub ref_state_id: ObjectId,
 }
 
-/// Compatibility result type retained for the now-refused format-1 reconstruction API.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RefRecoveryRepair {
-    /// Human-readable ref name.
-    pub ref_name: String,
-    /// RefState ID reconstructed into the pointer file.
-    pub ref_state_id: ObjectId,
-    /// Whether a pointer file was written.
-    pub wrote_pointer: bool,
-}
-
 /// Inputs for a single ref publication primitive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RefPublication {
@@ -311,14 +300,6 @@ impl RefStore {
             target_object_id: update.new_target_object_id,
             update_seq: update.update_seq,
         }))
-    }
-
-    /// Refuse unsigned reconstruction of a missing format-1 ref pointer.
-    pub fn reconstruct_missing_ref_from_log(&self, ref_name: &str) -> Result<RefRecoveryRepair> {
-        let _ = ref_name;
-        Err(PrikkError::Integrity(
-            "format-1 missing-pointer reconstruction is unsupported in 0.18.0".to_string(),
-        ))
     }
 
     fn ensure_current_matches(&self, ref_name: &str, expected: Option<ObjectId>) -> Result<()> {

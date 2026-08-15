@@ -136,8 +136,8 @@ pub use received::{
 };
 pub use refs::{
     RefFileOutcome, RefFileStatus, RefItemOutcome, RefItemStatus, RefLogRecord, RefLogReplay,
-    RefPointerSummary, RefPublication, RefPublicationIssue, RefRecoveryCandidate,
-    RefRecoveryRepair, RefStore, validate_local_branch_ref, validate_local_tag_ref,
+    RefPointerSummary, RefPublication, RefPublicationIssue, RefRecoveryCandidate, RefStore,
+    validate_local_branch_ref, validate_local_tag_ref,
 };
 #[cfg(feature = "test-support")]
 pub use refs::{
