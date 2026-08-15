@@ -134,13 +134,6 @@ impl RepositoryLayout {
         for dir in layout.required_repository_directories()? {
             ensure_directory_required(layout.repository_mutation_root(), &dir)?;
         }
-        if read_file_if_exists(layout.repository_mutation_root(), Path::new("FORMAT"))?.is_none() {
-            write_file_atomically(
-                layout.repository_mutation_root(),
-                Path::new("FORMAT"),
-                CURRENT_FORMAT_VERSION,
-            )?;
-        }
         // RFC 102 Stage 1: created at `init`, never later -- a missing file and an idempotent
         // re-`init` on an already-initialized repository must not clobber either.
         create_empty_file_once(&layout, &layout.worktree_unclean_shutdown_marker_path())?;
@@ -174,6 +167,24 @@ impl RepositoryLayout {
             &layout.ref_log_container_slot_path(ContainerSlot::B),
         )?;
         create_empty_file_once(&layout, &layout.ref_pointer_index_path())?;
+        // RFC 102 Stage 5, design-v1.md §14.2: written last, once every container/marker/WAL name
+        // above is confirmed present. `FORMAT`'s presence is what certifies `init` completed --
+        // written first (the old order), a crash between it and the containers left a repository
+        // that read as a valid, empty format-4 repository with every container absent, and nothing
+        // detected it (`status`/`verify`/`doctor` all exited 0 against a probe repository with all 16
+        // container files deleted). Written last, an interrupted `init` leaves `FORMAT` absent, so a
+        // re-`init` skips the mismatched-format guard above (it only fires when `FORMAT` already
+        // exists) and re-enters this same body -- every `create_empty_file_once` call above is
+        // idempotent, so the re-run completes whichever names are still missing and finishes by
+        // writing `FORMAT`, exactly the "detectable and completable" property the reordering exists
+        // to provide.
+        if read_file_if_exists(layout.repository_mutation_root(), Path::new("FORMAT"))?.is_none() {
+            write_file_atomically(
+                layout.repository_mutation_root(),
+                Path::new("FORMAT"),
+                CURRENT_FORMAT_VERSION,
+            )?;
+        }
         Ok(layout)
     }
 
