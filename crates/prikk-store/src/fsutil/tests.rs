@@ -8,9 +8,10 @@ use crate::RepositoryLayout;
 use crate::test_support::unique_temp_dir;
 
 use super::{
-    MutationRoot, TestFailPoint, append_file_required, ensure_directory_required,
-    fail_once_for_test, promote_file_required, read_file_if_exists, remove_file_required,
-    truncate_existing_file_required, write_file_atomically, write_worktree_file_atomically,
+    MutationRoot, TestFailPoint, append_file_required, create_new_file_required,
+    ensure_directory_required, fail_once_for_test, promote_file_required, read_file_if_exists,
+    remove_file_required, truncate_existing_file_required, write_file_atomically,
+    write_worktree_file_atomically,
 };
 
 fn mutation_root(path: &Path) -> MutationRoot {
@@ -160,6 +161,10 @@ fn failed_mutable_rename_keeps_previous_authoritative_state() {
 fn failed_append_write_is_retryable() {
     let path = unique_temp_dir("append-write-failure");
     let root = mutation_root(&path);
+    // RFC 102 Stage 5, design-v1.md §14.3/§14.5: `durable_append` now requires an existing file --
+    // every production caller's target name is created at `init`, and this test's setup must match
+    // that discipline rather than lean on the retired create-on-append fallback.
+    assert!(create_new_file_required(&root, Path::new("log"), b"").is_ok());
     fail_once_for_test(TestFailPoint::AppendWrite);
     assert!(append_file_required(&root, Path::new("log"), b"record").is_err());
     assert_eq!(fs::read(path.join("log")).unwrap_or_default(), b"");

@@ -106,15 +106,19 @@ pub(super) fn open_existing_or_create_regular(
     }
 }
 
+/// RFC 102 Stage 5, design-v1.md §14.3/§14.5: requires an existing file rather than falling back to
+/// creation on `EEXIST`, matching `open_existing_regular`'s own use by `durable_truncate`
+/// (`anchored/linux.rs:63-64`). A create-on-append is a new-directory-entry event on every append --
+/// harmless on Linux (a wasted `EEXIST` syscall) but the exact gap this RFC exists to close on
+/// Windows, and it silently repaired an interrupted `init` (RFC's own §14.2 finding) into an
+/// undetectable one. Safe with zero behavior change on every path that exists today: every production
+/// `append_file_required` caller targets a name `RepositoryLayout::init` already created via
+/// `create_empty_file_once`, which routes through `create_new_file_required` -- a separate primitive
+/// that never calls this function -- so nothing here has ever depended on the fallback for
+/// correctness.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(super) fn open_append_regular(directory: impl AsFd, name: &std::ffi::OsStr) -> Result<OwnedFd> {
-    match open_new_regular(directory.as_fd(), name) {
-        Ok(fd) => Ok(fd),
-        Err(rustix::io::Errno::EXIST) => {
-            open_existing_regular(directory, name, OFlags::WRONLY | OFlags::APPEND)
-        }
-        Err(error) => Err(io_error(error)),
-    }
+    open_existing_regular(directory, name, OFlags::WRONLY | OFlags::APPEND)
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]

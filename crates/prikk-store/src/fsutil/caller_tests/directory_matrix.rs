@@ -3,10 +3,10 @@
 use std::path::Path;
 
 use crate::fsutil::{TestFailPoint, fail_once_for_test};
-use crate::test_support::{signed_patch_envelope, unique_temp_dir};
+use crate::test_support::unique_temp_dir;
 use crate::worktree::materialize_manifest_entries;
 use crate::{
-    RepoPath, RepositoryLayout, SnapshotEntry, SnapshotManifest, Wal, add_trusted_maintainer,
+    RepoPath, RepositoryLayout, SnapshotEntry, SnapshotManifest, add_trusted_maintainer,
     write_active_ref_metadata,
 };
 
@@ -49,27 +49,24 @@ fn repository_initialization_component_matrix() -> prikk_error::Result<()> {
 // `DirectoryCreate`/`CreatedDirectoryParentSync` failpoints are simply never reached by
 // `FileObjectStore::write_object`, and there is no analogous scenario left to prove here.
 
-#[test]
-fn wal_directory_component_matrix() -> prikk_error::Result<()> {
-    for point in COMPONENT_POINTS {
-        let root = unique_temp_dir("wal-component-matrix");
-        let layout = RepositoryLayout::init(root.clone())?;
-        let active_dir = layout.default_active_dir();
-        // RFC 102 Stage 1: `init` now creates `queue.wal` itself, so the directory this test needs
-        // empty (to exercise `ensure_directory_required`'s own recreation, not the WAL's presence)
-        // must have it removed first.
-        std::fs::remove_file(layout.default_queue_wal_path())?;
-        remove_empty_directory(&active_dir)?;
-        let wal = Wal::for_layout(&layout);
-        let patch = signed_patch_envelope();
-        fail_once_for_test(point);
-        assert!(wal.append_patch(&patch).is_err());
-        assert_retained_component(point, &active_dir);
-        assert_eq!(wal.append_patch(&patch)?, 1);
-        let _ = std::fs::remove_dir_all(root);
-    }
-    Ok(())
-}
+// RFC 102 Stage 5, design-v1.md §14.3/§14.5: `wal_directory_component_matrix` (proving a
+// missing-directory-plus-missing-WAL-file failure during append was retryable) has no
+// strict-`durable_append`-era equivalent, and was removed rather than retargeted -- the same
+// disposition Stage 3 and Stage 4 gave the two retirement notes above, for the same underlying
+// reason arriving through a third door. Its setup deleted `queue.wal` and then its now-empty
+// parent directory to force `wal.rs:194`'s defensive `ensure_directory_required` to recreate a
+// directory from nothing; under the old lenient `durable_append`, the subsequent append also
+// transparently recreated the deleted file. Strict `durable_append` closes exactly that
+// transparent recreation (design-v1.md §14.3's own point: it "silently repairs" an interrupted-
+// init-shaped state into an undetectable one), so the fixture's constructed state --
+// directory absent, file absent -- is no longer one `wal.append_patch` can recover from, and is
+// not a state a correctly-`init`ed repository can reach in the first place:
+// `default_active_dir()` is in `required_directories()` (`layout.rs:378`) and nothing in this
+// codebase ever removes a required directory. `wal.rs:194`'s `ensure_directory_required` call
+// is therefore defensive-only for a directory that cannot legitimately be absent, the same
+// conclusion already reached for object containers (Stage 3) and ref containers (Stage 4).
+// Flagged as a finding for the same reason those two were: verified from the code, not assumed,
+// and reported for an affirmative ruling rather than retired silently.
 
 #[test]
 fn active_metadata_directory_component_matrix() -> prikk_error::Result<()> {
