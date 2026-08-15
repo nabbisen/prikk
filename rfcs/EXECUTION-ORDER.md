@@ -294,7 +294,7 @@ These apply to all work above and are not restated in each handoff.
     dependencies change, so no silent loss or growth can hide.
 
     **Baseline, measured 2026-08-15 at `4ad0021` (RFC 102 Stage 6 Step 1 merged), covering every
-    workspace member:** `prikk-store` **709**, `prikk` (the CLI) **113**, `prikk-release-policy` 83,
+    workspace member:** `prikk-store` **709**, `prikk` (the CLI) **107**, `prikk-release-policy` 83,
     `prikk-object` 80, `prikk-replay` 44, `prikk-hash` 14, `prikk-crypto` 7, `prikk-error` 0;
     **179 locked packages**.
 
@@ -306,6 +306,14 @@ These apply to all work above and are not restated in each handoff.
     > table. **I re-measured and rewrote this baseline twice in one day without once asking whether the
     > list of crates was complete** — verifying every element while never verifying the set. Derive the
     > member list from `cargo metadata --no-deps`, not from this line's own history.
+    >
+    > **Corrected within the hour: `prikk` was written as 113 and is 107 at the commit this line names.**
+    > The developer caught it by noticing that 113 matched *their branch* — which carries six CLI tests
+    > `main` does not — and re-measured at `4ad0021` in a detached worktree. **I had measured in the
+    > shared primary tree without checking which commit it was sitting on**, and labelled the result with
+    > `main`'s hash. `prikk-store` 709 and `prikk-error` 0 were taken earlier at the right state and are
+    > correct. **Measure baselines in a detached worktree at the named commit — never in the shared tree,
+    > whose branch is not yours to assume.**
 
     > **The obligation below was missed on its first outing, by its own author.** RFC 102 Stage 5 moved
     > `prikk-store` from 688 to 703 across six rounds. Every round reported its own count correctly and
