@@ -293,9 +293,19 @@ These apply to all work above and are not restated in each handoff.
 10. **Report counts before and after.** Test counts per touched crate, and locked package count where
     dependencies change, so no silent loss or growth can hide.
 
-    **Baseline, measured 2026-08-15 at `4ad0021` (RFC 102 Stage 6 Step 1 merged):** `prikk-store`
-    **709**, `prikk-object` 80, `prikk-replay` 44, `prikk-hash` 14, `prikk-crypto` 7,
-    `prikk-release-policy` 83; **179 locked packages**.
+    **Baseline, measured 2026-08-15 at `4ad0021` (RFC 102 Stage 6 Step 1 merged), covering every
+    workspace member:** `prikk-store` **709**, `prikk` (the CLI) **113**, `prikk-release-policy` 83,
+    `prikk-object` 80, `prikk-replay` 44, `prikk-hash` 14, `prikk-crypto` 7, `prikk-error` 0;
+    **179 locked packages**.
+
+    > **The crate list itself was wrong until 2026-08-15, and that is worse than the figures ever were.**
+    > This baseline named **six of eight** workspace members. `prikk` — the CLI, with **113 tests** — and
+    > `prikk-error` were never counted, so a rule whose stated purpose is that *"no silent loss or growth
+    > can hide"* had an entire tested crate outside it. Found when RFC 102 Stage 6 Step 2 round 4 added
+    > six CLI tests and reported, correctly and in passing, that `prikk-cli` *"never has been"* in this
+    > table. **I re-measured and rewrote this baseline twice in one day without once asking whether the
+    > list of crates was complete** — verifying every element while never verifying the set. Derive the
+    > member list from `cargo metadata --no-deps`, not from this line's own history.
 
     > **The obligation below was missed on its first outing, by its own author.** RFC 102 Stage 5 moved
     > `prikk-store` from 688 to 703 across six rounds. Every round reported its own count correctly and
