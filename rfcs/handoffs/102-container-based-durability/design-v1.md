@@ -916,7 +916,7 @@ pre-allocate empty at `init`, then append to set and truncate-to-empty to clear,
 (`active.rs:98-115`): absent yields `ActiveRefMetadata::Missing`, but **empty yields `Some(b"")` →
 `validate_local_branch_ref("")` → `Err` (`refs.rs:399-404`) → `ActiveRefMetadata::Invalid`.** So the
 cleared state stops being `Missing` and becomes `Invalid`, and **every freshly-`init`ed repository reports
-invalid active-ref metadata from creation.** That enum is matched at eleven production sites, including
+invalid active-ref metadata from creation.** That enum is matched at ten production sites, including
 `verify.rs:1265`'s `(wal_is_empty, metadata)` verify stage and `require_active_ref_for_non_empty_wal`,
 where `Invalid` is an integrity signal.
 
@@ -933,3 +933,31 @@ committed units; `FORMAT`-last with re-`init` completing an interrupted init; `d
 — safe because `create_empty_file_once` (`layout.rs:518-524`) creates names through
 **`create_new_file_required`**, never through `durable_append`, a fact the report's conclusion needed and
 did not supply.
+
+### 14.6 `active.rs` plan sign-off, 2026-08-15
+
+The corrected plan is **approved**, subject to one condition, and its own count corrected.
+
+**`write_active_ref_metadata` must truncate-to-empty then append, internally.** It is `pub`
+(`active.rs:118`) and re-exported (`lib.rs:81`), so it is public API, and today it is
+`write_file_atomically` — **replace semantics, idempotent, safe to call twice.** A bare append makes a
+second call concatenate two ref names into one file, which reads back as `Invalid`: a public function
+that is idempotent today would silently corrupt state tomorrow, with the requirement living only in the
+discipline of its single caller. Truncating inside the function keeps the public contract unchanged and
+makes the single-entry invariant structural rather than conventional. It adds no crash exposure —
+`prepare_empty_active_ref_for_append` already opens an empty-file window between clear and write; this
+only moves it inside, where a crash leaves `(true, Missing)` on an empty WAL, which is not debris.
+
+**§14.5 said the enum is matched at "eleven production sites." It is ten** — corrected above. The
+developer's own sweep covered nine, missing `active.rs:176`
+(`require_active_ref_for_non_empty_wal`), which distinguishes `Missing` from `Invalid` with two
+different `Integrity` messages and is therefore in the class the sweep existed to find. It is unaffected,
+for the same reason `seal.rs:106` is, so **the conclusion stands** — but the ruling that told the
+developer to re-check every site carried a wrong count, and their re-check was itself incomplete. Both
+are instances of the standing `FINDINGS.md` row on searches reported as exhaustive.
+
+**Scheduling, which neither the plan nor §14.5 caught:** step 1 pre-allocates
+`default_active_ref_name_path()` (`active/default/ref-name`, `layout.rs:281-282`) at `init`, and `init`'s
+`create_empty_file_once` list (`:139-169`) does not include it today. **That is a new name at `init`, so
+this unit blocks on the format-bump decision exactly as `received.rs` and the trust key container do** —
+three units, not two. The developer's own format-bump argument did not generalise to their own unit.

@@ -293,9 +293,15 @@ These apply to all work above and are not restated in each handoff.
 10. **Report counts before and after.** Test counts per touched crate, and locked package count where
     dependencies change, so no silent loss or growth can hide.
 
-    **Baseline, measured 2026-08-15 at `f2edb11`:** `prikk-store` 690, `prikk-object` 80,
+    **Baseline, measured 2026-08-15 at `f2edb11`:** `prikk-store` **688**, `prikk-object` 80,
     `prikk-replay` 44, `prikk-hash` 14, `prikk-crypto` 7, `prikk-release-policy` 83; **179 locked
     packages**.
+
+    **How to measure — this is not incidental.** Sum `passed` **only from result lines reporting
+    `0 filtered out`.** `prikk-store` runs two tests a second time in isolation, so `cargo test -p
+    prikk-store` emits three result lines — `1 passed; 691 filtered out`, again, and then
+    `692 passed; 0 filtered out`. Summing all three double-counts those two tests. No other crate in the
+    workspace currently emits a filtered run, which is why the error shows up nowhere else.
 
     **An increment that changes any of these numbers must update this line in the same commit.** Not a
     courtesy — the line *is* the comparison point, and a stale one makes the rule unfalsifiable.
@@ -313,6 +319,13 @@ These apply to all work above and are not restated in each handoff.
     > The baseline is pinned to `f2edb11` rather than to `origin/main` because **`origin/main` did not
     > compile when this was measured** (see `FINDINGS.md`) — a count cannot be taken at a commit that
     > has no test binaries.
+    >
+    > **Corrected again the same day: `prikk-store` was recorded as 690 and is 688.** The replacement
+    > baseline was itself wrong, by the measurement error the paragraph above now documents — three
+    > result lines summed where two were isolated re-runs of tests already counted. Found by the
+    > developer, who re-measured at `f2edb11` in an isolated worktree instead of citing the figure they
+    > had been handed. **The lesson is not "baselines decay" but the narrower one: a number is only as
+    > good as the command that produced it, and re-deriving a figure is not the same as repeating it.**
 11. **Submit a review request per candidate** with the diff, an evidence note, gate output, and an explicit
     statement of what did *not* change.
 
