@@ -65,6 +65,12 @@ maintainer policy.
 cross-platform filesystem behavior, merge execution safety, semantic conflict resolution, backup
 coverage, or successful recovery from every crash shape.
 
+**`verify` does not read the received-ref index.** Ref pointers imported by `prikk bundle import` live
+in `refs/containers/received-index-{a,b}.container` and are outside the verification surface entirely.
+They are also not rebuildable: the origin ref name exists only inside the imported bundle, which may be
+gone. So nothing detects their loss or corruption — a gap in `verify`'s own scope, independent of
+platform.
+
 ## Verify Output and Exit Behavior
 
 The current CLI prints counters for checked objects, Blocks, rollback Blocks, sealed rollback Patches,

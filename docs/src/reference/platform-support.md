@@ -36,6 +36,14 @@ already-planted reparse point is caught on every platform.
 Prikk does not claim otherwise, and this difference is the reason Windows mutation is not shipped on the
 strength of the primitives alone.
 
+**The same gap exists on the read path today, in the shipped read-only configuration.** All four non-Unix
+fallback read functions resolve a whole path in one operating-system call, so reparse points at
+intermediate components are followed — there is no component-by-component walk on that path at all. One
+of them, `read_file_if_exists`, additionally does not refuse a symlink at the *final* component, unlike
+its three siblings in the same module, which use a no-follow stat. That last one is an asymmetry inside
+one file rather than a platform limitation, and it is stated here rather than left implicit because the
+guarantee is otherwise described per-function.
+
 **Read-only commands build and run everywhere.** They never reach a mutation primitive — verified by
 tracing every command's call graph to `crates/prikk-store/src/fsutil`'s mutation set (`ensure_root`,
 `write_file_atomically`, `write_worktree_file_atomically`, `append_file_required`,
