@@ -1,7 +1,7 @@
 # Repository Layout and Authority
 
 This page is the authoritative current-state reference for Prikk's on-disk repository layout and
-storage authority boundaries. It describes the current implementation prepared for 0.18.0 and is grounded
+storage authority boundaries. It describes the current implementation and is grounded
 in the code, released RFCs, and implementation status records listed in the anchor table at the foot of
 the page.
 
@@ -42,86 +42,93 @@ later, since none of those names exist at `init` time and a per-name file would 
 ```text
 .prikk/
   FORMAT
-  objects/
-    patch/
-    block/
-    ref-state/
-    tag/
-    attestation/
-    blob/
+  worktree.marker
+  containers/
+    patch/{a,b}.container
+    block/{a,b}.container
+    ref-state/{a,b}.container
+    tag/{a,b}.container
+    attestation/{a,b}.container
+    blob/{a,b}.container
+    index.container
+    generations.log
   active/
     default/
+      queue.wal
+      ref-name
   refs/
     containers/
-      log-a.container
-      log-b.container
-      pointer-index.container
-      received-index.container
+      log-{a,b}.container
+      pointer-index-{a,b}.container
+      pointer-index-generation.log
+      received-index-{a,b}.container
+      received-index-generation.log
     locks/
-    by-id/
-    logs/
-    tmp/
   trust/
     keys.container
-    policy.container
+    policy-{a,b}.container
+    policy-generation.log
   cache/
-  quarantine/
 ```
 
-New repositories contain `2` in `FORMAT`. Opening value `2` selects the current writable format;
-opening value `1` selects bounded legacy read-only behavior. Every other value is unsupported. The
-marker is load-bearing and is never inferred from individual objects.
+Every file above is created by `init` and is empty until first use. **No name under `.prikk/` is created
+after `init`** — that is a design invariant, not an implementation detail, and it is what makes the
+repository durable on filesystems that cannot make a new directory entry durable.
 
-Format 2 admits schema-2 Blocks and schema-1 Patch, RefState, RefUpdate, Tag, Attestation, and Blob
-envelopes in their authorized locations. Ordinary object, WAL, ref, trust, repair, and worktree writes
-are refused for format 1. Read-only inspection and planning remain available with a warning. `verify`
-performs bounded structural/signature checks but returns nonzero because format-1 scaffold roots are
-not state commitments. The sole legacy mutation is exact signer-backed completion of DC-34's retained
-one-record-ahead interrupted publication; it promotes existing signed state without rewriting identity
-bytes or appending another log record.
+`init` also creates these directories, which are **allocated but never written to**: `objects/` and its
+six object-type subdirectories, `quarantine/`, `refs/by-id/`, `refs/logs/`, and `refs/tmp/`. They are
+remnants of retired storage mechanisms. They are not authority for anything, but their **absence is an
+error** — repository open validates that every required directory is present, so removing them from an
+existing repository breaks it.
 
-`cache/` and `quarantine/` are initialized directories. Current released behavior does not use either
-directory as authority for verification, publication, recovery, or trust.
+New repositories contain `6` in `FORMAT`. **Formats 1 through 5 are rejected at open**, with an error
+naming the format found and directing migration through `prikk bundle export` on a version that still
+supports it. There is no dual-layout bridge and no in-place migration: the format marker is a gate, and
+a repository whose on-disk shape does not match what the code expects is refused rather than opened and
+left to fail later.
 
-There is no initialized `gc/` directory today.
+`cache/` holds rebuildable, non-authoritative state — a corrupt or absent cache file is never an error,
+and any operation's result is identical whether the cache is warm, cold, or missing.
+
+There is no initialized `gc/` directory, and prikk performs no garbage collection: no object is ever
+deleted or superseded once written.
 
 ## Object Store
 
-Prikk stores persistent object envelopes under object-type directories. Current initialized persistent
-object directories are:
-
-- `objects/patch/`
-- `objects/block/`
-- `objects/ref-state/`
-- `objects/tag/`
-- `objects/attestation/`
-- `objects/blob/`
-
-When an object is written, its storage path is:
+**Objects are not stored one-file-per-object.** Every persistent object envelope is a checksum-framed
+record appended into a shared, per-type container allocated at `init`:
 
 ```text
-objects/<object-type>/<first-two-object-id-hex>/<object-id>.pobj
+containers/<object-type>/a.container
 ```
 
-The two-hex fanout directory is created when the object is written. It is not present in a fresh
-repository unless an object with that prefix has been persisted.
+with a paired `b.container` reserved for future compaction, and one `containers/index.container` mapping
+each object id to the container, slot, offset and length where its record lives.
 
-The current object type enum contains additional internal or future-facing type names, but only the
-six directories listed above are initialized persistent object directories today. `RefUpdate` is stored
-inline in ref logs, not as an object-store file. Current docs should not describe
-`objects/genesis/`, `objects/block-summary-cache-rebuildable/`, or
-`objects/recovery-note-inline-only/` as present directories.
+Six object types are persisted this way — `patch`, `block`, `ref-state`, `tag`, `attestation`, `blob`.
+`RefUpdate` is stored inline in ref logs, not as an object record.
 
-Object files are authority only when their envelope decodes, validates, has the expected type, and its
-computed content-addressed object id matches the requested id and path.
+**Why containers rather than files.** An object's identity *is* its content hash, so every
+one-file-per-object write created a new directory entry. Making a new name durable requires an fsync on
+the parent directory, which POSIX provides and Windows does not — there is no documented or undocumented
+Windows primitive that makes a new directory entry durable. Appending to a file that already has a name
+needs only content durability, which every supported platform provides. Moving objects into fixed,
+`init`-allocated containers is what makes prikk's durability guarantee statable as a property rather
+than as a list of platforms that happen to pass.
 
-Object publication is immutable and no-clobber. A new object is written and synced through a unique
-same-shard temp, installed without replacing an existing final name, and followed by required shard
-sync and invocation-owned temp cleanup. An existing final name succeeds only when one no-follow
-regular-file read proves valid identity/type and exact persisted-byte equality with the candidate.
+**Reading is isolate-and-continue.** A damaged record is named at its byte offset and the scan continues
+to the next intact one, so corruption is confined to the records it actually damaged rather than
+failing the whole container. A record is authority only when its frame checksum verifies, its envelope
+decodes and validates, it has the expected type, and its computed content-addressed id matches the
+requested id.
 
-Crash-left names matching `<object-id>.pobj.tmp.<pid>.<random>` are non-authoritative local debris.
-Canonical reads ignore them; `verify` and `doctor` warn without deleting them or inferring ownership.
+**The index is rebuildable and off the durability path.** An object record is appended and made durable
+*before* its index entry is appended, so a crash between the two leaves an object present but unindexed
+— recoverable by rebuilding the index from a container scan. The reverse ordering would let a reader see
+a valid index entry pointing at bytes that are not there, so the ordering is load-bearing.
+
+**Nothing supersedes or deletes an object.** Writing an id that already exists with identical bytes is a
+no-op; writing one with different bytes is an error. Containers therefore only ever grow.
 
 ## Refs and Ref Logs
 
@@ -131,7 +138,7 @@ exist until `branch create`/`tag create` mints it, well after `init` — a per-r
 one of `init`'s own fixed names, so pointers and logs for every ref instead interleave inside:
 
 ```text
-refs/containers/pointer-index.container
+refs/containers/pointer-index-{a,b}.container
 refs/containers/log-a.container
 refs/containers/log-b.container
 refs/locks/<ref-name-storage-key>.lock
@@ -141,7 +148,7 @@ Locks remain per-ref files, one per ref name actually in use, unaffected by this
 the hex SHA-256 digest of the ref name bytes, the same digest used internally to attribute each
 container entry to its own ref.
 
-`pointer-index.container` is an append-only, checksum-framed sequence of pointer entries; each entry
+`pointer-index-a.container` (the live slot; see below) is an append-only, checksum-framed sequence of pointer entries; each entry
 records one ref's human-readable name, its published RefState object id, and the SHA-256 key derived
 from that name. A ref's current pointer is its *last* matching entry — republishing a ref appends a
 new entry rather than rewriting the old one. It is useful for lookup and recovery, but is not trusted
@@ -160,10 +167,11 @@ a root of trust. There is no longer a temporary-candidate mechanism: an append-o
 no candidate value to stage before becoming durable, so a publish that used to write, sync, and
 promote a candidate now durably appends the pointer entry directly, in one step.
 
-`refs/by-id/`, `refs/logs/`, and `refs/tmp/` are still initialized directories — join `cache/` and
-`quarantine/` above as present-but-not-authoritative: nothing writes into any of the three anymore, but
-`init` still allocates them, and current released behavior does not remove them or treat their
-presence as meaningful.
+`refs/by-id/`, `refs/logs/` and `refs/tmp/` are still initialized directories, alongside `objects/`
+(with its six type subdirectories) and `quarantine/`. **Nothing writes into any of them.** `init` still
+allocates them and current behavior does not remove them, but their **absence is an error**: repository
+open validates that every required directory is present, so deleting them from an existing repository
+makes it unopenable. They are remnants, not extension points.
 
 ## Active Session
 
@@ -194,14 +202,14 @@ The repository-local MAINTAINER trust containers are:
 
 ```text
 trust/keys.container
-trust/policy.container
+trust/policy-{a,b}.container
 ```
 
 Both are allocated empty at `init`, then appended to by `prikk trust maintainer add`/`remove` — no
 name is created after `init`.
 
 `keys.container` holds one append-only entry per adopted key id: the key id and its Ed25519 public key.
-`policy.container` holds a sequence of complete policy snapshots — each `add` or `remove` appends the
+`policy-a.container` (the live slot) holds a sequence of complete policy snapshots — each `add` or `remove` appends the
 *entire* current adopted-key-id list, not an incremental change; readers take the last complete
 snapshot, with `required = 1` meaning any one adopted key's signature suffices (never stored — it is a
 constant, not configurable). Seal checks the configured MAINTAINER signer against this repository-local
@@ -218,20 +226,21 @@ adopted set or reserves its case-folded id.
 
 | Path or data | Classification | Current meaning |
 |---|---|---|
-| `.prikk/FORMAT` | Format gate | Required by repository open; `2` is current writable format and `1` is bounded legacy read-only mode. |
-| `objects/<type>/<prefix>/<id>.pobj` | Content-addressed object authority | Authority when the envelope validates and its computed id/type match the path and expected object. |
+| `.prikk/FORMAT` | Format gate | Required by repository open; `6` is the current format. Formats 1-5 are rejected at open, with no bridge and no in-place migration. |
+| `containers/<type>/a.container` | Content-addressed object authority | One checksum-framed record per object. Authority when the frame checksum verifies, the envelope validates, and its computed id/type match the requested object. `objects/` is an empty remnant directory and is authority for nothing. |
 | `refs/containers/log-a.container` (`log-b.container` reserved) | Publication evidence | Shared, append-only signed RefUpdate records for every ref, interleaved; authoritative only with valid chain, object, signature, and trust checks. |
-| `trust/policy.container` and `trust/keys.container` | Repository-local trust authority | Current local MAINTAINER trust input for seal and verify publication-trust checks. |
+| `trust/policy-{a,b}.container` and `trust/keys.container` | Repository-local trust authority | Current local MAINTAINER trust input for seal and verify publication-trust checks. |
 | `active/default/queue.wal` | Local active-session state | Pending signed Patch envelopes before seal; load-bearing for the active session, not sealed history. |
 | `active/default/ref-name` | Local active-session metadata | Identifies which ref owns a non-empty active WAL; not sealed history. |
-| `refs/containers/pointer-index.container` | Mutable convenience pointer | Shared, append-only, last-entry-wins RefState pointer for every ref; fast current-state lookup and recovery target; not trusted without RefState/ref-log checks. |
+| `refs/containers/pointer-index-{a,b}.container` | Mutable convenience pointer | Shared, append-only, last-entry-wins RefState pointer for every ref; fast current-state lookup and recovery target; not trusted without RefState/ref-log checks. |
 | `active/default/active.lock` and `refs/locks/*.lock` | Local synchronization | Prevent concurrent writers; not history or trust evidence. |
-| `cache/`, `quarantine/`, `refs/by-id/`, `refs/logs/`, `refs/tmp/` | Initialized but non-root | Present after init; not current roots of trust and not used for current verify/publication authority. The last three are dead: nothing writes into them since ref publication state moved into containers. |
+| `cache/` | Initialized, rebuildable, non-root | Never authority; a corrupt or absent cache file is not an error and does not change any result. |
+| `objects/` (and its six type subdirectories), `quarantine/`, `refs/by-id/`, `refs/logs/`, `refs/tmp/` | Initialized, dead | Nothing has written into any of them since object and ref publication state moved into containers. Not authority for anything — but their absence is an error, because repository open validates that every required directory is present. |
 | `gc/` | Deferred/not present | No current initialized directory or released behavior. |
 
 ## Deferred and Not Stable
 
-Prikk does not provide in-place or history-preserving migration from format 1 to format 2. The
+Prikk does not provide in-place or history-preserving migration between any two formats. The
 documented writable path is a newly initialized format-2 repository followed by deliberate worktree
 re-authoring, which creates new NodeIds, objects, signatures, and history. Copying `.prikk/` data or
 editing `FORMAT` is not migration. This explicit transition does not promise general format stability.
@@ -246,8 +255,8 @@ validation.
 | Claim | Source anchors |
 |---|---|
 | Repository initialization creates the listed directories and writes `.prikk/FORMAT`. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-31](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
-| `.prikk/FORMAT` selects current writable format 2 or bounded legacy format 1. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-40](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md) |
-| Persistent object placement uses object-type directories, two-hex fanout, and `.pobj` files. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`object_store.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/object_store.rs) |
+| `.prikk/FORMAT` selects current format 6; formats 1-5 are rejected at open. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-40](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md) |
+| Persistent objects are checksum-framed records appended into per-type containers allocated at `init`. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`object_store.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/object_store.rs) |
 | Six object types currently have initialized persistent object directories; `RefUpdate` is inline-only in ref logs. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`object_store.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/object_store.rs), [`refs/container.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/container.rs) |
 | Ref storage keys are SHA-256 hex digests of human-readable ref names, shared by the pointer index, the log container, and per-ref lock files. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs) |
 | The ref-pointer index is a shared, append-only, last-entry-wins container holding every ref's own current-pointer entry (name, RefState id, storage key). | [`refs/pointer_index.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer_index.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [data model](./data-model.md) |
@@ -255,7 +264,7 @@ validation.
 | Active WAL and active ref metadata are runtime active-session state, not fresh-init files. | [`active.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/active.rs), [`wal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/wal.rs), [durability and crash recovery](./durability-recovery.md) |
 | Trust policy and maintainer public-key files are written by the trust command and define current repository-local MAINTAINER trust. | [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [security and signing setup](../guide/security-setup.md) |
 | Verification checks object placement, ref pointer/log consistency, active WAL state, and publication trust within current limits. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [integrity and recovery diagnostics](./integrity-recovery.md), [trust and threat model](./trust-threat-model.md) |
-| `cache/` and `quarantine/` are initialized but not current roots of trust, and `gc/` is not a current initialized directory. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-31](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
+| `cache/` and `quarantine/` are initialized but not roots of trust; `quarantine/` is dead, and `gc/` is not an initialized directory. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-31](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
 
 ## Provenance
 

@@ -46,18 +46,23 @@ canonical identity schema, or domain change requires accepted design authority, 
 or domain, refusal or migration behavior, and literal compatibility vectors. Existing identity
 versions are never reinterpreted.
 
-## Repository Format 2 Transition
+## Repository Format Transitions
 
-New repositories use format 2 and schema-2 Blocks with replay-derived clean-state Merkle roots.
-Released format-1 repositories open only in bounded legacy read-only mode: inspection and planning are
-available with a warning, while `verify` reports scaffold roots as unverifiable and returns nonzero.
-Ordinary commit, seal, trust, repair, object/ref/WAL mutation, and worktree materialization are refused.
-The sole exception is exact signer-backed completion of a retained DC-34 one-record-ahead publication,
-which promotes already-signed state without rewriting identity bytes or appending a log record.
+New repositories use format **6** and schema-2 Blocks with replay-derived clean-state Merkle roots.
 
-There is no in-place or history-preserving migration in 0.18.0. To resume writable work, initialize a
-new format-2 repository and deliberately re-author the desired worktree. This creates new NodeIds,
-objects, signatures, and history. Do not copy `.prikk/` or edit `FORMAT` to simulate migration.
+**Formats 1 through 5 are rejected at open.** Each is refused with an error naming the format found. The
+earlier bounded legacy read-only mode for format 1 no longer exists — it was retired when format 1 was,
+and there is no read-only fallback for any superseded format.
+
+The format has moved repeatedly and deliberately: 1→2 (state Merkle roots), 2→3 (object containers),
+3→4 (ref containers), 4→5 (trust containers, received-ref index, active ref metadata), 5→6 (compaction
+slots and generation logs). Prikk is early implementation software and has not committed to format
+stability; **each bump is a deliberate decision that every older repository becomes unopenable.**
+
+There is no in-place or history-preserving migration between any two formats. To carry work across a
+format change, use `prikk bundle export` on a version that still opens the old repository and
+`prikk bundle import` into a new one. Do not copy `.prikk/` or edit `FORMAT` to simulate migration —
+editing the marker does not change the on-disk shape it describes.
 
 The workspace's declared minimum Rust version is exactly 1.85.0. The locked product workspace must
 check, test, and build on that toolchain:

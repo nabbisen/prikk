@@ -59,11 +59,13 @@ branch ref. It rejects snapshot-only baselines without node identity for worktre
 
 A Block is an immutable sealed history unit. Its payload records sorted parent Block ids, Block kind,
 Patch ids in canonical Block order, a state Merkle root, and an optional snapshot Blob reference.
-Format-2 seal creates schema-2 Root Blocks with zero parents for unborn refs and schema-2 Normal Blocks
-with exactly one schema-2 parent for refs with an existing published tip. Merge, Repair, and Import
-Blocks are rejected in format 2 until a later design defines their state derivation.
+Seal creates schema-2 Root Blocks with zero parents for unborn refs and schema-2 Normal Blocks with
+exactly one schema-2 parent for refs with an existing published tip. **Merge Blocks with exactly two
+parents are supported** (DC-75) and record both parents, a mainline pointer, and the merge baseline,
+which `verify` re-derives rather than trusts. **Repair and Import Blocks remain unauthorized** until a
+later design defines their state derivation.
 
-The format-2 state root commits to the complete replay-derived live-node set in canonical path order.
+The state root commits to the complete replay-derived live-node set in canonical path order.
 Each leaf binds the exact repository path, nonzero NodeId, node kind, normalized mode, and either the
 file Blob ObjectId or opaque UTF-8 symlink target. Binary Merkle reduction promotes an odd final hash
 unchanged. Patch ids, tombstones, implicit directories, snapshots, and caches are not state entries.
