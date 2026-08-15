@@ -15,35 +15,36 @@ const REPO_DIR: &str = ".prikk";
 const LEGACY_FORMAT_VERSION: &[u8] = b"1\n";
 const LEGACY_FORMAT_2_VERSION: &[u8] = b"2\n";
 const LEGACY_FORMAT_3_VERSION: &[u8] = b"3\n";
-const CURRENT_FORMAT_VERSION: &[u8] = b"4\n";
+const LEGACY_FORMAT_4_VERSION: &[u8] = b"4\n";
+const CURRENT_FORMAT_VERSION: &[u8] = b"5\n";
 
 /// Repository format selected by the authoritative `.prikk/FORMAT` marker.
 ///
-/// RFC 103 retired format 1; RFC 102 Stage 3 retired format 2 the same way, and RFC 102 Stage 4 does
-/// the same again for format 3 -- rejected at open (`read_repository_format`), not merely unsupported
-/// for mutation, no variant naming it here. **No fresh owner ruling was sought for this specific
-/// bump**: Stage 3's own Step 0 item 1 (design-v1.md §12.1) already settled the general policy --
-/// "prikk is in early stage of development and is not in production use. We don't have to care about
-/// such migration yet" -- stated about the project's lifecycle, not scoped to that one transition, and
-/// nothing about the project's stage changed between Stage 3 and Stage 4. Refs moving from loose files
-/// to containers is the same class of incompatible on-disk change objects moving to containers was;
-/// applying the same standing policy rather than re-asking it. The single remaining variant is kept as
-/// an enum rather than collapsed away, per design-v1.md §12.1's own note: `require_current_format`'s
-/// disk re-read is a real runtime check (RFC 103 Increment B was abandoned specifically because of
-/// it), so the enum's *shape* still carries meaning and is not free to simplify away.
+/// RFC 103 retired format 1; RFC 102 Stage 3 retired format 2 the same way, RFC 102 Stage 4 did the
+/// same again for format 3, and RFC 102 Stage 5 does it once more for format 4 -- rejected at open
+/// (`read_repository_format`), not merely unsupported for mutation, no variant naming it here.
+/// **This bump was sought and decided by the owner explicitly** (design-v1.md §14.7, 2026-08-15),
+/// unlike the 3→4 bump, which reused Stage 3's own already-ruled general policy without a fresh
+/// decision: Stage 5 adds container names to `init` that the 3→4-bump's own `durable_append`
+/// strictness change made unsafe to leave undetected in an older repository (design-v1.md §14.7's own
+/// account of why no middle path -- create-on-open or a side-check without a bump -- was viable). The
+/// single remaining variant is kept as an enum rather than collapsed away, per design-v1.md §12.1's
+/// own note: `require_current_format`'s disk re-read is a real runtime check (RFC 103 Increment B was
+/// abandoned specifically because of it), so the enum's *shape* still carries meaning and is not free
+/// to simplify away.
 ///
-/// **"Format 2"/"format 3"/"format 4" here name the on-disk repository layout** (loose objects/refs
-/// vs. RFC 102's containers) **-- a different axis from DC-40's "format-2" wire schema**
-/// (`block_state.rs`, `state_root.rs`, `format.rs`'s Block/Patch shape and Merkle rules), which
-/// neither Stage 3 nor Stage 4 touches and which keeps its own "format-2" name regardless of what this
-/// enum's current variant is called (design §8: "format-2's rejection of the ahead-log state" is
-/// explicitly unchanged).
+/// **"Format 2"/"format 3"/"format 4"/"format 5" here name the on-disk repository layout** (loose
+/// objects/refs vs. RFC 102's containers) **-- a different axis from DC-40's "format-2" wire schema**
+/// (`block_state.rs`, `state_root.rs`, `format.rs`'s Block/Patch shape and Merkle rules), which no RFC
+/// 102 stage touches and which keeps its own "format-2" name regardless of what this enum's current
+/// variant is called (design §8: "format-2's rejection of the ahead-log state" is explicitly
+/// unchanged).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepositoryFormat {
-    /// Current format 4: RFC 102 Stage 4's container-based ref storage, layered on Stage 3's
-    /// container-based object storage, still writable under the unchanged DC-40 schema and
-    /// state-root rules.
-    CurrentV4,
+    /// Current format 5: RFC 102 Stage 5's container-based trust/received-ref/active-session storage,
+    /// layered on Stage 3's and Stage 4's container-based object and ref storage, still writable under
+    /// the unchanged DC-40 schema and state-root rules.
+    CurrentV5,
 }
 
 /// One object-type container's pre-allocated alternate slot (RFC's §3.2 compaction requirement: a
@@ -112,13 +113,14 @@ impl RepositoryLayout {
         if let Some(version) = read_file_if_exists(&repository_mutation, Path::new("FORMAT"))? {
             if version != CURRENT_FORMAT_VERSION {
                 // RFC 102 Stage 3, design-v1.md §12.1: this refusal inherited the format-2 -> 3 bump;
-                // RFC 102 Stage 4 carries the same policy forward for format-3 -> 4. Audited, not just
-                // the constant swapped: unlike `read_repository_format`'s own rejection (reached via
-                // `open`), this fires only on a redundant `init` against an already-initialized
-                // repository of some other format, so it stays terse and points at `open` (any other
-                // command) for the detailed migration message rather than duplicating it here.
+                // Stage 4 carried it forward for format-3 -> 4, and Stage 5 does the same again for
+                // format-4 -> 5 (design-v1.md §14.7). Audited, not just the constant swapped: unlike
+                // `read_repository_format`'s own rejection (reached via `open`), this fires only on a
+                // redundant `init` against an already-initialized repository of some other format, so
+                // it stays terse and points at `open` (any other command) for the detailed migration
+                // message rather than duplicating it here.
                 return Err(PrikkError::Integrity(
-                    "refusing to initialize an existing non-format-4 Prikk repository (open it \
+                    "refusing to initialize an existing non-format-5 Prikk repository (open it \
                      with any other command for a detailed unsupported-format message)"
                         .to_string(),
                 ));
@@ -129,7 +131,7 @@ impl RepositoryLayout {
             prikk_dir,
             worktree_mutation,
             repository_mutation,
-            format: RepositoryFormat::CurrentV4,
+            format: RepositoryFormat::CurrentV5,
         };
         for dir in layout.required_repository_directories()? {
             ensure_directory_required(layout.repository_mutation_root(), &dir)?;
@@ -210,7 +212,7 @@ impl RepositoryLayout {
     /// Refuse ordinary repository/worktree mutation in legacy format 1.
     pub fn require_current_format(&self) -> Result<()> {
         self.validate_format()?;
-        if self.format == RepositoryFormat::CurrentV4 {
+        if self.format == RepositoryFormat::CurrentV5 {
             return Ok(());
         }
         Err(PrikkError::UnsupportedFormatVersion(1))
@@ -542,7 +544,7 @@ fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
     match version.as_slice() {
         LEGACY_FORMAT_VERSION => Err(PrikkError::Integrity(
             "this repository uses format 1, which prikk no longer supports (this version \
-             requires format 4). format-1 support was removed after 0.19.0. to migrate: use \
+             requires format 5). format-1 support was removed after 0.19.0. to migrate: use \
              prikk 0.19.0 or earlier to `prikk bundle export`, then `prikk bundle import` here"
                 .to_string(),
         )),
@@ -553,7 +555,7 @@ fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
         // (`CHANGELOG.md`, `git tag`), not guessed.
         LEGACY_FORMAT_2_VERSION => Err(PrikkError::Integrity(
             "this repository uses format 2, which prikk no longer supports (this version \
-             requires format 4). format-2 support was removed after 0.19.0. to migrate: use \
+             requires format 5). format-2 support was removed after 0.19.0. to migrate: use \
              prikk 0.19.0 or earlier to `prikk bundle export`, then `prikk bundle import` here"
                 .to_string(),
         )),
@@ -566,11 +568,23 @@ fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
         // own discipline for these messages does not do.
         LEGACY_FORMAT_3_VERSION => Err(PrikkError::Integrity(
             "this repository uses format 3, which prikk no longer supports (this version \
-             requires format 4). to migrate: use a prikk version that supports format 3 to \
+             requires format 5). to migrate: use a prikk version that supports format 3 to \
              `prikk bundle export`, then `prikk bundle import` here"
                 .to_string(),
         )),
-        CURRENT_FORMAT_VERSION => Ok(RepositoryFormat::CurrentV4),
+        // RFC 102 Stage 5, design-v1.md §14.7 (owner decision): bump to format 5, reject format-4 at
+        // open, no dual-layout bridge -- format 3's precedent, not format 2's. No release was ever
+        // tagged at format 4 either (Stage 4 merged and Stage 5 began before any tag), verified against
+        // the release record (`CHANGELOG.md`, `git tag`) rather than assumed from format 3's own
+        // no-version precedent -- naming one anyway would be guessing, which this project's own
+        // discipline for these messages does not do.
+        LEGACY_FORMAT_4_VERSION => Err(PrikkError::Integrity(
+            "this repository uses format 4, which prikk no longer supports (this version \
+             requires format 5). to migrate: use a prikk version that supports format 4 to \
+             `prikk bundle export`, then `prikk bundle import` here"
+                .to_string(),
+        )),
+        CURRENT_FORMAT_VERSION => Ok(RepositoryFormat::CurrentV5),
         _ => Err(PrikkError::UnsupportedFormatVersion(0)),
     }
 }

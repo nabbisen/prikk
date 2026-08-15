@@ -11,7 +11,7 @@ pub(crate) fn validate_object_envelope(
 ) -> Result<()> {
     envelope.validate_strict()?;
     match format {
-        RepositoryFormat::CurrentV4 => validate_format2_schema(envelope),
+        RepositoryFormat::CurrentV5 => validate_format2_schema(envelope),
     }
 }
 
@@ -49,7 +49,7 @@ pub(crate) fn validate_read_schema(
     envelope: &ObjectEnvelope,
 ) -> Result<()> {
     match format {
-        RepositoryFormat::CurrentV4 => {
+        RepositoryFormat::CurrentV5 => {
             envelope.validate_strict()?;
             validate_format2_schema(envelope)
         }

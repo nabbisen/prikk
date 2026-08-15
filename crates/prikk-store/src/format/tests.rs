@@ -87,6 +87,6 @@ fn format2_rejects_wrong_schema_for_every_allowed_type() {
 #[test]
 fn format2_read_rejects_every_strict_envelope_failure() {
     for envelope in strict_read_failures() {
-        assert!(validate_read_schema(RepositoryFormat::CurrentV4, &envelope).is_err());
+        assert!(validate_read_schema(RepositoryFormat::CurrentV5, &envelope).is_err());
     }
 }

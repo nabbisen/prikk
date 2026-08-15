@@ -70,7 +70,7 @@ fn init_allocates_every_container_index_and_generation_log_name_once() -> Result
         assert!(path.is_file());
         assert_eq!(std::fs::metadata(path)?.len(), 0);
     }
-    assert_eq!(reopened.format(), RepositoryFormat::CurrentV4);
+    assert_eq!(reopened.format(), RepositoryFormat::CurrentV5);
 
     let expected: HashSet<PathBuf> = container_paths.into_iter().collect();
     assert_eq!(files_under(&layout.containers_dir())?, expected);
@@ -129,7 +129,7 @@ fn init_allocates_every_ref_container_name_once() -> Result<()> {
         assert!(path.is_file());
         assert_eq!(std::fs::metadata(path)?.len(), 0);
     }
-    assert_eq!(reopened.format(), RepositoryFormat::CurrentV4);
+    assert_eq!(reopened.format(), RepositoryFormat::CurrentV5);
 
     let expected: HashSet<PathBuf> = ref_container_paths.into_iter().collect();
     assert_eq!(files_under(&layout.refs_containers_dir())?, expected);
