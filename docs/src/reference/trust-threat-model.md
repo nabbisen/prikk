@@ -11,8 +11,8 @@ implementation status records listed in the anchor table at the foot of the page
 - Ref pointers are mutable, not roots of trust.
 - Maintainer trust is repository-local with the current minimal `required = 1` policy.
 - `verify` is not a global trust proof.
-- There is no key rotation, revocation, hardware signing, remote trust, sync trust, or stable migration
-  policy yet.
+- MAINTAINER key revocation exists (`prikk trust maintainer remove`); there is no key rotation, hardware
+  signing, remote trust, sync trust, or stable migration policy yet, and no AUTHOR-identity revocation.
 - Durability and recovery claims are supported by current unit and integration tests, not by a
   completed crash-matrix or fuzzing campaign.
 - Repository *mutation* is exercised by project gates on Linux and macOS; Windows mutation remains

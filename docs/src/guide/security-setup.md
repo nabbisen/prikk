@@ -18,8 +18,9 @@ paths, see [repository layout and authority](../reference/repository-layout.md).
   (any one adopted key's signature suffices), and enforces trust-on-first-use per key id.
 - AUTHOR signatures are real Ed25519 signatures, but Prikk does not currently enforce a
   repository-wide AUTHOR trust policy.
-- There is no key rotation, revocation, hardware signing, remote trust, sync trust, hosted identity,
-  multi-maintainer threshold policy, or stable migration policy yet.
+- MAINTAINER key revocation exists (`prikk trust maintainer remove`); there is no key rotation, hardware
+  signing, remote trust, sync trust, hosted identity, multi-maintainer threshold policy, or stable
+  migration policy yet.
 
 ## Current Signing Roles
 
@@ -55,21 +56,23 @@ must provide the matching public key separately when configuring repository-loca
 
 ## Maintainer Trust Store Setup
 
-The current command for repository-local MAINTAINER trust is:
+The current commands for repository-local MAINTAINER trust are:
 
 ```text
 prikk trust maintainer add --key-id ID --public-key HEX
+prikk trust maintainer remove --key-id ID
 ```
 
 `ID` must match the MAINTAINER key id used by `PRIKK_MAINTAINER_KEY_ID`. `HEX` must be the lowercase
 64-hex-character Ed25519 public key that matches `PRIKK_MAINTAINER_SEED`.
 
-The command writes the trusted public key and adds it to the repository's adopted-key set, with
-`required = 1` continuing to mean any one adopted key's signature suffices. Adopting a key id already
-in the set with the same public key succeeds idempotently; adopting it again with a different public
-key is refused. This refusal is Prikk's trust-on-first-use enforcement: the first public key seen for a
-key id is the one trusted for that id, permanently, until an operator removes it out-of-band. There is
-still no remote trust distribution.
+`add` writes the trusted public key and adds it to the repository's adopted-key set, with `required = 1`
+continuing to mean any one adopted key's signature suffices. Adopting a key id already in the set with
+the same public key succeeds idempotently; adopting it again with a different public key is refused.
+This refusal is Prikk's trust-on-first-use enforcement: the first public key seen for a key id is the
+one trusted for that id, permanently, even after removal — `remove` takes a key id out of the adopted
+set, but re-adding the same id later with a *different* public key is still refused. There is still no
+remote trust distribution.
 
 ## Minimal Local Workflow
 
@@ -131,10 +134,11 @@ contract.
 ## Deferred Work
 
 Still deferred: key-generation commands, public-key derivation commands, local secret storage,
-keychain integration, passphrase handling, key rotation, key revocation, key expiration, compromise
-recovery, hardware signing, multi-maintainer thresholds, repository-wide AUTHOR trust policy, remote
-trust, hosted identity, JSON key-management output, stable trust-policy migration, stable
-repository-format migration, and production readiness.
+keychain integration, passphrase handling, key rotation, key expiration, compromise recovery, hardware
+signing, multi-maintainer thresholds, repository-wide AUTHOR trust policy (including AUTHOR-identity
+revocation — only MAINTAINER key revocation is supported), remote trust, hosted identity, JSON
+key-management output, stable trust-policy migration, stable repository-format migration, and
+production readiness.
 
 ## Claim-to-Source Anchors
 

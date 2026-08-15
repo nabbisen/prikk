@@ -170,18 +170,25 @@ the same name are not recognized as colliding; see the ASCII-folding caveat abov
 
 ## Maintainer Trust Key Id Safety
 
-A maintainer key id becomes a literal filesystem path component (`{key_id}.pub` under
-`.prikk/trust/keys/maintainer/`), the same hazard class as a repository path, so it is checked
-similarly:
+A maintainer key id is a field inside a trust-container record, not a filesystem path component — RFC
+102 Stage 5 replaced the earlier `{key_id}.pub`-under-`.prikk/trust/keys/maintainer/` storage, which is
+what originally motivated checking it the same way a repository path is checked. The same checks are
+still applied, now for their own reasons rather than a filesystem hazard:
 
-- storage-safe character allowlist (ASCII alphanumeric, `-`, `_`);
+- storage-safe character allowlist (ASCII alphanumeric, `-`, `_`) — kept as a conservative constraint on
+  the id shape, independent of any current storage mechanism;
 - Windows reserved device stem rejected regardless of host OS (`CON`, `PRN`, `AUX`, `NUL`, `COM1`
   through `COM9`, `LPT1` through `LPT9`) — this is the same check `RepoPath` uses, shared rather than
   duplicated;
-- case-insensitive collision against every other currently-stored key id is rejected.
+- case-insensitive collision against every other *currently-adopted* key id is rejected — a semantic
+  guard against operator confusion and ambiguous audit trails now, not a case-insensitive-filesystem
+  workaround. A key id removed from the active policy no longer reserves its case-folded name.
 
-`trust maintainer add` is add-or-replace for the exact same id: re-adding an unchanged `key_id` is not
-treated as colliding with itself.
+`trust maintainer add` adds a new key id, confirms idempotently if it already matches, and refuses if it
+conflicts with a different key under the same id (DC-78's TOFU enforcement) — re-adding an unchanged
+`key_id` is not treated as colliding with itself. `trust maintainer remove` revokes a key id from the
+active policy; the key's own material is retained internally, so a *different* key presented later under
+the same id is still refused even after removal.
 
 ## Deferred and Not Promised
 

@@ -33,11 +33,11 @@ For format stability, migration limits, and release identity, see
 ## Initialized Layout
 
 A fresh `prikk init` creates the repository directory, the initialized directories below, and the
-format marker file. It does not create runtime leaf files such as WALs, trust policy files, or
-maintainer key files. Ref pointer and ref-log storage is the exception: unlike WALs and trust files,
-the ref-pointer index and ref-log containers are fixed, named files allocated by `init` itself, empty
-until a ref is first published — there is no ref-specific directory or file created later, since ref
-names do not exist at `init` time and a per-ref file would have to be.
+format marker file. It does not create runtime leaf files such as the active WAL or active ref
+metadata. Ref, received-ref, and trust storage are the exception: the ref-pointer index, ref-log,
+received-ref index, and trust containers are all fixed, named files allocated by `init` itself, empty
+until first use — there is no per-ref, per-received-ref, or per-key-id file or directory created
+later, since none of those names exist at `init` time and a per-name file would have to be.
 
 ```text
 .prikk/
@@ -56,13 +56,14 @@ names do not exist at `init` time and a per-ref file would have to be.
       log-a.container
       log-b.container
       pointer-index.container
+      received-index.container
     locks/
     by-id/
     logs/
     tmp/
   trust/
-    keys/
-      maintainer/
+    keys.container
+    policy.container
   cache/
   quarantine/
 ```
@@ -189,22 +190,29 @@ not evidence of repository history or trust. Stale lock cleanup after a crash is
 
 ## Trust Store
 
-The current repository-local MAINTAINER trust paths are:
+The repository-local MAINTAINER trust containers are:
 
 ```text
-trust/policy.toml
-trust/keys/maintainer/<key-id>.pub
+trust/keys.container
+trust/policy.container
 ```
 
-These files are written by `prikk trust maintainer add`, not by bare repository initialization.
+Both are allocated empty at `init`, then appended to by `prikk trust maintainer add`/`remove` — no
+name is created after `init`.
 
-The trust policy holds a set of adopted MAINTAINER keys, with `required = 1` meaning any one adopted
-key's signature suffices. Each maintainer key file contains the trusted Ed25519 public key for its
-storage-safe key id. Seal checks the configured MAINTAINER signer against this repository-local policy
-before publication, and verify checks publication envelopes against the same local trust boundary.
+`keys.container` holds one append-only entry per adopted key id: the key id and its Ed25519 public key.
+`policy.container` holds a sequence of complete policy snapshots — each `add` or `remove` appends the
+*entire* current adopted-key-id list, not an incremental change; readers take the last complete
+snapshot, with `required = 1` meaning any one adopted key's signature suffices (never stored — it is a
+constant, not configurable). Seal checks the configured MAINTAINER signer against this repository-local
+policy before publication, and verify checks publication envelopes against the same local trust
+boundary.
 
 This trust store is authority for current publication-trust checks. It is not remote trust, global
-identity, key rotation, key revocation, hosted forge policy, or a multi-maintainer threshold system.
+identity, key rotation, hosted forge policy, or a multi-maintainer threshold system. Key revocation is
+supported (`prikk trust maintainer remove`): a removed key's material is retained internally (so a
+different key presented later under the same id is still refused), but it no longer counts toward the
+adopted set or reserves its case-folded id.
 
 ## Authority Model
 
@@ -213,7 +221,7 @@ identity, key rotation, key revocation, hosted forge policy, or a multi-maintain
 | `.prikk/FORMAT` | Format gate | Required by repository open; `2` is current writable format and `1` is bounded legacy read-only mode. |
 | `objects/<type>/<prefix>/<id>.pobj` | Content-addressed object authority | Authority when the envelope validates and its computed id/type match the path and expected object. |
 | `refs/containers/log-a.container` (`log-b.container` reserved) | Publication evidence | Shared, append-only signed RefUpdate records for every ref, interleaved; authoritative only with valid chain, object, signature, and trust checks. |
-| `trust/policy.toml` and `trust/keys/maintainer/*.pub` | Repository-local trust authority | Current local MAINTAINER trust input for seal and verify publication-trust checks. |
+| `trust/policy.container` and `trust/keys.container` | Repository-local trust authority | Current local MAINTAINER trust input for seal and verify publication-trust checks. |
 | `active/default/queue.wal` | Local active-session state | Pending signed Patch envelopes before seal; load-bearing for the active session, not sealed history. |
 | `active/default/ref-name` | Local active-session metadata | Identifies which ref owns a non-empty active WAL; not sealed history. |
 | `refs/containers/pointer-index.container` | Mutable convenience pointer | Shared, append-only, last-entry-wins RefState pointer for every ref; fast current-state lookup and recovery target; not trusted without RefState/ref-log checks. |

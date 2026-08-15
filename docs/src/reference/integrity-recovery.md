@@ -16,8 +16,9 @@ setup, see the [security and signing setup](../guide/security-setup.md) guide.
 - `verify` checks structural integrity and current repository-local publication trust for publication
   objects; it is not a global trust proof.
 - There is no repository-wide AUTHOR trust enforcement.
-- There is no historical PKI, key revocation, key rotation, hardware signing, remote trust, sync trust,
-  or stable migration policy yet.
+- MAINTAINER key revocation exists (`prikk trust maintainer remove`), but there is no historical PKI
+  (temporal/point-in-time revocation semantics), key rotation, hardware signing, remote trust, sync
+  trust, or stable migration policy yet.
 - `prikk doctor` repairs are opt-in and narrow.
 - Doctor recommendations are human guidance, not an automated recovery policy.
 - Output fields, counters, severity labels, and issue-code names are current CLI vocabulary, not a
@@ -55,7 +56,8 @@ interrupted-publication state exists.
 ## What Verify Does Not Prove
 
 `verify` does not prove that a repository is globally trustworthy. It does not enforce
-repository-wide AUTHOR trust, historical PKI semantics, key revocation, key rotation, remote identity,
+repository-wide AUTHOR trust, historical PKI semantics (temporal/point-in-time revocation tracking --
+`verify` only ever checks against the current adopted-key snapshot), key rotation, remote identity,
 remote trust, hosted forge policy, or thresholds beyond the current repository-local `required = 1`
 maintainer policy.
 
@@ -174,9 +176,9 @@ boundary.
 
 Still deferred: broader repair policy, stale-lock policy, missing-object recovery, malformed-log
 repair, checksum-mismatch repair, object quarantine and garbage collection, repository-wide AUTHOR
-trust policy, key rotation, revocation, hardware signing, remote trust, hosted identity, JSON output,
-stable diagnostic schema, backup/restore tooling, stable repository-format migration, and production
-readiness.
+trust policy, key rotation, hardware signing, remote trust, hosted identity, JSON output, stable
+diagnostic schema, backup/restore tooling, stable repository-format migration, and production
+readiness. (MAINTAINER key revocation is no longer deferred — `prikk trust maintainer remove`.)
 
 ## Claim-to-Source Anchors
 
