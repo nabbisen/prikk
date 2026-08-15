@@ -51,6 +51,7 @@ mod patch_inverse;
 mod patch_replay;
 mod path;
 mod received;
+mod received_index;
 mod refs;
 mod rollback_draft;
 mod rollback_preview;
