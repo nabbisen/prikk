@@ -1275,3 +1275,56 @@ non-destructive and whose users do not expect an operation that reclaims space f
 
 **DC-41 recoverability stays deferred to Step 2**, correctly — there are no compaction states to recover
 from until it exists.
+
+### 15.7 Step 2 — the exclusion ruling, and what it drags in, 2026-08-15
+
+**Owner decisions, 2026-08-15.** Writers participate in a lock (not optimistic publication); the lock is
+**container-scoped**, not the repository-wide `ActiveLock`; **stale-lock recovery is a prerequisite**, not
+a follow-up; and the wider growth programme is **deferred with the measurement recorded**.
+
+**What a "container" is, for locking.** One **logical** append-only record stream: its **slot pair
+(`-a`/`-b`) plus, for the three compaction targets, its generation log.** The lock unit is the logical
+container, never a file — compaction writes the `-b` file while writers write `-a`, so a per-file lock
+would not exclude them at all.
+
+**The lock inventory, traced rather than asserted.** Two earlier versions of this finding named the wrong
+locks, both times by reading a function's parameter instead of following the caller:
+
+| Path | Repository-wide lock |
+|---|---|
+| `seal` (`seal.rs:81`), `commit` (`node_authoring.rs:195`), `trust` add/remove (`trust.rs:88,144`) | **Yes** — so **two concurrent seals are impossible** |
+| `branch create` (`prikk-cli/src/branch.rs:204,331`), `tag create` (`prikk-cli/src/tag.rs:170`), `merge` (`merge_execute.rs:227`) | **No** — only the **per-ref** `RefLock` (`publication.rs:48`) |
+| `bundle import` (`bundle.rs:270`) | **No** — nothing |
+
+**`ActiveLock` does not mean what its name suggests:** a `branch create` can publish while a `seal` holds
+it, because the branch path never checks it.
+
+**Two hazards the owner named, both already real:**
+
+**Deadlock.** Multi-container operations exist today — `trust.rs:111`/`:129` write the key *and* policy
+containers; publication writes the ref log *and* the pointer index. Per-container locks make lock-order
+inversion possible. **A total lock order must be declared once and enforced structurally**, not left to
+per-call-site discipline.
+
+**The wedge, which has no recovery.** `lock_body` (`lock.rs:108-112`) states it outright:
+*"note=PR-007 lock has no stale-lock stealing yet"*. `acquire_lock_file` only ever returns
+`LockConflict` on `AlreadyExists`, so **a lock file surviving a crash wedges that lock permanently** — and
+**`doctor.rs:405` acquires `ActiveLock` itself**, so the tool meant to repair the repository is blocked by
+the very thing needing repair. Adding container locks would multiply an already-unrecovered failure mode.
+**Stale-lock recovery therefore lands before or with the container locks, not after.**
+
+**Two more Step 2 obligations, both easy to lose:**
+
+1. **When is a retired slot safe to reuse?** Compaction *n* writes `-b`; compaction *n+1* must reuse
+   `-a`, which must be truncated first. A reader that resolved `-a` before publication and is still
+   reading sees a truncated file — fail-closed, not silent, but a spurious failure. One candidate worth
+   evaluating: a reader re-reads the generation log after reading and retries if it moved, making the read
+   verifiably consistent for one small extra read.
+2. **Display locators go stale.** `refs/verify/scan.rs:72-79`'s `pointer_locator` hardcodes slot `A` and
+   documents the choice as Step-1-correct. Once compaction can publish `-b`, `verify`/`doctor` would name
+   the wrong file for a damaged record — degrading exactly the diagnostic an operator needs when
+   compaction has gone wrong.
+
+**Scope note.** The tearing exposure is **not** confined to the three compaction targets — the shared ref
+log takes concurrent appends from the same four unserialized commands. How wide the fix goes is a scope
+question for Step 0 to put back to the owner, not for the implementation to settle.
