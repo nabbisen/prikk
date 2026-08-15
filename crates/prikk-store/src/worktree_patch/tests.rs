@@ -1718,6 +1718,157 @@ fn genesis_second_commit_before_seal_queues() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// RFC 102 Stage 5, design-v1.md §14.4/§14.5 item 5: the commit-index cache's exemption from
+/// criterion 2 ("this is only a cache, never a root of trust") asserted by comparing real commit
+/// output, not merely described in prose. Same two-commit sequence as
+/// `genesis_second_commit_before_seal_queues` -- the second commit's worktree scan revisits `a.txt`
+/// (unchanged, present in both the worktree and the folded first-commit baseline) via
+/// `resolve_existing_file`'s cache consultation, exercising the read path this test targets, not
+/// just `CommitIndex::load`/`save` in isolation (already covered by `commit_index/tests.rs`). Run
+/// three times with three different cache states injected between the two commits, comparing the
+/// second commit's full report (`WorktreePatchCommitReport` derives `PartialEq`): a missing or
+/// corrupt cache must produce output identical to a warm one, proving cost is the only thing that
+/// differs.
+#[test]
+fn second_commit_report_is_identical_whether_the_commit_index_cache_is_warm_cold_or_corrupt() {
+    fn run_two_commits(
+        label: &str,
+        disrupt_cache: impl FnOnce(&RepositoryLayout),
+    ) -> crate::WorktreePatchCommitReport {
+        let root = unique_temp_dir(label);
+        let layout = RepositoryLayout::init(root.clone()).unwrap();
+        std::fs::write(root.join("a.txt"), b"one\n").unwrap();
+
+        let mut generator = deterministic_generator();
+        commit_worktree_changes_with_generator(
+            &layout,
+            "heads/main",
+            "genesis",
+            WorktreePatchCommitOptions::file_level(),
+            &mut generator,
+            &test_signer(),
+        )
+        .unwrap();
+
+        disrupt_cache(&layout);
+
+        std::fs::write(root.join("b.txt"), b"two\n").unwrap();
+        let mut generator2 = deterministic_generator();
+        let second = commit_worktree_changes_with_generator(
+            &layout,
+            "heads/main",
+            "again",
+            WorktreePatchCommitOptions::file_level(),
+            &mut generator2,
+            &test_signer(),
+        )
+        .unwrap();
+
+        let _ = std::fs::remove_dir_all(root);
+        second
+    }
+
+    fn cache_relative(layout: &RepositoryLayout) -> std::path::PathBuf {
+        layout
+            .repository_relative(&layout.cache_dir().join("commit-index.v1"))
+            .unwrap()
+    }
+
+    let warm = run_two_commits("commit-index-warm", |_layout| {});
+    let cold = run_two_commits("commit-index-cold", |layout| {
+        crate::fsutil::remove_file_required(
+            layout.repository_mutation_root(),
+            &cache_relative(layout),
+        )
+        .unwrap();
+    });
+    let corrupt = run_two_commits("commit-index-corrupt", |layout| {
+        crate::fsutil::write_file_atomically(
+            layout.repository_mutation_root(),
+            &cache_relative(layout),
+            b"not a valid commit index at all",
+        )
+        .unwrap();
+    });
+
+    assert_eq!(warm, cold);
+    assert_eq!(warm, corrupt);
+}
+
+/// RFC 102 Stage 5, design-v1.md §14.4/§14.5 item 5: the incremental lifecycle-state cache's
+/// exemption asserted the same way as the commit-index cache above. Baseline is `publish_node_
+/// baseline`'s sealed `Root` block, so `resolve_worktree_baseline` returns `WorktreeBaseline::
+/// Published` and every commit here reaches `resolve_baseline_state` (only reached for a `Published`
+/// baseline -- `node_authoring.rs:280-288`), unlike the genesis-queue tests above. The first commit
+/// warms the cache (a real persisted entry, not a hand-built one); the second is what gets compared
+/// across three cache states.
+#[test]
+fn second_commit_report_is_identical_whether_the_lifecycle_cache_is_warm_cold_or_corrupt() {
+    fn run_two_commits(
+        label: &str,
+        disrupt_cache: impl FnOnce(&RepositoryLayout),
+    ) -> crate::WorktreePatchCommitReport {
+        let root = unique_temp_dir(label);
+        let layout = RepositoryLayout::init(root.clone()).unwrap();
+        publish_node_baseline(&layout, &[("a.txt", b"one\n", BlobKind::Text)]);
+
+        std::fs::write(root.join("b.txt"), b"two\n").unwrap();
+        let mut generator = deterministic_generator();
+        commit_worktree_changes_with_generator(
+            &layout,
+            "heads/main",
+            "first",
+            WorktreePatchCommitOptions::file_level(),
+            &mut generator,
+            &test_signer(),
+        )
+        .unwrap();
+
+        disrupt_cache(&layout);
+
+        std::fs::write(root.join("c.txt"), b"three\n").unwrap();
+        let mut generator2 = deterministic_generator();
+        let second = commit_worktree_changes_with_generator(
+            &layout,
+            "heads/main",
+            "second",
+            WorktreePatchCommitOptions::file_level(),
+            &mut generator2,
+            &test_signer(),
+        )
+        .unwrap();
+
+        let _ = std::fs::remove_dir_all(root);
+        second
+    }
+
+    fn cache_relative(layout: &RepositoryLayout) -> std::path::PathBuf {
+        layout
+            .repository_relative(&layout.cache_dir().join("lifecycle-state.v1"))
+            .unwrap()
+    }
+
+    let warm = run_two_commits("lifecycle-cache-warm", |_layout| {});
+    let cold = run_two_commits("lifecycle-cache-cold", |layout| {
+        crate::fsutil::remove_file_required(
+            layout.repository_mutation_root(),
+            &cache_relative(layout),
+        )
+        .unwrap();
+    });
+    let corrupt = run_two_commits("lifecycle-cache-corrupt", |layout| {
+        crate::fsutil::write_file_atomically(
+            layout.repository_mutation_root(),
+            &cache_relative(layout),
+            b"not a valid lifecycle cache at all",
+        )
+        .unwrap();
+    });
+
+    assert_eq!(warm, cold);
+    assert_eq!(warm, corrupt);
+}
+
 /// DC-66 criterion 3: node identity is safe across a queue — no two queued patches can mint the same
 /// `node_id`, tested against constructed state. A file created by the first queued commit is
 /// correctly seen as existing by the second (proving the chain fold, not just non-collision by luck),
