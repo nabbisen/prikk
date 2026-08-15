@@ -1075,3 +1075,39 @@ repository will ever hold a `.pub` file. And `validate_no_maintainer_key_id_coll
 file, and **in a container that root cause disappears**, leaving a semantic guard. Its tests must be
 rewritten to assert the new property, not ported to keep passing — and the deliberate behaviour change
 (a removed key no longer reserves its case-variant id) stated in the commit.
+
+### 14.10 `FORMAT`'s own write — criterion 2 is not closed, 2026-08-15
+
+**Found by the developer while checking, rather than asserting, that Stage 5 closed criterion 2.**
+
+`layout.rs::init` writes `FORMAT` with `write_file_atomically` (`:191-196`), guarded by `is_none()` so it
+only fires on a genuinely absent file. **`atomic_replace` creates a temp name and renames it onto the
+destination — for a name that does not yet exist, that is a new-directory-entry event plus a rename**,
+the exact class §1 identifies as what Windows cannot make durable, and the reason `durable_append` and
+`durable_truncate_to_empty` were both hardened against creating names at all.
+
+`FORMAT` is durability-bearing in the strongest sense this codebase has: **its presence is what certifies
+`init` completed** (§14.2). It is covered by neither cache exemption and is not an argued third
+exception. **So criterion 2 — "no durability-bearing write uses `atomic_replace`" — is not closed.**
+
+**This was in scope from the start, and missing it is mine twice.** §14.1's own table lists
+`layout.rs`'s `FORMAT` write as durability-bearing, with the note *"init-only — see §14.2."* §14.2 then
+addressed only the **ordering** (write `FORMAT` last so an interrupted `init` is detectable) and never
+the **primitive**. Every subsequent `atomic_replace` sweep was scoped to per-name files that grow later —
+marker, WAL, refs, trust — and `FORMAT` fell between the two halves of my own ruling.
+
+**Ruling: one further Stage 5 unit.** Replace the `write_file_atomically` call with
+`create_new_file_required` (`fsutil/anchored.rs:111-117`, which takes the bytes and dispatches to
+`create_exclusive`), keeping the existing `is_none()` guard and §14.2's write-last position. That is the
+primitive every other name `init` allocates already uses, via `create_empty_file_once`, so the change
+makes `init` uniform rather than adding a special case: **one creation primitive for every name it
+creates.**
+
+**Two things to establish rather than assume when building it.** First, that `create_exclusive`'s
+durability is equivalent — it must sync the file and the parent directory as `atomic_replace` did; if it
+does not, say so rather than trading durability for uniformity. Second, that the concurrency
+characteristic is acceptable: `is_none()` followed by an exclusive create means a second concurrent
+`init` errors where `atomic_replace` would have overwritten. Every other name in `init` already behaves
+that way, so uniformity argues for it — but state it.
+
+**Criterion 2 closes when this lands, and not before.** The report was right to refuse the claim.
