@@ -774,8 +774,8 @@ reading each one, not by name:
 
 | Site | Writes | Durability-bearing? |
 |---|---|---|
-| `trust.rs:106` | maintainer trust key, **one new name per key id** | **Yes** — a lost key silently reduces a signing threshold |
-| `trust.rs:132` | trust policy | **Yes** — a torn policy is a wrong signer set |
+| `trust.rs:106` | maintainer trust key, **one new name per key id** | **Yes** — see §14.1.1 |
+| `trust.rs:132` | trust policy | **Yes** — see §14.1.1 |
 | `active.rs:122` | active-WAL ref metadata (current branch) | **Yes** |
 | `received.rs:107` | received ref pointer, **one new name per received ref** | **Yes** |
 | `layout.rs:138` | `FORMAT`, at `init` only | **Yes**, but init-only — see §14.2 |
@@ -784,6 +784,28 @@ reading each one, not by name:
 
 **Stage 5 as named covers two. Stage 6 (compaction) covers none.** `active.rs:122` and `received.rs:107`
 belong to no stage at all, so the staging as written terminates with criterion 2 unmet.
+
+#### 14.1.1 Trust fails closed, and I had the direction backwards
+
+My first draft of the table above said a lost maintainer key *"silently reduces a signing threshold."*
+**That is wrong twice, and the correction changes what Stage 5 must prove.**
+
+1. **There is no threshold.** `trust.rs:2-4`: `required = 1` keeps its DC-11 meaning regardless of how
+   many keys are adopted — a block needs *one* trusted signature, never a threshold of several
+   (`rfcs/done/DC-78-HISTORY-EXCHANGE.md` §D2).
+2. **Loss is neither silent nor weakening.** `load_maintainer_trust_policy` (`:208-237`) reads the policy
+   and **every** key it names through `read_file_required`. A single missing key file is a hard
+   `PrikkError::Integrity` that fails the entire load — so one lost key does not drop one signer, it
+   **fails verification of every publication in the repository.**
+
+So the risk is not privilege escalation; **it is the opposite, and more total than a threshold model
+would be.** Losing trust state renders all previously-valid history unverifiable. That is a durability
+and availability defect, and it is a *stronger* reason to containerize trust than the one I first wrote —
+the per-key-id new-name surface at `trust.rs:106` is precisely where Windows would lose it.
+
+**Consequence for Stage 5's criteria:** do not write a test that trust loss "fails safely" and call it
+done — it already does, loudly. **Prove the state survives.** The failure this stage prevents is a
+repository that can no longer verify its own history, not one that accepts a forged signature.
 
 **Ruling: Stage 5 is "the remaining durability-bearing replacements", not "trust".** Trust is its largest
 and most security-sensitive part, which is why it was the name that stuck — but naming a stage after its
