@@ -1,27 +1,18 @@
-//! Received-ref index framing: the encode/decode/corruption-isolation half of `received.rs`'s
-//! container migration (RFC 102 Stage 5, design-v1.md §14, Step 0 item 2's ruling that `received.rs`
-//! belongs on the refs container+pointer-index pattern -- the same unbounded, minted-after-`init`
-//! per-name shape that forced Stage 4's ref pointer index, §13.2's argument applied to a second
-//! subsystem). Mirrors `refs/pointer_index.rs` deliberately closely: same magic-framed,
-//! checksum-verified, resync-on-corruption record shape, and the identical entry fields --
-//! `received.rs`'s own doc already states its semantics are "no CAS and no merge... this is what I
-//! have now," which is exactly last-entry-wins, the same publish model the ref pointer index already
-//! proved sound.
+//! Received-ref index: append-only, off the durability path in the same sense the ref pointer index
+//! is (RFC 102 Stage 5, design-v1.md §14, Step 0 item 2's ruling that `received.rs` belongs on the
+//! refs container+pointer-index pattern -- the same unbounded, minted-after-`init` per-name shape
+//! that forced Stage 4's ref pointer index, §13.2's argument applied to a second subsystem). Mirrors
+//! `refs/pointer_index.rs` deliberately closely: same magic-framed, checksum-verified,
+//! resync-on-corruption record shape, and the identical entry fields -- `received.rs`'s own doc
+//! already states its semantics are "no CAS and no merge... this is what I have now," which is
+//! exactly last-entry-wins, the same publish model the ref pointer index already proved sound.
 //!
-//! **Deliberately incomplete.** This module holds only the pure codec -- encode, decode, frame
-//! parsing, resync-on-corruption -- with no dependency on `RepositoryLayout` or any container path.
-//! The read/append functions that would give this a place to live on disk, the `init`-time name
-//! allocation, and `require_current_format`'s guard all wait on a still-open question: whether adding
-//! this container name (and the trust key container alongside it) requires a `RepositoryFormat` bump,
-//! the same way Stage 3 and Stage 4 each bumped format for an equivalent on-disk shape change. See
-//! `.git-exclude/review-request/prikk-rfc102-stage5-format-bump-question-v1.md` and its ruling. This
-//! file is safe to land independent of that answer; nothing below touches a real repository.
-
-// Deliberately incomplete (see module doc): nothing outside this module's own tests calls any of
-// this yet, since the I/O layer that would give it a real caller waits on the format-bump ruling.
-// Temporary -- removed the moment `replay_received_index`/`append_received_index_entry`/`lookup_
-// received_pointer` land and give this a production caller.
-#![allow(dead_code)]
+//! **No separate log.** Unlike refs (Stage 4), a received ref carries no update-sequence history to
+//! preserve -- each import simply replaces the prior state outright -- so this one container plays
+//! both the pointer-index and the (nonexistent) log's role at once.
+//!
+//! The I/O layer below landed once the format-bump question (design-v1.md §14.7) was answered: this
+//! container name is allocated at `init` (`layout.rs::init`) under repository format 5.
 
 use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;
@@ -30,7 +21,8 @@ use prikk_object::ObjectId;
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{push_bytes_u64, push_u16};
 use crate::frame_resync::resync_to_next_magic;
-use crate::fsutil::len_to_u64;
+use crate::fsutil::{append_file_required, len_to_u64, read_file_if_exists};
+use crate::layout::RepositoryLayout;
 
 const RECEIVED_INDEX_MAGIC: &[u8; 8] = b"PRECVIX1";
 const RECEIVED_INDEX_VERSION: u16 = 1;
@@ -253,6 +245,83 @@ pub(crate) fn decode_received_index_records(bytes: &[u8]) -> Result<ReceivedInde
             }
         }
     }
+}
+
+/// Read and replay the on-disk received-ref index, off the durability path -- a missing file replays
+/// as empty, the same reader-equivalence rule Stage 1 established for the WAL and Stage 4 for the ref
+/// pointer index.
+pub(crate) fn replay_received_index(layout: &RepositoryLayout) -> Result<ReceivedIndexReplay> {
+    let relative = layout.repository_relative(&layout.received_index_path())?;
+    let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &relative)? else {
+        return Ok(ReceivedIndexReplay {
+            entries: Vec::new(),
+            trailing_partial_bytes: 0,
+            record_outcomes: Vec::new(),
+        });
+    };
+    decode_received_index_records(&bytes)
+}
+
+/// Look up one received ref's current pointer: the last entry matching `ref_name_key`, matching
+/// `pointer_index::lookup_ref_pointer`'s own "last entry wins" reverse search exactly. Refuses if the
+/// index itself has a damaged entry, rather than silently searching around it -- the same fail-closed
+/// reasoning applies here as it does there (design-v1.md §13.14): this index is also last-entry-wins,
+/// so silently skipping a damaged *latest* entry could let an older entry for the same ref resolve as
+/// current.
+pub(crate) fn lookup_received_index_entry(
+    layout: &RepositoryLayout,
+    ref_name_key: [u8; 32],
+) -> Result<Option<ReceivedIndexEntry>> {
+    let replay = replay_received_index(layout)?;
+    if replay.has_item_failure() {
+        return Err(PrikkError::Integrity(
+            "received-ref index has a damaged entry; run doctor before reading".to_string(),
+        ));
+    }
+    Ok(replay
+        .entries
+        .into_iter()
+        .rev()
+        .find(|entry| entry.ref_name_key == ref_name_key))
+}
+
+/// Resolve every currently-received ref: the last entry per `ref_name_key`, unsorted (callers sort by
+/// whatever key they need). Fails closed on any damaged entry, for the same reason `lookup_received_
+/// index_entry` does -- listing is exactly the same last-entry-wins resolution, just for every key
+/// instead of one.
+pub(crate) fn list_resolved_received_entries(
+    layout: &RepositoryLayout,
+) -> Result<Vec<ReceivedIndexEntry>> {
+    let replay = replay_received_index(layout)?;
+    if replay.has_item_failure() {
+        return Err(PrikkError::Integrity(
+            "received-ref index has a damaged entry; run doctor before reading".to_string(),
+        ));
+    }
+    let mut resolved: Vec<ReceivedIndexEntry> = Vec::new();
+    for entry in replay.entries {
+        match resolved
+            .iter_mut()
+            .find(|existing| existing.ref_name_key == entry.ref_name_key)
+        {
+            Some(existing) => *existing = entry,
+            None => resolved.push(entry),
+        }
+    }
+    Ok(resolved)
+}
+
+/// Durably append one new received-ref entry -- the import moment itself. Never checks for an
+/// existing entry first, matching `append_ref_pointer_entry`'s own reasoning exactly: "last entry
+/// wins" already makes a duplicate harmless, and `received.rs`'s own doc is explicit that a re-import
+/// has no CAS to enforce -- "this is what I have now."
+pub(crate) fn append_received_index_entry(
+    layout: &RepositoryLayout,
+    entry: &ReceivedIndexEntry,
+) -> Result<()> {
+    let record = encode_received_index_record(entry)?;
+    let relative = layout.repository_relative(&layout.received_index_path())?;
+    append_file_required(layout.repository_mutation_root(), &relative, &record)
 }
 
 #[cfg(test)]

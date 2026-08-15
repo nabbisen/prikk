@@ -1,5 +1,7 @@
 #![allow(clippy::indexing_slicing)]
 
+mod proptest_decode;
+
 use prikk_error::Result;
 
 use super::{

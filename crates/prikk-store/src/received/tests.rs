@@ -1,6 +1,6 @@
-//! Received-ref pointer storage tests.
-
-mod proptest_decode_received_pointer;
+//! Received-ref pointer storage tests. Wire-level round-trip/totality coverage for the underlying
+//! container format lives in `received_index/tests.rs` now -- this file tests only `received.rs`'s
+//! own public behavior (validation, write/read/list through the container).
 
 use prikk_object::ObjectId;
 

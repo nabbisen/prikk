@@ -354,7 +354,8 @@ fn parse_active_patch_threshold_env(
 fn run_log(args: Vec<String>) -> std::result::Result<(), String> {
     let args = parse_log_args(args)?;
     let layout = open_repository(args.root)?;
-    // Received refs (DC-78 ruling 4) live under refs/received/, not refs/by-id/, and their
+    // Received refs (DC-78 ruling 4) live in their own container (RFC 102 Stage 5:
+    // received_index.rs, formerly refs/received/), not the local-ref pointer index, and their
     // RefState objects carry the origin's own name rather than the local "remotes/"-prefixed one
     // — load_ref_history's pointer/name-match check can't resolve them, so route separately.
     let history = if args.ref_name.starts_with("remotes/") {

@@ -174,6 +174,7 @@ impl RepositoryLayout {
             &layout.ref_log_container_slot_path(ContainerSlot::B),
         )?;
         create_empty_file_once(&layout, &layout.ref_pointer_index_path())?;
+        create_empty_file_once(&layout, &layout.received_index_path())?;
         // RFC 102 Stage 5, design-v1.md §14.2: written last, once every container/marker/WAL name
         // above is confirmed present. `FORMAT`'s presence is what certifies `init` completed --
         // written first (the old order), a crash between it and the containers left a repository
@@ -378,6 +379,17 @@ impl RepositoryLayout {
     #[must_use]
     pub fn ref_pointer_index_path(&self) -> PathBuf {
         self.refs_containers_dir().join("pointer-index.container")
+    }
+
+    /// Return the received-ref-index container path (RFC 102 Stage 5, design-v1.md §14.1/Step 0 item
+    /// 2: `received.rs` on the same unbounded-per-name-minted-after-`init` shape that forced the ref
+    /// pointer index, Stage 4's §13.2 argument applied to a second subsystem). Single file, no A/B
+    /// slot, no separate log -- a received ref's own semantics are already last-entry-wins/replace-
+    /// outright (`received.rs`'s own doc: "no CAS and no merge... this is what I have now"), the same
+    /// shape the ref pointer index already proved sound, so this container plays both roles at once.
+    #[must_use]
+    pub fn received_index_path(&self) -> PathBuf {
+        self.refs_containers_dir().join("received-index.container")
     }
 
     /// Return all required directories for layout creation.

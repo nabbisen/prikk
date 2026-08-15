@@ -98,13 +98,15 @@ fn init_allocates_every_container_index_and_generation_log_name_once() -> Result
 }
 
 /// RFC 102 Stage 4 acceptance criterion 1 (handoff §4): "every new container name created at
-/// `init`" -- the shared ref-log container's both slots, plus the ref-pointer-index container.
-/// Mirrors `init_allocates_every_container_index_and_generation_log_name_once` exactly, including
-/// the third phase that test's own doc calls out by name: real publishes through `RefStore`
-/// (ordinary use, not just re-`init`), then the whole `refs/containers/` tree re-enumerated from the
-/// filesystem itself to confirm the file *set* is still exactly those 3 -- not just that
-/// `RepositoryLayout`'s own three named paths still exist, which a call site bug could satisfy while
-/// a real fourth file sat unnoticed alongside them.
+/// `init`" -- the shared ref-log container's both slots, plus the ref-pointer-index container. RFC
+/// 102 Stage 5 adds the received-index container to this same directory (design-v1.md §14, Step 0
+/// item 2), so this test covers it too rather than splitting into a separate one -- it belongs to the
+/// exact same "every name under `refs_containers_dir()`" property. Mirrors `init_allocates_every_
+/// container_index_and_generation_log_name_once` exactly, including the third phase that test's own
+/// doc calls out by name: real publishes through `RefStore` (ordinary use, not just re-`init`), then
+/// the whole `refs/containers/` tree re-enumerated from the filesystem itself to confirm the file
+/// *set* is still exactly those 4 -- not just that `RepositoryLayout`'s own four named paths still
+/// exist, which a call site bug could satisfy while a real fifth file sat unnoticed alongside them.
 #[test]
 fn init_allocates_every_ref_container_name_once() -> Result<()> {
     let root = unique_temp_dir("layout-ref-container-allocation");
@@ -114,6 +116,7 @@ fn init_allocates_every_ref_container_name_once() -> Result<()> {
         layout.ref_log_container_slot_path(ContainerSlot::A),
         layout.ref_log_container_slot_path(ContainerSlot::B),
         layout.ref_pointer_index_path(),
+        layout.received_index_path(),
     ];
     for path in &ref_container_paths {
         assert!(path.is_file(), "expected {path:?} to exist after init");
