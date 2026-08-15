@@ -622,17 +622,6 @@ fn run_doctor(args: Vec<String>) -> std::result::Result<(), String> {
         for patch_id in &repair.wal_repair.preserved_patch_ids {
             println!("repair: preserved queued patch {patch_id}");
         }
-        if let Some(ref_repair) = &repair.ref_repair {
-            println!(
-                "repair: {} heads/main pointer for RefState {}",
-                if ref_repair.wrote_pointer {
-                    "reconstructed"
-                } else {
-                    "kept existing"
-                },
-                ref_repair.ref_state_id
-            );
-        }
         print_doctor_report(&layout, &repair.after);
         if repair.after.is_healthy() {
             Ok(())

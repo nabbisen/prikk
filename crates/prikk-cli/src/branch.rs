@@ -13,8 +13,9 @@
 //! history, and every object stay. Closure publishes a final ref state carrying the `closed`
 //! field (`RefStatePayload` tag 7, schema 2). DC-60 tried deletion (removing the pointer while
 //! keeping the log); that produced "pointer absent, log present," a state the system does not
-//! merely classify as corruption but has a *repair function* for
-//! (`RefStore::recoverable_missing_ref` / `doctor`'s `reconstruct_missing_ref_from_log`), so
+//! merely classify as corruption but at the time had a *repair function* for
+//! (`RefStore::recoverable_missing_ref` plus a since-superseded `doctor` reconstruction path,
+//! removed by the dead-surface consolidation once DC-38's crash recovery made it unreachable), so
 //! `doctor` would have offered to resurrect every deleted branch, and it also bricked
 //! repository-wide commits at every record count
 //! (`.git-exclude/reviewed/prikk-dc60-delete-divergence-ruling-v1.md`). Closure leaves the pointer
