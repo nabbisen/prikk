@@ -7,7 +7,9 @@ acceptance clears the investigation, not the implementation.
 as possible, *with clean architecture and a safe process*. macOS landed as DC-81; this is the other
 half. Also from **DC-82's own criterion 3**, which was reported **not met** and deferred here by name:
 "the sub-contract layer is per-platform types and primitives, deferred to the Windows increment."
-**Target.** 0.20.0. **Status-claim criterion 6.**
+**Target.** **0.21.0** — retargeted from 0.20.0 by the project owner 2026-08-16. 0.20.0 was activated
+for RFC 102's completed work rather than held for this increment, whose design has not begun.
+**Status-claim criterion 6.**
 
 ## 0. What RFC 102 changed, added 2026-08-16
 
