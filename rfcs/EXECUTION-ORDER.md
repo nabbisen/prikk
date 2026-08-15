@@ -320,8 +320,17 @@ These apply to all work above and are not restated in each handoff.
     interleave their output with the main run, so the text is not reliably line-oriented; anchor on
     `ok\. N passed` rather than on field position.
 
-    **An increment that changes any of these numbers must update this line in the same commit.** Not a
-    courtesy — the line *is* the comparison point, and a stale one makes the rule unfalsifiable.
+    **Whoever changes these numbers must see this line updated.** Not a courtesy — the line *is* the
+    comparison point, and a stale one makes the rule unfalsifiable.
+
+    **But the developer cannot do it, and the rule spent a month pretending otherwise.** `rfcs/` is
+    architect-only, so an increment that moves a count can *report* the new figure and nothing more.
+    **The obligation is therefore the reviewer's: update this line as part of accepting the increment
+    that moved it**, in the same review, not later. That is the honest allocation, and it explains the
+    decay this rule kept suffering — RFC 102 Stage 5 moved `prikk-store` by 15 across six rounds, every
+    round reported its count correctly, and none could have edited this file if it had wanted to.
+    Corrected 2026-08-15 after Stage 6 Step 1 flagged the figure rather than editing it, which was the
+    only move available to it.
 
     > **Corrected 2026-08-15, and the correction is the lesson.** The previous baseline —
     > `prikk-store` 543, `prikk-object` 76, `prikk-crypto` 5, `prikk-release-policy` 59, 180 locked
