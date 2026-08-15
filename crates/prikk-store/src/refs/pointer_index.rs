@@ -31,8 +31,6 @@ use crate::file_codec::{push_bytes_u64, push_u16};
 use crate::frame_resync::resync_to_next_magic;
 use crate::fsutil::{append_file_required, len_to_u64, read_file_if_exists};
 use crate::generation::resolve_live_slot;
-#[cfg(any(test, feature = "test-support"))]
-use crate::layout::ContainerSlot;
 use crate::layout::RepositoryLayout;
 
 const POINTER_INDEX_MAGIC: &[u8; 8] = b"PREFPTI1";
@@ -377,7 +375,12 @@ pub(crate) fn remove_pointer_entries_for_test(
     layout: &RepositoryLayout,
     ref_name_key: [u8; 32],
 ) -> Result<()> {
-    let path = layout.ref_pointer_index_slot_path(ContainerSlot::A);
+    // RFC 102 Stage 6 Step 2 review's residual note: hardcoding `A` here would silently splice the
+    // *retired* slot after a compaction, passing for the wrong reason (or failing confusingly) rather
+    // than acting on the live slot every real reader resolves. Resolver-routed, matching every
+    // production writer this stage just fixed for the identical reason.
+    let slot = resolve_live_slot(layout, &layout.ref_pointer_index_generation_log_path())?;
+    let path = layout.ref_pointer_index_slot_path(slot);
     let bytes = std::fs::read(&path)?;
     let replay = decode_pointer_index_records(&bytes)?;
     let mut entries = replay.entries.iter();
