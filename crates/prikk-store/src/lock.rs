@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use prikk_error::{PrikkError, Result};
 
 use crate::fsutil::{MutationRoot, create_new_file_required, remove_file_cleanup_best_effort};
-use crate::layout::RepositoryLayout;
+use crate::layout::{LockableContainer, RepositoryLayout};
 
 /// Active session lock acquired before mutating an active WAL tail.
 #[derive(Debug)]
@@ -86,6 +86,77 @@ impl RefLock {
 impl Drop for RefLock {
     fn drop(&mut self) {
         remove_file_cleanup_best_effort(&self.mutation_root, &self.relative);
+    }
+}
+
+/// One held lock on a `LockableContainer`. Never constructed directly outside
+/// `acquire_container_locks` -- the sorted-order guarantee that helper provides is only real if
+/// nothing can acquire a container lock any other way.
+#[derive(Debug)]
+struct ContainerLockHandle {
+    relative: PathBuf,
+    mutation_root: MutationRoot,
+}
+
+impl Drop for ContainerLockHandle {
+    fn drop(&mut self) {
+        remove_file_cleanup_best_effort(&self.mutation_root, &self.relative);
+    }
+}
+
+/// RAII guard for one or more container locks, acquired together by `acquire_container_locks` and
+/// released when dropped. Held for its `Drop` effect, not read from -- the same shape
+/// `ActiveLock`/`RefLock` already use.
+#[derive(Debug)]
+pub struct ContainerLockGuard {
+    _handles: Vec<ContainerLockHandle>,
+}
+
+/// Acquire every lock in `containers`, sorted into `LockableContainer`'s fixed `Ord` before any file
+/// is created (design-v1.md §15.7's deadlock ruling: a single acquisition helper that sorts the
+/// caller's requested set, not per-call-site ordering discipline) -- so two call sites that each
+/// request `{RefPointerIndex, RefLog}` always acquire them in the same order regardless of which order
+/// their own arguments list them in.
+///
+/// If any acquisition in the sorted sequence fails -- most commonly `LockConflict`, a concurrent
+/// writer or the compactor already holding a later container in the order -- every lock already
+/// acquired during this call is released before the error returns: `handles` (built incrementally,
+/// `?`-propagating on failure) simply drops here, and each already-acquired `ContainerLockHandle`'s
+/// own `Drop` releases it. A partial, leaked hold on early-failure is exactly the wedge shape this
+/// stage's stale-lock recovery work exists to stop introducing more of, so this path must never leave
+/// one behind.
+pub fn acquire_container_locks(
+    layout: &RepositoryLayout,
+    containers: &[LockableContainer],
+) -> Result<ContainerLockGuard> {
+    let mut sorted = containers.to_vec();
+    sorted.sort_unstable();
+    sorted.dedup();
+    let mutation_root = layout.repository_mutation_root().clone();
+    let mut handles = Vec::with_capacity(sorted.len());
+    for container in sorted {
+        let path = layout.lockable_container_lock_path(container);
+        let relative = layout.repository_relative(&path)?;
+        acquire_lock_file(
+            &mutation_root,
+            &relative,
+            &path,
+            container_lock_kind(container),
+        )?;
+        handles.push(ContainerLockHandle {
+            relative,
+            mutation_root: mutation_root.clone(),
+        });
+    }
+    Ok(ContainerLockGuard { _handles: handles })
+}
+
+fn container_lock_kind(container: LockableContainer) -> &'static str {
+    match container {
+        LockableContainer::RefPointerIndex => "container:ref-pointer-index",
+        LockableContainer::RefLog => "container:ref-log",
+        LockableContainer::ReceivedIndex => "container:received-index",
+        LockableContainer::TrustPolicy => "container:trust-policy",
     }
 }
 

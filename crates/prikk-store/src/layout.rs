@@ -73,6 +73,38 @@ impl ContainerSlot {
     }
 }
 
+/// One of the four containers RFC 102 Stage 6 Step 2 locks against concurrent writer/compactor races
+/// (design-v1.md §15.8, ruled **wide** by the project owner over the developer's own narrower lean):
+/// the three genuine compaction targets, plus the ref log, whose own tearing exposure predates RFC 102
+/// and is not caused by compaction, but is fixed here because the exclusion machinery being built for
+/// compaction closes it for free. `trust_key_container` is deliberately absent -- it never compacts,
+/// and stays protected by the unchanged, repository-wide `ActiveLock` alone, the same as before this
+/// stage.
+///
+/// `derive(Ord)` on a fieldless enum compares by declaration order, which **is** the one fixed total
+/// lock order every multi-container acquisition sorts into (`lock::acquire_container_locks`,
+/// design-v1.md §15.7's deadlock ruling) -- no call site can express an inverted order even by
+/// accident, because sorting is structural, not a discipline to remember.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum LockableContainer {
+    /// `refs/containers/pointer-index-{a,b}.container` -- Stage 6 Step 1's own generation-aware
+    /// target.
+    RefPointerIndex,
+    /// `refs/containers/log-{a,b}.container` -- never compacted (DC-38/DC-69), but shares the ref
+    /// pointer index's write path (`publication.rs`) and the same unserialized-appender exposure.
+    RefLog,
+    /// `refs/containers/received-index-{a,b}.container` -- Stage 6 Step 1's own generation-aware
+    /// target, and the container whose investigation (`bundle.rs:270`'s `import_bundle`, no lock at
+    /// all) is what surfaced this whole ruling.
+    ReceivedIndex,
+    /// `trust/policy-{a,b}.container` -- Stage 6 Step 1's own generation-aware target. Already
+    /// incidentally protected today by `ActiveLock` (`trust.rs:88,144`); gains its own dedicated lock
+    /// here anyway, per the owner's decision that the lock is container-scoped, not repository-wide
+    /// (design-v1.md §15.7 decision 2) -- so a `prikk compact` run on this container never contends
+    /// with unrelated `ActiveLock` holders (a `commit`, a `seal`) that never touch it.
+    TrustPolicy,
+}
+
 /// Repository layout paths.
 #[derive(Debug, Clone)]
 pub struct RepositoryLayout {
@@ -593,6 +625,26 @@ impl RepositoryLayout {
     #[must_use]
     pub fn trust_policy_generation_log_path(&self) -> PathBuf {
         self.trust_dir().join("policy-generation.log")
+    }
+
+    /// Return the lock file path for one of Stage 6 Step 2's four `LockableContainer`s
+    /// (design-v1.md §15.8). Ephemeral, like every other lock file in this codebase
+    /// (`ActiveLock`/`RefLock`): created on acquire, removed on release, never pre-allocated at
+    /// `init` -- criterion 2's "every name created at `init`" obligation is about durability-bearing
+    /// container names, not transient mutual-exclusion markers, and `ActiveLock`/`RefLock` already
+    /// establish that a lock file is exempt from it.
+    #[must_use]
+    pub fn lockable_container_lock_path(&self, container: LockableContainer) -> PathBuf {
+        match container {
+            LockableContainer::RefPointerIndex => {
+                self.refs_containers_dir().join("pointer-index.lock")
+            }
+            LockableContainer::RefLog => self.refs_containers_dir().join("log.lock"),
+            LockableContainer::ReceivedIndex => {
+                self.refs_containers_dir().join("received-index.lock")
+            }
+            LockableContainer::TrustPolicy => self.trust_dir().join("policy.lock"),
+        }
     }
 }
 

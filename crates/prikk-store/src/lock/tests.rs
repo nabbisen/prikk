@@ -2,7 +2,7 @@ use std::fs;
 
 use crate::fsutil::{TestFailPoint, fail_once_for_test};
 use crate::test_support::unique_temp_dir;
-use crate::{ActiveLock, RepositoryLayout};
+use crate::{ActiveLock, LockableContainer, RepositoryLayout, acquire_container_locks};
 
 #[test]
 fn failed_lock_directory_sync_retains_stale_lock() {
@@ -30,6 +30,155 @@ fn failed_lock_file_sync_retains_stale_lock() -> prikk_error::Result<()> {
     assert!(path.is_file());
     assert!(ActiveLock::acquire(&layout).is_err());
     let _ = fs::remove_file(path);
+    let _ = fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// Holding a container lock creates its file; dropping the guard removes it -- the same round trip
+/// `ActiveLock`/`RefLock` already prove, extended to the new container locks.
+#[test]
+fn container_lock_creates_its_file_and_releases_it_on_drop() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("container-lock-round-trip");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let path = layout.lockable_container_lock_path(LockableContainer::ReceivedIndex);
+    {
+        let _guard = acquire_container_locks(&layout, &[LockableContainer::ReceivedIndex])?;
+        assert!(path.is_file());
+    }
+    assert!(!path.is_file());
+    let _ = fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// design-v1.md §15.7's deadlock ruling: the acquisition order is the sorted `LockableContainer::Ord`
+/// order, not the caller's argument order -- proven by requesting the same pair in both orders and
+/// getting the same result (success) either way, not by inspecting acquisition order directly (which
+/// would couple the test to an implementation detail rather than the externally observable contract).
+#[test]
+fn requesting_a_pair_in_either_argument_order_succeeds_identically() -> prikk_error::Result<()> {
+    for containers in [
+        [
+            LockableContainer::RefLog,
+            LockableContainer::RefPointerIndex,
+        ],
+        [
+            LockableContainer::RefPointerIndex,
+            LockableContainer::RefLog,
+        ],
+    ] {
+        let root = unique_temp_dir("container-lock-order-independence");
+        let layout = RepositoryLayout::init(root.clone())?;
+        let guard = acquire_container_locks(&layout, &containers);
+        assert!(guard.is_ok());
+        drop(guard);
+        assert!(
+            !layout
+                .lockable_container_lock_path(LockableContainer::RefPointerIndex)
+                .is_file()
+        );
+        assert!(
+            !layout
+                .lockable_container_lock_path(LockableContainer::RefLog)
+                .is_file()
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+    Ok(())
+}
+
+/// A container already locked refuses a second acquisition -- the exclusion property Step 2 exists to
+/// add.
+#[test]
+fn a_held_container_lock_refuses_a_second_acquisition() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("container-lock-conflict");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let first = acquire_container_locks(&layout, &[LockableContainer::TrustPolicy])?;
+    let second = acquire_container_locks(&layout, &[LockableContainer::TrustPolicy]);
+    assert!(second.is_err());
+    drop(first);
+    assert!(acquire_container_locks(&layout, &[LockableContainer::TrustPolicy]).is_ok());
+    let _ = fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// The rollback property the helper's own doc promises: if the second lock in sorted order (`RefLog`,
+/// since `RefPointerIndex < RefLog`) is already held by someone else, the whole call fails **and** the
+/// `RefPointerIndex` lock it acquired first is released, not leaked -- the wedge-avoidance property, not
+/// just "the call returns an error."
+#[test]
+fn a_partial_failure_releases_every_lock_already_acquired_in_that_call() -> prikk_error::Result<()>
+{
+    let root = unique_temp_dir("container-lock-partial-failure-rollback");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let held_elsewhere = acquire_container_locks(&layout, &[LockableContainer::RefLog])?;
+
+    let result = acquire_container_locks(
+        &layout,
+        &[
+            LockableContainer::RefPointerIndex,
+            LockableContainer::RefLog,
+        ],
+    );
+    assert!(result.is_err());
+    assert!(
+        !layout
+            .lockable_container_lock_path(LockableContainer::RefPointerIndex)
+            .is_file(),
+        "the lock acquired before the failing one must not be leaked"
+    );
+    assert!(
+        layout
+            .lockable_container_lock_path(LockableContainer::RefLog)
+            .is_file(),
+        "the pre-existing holder's own lock must be untouched"
+    );
+
+    drop(held_elsewhere);
+    let _ = fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// The declared total order itself, checked directly rather than only through its effects: the whole
+/// deadlock-avoidance design (design-v1.md §15.7/§15.8) rests on `LockableContainer`'s `Ord` being
+/// exactly `RefPointerIndex < RefLog < ReceivedIndex < TrustPolicy`, the one order every multi-
+/// container acquisition sorts into. A future reordering of the enum's variants would silently change
+/// this without any other test here noticing, since the other tests only prove acquisition succeeds,
+/// not which order it happened in.
+#[test]
+fn lockable_container_ord_matches_the_declared_total_order() {
+    let mut containers = [
+        LockableContainer::TrustPolicy,
+        LockableContainer::RefLog,
+        LockableContainer::ReceivedIndex,
+        LockableContainer::RefPointerIndex,
+    ];
+    containers.sort_unstable();
+    assert_eq!(
+        containers,
+        [
+            LockableContainer::RefPointerIndex,
+            LockableContainer::RefLog,
+            LockableContainer::ReceivedIndex,
+            LockableContainer::TrustPolicy,
+        ]
+    );
+}
+
+/// Requesting the same container twice in one call is deduplicated, not double-acquired against
+/// itself (which would otherwise deadlock a single caller against its own first acquisition).
+#[test]
+fn duplicate_containers_in_one_request_are_deduplicated() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("container-lock-dedup");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let guard = acquire_container_locks(
+        &layout,
+        &[
+            LockableContainer::ReceivedIndex,
+            LockableContainer::ReceivedIndex,
+        ],
+    );
+    assert!(guard.is_ok());
+    drop(guard);
     let _ = fs::remove_dir_all(root);
     Ok(())
 }

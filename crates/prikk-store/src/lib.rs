@@ -102,9 +102,9 @@ pub use doctor::{
 pub use history::{
     DEFAULT_HISTORY_LIMIT, HistoryEntry, RefHistory, load_received_ref_history, load_ref_history,
 };
-pub use layout::{ContainerSlot, RepositoryFormat, RepositoryLayout};
+pub use layout::{ContainerSlot, LockableContainer, RepositoryFormat, RepositoryLayout};
 pub use lifecycle_cache::incremental::LifecycleCacheDivergence;
-pub use lock::{ActiveLock, RefLock};
+pub use lock::{ActiveLock, ContainerLockGuard, RefLock, acquire_container_locks};
 pub use maintainer_signing::{Ed25519MaintainerSigner, MaintainerSigner, maintainer_signature};
 pub use memory_store::MemoryObjectStore;
 pub use merge_evidence::{
