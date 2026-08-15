@@ -293,8 +293,8 @@ These apply to all work above and are not restated in each handoff.
 10. **Report counts before and after.** Test counts per touched crate, and locked package count where
     dependencies change, so no silent loss or growth can hide.
 
-    **Baseline, measured 2026-08-15 at `3aa6d51` (RFC 102 complete — Stage 6 Step 2 merged), covering
-    every workspace member:** `prikk-store` **737**, `prikk` (the CLI) **117**, `prikk-release-policy` 83,
+    **Baseline, measured 2026-08-16 at `96d7e3d` (dead-surface consolidation merged), covering every
+    workspace member:** `prikk-store` **738**, `prikk` (the CLI) **117**, `prikk-release-policy` 83,
     `prikk-object` 80, `prikk-replay` 44, `prikk-hash` 14, `prikk-crypto` 7, `prikk-error` 0;
     **179 locked packages**.
 
