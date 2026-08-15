@@ -1,6 +1,8 @@
-# RFC (proposed) - 104 Windows Mutation
+# RFC (accepted) - 104 Windows Mutation
 
-**Status.** Proposed 2026-08-16. **No design, no implementation, no production code authorized.**
+**Status.** **ACCEPTED by the project owner 2026-08-16.** **Acceptance clears §4's prerequisites only** —
+no design, no implementation, no production code. §4.1 is blocking: a stop-and-report on the
+`MutationRoot` question is a complete outcome and may end this RFC, exactly as RFC 101 ended.
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** RFC 102, complete and merged 2026-08-15, which removed the obstacle rather than the
 capability; and the owner's direction of 2026-08-16 that the next release should be *"RFC 102 delivered,
