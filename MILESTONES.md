@@ -109,9 +109,12 @@ is a one-way door.
 If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
 reviewed commit restores agreement.
 
-**Current release lane:** `active`.
+**Current release lane:** `parked`.
 
-**Current activated release target:** `0.20.0`.
+**Current activated release target:** none.
+
+**0.20.0 released 2026-08-16**; the lane was parked the same day. It is activated only while a release
+is being prepared, so a shipped target does not leave it standing open.
 
 **Activated 2026-08-16 by the project owner.** 0.20.0 carries RFC 102 complete — container-based
 durability across six stages, repository format 6, compaction — plus `prikk compact`, `prikk unlock`,

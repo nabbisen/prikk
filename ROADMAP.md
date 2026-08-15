@@ -190,8 +190,11 @@ the release lane is parked; see `MILESTONES.md` under Baseline and release postu
 
 ## Release Candidate Increment
 
-- Release lane state: **active**.
-- Activated release target: **0.20.0**.
+- Release lane state: **parked**.
+- Activated release target: **none**.
+- **0.20.0 released 2026-08-16** — RFC 102 complete (containers, format 6, compaction), `prikk compact`,
+  `prikk unlock`, `prikk trust maintainer remove`, dead-surface consolidation. Formats 1-5 rejected at
+  open. Windows remains read-only; DC-87 targets 0.21.0.
 - **0.20.0 activated 2026-08-16** — RFC 102 complete (containers, format 6, compaction), `prikk compact`,
   `prikk unlock`, `prikk trust maintainer remove`, dead-surface consolidation. **Every format-2 through
   format-5 repository is rejected at open**; migration is `bundle export` on an older binary then
