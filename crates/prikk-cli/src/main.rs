@@ -17,6 +17,7 @@ use std::process::ExitCode;
 mod args;
 mod branch;
 mod bundle;
+mod compact;
 mod merge;
 mod output;
 mod seal;
@@ -100,6 +101,7 @@ fn run() -> std::result::Result<(), String> {
         Some("verify") => run_verify(args.collect()),
         Some("doctor") => run_doctor(args.collect()),
         Some("unlock") => run_unlock(args.collect()),
+        Some("compact") => run_compact(args.collect()),
         Some(other) => Err(format!("unknown command: {other}")),
     }
 }
@@ -198,6 +200,11 @@ fn run_bundle(args: Vec<String>) -> std::result::Result<(), String> {
 fn run_unlock(args: Vec<String>) -> std::result::Result<(), String> {
     let root = current_dir()?;
     unlock::run_unlock(root, args)
+}
+
+fn run_compact(args: Vec<String>) -> std::result::Result<(), String> {
+    let root = current_dir()?;
+    compact::run_compact(root, args)
 }
 
 fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {

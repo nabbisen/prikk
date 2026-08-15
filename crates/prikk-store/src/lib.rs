@@ -99,6 +99,7 @@ pub use checkout::{
 pub use commit_index::CommitIndexDivergence;
 pub use compact::{
     CompactionReport, compact_received_index, compact_ref_pointer_index, compact_trust_policy,
+    plan_compact_received_index, plan_compact_ref_pointer_index, plan_compact_trust_policy,
 };
 pub use doctor::{
     DoctorIssue, DoctorRepairOptions, DoctorRepairReport, DoctorReport, DoctorSeverity,

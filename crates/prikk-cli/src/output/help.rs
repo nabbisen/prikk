@@ -85,5 +85,10 @@ pub(crate) fn print_help(version: &str) {
         "  prikk unlock --lock <path> [--yes]        Clear one stale lock (asks to confirm \
          unless --yes)"
     );
+    println!("  prikk compact --pointer-index|--received-index|--trust-policy|--all [--plan-only]");
+    println!(
+        "                                             Reclaim stale index/policy records \
+         (--plan-only previews only)"
+    );
     println!("  prikk --version                           Print version");
 }

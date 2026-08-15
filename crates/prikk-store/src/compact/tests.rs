@@ -3,7 +3,10 @@
 use prikk_crypto::Ed25519KeyPair;
 use prikk_error::Result;
 
-use super::{compact_received_index, compact_ref_pointer_index, compact_trust_policy};
+use super::{
+    compact_received_index, compact_ref_pointer_index, compact_trust_policy,
+    plan_compact_ref_pointer_index,
+};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use crate::fsutil::{TestFailPoint, fail_after_for_test};
 use crate::generation::resolve_live_slot;
@@ -89,6 +92,72 @@ fn compacting_the_ref_pointer_index_reclaims_stale_entries_and_preserves_current
     // resolves correctly through the now-live slot.
     let fourth = publish_update(&store, &mut objects, "heads/main", Some(third), 4)?;
     assert_eq!(store.read_current_ref_state_id("heads/main")?, Some(fourth));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// `--plan-only`'s own contract: the same counts a real run would report, with **nothing** on disk
+/// touched -- both slots' bytes, and the generation log, exactly as before.
+#[test]
+fn plan_compact_reports_the_same_counts_as_a_real_run_and_touches_nothing() -> Result<()> {
+    let root = unique_temp_dir("compact-pointer-index-plan-only");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let store = RefStore::new(layout.clone());
+
+    let first = publish_update(&store, &mut objects, "heads/main", None, 1)?;
+    let second = publish_update(&store, &mut objects, "heads/main", Some(first), 2)?;
+    publish_update(&store, &mut objects, "heads/main", Some(second), 3)?;
+    publish_update(&store, &mut objects, "heads/topic", None, 1)?;
+
+    let generation_log_path = layout.ref_pointer_index_generation_log_path();
+    let slot_a_before = std::fs::read(layout.ref_pointer_index_slot_path(ContainerSlot::A))?;
+    let slot_b_before = std::fs::read(layout.ref_pointer_index_slot_path(ContainerSlot::B))?;
+    let generation_log_before = std::fs::read(&generation_log_path)?;
+
+    let report = plan_compact_ref_pointer_index(&layout)?;
+    assert_eq!(report.entries_before, 4);
+    assert_eq!(report.entries_after, 2);
+
+    assert_eq!(
+        std::fs::read(layout.ref_pointer_index_slot_path(ContainerSlot::A))?,
+        slot_a_before
+    );
+    assert_eq!(
+        std::fs::read(layout.ref_pointer_index_slot_path(ContainerSlot::B))?,
+        slot_b_before
+    );
+    assert_eq!(std::fs::read(&generation_log_path)?, generation_log_before);
+    assert_eq!(
+        resolve_live_slot(&layout, &generation_log_path)?,
+        ContainerSlot::A
+    );
+
+    // A real run afterward still sees the same reduction -- the preview did not consume or disturb
+    // anything a subsequent real compaction depends on.
+    let real_report = compact_ref_pointer_index(&layout)?;
+    assert_eq!(real_report.entries_before, report.entries_before);
+    assert_eq!(real_report.entries_after, report.entries_after);
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// The preview holds the same container lock a real run does -- a stale-numbers preview is worse
+/// than none, since an operator acts on what it reports.
+#[test]
+fn plan_compact_refuses_while_its_own_container_lock_is_externally_held() -> Result<()> {
+    let root = unique_temp_dir("compact-pointer-index-plan-only-lock-conflict");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut objects = FileObjectStore::new(layout.clone());
+    let store = RefStore::new(layout.clone());
+    publish_update(&store, &mut objects, "heads/main", None, 1)?;
+
+    let held = acquire_container_locks(&layout, &[LockableContainer::RefPointerIndex])?;
+    assert!(plan_compact_ref_pointer_index(&layout).is_err());
+    drop(held);
+    assert!(plan_compact_ref_pointer_index(&layout).is_ok());
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())
