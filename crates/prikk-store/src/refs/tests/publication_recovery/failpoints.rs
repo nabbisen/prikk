@@ -10,12 +10,15 @@ fn object_finalization_failures_precede_pointer_and_log_mutation() -> prikk_erro
     // RFC 102 Stage 3: the ref-state object write no longer goes through the old immutable-install
     // primitive (`ImmutableFileSync`/`ImmutableInstallSync`) at all -- it durably appends to its
     // container, then to the index, both through the same `RequiredFileSync` point the ref lock's
-    // own creation already uses once. Skip 1 to land on the container append (the object is not
-    // even durably present); skip 2 to land on the index append instead (the container record is
-    // already durable, and the index write's own bytes are already on disk -- only its own sync is
-    // interrupted -- so the object is visible to a same-process read exactly as the old
+    // own creation already uses once. RFC 102 Stage 6 Step 2, design-v1.md §15.8, inserts two more
+    // `RequiredFileSync` occurrences between the ref lock's own creation and the object write --
+    // `acquire_container_locks`'s own `RefPointerIndex`/`RefLog` lock creations, hoisted to right
+    // after `RefLock::acquire`. Skip 3 (not 1) to land on the container append (the object is not
+    // even durably present); skip 4 (not 2) to land on the index append instead (the container
+    // record is already durable, and the index write's own bytes are already on disk -- only its
+    // own sync is interrupted -- so the object is visible to a same-process read exactly as the old
     // ImmutableInstallSync case's post-install cleanup-sync failure left it visible).
-    for (skip, installed_after_error) in [(1, false), (2, true)] {
+    for (skip, installed_after_error) in [(3, false), (4, true)] {
         let root = unique_temp_dir("dc38-object-finalization-retry");
         let layout = RepositoryLayout::init(root.clone())?;
         let publication = root_publication(&layout, "heads/main")?;

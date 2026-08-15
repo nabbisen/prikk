@@ -8,8 +8,8 @@ use super::{
     RefPublication, RefStore, container, validate_local_branch_ref, validate_local_tag_ref,
     validate_publication,
 };
-use crate::layout::{RepositoryFormat, ref_name_key_bytes};
-use crate::lock::RefLock;
+use crate::layout::{LockableContainer, RepositoryFormat, ref_name_key_bytes};
+use crate::lock::{RefLock, acquire_container_locks};
 use crate::object_store::{FileObjectStore, ObjectWriter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +46,22 @@ fn publish_locked(
     let ref_state_id = publication.ref_state.object_id();
     let ref_name_key = ref_name_key_bytes(&publication.ref_name);
     let ref_lock = RefLock::acquire(&store.layout, &publication.ref_name)?;
+    // RFC 102 Stage 6 Step 2, design-v1.md §15.8 (ruled wide): both containers this function writes
+    // -- the pointer index and the ref log -- are locked together, for the whole critical section
+    // below, before either is read or written. Acquired here, not per-write, so `classify_state`'s
+    // own reads (right below) are also excluded from a concurrent compactor, not just the appends --
+    // belt and suspenders alongside the readers' own generation-recheck-and-retry (`generation.rs`).
+    // `acquire_container_locks` sorts the set itself; this call's own argument order carries no
+    // meaning and must not be read as the write order below, which is unchanged and load-bearing
+    // (see the `PublicationState::Ready` arm's own comment on why pointer-then-log is not
+    // reorderable).
+    let container_locks = acquire_container_locks(
+        &store.layout,
+        &[
+            LockableContainer::RefPointerIndex,
+            LockableContainer::RefLog,
+        ],
+    )?;
     // Step 0 §13.3, ruled in design-v1.md §13.3: the candidate-write-then-promote mechanism
     // (`refs/pointer.rs`'s old `write_ref_pointer_candidate`/`promote_ref_pointer_candidate`,
     // `remove_candidate_write_temps` here) has no equivalent under an append-only pointer index --
@@ -128,6 +144,7 @@ fn publish_locked(
         }
     }
     ensure_agreement(store, publication, &update)?;
+    drop(container_locks);
     drop(ref_lock);
     Ok(ref_state_id)
 }

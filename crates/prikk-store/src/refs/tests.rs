@@ -5,10 +5,10 @@ mod publication_recovery;
 
 use prikk_object::ObjectType;
 
-use crate::layout::ref_name_key_bytes;
+use crate::layout::{LockableContainer, ref_name_key_bytes};
 use crate::{
     FileObjectStore, ObjectWriter, RefLock, RefPublication, RefStore, RepositoryLayout,
-    verify_repository,
+    acquire_container_locks, verify_repository,
 };
 
 use crate::fsutil::{TestFailPoint, fail_after_for_test};
@@ -93,6 +93,54 @@ fn publish_writes_append_rather_than_replace() -> prikk_error::Result<()> {
     assert!(log_after_second.starts_with(&log_after_first));
 
     let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 102 Stage 6 Step 2, design-v1.md §15.8: `publish` actually acquires the `RefPointerIndex`/
+/// `RefLog` container locks, not just in name -- proven by holding either one externally first and
+/// observing `publish` refuse, rather than trusting the call site diff. Two ref names, not one,
+/// confirms the container lock (not just `RefLock`'s own per-ref exclusion) is what blocks a second,
+/// *unrelated*-ref publish -- the exact gap this stage closes (design-v1.md §15.7's "a per-ref lock
+/// is not sufficient" finding).
+#[test]
+fn publish_refuses_while_either_container_lock_is_externally_held() -> prikk_error::Result<()> {
+    for container in [
+        LockableContainer::RefPointerIndex,
+        LockableContainer::RefLog,
+    ] {
+        let root = unique_temp_dir("ref-publish-container-lock-conflict");
+        let layout = RepositoryLayout::init(root.clone())?;
+        let mut objects = FileObjectStore::new(layout.clone());
+        let store = RefStore::new(layout.clone());
+        let target = objects.write_object(&signed_empty_block_envelope())?;
+        let ref_state = signed_ref_state_envelope("heads/unrelated", None, target, 1);
+        let ref_state_id = ref_state.object_id();
+        let publication = RefPublication {
+            ref_name: "heads/unrelated".to_string(),
+            expected_previous_ref_state_id: None,
+            ref_update: signed_ref_update_envelope(
+                "heads/unrelated",
+                None,
+                ref_state_id,
+                target,
+                1,
+            ),
+            ref_state,
+        };
+
+        // The failing attempt must not have written anything -- the container lock acquisition in
+        // `publish_locked` happens before the ref-state object write, so the same `publication` value
+        // is reusable for the retry below with no re-signing needed.
+        let held = acquire_container_locks(&layout, &[container])?;
+        assert!(
+            store.publish(&publication).is_err(),
+            "container {container:?} should have blocked publish"
+        );
+        drop(held);
+        assert_eq!(store.publish(&publication)?, ref_state_id);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
     Ok(())
 }
 
@@ -216,9 +264,12 @@ fn first_publication_retries_completed_log_sync_without_duplicate() -> prikk_err
         // RFC 102 Stage 3: an object write now durably appends to both its container and the
         // index (two matching sync calls, not one), preceded by the ref lock's own creation (a
         // third). RFC 102 Stage 4 adds one more before the log append: the pointer-index append
-        // (a fourth). Skip 4, not 3, to land the injected failure on the ref log's own completed
-        // append.
-        fail_after_for_test(point, 4);
+        // (a fourth). RFC 102 Stage 6 Step 2, design-v1.md §15.8, adds two more before that --
+        // `acquire_container_locks`'s own `RefPointerIndex`/`RefLog` lock creations, each firing
+        // both `RequiredFileSync` and `RequiredDirectorySync` via `create_exclusive`, the same as
+        // `RefLock`'s own creation always has. Skip 6, not 4, to land the injected failure on the
+        // ref log's own completed append.
+        fail_after_for_test(point, 6);
         assert!(store.publish(&publication).is_err());
         assert_eq!(store.replay_log("heads/main")?.records.len(), 1);
         assert_eq!(store.publish(&publication)?, ref_state_id);

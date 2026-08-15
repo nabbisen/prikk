@@ -19,11 +19,12 @@
 use prikk_crypto::Ed25519KeyPair;
 
 use crate::{
-    RepositoryLayout, add_trusted_maintainer, load_maintainer_trust_policy,
-    remove_trusted_maintainer, verify_signer_trusted,
+    RepositoryLayout, acquire_container_locks, add_trusted_maintainer,
+    load_maintainer_trust_policy, remove_trusted_maintainer, verify_signer_trusted,
 };
 
 use crate::fsutil::{TestFailPoint, fail_after_for_test, fail_once_for_test};
+use crate::layout::LockableContainer;
 use crate::maintainer_signing::Ed25519MaintainerSigner;
 use crate::test_support::unique_temp_dir;
 
@@ -62,6 +63,33 @@ fn add_and_load_single_maintainer_policy() {
         }
     }
     let _ = std::fs::remove_dir_all(root);
+}
+
+/// RFC 102 Stage 6 Step 2, design-v1.md §15.8: `add_trusted_maintainer`/`remove_trusted_maintainer`
+/// actually acquire the `TrustPolicy` container lock, not just `ActiveLock` -- proven the same way as
+/// `refs::tests::publish_refuses_while_either_container_lock_is_externally_held`: hold the lock
+/// externally first, observe the refusal, release, observe success.
+#[test]
+fn trust_add_and_remove_refuse_while_trust_policy_lock_is_externally_held()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("trust-container-lock-conflict");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let key = public_key_hex(&[7_u8; 32]);
+    let other_key = public_key_hex(&[8_u8; 32]);
+
+    let held = acquire_container_locks(&layout, &[LockableContainer::TrustPolicy])?;
+    assert!(add_trusted_maintainer(&layout, "blocked", &key).is_err());
+    drop(held);
+    assert!(add_trusted_maintainer(&layout, "blocked", &key).is_ok());
+    assert!(add_trusted_maintainer(&layout, "kept", &other_key).is_ok());
+
+    let held = acquire_container_locks(&layout, &[LockableContainer::TrustPolicy])?;
+    assert!(remove_trusted_maintainer(&layout, "blocked").is_err());
+    drop(held);
+    assert!(remove_trusted_maintainer(&layout, "blocked")?);
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
 }
 
 #[test]
@@ -270,7 +298,13 @@ fn failed_policy_append_exposes_retryable_new_effective_policy() {
         let old_key = public_key_hex(&[7_u8; 32]);
         let new_key = public_key_hex(&[8_u8; 32]);
         assert!(add_trusted_maintainer(&layout, "old", &old_key).is_ok());
-        fail_after_for_test(TestFailPoint::RequiredDirectorySync, 2);
+        // Adding a genuinely new key id ("new") fires `RequiredDirectorySync` four times: the
+        // `ActiveLock`'s own creation, the `TrustPolicy` container lock's own creation (RFC 102
+        // Stage 6 Step 2, design-v1.md §15.8 -- `acquire_container_locks`, hoisted to right after
+        // `ActiveLock::acquire`), the new key-material entry's append, and the policy snapshot's
+        // own append. Skip 3, not 2, to land on the policy snapshot's own directory sync -- the
+        // point this test's own assertions are about.
+        fail_after_for_test(TestFailPoint::RequiredDirectorySync, 3);
         assert!(add_trusted_maintainer(&layout, "new", &new_key).is_err());
         let loaded = load_maintainer_trust_policy(&layout);
         assert!(loaded.is_ok());

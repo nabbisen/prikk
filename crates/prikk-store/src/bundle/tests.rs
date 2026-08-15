@@ -5,6 +5,8 @@ mod proptest_decode_bundle;
 use prikk_object::{BlockKind, ObjectType};
 
 use crate::bundle::{BundleImportOptions, export_bundle, import_bundle};
+use crate::layout::LockableContainer;
+use crate::lock::acquire_container_locks;
 use crate::received::read_received_pointer;
 use crate::test_support::{
     signed_block, signed_patch_blob_envelope, signed_patch_envelope, signed_ref_state_envelope,
@@ -102,6 +104,37 @@ fn export_then_import_carries_the_full_genesis_complete_closure() -> prikk_error
             .read_typed(child_block_id, ObjectType::Block)?
             .is_some()
     );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// RFC 102 Stage 6 Step 2, design-v1.md §15.8: `import_bundle` acquires the `ReceivedIndex`
+/// container lock -- the gap the received-index concurrency investigation surfaced in the first
+/// place (`FINDINGS.md`), closed here. Proven the same way as the ref/trust equivalents: hold the
+/// lock externally, observe the refusal, release, observe success. Object writes must not have
+/// happened either -- the lock is acquired after them, so a refused import still leaves the target
+/// repository's received-index untouched, but confirming the objects themselves aren't silently
+/// re-imported on retry is the property this test also checks.
+#[test]
+fn import_refuses_while_received_index_lock_is_externally_held() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("bundle-lock-conflict-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    seal_two_block_history(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+
+    let target_root = unique_temp_dir("bundle-lock-conflict-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+
+    let held = acquire_container_locks(&target, &[LockableContainer::ReceivedIndex])?;
+    assert!(import_bundle(&target, &bytes, &BundleImportOptions::default_limits()).is_err());
+    assert!(read_received_pointer(&target, "remotes/heads/main")?.is_none());
+    drop(held);
+
+    let report = import_bundle(&target, &bytes, &BundleImportOptions::default_limits())?;
+    assert_eq!(report.ref_name, "remotes/heads/main");
+    assert!(read_received_pointer(&target, "remotes/heads/main")?.is_some());
 
     let _ = std::fs::remove_dir_all(source_root);
     let _ = std::fs::remove_dir_all(target_root);

@@ -15,8 +15,10 @@ use prikk_crypto::{ED25519_KEY_LEN, verify_ed25519};
 use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectEnvelope, Signature, SignatureAlgorithm, SignerRole, ascii_fold};
 
-use crate::layout::{RepositoryLayout, validate_maintainer_key_id_storage_safety};
-use crate::lock::ActiveLock;
+use crate::layout::{
+    LockableContainer, RepositoryLayout, validate_maintainer_key_id_storage_safety,
+};
+use crate::lock::{ActiveLock, acquire_container_locks};
 use crate::maintainer_signing::MaintainerSigner;
 use crate::trust_index::{
     TrustKeyEntry, append_trust_key_entry, append_trust_policy_snapshot, lookup_trust_key_entry,
@@ -86,6 +88,14 @@ pub fn add_trusted_maintainer(
 ) -> Result<(AdoptedMaintainerKey, bool)> {
     layout.require_current_format()?;
     let _active_lock = ActiveLock::acquire(layout)?;
+    // RFC 102 Stage 6 Step 2, design-v1.md §15.8: `TrustPolicy` gets its own container-scoped lock,
+    // not just `ActiveLock` -- the owner's decision 2 (design-v1.md §15.7) that the exclusion
+    // mechanism against the compactor must be container-scoped, so a `prikk compact` run on an
+    // unrelated container never contends with this. `ActiveLock` above is unchanged and still serves
+    // its original purpose (serializing this op against `seal`/`commit`); this is additional, not a
+    // replacement. `trust_key` is deliberately not in this set -- it never compacts, so `ActiveLock`
+    // alone remains sufficient for it, same as before this stage.
+    let _trust_policy_lock = acquire_container_locks(layout, &[LockableContainer::TrustPolicy])?;
     crate::refs::ensure_no_incomplete_publication(layout)?;
     Signature::validate_key_id(key_id)?;
     validate_maintainer_key_id_storage_safety(key_id)?;
@@ -142,6 +152,9 @@ pub fn add_trusted_maintainer(
 pub fn remove_trusted_maintainer(layout: &RepositoryLayout, key_id: &str) -> Result<bool> {
     layout.require_current_format()?;
     let _active_lock = ActiveLock::acquire(layout)?;
+    // See `add_trusted_maintainer`'s identical comment: `TrustPolicy`'s own container-scoped lock,
+    // additional to `ActiveLock`, per design-v1.md §15.7/§15.8.
+    let _trust_policy_lock = acquire_container_locks(layout, &[LockableContainer::TrustPolicy])?;
     crate::refs::ensure_no_incomplete_publication(layout)?;
     let mut key_ids = current_adopted_key_ids(layout)?;
     let original_len = key_ids.len();
