@@ -20,9 +20,12 @@ pointer promotion is not."* **RFC 102 eliminated pointer promotion.** `refs/publ
 the candidate-write-then-promote mechanism *"has no equivalent under an append-only pointer index — an
 append-only record has no candidate value to stage, the append **is** the publish."*
 `write_ref_pointer_candidate`/`promote_ref_pointer_candidate` are retired; only a test-only shim remains
-(`pointer_index.rs:302`). **A ref publication on Windows is now two container appends to names allocated
-at `init`.** Whether that fully discharges the deferral is the owner's to confirm — but the fact it rested
-on is gone.
+(`pointer_index.rs:302`). **Every durability-bearing operation in a ref publication is now an append or truncate on a name
+allocated at `init`** — the RefState object's container and index records, the pointer-index entry, the
+ref-log record, and a `durable_truncate` on the interrupted-tail branch. **The only names a publication
+creates after `init` are lock files, which are not durability-bearing** — a lock lost to a crash is
+harmless because its holder is gone. Deferral lifted 2026-08-16 (`../handoffs/DC-87-windows-mutation/stage-2-durability-ruling-v1.md`
+§6).
 
 **§3.2 narrows sharply.** *"Is `durable_directory_entry` implementable on NTFS?"* — its consequence
 question was *"does DC-38's ref-publication crash-recovery reasoning still hold under it?"* **It no longer

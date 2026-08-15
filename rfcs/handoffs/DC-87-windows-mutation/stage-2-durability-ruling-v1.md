@@ -130,9 +130,16 @@ mechanism *"has no equivalent under an append-only pointer index — an append-o
 value to stage, the append **is** the publish."* `write_ref_pointer_candidate`/`promote_ref_pointer_candidate`
 are gone; only a test-only shim remains (`pointer_index.rs:302`).
 
-**Publication is now two content appends to names allocated at `init`** — the pointer-index entry
-(`publication.rs:117`), then the ref-log record (`:125`). Both are the achievable kind. **The asymmetry
-that made it fatal is gone precisely because neither operation needs transition durability any more.**
+**Every durability-bearing operation in a publication is now an append or a truncate on a name allocated
+at `init`** — the RefState object's container and index records (`publication.rs:73`), the pointer-index
+entry (`:117`), the ref-log record (`:125`), and in the interrupted-tail branch a `durable_truncate`
+(`:92`). All are the achievable kind. **The asymmetry that made it fatal is gone precisely because no
+operation in the sequence needs transition durability any more.**
+
+**The only names a publication creates after `init` are lock files** — `RefLock::acquire` (`:48`) and
+`acquire_container_locks` (`:58`). **These are not durability-bearing**: a lock file lost to a crash is
+harmless, because the process holding it is gone too. A Windows implementor still has to create them, and
+should not read the sentence above as saying publication touches nothing but appends.
 
 **And DC-38's invariant now holds by construction rather than by primitive.** `PublicationState` has three
 variants — `Ready`, `PointerLeading`, `Complete` — and **no ahead-log state exists**. A crash between the
