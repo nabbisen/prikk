@@ -68,6 +68,15 @@ fn repository_initialization_component_matrix() -> prikk_error::Result<()> {
 // Flagged as a finding for the same reason those two were: verified from the code, not assumed,
 // and reported for an affirmative ruling rather than retired silently.
 
+/// RFC 102 Stage 5, design-v1.md §14.6: `init` now also creates `default_active_ref_name_path()`
+/// (`active/default/ref-name`) in this same directory, so it must be removed alongside `queue.wal`
+/// before the directory is genuinely empty -- the same discipline the `queue.wal` removal below
+/// already documents for itself. Still a live scenario, unlike `wal_directory_component_matrix`'s
+/// retirement above: `write_active_ref_metadata`'s truncate step goes through `durable_truncate_to_
+/// empty`, which (unlike strict `durable_append`) still creates a missing directory via `prepare_
+/// directory_required` -- confirmed by reading `linux.rs`'s two truncate primitives side by side, not
+/// assumed symmetric with `durable_append`. See the standing finding on that asymmetry in this round's
+/// own report.
 #[test]
 fn active_metadata_directory_component_matrix() -> prikk_error::Result<()> {
     for point in COMPONENT_POINTS {
@@ -78,6 +87,7 @@ fn active_metadata_directory_component_matrix() -> prikk_error::Result<()> {
         // empty (to exercise `ensure_directory_required`'s own recreation, not the WAL's presence)
         // must have it removed first.
         std::fs::remove_file(layout.default_queue_wal_path())?;
+        std::fs::remove_file(layout.default_active_ref_name_path())?;
         remove_empty_directory(&active_dir)?;
         fail_once_for_test(point);
         assert!(write_active_ref_metadata(&layout, "heads/main").is_err());

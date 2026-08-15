@@ -4,11 +4,17 @@
 //! durable active WAL. It owns lock acquisition for the default active session and appends only
 //! already-constructed, signed patch envelopes. It also owns the local ref-name metadata that makes a
 //! non-empty active WAL unambiguously belong to one target ref.
+//!
+//! RFC 102 Stage 5, design-v1.md §14.5/§14.6: the ref-name metadata file is pre-allocated at `init`
+//! (`layout.rs`) and never removed again -- "cleared" now means truncated to empty, "set" means
+//! truncated-then-appended, both `atomic_replace`-free. `write_active_ref_metadata` truncates
+//! internally rather than trusting caller discipline: it is `pub` API, and a bare append would let a
+//! second call silently concatenate two ref names into one file rather than replacing it.
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::ObjectEnvelope;
 
-use crate::fsutil::{read_file_if_exists, remove_file_if_present_required, write_file_atomically};
+use crate::fsutil::{append_file_required, read_file_if_exists, truncate_file_empty_required};
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
 use crate::refs::{ensure_no_incomplete_publication, validate_local_branch_ref};
@@ -100,6 +106,13 @@ pub fn read_active_ref_metadata(layout: &RepositoryLayout) -> Result<ActiveRefMe
     let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &relative)? else {
         return Ok(ActiveRefMetadata::Missing);
     };
+    // RFC 102 Stage 5, design-v1.md §14.6: the file is pre-allocated at `init` and never removed, so
+    // "no active session" is now represented by empty content as well as (pre-migration) absence --
+    // both read as `Missing`. Empty content can only be the cleared state; a real ref name is never
+    // zero bytes (`validate_local_branch_ref` rejects an empty string).
+    if bytes.is_empty() {
+        return Ok(ActiveRefMetadata::Missing);
+    }
     let text = match std::str::from_utf8(&bytes) {
         Ok(text) => text,
         Err(err) => {
@@ -114,12 +127,16 @@ pub fn read_active_ref_metadata(layout: &RepositoryLayout) -> Result<ActiveRefMe
     }
 }
 
-/// Write active-WAL ref metadata through a durable atomic update.
+/// Write active-WAL ref metadata, replacing whatever was there before. `pub` API, so the
+/// replace-semantics contract is enforced structurally rather than by caller discipline (design-v1.md
+/// §14.6's condition): truncates to empty, then appends the canonical ref name, so a second call can
+/// never concatenate two names into one file the way a bare append would.
 pub fn write_active_ref_metadata(layout: &RepositoryLayout, ref_name: &str) -> Result<String> {
     layout.require_current_format()?;
     let canonical = validate_local_branch_ref(ref_name)?;
     let relative = layout.repository_relative(&layout.default_active_ref_name_path())?;
-    write_file_atomically(
+    truncate_file_empty_required(layout.repository_mutation_root(), &relative)?;
+    append_file_required(
         layout.repository_mutation_root(),
         &relative,
         canonical.as_bytes(),
@@ -127,7 +144,9 @@ pub fn write_active_ref_metadata(layout: &RepositoryLayout, ref_name: &str) -> R
     Ok(canonical)
 }
 
-/// Remove active-WAL ref metadata and fsync the active-session directory.
+/// Clear active-WAL ref metadata and fsync the active-session directory. Returns whether there was
+/// non-empty content to clear (the pre-migration "did a file exist to remove" contract, now answered
+/// by content rather than presence -- the file itself is permanent from `init` onward).
 pub fn remove_active_ref_metadata(layout: &RepositoryLayout) -> Result<bool> {
     layout.require_current_format()?;
     remove_active_ref_metadata_authorized(layout)
@@ -135,7 +154,11 @@ pub fn remove_active_ref_metadata(layout: &RepositoryLayout) -> Result<bool> {
 
 fn remove_active_ref_metadata_authorized(layout: &RepositoryLayout) -> Result<bool> {
     let relative = layout.repository_relative(&layout.default_active_ref_name_path())?;
-    remove_file_if_present_required(layout.repository_mutation_root(), &relative)
+    let had_content = !read_file_if_exists(layout.repository_mutation_root(), &relative)?
+        .unwrap_or_default()
+        .is_empty();
+    truncate_file_empty_required(layout.repository_mutation_root(), &relative)?;
+    Ok(had_content)
 }
 
 /// Drain a fully published active WAL and remove its ownership metadata under the active lock.
@@ -154,16 +177,16 @@ pub fn finish_active_publication_cleanup(
 ///
 /// Caller must hold the active-session lock and must call this only after replay has proven that the
 /// active WAL has no records and no trailing partial bytes.
+///
+/// RFC 102 Stage 5, design-v1.md §14.6: no longer branches on the metadata's prior state --
+/// `write_active_ref_metadata` truncates before it appends, so any stale `Valid`/`Invalid` debris left
+/// over from a fully-drained-but-uncleared session is replaced unconditionally, the same as the
+/// `Missing` case. The pre-clear-then-write two-step this function used to perform is now internal to
+/// `write_active_ref_metadata` itself; the crash window between clear and write moved, it did not grow.
 pub(crate) fn prepare_empty_active_ref_for_append(
     layout: &RepositoryLayout,
     ref_name: &str,
 ) -> Result<String> {
-    match read_active_ref_metadata(layout)? {
-        ActiveRefMetadata::Missing => {}
-        ActiveRefMetadata::Valid(_) | ActiveRefMetadata::Invalid(_) => {
-            remove_active_ref_metadata(layout)?;
-        }
-    }
     write_active_ref_metadata(layout, ref_name)
 }
 

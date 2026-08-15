@@ -140,6 +140,11 @@ impl RepositoryLayout {
         // re-`init` on an already-initialized repository must not clobber either.
         create_empty_file_once(&layout, &layout.worktree_unclean_shutdown_marker_path())?;
         create_empty_file_once(&layout, &layout.default_queue_wal_path())?;
+        // RFC 102 Stage 5, design-v1.md §14.6: the active-WAL ref-ownership metadata, on the same
+        // marker pattern as the worktree marker above -- created empty at `init`, set by truncate-then
+        // -append, cleared by truncate-to-empty, never removed. Previously created lazily on the
+        // empty-to-non-empty WAL transition (`active.rs::prepare_empty_active_ref_for_append`).
+        create_empty_file_once(&layout, &layout.default_active_ref_name_path())?;
         // RFC 102 Stage 3, design-v1.md §2: every container name, both slots, plus the index and the
         // (currently unused) compaction generation log -- all allocated here, at `init`, and nowhere
         // else, for the life of the repository. This is the acceptance test itself (handoff §5

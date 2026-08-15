@@ -67,13 +67,23 @@ fn wal_parent_sync_failure_retains_one_record_and_retries() -> prikk_error::Resu
     Ok(())
 }
 
+/// RFC 102 Stage 5, design-v1.md §14.6: `write_active_ref_metadata` no longer goes through
+/// `atomic_replace` -- it truncates, then appends, each through `RequiredDirectorySync`. `is_file()`
+/// stopped being a meaningful postcondition the moment the file became permanent from `init` onward
+/// (it is always true); asserting the actual content survived an error is what still distinguishes
+/// "the write landed, only its confirmation failed" from "the write never happened." Skip 1 to land the
+/// injected failure on the append's own directory sync, not the truncate's -- skip 0 would fail before
+/// "heads/main" is ever written at all, proving a different (and less interesting) property.
 #[test]
 fn active_metadata_parent_sync_failure_retains_and_retries() -> prikk_error::Result<()> {
     let root = unique_temp_dir("active-sync-matrix");
     let layout = RepositoryLayout::init(root.clone())?;
-    fail_once_for_test(TestFailPoint::MutableParentSync);
+    fail_after_for_test(TestFailPoint::RequiredDirectorySync, 1);
     assert!(write_active_ref_metadata(&layout, "heads/main").is_err());
-    assert!(layout.default_active_ref_name_path().is_file());
+    assert_eq!(
+        std::fs::read(layout.default_active_ref_name_path())?,
+        b"heads/main"
+    );
     assert!(write_active_ref_metadata(&layout, "heads/main").is_ok());
     let _ = std::fs::remove_dir_all(root);
     Ok(())

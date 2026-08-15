@@ -8,7 +8,7 @@ use crate::{
     write_active_ref_metadata,
 };
 
-use crate::fsutil::{TestFailPoint, fail_once_for_test};
+use crate::fsutil::{TestFailPoint, fail_after_for_test, fail_once_for_test};
 use crate::test_support::{rollback_patch_envelope, signed_patch_envelope, unique_temp_dir};
 
 mod format_transition;
@@ -185,92 +185,138 @@ fn active_ref_metadata_reports_malformed_content() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// RFC 102 Stage 5, design-v1.md §14.6: redesigned onto the new truncate-then-append write and
+/// truncate-only clear, replacing the retired `write_file_atomically`/`remove_file_if_present_required`
+/// failpoints (`MutableParentSync`/`CleanupDirectorySync`) with the ones the new primitives actually
+/// have. `write_active_ref_metadata`'s two-step shape introduces a state the old single-`atomic_replace`
+/// write never had: a truncate that lands but an append that fails leaves the file genuinely empty
+/// (`Missing`), not the old value or the new one -- exactly the crash window the §14.6 condition moved
+/// inside this function rather than eliminating.
 #[test]
 fn active_metadata_write_and_removal_failures_pin_retained_state() {
     let root = unique_temp_dir("active-ref-failpoints");
     let layout = RepositoryLayout::init(root.clone()).unwrap();
 
-    fail_once_for_test(TestFailPoint::MutableParentSync);
+    // Truncate fails before any append: nothing has changed yet.
+    fail_once_for_test(TestFailPoint::Truncate);
     assert!(write_active_ref_metadata(&layout, "heads/topic").is_err());
+    assert_eq!(
+        read_active_ref_metadata(&layout).unwrap(),
+        ActiveRefMetadata::Missing
+    );
+
+    // Append fails after a successful truncate: the file is left genuinely empty, not the requested
+    // value.
+    fail_once_for_test(TestFailPoint::AppendWrite);
+    assert!(write_active_ref_metadata(&layout, "heads/topic").is_err());
+    assert_eq!(
+        read_active_ref_metadata(&layout).unwrap(),
+        ActiveRefMetadata::Missing
+    );
+
+    assert!(write_active_ref_metadata(&layout, "heads/topic").is_ok());
     assert_eq!(
         read_active_ref_metadata(&layout).unwrap(),
         ActiveRefMetadata::Valid("heads/topic".to_string())
     );
-    fail_once_for_test(TestFailPoint::CleanupDirectorySync);
+
+    // Clearing fails at the directory-sync confirmation, after the physical truncate already landed:
+    // the same "operation happened, confirmation failed" shape the old atomic-replace test proved for
+    // `MutableParentSync`, now via `durable_truncate_to_empty`'s own last step.
+    fail_once_for_test(TestFailPoint::RequiredDirectorySync);
     assert!(remove_active_ref_metadata(&layout).is_err());
     assert_eq!(
         read_active_ref_metadata(&layout).unwrap(),
         ActiveRefMetadata::Missing
     );
-    fail_once_for_test(TestFailPoint::CleanupDirectorySync);
-    assert!(remove_active_ref_metadata(&layout).is_err());
+
+    // A further clear is now a genuine no-op: nothing left to clear, reported as such.
     assert!(!remove_active_ref_metadata(&layout).unwrap());
 
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// RFC 102 Stage 5, design-v1.md §14.6: `finish_active_publication_cleanup` truncates the WAL, then
+/// truncates the metadata -- both now the same `durable_truncate_to_empty` primitive, so a one-shot
+/// `Truncate` failpoint always hits the WAL's own call first. Reaching the metadata's call needs
+/// `fail_after_for_test` to skip the WAL's. Retired the old `Unlink`/`CleanupDirectorySync` cases
+/// entirely: nothing in this function unlinks anything anymore, and `!layout.default_active_ref_name_
+/// path().exists()` is no longer a reachable postcondition -- the file is permanent from `init` onward.
 #[test]
 fn active_publication_cleanup_failures_preserve_retryable_states() {
-    for point in [
-        TestFailPoint::Truncate,
-        TestFailPoint::Unlink,
-        TestFailPoint::CleanupDirectorySync,
-    ] {
-        let root = unique_temp_dir("active-publication-cleanup-failpoint");
-        let layout = RepositoryLayout::init(root.clone()).unwrap();
-        write_active_ref_metadata(&layout, "heads/main").unwrap();
-        Wal::for_layout(&layout)
-            .append_patch(&signed_patch_envelope())
-            .unwrap();
-        let wal_before = std::fs::read(layout.default_queue_wal_path()).unwrap();
-        let metadata_before = std::fs::read(layout.default_active_ref_name_path()).unwrap();
-        let active_lock = ActiveLock::acquire(&layout).unwrap();
+    // The WAL's own truncate (the first of the two calls) fails: neither the WAL nor the metadata is
+    // touched.
+    let root = unique_temp_dir("active-publication-cleanup-failpoint-wal");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    write_active_ref_metadata(&layout, "heads/main").unwrap();
+    Wal::for_layout(&layout)
+        .append_patch(&signed_patch_envelope())
+        .unwrap();
+    let wal_before = std::fs::read(layout.default_queue_wal_path()).unwrap();
+    let metadata_before = std::fs::read(layout.default_active_ref_name_path()).unwrap();
+    let active_lock = ActiveLock::acquire(&layout).unwrap();
 
-        fail_once_for_test(point);
-        assert!(finish_active_publication_cleanup(&layout, &active_lock).is_err());
-        match point {
-            TestFailPoint::Truncate => {
-                assert_eq!(
-                    std::fs::read(layout.default_queue_wal_path()).unwrap(),
-                    wal_before
-                );
-                assert_eq!(
-                    std::fs::read(layout.default_active_ref_name_path()).unwrap(),
-                    metadata_before
-                );
-            }
-            TestFailPoint::Unlink => {
-                assert!(
-                    std::fs::read(layout.default_queue_wal_path())
-                        .unwrap()
-                        .is_empty()
-                );
-                assert_eq!(
-                    std::fs::read(layout.default_active_ref_name_path()).unwrap(),
-                    metadata_before
-                );
-            }
-            TestFailPoint::CleanupDirectorySync => {
-                assert!(
-                    std::fs::read(layout.default_queue_wal_path())
-                        .unwrap()
-                        .is_empty()
-                );
-                assert!(!layout.default_active_ref_name_path().exists());
-            }
-            _ => unreachable!(),
-        }
+    fail_once_for_test(TestFailPoint::Truncate);
+    assert!(finish_active_publication_cleanup(&layout, &active_lock).is_err());
+    assert_eq!(
+        std::fs::read(layout.default_queue_wal_path()).unwrap(),
+        wal_before
+    );
+    assert_eq!(
+        std::fs::read(layout.default_active_ref_name_path()).unwrap(),
+        metadata_before
+    );
 
-        finish_active_publication_cleanup(&layout, &active_lock).unwrap();
-        assert!(
-            std::fs::read(layout.default_queue_wal_path())
-                .unwrap()
-                .is_empty()
-        );
-        assert!(!layout.default_active_ref_name_path().exists());
-        drop(active_lock);
-        let _ = std::fs::remove_dir_all(root);
-    }
+    finish_active_publication_cleanup(&layout, &active_lock).unwrap();
+    assert!(
+        std::fs::read(layout.default_queue_wal_path())
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        std::fs::read(layout.default_active_ref_name_path())
+            .unwrap()
+            .is_empty()
+    );
+    drop(active_lock);
+    let _ = std::fs::remove_dir_all(root);
+
+    // The metadata's own truncate (the second of the two calls) fails: the WAL's truncate already
+    // landed, and the metadata's prior content is retained.
+    let root = unique_temp_dir("active-publication-cleanup-failpoint-metadata");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    write_active_ref_metadata(&layout, "heads/main").unwrap();
+    Wal::for_layout(&layout)
+        .append_patch(&signed_patch_envelope())
+        .unwrap();
+    let metadata_before = std::fs::read(layout.default_active_ref_name_path()).unwrap();
+    let active_lock = ActiveLock::acquire(&layout).unwrap();
+
+    fail_after_for_test(TestFailPoint::Truncate, 1);
+    assert!(finish_active_publication_cleanup(&layout, &active_lock).is_err());
+    assert!(
+        std::fs::read(layout.default_queue_wal_path())
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        std::fs::read(layout.default_active_ref_name_path()).unwrap(),
+        metadata_before
+    );
+
+    finish_active_publication_cleanup(&layout, &active_lock).unwrap();
+    assert!(
+        std::fs::read(layout.default_queue_wal_path())
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        std::fs::read(layout.default_active_ref_name_path())
+            .unwrap()
+            .is_empty()
+    );
+    drop(active_lock);
+    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]

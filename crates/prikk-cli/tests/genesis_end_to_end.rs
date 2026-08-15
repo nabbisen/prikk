@@ -178,9 +178,13 @@ fn non_default_ref_genesis_commit_seal_log_verify() {
         seal_stdout.contains("heads/topic RefState:"),
         "expected heads/topic publication; stdout: {seal_stdout}"
     );
+    // RFC 102 Stage 5, design-v1.md §14.6: the file is permanent from `init` onward; "removed" is now
+    // "truncated to empty."
     assert!(
-        !repo.join(".prikk/active/default/ref-name").exists(),
-        "seal should remove active ref metadata"
+        std::fs::read(repo.join(".prikk/active/default/ref-name"))
+            .unwrap()
+            .is_empty(),
+        "seal should clear active ref metadata"
     );
 
     let out = prikk(&repo)
@@ -398,7 +402,13 @@ fn seal_retry_drains_already_published_wal_without_duplicate_ref_update() {
     let after_retry_log = ref_store.replay_log("heads/main").unwrap();
     assert_eq!(after_retry_log.records.len(), 1);
     assert_eq!(std::fs::read(layout.default_queue_wal_path()).unwrap(), b"");
-    assert!(!layout.default_active_ref_name_path().exists());
+    // RFC 102 Stage 5, design-v1.md §14.6: the file is permanent from `init` onward; "removed" is now
+    // "truncated to empty."
+    assert!(
+        std::fs::read(layout.default_active_ref_name_path())
+            .unwrap()
+            .is_empty()
+    );
 
     let _ = std::fs::remove_dir_all(&repo);
 }

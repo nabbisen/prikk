@@ -19,10 +19,10 @@ mod tests;
 pub(crate) use anchored::{
     EntryKind, MutationRoot, RootFileStat, append_file_required, create_new_file_required,
     ensure_directory_required, inspect_entry, list_directory, read_file_if_exists,
-    read_file_required, remove_file_cleanup_best_effort, remove_file_if_present_required,
-    remove_worktree_file_required, set_regular_file_mode_required, stat_file_state_if_exists,
-    sync_directory_required, truncate_existing_file_required, truncate_file_empty_required,
-    write_file_atomically, write_worktree_file_atomically,
+    read_file_required, remove_file_cleanup_best_effort, remove_worktree_file_required,
+    set_regular_file_mode_required, stat_file_state_if_exists, sync_directory_required,
+    truncate_existing_file_required, truncate_file_empty_required, write_file_atomically,
+    write_worktree_file_atomically,
 };
 
 // RFC 102 Stage 4: `promote_file_required` (`DurabilityContract::promote`) has no production caller
