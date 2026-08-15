@@ -102,8 +102,9 @@ record appended into a shared, per-type container allocated at `init`:
 containers/<object-type>/a.container
 ```
 
-with a paired `b.container` reserved for future compaction, and one `containers/index.container` mapping
-each object id to the container, slot, offset and length where its record lives.
+with a paired `b.container` allocated at `init` and permanently unused — object containers have no data
+model to compact against (see [Compaction](#compaction) below) — and one `containers/index.container`
+mapping each object id to the container, slot, offset and length where its record lives.
 
 Six object types are persisted this way — `patch`, `block`, `ref-state`, `tag`, `attestation`, `blob`.
 `RefUpdate` is stored inline in ref logs, not as an object record.
@@ -148,19 +149,30 @@ Locks remain per-ref files, one per ref name actually in use, unaffected by this
 the hex SHA-256 digest of the ref name bytes, the same digest used internally to attribute each
 container entry to its own ref.
 
-`pointer-index-a.container` (the live slot; see below) is an append-only, checksum-framed sequence of pointer entries; each entry
-records one ref's human-readable name, its published RefState object id, and the SHA-256 key derived
-from that name. A ref's current pointer is its *last* matching entry — republishing a ref appends a
-new entry rather than rewriting the old one. It is useful for lookup and recovery, but is not trusted
-alone: verification checks pointer content against RefState objects and ref-log evidence, the same as
-before.
+`pointer-index-{a,b}.container` is an append-only, checksum-framed sequence of pointer entries; each
+entry records one ref's human-readable name, its published RefState object id, and the SHA-256 key
+derived from that name. A ref's current pointer is its *last* matching entry in the *live* slot —
+republishing a ref appends a new entry rather than rewriting the old one, and which slot is live is
+named by this container's own generation log, not always `a` (see [Compaction](#compaction) below).
+It is useful for lookup and recovery, but is not trusted alone: verification checks pointer content
+against RefState objects and ref-log evidence, the same as before.
+
+`received-index-{a,b}.container` holds the same shape of entry for **received** refs — pointers
+imported by `prikk bundle import` under the separate `remotes/<name>` namespace (DC-78 §D4), never
+`refs/by-id/`: an imported RefState object keeps the origin repository's own embedded ref name, which
+could never agree with a locally renamed pointer, so received refs get their own container and key
+space rather than a special case in the ordinary one. Last-entry-wins, the same as the ref-pointer
+index, and compacted the same way. This index is never consulted by `verify_repository` directly —
+every object a received pointer leads to is checked by the ordinary object-store scan regardless of
+how it was discovered.
 
 `log-a.container`/`log-b.container` hold every ref's RefUpdate log records, interleaved by append
 order; a reader filters to one ref's own subsequence by that same per-record key. Each record carries
 a signed RefUpdate envelope inline with frame magic, versioning, length, and checksum. Ref logs are
 publication evidence when their record chain, referenced RefState objects, target Blocks, signatures,
-and trust policy checks all hold — unchanged in meaning, only in storage shape. (Slot `b` is allocated
-alongside slot `a` for future container rotation; current writes always target slot `a`.)
+and trust policy checks all hold — unchanged in meaning, only in storage shape. Slot `b` is allocated
+alongside slot `a` at `init` and permanently unused: the ref log is DC-38/DC-69's audit trail and must
+never be compacted, so writes always target slot `a` (see [Compaction](#compaction) below).
 
 `refs/locks/*.lock` files are local synchronization files for ref-specific publication and repair, not
 a root of trust. There is no longer a temporary-candidate mechanism: an append-only pointer entry has
@@ -209,18 +221,58 @@ Both are allocated empty at `init`, then appended to by `prikk trust maintainer 
 name is created after `init`.
 
 `keys.container` holds one append-only entry per adopted key id: the key id and its Ed25519 public key.
-`policy-a.container` (the live slot) holds a sequence of complete policy snapshots — each `add` or `remove` appends the
-*entire* current adopted-key-id list, not an incremental change; readers take the last complete
-snapshot, with `required = 1` meaning any one adopted key's signature suffices (never stored — it is a
-constant, not configurable). Seal checks the configured MAINTAINER signer against this repository-local
-policy before publication, and verify checks publication envelopes against the same local trust
-boundary.
+It has no slot pair and is never compacted — TOFU history must persist across key removal (see
+[Compaction](#compaction) below).
+
+`policy-{a,b}.container` holds a sequence of complete policy snapshots in its *live* slot (named by
+this container's own generation log, not always `a`) — each `add` or `remove` appends the *entire*
+current adopted-key-id list, not an incremental change; readers take the last complete snapshot, with
+`required = 1` meaning any one adopted key's signature suffices (never stored — it is a constant, not
+configurable). Seal checks the configured MAINTAINER signer against this repository-local policy
+before publication, and verify checks publication envelopes against the same local trust boundary.
 
 This trust store is authority for current publication-trust checks. It is not remote trust, global
 identity, key rotation, hosted forge policy, or a multi-maintainer threshold system. Key revocation is
 supported (`prikk trust maintainer remove`): a removed key's material is retained internally (so a
 different key presented later under the same id is still refused), but it no longer counts toward the
 adopted set or reserves its case-folded id.
+
+## Compaction
+
+Three containers accumulate entries that are superseded the moment a newer one lands:
+`pointer-index-{a,b}.container`, `received-index-{a,b}.container`, and `policy-{a,b}.container`. A
+ref's or received ref's pointer is only ever its *last* matching entry — everything earlier for the
+same key is dead weight from the moment it is superseded — and a trust policy snapshot supersedes every
+earlier snapshot outright, since each one already carries the complete adopted-key-id list.
+
+Each of these three containers is paired with its own generation log
+(`pointer-index-generation.log`, `received-index-generation.log`, `policy-generation.log`, all under
+the same directory as the container they belong to) recording which slot — `a` or `b` — is currently
+live. An empty generation log means no compaction has ever run for that container, and the live slot
+is `a`. A reader resolves the live slot by reading the last complete record in the generation log; it
+never assumes `a`.
+
+`prikk compact --pointer-index|--received-index|--trust-policy|--all` reclaims the dead entries for
+one or all three: it reads the currently-live slot, keeps only what is still current (the last entry
+per key for the two indexes, the last snapshot for the trust policy), writes that reduced set to the
+*other* slot, makes it durable, and only then appends a generation record naming the new slot live —
+so a crash at any point before that append leaves the previous generation fully authoritative, and
+retrying the compaction from scratch is always safe. `prikk compact ... --plan-only` reports what a
+real run would reclaim without writing anything. Compaction never runs automatically; nothing else in
+Prikk invokes it.
+
+Compacting one of these containers takes the same per-container lock its own writers take (see
+[concurrency and locking](./concurrency-locking.md)), so a compaction run and an ordinary write to the
+same container cannot interleave, and a real run and a `--plan-only` preview never report stale
+numbers against each other.
+
+**Two container families never compact, deliberately — not because rotation is merely pending.**
+Object containers (`containers/<type>/{a,b}.container`) have no data model to compact against: nothing
+is ever superseded or deleted (see [Object Store](#object-store) above), so there is nothing for a
+second slot to reclaim. The ref log (`refs/containers/log-{a,b}.container`) is DC-38/DC-69's audit
+trail, which must never be compacted. Both keep their `b` slot allocated at `init` and permanently
+unused. The trust key container (`trust/keys.container`) has no slot pair at all — TOFU history must
+persist across key removal, so it stays a single append-only file, never compacted.
 
 ## Authority Model
 
@@ -229,11 +281,13 @@ adopted set or reserves its case-folded id.
 | `.prikk/FORMAT` | Format gate | Required by repository open; `6` is the current format. Formats 1-5 are rejected at open, with no bridge and no in-place migration. |
 | `containers/<type>/a.container` | Content-addressed object authority | One checksum-framed record per object. Authority when the frame checksum verifies, the envelope validates, and its computed id/type match the requested object. `objects/` is an empty remnant directory and is authority for nothing. |
 | `refs/containers/log-a.container` (`log-b.container` reserved) | Publication evidence | Shared, append-only signed RefUpdate records for every ref, interleaved; authoritative only with valid chain, object, signature, and trust checks. |
-| `trust/policy-{a,b}.container` and `trust/keys.container` | Repository-local trust authority | Current local MAINTAINER trust input for seal and verify publication-trust checks. |
+| `trust/policy-{a,b}.container` and `trust/keys.container` | Repository-local trust authority | Current local MAINTAINER trust input for seal and verify publication-trust checks. `policy-{a,b}` is compacted by `prikk compact --trust-policy` (the live slot is named by its own generation log); `keys.container` has no slot pair and is never compacted — TOFU history must persist across key removal. |
 | `active/default/queue.wal` | Local active-session state | Pending signed Patch envelopes before seal; load-bearing for the active session, not sealed history. |
 | `active/default/ref-name` | Local active-session metadata | Identifies which ref owns a non-empty active WAL; not sealed history. |
-| `refs/containers/pointer-index-{a,b}.container` | Mutable convenience pointer | Shared, append-only, last-entry-wins RefState pointer for every ref; fast current-state lookup and recovery target; not trusted without RefState/ref-log checks. |
-| `active/default/active.lock` and `refs/locks/*.lock` | Local synchronization | Prevent concurrent writers; not history or trust evidence. |
+| `refs/containers/pointer-index-{a,b}.container` | Mutable convenience pointer | Shared, append-only, last-entry-wins RefState pointer for every ref; fast current-state lookup and recovery target; not trusted without RefState/ref-log checks. Compacted by `prikk compact --pointer-index`; the live slot is named by its own generation log, not always `a` — see [Compaction](#compaction). |
+| `refs/containers/received-index-{a,b}.container` | Mutable convenience pointer | Same shape as the ref-pointer index, for imported `remotes/<name>` refs (`prikk bundle import`); not consulted by `verify_repository` directly. Compacted by `prikk compact --received-index`. |
+| `*-generation.log` (`pointer-index-`, `received-index-`, `policy-`) | Compaction state | Records which slot (`a`/`b`) is currently live for its own container; empty means `a`. Not history or trust evidence — see [Compaction](#compaction). |
+| `active/default/active.lock`, `refs/locks/*.lock`, and the four container locks (`pointer-index.lock`, `log.lock`, `received-index.lock`, `policy.lock`, all under `refs/containers/` or `trust/`) | Local synchronization | Prevent concurrent writers, and (for the container locks) a concurrent `prikk compact` run; not history or trust evidence. Recoverable after a crash via `prikk unlock` — see [concurrency and locking](./concurrency-locking.md). |
 | `cache/` | Initialized, rebuildable, non-root | Never authority; a corrupt or absent cache file is not an error and does not change any result. |
 | `objects/` (and its six type subdirectories), `quarantine/`, `refs/by-id/`, `refs/logs/`, `refs/tmp/` | Initialized, dead | Nothing has written into any of them since object and ref publication state moved into containers. Not authority for anything — but their absence is an error, because repository open validates that every required directory is present. |
 | `gc/` | Deferred/not present | No current initialized directory or released behavior. |
@@ -265,6 +319,8 @@ validation.
 | Trust policy and maintainer public-key files are written by the trust command and define current repository-local MAINTAINER trust. | [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [security and signing setup](../guide/security-setup.md) |
 | Verification checks object placement, ref pointer/log consistency, active WAL state, and publication trust within current limits. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [integrity and recovery diagnostics](./integrity-recovery.md), [trust and threat model](./trust-threat-model.md) |
 | `cache/` and `quarantine/` are initialized but not roots of trust; `quarantine/` is dead, and `gc/` is not an initialized directory. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-31](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
+| The received-ref index is a shared, append-only, last-entry-wins container for imported `remotes/<name>` pointers, kept separate from `refs/by-id/` because an imported RefState's own embedded ref name can never agree with a locally renamed pointer. | [`received.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/received.rs), [`received_index.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/received_index.rs) |
+| Three containers (ref-pointer index, received-ref index, trust policy) each have a generation log naming which slot is live, defaulting to `a` when empty; `prikk compact` reads the live slot, writes the reduced set to the other slot durably, then appends a generation record naming it live; `--plan-only` performs the same read with no write. Object containers and the ref log allocate an unused `b` slot and never compact; the trust key container has no slot pair at all. | [`generation.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/generation.rs), [`compact.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/compact.rs), [`lock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/lock.rs) |
 
 ## Provenance
 

@@ -19,8 +19,9 @@ see the [trust and threat model](./trust-threat-model.md) and the
 - There is no global repository lock today.
 - Lock conflicts and stale-baseline ref publication conflicts both surface as `LockConflict`, but they
   have different causes and operator responses.
-- Stale lock cleanup after a crash is manual today. There is no lock timeout, lock stealing, process
-  owner validation, or doctor stale-lock repair.
+- Stale lock cleanup after a crash is manual today, through `prikk unlock` — not automatic, not a
+  doctor repair, and not gated on the tool's own PID check, which is advisory only. There is no lock
+  timeout or automatic lock stealing.
 - The active-session model uses one default active WAL and active ref metadata. It is not a
   multi-active-session model.
 - Durability and recovery claims are supported by current unit and integration tests, not by a
@@ -33,26 +34,40 @@ see the [trust and threat model](./trust-threat-model.md) and the
 
 ## Lock Files and Scope
 
-Prikk currently uses two lock types:
+Prikk currently uses six lock types: the active-session lock, one per-ref lock, and four
+container locks (RFC 102 Stage 6 Step 2) — one per compacting container plus the ref log:
 
 ```text
 active/default/active.lock
 refs/locks/<ref-name-storage-key>.lock
+refs/containers/pointer-index.lock
+refs/containers/log.lock
+refs/containers/received-index.lock
+trust/policy.lock
 ```
 
 There is no temporary-candidate mechanism: ref publication writes into a shared, append-only pointer
 container directly, and an append-only record has no candidate value to stage before becoming durable.
 
-The lock primitive is the same for active-session and ref locks. The store creates the lock file with
+The lock primitive is the same for every lock kind above. The store creates the lock file with
 exclusive file creation. If the file already exists, acquisition fails with `LockConflict`. When
 acquisition succeeds, the file body records the current process id, lock kind, and a note that stale
-lock stealing is not implemented. The lock file and parent directory are required-synced before
-acquisition succeeds. A post-create sync failure returns failure and deliberately retains the lock as
-an actionable stale-lock state.
+lock stealing is not implemented — see [Stale Locks and Manual Cleanup](#stale-locks-and-manual-cleanup)
+below for what that note no longer fully describes. The lock file and parent directory are
+required-synced before acquisition succeeds. A post-create sync failure returns failure and
+deliberately retains the lock as an actionable stale-lock state.
 
 Lock release is best-effort file removal when the lock guard is dropped. If a process exits normally,
 that usually removes the lock. If a process dies while holding the lock, the file can remain and later
 commands fail closed instead of guessing whether the repository is safe to mutate.
+
+The four container locks are acquired by whichever operation is touching that container — the writer
+(ref publication, trust add/remove, bundle import) or `prikk compact`/`prikk compact --plan-only` — and
+held for that operation's whole critical section, never just the final write. Multi-container
+operations (ref publication touches the pointer-index and ref-log locks together; trust add touches
+only the policy lock, since the key container is not lockable) acquire their whole set through one
+internal helper that sorts it into a single fixed order first, so no call site can express an inverted
+acquisition order.
 
 These lock files are local synchronization state. They are not history, trust evidence, publication
 evidence, or object identity.
@@ -139,16 +154,48 @@ missing pointer. The former format-1 missing-pointer repair is refused in 0.18.0
 legacy mutation is signer-backed seal completion of one exact format-1 log-ahead transition with
 matching retained active state.
 
+## Container Locking and Compaction
+
+Four containers — the ref-pointer index, the ref log, the received-ref index, and the trust policy
+container — each have their own lock, held for the whole critical section by whichever operation is
+touching that container: an ordinary writer (ref publication, trust add/remove, bundle import) or
+`prikk compact`/`prikk compact --plan-only`. This excludes a compaction run and an ordinary write from
+interleaving; it is not about protecting the container's *content* the way CAS protects a ref's
+baseline, but about protecting *which physical slot* is currently authoritative while it is being
+read, written, or switched. For what a container lock actually protects against and how compaction
+itself works, see [repository layout — Compaction](./repository-layout.md#compaction).
+
+Ref publication acquires the ref-pointer-index and ref-log container locks together, in that order, in
+addition to (not instead of) the per-ref lock above. Trust add/remove acquires the trust-policy
+container lock in addition to `active.lock`. Bundle import acquires only the received-ref-index
+container lock — it previously acquired no lock at all for this write, which is what surfaced the
+container-locking work in the first place.
+
 ## Stale Locks and Manual Cleanup
 
-If a process dies while holding `active.lock` or a ref lock, the lock file can remain. Current Prikk
-does not steal stale locks, expire them, validate the recorded process id, or use doctor to clear them.
+If a process dies while holding any lock — `active.lock`, a ref lock, or one of the four container
+locks — the lock file can remain. Current Prikk does not steal stale locks, expire them, or use doctor
+to clear them, and this is deliberate, not merely unimplemented: automatically clearing a lock whose
+process turns out to still be running would let two writers hold the same container simultaneously,
+the exact race locking exists to prevent.
 
-Manual cleanup is therefore an operator decision. It is only safe after confirming that no Prikk process
-is still writing the repository. If the active WAL is non-empty, preserve the repository state and use
-`verify` / `doctor` diagnostics before deciding whether any manual lock removal is appropriate. Do not
-delete a lock file to work around a `ref CAS mismatch`; that error means the publication baseline is
-stale, not that a lock file is blocking progress.
+`prikk unlock` is the supported recovery path. A bare invocation lists every currently held lock, its
+recorded process id, and a best-effort advisory on whether that process still appears to be running
+(checked with `kill(pid, 0)` on Linux and macOS; unknown on other platforms). This check is
+asymmetric on purpose: a positive result — the process still appears to be running — is reliable
+evidence to refuse, because the check actually found it. A negative or unknown result is *not*
+evidence the lock is safe to clear, since PID reuse after a reboot or PID-namespace isolation inside a
+container can both make a genuinely running process appear absent. `prikk unlock --lock <path>` clears
+one specific lock, after printing its details, and requires typing `yes` at an interactive prompt
+unless `--yes` is passed for scripting — the tool never decides a lock is stale on its own; it reports
+what it can check and lets the operator supply the fact it cannot.
+
+Manual cleanup remains an operator decision, now made through a supported command rather than deleting
+the file directly. It is only safe after confirming that no Prikk process is still writing the
+repository. If the active WAL is non-empty, preserve the repository state and use `verify` / `doctor`
+diagnostics before deciding whether clearing any lock is appropriate. Do not clear a lock to work
+around a `ref CAS mismatch`; that error means the publication baseline is stale, not that a lock file
+is blocking progress.
 
 ## Concurrent Operations Supported Today
 
@@ -157,7 +204,10 @@ The current model is conservative:
 - one writer can hold the default active-session lock;
 - one writer can hold the lock for a specific ref;
 - different ref locks are separate files, so current storage code does not serialize all refs through a
-  single global lock;
+  single global lock — but ref publication to *any* ref also acquires the shared ref-pointer-index and
+  ref-log container locks, so two publications to different refs still serialize against each other on
+  those, even though their per-ref locks differ;
+- one writer or one `prikk compact` run can hold each of the four container locks;
 - the default active WAL still serializes public command flows that author then seal active state;
 - read-only verification, doctor analysis, history inspection, checkout planning, merge evidence, and
   merge planning do not create these lock files, though they still read mutable repository state.
@@ -168,10 +218,13 @@ remote synchronization, or race-free behavior under arbitrary concurrent filesys
 ## Deferred and Not Promised
 
 Still deferred: multi-active sessions, distributed locking, remote sync, hosted-forge lock semantics,
-branch transactions, lock expiry, PID checks, automatic stale-lock recovery, broad active-session
-recovery, complete crash-matrix testing, filesystem fault injection, fuzzing for WAL/ref-log recovery,
-macOS and Windows filesystem validation, stable repository-format migration, backup/restore tooling,
-and production-readiness claims.
+branch transactions, lock expiry, **automatic** stale-lock recovery, broad active-session recovery,
+complete crash-matrix testing, filesystem fault injection, fuzzing for WAL/ref-log recovery, macOS and
+Windows filesystem validation, stable repository-format migration, backup/restore tooling, and
+production-readiness claims. A best-effort, advisory PID check now exists (`prikk unlock`, see
+[Stale Locks and Manual Cleanup](#stale-locks-and-manual-cleanup) above) — what remains deferred is
+*automatic* recovery, not the check itself; the tool still requires an explicit operator decision for
+every lock it clears.
 
 ## Claim-to-Source Anchors
 
@@ -189,6 +242,8 @@ and production-readiness claims.
 | Unborn ref publication is allowed only when the pointer is absent and the ref log is empty with no trailing partial bytes. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-13](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-13-NONDEFAULT-REF-GENESIS.md) |
 | Doctor refuses format-1 missing-pointer reconstruction; exact interrupted publication completion requires signer-backed seal under the active and ref locks. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
 | Doctor repairs are opt-in and do not clear unsafe active sessions or define stale-lock cleanup. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [integrity and recovery diagnostics](./integrity-recovery.md), [DC-29](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-29-VERIFY-DOCTOR-INTEGRITY-RECOVERY-REFERENCE.md) |
+| Four container locks (ref-pointer index, ref log, received-ref index, trust policy) are acquired by writers and `prikk compact` alike, sorted into one fixed order by a single acquisition helper before any lock is taken. | [`lock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/lock.rs), [`compact.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/compact.rs) |
+| `prikk unlock` lists every held lock with an advisory (not authoritative) liveness check of its recorded process id, and clears one named lock only after explicit confirmation or `--yes`. | [`unlock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/unlock.rs), [`prikk-cli/src/unlock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/unlock.rs) |
 | Repository path and durability claims for *mutation* remain limited by current test evidence and gates exercised on Linux and macOS only; read-only commands are CI-gated cross-platform as of DC-71. | [durability and crash recovery](./durability-recovery.md), [path and worktree safety](./path-safety.md), [platform support](./platform-support.md), [DC-28](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md), [DC-32](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-32-PATH-WORKTREE-SAFETY-REFERENCE.md) |
 
 ## Provenance
