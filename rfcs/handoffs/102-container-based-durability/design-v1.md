@@ -1365,3 +1365,41 @@ they are easy to conflate when hoisting acquisition to the top of a function. St
 **Everything else in the Step 0 report stands as approved** — `prikk unlock` with PID advisory-not-
 authoritative, the sorted-set acquisition helper, read-then-recheck-retry with a bounded cap failing
 closed, and the five-window DC-41 inventory built alongside each window it proves.
+
+### 15.9 Criterion 6 amended — the deadlock test would be vacuous, 2026-08-15
+
+Step 2's criterion 6 asked for *"no deadlock under the declared order, with a test that would fail if a
+new call site took locks out of order."* The developer built the mechanism, flagged that they had not
+built that literal test, and offered to. **They should not, and the criterion is amended.**
+
+**Deadlock is impossible by construction.** Circular wait requires *waiting*, and
+`acquire_container_locks` never waits: `acquire_lock_file` returns `LockConflict` immediately on
+`AlreadyExists` (`lock.rs:172-174`). Two callers requesting overlapping sets produce an immediate
+conflict for one of them, not a hang — and this holds even for a future call site that holds one guard
+while acquiring another, which would fail immediately and roll back rather than block.
+
+**So a multi-threaded test asserting "two reversed-order acquirers do not hang" has no failing
+execution.** It would report coverage of a hazard that cannot occur — **a check that cannot fail, which
+this project has repeatedly found to be worse than no check because it is counted.** Demanding it would
+have manufactured exactly the defect class the RFC keeps closing.
+
+**Criterion 6 is restated as the four properties that actually carry it, all already established:**
+
+| Property | Established by |
+|---|---|
+| Acquisition never blocks | `lock.rs:172-174` + the conflict-refusal test |
+| Set acquisition is atomic — no caller holds a subset while seeking the rest | the partial-failure rollback test (RAII) |
+| The sorting helper is the only path to a container lock | **`ContainerLockGuard`'s private field** (`lock.rs:111-113`) — structural, not conventional |
+| The declared order is the declaration order | the dedicated `Ord` test |
+
+**Recorded so the absent test is not re-derived as a gap.** If a future change makes acquisition blocking
+— a retry-with-backoff, a queue, anything that waits — **this amendment is void and the hazard returns**,
+because it is the non-blocking property that does all the work here.
+
+**A consequence of the wide-scope ruling, now confirmed as implemented fact rather than estimate:** ref
+publishes to *different* ref names fully serialize, where they previously ran concurrently under per-ref
+locks. This affects `branch create`, `tag create`, `seal` and `merge`. It is inherent to `RefLog` being a
+single shared container — the same fact that made wide correct — and it was stated as a cost when the
+owner ruled. It is being put back to them as a measured outcome. **`RefLock` is now redundant for the
+race it solely prevented** (two publishes to the same ref) and is retained deliberately; removing it is
+its own decision.
