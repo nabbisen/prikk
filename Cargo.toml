@@ -21,7 +21,7 @@ default-members = [
 ]
 
 [workspace.package]
-version         = "0.19.0"
+version         = "0.20.0"
 edition         = "2024"
 rust-version    = "1.85"
 license             = "Apache-2.0"
@@ -32,12 +32,12 @@ categories          = ["algorithms"]
 keywords            = ["vcs"]
 
 [workspace.dependencies]
-prikk-crypto                = { version = "0.19.0", path = "crates/prikk-crypto" }
-prikk-error                 = { version = "0.19.0", path = "crates/prikk-error" }
-prikk-hash                  = { version = "0.19.0", path = "crates/prikk-hash" }
-prikk-object                = { version = "0.19.0", path = "crates/prikk-object" }
-prikk-replay                = { version = "0.19.0", path = "crates/prikk-replay" }
-prikk-store                 = { version = "0.19.0", path = "crates/prikk-store" }
+prikk-crypto                = { version = "0.20.0", path = "crates/prikk-crypto" }
+prikk-error                 = { version = "0.20.0", path = "crates/prikk-error" }
+prikk-hash                  = { version = "0.20.0", path = "crates/prikk-hash" }
+prikk-object                = { version = "0.20.0", path = "crates/prikk-object" }
+prikk-replay                = { version = "0.20.0", path = "crates/prikk-replay" }
+prikk-store                 = { version = "0.20.0", path = "crates/prikk-store" }
 
 ed25519-dalek               = "3"
 getrandom                   = "0.4"

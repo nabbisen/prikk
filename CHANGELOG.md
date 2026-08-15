@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.20.0 — unreleased
+## 0.20.0 — 2026-08-16
 
 Storage rebuilt. **Every repository created by 0.19.0 or earlier must be re-imported.**
 
