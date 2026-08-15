@@ -50,7 +50,12 @@ pub(crate) use anchored::MacosDurability;
 // here where `fsutil::tests` — the only consumer — actually compiles.
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 pub(crate) use anchored::NoDurability;
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+// `remove_file_required` itself carries no platform gate at its own definition (it dispatches
+// through `ACTIVE_DURABILITY`, which resolves per-platform internally) -- narrower re-export gates
+// above are about their *consumers* (`object_store::tests` and friends), not this function. Found by
+// cross-target clippy after `worktree_patch::tests` (bare `#[cfg(test)]`, no platform restriction)
+// gained a caller in Stage 5 round 1's cache-exemption tests.
+#[cfg(test)]
 pub(crate) use anchored::remove_file_required;
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 pub(crate) use contract::DurabilityContract;
