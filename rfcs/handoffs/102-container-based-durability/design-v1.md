@@ -961,3 +961,40 @@ are instances of the standing `FINDINGS.md` row on searches reported as exhausti
 `create_empty_file_once` list (`:139-169`) does not include it today. **That is a new name at `init`, so
 this unit blocks on the format-bump decision exactly as `received.rs` and the trust key container do** —
 three units, not two. The developer's own format-bump argument did not generalise to their own unit.
+
+### 14.7 The format bump — decided by the project owner, 2026-08-15
+
+**Bump to format 5; reject format-4 at open. No dual-layout bridge.**
+
+**Every existing format-4 repository becomes unopenable the moment Stage 5 ships.** That consequence was
+stated before the decision, not discovered after it — the same discipline §12.1 recorded for the 2→3
+bump.
+
+**What it cost, established rather than assumed.** In-tree: nothing. The CI fixture is authored fresh
+each run (`ci.yml:110-112` invokes `prikk init`), the only on-disk fixture repository
+(`crates/prikk-cli/tests/fixtures/dc55_pre_swap_repo`) is format 2 and has been unopenable since Stage 3,
+and no other `FORMAT` file exists in the tree. The exposure was limited to format-4 repositories held
+outside the repository, which is owner knowledge and was put to them as such.
+
+**Why no middle path was offered.** Creating missing names on open reintroduces name-creation after
+`init` — the property §14.3 just closed and criterion 1 tests for. Detecting missing names without
+bumping makes "format 4" denote two different on-disk shapes distinguished by a side check, which is what
+a format version exists to prevent. The real choice was **bump, or stop Stage 5 with criterion 2
+permanently unmet**, and it was framed that way.
+
+**Implementation.**
+
+1. `CURRENT_FORMAT_VERSION` becomes `5`; `RepositoryFormat::CurrentV4` becomes `CurrentV5`; a
+   `LEGACY_FORMAT_4_VERSION` arm is added to `read_repository_format`.
+2. **The rejection message follows format 3's precedent, not format 2's — this is the part most likely to
+   go wrong.** The Stage 5 question proposed *"name the last release that supported format 4, sourced
+   from the release record."* **No such release exists.** The latest tag is `0.19.0`, which was format 2
+   (`layout.rs:549-553`); formats 3 and 4 both landed after it and neither was ever tagged. Format 3's
+   own arm (`:560-572`) therefore names no version deliberately, and says so in a comment. **Format 4's
+   arm must do the same.** Naming a release here would be guessing, which the discipline governing these
+   messages forbids — and the release record is what settles it, not memory.
+3. **The bump lands once**, folded into whichever `init`-name unit ships first.
+
+**Three units depend on this, not two:** `received.rs`'s I/O and index wiring, the trust key container,
+and `active.rs` (§14.6 — its step 1 pre-allocates `active/default/ref-name`, a name `init` does not
+create today).
