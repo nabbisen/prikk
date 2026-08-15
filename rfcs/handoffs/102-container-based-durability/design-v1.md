@@ -1030,3 +1030,48 @@ vestigial — establish that, do not assume it); and when the three matrix tests
 `DirectoryCreate`/`CreatedDirectoryParentSync` through this path stop doing so, retire them documented in
 place and **state what directory-creation failpoint coverage remains.** If the answer is none, that is a
 finding to report.
+
+### 14.9 The trust container and revocation — correcting §14.5, 2026-08-15
+
+**§14.5 preserved the wrong property, and the developer caught it before any code was written.**
+
+That ruling rejected collapsing `policy.toml` into append order, and required "an explicit current
+adopted set record." I believed that preserved revocation. It does not. **Revocation today is *"open a
+text file, delete a key id, save"*** — it works because `policy.toml` is plain text. Under a
+magic-framed checksummed container, hand-editing breaks the record's checksum: the result is `Invalid`,
+not revoked. **I preserved explicit-set semantics when the capability rested on human-editable text.**
+
+**And the fix is far cheaper than §14.5 implied.** `add_trusted_maintainer` (`trust.rs:123-130`)
+**already writes a full snapshot** — it rebuilds the entire `keys = [...]` list on every call. The policy
+has always had snapshot semantics; a container only re-encodes it. **So removal is already natively
+representable: append a snapshot with the key absent.**
+
+**§14.5's "removal/tombstone record variant, a separate ruling" applied only to the rejected
+append-order design**, where membership was "every key ever appended" and removal genuinely could not be
+expressed. Under snapshots that constraint never existed. That sentence has been carried forward as
+though it bound both designs; **it binds neither now, and is withdrawn.**
+
+**Ruling: ship the snapshot container and add `remove_trusted_maintainer` in the same unit** — load the
+set, drop the id, append the new snapshot; symmetric with `add`, no new format concepts. Revocation moves
+from an undocumented hand-edit to a supported command, trust state becomes durable on Windows, and
+criterion 2 closes with **no exception**.
+
+**The two alternatives are both worse.** Shipping without revocation is the security-capability loss
+§14.5 exists to forbid, and recording a regression does not license it. Keeping `policy.toml` on
+`atomic_replace` as a named criterion-2 exception trades away what this RFC is for: the policy is
+durability-bearing (§14.1.1 — losing it fails verification of *every* publication), so that choice means
+Windows can never make trust state durable, leaving criterion 2 permanently open on the most
+security-sensitive file in the repository.
+
+**This adds an operator-facing verb** (`prikk trust maintainer remove`). It adds no capability —
+revocation exists today — it gives an existing one a supported interface. In scope as the migration's
+cost of not regressing. Closes `FINDINGS.md`'s revocation row.
+
+**Two further rulings for this unit.** `maintainer_trust_keys_dir()` is **removed, not left allocated** —
+follow round 4's `refs/received/` precedent, not Stage 4's three dead allocations, which are carried in
+`FINDINGS.md` as a defect rather than a pattern; format 5 rejects every older repository, so no openable
+repository will ever hold a `.pub` file. And `validate_no_maintainer_key_id_collision` changes
+*rationale*, not just source: DC-72's hazard was filesystem case-folding silently overwriting a `.pub`
+file, and **in a container that root cause disappears**, leaving a semantic guard. Its tests must be
+rewritten to assert the new property, not ported to keep passing — and the deliberate behaviour change
+(a removed key no longer reserves its case-variant id) stated in the commit.
