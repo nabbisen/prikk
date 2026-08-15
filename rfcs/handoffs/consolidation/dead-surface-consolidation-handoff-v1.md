@@ -94,3 +94,41 @@ deletion that should not proceed on a reviewer's say-so alone if the implementer
   `prikk-error` 0; **179 locked packages**. Report the figures; the architect updates the line at merge.
 - Deletions will remove tests. **Say which and why** — a removed test is a removed guarantee unless the
   thing it guarded is gone too.
+
+---
+
+## 6. Item 2 corrected, 2026-08-15 — the criterion in §2 was wrong
+
+**§2 said to remove the path accessors "each verified to have zero production callers." That is the wrong
+test**, and the developer found three problems it produced. All three verified.
+
+**The right test is whether removal loses something.** `ref_repair` (§3) was still correct to delete —
+it advertised a repair capability that does not exist and its only callers asserted it always fails.
+The accessors below are a different case and this criterion could not tell them apart.
+
+**A — `object_type_dir` has a live production reader.** `verify/objects.rs:337`, inside
+`scan_loose_file_temp_debris`, reached at `:172` on every `verify`. §2's table checked the
+**directories** for readers and concluded about the **accessors**. **Ruling:** remove `objects/` and its
+six subdirectories from `required_directories()` — the scan tolerates absence (`:339-340`,
+`inspect_entry` → `None` → `continue`) — but **keep `object_type_dir`/`objects_dir`, demoted to
+`pub(crate)`**, and do not touch `scan_loose_file_temp_debris`: design-v1.md §12.3 item 3 already
+declined to retire it as a side effect of unrelated work, which is what this would be.
+
+**B — `ref_tmp_path` serves the directory this handoff keeps.** Six internal call sites, several of them
+the acceptance-criterion-1 evidence that `refs/tmp/` is still scanned. **Ruling: keep it.** Inlining the
+expression six times, or re-creating it as a test-only helper, is the accessor again in a worse place.
+
+**C — three accessors are called from another crate.** `ref_pointer_path`, `ref_log_path` and
+`object_path` are used by `prikk-cli/tests/format_transition_support/` (five sites), which sees only
+public API — and `hex_prefix` (`layout.rs:808`) is **fully private** while `ref_name_storage_key` (`:812`)
+is `pub(crate)`, so an external crate cannot compute these paths. **Ruling: keep all three**, documented
+as legacy-format path builders retained for cross-crate fixtures with no production caller by design.
+Widening private hashing to `pub` to enable a deletion is the wrong trade; moving the fixtures across the
+crate boundary is outside this scope.
+
+**Item 2 is therefore:** remove `refs/by-id/`, `refs/logs/`, `quarantine/` (and `quarantine_dir`), and
+`objects/` + its six subdirectories from `required_directories()`. Keep `refs/tmp/`, `ref_tmp_path`,
+`ref_lock_path`, `object_type_dir`/`objects_dir` as `pub(crate)`, and the three C accessors.
+
+**Criterion 6 changes accordingly:** the documentation describes `objects/` as absent from new
+repositories but tolerated where present, and `refs/tmp/` as the one required-but-unwritten directory.
