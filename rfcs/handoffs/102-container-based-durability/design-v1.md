@@ -887,3 +887,49 @@ Whether the strict version needs a separate create-at-`init` primitive is Stage 
    appends meaningful** — an implementation that skips the sync on an empty write would silently remove
    that barrier. Enumerate the real callers rather than reasoning from this one.
 5. **How the two cache exemptions get asserted** rather than described.
+
+### 14.5 Stage 5 Step 0 rulings, 2026-08-15
+
+Step 0 returned three items for sign-off. Two are ruled against, and both were the ones the report was
+most confident about.
+
+**`policy.toml` does not collapse into container append order — rejected.** The proposal rested on
+*"`add_trusted_maintainer` never removes a key, so the adopted set is every key id ever appended, in
+append order."* True of the CLI — there is no `revoke` subcommand — and **false of the system.**
+Adoption is derived *exclusively* from `policy.toml`'s `keys = [...]` list: `load_maintainer_trust_policy`
+(`trust.rs:219`) parses the file and loads only the ids it names, and **the keys directory is never
+enumerated** (`:83` builds a path and nothing more). The `.pub` files are key material; `policy.toml` is
+the authority. **Removing a key id from it revokes that key while its `.pub` stays on disk — the only
+working revocation mechanism prikk has**, and `docs/src/reference/repository-layout.md:195,216` documents
+the file as exactly that authority. An append-only container with no removal record cannot express "no
+longer adopted" at all.
+
+**Ruling:** containerize the policy artifact — move the write off `atomic_replace`, which is all criterion
+2 requires — and keep an explicit *current adopted set* record. Append-order semantics may be revisited
+only with a removal/tombstone record variant designed in from the start, under its own ruling. The
+owner's acceptance of pre-production format churn does not apply here: **losing a security capability is
+a different class of decision from deferring a format bump.**
+
+**`active.rs` may not be converted on the marker pattern as proposed — blocking.** The plan was
+pre-allocate empty at `init`, then append to set and truncate-to-empty to clear, *"the exact mechanism
+`worktree_marker.rs` already implements."* Trace an empty file through `read_active_ref_metadata`
+(`active.rs:98-115`): absent yields `ActiveRefMetadata::Missing`, but **empty yields `Some(b"")` →
+`validate_local_branch_ref("")` → `Err` (`refs.rs:399-404`) → `ActiveRefMetadata::Invalid`.** So the
+cleared state stops being `Missing` and becomes `Invalid`, and **every freshly-`init`ed repository reports
+invalid active-ref metadata from creation.** That enum is matched at eleven production sites, including
+`verify.rs:1265`'s `(wal_is_empty, metadata)` verify stage and `require_active_ref_for_non_empty_wal`,
+where `Invalid` is an integrity signal.
+
+The marker analogy misleads because the marker has two states and treats empty as clean; `active.rs` has
+three and empty maps to the wrong one. **The shape matches, the state machine does not.**
+
+**Ruling:** `read_active_ref_metadata` must treat empty as `Missing`, and all eleven call sites re-checked
+for anything distinguishing "file absent" from "no active session," before this unit is written.
+
+**Approved:** no separate lookup index for trust (every trust read is a whole-set load — though the report
+counted four such sites and there are five; `verify/trust.rs:40` was missed, without affecting the
+conclusion); `received.rs` on the refs container+pointer-index pattern; the three-way split into three
+committed units; `FORMAT`-last with re-`init` completing an interrupted init; `durable_append` strictness
+— safe because `create_empty_file_once` (`layout.rs:518-524`) creates names through
+**`create_new_file_required`**, never through `durable_append`, a fact the report's conclusion needed and
+did not supply.
