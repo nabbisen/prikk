@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.20.0 — unreleased
+
+Storage rebuilt. **Every repository created by 0.19.0 or earlier must be re-imported.**
+
+### Breaking
+
+- **Repository format 6. Formats 1 through 5 are rejected at open**, each with an error naming the format
+  found. There is no in-place migration and no read-only fallback for a superseded format. To carry work
+  across: `prikk bundle export` on a version that still opens the old repository, then `prikk bundle
+  import` into a new one. Editing `FORMAT` does not change the on-disk shape it describes.
+- The format moved five times inside this release — 2→3 (object containers), 3→4 (ref containers), 4→5
+  (trust containers, received-ref index, active ref metadata), 5→6 (compaction slots and generation
+  logs). Prikk is early implementation software and has not committed to format stability; each bump was
+  a deliberate decision that older repositories become unopenable.
+
+### Added
+
+- **`prikk compact`** reclaims dead records from the three containers that accumulate them — the ref
+  pointer index, the received-ref index, and the trust policy container. `--plan-only` reports what a
+  run would reclaim without writing. Targets are explicit; a bare invocation refuses rather than
+  compacting everything. **Compaction refuses outright on a container with any damaged record** rather
+  than compacting around it, because a refusal is recoverable and a deletion is not.
+- **`prikk unlock`** recovers a repository wedged by a lock file left behind by a crash. A bare
+  invocation lists what is held, with a best-effort liveness check of each recorded process id. Clearing
+  requires naming one lock and confirming, or `--yes` for scripting. **The liveness check is advisory
+  only**: it is trusted to refuse, never to authorise — a process that appears absent may not be, and
+  clearing a lock that is still genuinely held would put two writers on one container.
+- **`prikk trust maintainer remove`** revokes an adopted maintainer key. Revocation previously existed
+  only as an undocumented hand-edit of `trust/policy.toml`; it now has a supported interface.
+
+### Changed
+
+- **Durability-bearing repository state lives in containers.** Objects, ref pointers, ref logs,
+  received-ref pointers and trust material are now checksum-framed records appended into a fixed set of
+  files, every name created at `init`. Nothing creates a name afterwards.
+- **Corruption is isolated to the records it damaged.** A damaged record is named at its byte offset and
+  the scan continues, rather than failing the whole container.
+- **No durability-bearing write uses an atomic rename.** The two exceptions are rebuildable caches whose
+  absence or corruption changes no result, and both are asserted by tests rather than described.
+
+### Why
+
+An object's identity is its content hash, so every write created a new directory entry — and making a
+new directory entry durable requires an fsync on the parent directory, which POSIX provides and Windows
+does not. Appending to a file that already has a name needs only content durability, which every
+supported platform provides. This release moves durability-bearing state onto that footing so the
+guarantee can be stated as a property rather than as a list of platforms that happen to pass.
+
+**It does not enable Windows mutation.** It removes the obstacle. Windows remains read-only, unchanged
+from 0.19.0; the implementation is targeted at 0.21.0.
+
 ## 0.19.0 — 2026-08-08
 
 Merge. New CLI surface, additive object-format change, no existing object id moves.
