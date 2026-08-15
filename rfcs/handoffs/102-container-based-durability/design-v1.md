@@ -757,3 +757,111 @@ envelope validation decides whether the record is admissible.**
 entirely**, which is why a rewrite could drop them and every gate stay green. Both were found by tests
 that happened to survive, not by any systematic guard. **Registered in `FINDINGS.md`: there is no
 inventory for validation outside `verify`.**
+
+---
+
+## 14. Stage 5 — scope, derived 2026-08-15
+
+Stage 4 merged at `94219cf` with green three-platform CI, so Stage 5 may be scoped. §7 recorded it as
+three words — **"Stage 5 — trust."** Deriving what that actually covers found that the phrase is wrong,
+and two defects behind it.
+
+### 14.1 Stage 5 as named reaches two of five sites — the RFC cannot meet its own criterion 2
+
+§9 criterion 2 is a whole-RFC claim: **"No durability-bearing write uses `atomic_replace`."** Seven
+production `write_file_atomically` calls remain after Stage 4 removed `refs/pointer.rs:51`. Classified by
+reading each one, not by name:
+
+| Site | Writes | Durability-bearing? |
+|---|---|---|
+| `trust.rs:106` | maintainer trust key, **one new name per key id** | **Yes** — a lost key silently reduces a signing threshold |
+| `trust.rs:132` | trust policy | **Yes** — a torn policy is a wrong signer set |
+| `active.rs:122` | active-WAL ref metadata (current branch) | **Yes** |
+| `received.rs:107` | received ref pointer, **one new name per received ref** | **Yes** |
+| `layout.rs:138` | `FORMAT`, at `init` only | **Yes**, but init-only — see §14.2 |
+| `commit_index.rs:80` | commit index | **No** — its own header says *"a rebuildable, non-authoritative cache"*, and `load` is `unwrap_or_default` |
+| `lifecycle_cache/incremental.rs:175` | lifecycle cache | **No** — `load` returns `Option`, and `:160` discards the save result entirely (`let _ = save(...)`) |
+
+**Stage 5 as named covers two. Stage 6 (compaction) covers none.** `active.rs:122` and `received.rs:107`
+belong to no stage at all, so the staging as written terminates with criterion 2 unmet.
+
+**Ruling: Stage 5 is "the remaining durability-bearing replacements", not "trust".** Trust is its largest
+and most security-sensitive part, which is why it was the name that stuck — but naming a stage after its
+most interesting member is how the other two went unscoped. The two rebuildable caches stay on
+`atomic_replace` deliberately, and criterion 2's wording is what permits that: *durability-bearing*, not
+*all*. **That exemption must be asserted by a test, not left as prose** — "this is only a cache" is a claim
+about behaviour, and an unguarded claim is the failure mode this RFC has hit repeatedly.
+
+### 14.2 `FORMAT` becomes durable before the containers it certifies exist
+
+`layout.rs:138` writes `FORMAT` and fsyncs it; container allocation begins at `:146`. So a crash between
+them leaves **a repository that reads as valid format-4 with containers absent** — and this is not
+Windows-specific, it is the ordering on every platform.
+
+Probed on a real repository (init, then delete all 16 container files):
+
+- `prikk status` — reports the repository normally, **exit 0**
+- `prikk verify` — **all 12 stages `evaluated`, exit 0**
+- `prikk doctor` — same, **exit 0**
+
+Nothing observes that a container name is missing, because **an absent container is indistinguishable
+from an empty one** and the probe repository was empty. Harmless there; the point is that no check exists.
+
+**`FORMAT` must be written last**, after every container name, so its presence certifies that init
+completed. That is the only reason the init exemption is sound at all — §7 assumes new names at `init`
+are acceptable but never argues it, and the argument is *"an interrupted init leaves nothing to lose,
+provided the incomplete state is detectable."* Written in the current order, it is not detectable.
+
+### 14.3 Every append creates the file first — so criterion 1 is enforced by nothing
+
+`durable_append` (`anchored/linux.rs:51`) calls `open_append_regular`, which is:
+
+```rust
+match open_new_regular(directory.as_fd(), name) {
+    Ok(fd) => Ok(fd),
+    Err(rustix::io::Errno::EXIST) => open_existing_regular(directory, name, WRONLY | APPEND),
+    Err(error) => Err(io_error(error)),
+}
+```
+
+**It attempts creation first and falls back on `EEXIST`.** Every container append in the system routes
+through it — objects (`index.rs:393`, `:412`), refs (`refs/container.rs:389`, `:392`), the WAL
+(`wal.rs:174`, `:195`), the marker (`worktree_marker.rs:44`).
+
+Three consequences:
+
+1. **§9 criterion 1 — "no container name is created after `init`" — has no runtime guard.** The append
+   path creates names. Criterion 1's test is *enumeration at `init`*, which proves init creates every
+   name and is structurally incapable of proving nothing else does.
+2. **It silently repairs the §14.2 state**, converting a detectable broken repository into an
+   undetectable one.
+3. **It is the RFC's own hole, in the RFC's own primitive.** A create-first append is a new-name event
+   per append. On Linux that is a wasted `EEXIST` syscall; on Windows there is no way to make a new
+   directory entry durable, which is the entire reason this RFC exists.
+
+**Not a live defect** — Windows mutation does not exist yet (DC-37), so no shipped code depends on it.
+**It is a live trap**: the Windows `DurabilityContract` implementation that Stages 5–6 are meant to make
+possible would inherit this pattern by default and void the guarantee at the moment of arrival.
+
+**Ruling: `durable_append` must require an existing file**, matching `durable_truncate` at `:61-64`, which
+already uses `open_existing_regular`. The asymmetry between the two is unexplained and looks accidental.
+Whether the strict version needs a separate create-at-`init` primitive is Stage 5 Step 0's to answer.
+
+### 14.4 What Stage 5 Step 0 must report before any production code
+
+1. **Trust's shape.** Maintainer keys are one file per key id — a per-name surface, exactly what Stage 4
+   faced with refs. Does the ref-container answer transfer, or does trust's read pattern (verify a
+   threshold across N keys) need something else? Derive it; do not assume Stage 4's shape fits.
+2. **Whether `active.rs` and `received.rs` belong in Stage 5 or a Stage 7.** §14.1 puts them in scope;
+   if their shapes are unrelated to trust's, splitting may be cleaner. A reasoned split is acceptable —
+   silence is not.
+3. **The `FORMAT`-last reordering**, and what re-`init` on a partially initialized repository must do.
+4. **The `durable_append` strictness change**, and every caller that depends on create-on-append today.
+   The one caller that looks like a counter-example is not: `wal.rs:174` appends an **empty slice** on the
+   idempotent re-append path (last record's envelope equals the one being appended), returning the
+   existing `seq`. It is a **durability barrier, not a creation** — zero bytes written, and the file and
+   its parent re-synced so a duplicate request re-establishes durability. A strict `durable_append` does
+   not break it, since the file necessarily exists by then, **but the strict version must keep zero-byte
+   appends meaningful** — an implementation that skips the sync on an empty write would silently remove
+   that barrier. Enumerate the real callers rather than reasoning from this one.
+5. **How the two cache exemptions get asserted** rather than described.
