@@ -998,3 +998,35 @@ permanently unmet**, and it was framed that way.
 **Three units depend on this, not two:** `received.rs`'s I/O and index wiring, the trust key container,
 and `active.rs` (§14.6 — its step 1 pre-allocates `active/default/ref-name`, a name `init` does not
 create today).
+
+### 14.8 `durable_truncate_to_empty` is the other half of §14.3, 2026-08-15
+
+**Found by the developer in Stage 5 round 2, by reading `linux.rs`'s two truncate primitives side by side
+rather than assuming they were symmetric.** They were not:
+
+- **`durable_truncate` (`:61-71`)** — `open_existing_directory_required` + `open_existing_regular`. Strict.
+- **`durable_truncate_to_empty` (`:74-88`)** — `prepare_directory_required` +
+  `open_existing_or_create_regular`. **Creates the directory and the file if either is absent.**
+
+`d8f5240` hardened `durable_append` per §14.3 and left its neighbour untouched. **So criterion 1 — "no
+container name is created after `init`" — is still not met**, through the other durability primitive, and
+nothing reports it.
+
+**Three production surfaces, not the two first reported:** `worktree_marker.rs:51` (Stage 1, merged),
+`active.rs:138`/`:160` (Stage 5), and **`wal.rs:283-284`**, which is the worst of them — it calls
+`ensure_directory_required` explicitly *and then* the creating truncate, so draining a WAL whose
+`queue.wal` or `active/default/` had gone missing silently reconstructs both. `queue.wal` is a name `init`
+allocates (`layout.rs:140`).
+
+**Ruling: fixed inside RFC 102, as its own Stage 5 unit.** Not optional hardening — the same defect
+§14.3 closed, in the other primitive, and leaving it lets Stage 5 report criterion 1 as satisfied when it
+is not. It becomes a separate unit rather than a side effect of `active.rs` because it touches merged
+Stage 1 code.
+
+**Required:** swap both primitives to the strict pair; enumerate every caller and establish that none
+depends on creation, as `d8f5240` did; remove `wal.rs:283`'s `ensure_directory_required` or justify it
+(`default_active_dir()` is already in `required_repository_directories()`, `layout.rs:389`, so it looks
+vestigial — establish that, do not assume it); and when the three matrix tests that reach
+`DirectoryCreate`/`CreatedDirectoryParentSync` through this path stop doing so, retire them documented in
+place and **state what directory-creation failpoint coverage remains.** If the answer is none, that is a
+finding to report.
