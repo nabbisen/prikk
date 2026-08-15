@@ -19,8 +19,8 @@ For format stability, migration limits, and release identity, see
 - `.prikk/` is Prikk's native repository format and is not Git-compatible storage.
 - `.prikk/FORMAT` is a current format-version gate, not a stable-format or migration guarantee.
 - Ref files are mutable pointers for convenience and recovery, not roots of trust.
-- Cache-like and quarantine-like directories are initialized today, but are not current roots of
-  trust.
+- Cache-like directories are initialized today, but are not current roots of trust; the quarantine
+  directory is retired and no longer initialized.
 - Durability and recovery claims are supported by current unit and integration tests, not by a
   completed crash-matrix or fuzzing campaign.
 - Repository *mutation* is exercised by project gates on Linux and macOS; Windows mutation remains
@@ -75,11 +75,16 @@ Every file above is created by `init` and is empty until first use. **No name un
 after `init`** — that is a design invariant, not an implementation detail, and it is what makes the
 repository durable on filesystems that cannot make a new directory entry durable.
 
-`init` also creates these directories, which are **allocated but never written to**: `objects/` and its
-six object-type subdirectories, `quarantine/`, `refs/by-id/`, `refs/logs/`, and `refs/tmp/`. They are
-remnants of retired storage mechanisms. They are not authority for anything, but their **absence is an
-error** — repository open validates that every required directory is present, so removing them from an
-existing repository breaks it.
+`init` also creates `refs/tmp/`, which is **allocated but never written to**. It is a remnant of a
+retired candidate-publication mechanism, not authority for anything, but its **absence is an error**:
+`verify` scans it on every run, so repository open validates it is present.
+
+Ten further directories that were previously allocated at `init` for the same reason — `objects/` and
+its six object-type subdirectories, `quarantine/`, `refs/by-id/`, `refs/logs/` — are no longer created.
+Nothing has ever written into any of them (object and ref storage moved into containers years earlier),
+and nothing validates their presence at open, so a repository initialized before this change keeps them
+harmlessly and a newly initialized one simply lacks them. One dormant diagnostic still reads the
+`objects/` tree if present — see [Object Store](#object-store) below.
 
 New repositories contain `6` in `FORMAT`. **Formats 1 through 5 are rejected at open**, with an error
 naming the format found and directing migration through `prikk bundle export` on a version that still
@@ -131,6 +136,12 @@ a valid index entry pointing at bytes that are not there, so the ordering is loa
 **Nothing supersedes or deletes an object.** Writing an id that already exists with identical bytes is a
 no-op; writing one with different bytes is an error. Containers therefore only ever grow.
 
+**`objects/` and its six type subdirectories are a retired one-file-per-object layout**, replaced by the
+containers above; nothing in a format-3 repository writes into it, and `init` no longer creates it. A
+repository initialized before this change may still have it on disk — its presence or absence is not
+validated at open — and if so, one dormant diagnostic (`scan_loose_file_temp_debris`, kept for
+`.pobj.tmp.` debris a format-3 repository can no longer produce) still reads it during `verify`.
+
 ## Refs and Ref Logs
 
 Ref pointer and ref-log storage is shared, not per-ref: every ref's own pointer entry and log records
@@ -179,18 +190,15 @@ a root of trust. There is no longer a temporary-candidate mechanism: an append-o
 no candidate value to stage before becoming durable, so a publish that used to write, sync, and
 promote a candidate now durably appends the pointer entry directly, in one step.
 
-`refs/by-id/`, `refs/logs/` and `refs/tmp/` are still initialized directories, alongside `objects/`
-(with its six type subdirectories) and `quarantine/`. **Nothing writes into any of them.** `init` still
-allocates them and current behavior does not remove them. **Nothing validates their presence at open** —
-`required_directories()` is consulted only by `init` itself.
+`refs/by-id/` and `refs/logs/` are no longer initialized directories — nothing has read or written
+either since ref publication moved into containers, so `init` no longer creates them, and a repository
+missing them behaves identically to one that still has them from before this change (their presence or
+absence is not validated at open).
 
-**Ten of the eleven have no reader at all**: `objects/` and its six type subdirectories, `quarantine/`,
-`refs/by-id/` and `refs/logs/`. A repository missing those behaves identically to one that has them.
-
-**`refs/tmp/` is the exception and is genuinely required.** `verify` lists it on every run, so a
-repository missing it fails verification with `directory is absent: refs/tmp`. Nothing has written into
-it since ref publication moved into containers, so the scan can only ever find nothing — but the
-directory must exist for the scan to succeed.
+**`refs/tmp/` is different and is genuinely required.** `init` still allocates it, and `verify` lists it
+on every run, so a repository missing it fails verification with `directory is absent: refs/tmp`.
+Nothing has written into it since ref publication moved into containers, so the scan can only ever find
+nothing — but the directory must exist for the scan to succeed.
 
 ## Active Session
 
@@ -286,7 +294,7 @@ persist across key removal, so it stays a single append-only file, never compact
 | Path or data | Classification | Current meaning |
 |---|---|---|
 | `.prikk/FORMAT` | Format gate | Required by repository open; `6` is the current format. Formats 1-5 are rejected at open, with no bridge and no in-place migration. |
-| `containers/<type>/a.container` | Content-addressed object authority | One checksum-framed record per object. Authority when the frame checksum verifies, the envelope validates, and its computed id/type match the requested object. `objects/` is an empty remnant directory and is authority for nothing. |
+| `containers/<type>/a.container` | Content-addressed object authority | One checksum-framed record per object. Authority when the frame checksum verifies, the envelope validates, and its computed id/type match the requested object. `objects/` is a retired remnant no longer created by `init`; authority for nothing. |
 | `refs/containers/log-a.container` (`log-b.container` reserved) | Publication evidence | Shared, append-only signed RefUpdate records for every ref, interleaved; authoritative only with valid chain, object, signature, and trust checks. |
 | `trust/policy-{a,b}.container` and `trust/keys.container` | Repository-local trust authority | Current local MAINTAINER trust input for seal and verify publication-trust checks. `policy-{a,b}` is compacted by `prikk compact --trust-policy` (the live slot is named by its own generation log); `keys.container` has no slot pair and is never compacted — TOFU history must persist across key removal. |
 | `active/default/queue.wal` | Local active-session state | Pending signed Patch envelopes before seal; load-bearing for the active session, not sealed history. |
@@ -296,7 +304,8 @@ persist across key removal, so it stays a single append-only file, never compact
 | `*-generation.log` (`pointer-index-`, `received-index-`, `policy-`) | Compaction state | Records which slot (`a`/`b`) is currently live for its own container; empty means `a`. Not history or trust evidence — see [Compaction](#compaction). |
 | `active/default/active.lock`, `refs/locks/*.lock`, and the four container locks (`pointer-index.lock`, `log.lock`, `received-index.lock`, `policy.lock`, all under `refs/containers/` or `trust/`) | Local synchronization | Prevent concurrent writers, and (for the container locks) a concurrent `prikk compact` run; not history or trust evidence. Recoverable after a crash via `prikk unlock` — see [concurrency and locking](./concurrency-locking.md). |
 | `cache/` | Initialized, rebuildable, non-root | Never authority; a corrupt or absent cache file is not an error and does not change any result. |
-| `objects/` (and its six type subdirectories), `quarantine/`, `refs/by-id/`, `refs/logs/`, `refs/tmp/` | Initialized, dead | Nothing has written into any of them since object and ref publication state moved into containers. Not authority for anything, and not validated at open — `required_directories()` is consulted only by `init`. **`refs/tmp/` is the exception**: `verify` lists it on every run, so its absence fails verification even though nothing can write into it any more. The other ten have no reader at all. |
+| `refs/tmp/` | Initialized, unwritten, required | `init` still allocates it; nothing writes into it since ref publication moved into containers, but `verify` lists it on every run, so its absence fails verification. Not authority for anything. |
+| `objects/` (and its six type subdirectories), `quarantine/`, `refs/by-id/`, `refs/logs/` | Retired, no longer initialized | `init` no longer creates these; nothing has written into any of them since object and ref publication state moved into containers. Not validated at open, so a repository initialized before this change keeps them harmlessly. Not authority for anything. `objects/` alone still has one dormant reader — see [Object Store](#object-store). |
 | `gc/` | Deferred/not present | No current initialized directory or released behavior. |
 
 ## Deferred and Not Stable
@@ -325,7 +334,7 @@ validation.
 | Active WAL and active ref metadata are runtime active-session state, not fresh-init files. | [`active.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/active.rs), [`wal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/wal.rs), [durability and crash recovery](./durability-recovery.md) |
 | Trust policy and maintainer public-key files are written by the trust command and define current repository-local MAINTAINER trust. | [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [security and signing setup](../guide/security-setup.md) |
 | Verification checks object placement, ref pointer/log consistency, active WAL state, and publication trust within current limits. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [integrity and recovery diagnostics](./integrity-recovery.md), [trust and threat model](./trust-threat-model.md) |
-| `cache/` and `quarantine/` are initialized but not roots of trust; `quarantine/` is dead, and `gc/` is not an initialized directory. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-31](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
+| `cache/` is initialized but not a root of trust; `quarantine/` is retired and no longer initialized, and `gc/` is not an initialized directory. | [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-31](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-31-REPOSITORY-LAYOUT-AUTHORITY-REFERENCE.md) |
 | The received-ref index is a shared, append-only, last-entry-wins container for imported `remotes/<name>` pointers, kept separate from `refs/by-id/` because an imported RefState's own embedded ref name can never agree with a locally renamed pointer. | [`received.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/received.rs), [`received_index.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/received_index.rs) |
 | Three containers (ref-pointer index, received-ref index, trust policy) each have a generation log naming which slot is live, defaulting to `a` when empty; `prikk compact` reads the live slot, writes the reduced set to the other slot durably, then appends a generation record naming it live; `--plan-only` performs the same read with no write. Object containers and the ref log allocate an unused `b` slot and never compact; the trust key container has no slot pair at all. | [`generation.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/generation.rs), [`compact.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/compact.rs), [`lock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/lock.rs) |
 

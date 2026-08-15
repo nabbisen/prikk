@@ -916,7 +916,13 @@ fn verify_repository_detects_every_directory_shape_violation() -> Result<()> {
         1,
         b"payload".to_vec(),
     ))?;
-    let stray_file = layout.object_type_dir(ObjectType::Blob).join("zz");
+    // Dead-surface consolidation: `objects/` + its type subdirectories are no longer in
+    // `required_directories()` (nothing in a format-3 repository writes loose object files there
+    // anymore), so this fixture -- deliberately probing the dormant `scan_loose_file_temp_debris`
+    // check that still reads this tree -- must create it itself rather than relying on `init`.
+    let object_type_dir = layout.object_type_dir(ObjectType::Blob);
+    std::fs::create_dir_all(&object_type_dir)?;
+    let stray_file = object_type_dir.join("zz");
     std::fs::write(&stray_file, b"not a prefix directory")?;
     let report = verify_repository(&layout)?;
     assert_stage_failed(

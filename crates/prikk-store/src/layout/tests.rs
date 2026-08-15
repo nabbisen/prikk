@@ -6,7 +6,7 @@ use crate::test_support::{
     signed_empty_block_envelope, signed_ref_state_envelope, signed_ref_update_envelope,
     unique_temp_dir,
 };
-use crate::{FileObjectStore, ObjectWriter, RefPublication, RefStore};
+use crate::{FileObjectStore, ObjectWriter, RefPublication, RefStore, verify_repository};
 use prikk_object::{ObjectEnvelope, ObjectType};
 
 /// Recursively lists every regular file under `dir` (there is no directory nesting deeper than
@@ -287,6 +287,73 @@ fn init_allocates_every_active_default_container_name_once_excluding_the_runtime
         "excluding the runtime lock, the set is still exactly the two init-allocated names"
     );
     drop(lock);
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// Dead-surface consolidation, acceptance criterion 3: `required_directories()` dropping ten
+/// directories (`objects/` + its six type subdirectories, `refs/by-id/`, `refs/logs/`,
+/// `quarantine/`) is asserted, not argued, to be genuinely "not a format change" -- a fresh
+/// repository must still `init`, accept ordinary use (a real object write, a real ref publish), and
+/// `verify` clean, with none of the ten directories ever having existed. `refs/tmp/` is the control:
+/// it stays in `required_directories()` (`refs/verify.rs`'s `candidate_issues` scans it on every
+/// `verify`), so its continued presence -- proven the same way the other ten's absence is -- is what
+/// distinguishes "removed because nothing reads it" from "removed and something broke."
+#[test]
+fn a_fresh_repository_opens_and_verifies_without_the_ten_removed_directories() -> Result<()> {
+    let root = unique_temp_dir("layout-no-dead-directories");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    let mut absent_paths = vec![
+        layout.prikk_dir().join("objects"),
+        layout.refs_dir().join("by-id"),
+        layout.refs_dir().join("logs"),
+        layout.prikk_dir().join("quarantine"),
+    ];
+    for object_type in persisted_object_types() {
+        absent_paths.push(
+            layout
+                .prikk_dir()
+                .join("objects")
+                .join(object_type_directory_name(object_type)),
+        );
+    }
+    assert_eq!(
+        absent_paths.len(),
+        10,
+        "objects/ + its six subdirectories + three others"
+    );
+    for absent in &absent_paths {
+        assert!(
+            !absent.exists(),
+            "expected {absent:?} to not exist after init -- it is one of the ten removed \
+             directories"
+        );
+    }
+    assert!(
+        layout.refs_dir().join("tmp").is_dir(),
+        "refs/tmp/ is the one directory that stays -- refs/verify.rs's candidate scan reads it \
+         on every verify"
+    );
+
+    let mut objects = FileObjectStore::new(layout.clone());
+    let target = objects.write_object(&signed_empty_block_envelope())?;
+    let ref_state = signed_ref_state_envelope("heads/main", None, target, 1);
+    let ref_state_id = ref_state.object_id();
+    RefStore::new(layout.clone()).publish(&RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_update: signed_ref_update_envelope("heads/main", None, ref_state_id, target, 1),
+        ref_state,
+    })?;
+
+    let report = verify_repository(&layout)?;
+    assert!(
+        !report.has_stage_failure(),
+        "expected a clean verify on a repository that never had the ten removed directories, got: \
+         {report:?}"
+    );
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

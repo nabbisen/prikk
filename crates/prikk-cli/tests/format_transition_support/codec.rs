@@ -40,7 +40,12 @@ pub(super) fn write_ref_log(
     record.extend_from_slice(&body_len.to_be_bytes());
     record.extend_from_slice(&sha256(&checksum_input));
     record.extend_from_slice(&body);
-    std::fs::write(layout.ref_log_path(ref_name), record)?;
+    let path = layout.ref_log_path(ref_name);
+    let parent = path
+        .parent()
+        .ok_or("legacy fixture ref log has no parent")?;
+    std::fs::create_dir_all(parent)?;
+    std::fs::write(path, record)?;
     Ok(())
 }
 
@@ -55,7 +60,12 @@ pub(super) fn write_ref_pointer(
     bytes.extend_from_slice(&u64::try_from(name.len())?.to_be_bytes());
     bytes.extend_from_slice(name);
     bytes.extend_from_slice(state_id.as_bytes());
-    std::fs::write(layout.ref_pointer_path(ref_name), bytes)?;
+    let path = layout.ref_pointer_path(ref_name);
+    let parent = path
+        .parent()
+        .ok_or("legacy fixture ref pointer has no parent")?;
+    std::fs::create_dir_all(parent)?;
+    std::fs::write(path, bytes)?;
     Ok(())
 }
 
