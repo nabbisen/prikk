@@ -10,7 +10,7 @@
 use std::io::Write as _;
 use std::path::PathBuf;
 
-use prikk_store::{HeldLock, PidLiveness, clear_lock, list_held_locks};
+use prikk_store::{HeldLock, PidLiveness, clear_lock, find_held_lock, list_held_locks};
 
 pub(crate) fn run_unlock(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
     let mut args = args.into_iter();
@@ -37,11 +37,28 @@ pub(crate) fn run_unlock(root: PathBuf, args: Vec<String>) -> std::result::Resul
         return Ok(());
     };
 
+    // `find_held_lock` resolves both sides before comparing (a path reached through a symlinked temp
+    // dir, home, or mount must still match) -- but `print_locks` below already emits every path in its
+    // resolved form, so an operator who copies straight from a listing never needed this in the first
+    // place. This only ever bites a path constructed independently of that listing.
     let target_path = PathBuf::from(&target);
-    let Some(lock) = locks.iter().find(|lock| lock.path == target_path) else {
+    let Some(lock) = find_held_lock(&locks, &target_path) else {
+        // Name the resolution explicitly when it changes something, rather than silently comparing
+        // resolved forms behind the scenes and leaving an operator to wonder why a path that "looks
+        // right" still didn't match -- if it resolves to something real, say what, so a raw/resolved
+        // mismatch is visible instead of hidden.
+        let resolved_note = match std::fs::canonicalize(&target_path) {
+            Ok(resolved) if resolved != target_path => {
+                format!(
+                    " (resolves to {}, which also has no held lock)",
+                    resolved.display()
+                )
+            }
+            _ => String::new(),
+        };
         return Err(format!(
-            "no held lock at {target} -- run `prikk unlock` with no arguments to list what is \
-             currently held"
+            "no held lock at {target}{resolved_note} -- run `prikk unlock` with no arguments to list \
+             what is currently held"
         ));
     };
 

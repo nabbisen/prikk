@@ -154,6 +154,40 @@ pub fn list_held_locks(layout: &RepositoryLayout) -> Result<Vec<HeldLock>> {
     Ok(locks)
 }
 
+/// Find the held lock naming the same file as `target`, resolving both sides through the filesystem
+/// before comparing. A path reached through a different-but-equivalent route -- a symlinked temp
+/// directory (every macOS `/tmp`/`/var` path), a symlinked home, a symlinked mount -- must still match
+/// the lock `list_held_locks` itself reports; exact string equality alone silently misses these,
+/// telling an operator with a genuinely wedged repository and a genuinely correct path that "no held
+/// lock" exists (the CI run that found this: a real lock, a real matching path, reported absent,
+/// because `HeldLock::path` is built from an OS-resolved root while an independently-typed `--lock`
+/// argument is not).
+///
+/// Falls back to plain path equality if either side fails to resolve (`std::fs::canonicalize` errors
+/// on a path that does not exist): a target that names nothing real is exactly the "not currently
+/// held" case this function must still express as `None`, not an I/O error -- the no-match branch is
+/// precisely where the target may be bogus. `lock.path` is resolved defensively here too, even though
+/// it is already well-formed by construction today (`list_held_locks` builds it from an
+/// OS-resolved root) -- that is an invariant of the current call path, not a guarantee this function
+/// should assume holds forever.
+///
+/// `print_locks` (`prikk-cli`) already emits every `HeldLock::path` in its resolved form, so an
+/// operator who copies a path straight from a `prikk unlock` listing always gets a working `--lock`
+/// argument -- this defect only ever bit a path an operator (or a test) constructed independently.
+#[must_use]
+pub fn find_held_lock<'a>(locks: &'a [HeldLock], target: &Path) -> Option<&'a HeldLock> {
+    locks
+        .iter()
+        .find(|lock| paths_name_the_same_file(&lock.path, target))
+}
+
+fn paths_name_the_same_file(a: &Path, b: &Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
+}
+
 /// Clear one specific lock file by path. The caller (`prikk unlock`) is responsible for obtaining
 /// operator confirmation before calling this -- this function performs no confirmation, no liveness
 /// check, and no safety gate of its own: by the time it is called, the decision has already been made

@@ -2,7 +2,7 @@
 
 use prikk_error::Result;
 
-use super::{PidLiveness, clear_lock, list_held_locks};
+use super::{PidLiveness, clear_lock, find_held_lock, list_held_locks};
 use crate::RepositoryLayout;
 use crate::layout::LockableContainer;
 use crate::lock::{ActiveLock, RefLock, acquire_container_locks};
@@ -135,6 +135,60 @@ fn a_wedged_container_lock_blocks_compaction_until_unlock_clears_it() -> Result<
 
     let report = crate::compact_ref_pointer_index(&layout)?;
     assert_eq!(report.entries_before, 0);
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// The macOS CI defect, reproduced directly rather than only through the subprocess integration tests
+/// that first caught it: a real symlink to the repository root, a `--lock`-equivalent path constructed
+/// through the symlinked route, and confirmation that `find_held_lock` still matches it against the
+/// `HeldLock` whose own path was built from the *resolved* root -- exactly the mismatch a `--lock
+/// <path>` argument hits whenever the operator's path and the store's own internal root disagree only
+/// on which route to the same file they took.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn find_held_lock_matches_a_lock_reached_through_a_symlinked_route() -> Result<()> {
+    let real_root = unique_temp_dir("unlock-symlink-real");
+    let layout = RepositoryLayout::init(real_root.clone())?;
+    let active = ActiveLock::acquire(&layout)?;
+
+    let symlink_root = unique_temp_dir("unlock-symlink-link");
+    std::fs::remove_dir(&symlink_root)?;
+    std::os::unix::fs::symlink(&real_root, &symlink_root)?;
+
+    // The path an operator would type after `cd`-ing through the symlinked route, or copying a path
+    // from somewhere that never resolved it -- syntactically different from `layout`'s own root, same
+    // physical file.
+    let symlinked_target = symlink_root.join(".prikk/active/default/active.lock");
+    assert_ne!(symlinked_target, active.path());
+
+    let locks = list_held_locks(&layout)?;
+    let found = find_held_lock(&locks, &symlinked_target);
+    assert!(
+        found.is_some(),
+        "a lock reached through a symlinked route must still match the canonical `HeldLock` \
+         `list_held_locks` reports"
+    );
+
+    drop(active);
+    let _ = std::fs::remove_file(&symlink_root);
+    let _ = std::fs::remove_dir_all(real_root);
+    Ok(())
+}
+
+/// A target that resolves to nothing real must still report "not found" rather than propagating an
+/// I/O error -- the no-match branch is exactly where a target may be bogus, and `find_held_lock`
+/// returns `Option`, not `Result`, on purpose.
+#[test]
+fn find_held_lock_returns_none_for_a_target_that_does_not_exist() -> Result<()> {
+    let root = unique_temp_dir("unlock-bogus-target");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let _active = ActiveLock::acquire(&layout)?;
+
+    let locks = list_held_locks(&layout)?;
+    let bogus = root.join("this-path-was-never-created").join("active.lock");
+    assert!(find_held_lock(&locks, &bogus).is_none());
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())
