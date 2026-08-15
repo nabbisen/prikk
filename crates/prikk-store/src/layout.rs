@@ -115,6 +115,18 @@ pub enum LockableContainer {
     TrustPolicy,
 }
 
+impl LockableContainer {
+    /// Every variant, in the declared total order -- the one enumeration `prikk unlock` (and anything
+    /// else that needs to sweep every container lock) should use, rather than hand-rolling the list
+    /// and risking it drift from the enum's own declaration.
+    pub const ALL: [Self; 4] = [
+        Self::RefPointerIndex,
+        Self::RefLog,
+        Self::ReceivedIndex,
+        Self::TrustPolicy,
+    ];
+}
+
 /// Repository layout paths.
 #[derive(Debug, Clone)]
 pub struct RepositoryLayout {

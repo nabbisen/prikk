@@ -21,6 +21,7 @@ mod merge;
 mod output;
 mod seal;
 mod tag;
+mod unlock;
 
 use args::{
     CheckoutMode, MergeEvidenceTargetArg, current_dir, parse_checkout_args, parse_commit_args,
@@ -98,6 +99,7 @@ fn run() -> std::result::Result<(), String> {
         Some("worktree-status") => run_worktree_status(args.collect()),
         Some("verify") => run_verify(args.collect()),
         Some("doctor") => run_doctor(args.collect()),
+        Some("unlock") => run_unlock(args.collect()),
         Some(other) => Err(format!("unknown command: {other}")),
     }
 }
@@ -191,6 +193,11 @@ fn run_tag(args: Vec<String>) -> std::result::Result<(), String> {
 fn run_bundle(args: Vec<String>) -> std::result::Result<(), String> {
     let root = current_dir()?;
     bundle::run_bundle(root, args)
+}
+
+fn run_unlock(args: Vec<String>) -> std::result::Result<(), String> {
+    let root = current_dir()?;
+    unlock::run_unlock(root, args)
 }
 
 fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {

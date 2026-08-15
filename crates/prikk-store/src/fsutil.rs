@@ -51,11 +51,11 @@ pub(crate) use anchored::MacosDurability;
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 pub(crate) use anchored::NoDurability;
 // `remove_file_required` itself carries no platform gate at its own definition (it dispatches
-// through `ACTIVE_DURABILITY`, which resolves per-platform internally) -- narrower re-export gates
-// above are about their *consumers* (`object_store::tests` and friends), not this function. Found by
-// cross-target clippy after `worktree_patch::tests` (bare `#[cfg(test)]`, no platform restriction)
-// gained a caller in Stage 5 round 1's cache-exemption tests.
-#[cfg(test)]
+// through `ACTIVE_DURABILITY`, which resolves per-platform internally). Unconditional since RFC 102
+// Stage 6 Step 2's `unlock.rs` (design-v1.md §15.7 decision 3) is a genuine production caller, not
+// just tests -- `prikk unlock` needs a real `Result`, not `remove_file_cleanup_best_effort`'s
+// swallowed-error shape, since an operator-initiated removal that silently failed would be worse than
+// an error surfaced.
 pub(crate) use anchored::remove_file_required;
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 pub(crate) use contract::DurabilityContract;

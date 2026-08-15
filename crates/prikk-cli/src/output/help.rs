@@ -80,5 +80,10 @@ pub(crate) fn print_help(version: &str) {
     );
     println!("  prikk doctor [path]                       Run health diagnostics");
     println!("  prikk doctor [path] --repair-wal-tail     Truncate incomplete trailing WAL bytes");
+    println!("  prikk unlock                              List every currently held lock");
+    println!(
+        "  prikk unlock --lock <path> [--yes]        Clear one stale lock (asks to confirm \
+         unless --yes)"
+    );
     println!("  prikk --version                           Print version");
 }
