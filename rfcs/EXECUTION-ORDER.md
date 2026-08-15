@@ -344,7 +344,11 @@ These apply to all work above and are not restated in each handoff.
     **But the developer cannot do it, and the rule spent a month pretending otherwise.** `rfcs/` is
     architect-only, so an increment that moves a count can *report* the new figure and nothing more.
     **The obligation is therefore the reviewer's: update this line as part of accepting the increment
-    that moved it**, in the same review, not later. That is the honest allocation, and it explains the
+    that moved it**, at the moment it merges — not at the moment it is reviewed. **Corrected 2026-08-15**:
+    the original wording said "in the same review," which cannot be right, because this line describes
+    `main` and a reviewed increment is not on `main` yet. Updating at review time would make the baseline
+    describe a branch. Accept the increment, record its reported figures in the review, and update this
+    line when the branch lands. That is the honest allocation, and it explains the
     decay this rule kept suffering — RFC 102 Stage 5 moved `prikk-store` by 15 across six rounds, every
     round reported its count correctly, and none could have edited this file if it had wanted to.
     Corrected 2026-08-15 after Stage 6 Step 1 flagged the figure rather than editing it, which was the
