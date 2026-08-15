@@ -1236,3 +1236,42 @@ review closely, which is what §15.3's risk deserves.
    "authoritative slot" means does.
 5. **DC-41-grade recoverability at the new state count** (§9 criterion 5) — compaction adds states, and
    the criterion is explicit that recoverability is re-earned rather than assumed.
+
+### 15.6 Stage 6 Step 0 rulings — and §15.4's staging was wrong, 2026-08-15
+
+**§15.1's table is confirmed**, checked row by row against the code by the developer rather than taken
+from its prose.
+
+**§15.4's split does not do what it claimed, and the developer's own report contains the disproof
+without drawing it.** Their item 5 notes that `ref_pointer_index`, `received_index` and
+`trust_policy_container` *"have no `ContainerSlot::A` sites to route at all."* Verified: all sixteen
+sites are in `index.rs`, `layout.rs`, `refs/container.rs`, `refs/verify/scan.rs` and `verify/objects.rs`
+— **objects and ref log exclusively** — and the three targets contain zero `ContainerSlot` occurrences.
+
+**So every site Step 1 was going to route sits on a container §15.1 establishes will never be compacted.**
+The resolver would return `A` for them forever. §15.4 claimed Step 1 *"carries the whole 'every reader
+must agree on which slot is live' problem into a step that cannot lose data"* — **it does not.** The
+readers that must agree are the three targets', which have no slot concept to route, so Step 2 would have
+retained all of the risk Step 1 was created to drain.
+
+**Restructured Step 1:** allocate a **B slot and a generation log per target** at `init`; add the
+resolver; make **the three targets' readers** generation-aware, resolving to `A` because no generation
+record exists. No compaction, nothing destroyed, no existing read or write path changed. Step 2 then adds
+only the compactor, against readers already generation-aware and already tested.
+
+**The sixteen existing sites are left alone** — routing a call that provably always returns `A`, on
+containers that never compact, is churn. Note the reason at one site so the inconsistency reads as
+deliberate. **The format bump moves to Step 1**, where the new names now land.
+
+**Three generation logs, not one shared** — approved. The developer's reasoning (the existing
+`containers/generations.log` was reserved for object compaction that will never happen; a shared log
+needs per-record tagging to recover independence) is sound, but **the decisive reason is blast radius and
+it is this RFC's own**: a shared log lets **one corrupt generation record destroy slot resolution for all
+three containers at once**, re-creating exactly the coupling §3's isolate-and-continue design and amended
+constraint 5 exist to remove. Three logs confine it.
+
+**`prikk compact` as a standalone command** — approved, explicitly not under `doctor`, whose repairs are
+non-destructive and whose users do not expect an operation that reclaims space from healthy state.
+
+**DC-41 recoverability stays deferred to Step 2**, correctly — there are no compaction states to recover
+from until it exists.
