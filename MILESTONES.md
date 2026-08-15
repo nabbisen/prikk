@@ -109,9 +109,16 @@ is a one-way door.
 If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
 reviewed commit restores agreement.
 
-**Current release lane:** `parked`.
+**Current release lane:** `active`.
 
-**Current activated release target:** none.
+**Current activated release target:** `0.20.0`.
+
+**Activated 2026-08-16 by the project owner.** 0.20.0 carries RFC 102 complete — container-based
+durability across six stages, repository format 6, compaction — plus `prikk compact`, `prikk unlock`,
+`prikk trust maintainer remove`, and the dead-surface consolidation. **DC-87 (Windows mutation) is
+retargeted to 0.21.0**: its design has not begun, and holding a finished body of work for unstarted work
+is what produced a 393-commit gap since 0.19.0. **0.20.0 does not deliver Windows mutation** — Windows
+remains read-only, unchanged from 0.19.0.
 
 **0.19.0 released 2026-08-08** — seven crates published, tag `0.19.0` signed with the owner's key
 (RSA `25757DA6CBF7022C4E14CCAC1B3066B87DB99A34`), CI and Release workflows green, six assets published.
