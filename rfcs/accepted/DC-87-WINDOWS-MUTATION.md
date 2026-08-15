@@ -9,6 +9,41 @@ half. Also from **DC-82's own criterion 3**, which was reported **not met** and 
 "the sub-contract layer is per-platform types and primitives, deferred to the Windows increment."
 **Target.** 0.20.0. **Status-claim criterion 6.**
 
+## 0. What RFC 102 changed, added 2026-08-16
+
+**This RFC was accepted 2026-08-10. RFC 102 completed 2026-08-15 and materially narrows three of §3's six
+prerequisites.** Verified against the merged tree, not assumed:
+
+**The Stage 2 deferral reason is discharged.** Stage 2 was deferred 2026-08-11 as *"deferred but
+controlled — DC-38's ahead-log invariant cannot hold on Windows: the log append is achievable there, the
+pointer promotion is not."* **RFC 102 eliminated pointer promotion.** `refs/publication.rs` records it:
+the candidate-write-then-promote mechanism *"has no equivalent under an append-only pointer index — an
+append-only record has no candidate value to stage, the append **is** the publish."*
+`write_ref_pointer_candidate`/`promote_ref_pointer_candidate` are retired; only a test-only shim remains
+(`pointer_index.rs:302`). **A ref publication on Windows is now two container appends to names allocated
+at `init`.** Whether that fully discharges the deferral is the owner's to confirm — but the fact it rested
+on is gone.
+
+**§3.2 narrows sharply.** *"Is `durable_directory_entry` implementable on NTFS?"* — its consequence
+question was *"does DC-38's ref-publication crash-recovery reasoning still hold under it?"* **It no longer
+depends on it.** `durable_directory_entry` has exactly two production callers, `worktree.rs:151` and
+`:199`, **both on `worktree_mutation_root()`**. Nothing under `.prikk/` calls it. The question becomes
+what worktree materialization needs, not whether ref publication survives.
+
+**§3.3 narrows the same way.** `set_permission_bits` has two production callers, `worktree.rs:154` and
+`:158` — worktree only. `ChangePerm` replay fidelity is still a real cross-platform-history question, but
+it is now scoped to the worktree rather than to repository state.
+
+**§3.4 half-evaporates.** `promote` has **zero** production callers. `publish_immutable` has zero — the
+standing G5 orphan finding. Both remain on the trait, so a Windows implementor must still supply
+*something*; neither is reachable from any production path.
+
+**What did not change:** §3.1 (G1 / anchored resolution) is untouched by RFC 102 and remains the blocking
+prerequisite. §3.5 (dependency) and §3.6 (the read-path finding) are unaffected.
+
+**RFC 104 was written 2026-08-16 duplicating this RFC's §3 and withdrawn the same day**
+(`../archive/104-windows-mutation.md`). Its only original content is the caller inventory above.
+
 ## 1. What is already settled, so this increment does not re-derive it
 
 - **The contract exists and is guarantee-named, not syscall-named** (DC-76). Eleven methods, nine

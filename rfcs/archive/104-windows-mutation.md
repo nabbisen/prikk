@@ -1,8 +1,20 @@
-# RFC (accepted) - 104 Windows Mutation
+# RFC (archive) - 104 Windows Mutation — WITHDRAWN AS A DUPLICATE
 
-**Status.** **ACCEPTED by the project owner 2026-08-16.** **Acceptance clears §4's prerequisites only** —
-no design, no implementation, no production code. §4.1 is blocking: a stop-and-report on the
-`MutationRoot` question is a complete outcome and may end this RFC, exactly as RFC 101 ended.
+**Status.** **WITHDRAWN 2026-08-16, the day it was accepted.** This RFC duplicates
+**[DC-87 Windows Mutation](../accepted/DC-87-WINDOWS-MUTATION.md)**, accepted 2026-08-10, whose §3 poses
+the same six prerequisites — §4.1 here is DC-87 §3.1, §4.3 is §3.2/§3.3, §4.2 is §3.5. **DC-87 is the
+governing RFC and always was.**
+
+**How this happened, recorded because the mechanism matters more than the mistake.** Checking for an
+existing RFC number, the architect ran `ls rfcs/accepted/ rfcs/done/ | grep -oE "^[0-9]+"` — a query that
+**by construction returns only numerically-prefixed RFCs and silently drops every `DC-` one**, which is
+most of them. An empty result was read as "no prior Windows RFC." This is the standing `FINDINGS.md` row
+on searches that could not have returned the answer, committed by its own author, and this time it
+produced a duplicate accepted RFC rather than a wrong sentence.
+
+**What carried over into DC-87 rather than being lost:** §1's post-RFC-102 caller inventory, which DC-87
+could not have had — it was accepted five days before RFC 102 completed. See DC-87 §0.
+
 **Independence.** Author-reviewed — the standing ceiling.
 **Arises from.** RFC 102, complete and merged 2026-08-15, which removed the obstacle rather than the
 capability; and the owner's direction of 2026-08-16 that the next release should be *"RFC 102 delivered,
