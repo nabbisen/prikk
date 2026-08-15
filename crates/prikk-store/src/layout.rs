@@ -8,7 +8,7 @@ use prikk_object::{ObjectId, ObjectType, is_windows_reserved_name};
 
 use crate::fsutil::{
     MutationRoot, create_new_file_required, ensure_directory_required, read_file_if_exists,
-    read_file_required, write_file_atomically,
+    read_file_required,
 };
 
 const REPO_DIR: &str = ".prikk";
@@ -188,8 +188,21 @@ impl RepositoryLayout {
         // idempotent, so the re-run completes whichever names are still missing and finishes by
         // writing `FORMAT`, exactly the "detectable and completable" property the reordering exists
         // to provide.
+        //
+        // RFC 102 Stage 5, design-v1.md §14.10: `create_new_file_required` (`create_exclusive`), not
+        // `write_file_atomically` (`atomic_replace`) -- the same primitive `create_empty_file_once`
+        // already uses for every other name above. For a name that does not yet exist,
+        // `atomic_replace`'s rename-into-place is a new-directory-entry event, exactly the class this
+        // RFC exists to eliminate; `create_exclusive` is one new-name event with no temp file and no
+        // rename. Confirmed, not assumed: `create_exclusive` (`anchored/linux.rs`) syncs both the file
+        // and the parent directory, the same durability `atomic_replace` provided. The `is_none()`
+        // guard above still governs whether this runs at all -- unchanged -- but the create call
+        // itself is now exclusive, so a genuine concurrent-`init` race now errors on `FORMAT` the same
+        // way it already does on every other name `create_empty_file_once` allocates, rather than
+        // FORMAT alone silently accepting whichever racer's rename landed last. Not a new failure
+        // mode: it is FORMAT joining the behavior every other name in this function already has.
         if read_file_if_exists(layout.repository_mutation_root(), Path::new("FORMAT"))?.is_none() {
-            write_file_atomically(
+            create_new_file_required(
                 layout.repository_mutation_root(),
                 Path::new("FORMAT"),
                 CURRENT_FORMAT_VERSION,

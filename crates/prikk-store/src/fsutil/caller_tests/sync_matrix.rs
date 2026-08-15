@@ -13,12 +13,26 @@ use crate::{
     RepositoryLayout, SnapshotEntry, SnapshotManifest, Wal, write_active_ref_metadata,
 };
 
+/// RFC 102 Stage 5, design-v1.md §14.10: `FORMAT` now goes through `create_new_file_required`
+/// (`create_exclusive`), the same primitive every other `init`-time name uses -- `MutableParentSync`
+/// (`atomic_replace`-only) no longer fires anywhere in `init` at all. `create_exclusive` shares
+/// `RequiredDirectorySync` with every other name's own creation, so landing on `FORMAT`'s specific
+/// occurrence (the last one, since §14.2 orders it last) needs a skip count derived from the exact
+/// sequence, not assumed: 3 fixed names (worktree marker, WAL, active-ref metadata) + 6 persisted
+/// object types × 2 slots (12) + the object index + generation log (2) + 2 ref-log slots + ref pointer
+/// index + received index (4) + 2 trust containers = 23 names before `FORMAT` itself, so skip 23 to
+/// land on the 24th occurrence. If a future stage adds another `init`-time name before `FORMAT`, this
+/// count needs updating -- the same maintenance `ref_log_parent_sync_failure_retains_one_update_and_
+/// retries` below already carries for the same reason.
 #[test]
-fn repository_format_parent_sync_failure_retains_and_retries() -> prikk_error::Result<()> {
+fn repository_format_create_sync_failure_retains_and_retries() -> prikk_error::Result<()> {
     let root = unique_temp_dir("repository-sync-matrix");
-    fail_once_for_test(TestFailPoint::MutableParentSync);
+    fail_after_for_test(TestFailPoint::RequiredDirectorySync, 23);
     assert!(RepositoryLayout::init(root.clone()).is_err());
-    assert!(root.join(".prikk/FORMAT").is_file());
+    assert!(
+        root.join(".prikk/FORMAT").is_file(),
+        "the create already landed before the directory sync failed"
+    );
     assert!(RepositoryLayout::init(root.clone()).is_ok());
     let _ = std::fs::remove_dir_all(root);
     Ok(())
