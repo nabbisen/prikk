@@ -39,7 +39,8 @@ use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{push_string_u16, push_u16, push_u32};
 use crate::frame_resync::resync_to_next_magic;
 use crate::fsutil::{append_file_required, len_to_u64, read_file_if_exists};
-use crate::layout::RepositoryLayout;
+use crate::generation::resolve_live_slot;
+use crate::layout::{ContainerSlot, RepositoryLayout};
 
 const TRUST_KEY_MAGIC: &[u8; 8] = b"PTRUKEY1";
 const TRUST_KEY_VERSION: u16 = 1;
@@ -504,8 +505,11 @@ pub(crate) fn decode_trust_policy_records(bytes: &[u8]) -> Result<TrustPolicyRep
     }
 }
 
+/// Generation-aware (RFC 102 Stage 6 Step 1, design-v1.md §15.6): resolves to `A` today, since
+/// nothing has ever appended a generation record.
 pub(crate) fn replay_trust_policy(layout: &RepositoryLayout) -> Result<TrustPolicyReplay> {
-    let relative = layout.repository_relative(&layout.trust_policy_container_path())?;
+    let slot = resolve_live_slot(layout, &layout.trust_policy_generation_log_path())?;
+    let relative = layout.repository_relative(&layout.trust_policy_container_slot_path(slot))?;
     let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &relative)? else {
         return Ok(TrustPolicyReplay {
             entries: Vec::new(),
@@ -544,7 +548,10 @@ pub(crate) fn append_trust_policy_snapshot(
     let record = encode_trust_policy_record(&TrustPolicySnapshotEntry {
         key_ids: key_ids.to_vec(),
     })?;
-    let relative = layout.repository_relative(&layout.trust_policy_container_path())?;
+    // Step 1 has no compactor, so `A` is the only slot ever written -- see
+    // `pointer_index::append_ref_pointer_entry`'s identical comment.
+    let relative =
+        layout.repository_relative(&layout.trust_policy_container_slot_path(ContainerSlot::A))?;
     append_file_required(layout.repository_mutation_root(), &relative, &record)
 }
 

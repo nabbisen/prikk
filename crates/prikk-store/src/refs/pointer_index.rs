@@ -30,7 +30,8 @@ use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{push_bytes_u64, push_u16};
 use crate::frame_resync::resync_to_next_magic;
 use crate::fsutil::{append_file_required, len_to_u64, read_file_if_exists};
-use crate::layout::RepositoryLayout;
+use crate::generation::resolve_live_slot;
+use crate::layout::{ContainerSlot, RepositoryLayout};
 
 const POINTER_INDEX_MAGIC: &[u8; 8] = b"PREFPTI1";
 const POINTER_INDEX_VERSION: u16 = 1;
@@ -254,9 +255,12 @@ pub(crate) fn decode_pointer_index_records(bytes: &[u8]) -> Result<PointerIndexR
 }
 
 /// Read and replay the on-disk pointer index, off the durability path -- a missing file replays as
-/// empty, the same reader-equivalence rule Stage 1 established for the WAL.
+/// empty, the same reader-equivalence rule Stage 1 established for the WAL. Generation-aware (RFC 102
+/// Stage 6 Step 1, design-v1.md §15.6): resolves to `A` today, since nothing has ever appended a
+/// generation record -- Step 2's compactor is what will ever make this resolve to `B`.
 pub(crate) fn replay_pointer_index(layout: &RepositoryLayout) -> Result<PointerIndexReplay> {
-    let relative = layout.repository_relative(&layout.ref_pointer_index_path())?;
+    let slot = resolve_live_slot(layout, &layout.ref_pointer_index_generation_log_path())?;
+    let relative = layout.repository_relative(&layout.ref_pointer_index_slot_path(slot))?;
     let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &relative)? else {
         return Ok(PointerIndexReplay {
             entries: Vec::new(),
@@ -342,7 +346,11 @@ pub(crate) fn append_ref_pointer_entry(
     entry: &PointerIndexEntry,
 ) -> Result<()> {
     let record = encode_pointer_index_record(entry)?;
-    let relative = layout.repository_relative(&layout.ref_pointer_index_path())?;
+    // Step 1 has no compactor, so `A` is the only slot ever written -- the write side stays
+    // hardcoded rather than resolver-routed, matching the handoff's own "make the three targets'
+    // readers generation-aware" (design-v1.md §15.6), not the writers.
+    let relative =
+        layout.repository_relative(&layout.ref_pointer_index_slot_path(ContainerSlot::A))?;
     append_file_required(layout.repository_mutation_root(), &relative, &record)
 }
 
@@ -362,7 +370,7 @@ pub(crate) fn remove_pointer_entries_for_test(
     layout: &RepositoryLayout,
     ref_name_key: [u8; 32],
 ) -> Result<()> {
-    let path = layout.ref_pointer_index_path();
+    let path = layout.ref_pointer_index_slot_path(ContainerSlot::A);
     let bytes = std::fs::read(&path)?;
     let replay = decode_pointer_index_records(&bytes)?;
     let mut entries = replay.entries.iter();

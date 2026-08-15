@@ -13,9 +13,10 @@ fn changed_or_missing_retained_format_marker_blocks_active_and_wal_mutation() {
         ("legacy-v2", Some(b"2\n".as_slice())),
         ("legacy-v3", Some(b"3\n".as_slice())),
         ("legacy-v4", Some(b"4\n".as_slice())),
-        // RFC 102 Stage 5: format 5 is now current, so "unknown" needs a value past it to still be
+        ("legacy-v5", Some(b"5\n".as_slice())),
+        // RFC 102 Stage 6: format 6 is now current, so "unknown" needs a value past it to still be
         // genuinely unrecognized rather than accidentally matching.
-        ("unknown", Some(b"6\n".as_slice())),
+        ("unknown", Some(b"7\n".as_slice())),
         ("malformed", Some(b"2".as_slice())),
         ("missing", None),
     ] {

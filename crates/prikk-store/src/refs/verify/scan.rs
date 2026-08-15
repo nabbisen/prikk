@@ -70,7 +70,12 @@ pub struct RefFileOutcome {
 }
 
 fn pointer_locator(layout: &RepositoryLayout, offset: usize) -> PathBuf {
-    layout.ref_pointer_index_path().join(format!("#{offset}"))
+    // Display-only. Step 1 (RFC 102 Stage 6, design-v1.md §15.6) never resolves anywhere but `A` --
+    // hardcoded here rather than resolver-routed for the same reason `log_locator` hardcodes `A` for
+    // the (never-compacting) ref log container.
+    layout
+        .ref_pointer_index_slot_path(ContainerSlot::A)
+        .join(format!("#{offset}"))
 }
 
 fn log_locator(layout: &RepositoryLayout, offset: usize) -> PathBuf {

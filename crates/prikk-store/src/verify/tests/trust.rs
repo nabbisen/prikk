@@ -95,7 +95,10 @@ fn assert_invalid_policy_sequence(
     let root = unique_temp_dir(fixture_name);
     let layout = RepositoryLayout::init(root.clone())?;
     if let Some(policy) = malformed_policy {
-        std::fs::write(layout.trust_policy_container_path(), policy)?;
+        std::fs::write(
+            layout.trust_policy_container_slot_path(crate::layout::ContainerSlot::A),
+            policy,
+        )?;
     }
 
     let first = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"first".to_vec());

@@ -171,7 +171,7 @@ pub(super) fn assert_wal_item_failed(report: &RepositoryVerification, expected_s
 /// block, via `validate_v2_lineage`'s own independent "format-2 parent Block {id} is missing" read in
 /// Phase B; disabling the patch-existence check still rejects it, via the lifecycle-replay layer's own
 /// "patch {id} is malformed (patch object is missing)" when Phase B tries to replay it. **Both are
-/// redundant with a downstream read for `CurrentV5` blocks specifically** -- disabling `verify_block_
+/// redundant with a downstream read for `CurrentV6` blocks specifically** -- disabling `verify_block_
 /// payload`'s own explicit check does not let a bad repository verify clean, because something else
 /// already reads the same reference and fails closed too. That is a real property of the current design,
 /// not a gap this round's test can paper over with a placeholder root, and it is why these two rows are
@@ -1244,7 +1244,7 @@ fn verify_repository_detects_invalid_trust_policy() -> Result<()> {
     let malformed_root = unique_temp_dir("verify-trust-policy-malformed");
     let layout = RepositoryLayout::init(malformed_root.clone())?;
     std::fs::write(
-        layout.trust_policy_container_path(),
+        layout.trust_policy_container_slot_path(crate::layout::ContainerSlot::A),
         b"not a valid trust policy container at all",
     )?;
     let mut store = FileObjectStore::new(layout.clone());

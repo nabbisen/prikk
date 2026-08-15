@@ -28,6 +28,18 @@
 //!
 //! The byte-wise resync scan is `frame_resync::resync_to_next_magic`, shared with `wal.rs`,
 //! `refs/log.rs` (the retired per-file codec), and the top-level `container.rs` -- not a fourth copy.
+//!
+//! **Every `ContainerSlot::A` reference below is hardcoded, not resolver-routed -- deliberately, not
+//! an oversight.** RFC 102 Stage 6 Step 1 (design-v1.md §15.6) gave three *other* containers
+//! (`ref_pointer_index`, `received_index`, `trust_policy_container`) their own generation logs and a
+//! `generation::resolve_live_slot` reader, because §15.1 found those three are the genuine
+//! last-entry-wins garbage producers Stage 6 exists to compact. This container is not one of them: it
+//! is DC-38's audit trail and DC-69's "prikk does not forget" ruling made durable, so it must never be
+//! compacted, and `B` stays reserved-but-unused forever (`ContainerSlot`'s own doc, §15.2's "forward
+//! reservation, not dead" framing). Routing these sites through the resolver would be uniformity
+//! ceremony on a container that will never exercise it -- exactly the staging error §15.4's original
+//! (now-superseded) Step 1 proposal made for the ref-pointer-index and received-index containers
+//! before the restructure, so it is not repeated here on purpose.
 
 use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;

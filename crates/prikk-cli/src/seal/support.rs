@@ -91,7 +91,7 @@ pub(super) fn current_ref_state(
             ));
         }
         if !log.records.is_empty()
-            && (object_store.layout().format() == RepositoryFormat::CurrentV5
+            && (object_store.layout().format() == RepositoryFormat::CurrentV6
                 || log.records.len() > 1)
         {
             return Err(format!(

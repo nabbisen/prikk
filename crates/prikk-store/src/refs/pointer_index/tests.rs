@@ -7,7 +7,7 @@ use super::{
     decode_pointer_index_records, encode_pointer_index_record, lookup_ref_pointer,
     replay_pointer_index,
 };
-use crate::layout::{RepositoryLayout, ref_name_key_bytes};
+use crate::layout::{ContainerSlot, RepositoryLayout, ref_name_key_bytes};
 use crate::test_support::{sample_object_id, unique_temp_dir};
 
 #[test]
@@ -178,7 +178,7 @@ fn damaged_entry_fails_closed_rather_than_silently_resolving_a_stale_entry() -> 
         .last_mut()
         .ok_or_else(|| prikk_error::PrikkError::Integrity("expected a record".to_string()))?;
     *last ^= 0x01;
-    let path = layout.ref_pointer_index_path();
+    let path = layout.ref_pointer_index_slot_path(ContainerSlot::A);
     let mut existing = std::fs::read(&path)?;
     existing.extend_from_slice(&damaged);
     std::fs::write(&path, existing)?;

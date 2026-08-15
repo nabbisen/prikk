@@ -182,7 +182,7 @@ fn a_corrupt_policy_container_fails_closed_rather_than_resolving_stale_or_empty(
         assert!(add_trusted_maintainer(&layout, "alice", &key).is_ok());
         assert!(
             std::fs::write(
-                layout.trust_policy_container_path(),
+                layout.trust_policy_container_slot_path(crate::layout::ContainerSlot::A),
                 b"not a valid trust policy container at all",
             )
             .is_ok()
@@ -307,9 +307,21 @@ fn trust_reads_and_updates_remain_on_retained_repository_root() -> prikk_error::
         displaced.join("trust/keys.container"),
         root.join(".prikk/trust/keys.container"),
     )?;
+    // RFC 102 Stage 6 Step 1, design-v1.md §15.6: the policy container gained an A/B slot pair and a
+    // generation log, replacing the single `policy.container` name -- all three copied here, even
+    // though B and the generation log are empty in Step 1, so this test still exercises "every name
+    // under `trust/` survives a root replacement," not just the one slot that happens to be live.
     std::fs::copy(
-        displaced.join("trust/policy.container"),
-        root.join(".prikk/trust/policy.container"),
+        displaced.join("trust/policy-a.container"),
+        root.join(".prikk/trust/policy-a.container"),
+    )?;
+    std::fs::copy(
+        displaced.join("trust/policy-b.container"),
+        root.join(".prikk/trust/policy-b.container"),
+    )?;
+    std::fs::copy(
+        displaced.join("trust/policy-generation.log"),
+        root.join(".prikk/trust/policy-generation.log"),
     )?;
 
     assert_eq!(
@@ -324,7 +336,7 @@ fn trust_reads_and_updates_remain_on_retained_repository_root() -> prikk_error::
         loaded.keys[1].public_key,
         Ed25519KeyPair::from_seed(&[8_u8; 32]).public_key_bytes()
     );
-    assert!(root.join(".prikk/trust/policy.container").is_file());
+    assert!(root.join(".prikk/trust/policy-a.container").is_file());
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

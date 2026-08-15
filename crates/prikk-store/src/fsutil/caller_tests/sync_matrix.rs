@@ -18,16 +18,20 @@ use crate::{
 /// (`atomic_replace`-only) no longer fires anywhere in `init` at all. `create_exclusive` shares
 /// `RequiredDirectorySync` with every other name's own creation, so landing on `FORMAT`'s specific
 /// occurrence (the last one, since §14.2 orders it last) needs a skip count derived from the exact
-/// sequence, not assumed: 3 fixed names (worktree marker, WAL, active-ref metadata) + 6 persisted
-/// object types × 2 slots (12) + the object index + generation log (2) + 2 ref-log slots + ref pointer
-/// index + received index (4) + 2 trust containers = 23 names before `FORMAT` itself, so skip 23 to
-/// land on the 24th occurrence. If a future stage adds another `init`-time name before `FORMAT`, this
-/// count needs updating -- the same maintenance `ref_log_parent_sync_failure_retains_one_update_and_
-/// retries` below already carries for the same reason.
+/// sequence, not assumed. RFC 102 Stage 6 Step 1 (design-v1.md §15.6) gives each of the three genuine
+/// compaction targets (ref pointer index, received index, trust policy container) its own A/B slot
+/// pair and generation log -- 3 names apiece instead of the 1 each carried before this stage.
+/// Recomputed directly from `init`'s own call sequence: 3 fixed names (worktree marker, WAL,
+/// active-ref metadata) + 6 persisted object types × 2 slots (12) + the object index + generation log
+/// (2) + 2 ref-log slots + 3 ref-pointer-index (A/B/genlog) + 3 received-index (A/B/genlog) + 1 trust
+/// key + 3 trust-policy (A/B/genlog) = 29 names before `FORMAT` itself, so skip 29 to land on the 30th
+/// occurrence. If a future stage adds another `init`-time name before `FORMAT`, this count needs
+/// updating -- the same maintenance `ref_log_parent_sync_failure_retains_one_update_and_retries` below
+/// already carries for the same reason.
 #[test]
 fn repository_format_create_sync_failure_retains_and_retries() -> prikk_error::Result<()> {
     let root = unique_temp_dir("repository-sync-matrix");
-    fail_after_for_test(TestFailPoint::RequiredDirectorySync, 23);
+    fail_after_for_test(TestFailPoint::RequiredDirectorySync, 29);
     assert!(RepositoryLayout::init(root.clone()).is_err());
     assert!(
         root.join(".prikk/FORMAT").is_file(),

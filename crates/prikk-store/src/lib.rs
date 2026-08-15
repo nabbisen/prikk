@@ -29,6 +29,7 @@ mod file_codec;
 mod format;
 mod frame_resync;
 mod fsutil;
+mod generation;
 mod history;
 mod index;
 mod layout;

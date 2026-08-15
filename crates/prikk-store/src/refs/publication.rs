@@ -53,7 +53,7 @@ fn publish_locked(
     // is never written by this function again.
     let mut object_store = FileObjectStore::new(store.layout.clone());
     match store.layout.format() {
-        RepositoryFormat::CurrentV5 => {
+        RepositoryFormat::CurrentV6 => {
             object_store.write_object(&publication.ref_state)?;
         }
     }

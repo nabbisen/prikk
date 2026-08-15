@@ -425,7 +425,7 @@ fn verify_repository_fails_closed_on_a_damaged_pointer_index_entry() -> Result<(
     crate::refs::write_ref_pointer_candidate(&layout, "heads/main", ref_state_id)?;
     // Corrupt the just-written entry's own last byte (inside its checksum-covered region) --
     // shape otherwise valid, only the content is damaged.
-    let path = layout.ref_pointer_index_path();
+    let path = layout.ref_pointer_index_slot_path(crate::layout::ContainerSlot::A);
     let mut bytes = std::fs::read(&path)?;
     let last = bytes.last_mut().ok_or_else(|| {
         prikk_error::PrikkError::Integrity("expected a pointer entry".to_string())

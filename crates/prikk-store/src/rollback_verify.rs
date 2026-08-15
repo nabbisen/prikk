@@ -222,9 +222,9 @@ fn require_rollback_author_signature<'a>(
             }
             // RFC 103, following DC-95 Stage 1 round 11's own finding: this arm was already reachable
             // end to end only under format-1 -- `Wal::replay()` calls `validate_read_schema` on every
-            // record before this function ever runs, and under `RepositoryFormat::CurrentV5` that
+            // record before this function ever runs, and under `RepositoryFormat::CurrentV6` that
             // call already hard-errors on a malformed-length signature via `envelope.validate_strict()`.
-            // With formats 1 through 4 all retired (RFC 102 Stages 3-5), `CurrentV5` is the only
+            // With formats 1 through 4 all retired (RFC 102 Stages 3-5), `CurrentV6` is the only
             // format left, so this arm is now provably unreachable through `verify_repository`'s
             // pipeline, not merely untested. Kept, per round
             // 6's ruling on unreachable checks: unreachable today is not unreachable by design, and the

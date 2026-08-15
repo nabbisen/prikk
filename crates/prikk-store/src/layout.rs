@@ -16,45 +16,49 @@ const LEGACY_FORMAT_VERSION: &[u8] = b"1\n";
 const LEGACY_FORMAT_2_VERSION: &[u8] = b"2\n";
 const LEGACY_FORMAT_3_VERSION: &[u8] = b"3\n";
 const LEGACY_FORMAT_4_VERSION: &[u8] = b"4\n";
-const CURRENT_FORMAT_VERSION: &[u8] = b"5\n";
+const LEGACY_FORMAT_5_VERSION: &[u8] = b"5\n";
+const CURRENT_FORMAT_VERSION: &[u8] = b"6\n";
 
 /// Repository format selected by the authoritative `.prikk/FORMAT` marker.
 ///
 /// RFC 103 retired format 1; RFC 102 Stage 3 retired format 2 the same way, RFC 102 Stage 4 did the
-/// same again for format 3, and RFC 102 Stage 5 does it once more for format 4 -- rejected at open
-/// (`read_repository_format`), not merely unsupported for mutation, no variant naming it here.
-/// **This bump was sought and decided by the owner explicitly** (design-v1.md §14.7, 2026-08-15),
-/// unlike the 3→4 bump, which reused Stage 3's own already-ruled general policy without a fresh
-/// decision: Stage 5 adds container names to `init` that the 3→4-bump's own `durable_append`
-/// strictness change made unsafe to leave undetected in an older repository (design-v1.md §14.7's own
-/// account of why no middle path -- create-on-open or a side-check without a bump -- was viable). The
+/// same again for format 3, RFC 102 Stage 5 did it once more for format 4, and RFC 102 Stage 6 does it
+/// again for format 5 -- rejected at open (`read_repository_format`), not merely unsupported for
+/// mutation, no variant naming it here. **This bump was sought and decided by the owner explicitly**
+/// (design-v1.md §14.7, 2026-08-15) and Stage 6 follows the same precedent (design-v1.md §15.6):
+/// Stage 6 Step 1 adds a B slot and a generation log for each of the three compacting containers, new
+/// names `durable_append`'s strictness makes unsafe to leave undetected in an older repository. The
 /// single remaining variant is kept as an enum rather than collapsed away, per design-v1.md §12.1's
 /// own note: `require_current_format`'s disk re-read is a real runtime check (RFC 103 Increment B was
 /// abandoned specifically because of it), so the enum's *shape* still carries meaning and is not free
 /// to simplify away.
 ///
-/// **"Format 2"/"format 3"/"format 4"/"format 5" here name the on-disk repository layout** (loose
-/// objects/refs vs. RFC 102's containers) **-- a different axis from DC-40's "format-2" wire schema**
-/// (`block_state.rs`, `state_root.rs`, `format.rs`'s Block/Patch shape and Merkle rules), which no RFC
-/// 102 stage touches and which keeps its own "format-2" name regardless of what this enum's current
-/// variant is called (design §8: "format-2's rejection of the ahead-log state" is explicitly
-/// unchanged).
+/// **"Format 2"/"format 3"/"format 4"/"format 5"/"format 6" here name the on-disk repository layout**
+/// (loose objects/refs vs. RFC 102's containers) **-- a different axis from DC-40's "format-2" wire
+/// schema** (`block_state.rs`, `state_root.rs`, `format.rs`'s Block/Patch shape and Merkle rules),
+/// which no RFC 102 stage touches and which keeps its own "format-2" name regardless of what this
+/// enum's current variant is called (design §8: "format-2's rejection of the ahead-log state" is
+/// explicitly unchanged).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepositoryFormat {
-    /// Current format 5: RFC 102 Stage 5's container-based trust/received-ref/active-session storage,
-    /// layered on Stage 3's and Stage 4's container-based object and ref storage, still writable under
-    /// the unchanged DC-40 schema and state-root rules.
-    CurrentV5,
+    /// Current format 6: RFC 102 Stage 6 Step 1's generation-aware index containers (ref pointer
+    /// index, received-ref index, trust policy container), layered on every prior stage's container
+    /// work, still writable under the unchanged DC-40 schema and state-root rules.
+    CurrentV6,
 }
 
-/// One object-type container's pre-allocated alternate slot (RFC's §3.2 compaction requirement: a
-/// fixed A/B pair of names, never a rotated/new name). Stage 3 only ever writes `A`; `B` exists solely
-/// so its name is already allocated at `init` for Stage 6 compaction to use later.
+/// One container's pre-allocated alternate slot (RFC's §3.2 compaction requirement: a fixed A/B pair
+/// of names, never a rotated/new name). Object and ref-log containers keep `B` reserved-but-unused
+/// forever, per design-v1.md §15.2 -- object compaction has no data model to target and the ref log
+/// must never be compacted (DC-38/DC-69). The three genuine compaction targets (ref pointer index,
+/// received-ref index, trust policy container -- design-v1.md §15.1) got their own `A`/`B` slots in
+/// Stage 6 Step 1; `B` is written only once Stage 6 Step 2's compactor exists.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContainerSlot {
-    /// The slot every Stage-3-era write and read targets.
+    /// The slot every write targets until compaction (Stage 6 Step 2) exists.
     A,
-    /// Reserved for compaction (Stage 6, not authorized). Never written by this stage.
+    /// The alternate slot compaction publishes to. Unused by object/ref-log containers, which never
+    /// compact; unused by the three Step-1-generation-aware containers until Step 2 lands.
     B,
 }
 
@@ -113,14 +117,14 @@ impl RepositoryLayout {
         if let Some(version) = read_file_if_exists(&repository_mutation, Path::new("FORMAT"))? {
             if version != CURRENT_FORMAT_VERSION {
                 // RFC 102 Stage 3, design-v1.md §12.1: this refusal inherited the format-2 -> 3 bump;
-                // Stage 4 carried it forward for format-3 -> 4, and Stage 5 does the same again for
-                // format-4 -> 5 (design-v1.md §14.7). Audited, not just the constant swapped: unlike
-                // `read_repository_format`'s own rejection (reached via `open`), this fires only on a
-                // redundant `init` against an already-initialized repository of some other format, so
-                // it stays terse and points at `open` (any other command) for the detailed migration
-                // message rather than duplicating it here.
+                // Stage 4 carried it forward for format-3 -> 4, Stage 5 did the same for format-4 ->
+                // 5, and Stage 6 does it again for format-5 -> 6 (design-v1.md §15.6). Audited, not
+                // just the constant swapped: unlike `read_repository_format`'s own rejection (reached
+                // via `open`), this fires only on a redundant `init` against an already-initialized
+                // repository of some other format, so it stays terse and points at `open` (any other
+                // command) for the detailed migration message rather than duplicating it here.
                 return Err(PrikkError::Integrity(
-                    "refusing to initialize an existing non-format-5 Prikk repository (open it \
+                    "refusing to initialize an existing non-format-6 Prikk repository (open it \
                      with any other command for a detailed unsupported-format message)"
                         .to_string(),
                 ));
@@ -131,7 +135,7 @@ impl RepositoryLayout {
             prikk_dir,
             worktree_mutation,
             repository_mutation,
-            format: RepositoryFormat::CurrentV5,
+            format: RepositoryFormat::CurrentV6,
         };
         for dir in layout.required_repository_directories()? {
             ensure_directory_required(layout.repository_mutation_root(), &dir)?;
@@ -173,10 +177,32 @@ impl RepositoryLayout {
             &layout,
             &layout.ref_log_container_slot_path(ContainerSlot::B),
         )?;
-        create_empty_file_once(&layout, &layout.ref_pointer_index_path())?;
-        create_empty_file_once(&layout, &layout.received_index_path())?;
+        // RFC 102 Stage 6 Step 1, design-v1.md §15.6: the three genuine compaction targets each gain
+        // an A/B pair and their own generation log here, allocated at `init` like every other name --
+        // Step 1 itself never writes B or a generation record, so every one of these stays empty
+        // until Step 2's compactor exists (handoff §2 criterion 2, "no behaviour change").
+        create_empty_file_once(
+            &layout,
+            &layout.ref_pointer_index_slot_path(ContainerSlot::A),
+        )?;
+        create_empty_file_once(
+            &layout,
+            &layout.ref_pointer_index_slot_path(ContainerSlot::B),
+        )?;
+        create_empty_file_once(&layout, &layout.ref_pointer_index_generation_log_path())?;
+        create_empty_file_once(&layout, &layout.received_index_slot_path(ContainerSlot::A))?;
+        create_empty_file_once(&layout, &layout.received_index_slot_path(ContainerSlot::B))?;
+        create_empty_file_once(&layout, &layout.received_index_generation_log_path())?;
         create_empty_file_once(&layout, &layout.trust_key_container_path())?;
-        create_empty_file_once(&layout, &layout.trust_policy_container_path())?;
+        create_empty_file_once(
+            &layout,
+            &layout.trust_policy_container_slot_path(ContainerSlot::A),
+        )?;
+        create_empty_file_once(
+            &layout,
+            &layout.trust_policy_container_slot_path(ContainerSlot::B),
+        )?;
+        create_empty_file_once(&layout, &layout.trust_policy_generation_log_path())?;
         // RFC 102 Stage 5, design-v1.md §14.2: written last, once every container/marker/WAL name
         // above is confirmed present. `FORMAT`'s presence is what certifies `init` completed --
         // written first (the old order), a crash between it and the containers left a repository
@@ -233,7 +259,7 @@ impl RepositoryLayout {
     /// Refuse ordinary repository/worktree mutation in legacy format 1.
     pub fn require_current_format(&self) -> Result<()> {
         self.validate_format()?;
-        if self.format == RepositoryFormat::CurrentV5 {
+        if self.format == RepositoryFormat::CurrentV6 {
             return Ok(());
         }
         Err(PrikkError::UnsupportedFormatVersion(1))
@@ -387,24 +413,50 @@ impl RepositoryLayout {
             .join(format!("log-{}.container", slot.as_str()))
     }
 
-    /// Return the ref-pointer-index container path (Step 0 §13.4, ruled in design-v1.md §13.4: a
-    /// *separate* ref index, its own type and its own container -- `index.rs`'s already-shipped object
-    /// index schema is never widened). Single file, no A/B slot, same reasoning as
-    /// `container_index_path`: an index's publication shape is plain append-only.
+    /// Return the ref-pointer-index container path for a given slot (RFC 102 Stage 6 Step 1,
+    /// design-v1.md §15.6: this is one of the three genuine compaction targets -- `ref_pointer_index`
+    /// is last-entry-wins, and every ref update strands the previous entry, §15.1's own finding. `A`/`B`
+    /// slots mirror `container_slot_path`'s own naming shape). Reads and writes resolve which slot is
+    /// live through `generation.rs`'s resolver; Step 1 always resolves `A` because no generation record
+    /// has ever been written -- see `ref_pointer_index_generation_log_path`.
     #[must_use]
-    pub fn ref_pointer_index_path(&self) -> PathBuf {
-        self.refs_containers_dir().join("pointer-index.container")
+    pub fn ref_pointer_index_slot_path(&self, slot: ContainerSlot) -> PathBuf {
+        self.refs_containers_dir()
+            .join(format!("pointer-index-{}.container", slot.as_str()))
     }
 
-    /// Return the received-ref-index container path (RFC 102 Stage 5, design-v1.md §14.1/Step 0 item
-    /// 2: `received.rs` on the same unbounded-per-name-minted-after-`init` shape that forced the ref
-    /// pointer index, Stage 4's §13.2 argument applied to a second subsystem). Single file, no A/B
-    /// slot, no separate log -- a received ref's own semantics are already last-entry-wins/replace-
-    /// outright (`received.rs`'s own doc: "no CAS and no merge... this is what I have now"), the same
-    /// shape the ref pointer index already proved sound, so this container plays both roles at once.
+    /// Return the ref-pointer-index generation log path (RFC 102 Stage 6 Step 1, design-v1.md §15.6
+    /// item 3/§4: readers take the last complete generation record; empty until Step 2's compactor
+    /// ever writes one, at which point `A` stops being the unconditional answer). Its own name, not
+    /// the pre-existing `container_generation_log_path()` -- that name was allocated for object-
+    /// container compaction, which §15.1 establishes will never happen under the current content-
+    /// addressed, no-GC data model, and a shared log across independently-compacting containers would
+    /// let one corrupt record take down slot resolution for all of them at once (§15.6's own
+    /// blast-radius reasoning).
     #[must_use]
-    pub fn received_index_path(&self) -> PathBuf {
-        self.refs_containers_dir().join("received-index.container")
+    pub fn ref_pointer_index_generation_log_path(&self) -> PathBuf {
+        self.refs_containers_dir()
+            .join("pointer-index-generation.log")
+    }
+
+    /// Return the received-ref-index container path for a given slot (RFC 102 Stage 6 Step 1,
+    /// design-v1.md §15.6: the second of the three genuine compaction targets, same last-entry-wins
+    /// shape as the ref pointer index). Formerly `received_index_path`, single-name -- RFC 102 Stage 5,
+    /// design-v1.md §14.1/Step 0 item 2's own reasoning for why `received.rs` belongs on the refs
+    /// container+pointer-index pattern is unaffected by gaining a slot; only the publication shape
+    /// (single-name vs. resolver-selected) changed.
+    #[must_use]
+    pub fn received_index_slot_path(&self, slot: ContainerSlot) -> PathBuf {
+        self.refs_containers_dir()
+            .join(format!("received-index-{}.container", slot.as_str()))
+    }
+
+    /// Return the received-ref-index generation log path. Its own name, for the same blast-radius
+    /// reason `ref_pointer_index_generation_log_path` has its own.
+    #[must_use]
+    pub fn received_index_generation_log_path(&self) -> PathBuf {
+        self.refs_containers_dir()
+            .join("received-index-generation.log")
     }
 
     /// Return all required directories for layout creation.
@@ -521,13 +573,26 @@ impl RepositoryLayout {
         self.trust_dir().join("keys.container")
     }
 
-    /// Return the trust policy container path (RFC 102 Stage 5, design-v1.md §14/§14.9). Replaces
-    /// `trust/policy.toml`. Each append is a **complete snapshot** of the adopted key id list, not an
-    /// incremental log entry -- see `trust_index.rs`'s own module doc for why that is what makes
-    /// revocation representable without a tombstone record.
+    /// Return the trust policy container path for a given slot (RFC 102 Stage 5, design-v1.md
+    /// §14/§14.9, gaining a slot in Stage 6 Step 1, design-v1.md §15.6 -- the third of the three
+    /// genuine compaction targets: one complete snapshot appended per `add`/`remove`, every earlier
+    /// snapshot dead, §15.1's own finding). Each append is a **complete snapshot** of the adopted key
+    /// id list, not an incremental log entry -- see `trust_index.rs`'s own module doc for why that is
+    /// what makes revocation representable without a tombstone record; that property is unaffected by
+    /// gaining a slot.
     #[must_use]
-    pub fn trust_policy_container_path(&self) -> PathBuf {
-        self.trust_dir().join("policy.container")
+    pub fn trust_policy_container_slot_path(&self, slot: ContainerSlot) -> PathBuf {
+        self.trust_dir()
+            .join(format!("policy-{}.container", slot.as_str()))
+    }
+
+    /// Return the trust-policy generation log path. Its own name, for the same blast-radius reason
+    /// `ref_pointer_index_generation_log_path` has its own -- and distinct from `trust_key_container_
+    /// path`, which is **not** one of the three compacting containers and gains no slot: TOFU history
+    /// must persist across removal (`trust.rs:77`), which compacting the key container would break.
+    #[must_use]
+    pub fn trust_policy_generation_log_path(&self) -> PathBuf {
+        self.trust_dir().join("policy-generation.log")
     }
 }
 
@@ -576,7 +641,7 @@ fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
     match version.as_slice() {
         LEGACY_FORMAT_VERSION => Err(PrikkError::Integrity(
             "this repository uses format 1, which prikk no longer supports (this version \
-             requires format 5). format-1 support was removed after 0.19.0. to migrate: use \
+             requires format 6). format-1 support was removed after 0.19.0. to migrate: use \
              prikk 0.19.0 or earlier to `prikk bundle export`, then `prikk bundle import` here"
                 .to_string(),
         )),
@@ -587,7 +652,7 @@ fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
         // (`CHANGELOG.md`, `git tag`), not guessed.
         LEGACY_FORMAT_2_VERSION => Err(PrikkError::Integrity(
             "this repository uses format 2, which prikk no longer supports (this version \
-             requires format 5). format-2 support was removed after 0.19.0. to migrate: use \
+             requires format 6). format-2 support was removed after 0.19.0. to migrate: use \
              prikk 0.19.0 or earlier to `prikk bundle export`, then `prikk bundle import` here"
                 .to_string(),
         )),
@@ -600,7 +665,7 @@ fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
         // own discipline for these messages does not do.
         LEGACY_FORMAT_3_VERSION => Err(PrikkError::Integrity(
             "this repository uses format 3, which prikk no longer supports (this version \
-             requires format 5). to migrate: use a prikk version that supports format 3 to \
+             requires format 6). to migrate: use a prikk version that supports format 3 to \
              `prikk bundle export`, then `prikk bundle import` here"
                 .to_string(),
         )),
@@ -612,11 +677,22 @@ fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
         // discipline for these messages does not do.
         LEGACY_FORMAT_4_VERSION => Err(PrikkError::Integrity(
             "this repository uses format 4, which prikk no longer supports (this version \
-             requires format 5). to migrate: use a prikk version that supports format 4 to \
+             requires format 6). to migrate: use a prikk version that supports format 4 to \
              `prikk bundle export`, then `prikk bundle import` here"
                 .to_string(),
         )),
-        CURRENT_FORMAT_VERSION => Ok(RepositoryFormat::CurrentV5),
+        // RFC 102 Stage 6, design-v1.md §15.6 (owner decision): bump to format 6, reject format-5 at
+        // open, no dual-layout bridge -- the same precedent again. No release was ever tagged at
+        // format 5 either (still 0.19.0, format 2, verified against `git tag` fresh rather than
+        // assumed from the format-4 arm's own finding), so no version is named here for the same
+        // reason.
+        LEGACY_FORMAT_5_VERSION => Err(PrikkError::Integrity(
+            "this repository uses format 5, which prikk no longer supports (this version \
+             requires format 6). to migrate: use a prikk version that supports format 5 to \
+             `prikk bundle export`, then `prikk bundle import` here"
+                .to_string(),
+        )),
+        CURRENT_FORMAT_VERSION => Ok(RepositoryFormat::CurrentV6),
         _ => Err(PrikkError::UnsupportedFormatVersion(0)),
     }
 }

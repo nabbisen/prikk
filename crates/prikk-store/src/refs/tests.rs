@@ -50,7 +50,7 @@ fn ref_lock_rejects_second_writer() {
 fn publish_writes_append_rather_than_replace() -> prikk_error::Result<()> {
     let root = unique_temp_dir("ref-publish-append-not-replace");
     let layout = RepositoryLayout::init(root.clone())?;
-    let pointer_index_path = layout.ref_pointer_index_path();
+    let pointer_index_path = layout.ref_pointer_index_slot_path(crate::layout::ContainerSlot::A);
     let log_path = layout.ref_log_container_slot_path(crate::layout::ContainerSlot::A);
     let mut objects = FileObjectStore::new(layout.clone());
     let store = RefStore::new(layout.clone());

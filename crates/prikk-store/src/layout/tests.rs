@@ -70,7 +70,7 @@ fn init_allocates_every_container_index_and_generation_log_name_once() -> Result
         assert!(path.is_file());
         assert_eq!(std::fs::metadata(path)?.len(), 0);
     }
-    assert_eq!(reopened.format(), RepositoryFormat::CurrentV5);
+    assert_eq!(reopened.format(), RepositoryFormat::CurrentV6);
 
     let expected: HashSet<PathBuf> = container_paths.into_iter().collect();
     assert_eq!(files_under(&layout.containers_dir())?, expected);
@@ -101,12 +101,16 @@ fn init_allocates_every_container_index_and_generation_log_name_once() -> Result
 /// `init`" -- the shared ref-log container's both slots, plus the ref-pointer-index container. RFC
 /// 102 Stage 5 adds the received-index container to this same directory (design-v1.md §14, Step 0
 /// item 2), so this test covers it too rather than splitting into a separate one -- it belongs to the
-/// exact same "every name under `refs_containers_dir()`" property. Mirrors `init_allocates_every_
-/// container_index_and_generation_log_name_once` exactly, including the third phase that test's own
-/// doc calls out by name: real publishes through `RefStore` (ordinary use, not just re-`init`), then
-/// the whole `refs/containers/` tree re-enumerated from the filesystem itself to confirm the file
-/// *set* is still exactly those 4 -- not just that `RepositoryLayout`'s own four named paths still
-/// exist, which a call site bug could satisfy while a real fifth file sat unnoticed alongside them.
+/// exact same "every name under `refs_containers_dir()`" property. RFC 102 Stage 6 Step 1
+/// (design-v1.md §15.6) gives the ref-pointer-index and received-index containers their own `A`/`B`
+/// slots and generation logs -- the ref-log container's own `B` slot stays unused forever (§15.2), but
+/// these two are two of the three genuine compaction targets, so this enumeration grows by two names
+/// each. Mirrors `init_allocates_every_container_index_and_generation_log_name_once` exactly,
+/// including the third phase that test's own doc calls out by name: real publishes through
+/// `RefStore` (ordinary use, not just re-`init`), then the whole `refs/containers/` tree
+/// re-enumerated from the filesystem itself to confirm the file *set* is still exactly those 8 -- not
+/// just that `RepositoryLayout`'s own named paths still exist, which a call site bug could satisfy
+/// while a real extra file sat unnoticed alongside them.
 #[test]
 fn init_allocates_every_ref_container_name_once() -> Result<()> {
     let root = unique_temp_dir("layout-ref-container-allocation");
@@ -115,8 +119,12 @@ fn init_allocates_every_ref_container_name_once() -> Result<()> {
     let ref_container_paths = vec![
         layout.ref_log_container_slot_path(ContainerSlot::A),
         layout.ref_log_container_slot_path(ContainerSlot::B),
-        layout.ref_pointer_index_path(),
-        layout.received_index_path(),
+        layout.ref_pointer_index_slot_path(ContainerSlot::A),
+        layout.ref_pointer_index_slot_path(ContainerSlot::B),
+        layout.ref_pointer_index_generation_log_path(),
+        layout.received_index_slot_path(ContainerSlot::A),
+        layout.received_index_slot_path(ContainerSlot::B),
+        layout.received_index_generation_log_path(),
     ];
     for path in &ref_container_paths {
         assert!(path.is_file(), "expected {path:?} to exist after init");
@@ -132,7 +140,7 @@ fn init_allocates_every_ref_container_name_once() -> Result<()> {
         assert!(path.is_file());
         assert_eq!(std::fs::metadata(path)?.len(), 0);
     }
-    assert_eq!(reopened.format(), RepositoryFormat::CurrentV5);
+    assert_eq!(reopened.format(), RepositoryFormat::CurrentV6);
 
     let expected: HashSet<PathBuf> = ref_container_paths.into_iter().collect();
     assert_eq!(files_under(&layout.refs_containers_dir())?, expected);
@@ -181,7 +189,11 @@ fn init_allocates_every_ref_container_name_once() -> Result<()> {
 /// policy containers, mirroring `init_allocates_every_ref_container_name_once`'s exact shape --
 /// existence and emptiness immediately after `init`, idempotent re-`init`, then real writes
 /// (`add_trusted_maintainer`, not just re-`init`) followed by re-enumerating `trust_dir()` from the
-/// filesystem itself to confirm the file set is still exactly those 2.
+/// filesystem itself to confirm the file set is still exactly those. RFC 102 Stage 6 Step 1
+/// (design-v1.md §15.6) gives the trust policy container its own `A`/`B` slots and a generation log --
+/// the third of the three genuine compaction targets -- while `trust_key_container_path` stays a
+/// single unslotted name, unchanged: TOFU history must persist across removal (`trust.rs:77`), which
+/// compacting the key container would break.
 #[test]
 fn init_allocates_every_trust_container_name_once() -> Result<()> {
     let root = unique_temp_dir("layout-trust-container-allocation");
@@ -189,7 +201,9 @@ fn init_allocates_every_trust_container_name_once() -> Result<()> {
 
     let trust_container_paths = vec![
         layout.trust_key_container_path(),
-        layout.trust_policy_container_path(),
+        layout.trust_policy_container_slot_path(ContainerSlot::A),
+        layout.trust_policy_container_slot_path(ContainerSlot::B),
+        layout.trust_policy_generation_log_path(),
     ];
     for path in &trust_container_paths {
         assert!(path.is_file(), "expected {path:?} to exist after init");
@@ -205,7 +219,7 @@ fn init_allocates_every_trust_container_name_once() -> Result<()> {
         assert!(path.is_file());
         assert_eq!(std::fs::metadata(path)?.len(), 0);
     }
-    assert_eq!(reopened.format(), RepositoryFormat::CurrentV5);
+    assert_eq!(reopened.format(), RepositoryFormat::CurrentV6);
 
     let expected: HashSet<PathBuf> = trust_container_paths.into_iter().collect();
     assert_eq!(files_under(&layout.trust_dir())?, expected);

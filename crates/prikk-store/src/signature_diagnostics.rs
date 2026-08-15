@@ -79,11 +79,11 @@ pub struct SignatureEnvelopeIssue {
 /// RFC 103: every one of this function's three call sites (`verify.rs`, `verify/objects.rs`,
 /// `refs/verify.rs`) runs it immediately after a `crate::format::validate_read_schema(layout.format(),
 /// &envelope)?` on the same envelope, propagating on `Err` before this function is ever reached.
-/// `validate_read_schema` under `RepositoryFormat::CurrentV5` calls `envelope.validate_strict()`,
+/// `validate_read_schema` under `RepositoryFormat::CurrentV6` calls `envelope.validate_strict()`,
 /// which independently checks the exact same three conditions this function classifies
 /// (`signature_issues()`'s `malformed_shape`/`duplicate`/`noncanonical_order`) and hard-errors on any
 /// of them. With format-1 and format-2 both retired -- format-1's `validate_read_schema` branch
-/// checked only `schema_version`, never calling `validate_strict()` -- `CurrentV5` is the only format
+/// checked only `schema_version`, never calling `validate_strict()` -- `CurrentV6` is the only format
 /// left, so any envelope this function would flag was already rejected one call earlier. **Provably
 /// unreachable through `verify_repository`'s pipeline**, the same shape as the rollback
 /// wrong-signature-length

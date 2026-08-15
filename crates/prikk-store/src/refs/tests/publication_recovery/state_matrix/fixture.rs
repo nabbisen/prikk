@@ -75,7 +75,7 @@ impl Fixture {
     pub(super) fn state_bytes(&self) -> prikk_error::Result<Vec<Option<Vec<u8>>>> {
         [
             self.layout.ref_tmp_path("heads/main"),
-            self.layout.ref_pointer_index_path(),
+            self.layout.ref_pointer_index_slot_path(ContainerSlot::A),
             self.layout.ref_log_container_slot_path(ContainerSlot::A),
             self.layout.default_queue_wal_path(),
             self.layout.default_active_ref_name_path(),
