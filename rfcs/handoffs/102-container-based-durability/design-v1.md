@@ -1141,3 +1141,98 @@ fixing.
 
 An auditor reading criterion 2 will find `atomic_replace` reachable from `worktree.rs` and has to be able
 to find out why that is fine without re-deriving it.
+
+---
+
+## 15. Stage 6 — scope, derived 2026-08-15
+
+Stage 5 merged at `87b5085` with green three-platform CI, so Stage 6 may be scoped. §7 recorded it as
+three words — **"Stage 6 — compaction."** Deriving what that covers found the same problem §14.1 found for
+Stage 5, and worse: **the A/B slots this stage was supposed to use are allocated on every container that
+does not need compacting, and on none of the containers that do.**
+
+### 15.1 What actually accumulates garbage — established, not assumed
+
+Compaction reclaims space occupied by records that are dead. So the first question is which containers
+hold dead records at all. Per container, from the code:
+
+| Container | Slots? | Accumulates dead records? |
+|---|---|---|
+| 6 object type containers | **A/B** | **No.** Objects are content-addressed and immutable; `index.rs:370-378` returns early on an identical-bytes rewrite and *errors* on a differing one, so each object is written once. **No garbage collection, object deletion or pruning exists anywhere in the workspace** — checked, not assumed. Nothing is ever superseded or unreachable |
+| Ref log container | **A/B** | **Yes, but it must not be reclaimed.** DC-38's audit trail is the point of the log, and `scan.rs` validates `update_seq` against record order. DC-69 ruled route (c) — *prikk does not forget* — so there is no retention horizon to compact against |
+| `ref_pointer_index` | none | **Yes.** Last-entry-wins: every ref update appends a new entry and strands the previous one. **The largest garbage producer in the repository** |
+| `received_index` | none | **Yes.** Last-entry-wins, same shape |
+| `trust_policy_container` | none | **Yes.** One complete snapshot appended per add/remove (§14.9); every earlier snapshot is dead |
+| `trust_key_container` | none | **No — and must not be.** `trust.rs:77`: *"the key-material container is never pruned, so TOFU history persists across removal"*, asserted by round 5's `a_changed_key_under_a_removed_and_readded_id_is_still_refused` |
+| `container_index` | none | **No.** One entry per object, never superseded — unless object deletion is added, which does not exist |
+
+**So the RFC's §3.2 A/B ruling rests on a premise that does not hold.** It reserved paired slots for the
+object containers on the assumption that they would need rewriting. They never will, on the current data
+model: an immutable content-addressed store with no GC only ever grows with genuinely new content.
+
+**The three containers that genuinely accumulate garbage — `ref_pointer_index`, `received_index`,
+`trust_policy_container` — have no B slot allocated**, because Stage 3 allocated slots before anything
+had established where compaction was needed.
+
+### 15.2 What this means for Stage 6
+
+**Compaction is a smaller and different stage than "compaction" sounds like.** It targets three
+single-name index containers, all last-entry-wins, none of which carries history anyone is entitled to
+read. That is a far safer target than the object containers — there is no audit trail to lose and no
+ordering to preserve, only a most-recent entry per key.
+
+**It requires new names at `init`** (a B slot for each of the three), which is a format bump on the
+now-established precedent (§14.7).
+
+**The object and ref-log A/B slots stay allocated and unused.** Removing them is a separate decision:
+they are pre-allocated names, harmless, and object-container compaction becomes real the moment object
+deletion or GC exists. Recording them as reserved-for-a-feature-that-does-not-exist is honest;
+retiring them would foreclose the design §3.2 chose deliberately. **This is not the
+`refs/by-id`/`refs/logs`/`refs/tmp` dead-allocation case** — those are remnants of retired mechanisms,
+these are forward reservations.
+
+### 15.3 The corruption ruling — compaction must refuse, not compact around
+
+**Compaction is the first operation in this RFC that destroys data.** Every prior stage appended, or
+truncated a file whose content was already dead.
+
+§3's read path isolates and continues: a corrupt record is named at its offset and skipped, **but it
+remains on disk and remains recoverable.** A compactor built the obvious way — read through the resync
+reader, write back what it yields — would omit those records from the new slot and abandon the old one.
+**Corruption becomes permanent deletion, through the very mechanism designed to survive corruption, and
+the operation reports success.**
+
+**Ruling: compaction refuses to run on any container with a known-corrupt record.** It does not compact
+around the damage, does not "repair," and does not partially proceed. The operator runs `doctor`/`verify`
+first and deals with the finding. Security and data-safety before convenience, per the owner's standing
+direction — and a refusal is recoverable while a deletion is not.
+
+### 15.4 Staging — the destructive step must be as small as possible
+
+**Step 1 — the generation resolver, with no compaction at all.** Route every container access through a
+single function that resolves which slot is live, and have it return `A` unconditionally because the
+generation log is empty. **No behaviour change, no format bump, no data destroyed, fully testable.**
+Fifteen of the sixteen non-test `ContainerSlot::A` sites currently hardcode the slot; only `index.rs:330`
+resolves it from data (`entry.slot`). If the routing is right nothing changes; if it is wrong, everything
+fails loudly and immediately.
+
+**Step 2 — compaction itself**, which by then only has to write the new slot and append a generation
+record. §4 already specifies the publish mechanism: *readers take the last complete generation record*.
+
+**Why split:** step 1 carries the whole "every reader must agree on which slot is live" problem — the part
+that touches sixteen call sites — into a step that **cannot lose data**. Step 2 is then small enough to
+review closely, which is what §15.3's risk deserves.
+
+### 15.5 Open items Step 0 must resolve
+
+1. **Confirm §15.1's table independently.** It is the whole basis for this scope, and it contradicts the
+   RFC's own §3.2. If any container in it is misclassified, say so before anything is built.
+2. **What the generation record contains** — per-container-type generations, or one global? The three
+   targets compact independently, which argues per-container; establish it from what readers need.
+3. **What triggers compaction** — an explicit command, or automatic on a threshold? No such trigger
+   exists today, and an automatic destructive operation needs an argument, not a default.
+4. **Whether the format bump is one or two.** Step 1 needs none. Step 2 needs one, for the reason §14.7's
+   precedent covers — but establish whether the new B-slot names alone force it, or the change in what
+   "authoritative slot" means does.
+5. **DC-41-grade recoverability at the new state count** (§9 criterion 5) — compaction adds states, and
+   the criterion is explicit that recoverability is re-earned rather than assumed.
