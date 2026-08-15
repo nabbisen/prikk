@@ -27,78 +27,70 @@ use rustix::fs::{self, AtFlags, OFlags};
 
 /// Publish immutable bytes without replacing an existing final entry.
 ///
-/// Off Linux and macOS this function's own `#[cfg(not(any(...)))]` branch below is genuinely
-/// unreachable today: `anchored.rs`'s `publish_immutable_file` only reaches this function through
-/// `LinuxDurability`/`MacosDurability`, both gated to their own platform (DC-76 addendum-2 B1;
-/// DC-81 widened the gate, not relaxed it). `#[allow(dead_code)]` states that honestly; see
-/// `DurabilityContract`'s doc comment for why this is not gated instead.
-#[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
+/// DC-87 Stage 1: item-level gated rather than carrying its own inline non-Unix branch. This
+/// function is reachable only through `LinuxDurability`/`MacosDurability`'s own `publish_immutable`
+/// (DC-76 addendum-2 B1; DC-81 widened the gate, not relaxed it) — `anchored.rs`'s own
+/// `publish_immutable_file` dispatch wrapper does not even exist off Linux/macOS
+/// (`#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]`), and `NoDurability`'s
+/// `publish_immutable` never calls this function at all. The platform difference already resolves
+/// one layer up, through `DurabilityContract`; this function does not need to restate it.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) fn publish_immutable_file(
     root: &MutationRoot,
     relative: &Path,
     candidate: &[u8],
     validate_existing: impl Fn(&[u8]) -> Result<()>,
 ) -> Result<()> {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    {
-        let parent = required_parent(relative)?;
-        let directory = prepare_directory_required(root, parent)?;
-        let destination = required_file_name(relative)?;
-        if compare_existing(&directory, destination, candidate, &validate_existing)? {
-            failpoints::immutable_cleanup_sync()?;
-            directory.sync()?;
-            return Ok(());
-        }
-
-        let temp_path = temporary_path(relative)?;
-        let temp_name = required_file_name(&temp_path)?;
-        let fd = open_new_regular(&directory.fd, temp_name).map_err(io_error)?;
-        let mut temp = File::from(fd);
-        temp.write_all(candidate)?;
-        failpoints::immutable_file_sync()?;
-        temp.sync_all()?;
-        drop(temp);
-
-        failpoints::wait_at_immutable_install();
-        failpoints::immutable_install()?;
-        let install = if let Some(error) = failpoints::immutable_install_error() {
-            Err(error)
-        } else {
-            fs::linkat(
-                &directory.fd,
-                temp_name,
-                &directory.fd,
-                destination,
-                AtFlags::empty(),
-            )
-        };
-        match install {
-            Ok(()) => {
-                failpoints::immutable_install_sync()?;
-                directory.sync()?;
-            }
-            Err(rustix::io::Errno::EXIST) => {
-                if !compare_existing(&directory, destination, candidate, &validate_existing)? {
-                    return Err(PrikkError::Integrity(
-                        "no-clobber install reported an absent winner".to_string(),
-                    ));
-                }
-            }
-            Err(error) => return Err(classify_install_error(error)),
-        }
-
-        failpoints::immutable_temp_unlink()?;
-        fs::unlinkat(&directory.fd, temp_name, AtFlags::empty()).map_err(io_error)?;
+    let parent = required_parent(relative)?;
+    let directory = prepare_directory_required(root, parent)?;
+    let destination = required_file_name(relative)?;
+    if compare_existing(&directory, destination, candidate, &validate_existing)? {
         failpoints::immutable_cleanup_sync()?;
-        directory.sync()
+        directory.sync()?;
+        return Ok(());
     }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    {
-        let _ = (root, relative, candidate, validate_existing);
-        Err(PrikkError::Io(
-            "immutable no-clobber publication is unsupported on this platform".to_string(),
-        ))
+
+    let temp_path = temporary_path(relative)?;
+    let temp_name = required_file_name(&temp_path)?;
+    let fd = open_new_regular(&directory.fd, temp_name).map_err(io_error)?;
+    let mut temp = File::from(fd);
+    temp.write_all(candidate)?;
+    failpoints::immutable_file_sync()?;
+    temp.sync_all()?;
+    drop(temp);
+
+    failpoints::wait_at_immutable_install();
+    failpoints::immutable_install()?;
+    let install = if let Some(error) = failpoints::immutable_install_error() {
+        Err(error)
+    } else {
+        fs::linkat(
+            &directory.fd,
+            temp_name,
+            &directory.fd,
+            destination,
+            AtFlags::empty(),
+        )
+    };
+    match install {
+        Ok(()) => {
+            failpoints::immutable_install_sync()?;
+            directory.sync()?;
+        }
+        Err(rustix::io::Errno::EXIST) => {
+            if !compare_existing(&directory, destination, candidate, &validate_existing)? {
+                return Err(PrikkError::Integrity(
+                    "no-clobber install reported an absent winner".to_string(),
+                ));
+            }
+        }
+        Err(error) => return Err(classify_install_error(error)),
     }
+
+    failpoints::immutable_temp_unlink()?;
+    fs::unlinkat(&directory.fd, temp_name, AtFlags::empty()).map_err(io_error)?;
+    failpoints::immutable_cleanup_sync()?;
+    directory.sync()
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]

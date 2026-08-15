@@ -15,15 +15,46 @@ use rustix::fs::{self, Mode, OFlags};
 use super::failpoints;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use super::io_error;
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-use super::unsupported_mutation;
 
-/// A validated mutation authority rooted at one retained directory handle.
+/// One platform's mutation authority: whatever it retains (or does not) to resolve a relative
+/// path against a validated root. DC-87 Stage 1 -- this is the seam a future Windows implementor
+/// (Stage 2) plugs into: one more `impl PlatformAuthority for ...` block, gated to its own
+/// platform, with no change to `MutationRoot`'s own methods below. `bind`/`same_as`/`ensure_child`/
+/// `open_child` are named after what `MutationRoot`'s own four platform-varying methods need, not
+/// after any platform's primitive -- the same "guarantee, not syscall" discipline `contract.rs`
+/// already holds `DurabilityContract` to.
+pub(super) trait PlatformAuthority: Sized {
+    /// Bind a fresh authority to `path`, matching `MutationRoot::open`'s own contract.
+    fn bind(path: &Path) -> Result<Self>;
+    /// True when `self`/`self_path` and `other`/`other_path` name the same retained authority.
+    /// Takes both the authority value and its `MutationRoot`'s own path because a platform with no
+    /// retained resource of its own (`PathOnlyAuthority`) has nothing else to compare identity on
+    /// -- matching exactly what the pre-refactor inline `same_authority` compared on each platform,
+    /// not a new notion of identity.
+    fn same_as(&self, self_path: &Arc<PathBuf>, other: &Self, other_path: &Arc<PathBuf>) -> bool;
+    /// Create (or validate an already-existing) nested authority at `relative`, resolved against
+    /// `self`. Matches `MutationRoot::ensure_root`.
+    fn ensure_child(&self, relative: &Path) -> Result<Self>;
+    /// Bind to an existing nested authority at `relative`, resolved against `self`. Matches
+    /// `MutationRoot::open_root`.
+    fn open_child(&self, relative: &Path) -> Result<Self>;
+}
+
+/// Platform authority payload for `MutationRoot`. A single alias, not a `#[cfg]`'d field: the
+/// struct below has one shape on every platform, and the platform difference lives entirely in
+/// which concrete type this resolves to and that type's own `PlatformAuthority` impl.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+type Authority = Arc<AnchoredDirectory>;
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+type Authority = PathOnlyAuthority;
+
+/// A validated mutation authority rooted at one retained directory handle (Linux/macOS) or, off
+/// those platforms, at a validated path alone (`PathOnlyAuthority`; a future Windows implementor
+/// is a third `Authority` type, not a change to this struct).
 #[derive(Clone)]
 pub(crate) struct MutationRoot {
     path: Arc<PathBuf>,
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    directory: Arc<AnchoredDirectory>,
+    authority: Authority,
 }
 
 impl fmt::Debug for MutationRoot {
@@ -34,71 +65,34 @@ impl fmt::Debug for MutationRoot {
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub(super) struct AnchoredDirectory {
-    pub(super) fd: OwnedFd,
-}
-
 impl MutationRoot {
     pub(crate) fn same_authority(&self, other: &Self) -> bool {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        {
-            Arc::ptr_eq(&self.directory, &other.directory)
-        }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-        {
-            Arc::ptr_eq(&self.path, &other.path)
-        }
+        self.authority
+            .same_as(&self.path, &other.authority, &other.path)
     }
 
     /// Bind mutation authority to an existing no-follow directory handle.
     pub(crate) fn open(path: &Path) -> Result<Self> {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        {
-            Ok(Self {
-                path: Arc::new(path.to_path_buf()),
-                directory: Arc::new(AnchoredDirectory::open(path)?),
-            })
-        }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-        {
-            Ok(Self {
-                path: Arc::new(path.to_path_buf()),
-            })
-        }
+        Ok(Self {
+            path: Arc::new(path.to_path_buf()),
+            authority: Authority::bind(path)?,
+        })
     }
 
     /// Create and bind a nested root relative to this authority.
     pub(crate) fn ensure_root(&self, relative: &Path) -> Result<Self> {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        {
-            Ok(Self {
-                path: Arc::new(self.fallback_path(relative)?),
-                directory: Arc::new(prepare_directory_required(self, relative)?),
-            })
-        }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-        {
-            let _ = relative;
-            unsupported_mutation()
-        }
+        Ok(Self {
+            path: Arc::new(self.fallback_path(relative)?),
+            authority: self.authority.ensure_child(relative)?,
+        })
     }
 
     /// Bind a nested existing root relative to this authority.
     pub(crate) fn open_root(&self, relative: &Path) -> Result<Self> {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        {
-            Ok(Self {
-                path: Arc::new(self.fallback_path(relative)?),
-                directory: Arc::new(open_existing_directory_required(self, relative)?),
-            })
-        }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-        {
-            Ok(Self {
-                path: Arc::new(self.fallback_path(relative)?),
-            })
-        }
+        Ok(Self {
+            path: Arc::new(self.fallback_path(relative)?),
+            authority: self.authority.open_child(relative)?,
+        })
     }
 
     pub(super) fn fallback_path(&self, relative: &Path) -> Result<PathBuf> {
@@ -108,8 +102,80 @@ impl MutationRoot {
 
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     pub(super) fn duplicate_directory(&self) -> Result<AnchoredDirectory> {
-        let fd = rustix::io::dup(&self.directory.fd).map_err(io_error)?;
+        let fd = rustix::io::dup(&self.authority.fd).map_err(io_error)?;
         Ok(AnchoredDirectory { fd })
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub(super) struct AnchoredDirectory {
+    pub(super) fd: OwnedFd,
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+impl PlatformAuthority for Arc<AnchoredDirectory> {
+    fn bind(path: &Path) -> Result<Self> {
+        Ok(Arc::new(AnchoredDirectory::open(path)?))
+    }
+
+    fn same_as(&self, _self_path: &Arc<PathBuf>, other: &Self, _other_path: &Arc<PathBuf>) -> bool {
+        Arc::ptr_eq(self, other)
+    }
+
+    fn ensure_child(&self, relative: &Path) -> Result<Self> {
+        let mut current = dup(self)?;
+        for component in relative_components(relative)? {
+            current = current.ensure_child(component)?;
+        }
+        Ok(Arc::new(current))
+    }
+
+    fn open_child(&self, relative: &Path) -> Result<Self> {
+        let mut current = dup(self)?;
+        for component in relative_components(relative)? {
+            current = current.open_validated_child(component)?;
+        }
+        Ok(Arc::new(current))
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn dup(directory: &AnchoredDirectory) -> Result<AnchoredDirectory> {
+    let fd = rustix::io::dup(&directory.fd).map_err(io_error)?;
+    Ok(AnchoredDirectory { fd })
+}
+
+/// Off Linux and macOS: no retained handle at all, by construction, not as a shortcut -- Stage 2's
+/// Windows walk (design-v1.md §2) re-derives resolution from the validated path on every
+/// operation and needs no authority object between steps. This type exists so `PlatformAuthority`
+/// has a concrete non-Unix implementor today (used for `NoDurability` and by every test build);
+/// it carries the same "unsupported" behavior `ensure_root`/`open_root` already had inline before
+/// this refactor -- no behavior change, only where the platform difference is expressed.
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[derive(Clone)]
+pub(super) struct PathOnlyAuthority;
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+impl PlatformAuthority for PathOnlyAuthority {
+    fn bind(_path: &Path) -> Result<Self> {
+        Ok(Self)
+    }
+
+    fn same_as(&self, self_path: &Arc<PathBuf>, _other: &Self, other_path: &Arc<PathBuf>) -> bool {
+        // Preserves the pre-refactor non-Unix `same_authority` exactly: `Arc::ptr_eq` on the
+        // `MutationRoot`'s own path, since this authority retains no comparable resource of its
+        // own.
+        Arc::ptr_eq(self_path, other_path)
+    }
+
+    fn ensure_child(&self, relative: &Path) -> Result<Self> {
+        let _ = relative;
+        super::unsupported_mutation()
+    }
+
+    fn open_child(&self, relative: &Path) -> Result<Self> {
+        let _ = relative;
+        Ok(Self)
     }
 }
 

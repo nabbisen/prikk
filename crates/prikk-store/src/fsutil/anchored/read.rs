@@ -51,10 +51,68 @@ pub(crate) struct RootDirEntry {
     pub(crate) kind: EntryKind,
 }
 
+/// The platform-varying half of root-relative reads (DC-87 Stage 1). Mirrors
+/// `DurabilityContract`'s own "one gated dispatch constant, every call site unconditional" shape
+/// (`anchored.rs`'s `ACTIVE_DURABILITY`) rather than adding to that trait -- DC-87 §6 forbids
+/// changing `DurabilityContract`'s method set, and these four operations are reads, not durability
+/// guarantees, so they get their own contract rather than being folded into that one. A future
+/// Windows implementor (Stage 2) is a third `impl AnchoredReader`, gated to its own platform, with
+/// no change to the four public functions below.
+trait AnchoredReader {
+    fn read_file_if_exists(&self, root: &MutationRoot, relative: &Path) -> Result<Option<Vec<u8>>>;
+    fn stat_file_state_if_exists(
+        &self,
+        root: &MutationRoot,
+        relative: &Path,
+    ) -> Result<Option<RootFileStat>>;
+    fn list_directory(&self, root: &MutationRoot, relative: &Path) -> Result<Vec<RootDirEntry>>;
+    fn inspect_entry(&self, root: &MutationRoot, relative: &Path) -> Result<Option<EntryKind>>;
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+const ACTIVE_READER: PosixReader = PosixReader;
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+const ACTIVE_READER: PathOnlyReader = PathOnlyReader;
+
 /// Read a regular file's bytes, returning `None` only when a path component is absent.
 pub(crate) fn read_file_if_exists(root: &MutationRoot, relative: &Path) -> Result<Option<Vec<u8>>> {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    {
+    ACTIVE_READER.read_file_if_exists(root, relative)
+}
+
+/// Stat a regular file's size, mtime, and mode without opening or reading its content.
+pub(crate) fn stat_file_state_if_exists(
+    root: &MutationRoot,
+    relative: &Path,
+) -> Result<Option<RootFileStat>> {
+    ACTIVE_READER.stat_file_state_if_exists(root, relative)
+}
+
+/// List a root-relative directory and classify entries without following symlinks.
+pub(crate) fn list_directory(root: &MutationRoot, relative: &Path) -> Result<Vec<RootDirEntry>> {
+    ACTIVE_READER.list_directory(root, relative)
+}
+
+/// Read and require a root-relative regular file.
+pub(crate) fn read_file_required(root: &MutationRoot, relative: &Path) -> Result<Vec<u8>> {
+    read_file_if_exists(root, relative)?.ok_or_else(|| {
+        PrikkError::Io(format!(
+            "required root-relative file is absent: {}",
+            relative.display()
+        ))
+    })
+}
+
+/// Inspect a root-relative entry without following its final component.
+pub(crate) fn inspect_entry(root: &MutationRoot, relative: &Path) -> Result<Option<EntryKind>> {
+    ACTIVE_READER.inspect_entry(root, relative)
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+struct PosixReader;
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+impl AnchoredReader for PosixReader {
+    fn read_file_if_exists(&self, root: &MutationRoot, relative: &Path) -> Result<Option<Vec<u8>>> {
         let Some(directory) = open_existing_directory_for_read(root, required_parent(relative)?)?
         else {
             return Ok(None);
@@ -80,24 +138,12 @@ pub(crate) fn read_file_if_exists(root: &MutationRoot, relative: &Path) -> Resul
         File::from(fd).read_to_end(&mut bytes)?;
         Ok(Some(bytes))
     }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    {
-        let path = root.fallback_path(relative)?;
-        match std::fs::read(&path) {
-            Ok(bytes) => Ok(Some(bytes)),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(fallback_io_error(&path, "read", error)),
-        }
-    }
-}
 
-/// Stat a regular file's size, mtime, and mode without opening or reading its content.
-pub(crate) fn stat_file_state_if_exists(
-    root: &MutationRoot,
-    relative: &Path,
-) -> Result<Option<RootFileStat>> {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    {
+    fn stat_file_state_if_exists(
+        &self,
+        root: &MutationRoot,
+        relative: &Path,
+    ) -> Result<Option<RootFileStat>> {
         let Some(directory) = open_existing_directory_for_read(root, required_parent(relative)?)?
         else {
             return Ok(None);
@@ -131,8 +177,67 @@ pub(crate) fn stat_file_state_if_exists(
             mode: Some(mode),
         }))
     }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    {
+
+    fn list_directory(&self, root: &MutationRoot, relative: &Path) -> Result<Vec<RootDirEntry>> {
+        use std::os::unix::ffi::OsStrExt;
+
+        let directory = open_existing_directory_for_read(root, relative)?.ok_or_else(|| {
+            PrikkError::Io(format!("directory is absent: {}", relative.display()))
+        })?;
+        let mut stream = fs::Dir::read_from(&directory.fd).map_err(io_error)?;
+        let mut entries = Vec::new();
+        for entry in &mut stream {
+            let entry = entry.map_err(io_error)?;
+            let name = std::ffi::OsStr::from_bytes(entry.file_name().to_bytes()).to_os_string();
+            if name == "." || name == ".." {
+                continue;
+            }
+            let child = join_relative(relative, &name);
+            let kind = inspect_entry(root, &child)?.ok_or_else(|| {
+                PrikkError::Io(format!("directory entry disappeared: {}", child.display()))
+            })?;
+            entries.push(RootDirEntry { name, kind });
+        }
+        Ok(entries)
+    }
+
+    fn inspect_entry(&self, root: &MutationRoot, relative: &Path) -> Result<Option<EntryKind>> {
+        let Some(directory) = open_existing_directory_for_read(root, required_parent(relative)?)?
+        else {
+            return Ok(None);
+        };
+        let stat = match fs::statat(
+            &directory.fd,
+            required_file_name(relative)?,
+            AtFlags::SYMLINK_NOFOLLOW,
+        ) {
+            Ok(stat) => stat,
+            Err(rustix::io::Errno::NOENT) => return Ok(None),
+            Err(error) => return Err(io_error(error)),
+        };
+        Ok(Some(classify(FileType::from_raw_mode(stat.st_mode))))
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+struct PathOnlyReader;
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+impl AnchoredReader for PathOnlyReader {
+    fn read_file_if_exists(&self, root: &MutationRoot, relative: &Path) -> Result<Option<Vec<u8>>> {
+        let path = root.fallback_path(relative)?;
+        match std::fs::read(&path) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(fallback_io_error(&path, "read", error)),
+        }
+    }
+
+    fn stat_file_state_if_exists(
+        &self,
+        root: &MutationRoot,
+        relative: &Path,
+    ) -> Result<Option<RootFileStat>> {
         let path = root.fallback_path(relative)?;
         match std::fs::symlink_metadata(&path) {
             Ok(metadata) => {
@@ -167,35 +272,8 @@ pub(crate) fn stat_file_state_if_exists(
             Err(error) => Err(fallback_io_error(&path, "stat", error)),
         }
     }
-}
 
-/// List a root-relative directory and classify entries without following symlinks.
-pub(crate) fn list_directory(root: &MutationRoot, relative: &Path) -> Result<Vec<RootDirEntry>> {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    {
-        use std::os::unix::ffi::OsStrExt;
-
-        let directory = open_existing_directory_for_read(root, relative)?.ok_or_else(|| {
-            PrikkError::Io(format!("directory is absent: {}", relative.display()))
-        })?;
-        let mut stream = fs::Dir::read_from(&directory.fd).map_err(io_error)?;
-        let mut entries = Vec::new();
-        for entry in &mut stream {
-            let entry = entry.map_err(io_error)?;
-            let name = std::ffi::OsStr::from_bytes(entry.file_name().to_bytes()).to_os_string();
-            if name == "." || name == ".." {
-                continue;
-            }
-            let child = join_relative(relative, &name);
-            let kind = inspect_entry(root, &child)?.ok_or_else(|| {
-                PrikkError::Io(format!("directory entry disappeared: {}", child.display()))
-            })?;
-            entries.push(RootDirEntry { name, kind });
-        }
-        Ok(entries)
-    }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    {
+    fn list_directory(&self, root: &MutationRoot, relative: &Path) -> Result<Vec<RootDirEntry>> {
         let path = root.fallback_path(relative)?;
         let reader = match std::fs::read_dir(&path) {
             Ok(reader) => reader,
@@ -219,39 +297,8 @@ pub(crate) fn list_directory(root: &MutationRoot, relative: &Path) -> Result<Vec
         }
         Ok(entries)
     }
-}
 
-/// Read and require a root-relative regular file.
-pub(crate) fn read_file_required(root: &MutationRoot, relative: &Path) -> Result<Vec<u8>> {
-    read_file_if_exists(root, relative)?.ok_or_else(|| {
-        PrikkError::Io(format!(
-            "required root-relative file is absent: {}",
-            relative.display()
-        ))
-    })
-}
-
-/// Inspect a root-relative entry without following its final component.
-pub(crate) fn inspect_entry(root: &MutationRoot, relative: &Path) -> Result<Option<EntryKind>> {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    {
-        let Some(directory) = open_existing_directory_for_read(root, required_parent(relative)?)?
-        else {
-            return Ok(None);
-        };
-        let stat = match fs::statat(
-            &directory.fd,
-            required_file_name(relative)?,
-            AtFlags::SYMLINK_NOFOLLOW,
-        ) {
-            Ok(stat) => stat,
-            Err(rustix::io::Errno::NOENT) => return Ok(None),
-            Err(error) => return Err(io_error(error)),
-        };
-        Ok(Some(classify(FileType::from_raw_mode(stat.st_mode))))
-    }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    {
+    fn inspect_entry(&self, root: &MutationRoot, relative: &Path) -> Result<Option<EntryKind>> {
         let path = root.fallback_path(relative)?;
         let metadata = match std::fs::symlink_metadata(&path) {
             Ok(metadata) => metadata,

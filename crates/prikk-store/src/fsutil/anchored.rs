@@ -14,6 +14,7 @@ use prikk_error::{PrikkError, Result};
 mod directory;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod failpoints;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod immutable;
 #[cfg(target_os = "linux")]
 mod linux;
