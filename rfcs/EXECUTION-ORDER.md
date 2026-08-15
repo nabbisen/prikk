@@ -293,9 +293,15 @@ These apply to all work above and are not restated in each handoff.
 10. **Report counts before and after.** Test counts per touched crate, and locked package count where
     dependencies change, so no silent loss or growth can hide.
 
-    **Baseline, measured 2026-08-15 at `f2edb11`:** `prikk-store` **688**, `prikk-object` 80,
-    `prikk-replay` 44, `prikk-hash` 14, `prikk-crypto` 7, `prikk-release-policy` 83; **179 locked
-    packages**.
+    **Baseline, measured 2026-08-15 at `87b5085` (RFC 102 Stage 5 merged):** `prikk-store` **703**,
+    `prikk-object` 80, `prikk-replay` 44, `prikk-hash` 14, `prikk-crypto` 7, `prikk-release-policy` 83;
+    **179 locked packages**.
+
+    > **The obligation below was missed on its first outing, by its own author.** RFC 102 Stage 5 moved
+    > `prikk-store` from 688 to 703 across six rounds. Every round reported its own count correctly and
+    > **none updated this line**, and I did not require it in any of the six reviews — having written the
+    > same-commit rule the day before. Corrected here after the merge. The rule is not self-enforcing:
+    > **a reviewer has to ask for it, every time, or it decays exactly as the pre-DC-55 baseline did.**
 
     **How to measure — this is not incidental, and it has now been got wrong three times.**
     `prikk-store` runs two tests a second time in isolation, so `cargo test -p prikk-store` emits three
