@@ -1328,3 +1328,40 @@ the very thing needing repair. Adding container locks would multiply an already-
 **Scope note.** The tearing exposure is **not** confined to the three compaction targets — the shared ref
 log takes concurrent appends from the same four unserialized commands. How wide the fix goes is a scope
 question for Step 0 to put back to the owner, not for the implementation to settle.
+
+### 15.8 Step 2's exclusion width — decided by the project owner, 2026-08-15
+
+**Wide.** The container locks cover **four** logical containers, not the three compaction targets:
+
+```
+LockableContainer::RefPointerIndex
+LockableContainer::RefLog
+LockableContainer::ReceivedIndex
+LockableContainer::TrustPolicy
+```
+
+**Why wide, when the developer's own lean was narrow.** Two reasons, both from their Step 0 report:
+
+1. **The call sites are already being modified either way.** Under narrow, `branch create`, `tag create`
+   and `merge` must *already* acquire the `ref_pointer_index` lock, because they write it through
+   `publish` → `append_ref_pointer_entry` (`publication.rs:101`). Wide adds **one enum member to an
+   acquisition set those call sites are already constructing.**
+2. **Narrow would ship a total-order helper that nothing exercises.** Their report states it: under
+   narrow *"no operation acquires two of the new locks at once,"* so the deadlock machinery has no
+   production path through it. **A correctness mechanism with no exercised path is the shape this
+   project keeps finding and registering** — and the report cited that reasoning before landing on the
+   other side of it.
+
+The scope-drift objection was real and is noted: `ref_log`'s tearing exposure predates RFC 102 and is not
+caused by compaction. It is taken here because **the fix is the machinery being built for compaction
+anyway**, and deferring means a future increment rebuilds this whole context to add one enum member.
+
+**A constraint neither the report nor §15.7 stated, and it is load-bearing.** `publication.rs:95-96`
+records that the **pointer-first write order is what prevents a crash from producing the ahead-log state
+DC-38 treats as unrecoverable.** Refactoring these call sites to acquire locks up front **must not
+reorder the two appends** at `:101` and `:109`. Lock acquisition order and write order are independent;
+they are easy to conflate when hoisting acquisition to the top of a function. State it in the commit.
+
+**Everything else in the Step 0 report stands as approved** — `prikk unlock` with PID advisory-not-
+authoritative, the sorted-set acquisition helper, read-then-recheck-retry with a bounded cap failing
+closed, and the five-window DC-41 inventory built alongside each window it proves.
