@@ -205,6 +205,7 @@ These records currently live under `archive/`.
 | DC-09 | [Phase 4 Node Model and Operation Application](./archive/DC-09-PHASE-4-NODE-MODEL.md) | Superseded / partially implemented historical umbrella. |
 | DC-42 | [Performance and Maintainability Gates](./archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md) | Superseded 2026-07-29 into DC-56, DC-57, DC-58. Never implemented; design review found it bundled three unrelated increments. |
 | 101 | [First-Appearance Durability](./archive/101-first-appearance-durability.md) | **Closed 2026-08-12 with a negative result; superseded by RFC 102.** Accepted and closed the same day, no code produced. Its own §5.2 trace disproved its §1 problem statement: prikk is content-addressed, so *every* object write creates a new name, and the fix as scoped would have made Windows worse. Established that no Windows primitive provides new-name durability and that Transactional NTFS is unusable. Its transition table and three `FINDINGS.md` rows survive it. |
+| 104 | [Windows Mutation](./archive/104-windows-mutation.md) | **Withdrawn 2026-08-16, the day it was accepted — a duplicate of [DC-87](./accepted/DC-87-WINDOWS-MUTATION.md)**, accepted 2026-08-10, whose §3 poses the same prerequisites. Written after an RFC-number check that could only match numerically-prefixed files and silently dropped every `DC-` one. Its one original contribution, the post-RFC-102 caller inventory, was folded into DC-87 §0 |
 
 ## Handoffs
 
