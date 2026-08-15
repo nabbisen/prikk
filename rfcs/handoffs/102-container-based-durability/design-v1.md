@@ -1403,3 +1403,34 @@ single shared container — the same fact that made wide correct — and it was 
 owner ruled. It is being put back to them as a measured outcome. **`RefLock` is now redundant for the
 race it solely prevented** (two publishes to the same ref) and is retained deliberately; removing it is
 its own decision.
+
+### 15.10 `prikk unlock --lock` resolves paths in the library, 2026-08-15
+
+**Found by CI, not by any local gate** — the first defect in the whole RFC 102 arc where the eleven-gate
+set passed and the three-platform run did not. Six stages of the standing rule earning itself once, on
+the last branch before the RFC closes.
+
+**The defect.** `prikk-cli/src/unlock.rs:40-41` compares an operator-supplied `--lock <path>` against
+`HeldLock.path` with **exact `PathBuf` equality**. `HeldLock.path` derives from the layout root, which
+comes from `args.rs:445-447`'s bare `std::env::current_dir()` — and `getcwd()` resolves symlinks. So a
+repository reached through a symlink yields resolved lock paths, while an independently-constructed
+`--lock` argument may not be, and the lookup silently fails.
+
+**Not a macOS defect — a macOS *exposure*.** macOS `/tmp` and `/var` are symlinks so every temp-dir
+repository hits it; a Linux repository under a symlinked home, mount or directory hits it identically.
+**And the failure mode is the worst available for a recovery command:** a correct path is reported the
+same way as a typo — `no held lock` — so an operator concludes nothing is wedged when something is.
+
+**Ruling: fix in `prikk_store::unlock`, not in the CLI.** `list_held_locks` is a library function and its
+paths are library data; any consumer comparing against them inherits the same trap, so the correctness
+belongs with the data rather than with one caller. A library-level matcher is also testable against a
+real symlinked directory without a subprocess. Resolve both sides, falling back to plain equality when
+either fails to resolve, so a nonexistent target still yields `no held lock` rather than an I/O error.
+
+**A non-path `--kind` selector is rejected for now.** `list_held_locks` can report multiple `ref`-kind
+locks simultaneously — one per ref name — so kind cannot select among them, which makes it an *addition*
+rather than a fix: `--lock` still has to work correctly regardless. Two selectors with different
+coverage is something an operator would have to learn mid-recovery. Nothing here forecloses it later.
+
+**The three failing tests are not touched.** They asserted the correct behaviour against a wrong product;
+adjusting them would have converted a real defect into a passing suite.
