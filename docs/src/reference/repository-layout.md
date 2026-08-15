@@ -181,9 +181,16 @@ promote a candidate now durably appends the pointer entry directly, in one step.
 
 `refs/by-id/`, `refs/logs/` and `refs/tmp/` are still initialized directories, alongside `objects/`
 (with its six type subdirectories) and `quarantine/`. **Nothing writes into any of them.** `init` still
-allocates them and current behavior does not remove them, but their **absence is an error**: repository
-open validates that every required directory is present, so deleting them from an existing repository
-makes it unopenable. They are remnants, not extension points.
+allocates them and current behavior does not remove them. **Nothing validates their presence at open** —
+`required_directories()` is consulted only by `init` itself.
+
+**Ten of the eleven have no reader at all**: `objects/` and its six type subdirectories, `quarantine/`,
+`refs/by-id/` and `refs/logs/`. A repository missing those behaves identically to one that has them.
+
+**`refs/tmp/` is the exception and is genuinely required.** `verify` lists it on every run, so a
+repository missing it fails verification with `directory is absent: refs/tmp`. Nothing has written into
+it since ref publication moved into containers, so the scan can only ever find nothing — but the
+directory must exist for the scan to succeed.
 
 ## Active Session
 
@@ -289,7 +296,7 @@ persist across key removal, so it stays a single append-only file, never compact
 | `*-generation.log` (`pointer-index-`, `received-index-`, `policy-`) | Compaction state | Records which slot (`a`/`b`) is currently live for its own container; empty means `a`. Not history or trust evidence — see [Compaction](#compaction). |
 | `active/default/active.lock`, `refs/locks/*.lock`, and the four container locks (`pointer-index.lock`, `log.lock`, `received-index.lock`, `policy.lock`, all under `refs/containers/` or `trust/`) | Local synchronization | Prevent concurrent writers, and (for the container locks) a concurrent `prikk compact` run; not history or trust evidence. Recoverable after a crash via `prikk unlock` — see [concurrency and locking](./concurrency-locking.md). |
 | `cache/` | Initialized, rebuildable, non-root | Never authority; a corrupt or absent cache file is not an error and does not change any result. |
-| `objects/` (and its six type subdirectories), `quarantine/`, `refs/by-id/`, `refs/logs/`, `refs/tmp/` | Initialized, dead | Nothing has written into any of them since object and ref publication state moved into containers. Not authority for anything — but their absence is an error, because repository open validates that every required directory is present. |
+| `objects/` (and its six type subdirectories), `quarantine/`, `refs/by-id/`, `refs/logs/`, `refs/tmp/` | Initialized, dead | Nothing has written into any of them since object and ref publication state moved into containers. Not authority for anything, and not validated at open — `required_directories()` is consulted only by `init`. **`refs/tmp/` is the exception**: `verify` lists it on every run, so its absence fails verification even though nothing can write into it any more. The other ten have no reader at all. |
 | `gc/` | Deferred/not present | No current initialized directory or released behavior. |
 
 ## Deferred and Not Stable
