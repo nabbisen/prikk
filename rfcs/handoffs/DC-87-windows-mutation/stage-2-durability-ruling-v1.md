@@ -108,3 +108,49 @@ that question and nothing else.** Whether it runs, and whether 0.20.0 waits, is 
 - **DC-91:** proposed alongside this ruling.
 - Nothing here changes DC-88's or DC-90's merged state, or Windows read-only support, which is
   unaffected throughout.
+
+
+---
+
+## 6. Deferral LIFTED, 2026-08-16 — §5's option 1 was executed
+
+**§4's ruling is discharged, and by the route §5 named.**
+
+§5 listed three realistic options and put the scope choice to the owner. **Option 1 —** *"restructure ref
+publication so every durability-bearing transition is a content update to an already-named file. Large,
+touches DC-34/DC-38's state machine, and lands on all platforms"* **— is exactly what RFC 102 did**, across
+six stages, completed 2026-08-15.
+
+**§4's stated condition is now void, not merely outdated.** It read: *"step 6's log append is an existing-file
+content append and is achievable, while step 5's pointer promotion needs transition durability and is not.
+The asymmetry is what makes it fatal."*
+
+**There is no step 5.** `refs/publication.rs` records the retirement: the candidate-write-then-promote
+mechanism *"has no equivalent under an append-only pointer index — an append-only record has no candidate
+value to stage, the append **is** the publish."* `write_ref_pointer_candidate`/`promote_ref_pointer_candidate`
+are gone; only a test-only shim remains (`pointer_index.rs:302`).
+
+**Publication is now two content appends to names allocated at `init`** — the pointer-index entry
+(`publication.rs:117`), then the ref-log record (`:125`). Both are the achievable kind. **The asymmetry
+that made it fatal is gone precisely because neither operation needs transition durability any more.**
+
+**And DC-38's invariant now holds by construction rather than by primitive.** `PublicationState` has three
+variants — `Ready`, `PointerLeading`, `Complete` — and **no ahead-log state exists**. A crash between the
+two appends leaves *pointer leading*, the opposite of an ahead log, and completable.
+`publication.rs:95-96` states it: *"The pointer-first order below is what prevents a crash from ever
+producing it through normal publish."* That ordering is platform-independent.
+
+**§5's own open question is answered too.** It asked whether a fixed-name publication record has
+*"independent value on POSIX… or is it purely a Windows tax."* RFC 102 shipped it on all platforms and it
+paid for itself independently: corruption isolation per record, criterion 2 closed for the repository, and
+compaction. **It was not a Windows tax.**
+
+**Ruling: Stage 2 is unblocked.** Not because the facts were re-litigated — §4 was right on its facts —
+but because the design it ruled against was replaced. **Option 3 (do not ship Windows mutation) is no
+longer the honest cheap answer; option 2 (weaker invariant, ahead-log recovery) was correctly refused
+twice and is not needed.**
+
+**What is still blocking is DC-87 §3.1 alone** — G1 anchored resolution, where the developer's 2026-08-16
+report states a real, nameable gap: inter-component TOCTOU is open on Windows and closed on Linux/macOS.
+That is a separate condition with its own accepted-once precedent, and it is not what this deferral was
+about.
