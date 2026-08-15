@@ -297,11 +297,22 @@ These apply to all work above and are not restated in each handoff.
     `prikk-replay` 44, `prikk-hash` 14, `prikk-crypto` 7, `prikk-release-policy` 83; **179 locked
     packages**.
 
-    **How to measure — this is not incidental.** Sum `passed` **only from result lines reporting
-    `0 filtered out`.** `prikk-store` runs two tests a second time in isolation, so `cargo test -p
-    prikk-store` emits three result lines — `1 passed; 691 filtered out`, again, and then
-    `692 passed; 0 filtered out`. Summing all three double-counts those two tests. No other crate in the
-    workspace currently emits a filtered run, which is why the error shows up nowhere else.
+    **How to measure — this is not incidental, and it has now been got wrong three times.**
+    `prikk-store` runs two tests a second time in isolation, so `cargo test -p prikk-store` emits three
+    result lines: `1 passed; N filtered out`, the same again, and then the real
+    `<count> passed; 0 filtered out`. Only the last is the count. No other crate in the workspace emits a
+    filtered run, which is why this shows up nowhere else. Use exactly:
+
+    ```
+    cargo test -p <crate> --locked 2>&1 | grep -oE "ok\. [0-9]+ passed;.*; 0 filtered out" | awk '{s+=$2} END {print s}'
+    ```
+
+    **Two ways this has actually gone wrong, both mine, both caught by the developer:** summing every
+    `test result:` line (counts the isolated runs twice), and then filtering on the bare substring
+    `0 filtered out` — which **also matches `690 filtered out`**, re-admitting the very lines it was
+    written to exclude. The separator in `; 0 filtered out` is load-bearing. The isolated runs also
+    interleave their output with the main run, so the text is not reliably line-oriented; anchor on
+    `ok\. N passed` rather than on field position.
 
     **An increment that changes any of these numbers must update this line in the same commit.** Not a
     courtesy — the line *is* the comparison point, and a stale one makes the rule unfalsifiable.
