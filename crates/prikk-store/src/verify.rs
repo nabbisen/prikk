@@ -169,7 +169,7 @@
 //! different kind this method cannot surface. One known instance: the received-ref index
 //! (`received_index.rs`, RFC 102 Stage 5 -- formerly `refs/received/`) is never read by
 //! `verify_repository` at all (RFC 101 §5.2's independently-derived transition trace); registered in
-//! `FINDINGS.md`, not a row here, since there is no existing check to classify.
+//! reported in the review result, not a row here, since there is no existing check to classify.
 //!
 //! ## `verify/objects.rs` + `block_state.rs` (`verify/tests.rs`)
 //!
@@ -218,7 +218,7 @@
 //! | Incomplete log tail without pointer lead | Load-bearing (unchanged mechanism, container-based replay) |
 //! | Catch-all "unexplained pointer/log divergence" | Load-bearing (unchanged mechanism) |
 //! | `created_at == 0` | Load-bearing -- **now enforced at write time too** (`container::append_ref_container_record`, design-v1.md §13.15), not only at read time; a real production gap in the Stage 4 rewrite, found and closed |
-//! | `CANDIDATE-DEBRIS` | Non-blocking -- **now reachable only via a directly-planted fixture, never a real crash** (the candidate-write mechanism it detected is gone entirely); registered in `FINDINGS.md` as a dormant mutation wedge (design-v1.md §13.14), not fixed here |
+//! | `CANDIDATE-DEBRIS` | Non-blocking -- **now reachable only via a directly-planted fixture, never a real crash** (the candidate-write mechanism it detected is gone entirely); a dormant mutation wedge (design-v1.md §13.14), not fixed here |
 //! | Duplicate pointer identity / duplicate ref-log identity | **Retired** (design-v1.md §13.12-13.13) -- see prose above |
 //! | Non-canonical ref pointer path | **Retired**, replaced by "Pointer-index entry key mismatch" below |
 //! | RefState name mismatches pointer | Downstream-redundant (`classify_ref_state`'s own coherence arm), unchanged |

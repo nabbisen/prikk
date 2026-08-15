@@ -10,7 +10,8 @@ major-version timing, significant risk acceptance, and release approval are the 
 (`.git-exclude/roles/high-capability-model-operating-instructions.md:9`), and roadmap and milestones
 are defined jointly (line 18). The architect edits this file only where an owner ruling, an RFC
 acceptance criterion, or a direct instruction names what to change; the developer does not edit it at
-all. **Risk and review findings are not recorded here** — see [`FINDINGS.md`](./FINDINGS.md).
+all. **Risk and review findings are not recorded here** — a finding lives in the review result that
+raised it, and anything that must outlive that review is documented in `docs/` or `rfcs/`.
 
 ## Baseline and release posture
 
@@ -72,7 +73,7 @@ judgement at the time, and so each gap has a visible owner.
 |---|---|---|---|
 | 1 | **Sync exists** — two machines can exchange sealed history, and both verify it afterward | A *distributed* VCS that cannot distribute. Nothing in the tree exchanges history between repositories; branches merge only within one | **Nothing built. Unowned, no increment.** The largest single gap |
 | 2 | **The format-stability question is answered, and its answer honoured** — either canonical encoding is frozen with a stated compatibility promise, or a migration guarantee exists that a repository written by one release is readable by the next | The badge's own sentence says migration may be required. DC-75 added two `BlockPayload` fields on 2026-08-08 | **Unanswered.** This is the system proposal's RΔ3, still unsettled; the answerable form is *what minimum must never change for a verification claim made today to hold in ten years* |
-| 3 | **`verify` is not superlinear in history length** | The central claim is offline verifiability by anyone. At roughly O(N³) — 34 s at 160 blocks — that stops being practical at a few hundred commits | **Measured, tracked in `FINDINGS.md`, unowned.** Likely fix named |
+| 3 | **`verify` is not superlinear in history length** | The central claim is offline verifiability by anyone. At roughly O(N³) — 34 s at 160 blocks — that stops being practical at a few hundred commits | **Measured, unowned.** Likely fix named |
 | 4 | **The signer bootstrap has occurred** — DC-35's authority transaction, two distinct natural persons | Release authority has never been established for any release to date | **`release-signers.toml` empty and fail-closed.** `docs/src/reference/release-compatibility.md:16` already states no release satisfies the gate |
 | 5 | **`verify` checks author signatures repository-wide** — **Corrected 2026-08-09 by DC-78's investigation: NOT a prerequisite of criterion 1.** Exchange is ruled to claim only "sealed by a Maintainer key you adopted", which `trust.rs` can already verify — so a receiver verifies exactly as much as a local user does, and criterion 1 is reachable without this one. **But shipping exchange makes this criterion more important, not less**, since other people's history then arrives with authorship unchecked | The positioning is that every change is signed by its author *and verifiable by anyone*. Signatures are carried and preserved, but `verify` never checks them — the only cryptographic verification in the product is one policy-signature call site | **DC-53, proposed and unscheduled** |
 | 6 | **Mutation works wherever the project claims support** | A tool that can read but not write on two of three supported platforms is not past "early" | **Linux-only.** DC-76 in flight; macOS then Windows to follow |
@@ -190,9 +191,16 @@ When citing a gate, name the scheme: "product M3" or "corrective M2", never a ba
 
 ## Finding ownership
 
-**Moved.** The finding and risk register now lives in [`FINDINGS.md`](./FINDINGS.md), split out
-verbatim on 2026-08-08 so that authorship follows the file. Findings are the architect's to record;
-this file is the owner's schedule.
+**Moved, then removed.** A separate finding-and-risk register was split out of this file on
+2026-08-08 so that authorship followed the file. **It was removed on 2026-08-16 by owner decision**: it
+had grown to 105 rows and 87KB, roughly half of them duplicating milestones this file already schedules
+and the rest an unscheduled backlog nobody read, so it cost the reviewee more to search than it returned.
+
+**What replaces it.** A review finding lives in the review result that raised it. Anything that must
+outlive that review is documented where it belongs — `docs/` for behaviour and limitations users or
+operators need, `rfcs/` for decisions and scope. Nothing accumulates in a third place. Records written
+before 2026-08-16 that refer to the register are accurate as of their own date and are deliberately left
+unrewritten.
 
 ## M0 - Architecture ratification
 
