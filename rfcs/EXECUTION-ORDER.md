@@ -291,10 +291,28 @@ These apply to all work above and are not restated in each handoff.
    platforms, so an increment that skips it can pass every canonical gate and still turn CI red. The nine
    above cannot see platform-conditional dead code, which is the exact failure DC-71 exists to prevent.
 10. **Report counts before and after.** Test counts per touched crate, and locked package count where
-    dependencies change, so no silent loss or growth can hide. Current: `prikk-store` 543,
-    `prikk-object` 76, `prikk-replay` 44, `prikk-hash` 14, `prikk-crypto` 5, `prikk-release-policy` 59;
-    180 locked packages. (`prikk-replay` was previously misrecorded here as 4; it has been 44 since
-    before DC-54 and nothing has touched it — corrected during DC-55's baseline check.)
+    dependencies change, so no silent loss or growth can hide.
+
+    **Baseline, measured 2026-08-15 at `f2edb11`:** `prikk-store` 690, `prikk-object` 80,
+    `prikk-replay` 44, `prikk-hash` 14, `prikk-crypto` 7, `prikk-release-policy` 83; **179 locked
+    packages**.
+
+    **An increment that changes any of these numbers must update this line in the same commit.** Not a
+    courtesy — the line *is* the comparison point, and a stale one makes the rule unfalsifiable.
+
+    > **Corrected 2026-08-15, and the correction is the lesson.** The previous baseline —
+    > `prikk-store` 543, `prikk-object` 76, `prikk-crypto` 5, `prikk-release-policy` 59, 180 locked
+    > packages — had been stale in **five of seven figures** since DC-55. DC-72, DC-75, DC-79, DC-80
+    > and DC-90 each changed counts this line records; none updated it. So **+177 tests and a
+    > one-package drop accumulated invisibly** — precisely the "silent loss or growth" the rule exists
+    > to prevent. The rule did not fail because anyone skipped it; it failed because a hand-maintained
+    > figure with no owner and no automated check decays, and every gate stayed green throughout. The
+    > earlier `prikk-replay` 4→44 correction (DC-55) was the same decay caught once and patched
+    > per-instance rather than structurally.
+    >
+    > The baseline is pinned to `f2edb11` rather than to `origin/main` because **`origin/main` did not
+    > compile when this was measured** (see `FINDINGS.md`) — a count cannot be taken at a commit that
+    > has no test binaries.
 11. **Submit a review request per candidate** with the diff, an evidence note, gate output, and an explicit
     statement of what did *not* change.
 
