@@ -1111,3 +1111,33 @@ characteristic is acceptable: `is_none()` followed by an exclusive create means 
 that way, so uniformity argues for it — but state it.
 
 **Criterion 2 closes when this lands, and not before.** The report was right to refuse the claim.
+
+### 14.11 Criterion 2 — closed for the repository, 2026-08-15
+
+`d6c6fa3` swapped `FORMAT`'s write to `create_new_file_required`, keeping the `is_none()` guard and
+§14.2's write-last position. **`init` now uses one creation primitive for every name it allocates** — the
+`FORMAT` write at `layout.rs:204-208` is structurally identical to `create_empty_file_once`'s own body.
+
+**Criterion 2 — "no durability-bearing write uses `atomic_replace`" — is true of the repository**, not
+merely of a stage's own paths. Verified workspace-wide across `crates` and `tools`, searching both
+`write_file_atomically(` and direct `.atomic_replace(` calls rather than one name in one directory.
+
+**Two exemptions, both argued and both asserted by tests** — `commit_index.rs:80` and
+`lifecycle_cache/incremental.rs:175`, the rebuildable caches, covered by round 1's
+warm/cold/corrupt-identical-report tests. Prose alone was never enough for these (§14.1's own condition).
+
+**One surface that is out of scope rather than exempt, recorded here because it is reachable and nobody
+had written it down.** `write_worktree_file_atomically` (`fsutil/anchored.rs:67-73`) is a thin wrapper
+onto the same primitive, called at `worktree.rs:157` and `:207`. Both write into
+`worktree_mutation_root()` — **the user's working directory, not repository state** — which is
+materialized from sealed history and therefore rebuildable by re-checkout. Criterion 2 governs
+durability-bearing repository state, so these are not exceptions to it.
+
+**And the one hazard a lost worktree name would create is already closed.** T12's concern is that a
+missing worktree file can be misread as a deletion the user intended; `worktree.rs:60` calls
+`mark_worktree_dirty` before either write, and §6's marker makes commit-authoring refuse to infer
+deletion while dirty. **Stage 1 covers exactly this**, which is why the surface needs naming rather than
+fixing.
+
+An auditor reading criterion 2 will find `atomic_replace` reachable from `worktree.rs` and has to be able
+to find out why that is fine without re-deriving it.
