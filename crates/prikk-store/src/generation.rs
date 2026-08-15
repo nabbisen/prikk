@@ -16,20 +16,19 @@
 //! generation-pointer level: resolving to an older, damaged-but-plausible generation would let a
 //! reader silently address the wrong slot.
 //!
-//! **`encode_generation_record` is test-only.** Step 1 has no writer -- nothing in production ever
-//! appends a generation record until Step 2's compactor exists. Building the encoder without a
-//! production caller would be exactly the "orphan `pub(crate)`, no real caller before merge" shape
-//! Stage 5 round 1's review flagged; gating it to tests instead means the corruption-isolation
-//! coverage this stage's own acceptance criteria require doesn't have to wait for Step 2.
+//! **`append_generation_record` is Stage 6 Step 2's own production write path.** Step 1 shipped only
+//! the decoder and resolver, `#[cfg(test)]`-gating the encoder -- there was no production caller yet,
+//! and building one without a real caller would have been exactly the "orphan `pub(crate)`, no real
+//! caller before merge" shape Stage 5 round 1's review flagged. Step 2's compactor (`compact.rs`) is
+//! that caller now.
 
 use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;
 
 use crate::byte_cursor::ByteCursor;
-#[cfg(test)]
 use crate::file_codec::push_u16;
 use crate::frame_resync::resync_to_next_magic;
-use crate::fsutil::read_file_if_exists;
+use crate::fsutil::{append_file_required, read_file_if_exists};
 use crate::layout::{ContainerSlot, RepositoryLayout};
 
 const GENERATION_MAGIC: &[u8; 8] = b"PGENREC1";
@@ -70,7 +69,6 @@ impl GenerationReplay {
     }
 }
 
-#[cfg(test)]
 fn slot_code(slot: ContainerSlot) -> u8 {
     match slot {
         ContainerSlot::A => 0,
@@ -97,8 +95,10 @@ fn generation_checksum(body_len: u64, body: &[u8]) -> [u8; 32] {
     sha256(&preimage)
 }
 
-#[cfg(test)]
-pub(crate) fn encode_generation_record_for_test(record: &GenerationRecord) -> Vec<u8> {
+/// Encode one generation record. Promoted from Step 1's `#[cfg(test)]`-only helper (`encode_
+/// generation_record_for_test`) now that Step 2's compactor is the real production caller Step 1's
+/// own doc anticipated -- see `append_generation_record`, the only production call site.
+pub(crate) fn encode_generation_record(record: &GenerationRecord) -> Vec<u8> {
     let body = vec![slot_code(record.live_slot)];
     let body_len = u64::try_from(body.len()).unwrap_or(0);
     let checksum = generation_checksum(body_len, &body);
@@ -109,6 +109,21 @@ pub(crate) fn encode_generation_record_for_test(record: &GenerationRecord) -> Ve
     out.extend_from_slice(&checksum);
     out.extend_from_slice(&body);
     out
+}
+
+/// Durably append one generation record -- the compaction publish moment itself (design-v1.md §15.6
+/// item 3/§4, criterion 1: "the compactor publishes by appending a generation record, after the new
+/// slot's bytes are durable"). The caller is responsible for that ordering; this function only
+/// guarantees the append itself is durable once called, the same as every other container's own
+/// append primitive.
+pub(crate) fn append_generation_record(
+    layout: &RepositoryLayout,
+    generation_log_path: &std::path::Path,
+    record: &GenerationRecord,
+) -> Result<()> {
+    let relative = layout.repository_relative(generation_log_path)?;
+    let bytes = encode_generation_record(record);
+    append_file_required(layout.repository_mutation_root(), &relative, &bytes)
 }
 
 fn decode_generation_body(body: &[u8]) -> Result<GenerationRecord> {

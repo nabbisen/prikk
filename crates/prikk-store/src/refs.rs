@@ -33,6 +33,13 @@ pub(crate) use pointer_index::{
     write_ref_pointer_candidate_for_test as write_ref_pointer_candidate,
     write_ref_pointer_entry_with_explicit_key_for_test,
 };
+// RFC 102 Stage 6 Step 2, design-v1.md §15.6-§15.9: `compact.rs`'s ref-pointer-index compactor is
+// outside `refs`, so these need re-exporting here the same way `verify_refs` already is below --
+// `pointer_index` itself stays a private submodule; only the specific items a caller outside `refs`
+// needs are widened.
+pub(crate) use pointer_index::{
+    PointerIndexEntry, encode_pointer_index_record, replay_pointer_index,
+};
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, RefUpdatePayload};

@@ -31,7 +31,9 @@ use crate::file_codec::{push_bytes_u64, push_u16};
 use crate::frame_resync::resync_to_next_magic;
 use crate::fsutil::{append_file_required, len_to_u64, read_file_if_exists};
 use crate::generation::resolve_live_slot;
-use crate::layout::{ContainerSlot, RepositoryLayout};
+#[cfg(any(test, feature = "test-support"))]
+use crate::layout::ContainerSlot;
+use crate::layout::RepositoryLayout;
 
 const POINTER_INDEX_MAGIC: &[u8; 8] = b"PREFPTI1";
 const POINTER_INDEX_VERSION: u16 = 1;
@@ -346,11 +348,16 @@ pub(crate) fn append_ref_pointer_entry(
     entry: &PointerIndexEntry,
 ) -> Result<()> {
     let record = encode_pointer_index_record(entry)?;
-    // Step 1 has no compactor, so `A` is the only slot ever written -- the write side stays
-    // hardcoded rather than resolver-routed, matching the handoff's own "make the three targets'
-    // readers generation-aware" (design-v1.md §15.6), not the writers.
-    let relative =
-        layout.repository_relative(&layout.ref_pointer_index_slot_path(ContainerSlot::A))?;
+    // RFC 102 Stage 6 Step 2, design-v1.md §15.7/§15.9: resolver-routed, not hardcoded to `A` --
+    // Step 1's own hardcoding was correct only because nothing could ever make `B` live yet. Once
+    // Step 2's compactor exists, a writer still appending to `A` after compaction published `B`
+    // would be a silently lost write (the review's own finding: "the reader resolves `B`, the record
+    // went to `A`, and nothing reports it"). Safe against the compactor racing this exact
+    // resolve-then-append sequence only because every caller already holds this container's lock
+    // (`acquire_container_locks`) for the whole critical section -- the compactor cannot run
+    // concurrently, so "resolve, then write to what was just resolved" cannot go stale mid-sequence.
+    let slot = resolve_live_slot(layout, &layout.ref_pointer_index_generation_log_path())?;
+    let relative = layout.repository_relative(&layout.ref_pointer_index_slot_path(slot))?;
     append_file_required(layout.repository_mutation_root(), &relative, &record)
 }
 

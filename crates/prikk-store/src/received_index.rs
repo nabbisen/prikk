@@ -23,7 +23,7 @@ use crate::file_codec::{push_bytes_u64, push_u16};
 use crate::frame_resync::resync_to_next_magic;
 use crate::fsutil::{append_file_required, len_to_u64, read_file_if_exists};
 use crate::generation::resolve_live_slot;
-use crate::layout::{ContainerSlot, RepositoryLayout};
+use crate::layout::RepositoryLayout;
 
 const RECEIVED_INDEX_MAGIC: &[u8; 8] = b"PRECVIX1";
 const RECEIVED_INDEX_VERSION: u16 = 1;
@@ -323,10 +323,13 @@ pub(crate) fn append_received_index_entry(
     entry: &ReceivedIndexEntry,
 ) -> Result<()> {
     let record = encode_received_index_record(entry)?;
-    // Step 1 has no compactor, so `A` is the only slot ever written -- see
-    // `pointer_index::append_ref_pointer_entry`'s identical comment.
-    let relative =
-        layout.repository_relative(&layout.received_index_slot_path(ContainerSlot::A))?;
+    // RFC 102 Stage 6 Step 2, design-v1.md §15.7/§15.9: resolver-routed, not hardcoded to `A` --
+    // see `pointer_index::append_ref_pointer_entry`'s identical comment for why, and why this is
+    // safe against the compactor despite the resolve-then-append sequence not being atomic on its
+    // own (the container lock, held by every caller for its whole critical section, is what closes
+    // that gap).
+    let slot = resolve_live_slot(layout, &layout.received_index_generation_log_path())?;
+    let relative = layout.repository_relative(&layout.received_index_slot_path(slot))?;
     append_file_required(layout.repository_mutation_root(), &relative, &record)
 }
 

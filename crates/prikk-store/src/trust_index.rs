@@ -40,7 +40,7 @@ use crate::file_codec::{push_string_u16, push_u16, push_u32};
 use crate::frame_resync::resync_to_next_magic;
 use crate::fsutil::{append_file_required, len_to_u64, read_file_if_exists};
 use crate::generation::resolve_live_slot;
-use crate::layout::{ContainerSlot, RepositoryLayout};
+use crate::layout::RepositoryLayout;
 
 const TRUST_KEY_MAGIC: &[u8; 8] = b"PTRUKEY1";
 const TRUST_KEY_VERSION: u16 = 1;
@@ -548,10 +548,12 @@ pub(crate) fn append_trust_policy_snapshot(
     let record = encode_trust_policy_record(&TrustPolicySnapshotEntry {
         key_ids: key_ids.to_vec(),
     })?;
-    // Step 1 has no compactor, so `A` is the only slot ever written -- see
-    // `pointer_index::append_ref_pointer_entry`'s identical comment.
-    let relative =
-        layout.repository_relative(&layout.trust_policy_container_slot_path(ContainerSlot::A))?;
+    // RFC 102 Stage 6 Step 2, design-v1.md §15.7/§15.9: resolver-routed, not hardcoded to `A` --
+    // see `pointer_index::append_ref_pointer_entry`'s identical comment for why, and why the
+    // container lock (held by `add_trusted_maintainer`/`remove_trusted_maintainer` for their whole
+    // critical section) closes the resolve-then-append race against the compactor.
+    let slot = resolve_live_slot(layout, &layout.trust_policy_generation_log_path())?;
+    let relative = layout.repository_relative(&layout.trust_policy_container_slot_path(slot))?;
     append_file_required(layout.repository_mutation_root(), &relative, &record)
 }
 

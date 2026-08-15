@@ -71,6 +71,16 @@ impl ContainerSlot {
             Self::B => "b",
         }
     }
+
+    /// Return the other slot -- the compactor's own "which slot am I retiring into" question
+    /// (design-v1.md §15.6/§4: compaction always writes the slot that is *not* currently live).
+    #[must_use]
+    pub const fn other(self) -> Self {
+        match self {
+            Self::A => Self::B,
+            Self::B => Self::A,
+        }
+    }
 }
 
 /// One of the four containers RFC 102 Stage 6 Step 2 locks against concurrent writer/compactor races

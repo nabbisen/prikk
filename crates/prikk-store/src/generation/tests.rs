@@ -3,8 +3,8 @@
 use prikk_error::Result;
 
 use super::{
-    GenerationRecord, GenerationRecordStatus, decode_generation_records,
-    encode_generation_record_for_test, resolve_live_slot,
+    GenerationRecord, GenerationRecordStatus, decode_generation_records, encode_generation_record,
+    resolve_live_slot,
 };
 use crate::layout::{ContainerSlot, RepositoryLayout};
 use crate::test_support::unique_temp_dir;
@@ -14,7 +14,7 @@ fn a_single_record_round_trips_through_decode() -> Result<()> {
     let record = GenerationRecord {
         live_slot: ContainerSlot::B,
     };
-    let bytes = encode_generation_record_for_test(&record);
+    let bytes = encode_generation_record(&record);
     let replay = decode_generation_records(&bytes)?;
     assert_eq!(replay.records, vec![record]);
     assert_eq!(replay.trailing_partial_bytes, 0);
@@ -34,7 +34,7 @@ fn trailing_partial_bytes_are_tolerated_not_treated_as_corruption() -> Result<()
     let record = GenerationRecord {
         live_slot: ContainerSlot::A,
     };
-    let mut bytes = encode_generation_record_for_test(&record);
+    let mut bytes = encode_generation_record(&record);
     bytes.extend_from_slice(&[0_u8; 10]);
     let replay = decode_generation_records(&bytes)?;
     assert_eq!(replay.records, vec![record]);
@@ -55,12 +55,12 @@ fn isolates_a_damaged_record_at_decode_level_and_reads_sound_records_around_it()
     let last = GenerationRecord {
         live_slot: ContainerSlot::A,
     };
-    let mut bytes = encode_generation_record_for_test(&first);
+    let mut bytes = encode_generation_record(&first);
     let damaged_start = bytes.len();
-    let damaged_record = encode_generation_record_for_test(&damaged);
+    let damaged_record = encode_generation_record(&damaged);
     let damaged_end = damaged_start + damaged_record.len();
     bytes.extend_from_slice(&damaged_record);
-    bytes.extend_from_slice(&encode_generation_record_for_test(&last));
+    bytes.extend_from_slice(&encode_generation_record(&last));
     bytes[damaged_end - 1] ^= 0x01;
 
     let replay = decode_generation_records(&bytes)?;
@@ -104,10 +104,10 @@ fn resolver_takes_the_last_complete_record() -> Result<()> {
     let root = unique_temp_dir("generation-resolver-last-wins");
     let layout = RepositoryLayout::init(root.clone())?;
     let path = layout.received_index_generation_log_path();
-    let mut bytes = encode_generation_record_for_test(&GenerationRecord {
+    let mut bytes = encode_generation_record(&GenerationRecord {
         live_slot: ContainerSlot::A,
     });
-    bytes.extend_from_slice(&encode_generation_record_for_test(&GenerationRecord {
+    bytes.extend_from_slice(&encode_generation_record(&GenerationRecord {
         live_slot: ContainerSlot::B,
     }));
     std::fs::write(&path, bytes)?;
@@ -125,7 +125,7 @@ fn a_damaged_generation_record_fails_closed_rather_than_resolving_silently() -> 
     let root = unique_temp_dir("generation-resolver-fails-closed");
     let layout = RepositoryLayout::init(root.clone())?;
     let path = layout.trust_policy_generation_log_path();
-    let mut bytes = encode_generation_record_for_test(&GenerationRecord {
+    let mut bytes = encode_generation_record(&GenerationRecord {
         live_slot: ContainerSlot::B,
     });
     let last_index = bytes.len() - 1;

@@ -23,6 +23,7 @@ mod bundle;
 mod byte_cursor;
 mod checkout;
 mod commit_index;
+mod compact;
 mod container;
 mod doctor;
 mod file_codec;
@@ -95,6 +96,9 @@ pub use checkout::{
     prepare_checkout_plan, prepare_snapshot_checkout_plan,
 };
 pub use commit_index::CommitIndexDivergence;
+pub use compact::{
+    CompactionReport, compact_received_index, compact_ref_pointer_index, compact_trust_policy,
+};
 pub use doctor::{
     DoctorIssue, DoctorRepairOptions, DoctorRepairReport, DoctorReport, DoctorSeverity,
     doctor_repository, repair_repository,
