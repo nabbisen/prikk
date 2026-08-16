@@ -179,14 +179,18 @@ pub(crate) fn promote_file_required(
 /// RFC 102 Stage 3, design-v1.md §12.3: G5 has no production caller now that object writes go
 /// through `index.rs`'s container append protocol instead. Kept as the clean, cross-platform entry
 /// point `object_store/tests/immutable.rs` and `races.rs` re-target onto directly (naming
-/// `LinuxDurability`/`MacosDurability` by hand in a test that runs on both would defeat the point of
-/// `ACTIVE_DURABILITY` picking the right one). Gated to match `object_store::tests`' own gate
-/// exactly (`object_store.rs:123`), not just `#[cfg(test)]` -- its only caller is Linux/macOS-only
-/// (DC-71/81: every test there sets up its scenario through real repository mutation), so a bare
-/// `#[cfg(test)]` here left this genuinely unused, and `-D warnings` genuinely dead, under a
-/// `--target x86_64-pc-windows-gnu` test build (`EXECUTION-ORDER.md` §6 rule 9's own cross-target
-/// clippy check, added for exactly this class of platform-conditional dead code).
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+/// `LinuxDurability`/`MacosDurability`/`WindowsDurability` by hand in a test that runs on all three
+/// would defeat the point of `ACTIVE_DURABILITY` picking the right one). Gated to match
+/// `object_store::tests`' own gate exactly (`object_store.rs:123`), not just `#[cfg(test)]` -- DC-97
+/// widened both to include Windows once `object_store.rs:123`'s own Linux/macOS-only reasoning was
+/// found stale (it predated DC-87 making Windows a mutating platform). A bare `#[cfg(test)]` here
+/// would leave this genuinely unused, and `-D warnings` genuinely dead, on whichever platform its
+/// only callers don't compile for (`EXECUTION-ORDER.md` §6 rule 9's own cross-target clippy check,
+/// added for exactly this class of platform-conditional dead code).
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
 pub(crate) fn publish_immutable_file(
     root: &MutationRoot,
     relative: &Path,

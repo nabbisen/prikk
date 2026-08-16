@@ -117,8 +117,14 @@ impl ObjectWriter for FileObjectStore {
     }
 }
 
-// DC-71/DC-81: every test here sets up its scenario via real repository mutation
-// (RepositoryLayout::init or equivalent), which is Linux/macOS-only; the module never compiles a
-// test meaningful on any other platform.
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+// DC-97 correction of the comment below: that reasoning was true when written (DC-71/DC-81, before
+// DC-87 made Windows a mutating platform) and nobody revisited it once Windows mutation shipped --
+// found only by DC-97's own G5 investigation confirming the claimed Windows evidence for G5 (this
+// module's `tests::immutable::*`) does not actually run there. `RepositoryLayout::init` and real
+// repository mutation are not Linux/macOS-only anymore; what remains unix-only inside this module
+// (failpoints, symlinks, FIFOs) is now gated per-test/per-file instead of by this one blanket gate.
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
 mod tests;

@@ -12,9 +12,16 @@ use std::path::{Path, PathBuf};
 use prikk_object::{ObjectEnvelope, ObjectType};
 
 use crate::file_codec::{decode_envelope_file, encode_envelope_file};
-use crate::fsutil::{TestFailPoint, fail_once_for_test, publish_immutable_file};
+use crate::fsutil::publish_immutable_file;
+// DC-97: no Windows failpoint wiring exists (same reason as G3/G8) -- every test using these stays
+// inline-gated below.
+use crate::RepositoryLayout;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use crate::fsutil::{TestFailPoint, fail_once_for_test};
 use crate::test_support::{dummy_signature, unique_temp_dir};
-use crate::{DoctorSeverity, RepositoryLayout, doctor_repository, verify_repository};
+// DC-97: only used by the failpoint-gated tests below.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use crate::{DoctorSeverity, doctor_repository, verify_repository};
 
 const TEST_OBJECT_RELATIVE: &str = "objects/g5-conformance-test.pobj";
 
@@ -87,6 +94,7 @@ fn publish(layout: &RepositoryLayout, envelope: &ObjectEnvelope) -> prikk_error:
     )
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn temp_paths(shard: &Path) -> prikk_error::Result<Vec<PathBuf>> {
     let mut paths = Vec::new();
     for entry in std::fs::read_dir(shard)? {
@@ -102,6 +110,7 @@ fn temp_paths(shard: &Path) -> prikk_error::Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn exact_existing_bytes_are_synced_and_accepted() -> prikk_error::Result<()> {
     let (root, layout, envelope) = setup("object-exact-existing")?;
@@ -211,6 +220,7 @@ fn final_fifo_is_rejected_without_blocking() -> prikk_error::Result<()> {
     Ok(())
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn immutable_failpoints_retain_required_artifacts_and_retry() -> prikk_error::Result<()> {
     for point in [
@@ -281,6 +291,7 @@ fn immutable_failpoints_retain_required_artifacts_and_retry() -> prikk_error::Re
 /// standing in for whatever future caller might still produce it. This is the one test in this file
 /// that cannot use the fixed `TEST_OBJECT_RELATIVE` path every other test uses, precisely because
 /// the diagnostic it proves still works is itself scoped to that real addressing scheme.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn crash_left_temp_is_ignored_by_reads_and_warned_without_cleanup() -> prikk_error::Result<()> {
     let (root, layout, envelope) = setup("object-temp-diagnostics")?;

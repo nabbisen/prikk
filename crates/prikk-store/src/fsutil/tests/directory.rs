@@ -2,15 +2,23 @@
 
 use std::fs;
 use std::path::Path;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::sync::{Arc, Barrier};
 
 use crate::test_support::unique_temp_dir;
 
-use super::super::{
-    TestFailPoint, ensure_directory_required, fail_once_for_test,
-    set_directory_create_barrier_for_test,
-};
+use super::super::ensure_directory_required;
 use super::mutation_root;
+// DC-97: `concurrent_required_directory_creation_is_idempotent`'s deterministic race relies on
+// `set_directory_create_barrier_for_test`, which is *itself* inside `anchored/failpoints.rs`
+// (`wait_at_directory_create` is called only from the Unix `AnchoredDirectory::ensure_child`,
+// `directory.rs:283` -- never from `windows_authority.rs`). G8 does not get an equally rigorous
+// Windows control from writing a threaded test alone: without the barrier, N threads racing on the
+// OS scheduler alone is weaker evidence than a synchronized race, and reproducing the barrier
+// mechanism itself needs the same unbuilt Windows failpoint wiring G3 does. Reported, not worked
+// around -- see the review submission.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use super::super::{TestFailPoint, fail_once_for_test, set_directory_create_barrier_for_test};
 
 #[test]
 fn required_directory_creation_builds_each_component() {
@@ -21,6 +29,7 @@ fn required_directory_creation_builds_each_component() {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn concurrent_required_directory_creation_is_idempotent() -> prikk_error::Result<()> {
     let path = unique_temp_dir("concurrent-required-directory");
@@ -45,6 +54,7 @@ fn concurrent_required_directory_creation_is_idempotent() -> prikk_error::Result
     Ok(())
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn observed_component_parent_sync_failure_is_retryable() {
     let path = unique_temp_dir("observed-parent-sync-failure");
@@ -57,6 +67,7 @@ fn observed_component_parent_sync_failure_is_retryable() {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn directory_create_failure_has_no_side_effect_and_is_retryable() {
     let path = unique_temp_dir("directory-create-failure");
@@ -68,6 +79,7 @@ fn directory_create_failure_has_no_side_effect_and_is_retryable() {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn failed_directory_parent_sync_retains_created_component() {
     let path = unique_temp_dir("required-directory-failure");

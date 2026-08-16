@@ -7,11 +7,17 @@ mod directory;
 use crate::RepositoryLayout;
 use crate::test_support::unique_temp_dir;
 
+use super::{MutationRoot, write_file_atomically, write_worktree_file_atomically};
+// DC-97: the failpoint injection mechanism and the retired-`promote`-caller test it feeds have no
+// Windows implementation (fsutil.rs's own `mod caller_tests` comment states why) -- every test that
+// uses them, and every test that uses these otherwise-portable primitives only from within a
+// failpoint-gated test, stays inline-gated below, and their imports are gated to match rather than
+// pulled in unconditionally now that this file's outer module gate includes Windows.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use super::{
-    MutationRoot, TestFailPoint, append_file_required, create_new_file_required,
-    ensure_directory_required, fail_once_for_test, promote_file_required, read_file_if_exists,
-    remove_file_required, truncate_existing_file_required, write_file_atomically,
-    write_worktree_file_atomically,
+    TestFailPoint, append_file_required, create_new_file_required, ensure_directory_required,
+    fail_once_for_test, promote_file_required, read_file_if_exists, remove_file_required,
+    truncate_existing_file_required,
 };
 
 fn mutation_root(path: &Path) -> MutationRoot {
@@ -55,6 +61,9 @@ fn worktree_writer_remains_bound_after_root_replacement() {
     let _ = fs::remove_dir_all(replacement);
 }
 
+// DC-97: failpoint-based -- no Windows failpoint mechanism exists (see this file's own top-level
+// import comment).
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn worktree_write_sync_failure_retains_file_and_is_retryable() {
     let path = unique_temp_dir("worktree-write-failure");
@@ -93,6 +102,7 @@ fn repository_layout_remains_bound_after_prikk_replacement() {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn required_open_failure_has_no_side_effect_and_is_retryable() {
     let path = unique_temp_dir("required-open-failure");
@@ -114,6 +124,7 @@ fn mutable_atomic_write_replaces_complete_content() {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn failed_mutable_parent_sync_retains_replaced_final_name() {
     let path = unique_temp_dir("required-mutable-sync-failure");
@@ -129,6 +140,7 @@ fn failed_mutable_parent_sync_retains_replaced_final_name() {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn failed_mutable_file_sync_keeps_only_non_authoritative_temp() {
     let path = unique_temp_dir("required-mutable-file-failure");
@@ -143,6 +155,7 @@ fn failed_mutable_file_sync_keeps_only_non_authoritative_temp() {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn failed_mutable_rename_keeps_previous_authoritative_state() {
     let path = unique_temp_dir("required-mutable-rename-failure");
@@ -157,6 +170,7 @@ fn failed_mutable_rename_keeps_previous_authoritative_state() {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn failed_append_write_is_retryable() {
     let path = unique_temp_dir("append-write-failure");
@@ -173,6 +187,7 @@ fn failed_append_write_is_retryable() {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn failed_truncate_retains_previous_state_and_is_retryable() {
     let path = unique_temp_dir("truncate-failure");
@@ -189,6 +204,7 @@ fn failed_truncate_retains_previous_state_and_is_retryable() {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn failed_unlink_retains_file_and_cleanup_sync_reports_removed_state() {
     let path = unique_temp_dir("unlink-failure");
@@ -265,6 +281,7 @@ fn unsupported_mutation_fails_before_filesystem_side_effect() {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn promotion_destination_sync_failure_retains_destination_state() {
     let path = unique_temp_dir("required-promotion-destination");
@@ -289,6 +306,7 @@ fn promotion_destination_sync_failure_retains_destination_state() {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn promotion_rename_failure_retains_source_only() {
     let path = unique_temp_dir("required-promotion-rename");
@@ -313,6 +331,7 @@ fn promotion_rename_failure_retains_source_only() {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn promotion_source_sync_failure_reports_committed_destination() {
     let path = unique_temp_dir("required-promotion-source");
@@ -387,11 +406,16 @@ fn measure_directory_sync_fsync_vs_fcntl_fullfsync() {
 /// DC-82 §3: "mutation fails at runtime, not a compile error" for the implementor-less case, proven
 /// by *running* the code, not by cross-target `clippy`/`build` alone (which prove compilation, never
 /// runtime behaviour). `none::NoDurability` is visible here under its `#[cfg(any(test, ...))]` gate
-/// regardless of host platform — this test constructs it directly and calls every trait method,
-/// which the compiler accepts (proving no compile-time obstacle) and which each return `Err` at
-/// runtime with the exact message the pre-DC-82 `#[cfg(not(any(...)))]` fallback arms used to
-/// construct inline. The production dispatch (`ACTIVE_DURABILITY`) is untouched by this test — on
-/// this host it still resolves to `LinuxDurability`/`MacosDurability`, never `NoDurability`.
+/// on Linux and macOS -- **not on Windows** (DC-97 correction: an earlier version of this comment
+/// said "regardless of host platform," which stopped being true once Windows got a real
+/// `WindowsDurability` implementor; `anchored.rs`'s own `NoDurability` gate excludes Windows in test
+/// builds specifically because Windows no longer needs an implementor-less fallback to test). This
+/// test constructs it directly and calls every trait method, which the compiler accepts (proving no
+/// compile-time obstacle) and which each return `Err` at runtime with the exact message the
+/// pre-DC-82 `#[cfg(not(any(...)))]` fallback arms used to construct inline. The production dispatch
+/// (`ACTIVE_DURABILITY`) is untouched by this test — on this host it still resolves to
+/// `LinuxDurability`/`MacosDurability`, never `NoDurability`.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn no_durability_every_method_fails_at_runtime_not_compile_time() {
     use crate::fsutil::{DurabilityContract, NoDurability};
