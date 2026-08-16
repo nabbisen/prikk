@@ -30,6 +30,8 @@ mod read;
 mod regular;
 #[cfg(target_os = "windows")]
 mod windows;
+#[cfg(target_os = "windows")]
+mod windows_authority;
 
 pub(crate) use directory::MutationRoot;
 pub(crate) use read::{

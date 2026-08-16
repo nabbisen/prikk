@@ -7,6 +7,7 @@ use super::{Inventory, Procedure, scan_procedure_files, verify};
 fn valid() -> Inventory {
     let packages = [
         "prikk-error",
+        "prikk-ffi",
         "prikk-hash",
         "prikk-crypto",
         "prikk-object",

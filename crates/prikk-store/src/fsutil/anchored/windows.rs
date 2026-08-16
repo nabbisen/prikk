@@ -111,10 +111,19 @@ fn validate_directory_not_reparse_point(file: &File, path: &Path) -> Result<()> 
 }
 
 /// Open `path` as a directory handle, refusing a reparse point or non-directory. Component-level
-/// building block for `directory.rs`'s `WindowsAuthority`.
-pub(super) fn open_directory_no_follow(path: &Path) -> Result<()> {
+/// building block for `windows_authority.rs`'s `WindowsAuthority`. Returns the validated handle
+/// (rather than discarding it) so a caller that needs this component's identity -- only the final
+/// component of a walk, per DC-96 -- can read it from the same open, not a second one.
+pub(super) fn open_directory_no_follow(path: &Path) -> Result<File> {
     let file = open_directory_handle(path).map_err(|error| io_error(path, error))?;
-    validate_directory_not_reparse_point(&file, path)
+    validate_directory_not_reparse_point(&file, path)?;
+    Ok(file)
+}
+
+/// Read `file`'s identity (DC-96) -- the `windows.rs`-local wrapper around `prikk_ffi::identity_of`
+/// that also attaches `path` to any I/O error, matching every other function in this module.
+pub(super) fn identity_no_follow(file: &File, path: &Path) -> Result<prikk_ffi::FileIdentity> {
+    prikk_ffi::identity_of(file).map_err(|error| io_error(path, error))
 }
 
 /// `open_directory_no_follow`, but `None` (not an error) when `path` does not exist.
@@ -131,10 +140,14 @@ pub(super) fn stat_directory_no_follow(path: &Path) -> Result<Option<()>> {
 
 /// Open or create `path` as a directory, tolerating a concurrent creator (G8) the same way
 /// `AnchoredDirectory::ensure_child` does on Unix: try the open first, create only on `NotFound`,
-/// and treat a create-time `AlreadyExists` as the concurrent winner rather than an error.
-pub(super) fn ensure_directory_component_no_follow(path: &Path) -> Result<()> {
+/// and treat a create-time `AlreadyExists` as the concurrent winner rather than an error. Returns
+/// the validated handle for the same reason `open_directory_no_follow` does.
+pub(super) fn ensure_directory_component_no_follow(path: &Path) -> Result<File> {
     match open_directory_handle(path) {
-        Ok(file) => validate_directory_not_reparse_point(&file, path),
+        Ok(file) => {
+            validate_directory_not_reparse_point(&file, path)?;
+            Ok(file)
+        }
         Err(error) if error.kind() == io::ErrorKind::NotFound => match fs::create_dir(path) {
             Ok(()) => open_directory_no_follow(path),
             Err(create_error) if create_error.kind() == io::ErrorKind::AlreadyExists => {

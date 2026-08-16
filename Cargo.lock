@@ -814,6 +814,13 @@ name = "prikk-error"
 version = "0.20.0"
 
 [[package]]
+name = "prikk-ffi"
+version = "0.20.0"
+dependencies = [
+ "windows-sys",
+]
+
+[[package]]
 name = "prikk-hash"
 version = "0.20.0"
 dependencies = [
@@ -858,6 +865,7 @@ dependencies = [
  "getrandom 0.4.3",
  "prikk-crypto",
  "prikk-error",
+ "prikk-ffi",
  "prikk-hash",
  "prikk-object",
  "prikk-replay",

@@ -11,8 +11,9 @@ use serde::Serialize;
 
 use crate::error::{Error, Result};
 
-const PRODUCTS: [(&str, &str); 7] = [
+const PRODUCTS: [(&str, &str); 8] = [
     ("prikk-error", "crates/prikk-error/Cargo.toml"),
+    ("prikk-ffi", "crates/prikk-ffi/Cargo.toml"),
     ("prikk-hash", "crates/prikk-hash/Cargo.toml"),
     ("prikk-crypto", "crates/prikk-crypto/Cargo.toml"),
     ("prikk-object", "crates/prikk-object/Cargo.toml"),

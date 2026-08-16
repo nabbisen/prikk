@@ -105,6 +105,41 @@ fn full_verification_retains_wal_objects_trust_and_recovery_diagnosis_after_root
     Ok(())
 }
 
+/// DC-96 Windows Anchor Identity, design-v1.md §6.2: the `repository_mutation` negative control,
+/// distinct from `snapshot::tests::worktree_checks_and_writes_remain_on_retained_root`'s worktree
+/// one -- this scenario swaps `.prikk` itself, not the worktree root, so it exercises
+/// `repository_mutation` (objects/refs/WAL, the durability-bearing anchor), not `worktree_mutation`.
+/// Windows-only: on Linux/macOS the retained file descriptor means this scenario has no failure
+/// mode to refuse -- the write simply succeeds, anchored correctly, which is exactly what
+/// `full_verification_retains_wal_objects_trust_and_recovery_diagnosis_after_root_replacement`
+/// above already demonstrates for reads through the same retained authority. Converted from the
+/// throwaway diagnostic probe on `dc87-stage2-windows-cause2-probe` (`d691625`), whose byte-count
+/// observation (0 -> 362 bytes into the *impostor* `.prikk`, not the retained `.prikk-retained`) is
+/// what first established this as a write, not merely a read, vulnerability.
+#[cfg(target_os = "windows")]
+#[test]
+fn durability_bearing_write_is_refused_after_repository_root_replacement() -> prikk_error::Result<()>
+{
+    let root = unique_temp_dir("verify-durability-write-root-replacement");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    std::fs::rename(layout.prikk_dir(), root.join(".prikk-retained"))?;
+    // The impostor: a fresh, empty .prikk at the same path the stale `layout` still points at.
+    let _replacement = RepositoryLayout::init(root.clone())?;
+
+    let mut objects = FileObjectStore::new(layout.clone());
+    let write_result = objects.write_object(&signed_patch_blob_envelope());
+
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(
+        write_result.is_err(),
+        "a durability-bearing write through a stale layout must be refused once the anchor it \
+         was bound to has been replaced, not silently redirected into the impostor: {write_result:?}"
+    );
+    Ok(())
+}
+
 fn assert_retained_missing_pointer(
     layout: &RepositoryLayout,
     patch_id: prikk_object::ObjectId,

@@ -46,7 +46,7 @@ pub(super) trait PlatformAuthority: Sized {
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 type Authority = Arc<AnchoredDirectory>;
 #[cfg(target_os = "windows")]
-type Authority = WindowsAuthority;
+type Authority = super::windows_authority::WindowsAuthority;
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 type Authority = PathOnlyAuthority;
 
@@ -182,50 +182,12 @@ impl PlatformAuthority for PathOnlyAuthority {
     }
 }
 
-/// Windows: no retained handle between steps, by construction, not as a shortcut -- design-v1.md
-/// §2's own gap statement. Each `WindowsAuthority` carries its own validated absolute path and
-/// re-walks from it on every `ensure_child`/`open_child` call, one component at a time, refusing a
-/// reparse point at whichever component is currently being opened (`windows.rs`'s own module doc
-/// states precisely what this closes and what it does not -- not repeated here).
-#[cfg(target_os = "windows")]
-#[derive(Clone)]
-pub(super) struct WindowsAuthority {
-    path: PathBuf,
-}
-
-#[cfg(target_os = "windows")]
-impl PlatformAuthority for WindowsAuthority {
-    fn bind(path: &Path) -> Result<Self> {
-        super::windows::open_directory_no_follow(path)?;
-        Ok(Self {
-            path: path.to_path_buf(),
-        })
-    }
-
-    fn same_as(&self, self_path: &Arc<PathBuf>, _other: &Self, other_path: &Arc<PathBuf>) -> bool {
-        // No retained handle to compare -- identity is the `MutationRoot`'s own path, the same
-        // fallback `PathOnlyAuthority` uses for the same reason.
-        Arc::ptr_eq(self_path, other_path)
-    }
-
-    fn ensure_child(&self, relative: &Path) -> Result<Self> {
-        let mut current = self.path.clone();
-        for component in relative_components(relative)? {
-            current.push(component);
-            super::windows::ensure_directory_component_no_follow(&current)?;
-        }
-        Ok(Self { path: current })
-    }
-
-    fn open_child(&self, relative: &Path) -> Result<Self> {
-        let mut current = self.path.clone();
-        for component in relative_components(relative)? {
-            current.push(component);
-            super::windows::open_directory_no_follow(&current)?;
-        }
-        Ok(Self { path: current })
-    }
-}
+// Windows: no retained handle between steps, by construction, not as a shortcut -- design-v1.md
+// §2's own gap statement. `WindowsAuthority` itself now lives in its own module (DC-96,
+// `windows_authority.rs`) so its fields are genuinely private and every walk verifies the
+// anchor's identity before touching them -- see that module's own doc for why. The three
+// functions below are thin wrappers over its resolvers, kept here so `windows.rs`/`read.rs` do
+// not need to know the authority moved.
 
 /// Resolve (creating any missing component) `relative` against `root`'s own Windows authority,
 /// returning the validated absolute path. Mirrors `prepare_directory_required`.
@@ -234,7 +196,7 @@ pub(super) fn prepare_windows_directory_required(
     root: &MutationRoot,
     relative: &Path,
 ) -> Result<PathBuf> {
-    Ok(root.authority.ensure_child(relative)?.path)
+    root.authority.resolve_prepared(relative)
 }
 
 /// Resolve `relative` against `root`'s own Windows authority, requiring every component to
@@ -244,7 +206,7 @@ pub(super) fn open_existing_windows_directory_required(
     root: &MutationRoot,
     relative: &Path,
 ) -> Result<PathBuf> {
-    Ok(root.authority.open_child(relative)?.path)
+    root.authority.resolve_existing(relative)
 }
 
 /// Resolve `relative` against `root`'s own Windows authority, returning `None` (not an error) as
@@ -254,14 +216,7 @@ pub(super) fn open_existing_windows_directory_for_read(
     root: &MutationRoot,
     relative: &Path,
 ) -> Result<Option<PathBuf>> {
-    let mut current = root.authority.path.clone();
-    for component in relative_components(relative)? {
-        current.push(component);
-        if super::windows::stat_directory_no_follow(&current)?.is_none() {
-            return Ok(None);
-        }
-    }
-    Ok(Some(current))
+    root.authority.resolve_existing_for_read(relative)
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]

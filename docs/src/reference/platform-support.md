@@ -26,9 +26,8 @@ rather than left to be discovered, because it is a real difference and not a cov
 resolution on Linux and macOS opens each path component with `openat(dirfd, name, O_NOFOLLOW)`, so the
 handle for a component is bound to the object that was checked — the next open is scoped to that
 handle, not to a re-walked path string. **Windows has no equivalent**: no Win32 primitive takes a
-directory handle as a resolution root for opening a child by name, and the natural mitigation —
-confirming two opens landed on the same object via a file-index/volume-serial pair — sits behind an
-unstable Rust API.
+directory handle as a resolution root for opening a child by name, so the walk itself is always a
+re-walked path string on Windows, by construction.
 
 Windows' actual implementation (`crates/prikk-store/src/fsutil/anchored/windows.rs`) refuses a reparse
 point at each component as it is opened (`FILE_FLAG_OPEN_REPARSE_POINT` plus a post-open attribute
@@ -36,9 +35,33 @@ check), which defeats a symlink or junction that is already in place. **It does 
 between checking a component and opening the next one.** So a concurrent local process that
 substitutes a reparse point mid-walk, timed into that window, is not provably defeated on Windows,
 while it is on Linux and macOS. A passive, already-planted reparse point is caught on every platform.
+**This mid-walk window is unchanged by anything below** — DC-96 verifies the anchor a walk starts
+from, not each intermediate component of the walk itself.
 
 Prikk does not claim otherwise. This gap was accepted, once, on the condition that it be stated rather
 than elided (`prerequisite-ruling-v1.md` §4.1) — this section is that statement.
+
+**Anchor replacement (DC-96 Windows Anchor Identity).** DC-87 Stage 2's own CI job demonstrated a
+second, wider gap: renaming a repository's root (or `.prikk` specifically) aside and creating a fresh
+directory at that path redirected both reads and writes — including objects, refs, and the WAL, not
+only the worktree — into the impostor, silently, with prikk reporting success. This was not the G1
+mid-walk race above; it needed no reparse point at all, and the disclosure as it stood would have led a
+reader to conclude it was already defended. It was not.
+
+**Fixed, as detection rather than prevention.** `WindowsAuthority` (`crates/prikk-store/src/fsutil/
+anchored/windows_authority.rs`) now captures the identity of the directory it is bound to
+(`GetFileInformationByHandle`'s `(volume serial number, file index)` pair, read via `prikk-ffi` —
+`crates/prikk-ffi`, the one workspace crate permitted `unsafe` per DC-90) and re-verifies it before
+every walk that starts from that anchor. A mismatch is refused, not silently followed. Three residual
+properties, stated precisely rather than left to be inferred:
+
+- **Anchor replacement *between* operations: detected, refused.** The gap the CI job demonstrated.
+- **Anchor replacement racing a *single* operation** — swapped between the identity check and the open
+  that immediately follows it — **is still possible.** The window is narrowed from "any time before the
+  next operation" to one check-then-open pair; it is not closed, because Windows still offers no
+  `openat`-equivalent to close it by construction the way Linux and macOS do.
+- **Intermediate path components are unchanged** — this is exactly the G1 mid-walk window above, and
+  DC-96 does not touch it.
 
 ### The nine `DurabilityContract` guarantees on Windows
 
