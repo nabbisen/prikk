@@ -240,25 +240,37 @@ fn repository_init_is_idempotent() {
 /// design-v1.md §2: a reparse point substituted for a plain directory or file at any component
 /// must be detected and refused. Requires `std::os::windows::fs::symlink_dir`, which needs either
 /// Administrator privilege or Developer Mode enabled -- GitHub's hosted `windows-latest` runner is
-/// expected to have this, but it is not verified from here. If this test errors on `symlink_dir`
-/// itself (not on the refusal assertion), that is an environment gap to report, not a defect in
-/// the walk.
+/// expected to have this, but it was never actually confirmed.
+///
+/// **DC-97 §2 correction**: this test used to return silently (reporting `ok`) if either
+/// precondition failed, on the stated intent that a missing precondition should be "reported as an
+/// environment gap." **The code never did that -- it reported nothing, and the guarantee this test
+/// exists to pin (G1, the anchoring property DC-96 hardened) could have been asserting nothing on
+/// every run with no red test to notice.** Both preconditions now `panic!` with a diagnostic naming
+/// exactly what failed, distinguishable from the refusal assertion itself failing. A control that
+/// cannot run must fail loudly, not pass silently.
 #[test]
 fn a_reparse_point_substituted_for_a_directory_component_is_refused() {
     let root_path = unique_temp_dir("windows-reparse-refusal");
     let root = mutation_root(&root_path);
 
     let real_target = root_path.join("real-target");
-    if std::fs::create_dir(&real_target).is_err() {
-        let _ = std::fs::remove_dir_all(root_path);
-        return;
+    if let Err(error) = std::fs::create_dir(&real_target) {
+        let _ = std::fs::remove_dir_all(&root_path);
+        panic!(
+            "DC-97 G1: could not create this test's own fixture directory (not the property under \
+             test -- an ordinary directory create failed): {error}"
+        );
     }
     let link_name = root_path.join("nested");
-    if std::os::windows::fs::symlink_dir(&real_target, &link_name).is_err() {
-        // Cannot create a directory symlink in this environment (no Developer Mode / privilege) --
-        // report this as an environment gap rather than fail the whole suite on it.
-        let _ = std::fs::remove_dir_all(root_path);
-        return;
+    if let Err(error) = std::os::windows::fs::symlink_dir(&real_target, &link_name) {
+        let _ = std::fs::remove_dir_all(&root_path);
+        panic!(
+            "DC-97 G1: symlink_dir failed, so this test cannot demonstrate the reparse-point \
+             refusal at all on this runner -- likely missing Developer Mode or Administrator \
+             privilege: {error}. If this fires in CI, G1 currently has no working Windows control \
+             and must be reclassified, not silently skipped."
+        );
     }
 
     let result = ensure_directory_required(&root, Path::new("nested/deeper"));
@@ -267,5 +279,5 @@ fn a_reparse_point_substituted_for_a_directory_component_is_refused() {
         "a reparse point standing in for a plain directory component must be refused"
     );
 
-    let _ = std::fs::remove_dir_all(root_path);
+    let _ = std::fs::remove_dir_all(&root_path);
 }
