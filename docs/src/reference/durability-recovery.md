@@ -16,10 +16,13 @@ Release-transaction durability, artifact identity, and evidence limits are docum
 - Prikk is early implementation software and is not a production Git replacement.
 - Durability and recovery claims are supported by current unit and integration tests, not by a
   completed crash-matrix or fuzzing campaign.
-- Repository mutation currently requires Linux or macOS anchored relative no-follow operations, strict
-  regular file and directory sync, atomic rename, and the required install primitives. Windows and
-  filesystems without those proved capabilities remain read-only/diagnostic targets — see
-  [platform support](./platform-support.md) for exactly which commands that covers and how it is
+- Repository mutation currently requires Linux, macOS, or Windows (DC-87 Stage 2) anchored relative
+  no-follow path resolution, strict regular file sync, and the required install primitives — with one
+  stated exception: Windows' anchoring is not handle-scoped between path components the way
+  Linux/macOS's is, so it does not close the same inter-component race (see
+  [platform support](./platform-support.md) for the exact gap and the full guarantee-by-guarantee
+  table). Filesystems without any of those proved capabilities remain read-only/diagnostic targets —
+  see [platform support](./platform-support.md) for exactly which commands that covers and how it is
   CI-verified.
 - `.prikk/` is not a stable repository format and there is no stable migration policy yet.
 - The ref pointer is a mutable convenience pointer (an entry in a shared, append-only container, not a
@@ -81,9 +84,10 @@ order:
 
 The implementation is designed so interruption recovery lands on a checkable previous ref state or a
 checkable new published state. That statement is bounded by the current evidence: unit/integration
-tests, no completed crash-matrix or fuzzing campaign, and gates exercised on Linux and macOS only
-(the `macOS mutation test suite` CI job runs the full suite on `macos-latest`; Windows mutation is
-unimplemented, so nothing exercises it there).
+tests, no completed crash-matrix or fuzzing campaign, and gates exercised on Linux, macOS, and Windows
+(the `macOS mutation test suite` and `Windows mutation test suite` CI jobs run the full suite on
+`macos-latest`/`windows-latest`) — with the caveat that DC-76's nine negative controls, which rely on
+failpoint injection, run on Linux/macOS only; that mechanism does not exist for Windows yet.
 
 If the active WAL's Patch IDs already match the current published tip, seal reconstructs the expected
 no-clock RefUpdate and finishes any exact one-record pointer lead before cleanup. An existing complete
@@ -192,7 +196,7 @@ stable repository-format migration, and production-readiness claims.
 | Doctor refuses format-1 missing-pointer reconstruction; exact interrupted ref publication completion requires retained active evidence and a trusted signer. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
 | Doctor began as read-only diagnostics, and current mutating repairs remain opt-in and narrow. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [PR-011](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-011-DOCTOR-HANDOFF.md), [PR-012](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-012-DOCTOR-REPAIR-HANDOFF.md), [PR-013](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-013-REF-RECOVERY-HANDOFF.md) |
 | Ref pointers are mutable, not roots of trust. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`refs/pointer_index.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer_index.rs), [data model](./data-model.md) |
-| Durability/platform claims remain limited by current test evidence and gates exercised on Linux and macOS only. | [DC-24 baseline recap](https://github.com/nabbisen/prikk/blob/main/rfcs/handoffs/DC-24-data-model-trust-threat-docs/baseline-recap.md), [DC-24](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md), [DC-28](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md) |
+| Durability/platform claims remain limited by current test evidence and gates exercised on Linux, macOS, and Windows. | [DC-24 baseline recap](https://github.com/nabbisen/prikk/blob/main/rfcs/handoffs/DC-24-data-model-trust-threat-docs/baseline-recap.md), [DC-24](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md), [DC-28](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md) |
 
 ## Provenance
 

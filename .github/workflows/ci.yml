@@ -89,9 +89,31 @@ jobs:
       - name: Measure fsync vs fcntl_fullfsync (NFR-PERF-01 data point, not a gate)
         run: cargo test --workspace --locked -- measure_directory_sync_fsync_vs_fcntl_fullfsync --ignored --nocapture
 
-  # A fixture repository is authored on Linux (repository mutation is Linux-only) and handed to the
-  # non-linux-verify job below, which proves the read-only command set actually runs elsewhere —
-  # criterion 2 asks for this demonstrated, not merely a successful compile.
+  # DC-87 Stage 2: repository mutation is Linux, macOS, and Windows now — this is the *only*
+  # verification available for the Windows backend, mirroring macos-mutation above for the same
+  # reason (DC-81 handoff §3, applying identically to Windows): neither developer nor architect can
+  # run Windows locally as part of this project's own environment. A green run here proves prikk's
+  # own path-resolution and failure-handling behaviour on Windows; criterion 2 (every guarantee held
+  # or documented weaker) is not provable from a compile alone — this job exercises it.
+  windows-mutation:
+    name: Windows mutation test suite
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Fetch dependencies for every target
+        # DC-81 addendum-2 B1's finding, confirmed to apply identically here (see lines 20/40/83):
+        # without this, boundary::tests::workspace_and_product_boundaries_hold fails.
+        run: cargo fetch --locked
+      - name: Test
+        run: cargo test --workspace --locked
+
+  # A fixture repository is authored on Linux and handed to the non-linux-verify job below, which
+  # proves the read-only command set actually runs elsewhere — criterion 2 asks for this
+  # demonstrated, not merely a successful compile. (Mutation is no longer Linux-only — DC-81 added
+  # macOS, DC-87 added Windows — but authoring the fixture here, once, keeps this job's own
+  # dependency on `windows-mutation`/`macos-mutation` for mutation coverage rather than duplicating
+  # it.)
   fixture:
     name: build read-only fixture repository
     runs-on: ubuntu-latest

@@ -13,13 +13,20 @@ use prikk_error::{PrikkError, Result};
 use super::MutationRoot;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use super::directory::open_existing_directory_for_read;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "windows")]
+use super::directory::open_existing_windows_directory_for_read;
 use super::regular::{required_file_name, required_parent};
+#[cfg(target_os = "windows")]
+use super::windows::{
+    RawKind, classify_no_follow, open_existing_file_no_follow, stat_file_no_follow,
+};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use super::{failpoints, io_error};
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use rustix::fs::{self, AtFlags, FileType, Mode, OFlags};
+#[cfg(target_os = "windows")]
+use std::io::Read as _;
 
 /// No-follow classification of a root-relative final entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,7 +78,9 @@ trait AnchoredReader {
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 const ACTIVE_READER: PosixReader = PosixReader;
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(target_os = "windows")]
+const ACTIVE_READER: WindowsReader = WindowsReader;
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 const ACTIVE_READER: PathOnlyReader = PathOnlyReader;
 
 /// Read a regular file's bytes, returning `None` only when a path component is absent.
@@ -219,10 +228,105 @@ impl AnchoredReader for PosixReader {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(target_os = "windows")]
+struct WindowsReader;
+
+#[cfg(target_os = "windows")]
+impl AnchoredReader for WindowsReader {
+    fn read_file_if_exists(&self, root: &MutationRoot, relative: &Path) -> Result<Option<Vec<u8>>> {
+        let Some(parent) =
+            open_existing_windows_directory_for_read(root, required_parent(relative)?)?
+        else {
+            return Ok(None);
+        };
+        let path = parent.join(required_file_name(relative)?);
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true);
+        let Some(mut file) = open_existing_file_no_follow(&path, &mut options)? else {
+            return Ok(None);
+        };
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)?;
+        Ok(Some(bytes))
+    }
+
+    fn stat_file_state_if_exists(
+        &self,
+        root: &MutationRoot,
+        relative: &Path,
+    ) -> Result<Option<RootFileStat>> {
+        let Some(parent) =
+            open_existing_windows_directory_for_read(root, required_parent(relative)?)?
+        else {
+            return Ok(None);
+        };
+        let path = parent.join(required_file_name(relative)?);
+        let Some(metadata) = stat_file_no_follow(&path)? else {
+            return Ok(None);
+        };
+        let modified = metadata
+            .modified()
+            .ok()
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+            .unwrap_or_default();
+        Ok(Some(RootFileStat {
+            size: metadata.len(),
+            mtime_secs: i64::try_from(modified.as_secs()).unwrap_or_default(),
+            mtime_nanos: modified.subsec_nanos(),
+            // No POSIX mode on Windows (DC-87 §3.3/§4.3) -- never a synthetic stand-in.
+            mode: None,
+        }))
+    }
+
+    fn list_directory(&self, root: &MutationRoot, relative: &Path) -> Result<Vec<RootDirEntry>> {
+        let Some(resolved) = open_existing_windows_directory_for_read(root, relative)? else {
+            return Err(PrikkError::Io(format!(
+                "directory is absent: {}",
+                relative.display()
+            )));
+        };
+        let mut entries = Vec::new();
+        for entry in std::fs::read_dir(&resolved)
+            .map_err(|error| fallback_io_error(&resolved, "open directory", error))?
+        {
+            let entry =
+                entry.map_err(|error| fallback_io_error(&resolved, "read directory", error))?;
+            let name = entry.file_name();
+            let child = join_relative(relative, &name);
+            let kind = self.inspect_entry(root, &child)?.ok_or_else(|| {
+                PrikkError::Io(format!("directory entry disappeared: {}", child.display()))
+            })?;
+            entries.push(RootDirEntry { name, kind });
+        }
+        Ok(entries)
+    }
+
+    fn inspect_entry(&self, root: &MutationRoot, relative: &Path) -> Result<Option<EntryKind>> {
+        let Some(parent) =
+            open_existing_windows_directory_for_read(root, required_parent(relative)?)?
+        else {
+            return Ok(None);
+        };
+        let path = parent.join(required_file_name(relative)?);
+        let Some(kind) = classify_no_follow(&path)? else {
+            return Ok(None);
+        };
+        Ok(Some(match kind {
+            RawKind::File => EntryKind::Regular,
+            RawKind::Directory => EntryKind::Directory,
+            // Any reparse point (junction, mount point, or symbolic link) classifies as
+            // `Symlink` -- see `windows::RawKind`'s own doc for why the coarser distinction is
+            // the one this design needs.
+            RawKind::ReparsePoint => EntryKind::Symlink,
+            RawKind::Other => EntryKind::Other,
+        }))
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 struct PathOnlyReader;
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 impl AnchoredReader for PathOnlyReader {
     fn read_file_if_exists(&self, root: &MutationRoot, relative: &Path) -> Result<Option<Vec<u8>>> {
         let path = root.fallback_path(relative)?;

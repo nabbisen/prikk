@@ -255,7 +255,7 @@ fn read_rejects_fifo_content_despite_the_os_permitting_the_open() {
     let _ = fs::remove_dir_all(path);
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 #[test]
 fn unsupported_mutation_fails_before_filesystem_side_effect() {
     let path = unique_temp_dir("unsupported-mutation");
@@ -396,7 +396,7 @@ fn measure_directory_sync_fsync_vs_fcntl_fullfsync() {
 fn no_durability_every_method_fails_at_runtime_not_compile_time() {
     use crate::fsutil::{DurabilityContract, NoDurability};
 
-    const EXPECTED: &str = "i/o error: repository mutation requires Linux or macOS root-scoped filesystem capabilities";
+    const EXPECTED: &str = "i/o error: repository mutation requires Linux, macOS, or Windows root-scoped filesystem capabilities";
 
     let path = unique_temp_dir("no-durability-runtime-check");
     let root = mutation_root(&path);
@@ -462,7 +462,7 @@ fn no_durability_every_method_fails_at_runtime_not_compile_time() {
     );
     assert_eq!(
         create_exclusive_error.to_string(),
-        "repository mutation requires Linux or macOS anchored filesystem primitives"
+        "repository mutation requires Linux, macOS, or Windows anchored filesystem primitives"
     );
 
     let _ = fs::remove_dir_all(path);

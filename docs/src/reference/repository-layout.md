@@ -23,10 +23,11 @@ For format stability, migration limits, and release identity, see
   directory is retired and no longer initialized.
 - Durability and recovery claims are supported by current unit and integration tests, not by a
   completed crash-matrix or fuzzing campaign.
-- Repository *mutation* is exercised by project gates on Linux and macOS; Windows mutation remains
-  unimplemented, so cross-platform fsync and path semantics for mutation remain a design target there.
-  Read-only commands are CI-gated on macOS and Windows too — see
-  [platform support](./platform-support.md).
+- Repository *mutation* is exercised by project gates on Linux, macOS, and Windows (DC-87 Stage 2).
+  Windows' anchoring guarantee is weaker than Linux/macOS in one stated way — see
+  [platform support](./platform-support.md) for the exact gap and which of the nine durability
+  guarantees are held, weaker, or documented no-ops there. Read-only commands are CI-gated on macOS
+  and Windows too — see [platform support](./platform-support.md).
 - Stable repository-format migration, garbage collection, quarantine enforcement, cache rebuilding,
   hosted forge trust, remotes/sync, and production merge execution remain deferred.
 

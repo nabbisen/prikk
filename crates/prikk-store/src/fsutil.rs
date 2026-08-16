@@ -1,6 +1,6 @@
 //! Filesystem utility helpers for storage operations.
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use std::path::{Path, PathBuf};
 
 use prikk_error::{PrikkError, Result};
@@ -69,7 +69,7 @@ pub(crate) use anchored::{
 };
 
 /// Return a process-unique temporary path next to the destination.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub(crate) fn temporary_path(path: &Path) -> Result<PathBuf> {
     let Some(file_name) = path.file_name() else {
         return Err(PrikkError::Io(

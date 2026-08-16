@@ -54,7 +54,7 @@ impl DurabilityContract for NoDurability {
         let _ = (root, relative, bytes);
         Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
-            "repository mutation requires Linux or macOS anchored filesystem primitives",
+            "repository mutation requires Linux, macOS, or Windows anchored filesystem primitives",
         ))
     }
 

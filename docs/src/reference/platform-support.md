@@ -8,33 +8,64 @@ non-Linux target on every change; see [Non-Linux CI conformance](#non-linux-ci-c
 
 ## The boundary
 
-**Repository *mutation* requires Linux or macOS.** `crates/prikk-store`'s anchored filesystem
-primitives use no-follow, nonblocking, atomic-rename, and no-clobber-install capabilities
+**Repository *mutation* requires Linux, macOS, or Windows.** `crates/prikk-store`'s anchored
+filesystem primitives use no-follow, nonblocking, atomic-rename, and no-clobber-install capabilities
 ([durability and crash recovery](./durability-recovery.md)) with a reviewed implementation on each of
-those two platforms — `LinuxDurability`, and, since DC-81/DC-82, `MacosDurability` (G3 uses
+those three platforms — `LinuxDurability`, `MacosDurability` (DC-81/DC-82; G3 uses
 `fcntl_fullfsync` in place of `fsync`, measured ~180x slower on the GitHub macOS runner and recorded
-in `FINDINGS.md`) — and no reviewed equivalent on any other platform yet
-([DC-37](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md)).
+in `FINDINGS.md`), and `WindowsDurability` (DC-87 Stage 2) — and no reviewed equivalent on any other
+platform yet
+([DC-37](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md),
+superseded for Linux/macOS/Windows by DC-87).
 Every mutation function's *signature* compiles on every platform; only its *body* has a real
-implementor on Linux and macOS, and a caller on any other platform receives a clean runtime error
-rather than a build failure or a silent no-op.
+implementor on Linux, macOS, and Windows, and a caller on any other platform receives a clean runtime
+error rather than a build failure or a silent no-op.
 
-**What a Windows implementation would and would not be able to guarantee.** This is stated here rather
-than left to be discovered, because it is a real difference and not a coverage gap. Anchored resolution
-on Linux and macOS opens each path component with `openat(dirfd, name, O_NOFOLLOW)`, so the handle for a
-component is bound to the object that was checked — the next open is scoped to that handle, not to a
-re-walked path string. **Windows has no equivalent**: no Win32 primitive takes a directory handle as a
-resolution root for opening a child by name, and the natural mitigation — confirming two opens landed on
-the same object via a file-index/volume-serial pair — sits behind an unstable Rust API.
+**What Windows actually guarantees and does not, for path resolution (G1).** This is stated here
+rather than left to be discovered, because it is a real difference and not a coverage gap. Anchored
+resolution on Linux and macOS opens each path component with `openat(dirfd, name, O_NOFOLLOW)`, so the
+handle for a component is bound to the object that was checked — the next open is scoped to that
+handle, not to a re-walked path string. **Windows has no equivalent**: no Win32 primitive takes a
+directory handle as a resolution root for opening a child by name, and the natural mitigation —
+confirming two opens landed on the same object via a file-index/volume-serial pair — sits behind an
+unstable Rust API.
 
-A Windows implementation can refuse a reparse point at each component as it is opened, which defeats a
-symlink or junction that is already in place. **It cannot close the window between checking a component
-and opening the next one.** So a concurrent local process that substitutes a reparse point mid-walk,
-timed into that window, is not provably defeated on Windows, while it is on Linux and macOS. A passive,
-already-planted reparse point is caught on every platform.
+Windows' actual implementation (`crates/prikk-store/src/fsutil/anchored/windows.rs`) refuses a reparse
+point at each component as it is opened (`FILE_FLAG_OPEN_REPARSE_POINT` plus a post-open attribute
+check), which defeats a symlink or junction that is already in place. **It does not close the window
+between checking a component and opening the next one.** So a concurrent local process that
+substitutes a reparse point mid-walk, timed into that window, is not provably defeated on Windows,
+while it is on Linux and macOS. A passive, already-planted reparse point is caught on every platform.
 
-Prikk does not claim otherwise, and this difference is the reason Windows mutation is not shipped on the
-strength of the primitives alone.
+Prikk does not claim otherwise. This gap was accepted, once, on the condition that it be stated rather
+than elided (`prerequisite-ruling-v1.md` §4.1) — this section is that statement.
+
+### The nine `DurabilityContract` guarantees on Windows
+
+| Method | Windows guarantee |
+|---|---|
+| `durable_append` | **Held.** Content durability on an existing name is what Windows provides. |
+| `durable_truncate` / `durable_truncate_to_empty` | **Held.** |
+| `create_exclusive` | **Held at `init` only.** The new directory entry it creates is not itself durably confirmed — see the `init`-time exemption below. |
+| `ensure_directory` | **Held at `init` only**, same caveat. |
+| `remove_if_present` | **Held**, conditional on every open in the Windows backend requesting `FILE_SHARE_DELETE` — enforced in one place ([`open_no_follow`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/fsutil/anchored/windows.rs)), not per call site. |
+| `atomic_replace` | **Weaker.** `std::fs::rename` over the destination, with no durability lever asserted for the rename itself (`MOVEFILE_WRITE_THROUGH`'s same-volume guarantee was investigated to three independent primary sources and found genuinely undeterminable). Acceptable only because its remaining callers are two rebuildable caches. |
+| `promote` | **Weaker**, same rename caveat, and unreachable — zero production callers. |
+| `publish_immutable` | **Weaker**, `std::fs::hard_link`-based no-clobber install with the same rename-adjacent caveat, and unreachable — zero production callers (the standing G5 orphan finding). |
+| `set_permission_bits` | **Vacuous — a documented no-op.** NTFS has no POSIX execute bit; prikk's own recorded mode is never derived from the filesystem, so a round-trip checkout on Linux restores the node's recorded mode faithfully regardless of what this method does on Windows. |
+| `durable_directory_entry` | **Vacuous — a documented no-op.** `FlushFileBuffers`'s own documentation covers file, communications-device, named-pipe, and volume handles and says nothing about a directory handle — there is no contract to implement against. Safe because both production callers sit inside the worktree unclean-shutdown marker's bracket (`worktree_marker.rs`): a crash between this call and the entry becoming durable leaves the marker dirty, and commit-authoring refuses to infer deletion until the worktree is re-verified. |
+
+**The `init`-time exemption.** `create_exclusive` and `ensure_directory` create names, and Windows
+cannot make a new directory entry durable. Both are reachable only during `init`. This is tolerated
+because an interrupted `init` has nothing to lose — no user history exists yet, and `FORMAT` is written
+last — so an incomplete `init` is detectable and a re-run completes it idempotently. That argument
+depends on ordering, not on a durability primitive, so it holds on Windows unchanged.
+
+**DC-76's nine negative controls are not demonstrated on Windows as of Stage 2.** The failpoint
+injection mechanism they rely on (`crates/prikk-store/src/fsutil/anchored/failpoints.rs`) is
+Linux/macOS-only; building an equivalent for Windows is a separate increment, not a byproduct of
+Stage 2. Reported per DC-76's own precedent (two controls there also could not be cleanly
+demonstrated, and were reported rather than dropped) rather than silently skipped.
 
 **The same gap exists on the read path today, in the shipped read-only configuration.** All four non-Unix
 fallback read functions resolve a whole path in one operating-system call, so reparse points at
@@ -107,22 +138,30 @@ target — fails CI immediately rather than being found by a user or the next tr
 above) against a fixture repository authored on Linux, so this is a demonstrated property, not merely
 a successful compile.
 
+**`macos-mutation` and `windows-mutation`** (DC-81, DC-87 Stage 2) run the full workspace test suite
+natively on `macos-latest` and `windows-latest`, since neither developer nor architect can run either
+platform locally as part of this project's own environment — the CI job existing and being green *is*
+the verification for each backend, not a supplement to one done elsewhere.
+
 ## What is not covered here
 
 - **Prebuilt non-Linux binaries** are not published. Building from source (`cargo build`/
   `cargo install`) is the only non-Linux install path today; see the [README's install
   section](https://github.com/nabbisen/prikk#install).
-- **Non-Linux filesystem durability semantics** are out of scope — read-only paths do not need them,
-  and DC-37's boundary is unchanged by DC-71.
+- **DC-76's nine negative controls are not demonstrated on Windows** — see "The nine
+  `DurabilityContract` guarantees on Windows" above. The failpoint mechanism they need is
+  Linux/macOS-only.
 - **`macos-latest` is Apple Silicon (`aarch64-apple-darwin`), not x86_64** — GitHub's default since
   the macOS 14 runner image. `windows-latest` is x86_64. Neither the x86_64 macOS nor the arm64
-  Windows variant is separately CI-gated as of DC-71; nothing in the fix is architecture-specific
-  (it is `#[cfg(target_os = ...)]`, not target-triple-specific), so this is a coverage gap in CI
-  breadth, not a known or suspected difference in behavior.
-- **File mode / executable-bit authoring on a platform with no observable POSIX mode** (DC-87
-  §3.3/§4.3): worktree authoring never derives a node's recorded mode from such a platform's
+  Windows variant is separately CI-gated, and Windows arm64 is untested entirely; nothing in the
+  Windows backend is architecture-specific (it is `#[cfg(target_os = ...)]`, not
+  target-triple-specific), so this is a coverage gap in CI breadth, not a known or suspected
+  difference in behavior.
+- **File mode / executable-bit authoring on Windows, or any platform with no observable POSIX mode**
+  (DC-87 §3.3/§4.3): worktree authoring never derives a node's recorded mode from such a platform's
   filesystem — an existing node's already-recorded mode is always carried forward untouched, and a
   brand-new file is created non-executable by default, since there is no existing recorded mode to
-  inherit and no observed signal to use. This is a missing capability (an executable file's initial
-  creation cannot be authored from such a worktree), not data loss — a previously-recorded executable
-  bit is never silently dropped from sealed history by this platform difference.
+  inherit and no observed signal to use. `set_permission_bits` is correspondingly a documented no-op
+  on Windows (see the guarantee table above) — this is a missing capability (an executable file's
+  initial creation cannot be authored from such a worktree), not data loss — a previously-recorded
+  executable bit is never silently dropped from sealed history by this platform difference.
