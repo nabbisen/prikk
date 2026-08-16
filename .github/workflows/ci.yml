@@ -208,8 +208,20 @@ jobs:
   # Every test elsewhere in this workflow is one platform verifying itself; this is the one place a
   # Windows-authored object is checked by a different platform's own re-derivation. Reuses the
   # fixture job's own deterministic seeds so the mutation performed here is reproducible bit-for-bit
-  # by linux-mutate-reference below — same content, same signer, same commit message, on both
-  # platforms, is what makes an object-id comparison meaningful rather than coincidental.
+  # by linux-mutate-reference below.
+  #
+  # The mutation is an EDIT to the fixture's already-existing readme.txt, deliberately not a new
+  # file. Object ids are deterministic given identical canonical bytes, but a *fresh* node's id is
+  # not part of that: `NodeIdGenerator`'s production entropy source mints it via `getrandom` (real
+  # OS randomness, no seed), by design, and minting only happens for a fresh node
+  # (`node_authoring.rs`'s own doc: "fresh nodes are minted through NodeIdGenerator"). Editing an
+  # already-existing node reuses its established id from the baseline — no fresh entropy anywhere in
+  # its canonical bytes — which is what actually makes two independent runs comparable. Confirmed
+  # locally before relying on it: two independent edits from a shared baseline produced identical
+  # block ids; two independent *creates* did not, even run twice on the same machine. **Consequence
+  # worth stating plainly: this comparison does not, and cannot, cross-check node *creation* on
+  # Windows — that path is still exercised by the `Windows mutation test suite` above, just not
+  # id-compared here, because a created node's id is random by design on every platform.**
   windows-mutate:
     name: mutate the fixture on Windows
     runs-on: windows-latest
@@ -240,7 +252,7 @@ jobs:
         shell: bash
         run: |
           cd fixture-repo
-          echo "windows cross-platform history check" > windows-check.txt
+          echo "cross-platform history check" >> readme.txt
           ../target/debug/prikk commit -m cross-platform-history-check
           ../target/debug/prikk seal --allow-no-audit
       - name: Record the resulting object ids
@@ -288,7 +300,7 @@ jobs:
       - name: Mutate the fixture identically on Linux
         run: |
           cd fixture-repo
-          echo "windows cross-platform history check" > windows-check.txt
+          echo "cross-platform history check" >> readme.txt
           ../target/debug/prikk commit -m cross-platform-history-check
           ../target/debug/prikk seal --allow-no-audit
       - name: Record the resulting object ids
@@ -307,15 +319,28 @@ jobs:
   # to end, not reasoned about from a green compile on either side.
   #
   # The object-id comparison below compares two *independent* mutations, run at different
-  # wall-clock times on different runners — that only proves anything because prikk's object ids
-  # carry no clock. `BlockPayload` has no timestamp field at all; the only `created_at`
-  # (`TagPayload`/`RefUpdatePayload`) is a documented no-clock sentinel, not a real time value; and
-  # Ed25519 signing is deterministic, so the same fixed seed on both sides produces the same
-  # signature bytes. If a real timestamp is ever added to an object preimage, this job starts
-  # failing for a reason that has nothing to do with platform divergence — the fix at that point is
-  # to change what is compared (e.g. exclude the timestamp), never to weaken or drop this
-  # comparison, which is the only check in this workflow that proves Windows and Linux agree rather
-  # than merely that each is internally consistent with itself.
+  # wall-clock times on different runners. "No clock in the preimage" is necessary but not
+  # sufficient for that to be meaningful — determinism also requires no *random* input anywhere in
+  # the compared bytes, and `windows-mutate`'s own comment explains why that is exactly what an edit
+  # to an already-existing node gives (no fresh `NodeId` minted) that creating one would not. Two
+  # things, not one, make the comparison valid:
+  #   1. No clock: `BlockPayload` has no timestamp field; the only `created_at`
+  #      (inside a `Signature`, not the object's own canonical payload — see `envelope.rs`'s
+  #      `object_id()`, which hashes only `object_type`/`schema_version`/`canonical_payload`) is a
+  #      documented no-clock sentinel and is not part of object identity at all. Ed25519 signing is
+  #      deterministic, so the same fixed seed on both sides produces the same signature bytes.
+  #   2. No fresh entropy: both jobs edit `readme.txt`, never create a new file. A created node's id
+  #      is `getrandom`-sourced by design and would never match across independent runs, on any
+  #      platform, even twice on the same machine — confirmed locally before this job existed in its
+  #      current form.
+  # If a real timestamp is ever added to an object preimage, or the mutation is ever changed back to
+  # creating a file, this job starts failing for a reason that has nothing to do with platform
+  # divergence — the fix at that point is to change what is compared or restore the edit, never to
+  # weaken or drop this comparison, which is the only check in this workflow that proves Windows and
+  # Linux agree rather than merely that each is internally consistent with itself. **This comparison
+  # does not and cannot cross-check node *creation* on Windows — a created node's id is random by
+  # design on every platform. Creation is still exercised by `Windows mutation test suite` above; it
+  # is simply not part of what this job compares.**
   verify-cross-platform-history:
     name: cross-platform history identity (Windows mutation, Linux verification)
     runs-on: ubuntu-latest
@@ -339,10 +364,8 @@ jobs:
         run: |
           cd windows-repo
           ../target/debug/prikk verify
+      # `diff`'s own non-zero exit on a mismatch already fails this step, the same way `prikk
+      # verify`'s non-zero exit already fails the step above with no explicit `if`/`exit` wrapper —
+      # matching that pattern rather than reintroducing one keeps this to a single governed command.
       - name: Compare object ids — Windows-computed against the independent Linux reference
-        run: |
-          if ! diff -u linux-object-ids.txt windows-object-ids.txt; then
-            echo "::error::object ids diverged between the Linux reference and the Windows mutation"
-            exit 1
-          fi
-          echo "=== object ids identical across platforms ==="
+        run: diff -u linux-object-ids.txt windows-object-ids.txt && echo "=== object ids identical across platforms ==="
