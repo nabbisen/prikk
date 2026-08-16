@@ -76,11 +76,19 @@ What Windows *does* offer is **identity**: `GetFileInformationByHandle` yields a
 another on a volume. Rust's `std` exposes this only behind the unstable `windows_by_handle` feature, which
 is why prikk has not used it so far.
 
-**So the achievable guarantee is detection, not prevention.** Prikk cannot make the swap ineffective on
-Windows the way a retained descriptor does on Linux. It can refuse to proceed once the anchor is no longer
-the object it validated.
+**Corrected 2026-08-16.** This section originally concluded *"the achievable guarantee is detection, not
+prevention."* That was wrong, and it made criterion 1 below unsatisfiable — the two existing tests encode
+**prevention** (after replacement, operations continue correctly against the retained directory), so an
+increment built to detect-and-refuse was specified to fail its own acceptance criterion. Found by CI run
+`31942111785`, which passed the first assertion of each test and failed the next; ruled in
+`.git-exclude/reviewed/DC-96-implementation-ruling-v1.md` §4.
 
-**This must not be over-claimed.** See §5.
+**Windows can follow the object.** A retained directory handle survives a rename of its directory, and
+`GetFinalPathNameByHandle` returns that handle's current path. Re-deriving the anchor path from the
+retained handle before each walk means the walk starts from the object that was validated. Identity
+comparison remains, as the post-open confirmation that closes the check-then-open window.
+
+**What is still not achievable must not be over-claimed.** See §5 of the design.
 
 ## 3. Acceptance criteria
 
@@ -109,8 +117,10 @@ the object it validated.
 - **Per-component identity.** Only the anchor is verified. Recording an identity for every component of
   every walk is a larger design with a real cost, and the demonstrated failure is anchor replacement.
 - **Matching Linux's guarantee.** Detection is not prevention. §5 of the design states the residual.
-- **Any new `unsafe` beyond the one call.** The exemption is claimed for `GetFileInformationByHandle` and
-  nothing else.
+- **Any new `unsafe` beyond the two calls.** The exemption is claimed for `GetFileInformationByHandle`
+  and `GetFinalPathNameByHandle`, and nothing else. **Widened from one call 2026-08-16**: the original
+  non-goal was written on the premise the §2 correction overturns, and a non-goal written on a wrong
+  premise does not bind.
 - **Windows `OpenProcess`/`GetExitCodeProcess` liveness** (DC-87's separate follow-up, still owner scope).
   It is unrelated and must not be folded in because both happen to be Win32 FFI.
 

@@ -81,12 +81,28 @@ pub(super) struct WindowsAuthority {
 }
 ```
 
-**Store the identity value, not the handle.** A retained `File` would look like the Linux design and buy
-nothing — Windows cannot resolve a child through it — and an inert retained resource invites the belief
-that it is providing a guarantee it is not. Say so in the doc comment; the next reader will ask.
+**Corrected 2026-08-16 — this section originally said "store the identity value, not the handle."**
+The stated reason was *"a retained `File` would buy nothing, since Windows cannot resolve a child through
+it."* The premise is true and the conclusion does not follow: **`GetFinalPathNameByHandle` returns the
+current path of a handle's object**, and a handle follows its object across a rename. Retaining it means a
+walk starts from the object that was validated, wherever it now is.
 
-- **`bind`** already opens and validates the directory. Capture the identity from **that same handle**,
-  before dropping it — do not re-open, which would introduce a race inside the constructor.
+That distinction is the whole increment. Identity alone gives **detection** — refuse when the anchor was
+replaced. The acceptance tests require **prevention** — after replacement, operations continue correctly
+against the retained directory (`snapshot/tests.rs:54-56` asserts the next write *succeeds* and lands in
+the retained directory, not that it is refused). See
+`.git-exclude/reviewed/DC-96-implementation-ruling-v1.md` §3.
+
+**Retain the handle *and* the identity.**
+
+- **`bind`** — open and validate the directory, **retain the handle**, and capture the identity from
+  **that same handle** before returning. Do not re-open to capture it; that would race inside the
+  constructor.
+- **Before each walk** — `GetFinalPathNameByHandle` on the retained handle gives the anchor's current
+  path. Walk from that, never from a stored string.
+- **After opening the anchor, before using it** — confirm the opened object's identity equals the retained
+  identity; fail closed otherwise. Verifying what you **opened** rather than what you are **about to
+  open** removes the check-then-open race on the anchor instead of narrowing it.
 - **`ensure_child` / `open_child`** — **call `verify_anchor()` first**, before walking. Then capture the
   identity of the final component for the returned authority, from the handle the walk already opened.
 - **`same_as`** — currently `Arc::ptr_eq` on the path with a comment that there is nothing else to compare.
