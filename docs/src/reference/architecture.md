@@ -101,11 +101,17 @@ explicitly excluded from block identity.
 
 ## Where the platform boundary sits
 
-Read-only commands run on Linux, macOS, and Windows, verified continuously in CI. **Mutation is Linux
-and macOS** — each platform's durability implementor lives behind one gated dispatch point
-(`ACTIVE_DURABILITY`, DC-82), so a third platform is one more arm there, not a rewrite of the mutation
-layer. Windows resolves to a stub implementor today and mutating there fails at runtime, not at build
-time.
+Read-only commands run on Linux, macOS, and Windows, verified continuously in CI. **Mutation runs on all
+three as of 0.21.0** — each platform's durability implementor lives behind one gated dispatch point
+(`ACTIVE_DURABILITY`, DC-82), so adding Windows was one more arm there rather than a rewrite of the
+mutation layer, which is what the seam was drawn for.
+
+Windows is not a straight equivalent, and the differences are named rather than implied: it has no
+`openat`, so anchored resolution is a validated path walk with the anchor's identity confirmed against a
+retained handle, and four residual properties are stated in
+[platform support](./platform-support.md). The mutation suite runs on all three platforms in CI, and a
+repository authored on Linux, mutated on Windows, and verified on Linux is required to produce
+byte-identical object ids.
 
 That is deliberate. DC-37 requires anchored opens that refuse symlink traversal, atomic replacement, and
 explicit file and directory durability; those guarantees were implemented against Linux primitives

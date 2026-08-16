@@ -42,7 +42,7 @@ Prikk is designed to be:
 
 ## Current Status
 
-Latest released implementation: **0.19.0**, adding merge execution and merge block lineage: a confluent merge adopts the other side's patches verbatim — same bytes, same object ids, same author signatures — and seals them as a `Merge` block recording both parents, the mainline pointer, and the baseline the merge was proven against.
+Latest released implementation: **0.21.0**, making Windows a mutating platform. Prikk now authors, commits, and checks out on Linux, macOS, and Windows, and CI requires a repository authored on Linux, mutated on Windows, and verified back on Linux to produce byte-identical object ids — so the claim that anyone can verify anyone's history is tested across platforms rather than assumed.
 
 Next increment candidates are tracked in `ROADMAP.md`.
 
@@ -59,9 +59,13 @@ candidates, and **execute a merge** when the two sides are proven confluent — 
 object, WAL, or ref write, when they are not.
 
 Known limits worth stating up front: **there is no networking or sync**, so history cannot be exchanged
-between machines; **mutation is Linux and macOS only, not Windows** (read-only commands run on macOS
-and Windows too); merge-base discovery is manual; conflicts are detected and refused but never
-resolved; and `verify` cost grows steeply with history length.
+between machines; merge-base discovery is manual; conflicts are detected and refused but never
+resolved; `verify` cost grows steeply with history length; and `verify` does not yet check author
+signatures repository-wide.
+
+**Mutation runs on Linux, macOS, and Windows** as of 0.21.0. Windows has narrower guarantees in four
+named places — see the [platform support
+reference](./docs/src/reference/platform-support.md).
 
 ## Good Fit
 
@@ -125,8 +129,9 @@ From crates.io, requires a Rust toolchain:
 cargo install prikk
 ```
 
-**Repository *mutation* is Linux and macOS only, not Windows; read-only commands build and run on macOS
-and Windows too**
+**Repository *mutation* runs on Linux, macOS, and Windows** (as of 0.21.0; Windows carries four named
+narrower guarantees — see the platform support reference below). **Read-only commands build and run on
+all three**
 (`verify`, `log`, `status`, `doctor`, `checkout --plan-only`/`--snapshot-plan`/`--patch-plan`/
 `--patch-delete-plan`, `merge-evidence`, `merge-plan`, `inverse-plan`, `rollback-preview`,
 `rollback-draft-verify`, `branch [list]`, `tag [list]` — the full, durable list, including one
