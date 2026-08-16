@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.21.0 — unreleased
+
+**Windows becomes a mutating platform.** Until now prikk could only read a repository on Windows;
+authoring, committing, and checking out required Linux or macOS. No repository format change, and no
+action required for existing repositories.
+
+### Added
+
+- **Repository mutation on Windows.** The full `DurabilityContract` is implemented for Windows, so
+  commands that write now run there. This is demonstrated rather than asserted: CI authors a repository
+  on Linux, mutates it on Windows, and verifies it back on Linux, requiring the resulting object ids to
+  be **byte-identical** to those produced by the same mutation on Linux. Prikk's central promise — that
+  anyone can verify anyone's history — now holds across platforms by test, not by assumption.
+- **A Windows test suite.** `cargo test --workspace` runs on Windows in CI for the first time. Windows
+  had previously only been compiled, never exercised.
+- **`prikk-ffi`**, an eighth published crate. It holds prikk's only `unsafe` code — two Win32 calls used
+  to identify and follow a repository's anchor directory. Every other crate in the workspace forbids
+  `unsafe` outright, and a release gate enforces that exactly one crate may hold the exemption.
+
+### Changed
+
+- **A replaced repository directory no longer redirects reads and writes.** If a repository's directory
+  is renamed aside and a fresh one created at the same path, prikk previously followed the new directory
+  on Windows — silently reading and writing an impostor while reporting success, including for objects,
+  refs, and the write-ahead log. Prikk now retains a handle to the directory it validated and works
+  against that object, so `.prikk` being moved is followed rather than lost, and replacing the worktree
+  root is refused by the operating system outright. Linux and macOS were never affected.
+
+### Windows limitations, stated rather than left to be found
+
+`docs/src/reference/platform-support.md` carries these in full, with the reason for each.
+
+- **`prikk unlock` gives no positive liveness signal on Windows.** Every stale-lock decision there rests
+  on the operator. The check never authorises clearing, so this is safe — but it is materially weaker
+  than on Linux and macOS.
+- **A repository's directory cannot be renamed or moved while a prikk command holds it open.** This is
+  the mechanism above, seen from the other side; it lasts one command, and prikk has no daemon.
+- **Path resolution has a narrower guarantee.** Windows offers no way to open a child relative to a
+  directory handle, so a concurrent process substituting a reparse point mid-walk is not provably
+  defeated, as it is on Linux and macOS. An already-planted one is caught on every platform.
+- **On ReFS — including Windows 11 Dev Drive — the 64-bit file index is not unique**, per Microsoft's own
+  documentation. Prikk uses it as a confirming check rather than as the mechanism that decides where a
+  write goes, which is why this weakens the diagnosis and not the guarantee.
+
+### Why
+
+Windows support was blocked for a year by a durability problem, not a porting one: prikk's
+content-addressed storage created a new filename per object, and Windows has no equivalent of `fsync` on
+a directory to make a new name durable. 0.20.0's container storage removed the requirement by making
+appends to existing names the only durability-bearing write. This release is the port that became
+possible once that was true.
+
 ## 0.20.0 — 2026-08-16
 
 Storage rebuilt. **Every repository created by 0.19.0 or earlier must be re-imported.**
