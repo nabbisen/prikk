@@ -109,12 +109,17 @@ is a one-way door.
 If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
 reviewed commit restores agreement.
 
-**Current release lane:** `active`.
+**Current release lane:** `parked`.
 
-**Current activated release target:** 0.21.0.
+**Current activated release target:** none.
+
+**0.21.0 released 2026-08-16** — tag `0.21.0` signed with the owner's key
+(RSA `25757DA6CBF7022C4E14CCAC1B3066B87DB99A34`) on `4a33b49`, 12/12 CI green at that commit, GitHub
+release published with six assets, and **all eight crates published to crates.io** — the first release
+to publish `prikk-ffi`. The lane was parked the same day.
 
 **0.21.0 activated 2026-08-16 by the project owner.** The lane was parked from 0.20.0's release until
-now. 0.21.0 carries DC-87 (Windows mutation, Stages 1 and 2) and DC-96 (Windows anchor identity) — 23
+activation. 0.21.0 carries DC-87 (Windows mutation, Stages 1 and 2) and DC-96 (Windows anchor identity) — 23
 commits since 0.20.0, all of one theme. **Windows becomes a mutating platform**, the first change to
 prikk's platform posture since the project began. `docs/src/reference/platform-support.md` states four
 residual properties a Windows operator meets: DC-87 criterion 4's nine `DurabilityContract` negative

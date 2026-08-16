@@ -190,10 +190,11 @@ the release lane is parked; see `MILESTONES.md` under Baseline and release postu
 
 ## Release Candidate Increment
 
-- Release lane state: **active**.
-- Activated release target: **0.21.0**.
-- **0.21.0 activated 2026-08-16** — Windows becomes a mutating platform. DC-87 (Windows mutation,
-  Stages 1 and 2) and DC-96 (Windows anchor identity). See `MILESTONES.md` for the activation record.
+- Release lane state: **parked**.
+- Activated release target: **none**.
+- **0.21.0 released 2026-08-16** — Windows becomes a mutating platform. DC-87 (Windows mutation, Stages 1
+  and 2) and DC-96 (Windows anchor identity). Eight crates published, including the new `prikk-ffi`. The
+  lane was parked the same day. See `MILESTONES.md`.
 - **0.20.0 released 2026-08-16** — RFC 102 complete (containers, format 6, compaction), `prikk compact`,
   `prikk unlock`, `prikk trust maintainer remove`, dead-surface consolidation. Formats 1-5 rejected at
   open. Windows remained read-only at this release; DC-87 (Windows mutation) completed 2026-08-16,
