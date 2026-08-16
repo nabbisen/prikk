@@ -305,6 +305,17 @@ jobs:
   # Closes DC-87 Stage 2 criterion 7. A repository authored on Linux, mutated on Windows, and
   # verified on Linux must produce identical object ids and a clean `verify` — demonstrated here end
   # to end, not reasoned about from a green compile on either side.
+  #
+  # The object-id comparison below compares two *independent* mutations, run at different
+  # wall-clock times on different runners — that only proves anything because prikk's object ids
+  # carry no clock. `BlockPayload` has no timestamp field at all; the only `created_at`
+  # (`TagPayload`/`RefUpdatePayload`) is a documented no-clock sentinel, not a real time value; and
+  # Ed25519 signing is deterministic, so the same fixed seed on both sides produces the same
+  # signature bytes. If a real timestamp is ever added to an object preimage, this job starts
+  # failing for a reason that has nothing to do with platform divergence — the fix at that point is
+  # to change what is compared (e.g. exclude the timestamp), never to weaken or drop this
+  # comparison, which is the only check in this workflow that proves Windows and Linux agree rather
+  # than merely that each is internally consistent with itself.
   verify-cross-platform-history:
     name: cross-platform history identity (Windows mutation, Linux verification)
     runs-on: ubuntu-latest
