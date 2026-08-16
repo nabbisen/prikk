@@ -92,15 +92,32 @@ comparison remains, as the post-open confirmation that closes the check-then-ope
 
 ## 3. Acceptance criteria
 
-1. **The two existing tests pass on Windows, ungated.**
+1. **Both existing tests exercise their question on every platform.**
    `snapshot::tests::worktree_checks_and_writes_remain_on_retained_root` and
-   `verify::tests::root_authority::full_verification_retains_wal_objects_trust_and_recovery_diagnosis_after_root_replacement`
-   pass on Linux and macOS today and must pass on Windows **without a `cfg` gate**. A gated version of
-   either is a failed increment, not a passed one — it is the question being stopped rather than answered.
+   `verify::tests::root_authority::full_verification_retains_wal_objects_trust_and_recovery_diagnosis_after_root_replacement`.
+
+   **Restated 2026-08-16.** This originally required both to pass *"ungated, with their assertions
+   untouched."* That is unsatisfiable: NTFS refuses to rename a directory containing an open handle
+   (`FILE_RENAME_INFORMATION`, confirmed against Microsoft's own reference), so under the ruled design the
+   snapshot test's **setup** cannot run on Windows. Corrected against the platform fact rather than
+   weakening the design to fit — `.git-exclude/reviewed/DC-96-ancestor-rename-ruling-v1.md` §3.
+
+   An assertion may be platform-split **only** where the platforms' guarantees genuinely differ, and only
+   if all three hold: (a) the Windows branch asserts something **at least as strong**; (b) the difference
+   is documented in `platform-support.md` with its operational consequence; (c) the Linux/macOS branch is
+   **unchanged**. **A split that merely skips a check on Windows is a failed increment** — that is the
+   distinction between this and the `unlock` liveness precedent it follows.
 2. **Both anchors covered.** A negative control for `worktree_mutation` *and* one for
    `repository_mutation`, since the second is the durability-bearing one and only the first is obvious.
 3. **Fail closed, and identifiably.** The refusal carries a distinct, greppable diagnostic naming the
-   path — an operator who hits this must be able to tell it from an ordinary I/O error.
+   path — an operator who hits this must be able to tell it from an ordinary I/O error. **Scope corrected
+   2026-08-16:** under the prevention design the refusal fires on the post-open identity mismatch — the
+   narrowed race — not on the demonstrated failure, which the OS now prevents outright.
+8. **The user-facing residual is documented.** While a prikk command holds a repository open on Windows,
+   that repository's directory and any directory containing it cannot be renamed or moved by any process.
+   Bounded to one command's execution; there is no daemon. It is a consequence of criterion 1's guarantee,
+   and `platform-support.md` must state that causal link so a reader meeting the error knows it is not a
+   bug.
 4. **The exemption is the smallest it can be.** Whatever crate is named in `UNSAFE_EXEMPT_CRATES` must be
    auditable in a single sitting. Naming `prikk-store` — the crate performing every filesystem operation —
    would spend the single exemption on the largest possible blast radius.
