@@ -75,6 +75,20 @@ its three siblings in the same module, which use a no-follow stat. That last one
 one file rather than a platform limitation, and it is stated here rather than left implicit because the
 guarantee is otherwise described per-function.
 
+**`prikk unlock`'s PID liveness check is held on Linux/macOS and documented-weaker on Windows** — the
+same shape as `set_permission_bits`/`durable_directory_entry` above, outside the `DurabilityContract`
+table because it lives in a different module (`crates/prikk-store/src/unlock.rs`). Linux/macOS have a
+real `kill(pid, 0)` primitive via `rustix::process::test_kill_process`; every other platform, Windows
+included, has always stubbed `check_pid_liveness` to an unconditional `PidLiveness::Unknown`
+(`unlock.rs:90-93`) — no `OpenProcess`/`GetExitCodeProcess` equivalent has been written. This is safe:
+`Unknown` is the conservative outcome and never authorizes clearing a lock, the same as a negative
+result on Linux/macOS. **The operational consequence is what changed with Stage 2, not the stub
+itself.** Before Windows could mutate, it could never hold a lock, so the stub was unreachable in
+practice. Stage 2 makes Windows a mutating platform: a Windows repository can now wedge, and on
+Windows, `prikk unlock` returns no positive liveness signal at all — every stale-lock decision there
+rests entirely on the operator, with no automated "this process is still running, don't clear it"
+refusal available. A real Windows primitive is tracked as follow-up scope, not part of Stage 2.
+
 **Read-only commands build and run everywhere.** They never reach a mutation primitive — verified by
 tracing every command's call graph to `crates/prikk-store/src/fsutil`'s mutation set (`ensure_root`,
 `write_file_atomically`, `write_worktree_file_atomically`, `append_file_required`,

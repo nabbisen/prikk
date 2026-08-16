@@ -67,10 +67,16 @@ fn listing_a_stale_lock_shows_its_recorded_pid_and_advisory_liveness() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("active.lock"), "stdout: {stdout}");
     assert!(stdout.contains("recorded pid: 999999"), "stdout: {stdout}");
+    // `check_pid_liveness` (prikk-store/src/unlock.rs) only has a real kill(pid, 0) primitive on
+    // Linux/macOS; every other platform, Windows included, stubs to `PidLiveness::Unknown` -- assert
+    // what each platform actually promises rather than an outcome Windows cannot produce.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     assert!(
         stdout.contains("does not appear to be running"),
         "stdout: {stdout}"
     );
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    assert!(stdout.contains("liveness: unknown"), "stdout: {stdout}");
     assert!(
         stdout.contains("advisory only"),
         "the advisory caveat must always print alongside a listing: {stdout}"
