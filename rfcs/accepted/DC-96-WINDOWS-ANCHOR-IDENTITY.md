@@ -42,9 +42,15 @@ impostor with **corrupt-signature** objects and the retained layout reports them
 - **The scope.** `RepositoryLayout` (`layout.rs:132-137`) holds **two** `MutationRoot`s —
   `worktree_mutation` and `repository_mutation`. Objects, refs, and the WAL are exposed, not only the
   worktree.
-- **The choke point.** Every `DurabilityContract` method reaches the filesystem through
+- **The choke points — two, not one.** Every `DurabilityContract` method reaches the filesystem through
   `resolved_existing_path` / `resolved_prepared_path` (`windows.rs:229-243`), both of which walk via
-  `WindowsAuthority::{open_child, ensure_child}`. **There is one place to verify, not eleven.**
+  `WindowsAuthority::{open_child, ensure_child}`. **But the read path does not.**
+  `open_existing_windows_directory_for_read` (`directory.rs:253-265`), behind all four `WindowsReader`
+  methods, walks from `root.authority.path` directly.
+  **Corrected 2026-08-16**, after this RFC originally claimed "one place to verify, not eleven" — a claim
+  scoped to the write side by an author who checked eleven methods and not the fourth trait. Found by the
+  preflight investigation the design's §8 asked for. The remedy is structural rather than a second call
+  site: see design-v1.md §3, "no code can obtain a base path from an authority without verifying it."
 - **The unsafe question is already ruled.** DC-90 established the owner's position — `unsafe` permitted
   "under control with safety and maintainability preserved" — and built the machine-checked boundary for
   it (`tools/release-policy/src/boundary/unsafe_boundary.rs`): at most one workspace crate may omit

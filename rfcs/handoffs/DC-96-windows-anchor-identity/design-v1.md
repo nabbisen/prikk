@@ -96,17 +96,67 @@ that it is providing a guarantee it is not. Say so in the doc comment; the next 
 **`verify_anchor`**: re-open `self.path` no-follow, read its identity, compare with `self.identity`.
 Mismatch → fail closed.
 
-### Why this single placement is sufficient
+### Correction, 2026-08-16 — the placement above was wrong, and the correction changes the shape
 
-Every `DurabilityContract` method reaches the filesystem through `resolved_existing_path` or
-`resolved_prepared_path` (`windows.rs:229-243`), and both walk via `open_child`/`ensure_child`. **Verified
-by reading all eleven, not assumed** — but re-verify it yourself and report if you find a method that
-does not, because the whole design rests on it.
+**This section originally said verification in `open_child`/`ensure_child` was sufficient, on the grounds
+that "every `DurabilityContract` method funnels through the two resolvers."** That claim is true and was
+verified against all eleven methods. **It is also scoped to the write side, and I did not check the read
+side.** The preflight investigation found the gap
+(`.git-exclude/review-request/prikk-dc96-preflight-findings-v1.md`), and I confirmed it:
+
+`open_existing_windows_directory_for_read` (`directory.rs:253-265`) — the resolver behind all four
+`WindowsReader` methods — does `root.authority.path.clone()` and walks with `stat_directory_no_follow`.
+**It never calls `open_child` or `ensure_child`.** Verification placed as originally written would have
+left every read exposed, and
+`full_verification_retains_wal_objects_trust_and_recovery_diagnosis_after_root_replacement` — a read
+through a stale layout, and the test that most directly demonstrates the finding — **would still have
+failed on Windows**, contradicting acceptance criterion 1.
+
+**The lesson is the shape, not the miss.** This gap exists because Stage 1 added a second walker and a
+later design reasoned only about the first. Adding a second verification call site leaves exactly that
+trap set for a third. So the answer is not "check in two places."
+
+### Ruling: no code can obtain a base path from an authority without verifying it
+
+**Move `WindowsAuthority` into its own module** (`fsutil/anchored/windows_authority.rs`, `cfg(windows)`),
+so its fields become genuinely private — today the struct and the read walker share `directory.rs`, and
+field privacy binds at module granularity, so privacy buys nothing where it stands.
+
+**The authority exposes no path accessor at all.** Its entire surface is walks that verify first:
+
+```rust
+pub(super) fn resolve_existing(&self, relative: &Path) -> Result<PathBuf>;
+pub(super) fn resolve_prepared(&self, relative: &Path) -> Result<PathBuf>;
+pub(super) fn resolve_existing_for_read(&self, relative: &Path) -> Result<Option<PathBuf>>;
+```
+
+Each verifies `self`'s identity, then walks. `directory.rs`'s three free resolver functions become thin
+wrappers over these. `PlatformAuthority::{ensure_child, open_child}` stay for
+`MutationRoot::{ensure_root, open_root}` and verify identically.
+
+**`resolve_existing_for_read` keeps the tolerant contract exactly** — `Ok(None)` as soon as a component is
+absent, which every `WindowsReader` signature depends on to distinguish absence from I/O error. It moves
+module, not meaning. **Do not unify it with the required variant**; the read/write contract split was a
+considered Stage 1 decision and is not this increment's to revisit.
+
+**Why this over a second call site.** It is the same size of diff and a different class of guarantee: a
+future fourth walker cannot compile without going through a verifying method, because there is no way to
+get the base path out. That is the distinction DC-90's own module doc draws between a control and a
+convention, applied here.
 
 **The empty-relative case is the one that matters most and is easiest to miss.** A file directly in the
 anchor (`conflict.txt` in the worktree root — the failing test's exact case) walks *zero* components, so
 verification must happen **before** the component loop, not inside it. A loop-body check would leave the
-demonstrated failure unfixed while every test that uses a nested path passed.
+demonstrated failure unfixed while every test that uses a nested path passed. This applies to all three
+methods above.
+
+### Cost, and what not to do about it
+
+Every read now pays one extra directory open plus one FFI call. `verify_repository` on a large repository
+performs many reads, so this is measurable in principle. Windows already walks the full path per
+operation, so one more open is proportionally small — but **measure rather than assume**, and if a
+regression appears, **report it rather than weakening the check** (caching a verification across
+operations reintroduces exactly the staleness window this increment exists to close).
 
 ## 4. Failure mode
 
