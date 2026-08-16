@@ -249,6 +249,15 @@ fn repository_init_is_idempotent() {
 /// every run with no red test to notice.** Both preconditions now `panic!` with a diagnostic naming
 /// exactly what failed, distinguishable from the refusal assertion itself failing. A control that
 /// cannot run must fail loudly, not pass silently.
+///
+/// **DC-97 ordered-list-ruling-v1.md §1-§2 correction**: a probe that disabled `is_reparse_point`
+/// entirely (making the reparse-point check itself a no-op) left this test **passing** -- diagnostic
+/// evidence (run `31955440915`) showed `validate_directory_not_reparse_point`'s *second* check
+/// (`!metadata.is_dir()`) caught the same case, because a no-follow handle on a directory symlink
+/// reports `is_dir=false` on Windows. The guarantee holds -- nothing was created through the symlink
+/// -- but the old `is_err()` assertion could not tell the two checks apart, so it proved less than
+/// it looked like it proved. Tightened to assert the refusal specifically names the reparse point
+/// (check 1's own message), not merely that some error occurred.
 #[test]
 fn a_reparse_point_substituted_for_a_directory_component_is_refused() {
     let root_path = unique_temp_dir("windows-reparse-refusal");
@@ -274,10 +283,18 @@ fn a_reparse_point_substituted_for_a_directory_component_is_refused() {
     }
 
     let result = ensure_directory_required(&root, Path::new("nested/deeper"));
-    assert!(
-        result.is_err(),
-        "a reparse point standing in for a plain directory component must be refused"
-    );
-
     let _ = std::fs::remove_dir_all(&root_path);
+    let Err(error) = result else {
+        panic!(
+            "a reparse point standing in for a plain directory component must be refused, but the \
+             call succeeded"
+        );
+    };
+    let message = error.to_string();
+    assert!(
+        message.contains("reparse point"),
+        "the refusal must specifically identify the reparse point (`validate_directory_not_reparse_\
+         point`'s first check), not merely occur for any reason -- a coincidental type-check \
+         failure would satisfy a bare `is_err()` without proving this guarantee at all: {message}"
+    );
 }
