@@ -1,6 +1,17 @@
 //! Object store and layout tests.
 
 mod immutable;
+// DC-97: mixed and not split here -- two tests use `set_immutable_install_barrier_for_test`, which
+// is the same failpoint-adjacent barrier mechanism G8 needs (`wait_at_immutable_install` is called
+// only from the Unix `publish_immutable` path, `fsutil/anchored/immutable.rs:62`, never from
+// `windows.rs`). Two more use real cross-process races via `std::process::Command` re-invoking the
+// test binary, which look genuinely portable, but share a helper (`object_writer_process_helper`)
+// whose body references the same failpoint types unconditionally regardless of which caller is
+// running. Splitting this file needed either duplicating the helper or conditionally compiling
+// individual match arms inside it, and criterion 3's "no Linux/macOS control weakened" made that
+// judgment call worth reporting rather than making under this round's time pressure -- see the
+// review submission.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod races;
 
 use prikk_object::{ObjectEnvelope, ObjectType};

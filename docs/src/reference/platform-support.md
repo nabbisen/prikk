@@ -119,11 +119,25 @@ because an interrupted `init` has nothing to lose — no user history exists yet
 last — so an incomplete `init` is detectable and a re-run completes it idempotently. That argument
 depends on ordering, not on a durability primitive, so it holds on Windows unchanged.
 
-**DC-76's nine negative controls are not demonstrated on Windows as of Stage 2.** The failpoint
-injection mechanism they rely on (`crates/prikk-store/src/fsutil/anchored/failpoints.rs`) is
-Linux/macOS-only; building an equivalent for Windows is a separate increment, not a byproduct of
-Stage 2. Reported per DC-76's own precedent (two controls there also could not be cleanly
-demonstrated, and were reported rather than dropped) rather than silently skipped.
+**DC-76's nine negative controls, per guarantee, on Windows (DC-97).** Stage 2 shipped with none of
+the nine demonstrated there; DC-97 classified each individually rather than leaving one blanket
+statement, since the honest answer differs guarantee by guarantee:
+
+| Guarantee | Windows control | Why |
+|---|---|---|
+| G1 (root-anchored, no-follow) | **Yes** — `windows::tests::a_reparse_point_substituted_for_a_directory_component_is_refused` | Substantiated by a negative control watched to fail, not merely reasoned about: the test's original bare `is_err()` did not distinguish which of `validate_directory_not_reparse_point`'s two checks fired, so it passed even with the first check (`is_reparse_point`) disabled — a directory symlink's no-follow handle independently reports `is_dir=false`, so the second check (`!metadata.is_dir()`) caught it too. A follow-up probe found the same is true for a junction (mount-point reparse point): its no-follow attributes do carry `FILE_ATTRIBUTE_REPARSE_POINT`, but `is_dir()` still reports `false`, because `std`'s `FileType::is_dir` excludes reparse points by construction on Windows for any reparse tag. So check 2 is not incidental coverage of one reparse-point shape, it is a `std`-semantic backstop for all of them — and check 1 is not dead code either: it is insurance against that `std` semantic ever changing, since if `is_dir()` ever stopped excluding reparse points, check 1 would become the sole defense. The assertion was tightened to require the error name the reparse point specifically (check 1's own message), not merely occur for any reason; watched to pass against real production code and fail with `is_reparse_point` stubbed out, both observed on CI, not assumed |
+| G2 (atomic content replacement) | **Yes** — `conformance::create_exclusive_refuses_an_already_occupied_path`'s sibling shape, `atomic_replace_overwrites_existing_content` | Same shared-assertion shape Linux/macOS use for the exclusive-creation case; the replace case is `windows::tests`' own test |
+| G3 (durable-after-return) | **No — unbuilt, not impossible.** | The failpoint injection mechanism itself is plain, platform-neutral Rust; what's missing is call sites inside `windows.rs`'s own `DurabilityContract` implementation invoking it, the same as every Unix implementor already does. Building that wiring is its own increment, not a Windows-specific technical barrier |
+| G4 (exclusive creation) | **Yes** — `conformance::create_exclusive_refuses_an_already_occupied_path`, `&WindowsDurability` | Same shared assertion body Linux/macOS use — no Windows-specific test needed, the file's own architecture already covers a new platform |
+| G5 (race-safe no-clobber publication) | **Partial.** `object_store::tests::immutable::{same_object_id_with_different_signature_transport_is_rejected, malformed_wrong_id_and_wrong_type_existing_files_are_rejected}` — **yes**. The concurrent-race variants (`object_store::tests::races`) — **no**, same reason as G3: the thread-synchronized race needs the same unbuilt failpoint call site, and the cross-process race variants share a test helper with the failpoint-only tests in a way this stage did not attempt to split under time pressure | `object_store.rs`'s own test gate was Linux/macOS-only for a stale reason (predated Windows mutation); narrowed, and what remains gated is gated for the reasons above, not by inertia |
+| G6 (regular-file validation) | **No — no Windows analogue exists**, not merely unbuilt | Linux/macOS evidence uses a FIFO, an ordinary-path filesystem object with no Windows equivalent reachable the same way: Windows named pipes live in a separate `\\.\pipe\` namespace, not placeable inside an anchored directory tree. Windows' own reserved-device-name special files (`CON`, `NUL`, …) are already refused one layer up, at `RepoPath::parse`, before ever reaching this guarantee's own code path |
+| G7 (non-blocking opens) | **No**, same reason as G6 | |
+| G8 (concurrent-safe directory creation) | **No — unbuilt, not impossible**, and the existing Windows test is weaker than the guarantee | `windows::tests::ensure_directory_is_idempotent_under_a_concurrent_creator_shape` calls the same operation twice sequentially in one thread — idempotency, not a proven race. Linux's real control needs `set_directory_create_barrier_for_test`, whose wait point (`wait_at_directory_create`) is called only from the Unix `AnchoredDirectory::ensure_child` — never from `windows_authority.rs`. The underlying code already tolerates a concurrent `AlreadyExists` winner (read, not yet proven under a synchronized race) |
+| G9 (mode-bit isolation) | **Yes, as a documented no-op** — `windows::tests::set_permission_bits_is_a_documented_noop` | Two independent reasons this is not negatively controllable further, not one: NTFS has no execute bit to mask (Windows), and `fchmod` already masks non-permission bits at the kernel level regardless of what this code does (Linux) — `conformance.rs`'s own shared assertion function reads back POSIX mode bits and so was never given a Windows wrapper; the no-op's own, differently-shaped test is the right coverage instead |
+
+Reported rather than silently left implicit, per DC-76's own precedent (two of its original nine also
+could not be cleanly demonstrated on the platforms it shipped on, and were reported rather than
+dropped).
 
 **The same gap exists on the read path today, in the shipped read-only configuration.** All four non-Unix
 fallback read functions resolve a whole path in one operating-system call, so reparse points at
@@ -229,9 +243,12 @@ one where a different platform checks Windows' output.
 - **Prebuilt non-Linux binaries** are not published. Building from source (`cargo build`/
   `cargo install`) is the only non-Linux install path today; see the [README's install
   section](https://github.com/nabbisen/prikk#install).
-- **DC-76's nine negative controls are not demonstrated on Windows** — see "The nine
-  `DurabilityContract` guarantees on Windows" above. The failpoint mechanism they need is
-  Linux/macOS-only.
+- **DC-76's nine negative controls are only partly demonstrated on Windows** — see "The nine
+  `DurabilityContract` guarantees on Windows" above for the per-guarantee table and reasons. G1,
+  G2, G4, and G9 are demonstrated; G5 is partial (the non-race half only); G3, G6, G7, and G8 are
+  not. Not all of the missing ones turn on the same cause: G3, G5's race half, and G8 are blocked
+  on the Windows failpoint injection mechanism being unbuilt (Linux/macOS-only today); G6 and G7
+  have no Windows analogue to demonstrate at all, for reasons unrelated to failpoints.
 - **`macos-latest` is Apple Silicon (`aarch64-apple-darwin`), not x86_64** — GitHub's default since
   the macOS 14 runner image. `windows-latest` is x86_64. Neither the x86_64 macOS nor the arm64
   Windows variant is separately CI-gated, and Windows arm64 is untested entirely; nothing in the

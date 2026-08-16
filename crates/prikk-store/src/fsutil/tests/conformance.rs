@@ -16,14 +16,18 @@
 //! | G1 (root-anchored, no-follow) | pre-existing: `tests::directory::required_directory_rejects_symlink_component` |
 //! | G2 (atomic content replacement) | pre-existing: `tests::mutable_atomic_write_replaces_complete_content` |
 //! | G3 (durable-after-return) | pre-existing only, deliberately: the `fsutil::tests`/`caller_tests` failpoint suite (DC-41). No new test is added for it here — a unit test cannot observe an fsync's real effect without an actual crash, so the only way to pin "this survives a crash" is failpoint injection proving fail-safe error propagation at each sync point, which is exactly what the existing suite already does. An earlier draft of this file added a test that opened a *second* `MutationRoot` and re-read the file to stand in for "surviving a restart" — it passed even with the `fsync` call deleted, because without a real crash nothing forces the write out of the page cache. Removed once that was discovered by trying the negative control, not asserted; recorded here so the same mistake is not repeated |
-//! | G4 (exclusive creation) | new: [`create_exclusive_refuses_an_already_occupied_path`] — no prior direct coverage found |
+//! | G4 (exclusive creation) | new: [`create_exclusive_refuses_an_already_occupied_path`] — no prior direct coverage found. DC-97: also runs on Windows now, same shared assertion body, `&WindowsDurability` |
 //! | G5 (race-safe no-clobber publication) | pre-existing: `object_store::tests::immutable::*` |
 //! | G6 (regular-file validation) | pre-existing, alongside G7: `tests::append_and_truncate_reject_fifo_without_blocking` |
 //! | G7 (non-blocking opens) | same as G6 |
 //! | G8 (concurrent-safe directory creation) | pre-existing: `tests::directory::concurrent_required_directory_creation_is_idempotent` |
-//! | G9 (mode-bit isolation) | new: [`set_permission_bits_masks_file_type_bits_out_of_a_recorded_mode`] proves the accepted-input shape; **not independently negative-controllable on Linux** — see the trait doc comment on `set_permission_bits` for why |
+//! | G9 (mode-bit isolation) | new: [`set_permission_bits_masks_file_type_bits_out_of_a_recorded_mode`] proves the accepted-input shape; **not independently negative-controllable on Linux** — see the trait doc comment on `set_permission_bits` for why. **DC-97: not given a Windows wrapper** — this assert function reads back POSIX mode bits (`PermissionsExt::mode`), which do not exist on Windows, so it cannot be reused unchanged; Windows' own no-op shape is covered separately by `windows::tests::set_permission_bits_is_a_documented_noop`, which asserts the property that actually applies there (content and existence unaffected) rather than a mode value that would never be meaningful |
 //! | `durable_directory_entry`'s restated parameter shape (DC-88) | new: [`durable_directory_entry_accepts_the_named_files_own_path`] proves the interface change — `relative` is the file to confirm, not its parent — by calling with a file's own path and asserting success. This is not a G3 durability-under-crash proof (the existing G3 row's reasoning still applies unchanged); it is a parameter-resolution correctness check for the restatement itself |
 
+// DC-97: G9's assert function is the only user, and G9 has no Windows wrapper (see the coverage map
+// above) -- gated to match rather than pulled in unconditionally now that this whole file compiles
+// on Windows too.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
@@ -31,6 +35,8 @@ use std::path::Path;
 use crate::fsutil::LinuxDurability;
 #[cfg(target_os = "macos")]
 use crate::fsutil::MacosDurability;
+#[cfg(target_os = "windows")]
+use crate::fsutil::WindowsDurability;
 use crate::fsutil::{DurabilityContract, MutationRoot};
 use crate::test_support::unique_temp_dir;
 
@@ -79,6 +85,14 @@ fn create_exclusive_refuses_an_already_occupied_path() {
     assert_create_exclusive_refuses_an_already_occupied_path(&MacosDurability);
 }
 
+// DC-97: the third platform this file's own architecture was designed to plug in -- no changes to
+// `assert_create_exclusive_refuses_an_already_occupied_path` itself, same shared assertion body.
+#[cfg(target_os = "windows")]
+#[test]
+fn create_exclusive_refuses_an_already_occupied_path() {
+    assert_create_exclusive_refuses_an_already_occupied_path(&WindowsDurability);
+}
+
 /// G9: `set_permission_bits` must accept a "recorded mode" carrying file-type bits (exactly the
 /// shape a sealed `CreateFile`/`ChangePerm` operation's `mode` field has, e.g. `0o100_755` for a
 /// regular file) without corrupting the file's actual type, and the permission bits it applies
@@ -87,6 +101,12 @@ fn create_exclusive_refuses_an_already_occupied_path() {
 /// itself is load-bearing on Linux: a reverted negative control (dropping the `& 0o7777` mask)
 /// left this exact assertion passing, because `fchmod` already ignores non-permission bits at the
 /// kernel level regardless of what this code does.
+///
+/// DC-97: not given a Windows wrapper -- unlike G4's, this function reads back POSIX mode bits
+/// (`PermissionsExt::mode`, gated above), which do not exist on Windows. `set_permission_bits` is a
+/// documented no-op there (NTFS has no execute bit), so there is no mode to read back; the coverage
+/// map at the top of this file names where Windows' own, differently-shaped assertion lives instead.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn assert_set_permission_bits_masks_file_type_bits_out_of_a_recorded_mode(
     durability: &impl DurabilityContract,
 ) {
@@ -177,4 +197,13 @@ fn durable_directory_entry_accepts_the_named_files_own_path() {
 #[test]
 fn durable_directory_entry_accepts_the_named_files_own_path() {
     assert_durable_directory_entry_accepts_the_named_files_own_path(&MacosDurability);
+}
+
+// DC-97: not one of the nine guarantees this stage is scoped to, but fully portable (no unix-only
+// facility) and this file's whole point is that a new platform plugs into the shared body -- added
+// rather than left as dead code needing its own gate for no technical reason.
+#[cfg(target_os = "windows")]
+#[test]
+fn durable_directory_entry_accepts_the_named_files_own_path() {
+    assert_durable_directory_entry_accepts_the_named_files_own_path(&WindowsDurability);
 }

@@ -8,12 +8,21 @@ use prikk_error::{PrikkError, Result};
 mod anchored;
 mod contract;
 
-// DC-71/DC-81: every test in both modules (including caller_tests' matrix submodules) sets up its
-// scenario via real repository mutation, which is Linux/macOS-only; neither module ever compiles a
-// test meaningful on any other platform.
+// DC-97: split. `caller_tests` (including its matrix submodules) is unix-only by wiring, not by
+// nature -- every one of its 18 tests calls the failpoint injection mechanism
+// (`anchored::TestFailPoint`), which has no Windows implementation; nothing in it uses a unix-only
+// OS facility directly. Blocked on a Windows failpoint mechanism being built (tracked as follow-up
+// scope, same reason DC-97's G3 row is "no"), not on anything unix-specific about the matrix itself.
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod caller_tests;
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+// `tests` (and its `conformance`/`directory` submodules) is genuinely mixed: some tests use
+// unix-only facilities (FIFOs, symlinks) or the same failpoint mechanism above, and are individually
+// gated inline where that's true; the rest -- including the whole `conformance` suite's Windows
+// wrappers -- compile and run on Windows too.
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
 mod tests;
 
 pub(crate) use anchored::{
@@ -36,18 +45,29 @@ pub(crate) use anchored::promote_file_required;
 // RFC 102 Stage 3, design-v1.md §12.3: G5 (`publish_immutable`) has no production caller left, but
 // stays reachable for its own conformance tests (`object_store/tests/immutable.rs`, `races.rs`) --
 // ruled "keep, record, decide separately" rather than retired as a stage side effect. Gated to match
-// those tests' own Linux/macOS-only gate (`object_store.rs:123`), not just `#[cfg(test)]` -- see
-// `anchored.rs`'s own doc comment on `publish_immutable_file` for why a bare `#[cfg(test)]` here is
-// wrong.
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+// those tests' own gate (`object_store.rs:123`, DC-97-widened to include Windows), not just
+// `#[cfg(test)]` -- see `anchored.rs`'s own doc comment on `publish_immutable_file` for why a bare
+// `#[cfg(test)]` here is wrong.
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
 pub(crate) use anchored::publish_immutable_file;
 
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) use anchored::LinuxDurability;
 #[cfg(all(test, target_os = "macos"))]
 pub(crate) use anchored::MacosDurability;
+// DC-97: conformance.rs's own architecture -- one shared `assert_*` body, a thin per-platform
+// `#[test]` wrapper naming a concrete type -- is what a new platform plugs into. Windows is that
+// platform now.
+#[cfg(all(test, target_os = "windows"))]
+pub(crate) use anchored::WindowsDurability;
 // DC-82: visible in test builds regardless of platform (`none`'s own gate), but only re-exported
-// here where `fsutil::tests` — the only consumer — actually compiles.
+// here where `fsutil::tests` — the only consumer — actually compiles. Still Linux/macOS-only even
+// though `fsutil::tests` itself now also compiles on Windows (DC-97): `NoDurability` itself has no
+// Windows arm in test builds either (`anchored.rs`'s own gate excludes it there, since Windows has a
+// real `WindowsDurability` now) -- the one test that uses it stays inline-gated to match.
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 pub(crate) use anchored::NoDurability;
 // `remove_file_required` itself carries no platform gate at its own definition (it dispatches
@@ -57,7 +77,12 @@ pub(crate) use anchored::NoDurability;
 // swallowed-error shape, since an operator-initiated removal that silently failed would be worse than
 // an error surfaced.
 pub(crate) use anchored::remove_file_required;
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+// DC-97: needed on Windows now too -- conformance.rs's shared `assert_*` functions take
+// `impl DurabilityContract`, and that includes the new Windows wrapper.
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
 pub(crate) use contract::DurabilityContract;
 
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
