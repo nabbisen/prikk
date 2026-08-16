@@ -123,6 +123,10 @@ fn cargo(command: &str, arguments: &[String]) -> bool {
         "test" => {
             arguments == ["--workspace"]
                 || arguments == ["--workspace", "--locked"]
+                // DC-87 Stage 2, fourth CI run: windows-mutation/macos-mutation's own Test step,
+                // spelled out exactly (DC-70 B1 precedent) -- `--no-fail-fast` so one Windows/macOS
+                // failure doesn't hide every failure behind it in the same run.
+                || arguments == ["--workspace", "--locked", "--no-fail-fast"]
                 // DC-81: the macOS CI job's NFR-PERF-01 data-collection step, spelled out exactly
                 // (DC-70 B1 precedent — never widened to accept an arbitrary name/flag set after
                 // `--`). Runs exactly one `#[ignore]`d test by name; it is not a gate.

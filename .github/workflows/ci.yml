@@ -81,8 +81,12 @@ jobs:
         # fails — that test runs `cargo metadata --locked --offline`, which needs every target's
         # dependency graph already cached (DC-71's same requirement, matching lines 20/40 above).
         run: cargo fetch --locked
+      # DC-87 Stage 2, fourth CI run: `cargo test` stops at the first failing test binary by default,
+      # so a Linux/macOS/Windows-specific failure hides every failure behind it -- three straight runs
+      # each surfaced exactly one new layer instead of the whole set. `--no-fail-fast` trades a single
+      # green/red signal for the complete inventory in one run.
       - name: Test
-        run: cargo test --workspace --locked
+        run: cargo test --workspace --locked --no-fail-fast
       # DC-81 addendum-1 §3: Q3's measurement is follow-through, not optional. `#[ignore]`d so it
       # never affects the gate above; run by name so only this one data-collection test executes,
       # not every `#[ignore]`d test in the workspace.
@@ -105,8 +109,11 @@ jobs:
         # DC-81 addendum-2 B1's finding, confirmed to apply identically here (see lines 20/40/83):
         # without this, boundary::tests::workspace_and_product_boundaries_hold fails.
         run: cargo fetch --locked
+      # DC-87 Stage 2, fourth CI run: see macos-mutation's own comment above -- fail-fast has cost one
+      # full CI cycle per newly-reachable layer for three runs straight; --no-fail-fast gets the whole
+      # inventory in one.
       - name: Test
-        run: cargo test --workspace --locked
+        run: cargo test --workspace --locked --no-fail-fast
 
   # A fixture repository is authored on Linux and handed to the non-linux-verify job below, which
   # proves the read-only command set actually runs elsewhere — criterion 2 asks for this
