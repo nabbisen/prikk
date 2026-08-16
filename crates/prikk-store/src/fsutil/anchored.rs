@@ -1,11 +1,12 @@
 //! Root-scoped filesystem mutation primitives. Every function here is a thin, **unconditional** call
 //! through the durability contract (DC-76, `super::contract::DurabilityContract`) — the guarantee
 //! each one provides is stated on the trait method it calls, not repeated here. `Linux`
-//! (`linux::LinuxDurability`), `Macos` (`macos::MacosDurability`, DC-81), and — as of DC-82 —
-//! `NoDurability` (`none::NoDurability`, every method an "unsupported" error) are the implementors.
+//! (`linux::LinuxDurability`), `Macos` (`macos::MacosDurability`, DC-81), `Windows`
+//! (`windows::WindowsDurability`, DC-87 Stage 2), and `NoDurability` (`none::NoDurability`, every
+//! method an "unsupported" error, for every remaining target) are the implementors.
 //! `ACTIVE_DURABILITY` below is the single gated constant that picks among them; no `target_os` gate
-//! appears at any call site in this file (DC-82's bar) — a third platform is one more `#[cfg]` arm on
-//! `ACTIVE_DURABILITY`, not one more arm at every one of these eleven functions.
+//! appears at any call site in this file (DC-82's bar) — a further platform is one more `#[cfg]` arm
+//! on `ACTIVE_DURABILITY`, not one more arm at every one of these eleven functions.
 
 use std::path::Path;
 
@@ -20,10 +21,17 @@ mod immutable;
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
-#[cfg(any(test, not(any(target_os = "linux", target_os = "macos"))))]
+#[cfg(any(
+    all(test, not(target_os = "windows")),
+    not(any(target_os = "linux", target_os = "macos", target_os = "windows"))
+))]
 mod none;
 mod read;
 mod regular;
+#[cfg(target_os = "windows")]
+mod windows;
+#[cfg(target_os = "windows")]
+mod windows_authority;
 
 pub(crate) use directory::MutationRoot;
 pub(crate) use read::{
@@ -36,8 +44,13 @@ use crate::fsutil::contract::DurabilityContract;
 pub(crate) use linux::LinuxDurability;
 #[cfg(target_os = "macos")]
 pub(crate) use macos::MacosDurability;
-#[cfg(any(test, not(any(target_os = "linux", target_os = "macos"))))]
+#[cfg(any(
+    all(test, not(target_os = "windows")),
+    not(any(target_os = "linux", target_os = "macos", target_os = "windows"))
+))]
 pub(crate) use none::NoDurability;
+#[cfg(target_os = "windows")]
+pub(crate) use windows::WindowsDurability;
 
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 pub(crate) use failpoints::{
@@ -52,7 +65,9 @@ pub(crate) use failpoints::{
 const ACTIVE_DURABILITY: LinuxDurability = LinuxDurability;
 #[cfg(target_os = "macos")]
 const ACTIVE_DURABILITY: MacosDurability = MacosDurability;
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(target_os = "windows")]
+const ACTIVE_DURABILITY: WindowsDurability = WindowsDurability;
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 const ACTIVE_DURABILITY: NoDurability = NoDurability;
 
 /// Write mutable metadata through a unique same-directory temporary file.
@@ -197,19 +212,24 @@ fn io_error(error: rustix::io::Errno) -> PrikkError {
     PrikkError::from(std::io::Error::from(error))
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn prikk_to_io(error: PrikkError) -> std::io::Error {
     std::io::Error::other(error.to_string())
 }
 
-/// Shared by `directory.rs` (`MutationRoot::ensure_root`'s fallback, unrelated to the durability
-/// dispatch above) and `none::NoDurability` (every method). Gated to match `none`'s own module gate —
-/// visible in test builds on every platform, and for real off Linux/macOS — so both callers always
-/// see it under the exact conditions they compile under.
-#[cfg(any(test, not(any(target_os = "linux", target_os = "macos"))))]
+/// Shared by `directory.rs`'s `PathOnlyAuthority` (`MutationRoot::ensure_root`'s fallback,
+/// unrelated to the durability dispatch above) and `none::NoDurability` (every method). Gated to
+/// match both callers' own gate exactly — visible in test builds on every target that is not
+/// Windows (Windows has its own real authority and implementor, in test builds too), and for real
+/// on every target that is none of Linux, macOS, or Windows.
+#[cfg(any(
+    all(test, not(target_os = "windows")),
+    not(any(target_os = "linux", target_os = "macos", target_os = "windows"))
+))]
 fn unsupported_mutation<T>() -> Result<T> {
     Err(PrikkError::Io(
-        "repository mutation requires Linux or macOS root-scoped filesystem capabilities"
+        "repository mutation requires Linux, macOS, or Windows root-scoped filesystem \
+         capabilities"
             .to_string(),
     ))
 }

@@ -26,9 +26,11 @@ see the [trust and threat model](./trust-threat-model.md) and the
   multi-active-session model.
 - Durability and recovery claims are supported by current unit and integration tests, not by a
   completed crash-matrix or fuzzing campaign.
-- Repository *mutation* is exercised by project gates on Linux and macOS; Windows mutation remains
-  unimplemented, so cross-platform filesystem locking, fsync, and rename behavior for mutation remain a
-  design target there. Read-only commands are CI-gated on macOS and Windows too — see
+- Repository *mutation* is exercised by project gates on Linux, macOS, and Windows (DC-87
+  Stage 2). Windows' anchoring guarantee is weaker than Linux/macOS in one stated way — see
+  [platform support](./platform-support.md) for the exact gap and which of the nine
+  durability guarantees are held, weaker, or documented no-ops there. Read-only commands are
+  CI-gated on macOS and Windows too — see
   [platform support](./platform-support.md).
 - `.prikk/` is not a stable repository format and there is no stable migration policy yet.
 
@@ -244,7 +246,7 @@ every lock it clears.
 | Doctor repairs are opt-in and do not clear unsafe active sessions or define stale-lock cleanup. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [integrity and recovery diagnostics](./integrity-recovery.md), [DC-29](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-29-VERIFY-DOCTOR-INTEGRITY-RECOVERY-REFERENCE.md) |
 | Four container locks (ref-pointer index, ref log, received-ref index, trust policy) are acquired by writers and `prikk compact` alike, sorted into one fixed order by a single acquisition helper before any lock is taken. | [`lock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/lock.rs), [`compact.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/compact.rs) |
 | `prikk unlock` lists every held lock with an advisory (not authoritative) liveness check of its recorded process id, and clears one named lock only after explicit confirmation or `--yes`. | [`unlock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/unlock.rs), [`prikk-cli/src/unlock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/unlock.rs) |
-| Repository path and durability claims for *mutation* remain limited by current test evidence and gates exercised on Linux and macOS only; read-only commands are CI-gated cross-platform as of DC-71. | [durability and crash recovery](./durability-recovery.md), [path and worktree safety](./path-safety.md), [platform support](./platform-support.md), [DC-28](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md), [DC-32](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-32-PATH-WORKTREE-SAFETY-REFERENCE.md) |
+| Repository path and durability claims for *mutation* remain limited by current test evidence and gates exercised on Linux, macOS, and Windows (DC-87 Stage 2); read-only commands are CI-gated cross-platform as of DC-71. | [durability and crash recovery](./durability-recovery.md), [path and worktree safety](./path-safety.md), [platform support](./platform-support.md), [DC-28](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md), [DC-32](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-32-PATH-WORKTREE-SAFETY-REFERENCE.md) |
 
 ## Provenance
 

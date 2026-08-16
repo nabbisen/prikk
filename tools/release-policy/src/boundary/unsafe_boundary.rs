@@ -38,13 +38,14 @@
 //! this: `#[allow(...)]` against a `forbid`-level lint is a hard compile error
 //! (`E0453: incompatible with previous forbid`), verified directly rather than assumed.
 //!
-//! **Dependency isolation, when a crate is actually named.** [`UNSAFE_EXEMPT_CRATES`]'s associated
-//! third-party allowlist is separate from `placement.rs`'s `ALLOWED_THIRD_PARTY` — an unsafe-exempt
-//! crate's third-party dependencies are not implicitly covered by whatever a product crate happens
-//! to already be allowed, so the exception cannot become a side door around DC-51's placement gate.
-//! Empty today, matching `UNSAFE_EXEMPT_CRATES` itself: no crate has an unsafe exception yet
-//! (acceptance criterion 3 — this being a meaningfully checked state, not a special case that starts
-//! working only once something is added).
+//! **Dependency isolation, when a crate is actually named.** This module does not carry a second
+//! third-party allowlist of its own — DC-96's preflight investigation found that claim in an
+//! earlier draft of this comment did not match the code, and corrected it rather than adding a
+//! table to match the prose. The isolation lives in `placement.rs`'s `ALLOWED_THIRD_PARTY`, which
+//! is keyed **per crate name**: an unsafe-exempt crate's third-party dependencies are named under
+//! its own entry there, never inherited from any other crate's allowance, so the exemption cannot
+//! become a side door around DC-51's placement gate. `prikk-ffi`'s own entry — `windows-sys`,
+//! nothing else — is what actually enforces this (acceptance criterion 3).
 //!
 //! ## What this gate cannot see (DC-90 §4.4)
 //!
@@ -73,8 +74,12 @@
 
 use super::{BoundaryError, PRODUCTS, push};
 
-/// At most one entry (checked by [`check_exemption_list_size`]). Empty today.
-const UNSAFE_EXEMPT_CRATES: &[&str] = &[];
+/// At most one entry (checked by [`check_exemption_list_size`]). DC-96: the first-ever entry --
+/// `prikk-ffi` calls `GetFileInformationByHandle` (`windows-sys`) to verify Windows anchor
+/// identity. Its own manifest re-declares the workspace lint table verbatim minus `unsafe_code`
+/// (see `prikk-ffi/Cargo.toml`'s own comment), which is what this module's `check_member` below
+/// verifies rather than trusts.
+const UNSAFE_EXEMPT_CRATES: &[&str] = &["prikk-ffi"];
 
 const SELF_GUARDING_LINT: &str = "undocumented_unsafe_blocks";
 /// `"forbid"`, not `"deny"` — see the module doc's "why the re-declaration must be forbid" section.

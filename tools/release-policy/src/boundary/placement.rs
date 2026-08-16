@@ -2,8 +2,11 @@ use std::path::Path;
 
 use super::{BoundaryError, PRODUCTS, push};
 
-const ALLOWED_THIRD_PARTY: [(&str, &[&str]); 7] = [
+const ALLOWED_THIRD_PARTY: [(&str, &[&str]); 8] = [
     ("prikk-error", &[]),
+    // DC-96: windows-sys under [target.'cfg(windows)'.dependencies] -- the sole exemption in
+    // UNSAFE_EXEMPT_CRATES below, and the sole reason this crate exists.
+    ("prikk-ffi", &["windows-sys"]),
     ("prikk-hash", &["sha2"]),
     ("prikk-crypto", &["ed25519-dalek", "getrandom"]),
     ("prikk-object", &[]),

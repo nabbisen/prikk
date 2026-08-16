@@ -23,6 +23,7 @@ test-support = []
 [dependencies]
 prikk-crypto                = { workspace = true }
 prikk-error                 = { workspace = true }
+prikk-ffi                   = { workspace = true }
 prikk-hash                  = { workspace = true }
 prikk-object                = { workspace = true }
 prikk-replay                = { workspace = true }

@@ -19,6 +19,19 @@ pub(super) fn allowed(tokens: &[String], index: usize, head: &str) -> bool {
         // gh as a general-purpose API client), so — unlike the inert set — they need an
         // exact-match entry, not blanket approval with any arguments.
         "tar" => tar(tail),
+        // DC-87 Stage 2, criterion 7: `grep`/`sort`/`cat`/`diff` are all read-only text utilities
+        // with no flag that invokes another program — unlike `tar`/`rustc`/`gh` above, none of
+        // these needed the exact-match treatment for the reason those three did; they get it
+        // anyway, per DC-70's own distinction (`inert_head` is reserved for commands that cannot
+        // execute another program under *any* arguments — these four are read-only for the
+        // specific arguments this workflow gives them, not unconditionally, so an exact-tail entry
+        // is the more conservative choice even though a wider one could likely be justified).
+        "grep" => tail == ["^block "],
+        "sort" => {
+            tail == [">", "../windows-object-ids.txt"] || tail == [">", "../linux-object-ids.txt"]
+        }
+        "cat" => tail == ["../windows-object-ids.txt"] || tail == ["../linux-object-ids.txt"],
+        "diff" => tail == ["-u", "linux-object-ids.txt", "windows-object-ids.txt"],
         "rustc" => {
             tail == [
                 "-vV",
@@ -61,6 +74,11 @@ fn tar(tail: &[String]) -> bool {
         // assumed from the shell source.
         || tail == ["-czf", "fixture-repo.tar.gz", "-C", "fixture-repo"]
         || tail == ["-xzf", "fixture-repo.tar.gz", "-C", "fixture-repo"]
+        // DC-87 Stage 2, criterion 7: the same create/extract round-trip as the fixture-repo pair
+        // above, for the Windows-mutated repository handed from windows-mutate to
+        // verify-cross-platform-history.
+        || tail == ["-czf", "windows-mutated-repo.tar.gz", "-C", "fixture-repo"]
+        || tail == ["-xzf", "windows-mutated-repo.tar.gz", "-C", "windows-repo"]
 }
 
 /// `gh release create $TAG <assets...> --repo nabbisen/prikk --title $TAG --notes-file <path>`.
@@ -105,6 +123,10 @@ fn cargo(command: &str, arguments: &[String]) -> bool {
         "test" => {
             arguments == ["--workspace"]
                 || arguments == ["--workspace", "--locked"]
+                // DC-87 Stage 2, fourth CI run: windows-mutation/macos-mutation's own Test step,
+                // spelled out exactly (DC-70 B1 precedent) -- `--no-fail-fast` so one Windows/macOS
+                // failure doesn't hide every failure behind it in the same run.
+                || arguments == ["--workspace", "--locked", "--no-fail-fast"]
                 // DC-81: the macOS CI job's NFR-PERF-01 data-collection step, spelled out exactly
                 // (DC-70 B1 precedent — never widened to accept an arbitrary name/flag set after
                 // `--`). Runs exactly one `#[ignore]`d test by name; it is not a gate.

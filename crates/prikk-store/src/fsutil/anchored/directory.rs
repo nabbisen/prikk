@@ -45,12 +45,15 @@ pub(super) trait PlatformAuthority: Sized {
 /// which concrete type this resolves to and that type's own `PlatformAuthority` impl.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 type Authority = Arc<AnchoredDirectory>;
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(target_os = "windows")]
+type Authority = Arc<super::windows_authority::WindowsAuthority>;
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 type Authority = PathOnlyAuthority;
 
-/// A validated mutation authority rooted at one retained directory handle (Linux/macOS) or, off
-/// those platforms, at a validated path alone (`PathOnlyAuthority`; a future Windows implementor
-/// is a third `Authority` type, not a change to this struct).
+/// A validated mutation authority rooted at one retained directory handle (Linux/macOS), at a
+/// component-at-a-time-validated path (Windows, `WindowsAuthority` -- design-v1.md §2), or, on
+/// every other platform, at a validated path alone with no per-component validation at all
+/// (`PathOnlyAuthority`).
 #[derive(Clone)]
 pub(crate) struct MutationRoot {
     path: Arc<PathBuf>,
@@ -145,17 +148,17 @@ fn dup(directory: &AnchoredDirectory) -> Result<AnchoredDirectory> {
     Ok(AnchoredDirectory { fd })
 }
 
-/// Off Linux and macOS: no retained handle at all, by construction, not as a shortcut -- Stage 2's
-/// Windows walk (design-v1.md §2) re-derives resolution from the validated path on every
-/// operation and needs no authority object between steps. This type exists so `PlatformAuthority`
-/// has a concrete non-Unix implementor today (used for `NoDurability` and by every test build);
-/// it carries the same "unsupported" behavior `ensure_root`/`open_root` already had inline before
-/// this refactor -- no behavior change, only where the platform difference is expressed.
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+/// Every platform that is neither Linux, macOS, nor Windows: no retained handle and no
+/// per-component validation at all, by construction, matching `NoDurability`'s own "genuinely
+/// unsupported" stance for these targets. This type exists so `PlatformAuthority` has a concrete
+/// implementor for `none::NoDurability` and every test build on such a target; it carries the same
+/// "unsupported" behavior `ensure_root`/`open_root` already had inline before Stage 1's refactor --
+/// no behavior change, only where the platform difference is expressed.
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 #[derive(Clone)]
 pub(super) struct PathOnlyAuthority;
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 impl PlatformAuthority for PathOnlyAuthority {
     fn bind(_path: &Path) -> Result<Self> {
         Ok(Self)
@@ -177,6 +180,43 @@ impl PlatformAuthority for PathOnlyAuthority {
         let _ = relative;
         Ok(Self)
     }
+}
+
+// Windows: no retained handle between steps, by construction, not as a shortcut -- design-v1.md
+// §2's own gap statement. `WindowsAuthority` itself now lives in its own module (DC-96,
+// `windows_authority.rs`) so its fields are genuinely private and every walk verifies the
+// anchor's identity before touching them -- see that module's own doc for why. The three
+// functions below are thin wrappers over its resolvers, kept here so `windows.rs`/`read.rs` do
+// not need to know the authority moved.
+
+/// Resolve (creating any missing component) `relative` against `root`'s own Windows authority,
+/// returning the validated absolute path. Mirrors `prepare_directory_required`.
+#[cfg(target_os = "windows")]
+pub(super) fn prepare_windows_directory_required(
+    root: &MutationRoot,
+    relative: &Path,
+) -> Result<PathBuf> {
+    root.authority.resolve_prepared(relative)
+}
+
+/// Resolve `relative` against `root`'s own Windows authority, requiring every component to
+/// already exist. Mirrors `open_existing_directory_required`.
+#[cfg(target_os = "windows")]
+pub(super) fn open_existing_windows_directory_required(
+    root: &MutationRoot,
+    relative: &Path,
+) -> Result<PathBuf> {
+    root.authority.resolve_existing(relative)
+}
+
+/// Resolve `relative` against `root`'s own Windows authority, returning `None` (not an error) as
+/// soon as any component is absent. Mirrors `open_existing_directory_for_read`.
+#[cfg(target_os = "windows")]
+pub(super) fn open_existing_windows_directory_for_read(
+    root: &MutationRoot,
+    relative: &Path,
+) -> Result<Option<PathBuf>> {
+    root.authority.resolve_existing_for_read(relative)
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -316,8 +356,12 @@ pub(super) fn open_existing_directory_for_read(
     Ok(Some(current))
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-fn relative_components(path: &Path) -> Result<Vec<&std::ffi::OsStr>> {
+/// Split a validated relative path into its individual normal components. Platform-neutral logic
+/// -- shared by the Unix fd-anchored walk and the Windows path-anchored walk (`WindowsAuthority`),
+/// each of which resolves one component at a time for the same reason: no single primitive on
+/// either platform resolves a whole relative path against a root in one call while refusing a
+/// reparse point/symlink at every intermediate component, only at the last.
+pub(super) fn relative_components(path: &Path) -> Result<Vec<&std::ffi::OsStr>> {
     validate_relative(path)?;
     let mut components = Vec::new();
     for component in path.components() {

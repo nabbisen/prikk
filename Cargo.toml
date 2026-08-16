@@ -4,6 +4,7 @@ members = [
     "crates/prikk-cli",
     "crates/prikk-crypto",
     "crates/prikk-error",
+    "crates/prikk-ffi",
     "crates/prikk-hash",
     "crates/prikk-object",
     "crates/prikk-replay",
@@ -14,6 +15,7 @@ default-members = [
     "crates/prikk-cli",
     "crates/prikk-crypto",
     "crates/prikk-error",
+    "crates/prikk-ffi",
     "crates/prikk-hash",
     "crates/prikk-object",
     "crates/prikk-replay",
@@ -34,6 +36,7 @@ keywords            = ["vcs"]
 [workspace.dependencies]
 prikk-crypto                = { version = "0.20.0", path = "crates/prikk-crypto" }
 prikk-error                 = { version = "0.20.0", path = "crates/prikk-error" }
+prikk-ffi                   = { version = "0.20.0", path = "crates/prikk-ffi" }
 prikk-hash                  = { version = "0.20.0", path = "crates/prikk-hash" }
 prikk-object                = { version = "0.20.0", path = "crates/prikk-object" }
 prikk-replay                = { version = "0.20.0", path = "crates/prikk-replay" }
@@ -43,6 +46,10 @@ ed25519-dalek               = "3"
 getrandom                   = "0.4"
 rustix                      = { version = "1", features = ["fs", "process"] }
 sha2                        = "0.11"
+# DC-96: pinned to the version already resolved in the dependency graph (via rustix->errno and
+# tempfile) so this direct edge does not add a second copy. Verify against Cargo.lock before
+# bumping, not just this comment.
+windows-sys                 = { version = "=0.61.2", features = ["Win32_Storage_FileSystem", "Win32_Foundation"] }
 
 # Testing
 proptest                    = "1"

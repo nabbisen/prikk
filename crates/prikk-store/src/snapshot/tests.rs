@@ -13,6 +13,7 @@ use crate::{
 use crate::test_support::{
     maintainer_signature, signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
 };
+#[cfg(not(target_os = "windows"))]
 use crate::worktree::materialize_manifest_entries;
 
 #[test]
@@ -26,38 +27,80 @@ fn repo_path_rejects_traversal_and_reserved_names() {
     assert!(RepoPath::parse("日本語.txt").is_err());
 }
 
+/// DC-96 Windows Anchor Identity, option 2 (`.git-exclude/reviewed/DC-96-ancestor-rename-ruling-v1.md`
+/// §2-§3): restated criterion 1 allows a platform split only where the Windows branch asserts
+/// something *at least as strong* as Linux/macOS's, the difference is documented in
+/// `platform-support.md`, and the Linux/macOS branch is unchanged. All three hold here.
+///
+/// **On Windows the rename itself is now refused by the OS**, not merely handled correctly if it
+/// happened: `layout` retains a handle on `root/.prikk` (`RepositoryLayout::init`), and NTFS
+/// refuses to rename a directory that contains any open handle, unconditionally — confirmed against
+/// Microsoft's own `FILE_RENAME_INFORMATION` reference and against this exact scenario on real
+/// Windows CI. So the attack this test simulates (rename the root, plant an impostor) cannot be
+/// *constructed* on Windows while a prikk command holds the repository open. That is a stronger
+/// guarantee than "constructed, then handled correctly," which is what the rest of this test (run
+/// on Linux/macOS, where the retained file descriptor makes the rename itself succeed) still
+/// verifies, unchanged below.
 #[test]
 fn worktree_checks_and_writes_remain_on_retained_root() -> prikk_error::Result<()> {
     let root = unique_temp_dir("worktree-operation-root-replacement");
     let layout = RepositoryLayout::init(root.clone())?;
     std::fs::write(root.join("conflict.txt"), b"original")?;
     let displaced = root.with_extension("displaced");
-    std::fs::rename(&root, &displaced)?;
-    std::fs::create_dir(&root)?;
+    let rename_result = std::fs::rename(&root, &displaced);
 
-    let conflict = SnapshotManifest {
-        files: vec![SnapshotEntry {
-            path: RepoPath::parse("conflict.txt")?,
-            bytes: b"replacement".to_vec(),
-        }],
-    };
-    assert!(materialize_manifest_entries(&layout, &conflict).is_err());
-    assert_eq!(std::fs::read(displaced.join("conflict.txt"))?, b"original");
-    assert!(!root.join("conflict.txt").exists());
+    #[cfg(target_os = "windows")]
+    {
+        // `layout` is never called on this branch, but it must stay alive (not be dropped) through
+        // the rename attempt above -- its retained `.prikk` handle is *why* the rename fails. This
+        // reference is only to satisfy the unused-variable lint; ordinary scope rules already keep
+        // it alive until here regardless.
+        let _ = &layout;
+        // DC-96 option2-ruling-v1 §3: assert the specific refusal, not merely "some error" -- a
+        // vacuous pass (e.g. the temp path colliding, or a transient unrelated I/O error) would
+        // satisfy a bare `is_err()` without the guarantee this test exists to pin actually holding.
+        let error_kind = rename_result.as_ref().err().map(std::io::Error::kind);
+        assert_eq!(
+            error_kind,
+            Some(std::io::ErrorKind::PermissionDenied),
+            "NTFS must refuse to rename a directory containing an open handle with the specific \
+             access-denied error, not merely any error -- `layout` retains one on `.prikk`, so \
+             this root-swap must be impossible to construct while a prikk command holds the \
+             repository open, not merely detected after the fact: {rename_result:?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+        Ok(())
+    }
 
-    let new_file = SnapshotManifest {
-        files: vec![SnapshotEntry {
-            path: RepoPath::parse("new.txt")?,
-            bytes: b"retained-root".to_vec(),
-        }],
-    };
-    assert!(materialize_manifest_entries(&layout, &new_file).is_ok());
-    assert_eq!(std::fs::read(displaced.join("new.txt"))?, b"retained-root");
-    assert!(!root.join("new.txt").exists());
+    #[cfg(not(target_os = "windows"))]
+    {
+        rename_result?;
+        std::fs::create_dir(&root)?;
 
-    let _ = std::fs::remove_dir_all(root);
-    let _ = std::fs::remove_dir_all(displaced);
-    Ok(())
+        let conflict = SnapshotManifest {
+            files: vec![SnapshotEntry {
+                path: RepoPath::parse("conflict.txt")?,
+                bytes: b"replacement".to_vec(),
+            }],
+        };
+        assert!(materialize_manifest_entries(&layout, &conflict).is_err());
+        assert_eq!(std::fs::read(displaced.join("conflict.txt"))?, b"original");
+        assert!(!root.join("conflict.txt").exists());
+
+        let new_file = SnapshotManifest {
+            files: vec![SnapshotEntry {
+                path: RepoPath::parse("new.txt")?,
+                bytes: b"retained-root".to_vec(),
+            }],
+        };
+        assert!(materialize_manifest_entries(&layout, &new_file).is_ok());
+        assert_eq!(std::fs::read(displaced.join("new.txt"))?, b"retained-root");
+        assert!(!root.join("new.txt").exists());
+
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(displaced);
+        Ok(())
+    }
 }
 
 #[test]
