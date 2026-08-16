@@ -62,14 +62,27 @@ object found there is still the one that was bound, and only then walks forward 
 calls go through `prikk-ffi` — `crates/prikk-ffi`, the one workspace crate permitted `unsafe` per
 DC-90. Three residual properties, stated precisely rather than left to be inferred:
 
-- **Anchor replacement *between* operations: detected, and operations continue correctly against the
-  retained directory.** The gap the CI job demonstrated — now prevention, not refusal.
+- **Anchor replacement *between* operations: prevented while a repository is open, in two different
+  ways.** For `.prikk` (`repository_mutation`), the retained handle follows a rename that does
+  succeed — the gap the CI job demonstrated, now closed by continuing correctly against the retained
+  directory rather than merely refusing. For the worktree root (`worktree_mutation`), the outcome is
+  stronger still: **NTFS refuses the rename outright**, because `RepositoryLayout` retains a nested
+  handle on `.prikk` inside it — see the next paragraph for what this means operationally.
 - **Anchor replacement racing a *single* operation** — swapped between the post-open identity check
   and the open that immediately follows it — **is still possible.** The window is narrowed from "any
   time before the next operation" to one check-then-open pair; it is not closed, because Windows still
   offers no `openat`-equivalent to close it by construction the way Linux and macOS do.
 - **Intermediate path components are unchanged** — this is exactly the G1 mid-walk window above, and
   DC-96 does not touch it.
+
+**A fourth property, user-facing rather than adversarial: while a prikk command holds a repository
+open on Windows, that repository's directory — and any directory containing it — cannot be renamed or
+moved by any process, prikk included.** NTFS refuses to rename a directory that contains an open
+handle anywhere within it, unconditionally, and prikk retains one on `.prikk` for the duration of a
+command (`RepositoryLayout::init`/`open`, `crates/prikk-store/src/fsutil/anchored/
+windows_authority.rs`). This is not a bug report waiting to happen; it is the mechanism above,
+observed from the other side. It is bounded to a single command's execution — `prikk` has no daemon —
+so the window is as long as one invocation takes, not a whole working session.
 
 **The 64-bit file index is not reliable on every filesystem — identity is the secondary check, not
 the sole mechanism, which is why this does not weaken the fix.** Per Microsoft's own documentation
