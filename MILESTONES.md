@@ -109,9 +109,18 @@ is a one-way door.
 If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
 reviewed commit restores agreement.
 
-**Current release lane:** `parked`.
+**Current release lane:** `active`.
 
-**Current activated release target:** none.
+**Current activated release target:** 0.21.0.
+
+**0.21.0 activated 2026-08-16 by the project owner.** The lane was parked from 0.20.0's release until
+now. 0.21.0 carries DC-87 (Windows mutation, Stages 1 and 2) and DC-96 (Windows anchor identity) — 23
+commits since 0.20.0, all of one theme. **Windows becomes a mutating platform**, the first change to
+prikk's platform posture since the project began. `docs/src/reference/platform-support.md` states four
+residual properties a Windows operator meets: DC-87 criterion 4's nine `DurabilityContract` negative
+controls are not run on Windows; `prikk unlock` returns no positive liveness signal there; the 64-bit
+file index is unreliable on ReFS (Windows 11 Dev Drive); and a repository directory cannot be renamed
+while a prikk command holds it open. All four are accepted and documented, not discovered late.
 
 **0.20.0 released 2026-08-16**; the lane was parked the same day. It is activated only while a release
 is being prepared, so a shipped target does not leave it standing open.
