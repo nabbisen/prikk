@@ -103,6 +103,34 @@ wrappers, and the `Point` variants that become unreachable. Independently worthw
 documented "Weaker" on Windows that nothing calls), and a prerequisite per §1. Report the test-count delta
 on all three platforms.
 
+### Discharging the prior ruling that kept `publish_immutable`
+
+**This is not a free deletion, and the record must show why it is now allowed.** `contract.rs`'s own doc
+carries a standing ruling:
+
+> *"**Ruled (design-v1.md §12.3): keep it.** Retiring a documented durability guarantee that has been
+> through DC-71, DC-76, DC-81 and DC-82 is an RFC-level act, not a stage's side effect — revisit once
+> Stages 4-5 (refs/trust containerization) show whether any loose-file use remains at all, not piecemeal."*
+
+Both conditions are now met. **RFC 102 completed all six stages and shipped in 0.20.0**, so Stages 4-5
+have answered the question the ruling deferred to: no loose-file use remains, and both methods have zero
+production callers. And the ruling requires an **RFC-level act** — which this RFC is, rather than a stage
+quietly dropping a guarantee on its way to something else.
+
+`promote` carries no equivalent ruling; its contract entry is a plain description.
+
+**Consequences that must be carried through, not discovered:**
+
+- **G5 (race-safe no-clobber publication) retires as a guarantee.** DC-76's nine become eight, and
+  `DurabilityContract` goes from eleven methods to nine. `platform-support.md`'s per-guarantee table and
+  DC-97's classification both change.
+- The tests that exercise it go with it — `object_store/tests/immutable.rs` and `races.rs`, which the
+  contract doc itself names as the reason it was *"not fully dead."* **This resolves DC-97's deferred
+  `races.rs` question by removing it**, rather than by splitting a helper.
+
+**Stop-and-report:** if any production caller of either method is found, stop. The zero-caller finding is
+the whole basis for this stage.
+
 **Stage 2 — classify, then wire.** Map each remaining wrapper to its Windows operation or its reason,
 **submit the classification for review before writing wiring**, then implement what the classification
 supports. DC-97's report-first shape, which found two vacuous controls that reading the code did not.
