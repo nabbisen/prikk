@@ -5,6 +5,8 @@ use prikk_object::{
     RefUpdatePayload,
 };
 
+#[cfg(target_os = "windows")]
+use crate::ObjectReader;
 use crate::test_support::{
     rollback_patch_envelope, signed_patch_blob_envelope, signed_patch_envelope, unique_temp_dir,
 };
@@ -109,17 +111,23 @@ fn full_verification_retains_wal_objects_trust_and_recovery_diagnosis_after_root
 /// distinct from `snapshot::tests::worktree_checks_and_writes_remain_on_retained_root`'s worktree
 /// one -- this scenario swaps `.prikk` itself, not the worktree root, so it exercises
 /// `repository_mutation` (objects/refs/WAL, the durability-bearing anchor), not `worktree_mutation`.
-/// Windows-only: on Linux/macOS the retained file descriptor means this scenario has no failure
-/// mode to refuse -- the write simply succeeds, anchored correctly, which is exactly what
+///
+/// **Asserts success, not refusal** -- corrected per
+/// `.git-exclude/reviewed/DC-96-implementation-ruling-v1.md` §2-§4: the mechanism is prevention
+/// (a retained handle follows the renamed directory), not detection, so a durability-bearing write
+/// issued through the stale `layout` must continue to succeed, landing in the *retained*
+/// `.prikk-retained` tree -- exactly what
 /// `full_verification_retains_wal_objects_trust_and_recovery_diagnosis_after_root_replacement`
-/// above already demonstrates for reads through the same retained authority. Converted from the
-/// throwaway diagnostic probe on `dc87-stage2-windows-cause2-probe` (`d691625`), whose byte-count
-/// observation (0 -> 362 bytes into the *impostor* `.prikk`, not the retained `.prikk-retained`) is
-/// what first established this as a write, not merely a read, vulnerability.
+/// above already demonstrates for reads through the same retained authority. An earlier version of
+/// this test asserted the opposite (refusal), matching the design's first, since-corrected
+/// "detection only" shape; ruled wrong because it could never have made the acceptance tests above
+/// pass while also passing this one -- the two would have required opposite outcomes for the same
+/// class of scenario. Windows-only: on Linux/macOS this scenario has no interesting behavior to
+/// pin beyond what the read test above already covers, via the same retained-fd mechanism.
 #[cfg(target_os = "windows")]
 #[test]
-fn durability_bearing_write_is_refused_after_repository_root_replacement() -> prikk_error::Result<()>
-{
+fn durability_bearing_write_succeeds_against_the_retained_repository_root_after_replacement()
+-> prikk_error::Result<()> {
     let root = unique_temp_dir("verify-durability-write-root-replacement");
     let layout = RepositoryLayout::init(root.clone())?;
 
@@ -127,17 +135,58 @@ fn durability_bearing_write_is_refused_after_repository_root_replacement() -> pr
     // The impostor: a fresh, empty .prikk at the same path the stale `layout` still points at.
     let _replacement = RepositoryLayout::init(root.clone())?;
 
+    let impostor_bytes_before = total_bytes_recursively(&root.join(".prikk"));
+    let retained_bytes_before = total_bytes_recursively(&root.join(".prikk-retained"));
+
     let mut objects = FileObjectStore::new(layout.clone());
     let write_result = objects.write_object(&signed_patch_blob_envelope());
+    let read_back = write_result
+        .as_ref()
+        .ok()
+        .and_then(|&id| objects.read_object(id).ok().flatten());
+
+    let impostor_bytes_after = total_bytes_recursively(&root.join(".prikk"));
+    let retained_bytes_after = total_bytes_recursively(&root.join(".prikk-retained"));
 
     let _ = std::fs::remove_dir_all(&root);
 
     assert!(
-        write_result.is_err(),
-        "a durability-bearing write through a stale layout must be refused once the anchor it \
-         was bound to has been replaced, not silently redirected into the impostor: {write_result:?}"
+        write_result.is_ok(),
+        "a durability-bearing write through a retained layout must succeed against the retained \
+         directory after the anchor is renamed aside, matching the Linux/macOS guarantee: \
+         {write_result:?}"
+    );
+    assert_eq!(
+        impostor_bytes_before, impostor_bytes_after,
+        "the impostor .prikk must not grow -- the write must not be redirected into it"
+    );
+    assert!(
+        retained_bytes_after > retained_bytes_before,
+        "the retained .prikk-retained tree must grow -- this is where the write must land"
+    );
+    assert_eq!(
+        read_back.map(|envelope| envelope.object_id()),
+        write_result.ok(),
+        "the written object must be readable back through the same retained layout"
     );
     Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn total_bytes_recursively(dir: &std::path::Path) -> u64 {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut total = 0_u64;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            total += total_bytes_recursively(&path);
+        } else if let Ok(metadata) = entry.metadata() {
+            total += metadata.len();
+        }
+    }
+    total
 }
 
 fn assert_retained_missing_pointer(

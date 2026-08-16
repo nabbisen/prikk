@@ -46,7 +46,7 @@ pub(super) trait PlatformAuthority: Sized {
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 type Authority = Arc<AnchoredDirectory>;
 #[cfg(target_os = "windows")]
-type Authority = super::windows_authority::WindowsAuthority;
+type Authority = Arc<super::windows_authority::WindowsAuthority>;
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 type Authority = PathOnlyAuthority;
 

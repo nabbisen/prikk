@@ -2,23 +2,30 @@
 //! so its fields are genuinely private -- it used to share that module with the read-side walker
 //! (`open_existing_windows_directory_for_read`), and field privacy binds at module granularity, so
 //! privacy bought nothing while both lived there. **This module exposes no way to obtain a base
-//! path from an authority without first verifying it is still the object it was bound to.** Every
-//! resolver below (`resolve_existing`/`resolve_prepared`/`resolve_existing_for_read`) and both
-//! `PlatformAuthority` walks (`ensure_child`/`open_child`) call [`WindowsAuthority::verify_anchor`]
-//! before touching `self.path` -- there is no path accessor a future fourth walker could reach for
-//! instead. That is what makes this a control rather than a convention (the distinction DC-90's own
-//! module doc draws, applied one layer down): a second call site could be forgotten; a missing
-//! accessor cannot compile around.
+//! path from an authority without first re-deriving and verifying it.** Every resolver below
+//! (`resolve_existing`/`resolve_prepared`/`resolve_existing_for_read`) and both `PlatformAuthority`
+//! walks (`ensure_child`/`open_child`) call [`WindowsAuthority::verified_anchor_path`] before
+//! touching anything -- there is no path accessor a future fourth walker could reach for instead.
+//! That is what makes this a control rather than a convention (the distinction DC-90's own module
+//! doc draws, applied one layer down): a second call site could be forgotten; a missing accessor
+//! cannot compile around.
 //!
-//! **Detection, not prevention** (design-v1.md §5). Windows has no `openat` -- there is no
-//! primitive that resolves a child by name against an already-open directory handle the way Linux
-//! and macOS do. `verify_anchor` re-opens `self.path` and compares its identity
-//! (`GetFileInformationByHandle`'s `(volume serial, file index)` pair, `prikk-ffi`) against the
-//! identity captured when this authority was bound. A mismatch means the directory at that path is
-//! not the one this authority validated -- refused, not silently followed. What this closes:
-//! **anchor replacement between operations.** What it does not: a replacement racing the single
-//! verify-then-open pair (the window is narrowed, not closed), and G1's already-documented
-//! mid-walk reparse-point race (`windows.rs`'s own module doc), which this module does not touch.
+//! **Prevention, not detection** (`.git-exclude/reviewed/DC-96-implementation-ruling-v1.md` §4,
+//! correcting this module's first version, which stored a path string and verified identity
+//! against it -- detection only, and wrong: the acceptance tests require operations to keep
+//! working correctly against the retained directory after a replacement, not merely refuse). This
+//! authority instead **retains the directory handle it was bound to.** Windows has no `openat` --
+//! no primitive resolves a child by name against an already-open directory handle the way Linux
+//! and macOS do -- but a retained handle still follows its object across a rename
+//! (`GetFinalPathNameByHandle`, `prikk-ffi::current_path_of`). So every walk re-derives the
+//! anchor's *current* path from the handle first, confirms the object found there is still the one
+//! that was bound (`GetFileInformationByHandle`, `prikk-ffi::identity_of` -- the check-then-open
+//! race closer, not the sole mechanism now), and only then walks forward. What this closes:
+//! **anchor replacement between operations, and the walk continues correctly against the retained
+//! object.** What it does not: a replacement racing the single verify-then-open pair on the anchor
+//! itself (the window is narrowed, not closed), and G1's already-documented mid-walk reparse-point
+//! race among the *relative* components of a walk (`windows.rs`'s own module doc), which this
+//! module does not touch.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -28,40 +35,46 @@ use prikk_error::{PrikkError, Result};
 use super::directory::{PlatformAuthority, relative_components};
 use super::windows;
 
-/// No retained handle -- a `File` would look like the Linux design and buy nothing, since Windows
-/// cannot resolve a child through a directory handle, and an inert retained resource invites the
-/// belief that it provides a guarantee it does not. `identity` is what actually stands in for it:
-/// a value, re-checked against a fresh open on every use, not a capability held across calls.
-#[derive(Clone)]
+/// The retained handle is the mechanism; `identity` is the confirmation that the object found at
+/// the handle's re-derived current path is still the one `bind` (or the last walk) validated --
+/// not the sole check, since `GetFinalPathNameByHandle` itself already follows the right object
+/// regardless of what identity says. Not `Clone` directly (a `File` cannot be cheaply cloned);
+/// always used behind `Arc`, matching Linux/macOS's `Arc<AnchoredDirectory>` shape exactly, for the
+/// same reason -- `MutationRoot` itself is `Clone` and needs its authority to be too.
 pub(super) struct WindowsAuthority {
-    path: PathBuf,
+    handle: std::fs::File,
     identity: prikk_ffi::FileIdentity,
 }
 
+fn io_error(path: &Path, error: std::io::Error) -> PrikkError {
+    PrikkError::Io(format!("{}: {error}", path.display()))
+}
+
 impl WindowsAuthority {
-    /// Re-open `self.path` no-follow, read its current identity, and fail closed if it no longer
-    /// matches the identity captured when this authority was bound or last walked to. Called
-    /// before every walk in this module, **before** the component loop when there is one -- a
-    /// relative path with zero components (a file directly in the anchor) must still be checked,
-    /// or the empty-relative case -- the failing tests' own exact shape -- would stay unverified.
-    fn verify_anchor(&self) -> Result<()> {
-        let file = windows::open_directory_no_follow(&self.path)?;
-        let current = windows::identity_no_follow(&file, &self.path)?;
-        if current != self.identity {
+    /// Re-derive this authority's current path from the retained handle, confirm the object found
+    /// there is still the one that was bound, and return the path to walk from. Called before
+    /// every walk in this module, **before** any component loop -- a relative path with zero
+    /// components (a file directly in the anchor) must still be checked, or the empty-relative
+    /// case -- the originally failing tests' own exact shape -- would stay unverified.
+    fn verified_anchor_path(&self) -> Result<PathBuf> {
+        let current_path = prikk_ffi::current_path_of(&self.handle)
+            .map_err(|error| io_error(Path::new("<retained Windows anchor handle>"), error))?;
+        let file = windows::open_directory_no_follow(&current_path)?;
+        let identity = windows::identity_no_follow(&file, &current_path)?;
+        if identity != self.identity {
             return Err(PrikkError::Integrity(format!(
                 "Windows anchor replaced: {} no longer identifies the directory this authority \
                  was bound to",
-                self.path.display()
+                current_path.display()
             )));
         }
-        Ok(())
+        Ok(current_path)
     }
 
     /// Resolve `relative` (creating any missing component) against this authority, verified
     /// first. Mirrors `prepare_directory_required`'s guarantee on the Unix side.
     pub(super) fn resolve_prepared(&self, relative: &Path) -> Result<PathBuf> {
-        self.verify_anchor()?;
-        let mut current = self.path.clone();
+        let mut current = self.verified_anchor_path()?;
         for component in relative_components(relative)? {
             current.push(component);
             windows::ensure_directory_component_no_follow(&current)?;
@@ -72,8 +85,7 @@ impl WindowsAuthority {
     /// Resolve `relative` against this authority, requiring every component to already exist,
     /// verified first. Mirrors `open_existing_directory_required`.
     pub(super) fn resolve_existing(&self, relative: &Path) -> Result<PathBuf> {
-        self.verify_anchor()?;
-        let mut current = self.path.clone();
+        let mut current = self.verified_anchor_path()?;
         for component in relative_components(relative)? {
             current.push(component);
             windows::open_directory_no_follow(&current)?;
@@ -87,8 +99,7 @@ impl WindowsAuthority {
     /// meaning "does not exist," not "error" -- this moved module, not meaning; unifying it with
     /// `resolve_existing`'s required contract is explicitly out of this increment's scope.
     pub(super) fn resolve_existing_for_read(&self, relative: &Path) -> Result<Option<PathBuf>> {
-        self.verify_anchor()?;
-        let mut current = self.path.clone();
+        let mut current = self.verified_anchor_path()?;
         for component in relative_components(relative)? {
             current.push(component);
             if windows::stat_directory_no_follow(&current)?.is_none() {
@@ -99,50 +110,54 @@ impl WindowsAuthority {
     }
 }
 
-impl PlatformAuthority for WindowsAuthority {
+impl PlatformAuthority for Arc<WindowsAuthority> {
     fn bind(path: &Path) -> Result<Self> {
-        // Capture identity from the same handle `open_directory_no_follow` already validated --
-        // not a second open, which would be a fresh race inside the constructor.
-        let file = windows::open_directory_no_follow(path)?;
-        let identity = windows::identity_no_follow(&file, path)?;
-        Ok(Self {
-            path: path.to_path_buf(),
-            identity,
-        })
+        // Capture identity from the same handle that is retained -- not a second open, which
+        // would be a fresh race inside the constructor.
+        let handle = windows::open_directory_no_follow(path)?;
+        let identity = windows::identity_no_follow(&handle, path)?;
+        Ok(Arc::new(WindowsAuthority { handle, identity }))
     }
 
     fn same_as(&self, _self_path: &Arc<PathBuf>, other: &Self, _other_path: &Arc<PathBuf>) -> bool {
-        self.path == other.path && self.identity == other.identity
+        // No stored path to compare (there is no path accessor at all, by design) -- identity is
+        // what "the same underlying object" means here, regardless of which of possibly several
+        // retained handles to that object either side happens to hold.
+        self.identity == other.identity
     }
 
     fn ensure_child(&self, relative: &Path) -> Result<Self> {
-        self.verify_anchor()?;
-        let mut current = self.path.clone();
+        let mut current = self.verified_anchor_path()?;
+        // Duplicate the retained handle unconditionally, matching Linux/macOS's own `dup(self)` at
+        // the same point (`directory.rs`) -- a genuinely new, independent authority even for the
+        // zero-component case, not a second reference to this one. Overwritten by the walk below
+        // if `relative` has any components.
+        let mut handle = self
+            .handle
+            .try_clone()
+            .map_err(|error| io_error(&current, error))?;
         let mut identity = self.identity;
         for component in relative_components(relative)? {
             current.push(component);
-            let file = windows::ensure_directory_component_no_follow(&current)?;
-            identity = windows::identity_no_follow(&file, &current)?;
+            handle = windows::ensure_directory_component_no_follow(&current)?;
+            identity = windows::identity_no_follow(&handle, &current)?;
         }
-        Ok(Self {
-            path: current,
-            identity,
-        })
+        Ok(Arc::new(WindowsAuthority { handle, identity }))
     }
 
     fn open_child(&self, relative: &Path) -> Result<Self> {
-        self.verify_anchor()?;
-        let mut current = self.path.clone();
+        let mut current = self.verified_anchor_path()?;
+        let mut handle = self
+            .handle
+            .try_clone()
+            .map_err(|error| io_error(&current, error))?;
         let mut identity = self.identity;
         for component in relative_components(relative)? {
             current.push(component);
-            let file = windows::open_directory_no_follow(&current)?;
-            identity = windows::identity_no_follow(&file, &current)?;
+            handle = windows::open_directory_no_follow(&current)?;
+            identity = windows::identity_no_follow(&handle, &current)?;
         }
-        Ok(Self {
-            path: current,
-            identity,
-        })
+        Ok(Arc::new(WindowsAuthority { handle, identity }))
     }
 }
 

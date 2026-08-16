@@ -48,9 +48,59 @@ pub fn identity_of(file: &std::fs::File) -> std::io::Result<FileIdentity> {
     })
 }
 
+/// The current path of an already-open handle's object (`GetFinalPathNameByHandle`, Microsoft
+/// Learn). A directory handle follows its object across a rename -- re-deriving the path this way
+/// before a walk, rather than re-walking a path string captured earlier, is what lets Windows
+/// continue operating correctly against the object that was validated even after its directory
+/// entry has been renamed elsewhere (DC-96 implementation-ruling-v1 §4). Returned with the
+/// `VOLUME_NAME_DOS` / `FILE_NAME_NORMALIZED` flags (value `0`) -- the ordinary drive-letter path
+/// form every other function in this crate and its caller already expects, at the cost of the
+/// well-known `\\?\` extended-length prefix Windows adds to this form; `std::fs`/`CreateFileW`
+/// both accept it transparently.
+#[cfg(windows)]
+pub fn current_path_of(file: &std::fs::File) -> std::io::Result<std::path::PathBuf> {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+    use std::os::windows::io::AsRawHandle;
+    use std::path::PathBuf;
+
+    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::Storage::FileSystem::GetFinalPathNameByHandleW;
+
+    let handle: HANDLE = file.as_raw_handle();
+    // Zero-initialized and grown by `Vec::resize`, never left partially uninitialized -- so
+    // `buffer.as_mut_ptr()` below is always a pointer to `buffer.len()` valid, initialized `u16`
+    // slots, regardless of how much of that capacity the call actually writes.
+    let mut buffer: Vec<u16> = vec![0; 512];
+    loop {
+        let capacity = u32::try_from(buffer.len()).unwrap_or(u32::MAX);
+        // SAFETY: `handle` is a valid, open HANDLE for the duration of this call, borrowed from
+        // `file`. `buffer.as_mut_ptr()` points to `capacity` initialized, writable `u16` slots
+        // (see above); the function writes at most `capacity` of them and returns the count
+        // actually written (success) or the count that would have been required (buffer too
+        // small) -- it never writes past what `capacity` promises is available. On failure
+        // (return value 0) it writes nothing we read; the OS error is read via
+        // `std::io::Error::last_os_error` immediately after, before any other call can clobber
+        // it.
+        let written =
+            unsafe { GetFinalPathNameByHandleW(handle, buffer.as_mut_ptr(), capacity, 0) };
+        if written == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        if written < capacity {
+            // Success: `written` is the length actually used, excluding the null terminator.
+            buffer.truncate(written as usize);
+            break;
+        }
+        // Too small: `written` is the required size, including the null terminator this time.
+        buffer.resize(written as usize, 0);
+    }
+    Ok(PathBuf::from(OsString::from_wide(&buffer)))
+}
+
 #[cfg(all(test, windows))]
 mod tests {
-    use super::{FileIdentity, identity_of};
+    use super::{FileIdentity, current_path_of, identity_of};
 
     /// DC-96 design-v1.md §6.4: without this, a `FileIdentity` that never equals itself -- or
     /// always equals everything -- would pass every other test in this increment silently.
@@ -88,5 +138,59 @@ mod tests {
     fn file_identity_is_copy_and_comparable() {
         fn assert_bounds<T: Copy + PartialEq + Eq + std::fmt::Debug>() {}
         assert_bounds::<FileIdentity>();
+    }
+
+    fn open_directory(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+        use std::os::windows::fs::OpenOptionsExt;
+        // `FILE_FLAG_BACKUP_SEMANTICS` (`0x02000000`) -- required to obtain a directory handle via
+        // `CreateFile` at all (Microsoft Learn, `CreateFileA`, `dwFlagsAndAttributes`). The same
+        // constant `windows.rs` uses for the same reason; not re-exported from there to keep this
+        // crate's only dependency on its caller one-directional (this crate takes no dependency on
+        // `prikk-store`).
+        std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(0x0200_0000)
+            .open(path)
+    }
+
+    /// DC-96 implementation-ruling-v1 §4: the mechanism the whole correction rests on. A retained
+    /// directory handle must keep resolving to its *current* path after the directory is renamed
+    /// out from under it -- this is what turns identity comparison from the sole mechanism
+    /// (detection only, and wrong per that ruling) into the secondary confirmation after a walk
+    /// that already starts from the right place (prevention).
+    #[test]
+    fn current_path_of_follows_the_handle_across_a_rename() -> std::io::Result<()> {
+        let temporary_root = std::env::temp_dir();
+        let suffix = std::process::id();
+        let original = temporary_root.join(format!("prikk-ffi-rename-test-original-{suffix}"));
+        let renamed = temporary_root.join(format!("prikk-ffi-rename-test-renamed-{suffix}"));
+        let _ = std::fs::remove_dir_all(&original);
+        let _ = std::fs::remove_dir_all(&renamed);
+        std::fs::create_dir(&original)?;
+
+        let handle = open_directory(&original)?;
+        let path_before = current_path_of(&handle)?;
+        let expected_before = std::fs::canonicalize(&original)?;
+
+        std::fs::rename(&original, &renamed)?;
+        let path_after = current_path_of(&handle)?;
+        let expected_after = std::fs::canonicalize(&renamed)?;
+
+        let _ = std::fs::remove_dir_all(&renamed);
+
+        assert_eq!(
+            path_before, expected_before,
+            "before any rename, the handle's path must match the directory it was opened from"
+        );
+        assert_eq!(
+            path_after, expected_after,
+            "after renaming the directory out from under the still-open handle, current_path_of \
+             must report the NEW path -- this is the whole mechanism DC-96 depends on"
+        );
+        assert_ne!(
+            path_before, path_after,
+            "the rename must actually have been observed, not silently ignored"
+        );
+        Ok(())
     }
 }

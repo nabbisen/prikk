@@ -48,20 +48,42 @@ only the worktree — into the impostor, silently, with prikk reporting success.
 mid-walk race above; it needed no reparse point at all, and the disclosure as it stood would have led a
 reader to conclude it was already defended. It was not.
 
-**Fixed, as detection rather than prevention.** `WindowsAuthority` (`crates/prikk-store/src/fsutil/
-anchored/windows_authority.rs`) now captures the identity of the directory it is bound to
-(`GetFileInformationByHandle`'s `(volume serial number, file index)` pair, read via `prikk-ffi` —
-`crates/prikk-ffi`, the one workspace crate permitted `unsafe` per DC-90) and re-verifies it before
-every walk that starts from that anchor. A mismatch is refused, not silently followed. Three residual
-properties, stated precisely rather than left to be inferred:
+**Fixed, as prevention, not merely detection.** An earlier version of this fix stored only a path
+string plus an identity value and refused on mismatch — detection, and wrong: it could satisfy only
+half of each acceptance test, since the tests require operations to keep working correctly against
+the *retained* directory after a replacement, not merely refuse
+(`.git-exclude/reviewed/DC-96-implementation-ruling-v1.md` §2-§4). **`WindowsAuthority`
+(`crates/prikk-store/src/fsutil/anchored/windows_authority.rs`) instead retains the directory handle
+it was bound to.** Windows has no `openat`-equivalent to resolve a child by name against that handle,
+but a retained handle still follows its object across a rename — `GetFinalPathNameByHandle` returns
+its *current* path. Every walk re-derives that current path from the retained handle first, confirms
+via identity (`GetFileInformationByHandle`'s `(volume serial number, file index)` pair) that the
+object found there is still the one that was bound, and only then walks forward from it. Both Win32
+calls go through `prikk-ffi` — `crates/prikk-ffi`, the one workspace crate permitted `unsafe` per
+DC-90. Three residual properties, stated precisely rather than left to be inferred:
 
-- **Anchor replacement *between* operations: detected, refused.** The gap the CI job demonstrated.
-- **Anchor replacement racing a *single* operation** — swapped between the identity check and the open
-  that immediately follows it — **is still possible.** The window is narrowed from "any time before the
-  next operation" to one check-then-open pair; it is not closed, because Windows still offers no
-  `openat`-equivalent to close it by construction the way Linux and macOS do.
+- **Anchor replacement *between* operations: detected, and operations continue correctly against the
+  retained directory.** The gap the CI job demonstrated — now prevention, not refusal.
+- **Anchor replacement racing a *single* operation** — swapped between the post-open identity check
+  and the open that immediately follows it — **is still possible.** The window is narrowed from "any
+  time before the next operation" to one check-then-open pair; it is not closed, because Windows still
+  offers no `openat`-equivalent to close it by construction the way Linux and macOS do.
 - **Intermediate path components are unchanged** — this is exactly the G1 mid-walk window above, and
   DC-96 does not touch it.
+
+**The 64-bit file index is not reliable on every filesystem — identity is the secondary check, not
+the sole mechanism, which is why this does not weaken the fix.** Per Microsoft's own documentation
+for `BY_HANDLE_FILE_INFORMATION` (`nFileIndexHigh`/`nFileIndexLow`): *"The ReFS file system... includes
+128-bit file identifiers... The 64-bit identifier [`nFileIndexHigh`/`nFileIndexLow`] is not guaranteed
+to be unique on ReFS"* — ReFS callers needing a reliable id are directed to `GetFileInformationByHandleEx`
+with `FileIdInfo` instead. Windows 11's Dev Drive, Microsoft's own recommended location for source
+repositories, is ReFS. This matters less than it would have under the detection-only design: the
+primary mechanism here is the retained handle following the renamed object via
+`GetFinalPathNameByHandle`, which does not depend on the file index at all; identity is only the
+confirmation that what was found at the re-derived path is the same object, not what determines where
+the walk goes. A coincidental file-index collision on ReFS would need to land on the object the walk
+already, independently, arrived at correctly — not redirect it. `FILE_ID_INFO` is not used here; if a
+future increment needs a stronger per-filesystem guarantee, that is its own design question.
 
 ### The nine `DurabilityContract` guarantees on Windows
 
