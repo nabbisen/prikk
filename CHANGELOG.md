@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.21.0 — unreleased
+## 0.21.0 — 2026-08-16
 
 **Windows becomes a mutating platform.** Until now prikk could only read a repository on Windows;
 authoring, committing, and checking out required Linux or macOS. No repository format change, and no
