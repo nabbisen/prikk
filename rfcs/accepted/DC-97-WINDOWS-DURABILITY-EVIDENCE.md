@@ -70,8 +70,16 @@ assertions weakened to nothing would satisfy a checklist and prove less than the
 3. **No Linux or macOS control is weakened** to make a shared code path compile. If a control must be
    split per platform, the non-Windows branch is unchanged, and the Windows branch asserts something real
    or is replaced by a reason under criterion 1.
-4. **The gate at `fsutil.rs:14-17` reflects what is actually unix-only**, not the whole module. Whatever
-   remains gated is gated for a stated reason.
+4. **Both Linux/macOS test gates reflect what is actually unix-only**, not the whole module. Whatever
+   remains gated is gated for a stated reason, written in the gate's own comment.
+
+   **Amended 2026-08-16.** This originally named only `fsutil.rs:14-17`, because §0 believed that was the
+   whole gate. It is not: **`object_store.rs:123` carries an identical gate**, whose stated rationale —
+   *"every test here sets up its scenario via real repository mutation… which is Linux/macOS-only"* — was
+   true when written and **made false by DC-87 Stage 2**. Found by the classification stage
+   (`.git-exclude/reviewed/DC-97-classification-ruling-v1.md` §1). The correct scope is *the gate*, not
+   the file: G5's evidence is not outside it as §0's table claimed, so **nine of nine guarantees, not
+   eight, currently have no Windows evidence from the original suites.**
 5. **The Windows test count rises**, and the increment reports by how much. A Windows-enabled suite that
    adds no executing assertions has not enabled anything.
 6. **`platform-support.md` states, per guarantee, whether it is negatively controlled on Windows.** The
