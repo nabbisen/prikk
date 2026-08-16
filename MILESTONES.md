@@ -118,10 +118,15 @@ is being prepared, so a shipped target does not leave it standing open.
 
 **Activated 2026-08-16 by the project owner.** 0.20.0 carries RFC 102 complete — container-based
 durability across six stages, repository format 6, compaction — plus `prikk compact`, `prikk unlock`,
-`prikk trust maintainer remove`, and the dead-surface consolidation. **DC-87 (Windows mutation) is
-retargeted to 0.21.0**: its design has not begun, and holding a finished body of work for unstarted work
-is what produced a 393-commit gap since 0.19.0. **0.20.0 does not deliver Windows mutation** — Windows
-remains read-only, unchanged from 0.19.0.
+`prikk trust maintainer remove`, and the dead-surface consolidation. **0.20.0 does not deliver Windows
+mutation** — at the time of this release Windows remained read-only, unchanged from 0.19.0; holding a
+finished body of work for unstarted work is what had produced a 393-commit gap since 0.19.0.
+
+**DC-87 (Windows mutation) completed 2026-08-16**, Stage 1 and Stage 2, together with DC-96 (Windows
+Anchor Identity — a security-hardening remedy Stage 2's own CI job found necessary before Windows
+mutation could ship: renaming a repository's directory tree and creating a fresh one at the same path
+redirected both reads and writes into the impostor, silently). Twelve of twelve CI jobs green across
+Linux, macOS, and Windows on branch `dc87-stage2-windows`, not yet merged to `main`. Targets 0.21.0.
 
 **0.19.0 released 2026-08-08** — seven crates published, tag `0.19.0` signed with the owner's key
 (RSA `25757DA6CBF7022C4E14CCAC1B3066B87DB99A34`), CI and Release workflows green, six assets published.

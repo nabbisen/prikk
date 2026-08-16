@@ -56,12 +56,17 @@ fn worktree_checks_and_writes_remain_on_retained_root() -> prikk_error::Result<(
         // reference is only to satisfy the unused-variable lint; ordinary scope rules already keep
         // it alive until here regardless.
         let _ = &layout;
-        assert!(
-            rename_result.is_err(),
-            "NTFS must refuse to rename a directory containing an open handle -- `layout` retains \
-             one on `.prikk`, so this root-swap must be impossible to construct while a prikk \
-             command holds the repository open, not merely detected after the fact: \
-             {rename_result:?}"
+        // DC-96 option2-ruling-v1 §3: assert the specific refusal, not merely "some error" -- a
+        // vacuous pass (e.g. the temp path colliding, or a transient unrelated I/O error) would
+        // satisfy a bare `is_err()` without the guarantee this test exists to pin actually holding.
+        let error_kind = rename_result.as_ref().err().map(std::io::Error::kind);
+        assert_eq!(
+            error_kind,
+            Some(std::io::ErrorKind::PermissionDenied),
+            "NTFS must refuse to rename a directory containing an open handle with the specific \
+             access-denied error, not merely any error -- `layout` retains one on `.prikk`, so \
+             this root-swap must be impossible to construct while a prikk command holds the \
+             repository open, not merely detected after the fact: {rename_result:?}"
         );
         let _ = std::fs::remove_dir_all(&root);
         Ok(())
