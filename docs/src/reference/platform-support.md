@@ -125,7 +125,7 @@ statement, since the honest answer differs guarantee by guarantee:
 
 | Guarantee | Windows control | Why |
 |---|---|---|
-| G1 (root-anchored, no-follow) | **Yes** — `windows::tests::a_reparse_point_substituted_for_a_directory_component_is_refused` | The one control this stage's own CI job proved was not silently skipping: an earlier version returned `Ok` without asserting anything if it lacked the privilege to create a test reparse point; confirmed via a loud failure that never fired that `windows-latest` grants the privilege and the refusal assertion genuinely runs |
+| G1 (root-anchored, no-follow) | **Yes** — `windows::tests::a_reparse_point_substituted_for_a_directory_component_is_refused` | Substantiated by a negative control watched to fail, not merely reasoned about: the test's original bare `is_err()` did not distinguish which of `validate_directory_not_reparse_point`'s two checks fired, so it passed even with the first check (`is_reparse_point`) disabled — a directory symlink's no-follow handle independently reports `is_dir=false`, so the second check (`!metadata.is_dir()`) caught it too. A follow-up probe found the same is true for a junction (mount-point reparse point): its no-follow attributes do carry `FILE_ATTRIBUTE_REPARSE_POINT`, but `is_dir()` still reports `false`, because `std`'s `FileType::is_dir` excludes reparse points by construction on Windows for any reparse tag. So check 2 is not incidental coverage of one reparse-point shape, it is a `std`-semantic backstop for all of them — and check 1 is not dead code either: it is insurance against that `std` semantic ever changing, since if `is_dir()` ever stopped excluding reparse points, check 1 would become the sole defense. The assertion was tightened to require the error name the reparse point specifically (check 1's own message), not merely occur for any reason; watched to pass against real production code and fail with `is_reparse_point` stubbed out, both observed on CI, not assumed |
 | G2 (atomic content replacement) | **Yes** — `conformance::create_exclusive_refuses_an_already_occupied_path`'s sibling shape, `atomic_replace_overwrites_existing_content` | Same shared-assertion shape Linux/macOS use for the exclusive-creation case; the replace case is `windows::tests`' own test |
 | G3 (durable-after-return) | **No — unbuilt, not impossible.** | The failpoint injection mechanism itself is plain, platform-neutral Rust; what's missing is call sites inside `windows.rs`'s own `DurabilityContract` implementation invoking it, the same as every Unix implementor already does. Building that wiring is its own increment, not a Windows-specific technical barrier |
 | G4 (exclusive creation) | **Yes** — `conformance::create_exclusive_refuses_an_already_occupied_path`, `&WindowsDurability` | Same shared assertion body Linux/macOS use — no Windows-specific test needed, the file's own architecture already covers a new platform |
@@ -243,9 +243,12 @@ one where a different platform checks Windows' output.
 - **Prebuilt non-Linux binaries** are not published. Building from source (`cargo build`/
   `cargo install`) is the only non-Linux install path today; see the [README's install
   section](https://github.com/nabbisen/prikk#install).
-- **DC-76's nine negative controls are not demonstrated on Windows** — see "The nine
-  `DurabilityContract` guarantees on Windows" above. The failpoint mechanism they need is
-  Linux/macOS-only.
+- **DC-76's nine negative controls are only partly demonstrated on Windows** — see "The nine
+  `DurabilityContract` guarantees on Windows" above for the per-guarantee table and reasons. G1,
+  G2, G4, and G9 are demonstrated; G5 is partial (the non-race half only); G3, G6, G7, and G8 are
+  not. Not all of the missing ones turn on the same cause: G3, G5's race half, and G8 are blocked
+  on the Windows failpoint injection mechanism being unbuilt (Linux/macOS-only today); G6 and G7
+  have no Windows analogue to demonstrate at all, for reasons unrelated to failpoints.
 - **`macos-latest` is Apple Silicon (`aarch64-apple-darwin`), not x86_64** — GitHub's default since
   the macOS 14 runner image. `windows-latest` is x86_64. Neither the x86_64 macOS nor the arm64
   Windows variant is separately CI-gated, and Windows arm64 is untested entirely; nothing in the
