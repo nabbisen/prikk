@@ -1,0 +1,6 @@
+# DC-87 Stage 2, third CI run: prikk is a content-addressed version control system whose premise is
+# that bytes are identity. Git's default line-ending translation on checkout violates that premise for
+# byte-exact committed fixtures (crates/prikk-object/src/vectors/snapshot.txt among them) -- invisible
+# until the first Windows job that reads one back. Disabling translation repo-wide, not per file, is
+# the point: the next byte-exact fixture is protected without being enumerated.
+* -text
