@@ -143,6 +143,15 @@ natively on `macos-latest` and `windows-latest`, since neither developer nor arc
 platform locally as part of this project's own environment — the CI job existing and being green *is*
 the verification for each backend, not a supplement to one done elsewhere.
 
+**`windows-mutate` → `linux-mutate-reference` → `verify-cross-platform-history`** (DC-87 Stage 2
+criterion 7) close the one property none of the jobs above can: that repository *authored on Linux,
+mutated on Windows, and verified on Linux* produces identical object ids and a clean `verify`. The
+Linux-built fixture is mutated identically on both platforms with the same deterministic signing seeds
+`fixture` already uses; the Windows-mutated repository is then handed to a Linux job, which runs
+`prikk verify` against it directly and diffs its recorded object ids against the independently-computed
+Linux reference. Every other job in this workflow is one platform verifying itself — this is the only
+one where a different platform checks Windows' output.
+
 ## What is not covered here
 
 - **Prebuilt non-Linux binaries** are not published. Building from source (`cargo build`/

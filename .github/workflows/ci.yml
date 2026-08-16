@@ -203,3 +203,135 @@ jobs:
           echo "=== prikk checkout --plan-only ==="
           ../target/debug/prikk checkout --plan-only
           echo "=== all read-only commands succeeded ==="
+
+  # DC-87 Stage 2 review, criterion 7: "the criterion that proves the port rather than the code."
+  # Every test elsewhere in this workflow is one platform verifying itself; this is the one place a
+  # Windows-authored object is checked by a different platform's own re-derivation. Reuses the
+  # fixture job's own deterministic seeds so the mutation performed here is reproducible bit-for-bit
+  # by linux-mutate-reference below — same content, same signer, same commit message, on both
+  # platforms, is what makes an object-id comparison meaningful rather than coincidental.
+  windows-mutate:
+    name: mutate the fixture on Windows
+    runs-on: windows-latest
+    needs: fixture
+    env:
+      PRIKK_AUTHOR_KEY_ID: dev-author
+      PRIKK_AUTHOR_SEED: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+      PRIKK_MAINTAINER_KEY_ID: dev-maintainer
+      PRIKK_MAINTAINER_SEED: "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build -p prikk --locked
+      - uses: actions/download-artifact@v8
+        with:
+          name: read-only-fixture-repo
+      - name: Unpack the fixture repository
+        shell: bash
+        run: |
+          mkdir -p fixture-repo
+          tar -xzf fixture-repo.tar.gz -C fixture-repo
+      # `shell: bash` throughout, not the pwsh default — Git Bash's `echo` writes LF, matching
+      # linux-mutate-reference's own `echo`, so the two platforms author byte-identical content
+      # rather than diverging on line endings for a reason that has nothing to do with what this
+      # job exists to check.
+      - name: Mutate the fixture on Windows
+        shell: bash
+        run: |
+          cd fixture-repo
+          echo "windows cross-platform history check" > windows-check.txt
+          ../target/debug/prikk commit -m cross-platform-history-check
+          ../target/debug/prikk seal --allow-no-audit
+      - name: Record the resulting object ids
+        shell: bash
+        run: |
+          cd fixture-repo
+          ../target/debug/prikk log | grep "^block " | sort > ../windows-object-ids.txt
+          cat ../windows-object-ids.txt
+      - name: Package the mutated repository
+        shell: bash
+        run: tar -czf windows-mutated-repo.tar.gz -C fixture-repo .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-mutated-repo
+          path: |
+            windows-mutated-repo.tar.gz
+            windows-object-ids.txt
+          if-no-files-found: error
+
+  # The independent reference computation "identical object ids" is compared against. Not a second
+  # run of `prikk verify`'s own re-derivation (that happens in verify-cross-platform-history below,
+  # against the Windows-produced repository directly) — this is a value computed with no dependency
+  # on anything Windows claimed, from the same original fixture and the same deterministic mutation.
+  linux-mutate-reference:
+    name: mutate the fixture on Linux (reference)
+    runs-on: ubuntu-latest
+    needs: fixture
+    env:
+      PRIKK_AUTHOR_KEY_ID: dev-author
+      PRIKK_AUTHOR_SEED: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+      PRIKK_MAINTAINER_KEY_ID: dev-maintainer
+      PRIKK_MAINTAINER_SEED: "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build -p prikk --locked
+      - uses: actions/download-artifact@v8
+        with:
+          name: read-only-fixture-repo
+      - name: Unpack the fixture repository
+        run: |
+          mkdir -p fixture-repo
+          tar -xzf fixture-repo.tar.gz -C fixture-repo
+      - name: Mutate the fixture identically on Linux
+        run: |
+          cd fixture-repo
+          echo "windows cross-platform history check" > windows-check.txt
+          ../target/debug/prikk commit -m cross-platform-history-check
+          ../target/debug/prikk seal --allow-no-audit
+      - name: Record the resulting object ids
+        run: |
+          cd fixture-repo
+          ../target/debug/prikk log | grep "^block " | sort > ../linux-object-ids.txt
+          cat ../linux-object-ids.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-object-ids
+          path: linux-object-ids.txt
+          if-no-files-found: error
+
+  # Closes DC-87 Stage 2 criterion 7. A repository authored on Linux, mutated on Windows, and
+  # verified on Linux must produce identical object ids and a clean `verify` — demonstrated here end
+  # to end, not reasoned about from a green compile on either side.
+  verify-cross-platform-history:
+    name: cross-platform history identity (Windows mutation, Linux verification)
+    runs-on: ubuntu-latest
+    needs: [windows-mutate, linux-mutate-reference]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build -p prikk --locked
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-mutated-repo
+      - uses: actions/download-artifact@v8
+        with:
+          name: linux-object-ids
+      - name: Unpack the Windows-mutated repository
+        run: |
+          mkdir -p windows-repo
+          tar -xzf windows-mutated-repo.tar.gz -C windows-repo
+      - name: Verify the Windows-mutated repository on Linux
+        run: |
+          cd windows-repo
+          ../target/debug/prikk verify
+      - name: Compare object ids — Windows-computed against the independent Linux reference
+        run: |
+          if ! diff -u linux-object-ids.txt windows-object-ids.txt; then
+            echo "::error::object ids diverged between the Linux reference and the Windows mutation"
+            exit 1
+          fi
+          echo "=== object ids identical across platforms ==="
