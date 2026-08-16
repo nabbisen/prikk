@@ -28,15 +28,13 @@
 //! no filesystem effect -- see their own doc comments below for exactly why each is safe rather
 //! than merely silent.
 //!
-//! **Three weaker-guarantee methods, documented rather than approximated.**
-//! [`atomic_replace`](DurabilityContract::atomic_replace),
-//! [`promote`](DurabilityContract::promote), and
-//! [`publish_immutable`](DurabilityContract::publish_immutable) all rest on rename/link semantics
-//! Windows does not provide identically to POSIX -- see each method's own doc comment for the
-//! specific gap and why it is acceptable given today's callers.
+//! **One weaker-guarantee method, documented rather than approximated.**
+//! [`atomic_replace`](DurabilityContract::atomic_replace) rests on rename semantics Windows does
+//! not provide identically to POSIX -- see its own doc comment for the specific gap and why it is
+//! acceptable given today's callers.
 
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
@@ -351,86 +349,6 @@ impl DurabilityContract for WindowsDurability {
         }
     }
 
-    fn promote(&self, root: &MutationRoot, source: &Path, destination: &Path) -> Result<()> {
-        // Weaker guarantee, documented rather than approximated, and unreachable in production
-        // (zero callers, DC-87 §0). Same rename-durability caveat `atomic_replace` states above --
-        // `std::fs::rename` gives type-matching, overwrite-on-supported-Windows-versions semantics
-        // with no asserted durability lever.
-        let source_parent = required_parent(source)?;
-        let source_name = required_file_name(source)?;
-        let resolved_source_parent = open_existing_windows_directory_required(root, source_parent)?;
-        let destination_parent = required_parent(destination)?;
-        let destination_name = required_file_name(destination)?;
-        let resolved_destination_parent =
-            open_existing_windows_directory_required(root, destination_parent)?;
-        let source_path = resolved_source_parent.join(source_name);
-        let destination_path = resolved_destination_parent.join(destination_name);
-        fs::rename(&source_path, &destination_path)
-            .map_err(|error| io_error(&destination_path, error))
-    }
-
-    fn publish_immutable(
-        &self,
-        root: &MutationRoot,
-        relative: &Path,
-        candidate: &[u8],
-        validate_existing: impl Fn(&[u8]) -> Result<()>,
-    ) -> Result<()> {
-        // Weaker guarantee, documented rather than approximated, and unreachable in production
-        // (zero callers, DC-87 §0's standing G5 orphan finding). `std::fs::hard_link` maps to
-        // `CreateHardLinkW`, which -- like POSIX `linkat` -- fails if the destination name already
-        // exists, giving the same no-clobber install shape the Linux implementation uses.
-        let parent = required_parent(relative)?;
-        let name = required_file_name(relative)?;
-        let resolved_parent = prepare_windows_directory_required(root, parent)?;
-        let destination = resolved_parent.join(name);
-        if let Some(existing) = read_existing_regular(&destination)? {
-            validate_existing(&existing)?;
-            if existing != candidate {
-                return Err(PrikkError::Integrity(
-                    "existing immutable object bytes differ from candidate".to_string(),
-                ));
-            }
-            return Ok(());
-        }
-
-        let temp_path = temporary_path(relative)?;
-        let temp_name = required_file_name(&temp_path)?;
-        let temp_full = resolved_parent.join(temp_name);
-        let mut file = open_no_follow(
-            &temp_full,
-            OpenOptions::new().write(true).create_new(true),
-            false,
-        )
-        .map_err(|error| io_error(&temp_full, error))?;
-        file.write_all(candidate)
-            .map_err(|error| io_error(&temp_full, error))?;
-        file.sync_all()
-            .map_err(|error| io_error(&temp_full, error))?;
-        drop(file);
-
-        match fs::hard_link(&temp_full, &destination) {
-            Ok(()) => {}
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                let _ = fs::remove_file(&temp_full);
-                let Some(existing) = read_existing_regular(&destination)? else {
-                    return Err(PrikkError::Integrity(
-                        "no-clobber install reported an absent winner".to_string(),
-                    ));
-                };
-                validate_existing(&existing)?;
-                if existing != candidate {
-                    return Err(PrikkError::Integrity(
-                        "existing immutable object bytes differ from candidate".to_string(),
-                    ));
-                }
-                return Ok(());
-            }
-            Err(error) => return Err(io_error(&destination, error)),
-        }
-        fs::remove_file(&temp_full).map_err(|error| io_error(&temp_full, error))
-    }
-
     fn ensure_directory(&self, root: &MutationRoot, relative: &Path) -> Result<()> {
         prepare_windows_directory_required(root, relative)?;
         Ok(())
@@ -450,16 +368,6 @@ impl DurabilityContract for WindowsDurability {
         let _ = (root, relative);
         Ok(())
     }
-}
-
-fn read_existing_regular(path: &Path) -> Result<Option<Vec<u8>>> {
-    let Some(mut file) = open_existing_file_no_follow(path, OpenOptions::new().read(true))? else {
-        return Ok(None);
-    };
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)
-        .map_err(|error| io_error(path, error))?;
-    Ok(Some(bytes))
 }
 
 #[cfg(test)]

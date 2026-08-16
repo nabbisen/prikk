@@ -34,26 +34,6 @@ pub(crate) use anchored::{
     write_worktree_file_atomically,
 };
 
-// RFC 102 Stage 4: `promote_file_required` (`DurabilityContract::promote`) has no production caller
-// left -- `refs/publication.rs`'s candidate-write-then-promote dance was its only one, retired by
-// Step 0 §13.3's ruling -- but stays reachable for `fsutil/tests.rs`'s own generic primitive test,
-// which exercises `promote` directly and does not depend on refs at all. Ruled the same "keep,
-// record, decide separately" way as G5 (`publish_immutable_file`, this same file, below).
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
-pub(crate) use anchored::promote_file_required;
-
-// RFC 102 Stage 3, design-v1.md §12.3: G5 (`publish_immutable`) has no production caller left, but
-// stays reachable for its own conformance tests (`object_store/tests/immutable.rs`, `races.rs`) --
-// ruled "keep, record, decide separately" rather than retired as a stage side effect. Gated to match
-// those tests' own gate (`object_store.rs:123`, DC-97-widened to include Windows), not just
-// `#[cfg(test)]` -- see `anchored.rs`'s own doc comment on `publish_immutable_file` for why a bare
-// `#[cfg(test)]` here is wrong.
-#[cfg(all(
-    test,
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
-))]
-pub(crate) use anchored::publish_immutable_file;
-
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) use anchored::LinuxDurability;
 #[cfg(all(test, target_os = "macos"))]
@@ -89,9 +69,7 @@ pub(crate) use contract::DurabilityContract;
 pub(crate) use anchored::{TestFailPoint, fail_after_for_test, fail_once_for_test};
 
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
-pub(crate) use anchored::{
-    set_directory_create_barrier_for_test, set_immutable_install_barrier_for_test,
-};
+pub(crate) use anchored::set_directory_create_barrier_for_test;
 
 /// Return a process-unique temporary path next to the destination.
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]

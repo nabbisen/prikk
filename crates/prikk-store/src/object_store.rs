@@ -117,12 +117,14 @@ impl ObjectWriter for FileObjectStore {
     }
 }
 
-// DC-97 correction of the comment below: that reasoning was true when written (DC-71/DC-81, before
-// DC-87 made Windows a mutating platform) and nobody revisited it once Windows mutation shipped --
-// found only by DC-97's own G5 investigation confirming the claimed Windows evidence for G5 (this
-// module's `tests::immutable::*`) does not actually run there. `RepositoryLayout::init` and real
-// repository mutation are not Linux/macOS-only anymore; what remains unix-only inside this module
-// (failpoints, symlinks, FIFOs) is now gated per-test/per-file instead of by this one blanket gate.
+// DC-97 correction of the comment this replaced: the Linux/macOS-only reasoning was true when
+// written (DC-71/DC-81, before DC-87 made Windows a mutating platform) and nobody revisited it once
+// Windows mutation shipped -- found only by DC-97's own G5 investigation, back when this module's
+// now-deleted `tests::immutable` still made the claimed Windows evidence for G5. `publish_immutable`
+// and its tests are gone entirely as of DC-98 (G5 retired, zero production callers). What remains
+// here is gated the same way regardless: `RepositoryLayout::init` and real repository mutation are
+// not Linux/macOS-only, so what is still unix-only inside this module (failpoints, symlinks, FIFOs)
+// is gated per-test/per-file instead of by one blanket gate.
 #[cfg(all(
     test,
     any(target_os = "linux", target_os = "macos", target_os = "windows")

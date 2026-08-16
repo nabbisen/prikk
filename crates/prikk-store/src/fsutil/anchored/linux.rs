@@ -16,7 +16,7 @@ use super::regular::{
     open_append_regular, open_existing_regular, open_new_regular, required_file_name,
     required_parent,
 };
-use super::{failpoints, immutable, io_error, prikk_to_io};
+use super::{failpoints, io_error, prikk_to_io};
 use crate::fsutil::contract::DurabilityContract;
 use crate::fsutil::temporary_path;
 
@@ -129,34 +129,6 @@ impl DurabilityContract for LinuxDurability {
         failpoints::cleanup_directory_sync()?;
         directory.sync()?;
         Ok(removed)
-    }
-
-    fn promote(&self, root: &MutationRoot, source: &Path, destination: &Path) -> Result<()> {
-        let source_dir = open_existing_directory_required(root, required_parent(source)?)?;
-        let destination_dir =
-            open_existing_directory_required(root, required_parent(destination)?)?;
-        failpoints::promotion_rename()?;
-        fs::renameat(
-            &source_dir.fd,
-            required_file_name(source)?,
-            &destination_dir.fd,
-            required_file_name(destination)?,
-        )
-        .map_err(io_error)?;
-        failpoints::promotion_destination_sync()?;
-        destination_dir.sync()?;
-        failpoints::promotion_source_sync()?;
-        source_dir.sync()
-    }
-
-    fn publish_immutable(
-        &self,
-        root: &MutationRoot,
-        relative: &Path,
-        candidate: &[u8],
-        validate_existing: impl Fn(&[u8]) -> Result<()>,
-    ) -> Result<()> {
-        immutable::publish_immutable_file(root, relative, candidate, validate_existing)
     }
 
     fn ensure_directory(&self, root: &MutationRoot, relative: &Path) -> Result<()> {

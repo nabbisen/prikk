@@ -165,7 +165,7 @@ Two limits are worth stating plainly, because they define what verification mean
 | `prikk verify` is roughly **O(N³)** in sealed block count — 34 s at 160 blocks | Tracked, unowned |
 | Node lifecycle state grows with cumulative history, not the current tree | Tracked; the project has no theory of forgetting yet |
 | Windows mutation's anchored path resolution cannot close the inter-component TOCTOU window `openat` closes on Linux/macOS | Accepted, documented ([platform support](./platform-support.md)) — requires a concurrent local attacker to matter |
-| DC-76's nine negative controls are not demonstrated on Windows (its failpoint mechanism is Linux/macOS-only) | Reported per DC-76's own precedent, unowned |
+| DC-76's negative controls are only partly demonstrated on Windows, for the eight guarantees that remain (G5 retired in DC-98) — see [platform support](./platform-support.md) for the per-guarantee table | Reported per DC-76's own precedent, unowned |
 | Commit cost is not yet bounded independently of repository size (NFR-PERF-01) | Reduced, still missed |
 | Merge complexity scoped to active block size (NFR-PERF-03) is **argued, not benchmarked** | Unowned |
 
