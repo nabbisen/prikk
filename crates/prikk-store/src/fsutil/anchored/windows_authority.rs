@@ -120,10 +120,17 @@ impl PlatformAuthority for Arc<WindowsAuthority> {
     }
 
     fn same_as(&self, _self_path: &Arc<PathBuf>, other: &Self, _other_path: &Arc<PathBuf>) -> bool {
-        // No stored path to compare (there is no path accessor at all, by design) -- identity is
-        // what "the same underlying object" means here, regardless of which of possibly several
-        // retained handles to that object either side happens to hold.
-        self.identity == other.identity
+        // DC-96 prevention-fix-ruling-v1 §5: this authority is `Arc<WindowsAuthority>` now, exactly
+        // like Linux/macOS's `Arc<AnchoredDirectory>` -- `Arc::ptr_eq` is available here for the
+        // same reason it is there, and using it restores the trait's own stated contract
+        // (`PlatformAuthority::same_as`'s doc: "not a new notion of identity"). An earlier version
+        // of this compared `identity == identity` instead, which quietly changed what "same
+        // authority" means on Windows (same on-disk object, rather than same retained authority)
+        // and made `Lock::require_layout`'s cross-repository check rest solely on the 64-bit file
+        // index -- exactly the property `platform-support.md` documents as not guaranteed unique
+        // on ReFS. Identity is still the right tool for `verified_anchor_path`'s post-open
+        // confirmation; it was never the right tool for this.
+        Arc::ptr_eq(self, other)
     }
 
     fn ensure_child(&self, relative: &Path) -> Result<Self> {
