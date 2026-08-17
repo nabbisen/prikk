@@ -64,9 +64,15 @@ tree at the moment the gate lands**, never copied from prose — the same error 
 
 ## 3. Acceptance criteria
 
-1. **A `boundary-check` failure for any new non-conforming name** under `rfcs/accepted/`, `rfcs/done/`,
-   `rfcs/archive/`, and `rfcs/handoffs/` — files and handoff directory names alike, since RFC 100 governs
-   both.
+1. **A `boundary-check` failure for any new non-conforming name** under `rfcs/proposed/`,
+   `rfcs/accepted/`, `rfcs/done/`, `rfcs/archive/`, and `rfcs/handoffs/` — files and handoff directory
+   names alike, since RFC 100 governs both.
+
+   **Corrected 2026-08-17: five locations, not four.** This originally omitted `rfcs/proposed/`, because
+   the author enumerated the directories he had happened to look at rather than listing `rfcs/`. It is the
+   worst of the five to have missed: **`proposed/` is where a new RFC first appears**, so a gate covering
+   only where RFCs end up is blind at the moment the rule actually applies. Found by the implementing
+   investigation (`.git-exclude/reviewed/RFC-105-investigation-ruling-v1.md` §3).
 2. **The legacy allowlist is exact and derived from the tree**, not transcribed from RFC 100's table or
    from this RFC. State how it was generated.
 3. **Every allowlisted name must correspond to a file that exists.** This is the self-guard: an entry
