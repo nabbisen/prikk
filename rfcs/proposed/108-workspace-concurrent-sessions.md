@@ -115,6 +115,47 @@ side of prikk's integrity boundary those patches sit on. **Everything else follo
 **This is the first thing a design must settle**, and it is not a detail — it decides whether this is a
 concurrency problem in the container/lock layer or a repository-topology problem.
 
+### 6.1 Owner's direction, 2026-08-18: sealed — and what that costs
+
+The project owner's instinct is **sealed**, on the grounds that it follows prikk's philosophy. It does.
+Three consequences follow that a design must price rather than discover, each verified against the code
+rather than reasoned from the model:
+
+1. **Sealing takes a repository-wide lock.** `crates/prikk-cli/src/seal.rs:81` acquires `ActiveLock`.
+   Concurrent Workspaces do **not** serialise while editing, building or testing — but they do **at the
+   moment of sealing**. Probably acceptable, since sealing is brief; but it is where the concurrency
+   requirement meets a real bottleneck, once per commit, and the design must say so.
+2. **prikk has no amend, no rewrite, and no force-push.** Searched; none exists. **Sealed is permanent.**
+   Under this choice every exploratory commit in a Workspace becomes permanent signed history, wrong turns
+   included.
+3. **Abandoning a Workspace does not undo that.** `branch close` is a state on the ref, not a deletion —
+   and `data-model-lifecycle.md:156` notes even that state is silently reopened by a later seal or merge.
+   `prikk compact` reclaims dead records from three containers, **not blocks or objects**. So an abandoned
+   Workspace's sealed blocks remain in the repository indefinitely, unreachable and unreclaimed.
+
+**The question is narrower than §6 first framed it.** The concept already contains both kinds of state —
+`Base + Patch 1 + Patch 2 + Working Changes`, where working changes are unsealed by definition. So the real
+question is:
+
+> **At what moment does a Workspace's work cross into permanent history?**
+
+| | Buys | Costs |
+|---|---|---|
+| **Seal early** (per Workspace commit) | Durable, attributable, verifiable and crash-safe from the moment of commit | Every wrong turn permanent; history grows per-Workspace, and `verify` is O(N³) — **three times the history is roughly twenty-seven times the verification cost**, making badge criterion 3 pressing rather than theoretical |
+| **Seal late** (only at integration) | Workspace is a private staging area; only integrated work becomes history | Uncommitted work is protected only by the WAL, and the WAL is `.prikk`-scoped — forcing §7's topology question immediately |
+
+**A decision test that does not require settling philosophy first:** *what should a user be able to throw
+away without trace?* A scratch space — "let me try something" — argues for seal-late, because sealing early
+makes discarding impossible. A long-lived line of development someone returns to for weeks argues for
+seal-early, because permanence is then a feature.
+
+**The concept itself reads long-lived** — §18's "a Workspace survives its session, recover and resume", and
+§14's fork/archive/transfer operations. That supports the owner's instinct.
+
+**If sealed is the answer, one question must be answered with it:** can an abandoned Workspace's blocks
+ever be reclaimed? Today nothing reclaims them, and a feature that creates unreachable permanent history by
+design should say what happens to it after a year of abandoned experiments.
+
 ## 7. One `.prikk` or many? — and the answer routes to two different projects
 
 Follows directly from §6, and the concept's diagrams are compatible with both.
