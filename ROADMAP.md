@@ -190,9 +190,9 @@ the release lane is parked; see `MILESTONES.md` under Baseline and release postu
 
 ## Release Candidate Increment
 
-- Release lane state: **active**.
-- Activated release target: **0.22.0**.
-- **0.22.0 activated 2026-08-17** — Windows capability parity: `prikk unlock` answers on Windows, and
+- Release lane state: **parked**.
+- Activated release target: **none**.
+- **0.22.0 released 2026-08-17** — Windows capability parity: `prikk unlock` answers on Windows, and
   anchor identity uses the 128-bit form where available (ReFS/Dev Drive). No observable change for Linux
   or macOS users. DC-97/DC-98/DC-99, RFC 105, RFC 106. See `MILESTONES.md`.
 - **0.21.0 released 2026-08-16** — Windows becomes a mutating platform. DC-87 (Windows mutation, Stages 1

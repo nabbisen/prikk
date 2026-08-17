@@ -109,9 +109,14 @@ is a one-way door.
 If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
 reviewed commit restores agreement.
 
-**Current release lane:** `active`.
+**Current release lane:** `parked`.
 
-**Current activated release target:** 0.22.0.
+**Current activated release target:** none.
+
+**0.22.0 released 2026-08-17** — tag `0.22.0` signed with the owner's key
+(RSA `25757DA6CBF7022C4E14CCAC1B3066B87DB99A34`) on `16313fe`, 12/12 CI green at that commit, GitHub
+release published with six assets, and all eight crates published to crates.io. The lane was parked the
+same day.
 
 **0.22.0 activated 2026-08-17 by the project owner.** Windows capability parity and the verification
 work behind it. **User-facing content is two Windows capabilities**: `prikk unlock` now returns a real
