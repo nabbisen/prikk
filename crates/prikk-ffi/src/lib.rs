@@ -4,45 +4,140 @@
 //! Compiles to nothing on non-Windows targets: there is no FFI need there today, and this crate
 //! exists to hold the one that does, not to anticipate ones that don't yet.
 
-/// Identity of an open filesystem object on Windows: the `(volume serial number, file index)`
-/// pair that distinguishes one directory object from another on a volume
-/// (`GetFileInformationByHandle`, Microsoft Learn). Meaningful only within one boot on one
+/// Identity of an open filesystem object on Windows -- the value that confirms an anchor handle
+/// still refers to the object it was bound to (DC-96). Meaningful only within one boot on one
 /// volume -- never derive an object id, a container path, or any on-disk artifact from it, and
 /// never persist it past the process that read it.
+///
+/// **Two variants, not one uniform 128-bit shape padded from the 64-bit fallback -- deliberately**
+/// (DC-99 Stage 2). `microsoft/STL`'s own `_Get_file_id_by_handle` (`stl/src/filesystem.cpp`,
+/// backing `std::filesystem::equivalent`) zero-pads the 64-bit index into `FILE_ID_INFO`'s 128-bit
+/// shape and compares both forms with one `memcmp`. That is safe for *their* use: two handles
+/// opened and compared within one call, so a filesystem lacking `FileIdInfo` produces the same
+/// zero-padded shape on both sides. **It is not safe for this crate's use**: `WindowsAuthority`
+/// captures an identity once (`bind`) and compares it against one re-derived later, at walk time --
+/// a stored, zero-padded 64-bit value could compare byte-equal to some other file's genuine 128-bit
+/// id that happens to end in eight zero bytes. Astronomically unlikely, but not structurally
+/// prevented by a uniform shape, and "correct for STL's own use case" is not the same claim as
+/// "correct for this one" (DC-99 stage-2-investigation-ruling-v1 §1). The enum below makes a
+/// cross-form comparison **impossible**, not merely unlikely: a derived `PartialEq` compares the
+/// discriminant first, so an `Id128` and an `Id64` never compare equal regardless of what bytes
+/// either one holds. If a future edit "simplifies" this back to one padded shape, it is
+/// reintroducing exactly the risk this comment -- and the ruling it records -- exists to name.
 #[cfg(windows)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct FileIdentity {
-    volume_serial_number: u32,
-    file_index: u64,
+pub enum FileIdentity {
+    /// `GetFileInformationByHandleEx(FileIdInfo)` -- NTFS, ReFS.
+    Id128 {
+        /// `FILE_ID_INFO::VolumeSerialNumber`.
+        volume_serial_number: u64,
+        /// `FILE_ID_INFO::FileId`'s 16-byte identifier, opaque and directly comparable as bytes --
+        /// no reserved or unstable portion (confirmed against `microsoft/STL`'s own `memcmp`-based
+        /// comparison of the whole struct).
+        file_id: [u8; 16],
+    },
+    /// `GetFileInformationByHandle`'s 64-bit file index -- the fallback for filesystems that
+    /// refuse `FileIdInfo` (FAT/exFAT, some network filesystems). Triggered only by
+    /// `ERROR_NOT_SUPPORTED` or `ERROR_INVALID_PARAMETER` from the primary call, the same two
+    /// codes `microsoft/STL`'s own fallback branches on -- any other failure is a real error,
+    /// propagated rather than silently downgraded to this variant.
+    Id64 {
+        /// `BY_HANDLE_FILE_INFORMATION::dwVolumeSerialNumber`.
+        volume_serial_number: u32,
+        /// `BY_HANDLE_FILE_INFORMATION`'s `nFileIndexHigh`/`nFileIndexLow`, combined -- not
+        /// guaranteed unique on ReFS (Microsoft's own documentation), which is exactly why the
+        /// 128-bit form above is preferred whenever the filesystem supports it.
+        file_index: u64,
+    },
 }
 
-/// Read `file`'s identity from its already-open handle. The caller owns opening the handle,
-/// including share flags and reparse-point policy (`FILE_SHARE_DELETE`,
-/// `FILE_FLAG_OPEN_REPARSE_POINT`) -- this function does one thing: read one out-parameter and
-/// combine two of its fields.
+#[cfg(all(test, windows))]
+std::thread_local! {
+    static FORCE_FALLBACK_ONCE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Test-only: force the very next `identity_of` call on this thread to take the 64-bit fallback
+/// path, as if the primary call had failed with `ERROR_NOT_SUPPORTED` -- without a real
+/// unsupported-filesystem volume, which CI does not provision (DC-99 stage-2-investigation-ruling-v1
+/// §3). Consumed after one call, matching this workspace's other test-only failure-injection
+/// mechanism (`fsutil::anchored::failpoints`, `prikk-store`). **Observable, not merely forced**: the
+/// caller must assert the returned `FileIdentity` is the `Id64` variant -- if this override ever
+/// stopped working, `identity_of` would take the real primary path and return `Id128`, and that
+/// assertion would fail. There is no state in which the override silently forces nothing.
+#[cfg(all(test, windows))]
+pub fn force_identity_fallback_once() {
+    FORCE_FALLBACK_ONCE.with(|flag| flag.set(true));
+}
+
+#[cfg(windows)]
+fn should_force_identity_fallback() -> bool {
+    #[cfg(test)]
+    {
+        FORCE_FALLBACK_ONCE.with(|flag| flag.replace(false))
+    }
+    #[cfg(not(test))]
+    {
+        false
+    }
+}
+
+/// Read `file`'s identity from its already-open handle, preferring the 128-bit form
+/// (`GetFileInformationByHandleEx(FileIdInfo)`) and falling back to the 64-bit form
+/// (`GetFileInformationByHandle`) only when the OS itself reports the 128-bit form unsupported. The
+/// caller owns opening the handle, including share flags and reparse-point policy
+/// (`FILE_SHARE_DELETE`, `FILE_FLAG_OPEN_REPARSE_POINT`).
 #[cfg(windows)]
 pub fn identity_of(file: &std::fs::File) -> std::io::Result<FileIdentity> {
     use std::os::windows::io::AsRawHandle;
 
-    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::Foundation::{ERROR_INVALID_PARAMETER, ERROR_NOT_SUPPORTED, HANDLE};
     use windows_sys::Win32::Storage::FileSystem::{
-        BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
+        BY_HANDLE_FILE_INFORMATION, FILE_ID_INFO, FileIdInfo, GetFileInformationByHandle,
+        GetFileInformationByHandleEx,
     };
 
     let handle: HANDLE = file.as_raw_handle();
+
+    if !should_force_identity_fallback() {
+        let mut id128 = FILE_ID_INFO::default();
+        // SAFETY: `handle` is a valid, open HANDLE for the duration of this call, borrowed from
+        // `file`. `id128` is `#[repr(C)]`, `Default`-initialized (windows-sys 0.61.2), and its size
+        // is passed explicitly as `dwBufferSize`, so a well-formed `&mut` pointer to it is always a
+        // valid, correctly-sized write target for what this call writes on success. On failure it
+        // writes nothing we read; the OS error is read via `std::io::Error::last_os_error`
+        // immediately after, before any other call can overwrite it.
+        let succeeded = unsafe {
+            GetFileInformationByHandleEx(
+                handle,
+                FileIdInfo,
+                (&raw mut id128).cast(),
+                u32::try_from(size_of::<FILE_ID_INFO>()).unwrap_or(u32::MAX),
+            )
+        };
+        if succeeded != 0 {
+            return Ok(FileIdentity::Id128 {
+                volume_serial_number: id128.VolumeSerialNumber,
+                file_id: id128.FileId.Identifier,
+            });
+        }
+        let error = std::io::Error::last_os_error();
+        match error.raw_os_error() {
+            Some(code)
+                if code == ERROR_NOT_SUPPORTED as i32 || code == ERROR_INVALID_PARAMETER as i32 => {
+            }
+            _ => return Err(error),
+        }
+    }
+
     let mut info = BY_HANDLE_FILE_INFORMATION::default();
-    // SAFETY: `handle` is a valid, open HANDLE for the duration of this call -- it is borrowed
-    // from `file`, which outlives the call and is not closed here. `info` is `#[repr(C)]` with
-    // every field a plain integer (`#[derive(Default)]`, windows-sys 0.61.2), so a well-formed
-    // `&mut` pointer to it is always a valid write target for every field
-    // `GetFileInformationByHandle` writes on success. On failure the function returns 0 (`BOOL`
-    // false) and writes nothing we read; the OS error is read via
-    // `std::io::Error::last_os_error` immediately after, before any other call can overwrite it.
+    // SAFETY: same reasoning as the primary call above -- `handle` is still the same valid, open
+    // HANDLE, `info` is `#[repr(C)]` and `Default`-initialized, and the OS error is read
+    // immediately on failure, before any other call can overwrite it.
     let succeeded = unsafe { GetFileInformationByHandle(handle, &raw mut info) };
     if succeeded == 0 {
         return Err(std::io::Error::last_os_error());
     }
-    Ok(FileIdentity {
+    Ok(FileIdentity::Id64 {
         volume_serial_number: info.dwVolumeSerialNumber,
         file_index: (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow),
     })
@@ -206,7 +301,10 @@ impl Drop for OwnedProcessHandle {
 
 #[cfg(all(test, windows))]
 mod tests {
-    use super::{FileIdentity, ProcessLiveness, current_path_of, identity_of, process_liveness};
+    use super::{
+        FileIdentity, ProcessLiveness, current_path_of, force_identity_fallback_once, identity_of,
+        process_liveness,
+    };
 
     /// The one case this advisory check can prove reliably: the current process's own PID, which is
     /// definitely alive because it is the process running this assertion.
@@ -251,7 +349,10 @@ mod tests {
     }
 
     /// DC-96 design-v1.md §6.4: without this, a `FileIdentity` that never equals itself -- or
-    /// always equals everything -- would pass every other test in this increment silently.
+    /// always equals everything -- would pass every other test in this increment silently. Exercises
+    /// the real primary path (DC-99 Stage 2): GitHub's `windows-latest` runner's drives are NTFS
+    /// (`stage-2-investigation-v1` §2), so this is expected to return the `Id128` variant without any
+    /// override, demonstrated below rather than assumed.
     #[test]
     fn identity_distinguishes_different_files_and_matches_the_same_one() -> std::io::Result<()> {
         let directory = std::env::temp_dir();
@@ -268,6 +369,11 @@ mod tests {
         let _ = std::fs::remove_file(&path_a);
         let _ = std::fs::remove_file(&path_b);
 
+        assert!(
+            matches!(identity_a, FileIdentity::Id128 { .. }),
+            "the CI runner's NTFS drives are expected to take the primary 128-bit path by default: \
+             {identity_a:?}"
+        );
         assert_ne!(
             identity_a, identity_b,
             "two different files must not compare equal"
@@ -279,7 +385,78 @@ mod tests {
         Ok(())
     }
 
-    /// Guards the struct's own shape: if a future edit adds a field this derive doesn't cover, or
+    /// DC-99 Stage 2's own negative control for the fallback path: `force_identity_fallback_once`
+    /// forces `identity_of` to skip the primary call and go straight to `GetFileInformationByHandle`,
+    /// against an ordinary NTFS file that would otherwise take the 128-bit path -- proving the
+    /// fallback's own construction is correct even though CI provisions no genuinely unsupported
+    /// filesystem to trigger it for real (`stage-2-investigation-ruling-v1` §3). Observable per that
+    /// ruling: every assertion below is on the *returned variant*, so if the override ever stopped
+    /// forcing anything, `identity_of` would silently take the primary path and return `Id128`
+    /// instead -- turning this test red, not green.
+    #[test]
+    fn identity_fallback_distinguishes_different_files_and_matches_the_same_one()
+    -> std::io::Result<()> {
+        let directory = std::env::temp_dir();
+        let suffix = std::process::id();
+        let path_a = directory.join(format!("prikk-ffi-identity-fallback-test-a-{suffix}"));
+        let path_b = directory.join(format!("prikk-ffi-identity-fallback-test-b-{suffix}"));
+        std::fs::write(&path_a, b"a")?;
+        std::fs::write(&path_b, b"b")?;
+
+        force_identity_fallback_once();
+        let identity_a = identity_of(&std::fs::File::open(&path_a)?)?;
+        force_identity_fallback_once();
+        let identity_b = identity_of(&std::fs::File::open(&path_b)?)?;
+        force_identity_fallback_once();
+        let identity_a_reopened = identity_of(&std::fs::File::open(&path_a)?)?;
+
+        let _ = std::fs::remove_file(&path_a);
+        let _ = std::fs::remove_file(&path_b);
+
+        assert!(
+            matches!(identity_a, FileIdentity::Id64 { .. }),
+            "the override must have forced the fallback branch, not the primary one: {identity_a:?}"
+        );
+        assert!(matches!(identity_b, FileIdentity::Id64 { .. }));
+        assert!(matches!(identity_a_reopened, FileIdentity::Id64 { .. }));
+        assert_ne!(
+            identity_a, identity_b,
+            "two different files must not compare equal, even via the fallback form"
+        );
+        assert_eq!(
+            identity_a, identity_a_reopened,
+            "the same file, reopened through the fallback form both times, must compare equal"
+        );
+        Ok(())
+    }
+
+    /// `force_identity_fallback_once` is consumed after exactly one call -- a second `identity_of`
+    /// call on the same thread must take the real primary path again, not stay forced. Without this,
+    /// the fallback test above could pass for the wrong reason: every call after the first one
+    /// forced would also return `Id64`, whether or not the override actually fired again.
+    #[test]
+    fn identity_fallback_override_is_consumed_after_one_call() -> std::io::Result<()> {
+        let path = std::env::temp_dir().join(format!(
+            "prikk-ffi-identity-fallback-once-test-{}",
+            std::process::id()
+        ));
+        std::fs::write(&path, b"x")?;
+
+        force_identity_fallback_once();
+        let forced = identity_of(&std::fs::File::open(&path)?)?;
+        let unforced = identity_of(&std::fs::File::open(&path)?)?;
+
+        let _ = std::fs::remove_file(&path);
+
+        assert!(matches!(forced, FileIdentity::Id64 { .. }));
+        assert!(
+            matches!(unforced, FileIdentity::Id128 { .. }),
+            "the override must not persist past its one call: {unforced:?}"
+        );
+        Ok(())
+    }
+
+    /// Guards the enum's own shape: if a future edit adds a field this derive doesn't cover, or
     /// removes `PartialEq`, this fails to compile rather than silently comparing fewer fields than
     /// intended.
     #[test]
