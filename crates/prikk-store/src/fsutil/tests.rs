@@ -8,16 +8,15 @@ use crate::RepositoryLayout;
 use crate::test_support::unique_temp_dir;
 
 use super::{MutationRoot, write_file_atomically, write_worktree_file_atomically};
-// DC-97: the failpoint injection mechanism and the retired-`promote`-caller test it feeds have no
-// Windows implementation (fsutil.rs's own `mod caller_tests` comment states why) -- every test that
-// uses them, and every test that uses these otherwise-portable primitives only from within a
-// failpoint-gated test, stays inline-gated below, and their imports are gated to match rather than
-// pulled in unconditionally now that this file's outer module gate includes Windows.
+// DC-97: the failpoint injection mechanism has no Windows implementation (fsutil.rs's own
+// `mod caller_tests` comment states why) -- every test that uses it, and every test that uses these
+// otherwise-portable primitives only from within a failpoint-gated test, stays inline-gated below,
+// and their imports are gated to match rather than pulled in unconditionally now that this file's
+// outer module gate includes Windows.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use super::{
-    TestFailPoint, append_file_required, create_new_file_required, ensure_directory_required,
-    fail_once_for_test, promote_file_required, read_file_if_exists, remove_file_required,
-    truncate_existing_file_required,
+    TestFailPoint, append_file_required, create_new_file_required, fail_once_for_test,
+    read_file_if_exists, remove_file_required, truncate_existing_file_required,
 };
 
 fn mutation_root(path: &Path) -> MutationRoot {
@@ -281,81 +280,6 @@ fn unsupported_mutation_fails_before_filesystem_side_effect() {
     let _ = fs::remove_dir_all(path);
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-#[test]
-fn promotion_destination_sync_failure_retains_destination_state() {
-    let path = unique_temp_dir("required-promotion-destination");
-    let root = mutation_root(&path);
-    assert!(ensure_directory_required(&root, Path::new("source")).is_ok());
-    assert!(ensure_directory_required(&root, Path::new("destination")).is_ok());
-    assert!(write_file_atomically(&root, Path::new("source/candidate"), b"pointer").is_ok());
-    fail_once_for_test(TestFailPoint::PromotionDestinationSync);
-    assert!(
-        promote_file_required(
-            &root,
-            Path::new("source/candidate"),
-            Path::new("destination/pointer")
-        )
-        .is_err()
-    );
-    assert!(!path.join("source/candidate").exists());
-    assert_eq!(
-        fs::read(path.join("destination/pointer")).unwrap_or_default(),
-        b"pointer"
-    );
-    let _ = fs::remove_dir_all(path);
-}
-
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-#[test]
-fn promotion_rename_failure_retains_source_only() {
-    let path = unique_temp_dir("required-promotion-rename");
-    let root = mutation_root(&path);
-    assert!(ensure_directory_required(&root, Path::new("source")).is_ok());
-    assert!(ensure_directory_required(&root, Path::new("destination")).is_ok());
-    assert!(write_file_atomically(&root, Path::new("source/candidate"), b"pointer").is_ok());
-    fail_once_for_test(TestFailPoint::PromotionRename);
-    assert!(
-        promote_file_required(
-            &root,
-            Path::new("source/candidate"),
-            Path::new("destination/pointer")
-        )
-        .is_err()
-    );
-    assert_eq!(
-        fs::read(path.join("source/candidate")).unwrap_or_default(),
-        b"pointer"
-    );
-    assert!(!path.join("destination/pointer").exists());
-    let _ = fs::remove_dir_all(path);
-}
-
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-#[test]
-fn promotion_source_sync_failure_reports_committed_destination() {
-    let path = unique_temp_dir("required-promotion-source");
-    let root = mutation_root(&path);
-    assert!(ensure_directory_required(&root, Path::new("source")).is_ok());
-    assert!(ensure_directory_required(&root, Path::new("destination")).is_ok());
-    assert!(write_file_atomically(&root, Path::new("source/candidate"), b"pointer").is_ok());
-    fail_once_for_test(TestFailPoint::PromotionSourceSync);
-    assert!(
-        promote_file_required(
-            &root,
-            Path::new("source/candidate"),
-            Path::new("destination/pointer")
-        )
-        .is_err()
-    );
-    assert!(!path.join("source/candidate").exists());
-    assert_eq!(
-        fs::read(path.join("destination/pointer")).unwrap_or_default(),
-        b"pointer"
-    );
-    let _ = fs::remove_dir_all(path);
-}
-
 /// DC-81 addendum-1 §3: "Q3's measurement is follow-through, not optional" once the macOS CI job
 /// runs mutation. `#[ignore]`d by default — this is a data point for NFR-PERF-01, not a pass/fail
 /// gate (there is no accepted threshold to assert against, and timing varies by runner) — the CI job
@@ -449,14 +373,6 @@ fn no_durability_every_method_fails_at_runtime_not_compile_time() {
             .map(|error| error.to_string()),
         NoDurability
             .remove_if_present(&root, relative)
-            .err()
-            .map(|error| error.to_string()),
-        NoDurability
-            .promote(&root, relative, Path::new("destination"))
-            .err()
-            .map(|error| error.to_string()),
-        NoDurability
-            .publish_immutable(&root, relative, b"x", |_| Ok(()))
             .err()
             .map(|error| error.to_string()),
         NoDurability

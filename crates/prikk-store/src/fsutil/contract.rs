@@ -60,8 +60,12 @@
 //! | G2 (atomic content replacement) | [`atomic_replace`](DurabilityContract::atomic_replace) |
 //! | G3 (durable-after-return) | every method below returns only once its effect is durable; [`durable_directory_entry`](DurabilityContract::durable_directory_entry) confirms one entry's presence directly, without relying on any other method's write having happened in the same call |
 //! | G4 (exclusive creation) | [`create_exclusive`](DurabilityContract::create_exclusive) |
-//! | G5 (race-safe no-clobber publication) | [`publish_immutable`](DurabilityContract::publish_immutable) |
 //! | G9 (mode-bit isolation) | [`set_permission_bits`](DurabilityContract::set_permission_bits) |
+//!
+//! G5 (race-safe no-clobber publication) retired in DC-98: its only method, `publish_immutable`,
+//! had zero production callers left after RFC 102 Stage 3's container cutover, and the ruling that
+//! kept it (design-v1.md §12.3) named its own discharge condition -- Stages 4-5 shipping and showing
+//! no loose-file use remained -- which DC-98's RFC confirmed met.
 
 use std::path::Path;
 
@@ -127,34 +131,6 @@ pub(crate) trait DurabilityContract {
     /// is not an error — the durability guarantee (the parent directory entry's removal, or its
     /// confirmed prior absence, is synced) holds either way.
     fn remove_if_present(&self, root: &MutationRoot, relative: &Path) -> Result<bool>;
-
-    /// Durably rename `source` to `destination`, both resolved under `root`, syncing the
-    /// destination directory before the source directory (so a crash between the two syncs still
-    /// leaves the rename durable from the destination's side).
-    fn promote(&self, root: &MutationRoot, source: &Path, destination: &Path) -> Result<()>;
-
-    /// Publish `candidate` at `relative` **without ever replacing existing content**: if a
-    /// different immutable object already exists there, this is a no-op after validating the
-    /// existing bytes against `candidate`; if the same content wins a creation race against
-    /// another process, both processes converge is on the same durable result rather than either
-    /// silently overwriting the other.
-    ///
-    /// **G5's only production caller was `object_store.rs`'s loose-file writes, retired by RFC 102
-    /// Stage 3's container cutover** (object storage now goes through `index.rs`'s append-only write
-    /// protocol instead). **Ruled (design-v1.md §12.3): keep it.** Retiring a documented durability
-    /// guarantee that has been through DC-71, DC-76, DC-81 and DC-82 is an RFC-level act, not a
-    /// stage's side effect -- revisit once Stages 4-5 (refs/trust containerization) show whether any
-    /// loose-file use remains at all, not piecemeal. Exercised by its own conformance tests
-    /// (`fsutil/tests.rs`, `object_store/tests/immutable.rs`, `races.rs`), so not fully dead -- only
-    /// unreachable from production code.
-    #[allow(dead_code)]
-    fn publish_immutable(
-        &self,
-        root: &MutationRoot,
-        relative: &Path,
-        candidate: &[u8],
-        validate_existing: impl Fn(&[u8]) -> Result<()>,
-    ) -> Result<()>;
 
     /// Ensure a relative directory tree exists, durably, tolerating a concurrent creator (G8).
     fn ensure_directory(&self, root: &MutationRoot, relative: &Path) -> Result<()>;

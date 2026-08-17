@@ -28,9 +28,9 @@ see the [trust and threat model](./trust-threat-model.md) and the
   completed crash-matrix or fuzzing campaign.
 - Repository *mutation* is exercised by project gates on Linux, macOS, and Windows (DC-87
   Stage 2). Windows' anchoring guarantee is weaker than Linux/macOS in one stated way — see
-  [platform support](./platform-support.md) for the exact gap and which of the nine
-  durability guarantees are held, weaker, or documented no-ops there. Read-only commands are
-  CI-gated on macOS and Windows too — see
+  [platform support](./platform-support.md) for the exact gap and which of the eight remaining
+  durability guarantees (G5 retired in DC-98) are held, weaker, or documented no-ops there.
+  Read-only commands are CI-gated on macOS and Windows too — see
   [platform support](./platform-support.md).
 - `.prikk/` is not a stable repository format and there is no stable migration policy yet.
 
@@ -172,6 +172,37 @@ addition to (not instead of) the per-ref lock above. Trust add/remove acquires t
 container lock in addition to `active.lock`. Bundle import acquires only the received-ref-index
 container lock — it previously acquired no lock at all for this write, which is what surfaced the
 container-locking work in the first place.
+
+## Object Container Writes Are Not Among the Four Locked Containers
+
+The content-addressed object containers (`write_object_to_container`, `index.rs`) are not one of
+the four containers above — there is no `LockableContainer` variant for them, and no dedicated lock
+file protects a write into one. An object write is safe under concurrency only when something else
+already holds a lock across it:
+
+- **`seal`** (`crates/prikk-cli/src/seal.rs`) acquires `ActiveLock` before persisting the WAL's
+  Patch envelopes and building a Block, and holds it for the whole operation — object writes there
+  are incidentally serialized against any other session by the same lock that serializes everything
+  else `seal` does.
+- **`import_bundle`** (`bundle.rs`) does not. Its object-writing loop runs before any lock is
+  acquired at all; the received-ref-index container lock above is taken only afterward, to protect
+  the received-pointer write, and covers none of the object writes that already happened.
+
+This matters because `write_object_to_container`'s own write path (`index.rs`) reads the target
+container's current length, then appends at that offset and records it in the index — a
+read-then-append that is not atomic across two unsynchronized writers. Content-addressed
+idempotency (RFC 102 Stage 3's same-id-same-bytes no-op, preserving the old `publish_immutable`
+contract) makes writing the *same* object twice from two racing writers safe, but does not cover
+two *different* concurrent unprotected appends into the same container computing offsets against
+the same stale length.
+
+**Known and accepted, not fixed here.** This predates DC-98 — it was previously recorded only as a
+comment pointing at `FINDINGS.md` and a `DurabilityContract::publish_immutable` row, both since
+removed, leaving it unregistered anywhere. Re-registered here in its own terms rather than by
+reference to either. The mechanism that would close it (a dedicated object-container lock, or
+extending `import_bundle` to hold `ActiveLock` across its object writes) is out of scope for this
+page to design; it is deferred, tracked follow-up scope, not a defect this document is claiming is
+fixed.
 
 ## Stale Locks and Manual Cleanup
 

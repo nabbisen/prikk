@@ -68,22 +68,6 @@ impl DurabilityContract for NoDurability {
         unsupported_mutation()
     }
 
-    fn promote(&self, root: &MutationRoot, source: &Path, destination: &Path) -> Result<()> {
-        let _ = (root, source, destination);
-        unsupported_mutation()
-    }
-
-    fn publish_immutable(
-        &self,
-        root: &MutationRoot,
-        relative: &Path,
-        candidate: &[u8],
-        validate_existing: impl Fn(&[u8]) -> Result<()>,
-    ) -> Result<()> {
-        let _ = (root, relative, candidate, validate_existing);
-        unsupported_mutation()
-    }
-
     fn ensure_directory(&self, root: &MutationRoot, relative: &Path) -> Result<()> {
         let _ = (root, relative);
         unsupported_mutation()

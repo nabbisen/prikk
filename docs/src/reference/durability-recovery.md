@@ -86,8 +86,10 @@ The implementation is designed so interruption recovery lands on a checkable pre
 checkable new published state. That statement is bounded by the current evidence: unit/integration
 tests, no completed crash-matrix or fuzzing campaign, and gates exercised on Linux, macOS, and Windows
 (the `macOS mutation test suite` and `Windows mutation test suite` CI jobs run the full suite on
-`macos-latest`/`windows-latest`) — with the caveat that DC-76's nine negative controls, which rely on
-failpoint injection, run on Linux/macOS only; that mechanism does not exist for Windows yet.
+`macos-latest`/`windows-latest`) — with the caveat that DC-76's negative controls (eight remain; G5
+retired in DC-98) are only partly demonstrated on Windows: G1, G2, G4, and G9 are, but G3 and G8
+still rely on a failpoint injection mechanism that exists only on Linux/macOS, and G6/G7 have no
+Windows analogue at all. See [platform support](./platform-support.md) for the per-guarantee table.
 
 If the active WAL's Patch IDs already match the current published tip, seal reconstructs the expected
 no-clock RefUpdate and finishes any exact one-record pointer lead before cleanup. An existing complete

@@ -42,6 +42,11 @@ fn repository_format_create_sync_failure_retains_and_retries() -> prikk_error::R
     Ok(())
 }
 
+/// DC-98 has a Windows twin of this exact body, same `skip` values, in
+/// `fsutil::anchored::windows::tests::object_write_sync_failure_retains_and_classifies_windows`
+/// (duplicated rather than freed from this module's shared per-file `use` statements -- see that
+/// test's own doc comment). **Mirror any edit to this test there too**, or the two silently
+/// diverge.
 #[test]
 fn object_write_sync_failure_retains_and_classifies() -> prikk_error::Result<()> {
     // RFC 102 Stage 3: an object write no longer goes through the old immutable-install

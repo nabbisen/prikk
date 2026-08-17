@@ -6,17 +6,15 @@
 //! method an "unsupported" error, for every remaining target) are the implementors.
 //! `ACTIVE_DURABILITY` below is the single gated constant that picks among them; no `target_os` gate
 //! appears at any call site in this file (DC-82's bar) — a further platform is one more `#[cfg]` arm
-//! on `ACTIVE_DURABILITY`, not one more arm at every one of these eleven functions.
+//! on `ACTIVE_DURABILITY`, not one more arm at every one of these nine functions.
 
 use std::path::Path;
 
 use prikk_error::{PrikkError, Result};
 
 mod directory;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 mod failpoints;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-mod immutable;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
@@ -52,12 +50,24 @@ pub(crate) use none::NoDurability;
 #[cfg(target_os = "windows")]
 pub(crate) use windows::WindowsDurability;
 
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
 pub(crate) use failpoints::{
-    Point as TestFailPoint, fail_after as fail_after_for_test, fail_once as fail_once_for_test,
+    Point as TestFailPoint, fail_once as fail_once_for_test,
     set_directory_create_barrier as set_directory_create_barrier_for_test,
-    set_immutable_install_barrier as set_immutable_install_barrier_for_test,
 };
+// DC-98: `windows/tests.rs::object_write_sync_failure_retains_and_classifies_windows` needs a
+// specific skip-count -- `RequiredFileSync` at skip 0 (container append's own sync) and skip 1
+// (index append's own sync), the same two ordinals `caller_tests::sync_matrix`'s Unix original
+// uses. Confirmed identical on Windows by a probe (`.git-exclude/reviewed/DC-98-stage-2-followups-\
+// ruling-v1.md` §2, CI run `31983187612`) before this widening, not assumed from the call graph.
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
+pub(crate) use failpoints::fail_after as fail_after_for_test;
 
 /// The one gated symbol DC-82 exists to introduce: picks the active `DurabilityContract`
 /// implementor for this build. Every function below calls through it unconditionally.
@@ -153,51 +163,6 @@ pub(crate) fn remove_file_cleanup_best_effort(root: &MutationRoot, relative: &Pa
 /// Remove a worktree file through its retained worktree-root authority.
 pub(crate) fn remove_worktree_file_required(root: &MutationRoot, relative: &Path) -> Result<()> {
     remove_file_required(root, relative)
-}
-
-/// Rename within one root, syncing destination before source.
-///
-/// RFC 102 Stage 4: orphaned by the same shape of rewire that orphaned G5 in Stage 3 --
-/// `refs/publication.rs`'s candidate-write-then-promote dance (`refs/pointer.rs`'s old
-/// `write_ref_pointer_candidate`/`promote_ref_pointer_candidate`) was this function's only
-/// production caller, and Step 0 §13.3's ruling retired that whole mechanism (an append-only
-/// pointer record has no candidate value to stage). Kept, not deleted: retiring a durability
-/// primitive is the same RFC-level act it was for G5, not a stage side effect. Reported, not
-/// decided -- see the review submission.
-#[allow(dead_code)]
-pub(crate) fn promote_file_required(
-    root: &MutationRoot,
-    source: &Path,
-    destination: &Path,
-) -> Result<()> {
-    ACTIVE_DURABILITY.promote(root, source, destination)
-}
-
-/// Publish immutable, content-addressed bytes at `relative` without ever replacing existing
-/// content — see `DurabilityContract::publish_immutable` for the guarantee.
-///
-/// RFC 102 Stage 3, design-v1.md §12.3: G5 has no production caller now that object writes go
-/// through `index.rs`'s container append protocol instead. Kept as the clean, cross-platform entry
-/// point `object_store/tests/immutable.rs` and `races.rs` re-target onto directly (naming
-/// `LinuxDurability`/`MacosDurability`/`WindowsDurability` by hand in a test that runs on all three
-/// would defeat the point of `ACTIVE_DURABILITY` picking the right one). Gated to match
-/// `object_store::tests`' own gate exactly (`object_store.rs:123`), not just `#[cfg(test)]` -- DC-97
-/// widened both to include Windows once `object_store.rs:123`'s own Linux/macOS-only reasoning was
-/// found stale (it predated DC-87 making Windows a mutating platform). A bare `#[cfg(test)]` here
-/// would leave this genuinely unused, and `-D warnings` genuinely dead, on whichever platform its
-/// only callers don't compile for (`EXECUTION-ORDER.md` §6 rule 9's own cross-target clippy check,
-/// added for exactly this class of platform-conditional dead code).
-#[cfg(all(
-    test,
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
-))]
-pub(crate) fn publish_immutable_file(
-    root: &MutationRoot,
-    relative: &Path,
-    candidate: &[u8],
-    validate_existing: impl Fn(&[u8]) -> Result<()>,
-) -> Result<()> {
-    ACTIVE_DURABILITY.publish_immutable(root, relative, candidate, validate_existing)
 }
 
 /// Ensure a relative directory tree exists, durably, tolerating a concurrent creator (G8).

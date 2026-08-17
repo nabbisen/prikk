@@ -8,11 +8,24 @@ use prikk_error::{PrikkError, Result};
 mod anchored;
 mod contract;
 
-// DC-97: split. `caller_tests` (including its matrix submodules) is unix-only by wiring, not by
-// nature -- every one of its 18 tests calls the failpoint injection mechanism
-// (`anchored::TestFailPoint`), which has no Windows implementation; nothing in it uses a unix-only
-// OS facility directly. Blocked on a Windows failpoint mechanism being built (tracked as follow-up
-// scope, same reason DC-97's G3 row is "no"), not on anything unix-specific about the matrix itself.
+// DC-97 gated this whole module off Windows because the failpoint mechanism itself had no Windows
+// implementation. DC-98 built and wired that mechanism -- re-evaluated per its own criterion 5, and
+// the gate stays Unix-only for what remains here, but the reason is per-test, not per-file (an
+// earlier version of this comment claimed "every one of these 18," found false for one test by
+// review: a per-file grep is not a per-test count). 17 of 18 exercise `CreatedDirectoryParentSync`/
+// `ObservedDirectoryParentSync`/`RequiredDirectorySync`/`MutableParentSync`, the directory-entry-sync
+// points DC-98's classification (rows #10-#14) found have no Windows operation to inject at at all
+// (no `FlushFileBuffers` contract for a directory handle) -- not a missing mechanism, a missing
+// operation. The 18th, `sync_matrix::object_write_sync_failure_retains_and_classifies`, uses only
+// `RequiredFileSync` (row #6, wired on Windows) and its Windows ordinals are now established by
+// observation (`anchored.rs`'s own `fail_after_for_test` re-export doc comment) -- it stays here
+// unmoved, but has its own Windows twin,
+// `windows::tests::object_write_sync_failure_retains_and_classifies_windows`, rather than this
+// module being restructured to free one test from three files' worth of shared per-file `use`
+// statements. Nothing in this module uses a unix-only OS facility directly; a future caller-level
+// test exercising only the points DC-98 did wire (`RequiredOpen`, `DirectoryCreate`,
+// `MutableFileSync`, `MutableRename`, `RequiredFileSync`, `AppendWrite`, `Truncate`, `Unlink`) can be
+// Windows-portable the same way.
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod caller_tests;
 // `tests` (and its `conformance`/`directory` submodules) is genuinely mixed: some tests use
@@ -33,26 +46,6 @@ pub(crate) use anchored::{
     truncate_existing_file_required, truncate_file_empty_required, write_file_atomically,
     write_worktree_file_atomically,
 };
-
-// RFC 102 Stage 4: `promote_file_required` (`DurabilityContract::promote`) has no production caller
-// left -- `refs/publication.rs`'s candidate-write-then-promote dance was its only one, retired by
-// Step 0 §13.3's ruling -- but stays reachable for `fsutil/tests.rs`'s own generic primitive test,
-// which exercises `promote` directly and does not depend on refs at all. Ruled the same "keep,
-// record, decide separately" way as G5 (`publish_immutable_file`, this same file, below).
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
-pub(crate) use anchored::promote_file_required;
-
-// RFC 102 Stage 3, design-v1.md §12.3: G5 (`publish_immutable`) has no production caller left, but
-// stays reachable for its own conformance tests (`object_store/tests/immutable.rs`, `races.rs`) --
-// ruled "keep, record, decide separately" rather than retired as a stage side effect. Gated to match
-// those tests' own gate (`object_store.rs:123`, DC-97-widened to include Windows), not just
-// `#[cfg(test)]` -- see `anchored.rs`'s own doc comment on `publish_immutable_file` for why a bare
-// `#[cfg(test)]` here is wrong.
-#[cfg(all(
-    test,
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
-))]
-pub(crate) use anchored::publish_immutable_file;
 
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) use anchored::LinuxDurability;
@@ -85,13 +78,24 @@ pub(crate) use anchored::remove_file_required;
 ))]
 pub(crate) use contract::DurabilityContract;
 
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
-pub(crate) use anchored::{TestFailPoint, fail_after_for_test, fail_once_for_test};
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
+pub(crate) use anchored::{TestFailPoint, fail_once_for_test};
+// DC-98: see `anchored.rs`'s own re-export of this for the established Windows ordinals it exists
+// to carry.
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
+pub(crate) use anchored::fail_after_for_test;
 
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
-pub(crate) use anchored::{
-    set_directory_create_barrier_for_test, set_immutable_install_barrier_for_test,
-};
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
+pub(crate) use anchored::set_directory_create_barrier_for_test;
 
 /// Return a process-unique temporary path next to the destination.
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
