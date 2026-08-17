@@ -40,6 +40,11 @@ pub(super) fn inert_head(token: &str) -> bool {
             | "mkdir"
             | "cp"
             | "sha256sum"
+            // RFC 107 Stage 2: macOS's checksum tool -- `sha256sum` is not confirmed present on
+            // the runner image, `shasum` is base-OS regardless
+            // (`RFC-107-stage-2-report-ruling-v1.md` §2). Same category as `sha256sum` above: a
+            // hashing utility with no capability to invoke another program under any arguments.
+            | "shasum"
             // DC-71: prikk itself. Verified, not assumed — `grep -rn "std::process::Command"
             // crates/` returns no matches anywhere in the workspace, so the binary this CI job
             // exercises against a read-only fixture has no capability to execute another program

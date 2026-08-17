@@ -24,6 +24,18 @@
 //! in derived form would still be defect 2 in gentler words on the release cut specifically to fix
 //! it (`RFC-107-stage-1-report-ruling-v1.md` §4). The platform list states only what is true of the
 //! artifacts themselves.
+//!
+//! **RFC 107 Stage 2** adds two things this module now does beyond deriving the platform sentence:
+//! - **Per-artifact completeness**: every `.build-info.txt` in `dist_dir` must have its own archive
+//!   and checksum sitting beside it, checked directly, not assumed from the build-info's own
+//!   existence. Without this, a target whose archive extension the publish step's asset globs did
+//!   not match (Windows' `.zip`, before `RFC-107-stage-2-report-ruling-v1.md` §5's fix) would be
+//!   *described* as published by these notes while never actually being attached to the release --
+//!   this RFC's own defect inverted: a true-looking claim about an artifact that is not there,
+//!   rather than a false claim about a platform.
+//! - **The macOS signing position**, stated in the same register as the standing release-authority
+//!   section, derived from the same `dist/` scan rather than a static clause that could go stale the
+//!   way the DC-37 one did if signing ever lands.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -96,6 +108,7 @@ fn platform_paragraph(dist_dir: &Path) -> Result<String> {
     let mut by_os: BTreeMap<&'static str, Vec<String>> = BTreeMap::new();
     for target in &targets {
         let (os, arch) = classify_target(target)?;
+        verify_artifact_present(dist_dir, target, os)?;
         let architectures = by_os.entry(os).or_default();
         if !architectures.contains(&arch) {
             architectures.push(arch);
@@ -110,6 +123,14 @@ fn platform_paragraph(dist_dir: &Path) -> Result<String> {
             .collect::<Vec<_>>()
             .join(", ")
     };
+    let macos_note = if by_os.contains_key("macOS") {
+        "\n\n**macOS binaries are unsigned.** Gatekeeper will warn on first run — right-click (or \
+         Control-click) the binary and choose Open, or clear the quarantine attribute directly with \
+         `xattr -d com.apple.quarantine <path>`. Notarization needs an Apple Developer identity and \
+         is a stated gap for a future increment, not an oversight."
+    } else {
+        ""
+    };
     Ok(format!(
         "## Prebuilt binaries\n\
          \n\
@@ -122,8 +143,28 @@ fn platform_paragraph(dist_dir: &Path) -> Result<String> {
          ```\n\
          \n\
          `cargo install prikk` remains the toolchain-based install path; these binaries are an\n\
-         additional option, not a replacement."
+         additional option, not a replacement.{macos_note}"
     ))
+}
+
+/// Every target this function is asked about came from a `.build-info.txt` file that already
+/// exists in `dist_dir` (`build_info_targets`'s job); this checks the archive and checksum that
+/// same target's build-info claims to describe are *also* actually there, so notes never describe
+/// an artifact that was never attached to the release (`RFC-107-stage-2-report-ruling-v1.md` §5).
+fn verify_artifact_present(dist_dir: &Path, target: &str, os: &str) -> Result<()> {
+    let extension = if os == "Windows" { "zip" } else { "tar.gz" };
+    let archive = format!("prikk-{target}.{extension}");
+    let checksum = format!("{archive}.sha256");
+    for name in [&archive, &checksum] {
+        if !dist_dir.join(name).is_file() {
+            return Err(Error::new(format!(
+                "{}: {name} is missing -- {target}'s build-info.txt exists but its archive is not \
+                 attached; these notes would describe an artifact that was never published",
+                dist_dir.display()
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn join_architectures(architectures: &[String]) -> String {

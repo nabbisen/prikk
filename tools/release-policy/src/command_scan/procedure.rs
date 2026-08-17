@@ -44,10 +44,93 @@ pub(super) fn allowed(tokens: &[String], index: usize, head: &str) -> bool {
                     ">>",
                     "dist/prikk-aarch64-unknown-linux-gnu.build-info.txt",
                 ]
+                // RFC 107 Stage 2: same shape, the two new targets' own build-info files.
+                || tail
+                    == [
+                        "-vV",
+                        ">>",
+                        "dist/prikk-aarch64-apple-darwin.build-info.txt",
+                    ]
+                || tail
+                    == [
+                        "-vV",
+                        ">>",
+                        "dist/prikk-x86_64-pc-windows-msvc.build-info.txt",
+                    ]
         }
         "gh" => gh_release_create(tail),
+        // RFC 107 Stage 2: the Windows package step's PowerShell cmdlets. Each is exact-match for
+        // the same `tar`/`rustc`/`gh` reason -- `Copy-Item`, `Compress-Archive`, and the rest can
+        // all reach outside `dist`/`stage` under some argument shape. Confirmed against the real
+        // lexer before writing release.yml, not assumed to parse
+        // (`RFC-107-stage-2-report-ruling-v1.md` §3): no pipe and no `$var = …` assignment appear
+        // in any of these, since the lexer splits the former into separate commands and
+        // unconditionally rejects the latter as a dynamic command head.
+        "New-Item" => windows_new_item(tail),
+        "Copy-Item" => windows_copy_item(tail),
+        "Compress-Archive" => windows_compress_archive(tail),
+        "Get-FileHash" => windows_get_file_hash(tail),
+        "Set-Content" => windows_set_content(tail),
+        "Add-Content" => windows_add_content(tail),
         _ => inert_head(head),
     }
+}
+
+fn windows_new_item(tail: &[String]) -> bool {
+    // The lexer trims trailing punctuation from tokens (`normalize_token`, the same rule that
+    // reduces `tar`'s trailing `.` argument elsewhere in this file) -- "stage," lexes as "stage",
+    // not "stage,", confirmed directly rather than assumed from the comma's presence in the
+    // source line.
+    tail == ["-ItemType", "Directory", "-Force", "-Path", "stage", "dist"]
+}
+
+fn windows_copy_item(tail: &[String]) -> bool {
+    tail == [
+        "target/x86_64-pc-windows-msvc/release/prikk.exe",
+        "stage/prikk.exe",
+    ] || tail == ["LICENSE", "stage/LICENSE"]
+}
+
+fn windows_compress_archive(tail: &[String]) -> bool {
+    tail == [
+        "-Path",
+        "stage/prikk.exe",
+        "stage/LICENSE",
+        "-DestinationPath",
+        "dist/prikk-x86_64-pc-windows-msvc.zip",
+    ]
+}
+
+fn windows_get_file_hash(tail: &[String]) -> bool {
+    tail == [
+        "dist/prikk-x86_64-pc-windows-msvc.zip",
+        "-Algorithm",
+        "SHA256",
+        ">",
+        "dist/prikk-x86_64-pc-windows-msvc.zip.sha256",
+    ]
+}
+
+fn windows_set_content(tail: &[String]) -> bool {
+    tail == [
+        "-Path",
+        "dist/prikk-x86_64-pc-windows-msvc.build-info.txt",
+        "-Value",
+        "target: x86_64-pc-windows-msvc",
+    ]
+}
+
+fn windows_add_content(tail: &[String]) -> bool {
+    let path = "dist/prikk-x86_64-pc-windows-msvc.build-info.txt";
+    tail == ["-Path", path, "-Value", "commit: $env:GITHUB_SHA"]
+        || tail == ["-Path", path, "-Value", "tag: $env:GITHUB_REF_NAME"]
+        || tail
+            == [
+                "-Path",
+                path,
+                "-Value",
+                "build: cargo build -p prikk --release --target x86_64-pc-windows-msvc --locked",
+            ]
 }
 
 fn tar(tail: &[String]) -> bool {
@@ -67,6 +150,16 @@ fn tar(tail: &[String]) -> bool {
             "prikk",
             "LICENSE",
         ]
+        // RFC 107 Stage 2: macOS's package step, identical shape to the two Linux targets above.
+        || tail
+            == [
+                "-C",
+                "stage",
+                "-czf",
+                "dist/prikk-aarch64-apple-darwin.tar.gz",
+                "prikk",
+                "LICENSE",
+            ]
         // DC-71 B2 ruling: the CI fixture round-trip through tar, not the artifact zip, which
         // does not preserve empty directories — create on the fixture job, extract on the
         // conformance job. The lexer's sentence-trailing-period trim (normalize_token) reduces
@@ -108,6 +201,8 @@ fn gh_release_create(tail: &[String]) -> bool {
             == [
                 "dist/*.tar.gz",
                 "dist/*.tar.gz.sha256",
+                "dist/*.zip",
+                "dist/*.zip.sha256",
                 "dist/*.build-info.txt",
             ]
         && repo_flag == "--repo"
@@ -199,6 +294,25 @@ fn cargo(command: &str, arguments: &[String]) -> bool {
                         "--release",
                         "--target",
                         "aarch64-unknown-linux-gnu",
+                        "--locked",
+                    ]
+                // RFC 107 Stage 2: the two new release-binary builds, same exact-entry shape.
+                || arguments
+                    == [
+                        "-p",
+                        "prikk",
+                        "--release",
+                        "--target",
+                        "aarch64-apple-darwin",
+                        "--locked",
+                    ]
+                || arguments
+                    == [
+                        "-p",
+                        "prikk",
+                        "--release",
+                        "--target",
+                        "x86_64-pc-windows-msvc",
                         "--locked",
                     ]
                 // DC-71: ci.yml's read-only-fixture jobs build only the prikk binary, debug

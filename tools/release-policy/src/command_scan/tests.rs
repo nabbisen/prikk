@@ -311,7 +311,7 @@ fn dc70_tar_rustc_gh_require_exact_procedure_match_not_blanket_inertness() {
         "tar -C stage -czf dist/prikk-aarch64-unknown-linux-gnu.tar.gz prikk LICENSE",
         "rustc -vV >> dist/prikk-x86_64-unknown-linux-gnu.build-info.txt",
         "rustc -vV >> dist/prikk-aarch64-unknown-linux-gnu.build-info.txt",
-        "gh release create \"$TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title \"$TAG\" --notes-file release-notes.md",
+        "gh release create \"$TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.zip dist/*.zip.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title \"$TAG\" --notes-file release-notes.md",
     ] {
         for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
             assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
@@ -327,8 +327,12 @@ fn dc70_tar_rustc_gh_require_exact_procedure_match_not_blanket_inertness() {
         "rustc evil.rs -o /tmp/evil",
         "gh api repos/nabbisen/prikk --method DELETE",
         "gh workflow run publish.yml",
-        "gh release create \"$OTHER_TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title \"$TAG\" --notes-file release-notes.md",
-        "gh release create \"$TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo other/repo --title \"$TAG\" --notes-file release-notes.md",
+        "gh release create \"$OTHER_TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.zip dist/*.zip.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title \"$TAG\" --notes-file release-notes.md",
+        "gh release create \"$TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.zip dist/*.zip.sha256 dist/*.build-info.txt --repo other/repo --title \"$TAG\" --notes-file release-notes.md",
+        // RFC 107 Stage 2: the old two-glob asset list (before the `.zip`/`.zip.sha256` fix) must
+        // now be rejected too -- it is what silently dropped the Windows artifact
+        // (`RFC-107-stage-2-report-ruling-v1.md` §5).
+        "gh release create \"$TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title \"$TAG\" --notes-file release-notes.md",
     ] {
         assert!(!scan_shell(command).errors.is_empty(), "{command}");
         assert!(
@@ -336,6 +340,91 @@ fn dc70_tar_rustc_gh_require_exact_procedure_match_not_blanket_inertness() {
             "{command}"
         );
     }
+}
+
+/// RFC 107 Stage 2: the macOS package step reuses Linux's `tar`/`rustc` shapes exactly, plus
+/// `shasum` (base-OS, unlike `sha256sum` which is not confirmed present --
+/// `RFC-107-stage-2-report-ruling-v1.md` §2) added to `inert_head` alongside `sha256sum` since
+/// neither can invoke another program under any arguments.
+#[test]
+fn recognizes_rfc107_macos_package_procedure() {
+    for command in [
+        "tar -C stage -czf dist/prikk-aarch64-apple-darwin.tar.gz prikk LICENSE",
+        "rustc -vV >> dist/prikk-aarch64-apple-darwin.build-info.txt",
+        "shasum -a 256 prikk-aarch64-apple-darwin.tar.gz",
+        "shasum -a 256 anything.tar.gz > anything.tar.gz.sha256",
+    ] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+        }
+    }
+
+    for command in [
+        "tar -C stage -czf dist/prikk-x86_64-apple-darwin.tar.gz prikk LICENSE",
+        "rustc evil.rs -o /tmp/evil",
+    ] {
+        assert!(!scan_shell(command).errors.is_empty(), "{command}");
+    }
+}
+
+/// RFC 107 Stage 2: the Windows package step's PowerShell cmdlets, each exact-match for the same
+/// reason `tar`/`rustc`/`gh` are. Confirmed against the real lexer before writing release.yml:
+/// commas and backslashes are both stripped by tokenization (`normalize_token`'s trailing-
+/// punctuation trim, and the lexer's own POSIX-style unquoted-backslash escape handling), which is
+/// exactly why the workflow uses forward slashes and no trailing comma survives into these
+/// literals (`RFC-107-stage-2-report-ruling-v1.md` §3).
+#[test]
+fn recognizes_rfc107_windows_package_procedure() {
+    for command in [
+        "New-Item -ItemType Directory -Force -Path stage, dist",
+        "Copy-Item target/x86_64-pc-windows-msvc/release/prikk.exe stage/prikk.exe",
+        "Copy-Item LICENSE stage/LICENSE",
+        "Compress-Archive -Path stage/prikk.exe, stage/LICENSE -DestinationPath dist/prikk-x86_64-pc-windows-msvc.zip",
+        "Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256 > dist/prikk-x86_64-pc-windows-msvc.zip.sha256",
+        "Set-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value \"target: x86_64-pc-windows-msvc\"",
+        "Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value \"commit: $env:GITHUB_SHA\"",
+        "Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value \"tag: $env:GITHUB_REF_NAME\"",
+        "Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value \"build: cargo build -p prikk --release --target x86_64-pc-windows-msvc --locked\"",
+        "rustc -vV >> dist/prikk-x86_64-pc-windows-msvc.build-info.txt",
+    ] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+        }
+    }
+
+    for command in [
+        "Copy-Item target/x86_64-pc-windows-msvc/release/prikk.exe /tmp/evil.exe",
+        "Compress-Archive -Path stage/prikk.exe -DestinationPath /tmp/evil.zip",
+        "Get-FileHash /etc/passwd -Algorithm SHA256",
+        "Set-Content -Path /tmp/evil.txt -Value \"anything\"",
+        "Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value \"commit: $(evil)\"",
+        "New-Item -ItemType File -Force -Path evil.exe",
+    ] {
+        assert!(!scan_shell(command).errors.is_empty(), "{command}");
+    }
+}
+
+/// RFC 107 Stage 2: the two new release-binary builds, same exact-entry shape as the existing
+/// Linux ones -- deliberately `aarch64-apple-darwin` and `x86_64-pc-windows-msvc` only, not
+/// `x86_64-apple-darwin`, per the target-list finding
+/// (`RFC-107-stage-2-report-ruling-v1.md` §1).
+#[test]
+fn recognizes_rfc107_stage2_release_binary_builds() {
+    for command in [
+        "cargo build -p prikk --release --target aarch64-apple-darwin --locked",
+        "cargo build -p prikk --release --target x86_64-pc-windows-msvc --locked",
+    ] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+            assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+
+    assert!(
+        !scan_shell("cargo build -p prikk --release --target x86_64-apple-darwin --locked")
+            .errors
+            .is_empty()
+    );
 }
 
 /// RFC 107 Stage 1: the notes-assembly step is a dedicated matcher (`release_notes_procedure`),
