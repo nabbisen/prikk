@@ -90,3 +90,24 @@ discontinuity marks where the scheme changed, and a reader who notices it can fi
   discriminator rule exists.
 - **Changing RFC content, templates, or the Status-field convention.** RFC-000 already governs those.
 - **Any product, tooling, or release-lane change.**
+
+## Addendum (2026-08-17): the rule held; it was unenforced, and now it is enforced
+
+This RFC shipped as prose with no machine check. Between its acceptance (2026-08-11) and 2026-08-17,
+four RFCs — `DC-96`, `DC-97`, `DC-98`, `DC-99` — were created by the architect in the `DC-NN` scheme
+this RFC retired. It went unnoticed for six days and four increments, and was caught by the project
+owner reading a filename.
+
+**`DC-96` through `DC-99` are frozen under the rule this RFC already states**, for the same reason as
+every other legacy name: `DC-96`'s identifier is published in `crates/prikk-ffi/Cargo.toml`'s
+description, its README, and its `lib.rs`, so renaming it would make the repository disagree with a
+released artifact permanently — the exact anti-pattern *"Why existing RFCs are not renamed"* describes.
+Renaming only the unreleased three would leave a gap in the series and three schemes instead of two, the
+partial migration this RFC argues against directly. **They are not an exception to this RFC; they are
+four more entries in the legacy set it already anticipated, added later than the rest.**
+
+**The next RFC number is 107.**
+
+[RFC 105](105-rfc-naming-gate.md) turns the rule stated here into a `boundary-check` control. So a
+reader meeting `DC-99` dated six days after this RFC's acceptance has the answer here rather than
+inferring the wrong one: **the rule did not lapse — it was never a control, and it is one now.**

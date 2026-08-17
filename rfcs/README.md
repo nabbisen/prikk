@@ -19,6 +19,14 @@ Prikk uses RFC-000's 5-folder variant:
 - `handoffs/` contains companion execution/FDD handoff material. Handoffs do not define an independent
   lifecycle; their state follows the related RFC.
 
+  **Every handoff should have a related RFC, and one does not.** `handoffs/consolidation/` holds
+  `dead-surface-consolidation-handoff-v1.md` for work that was designed, implemented and merged with no
+  governing RFC anywhere in `proposed/`, `accepted/`, `done/` or `archive/`. Found while deriving RFC
+  105's allowlist, where it is entered for that reason rather than as a legacy-naming exemption. Recorded
+  here because it is a **process** observation, not a naming one: a handoff's state is defined as
+  following its RFC, so a handoff without one has no defined state. No retroactive RFC is being invented
+  for it — that would assert a decision record that never existed.
+
 RFC-000 says folder location is lifecycle authority. The status text inside each RFC should be kept
 consistent with its folder.
 
