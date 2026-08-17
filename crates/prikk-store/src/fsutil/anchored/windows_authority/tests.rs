@@ -84,10 +84,17 @@ fn a_replacement_installed_between_path_re_derivation_and_open_is_refused()
     let _ = std::fs::remove_dir_all(&aside_path);
 
     let barrier = Arc::new(Barrier::new(2));
-    set_anchor_verification_barrier_for_test(Arc::clone(&barrier));
 
     let thread_root = root.clone();
+    let thread_barrier = Arc::clone(&barrier);
     let handle = std::thread::spawn(move || {
+        // `ANCHOR_VERIFICATION_BARRIER` is a thread-local: it must be installed on the thread that
+        // will call `wait_at_anchor_verification`, not on the driver thread that merely constructs
+        // it. Installing it before spawning would leave the spawned thread's own slot empty, so
+        // its `wait_at_anchor_verification` call would find nothing and run straight through --
+        // and the driver would then block on `barrier.wait()` for a party that never arrives, a
+        // hang rather than a failure (ruled in `RFC-106-implementation-ruling-v1.md` §1).
+        set_anchor_verification_barrier_for_test(thread_barrier);
         create_new_file_required(&thread_root, Path::new("state"), b"raced")
     });
 
