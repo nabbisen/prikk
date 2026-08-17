@@ -65,20 +65,21 @@ impl WindowsAuthority {
         failpoints::wait_at_anchor_verification();
         let file = windows::open_directory_no_follow(&current_path)?;
         let identity = windows::identity_no_follow(&file, &current_path)?;
-        // DC-99 Stage 2, stage-2-implementation-ruling-v1 §2-§4: this comparison is real and
-        // correct, but no test in the suite depends on it -- confirmed by a negative control that
-        // neutralized it (`if identity != self.identity` replaced with `if false`) and watched the
-        // full suite stay green, 936/936, identical to the real branch. Neither DC-96 acceptance
-        // test constructs the race this guards: `worktree_checks_and_writes_remain_on_retained_root`
-        // returns at the refused rename on Windows and never walks; the `.prikk`-swap test completes
-        // its rename before anything else runs, so `current_path_of`'s re-derivation alone already
-        // finds the retained directory and this check confirms trivially. What it actually guards --
-        // a replacement racing the narrow window between the `current_path_of` call above and the
-        // `open_directory_no_follow` call before it -- needs deliberate race injection to construct,
-        // which no existing test attempts. DC-98's `wait_at_directory_create`-style failpoint
-        // barrier is the mechanism to build one; ruled its own increment, not squeezed into DC-99.
-        // Insurance against a documented-open window (`platform-support.md`'s anchor-replacement
-        // section), not dead code -- just unverified rather than assumed proven.
+        // DC-99 Stage 2 found this comparison real and correct but unproven -- neutralizing it
+        // (`if identity != self.identity` replaced with `if false`) left the full suite green,
+        // 936/936, because neither DC-96 acceptance test constructs the race it guards: one returns
+        // at a refused rename and never walks, the other completes its rename before anything else
+        // runs, so `current_path_of`'s re-derivation alone already finds the retained directory and
+        // this check confirms trivially. RFC 106 built the mechanism -- `failpoints::wait_at_-
+        // anchor_verification` above holds this exact window open -- and constructed the race
+        // directly: `windows_authority/tests.rs::a_replacement_installed_between_path_re_derivation-
+        // _and_open_is_refused` installs a replacement in the window and asserts the refusal, and
+        // passed on real Windows CI (run `32002318009`). With the comparison neutralized the same
+        // way DC-99 did, that one test failed and was the only failure in the suite (run
+        // `32002319494`) -- so this comparison now has a control that depends on it. What remains
+        // unclosed is the window itself: Windows offers no `openat`-equivalent, so a replacement
+        // racing the verify-then-open pair on the anchor is narrowed, not closed
+        // (`platform-support.md`'s anchor-replacement section).
         if identity != self.identity {
             return Err(PrikkError::Integrity(format!(
                 "Windows anchor replaced: {} no longer identifies the directory this authority \
