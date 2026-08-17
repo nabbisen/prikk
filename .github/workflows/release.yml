@@ -80,10 +80,22 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
       - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
+
+      # RFC 107 Stage 1: notes are assembled from CHANGELOG.md and dist/*.build-info.txt at
+      # publish time rather than restated in a static file — a static file is what let the
+      # platform claim go stale (rfcs/accepted/107-release-distribution-surface.md §0). $TAG is
+      # not enumerable in advance, so the scanner (procedure.rs's release_notes_procedure) matches
+      # on shape: every other token fixed, $TAG free to vary but the same token release-policy
+      # itself will read from the environment below.
+      - name: Assemble release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: cargo run -p prikk-release-policy --locked -- release-notes "$TAG" dist > release-notes.md
 
       # $TAG and the repository slug are written out as the literal tokens the scanner sees
       # (procedure.rs's gh() match), not templated — the tag itself cannot be enumerated in
@@ -94,4 +106,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title "$TAG" --notes-file .github/release-notes-template.md
+        run: gh release create "$TAG" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title "$TAG" --notes-file release-notes.md

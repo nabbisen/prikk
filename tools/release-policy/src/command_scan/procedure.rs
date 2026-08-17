@@ -9,6 +9,7 @@ pub(super) fn allowed(tokens: &[String], index: usize, head: &str) -> bool {
         "cargo" => {
             rust_policy(tail)
                 || publication(tail).is_some()
+                || release_notes_procedure(tail)
                 || tail
                     .split_first()
                     .is_some_and(|(command, arguments)| cargo(command, arguments))
@@ -114,7 +115,29 @@ fn gh_release_create(tail: &[String]) -> bool {
         && title_flag == "--title"
         && title == tag
         && notes_flag == "--notes-file"
-        && notes == ".github/release-notes-template.md"
+        && notes == "release-notes.md"
+}
+
+/// `cargo run -p prikk-release-policy --locked -- release-notes $TAG dist > release-notes.md`.
+/// RFC 107 Stage 1. Mirrors `gh_release_create`'s shape-matching for the same reason: the release
+/// tag cannot be enumerated in advance, so every other token is fixed and the tag is free to vary.
+/// A dedicated matcher rather than widening `rust_policy` -- that helper pins the literal `check`
+/// subcommand `reference-check` uses to verify what the docs advertise
+/// (`RFC-107-stage-1-report-ruling-v1.md` §1), and widening a shared predicate as a side effect of
+/// an unrelated procedure is how allowlists rot.
+fn release_notes_procedure(tail: &[String]) -> bool {
+    tail == [
+        "run",
+        "-p",
+        "prikk-release-policy",
+        "--locked",
+        "--",
+        "release-notes",
+        "$TAG",
+        "dist",
+        ">",
+        "release-notes.md",
+    ]
 }
 
 fn cargo(command: &str, arguments: &[String]) -> bool {

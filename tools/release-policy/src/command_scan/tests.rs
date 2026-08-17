@@ -311,7 +311,7 @@ fn dc70_tar_rustc_gh_require_exact_procedure_match_not_blanket_inertness() {
         "tar -C stage -czf dist/prikk-aarch64-unknown-linux-gnu.tar.gz prikk LICENSE",
         "rustc -vV >> dist/prikk-x86_64-unknown-linux-gnu.build-info.txt",
         "rustc -vV >> dist/prikk-aarch64-unknown-linux-gnu.build-info.txt",
-        "gh release create \"$TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title \"$TAG\" --notes-file .github/release-notes-template.md",
+        "gh release create \"$TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title \"$TAG\" --notes-file release-notes.md",
     ] {
         for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
             assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
@@ -327,8 +327,36 @@ fn dc70_tar_rustc_gh_require_exact_procedure_match_not_blanket_inertness() {
         "rustc evil.rs -o /tmp/evil",
         "gh api repos/nabbisen/prikk --method DELETE",
         "gh workflow run publish.yml",
-        "gh release create \"$OTHER_TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title \"$TAG\" --notes-file .github/release-notes-template.md",
-        "gh release create \"$TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo other/repo --title \"$TAG\" --notes-file .github/release-notes-template.md",
+        "gh release create \"$OTHER_TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title \"$TAG\" --notes-file release-notes.md",
+        "gh release create \"$TAG\" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo other/repo --title \"$TAG\" --notes-file release-notes.md",
+    ] {
+        assert!(!scan_shell(command).errors.is_empty(), "{command}");
+        assert!(
+            !scan_yaml(&format!("- run: {command}")).errors.is_empty(),
+            "{command}"
+        );
+    }
+}
+
+/// RFC 107 Stage 1: the notes-assembly step is a dedicated matcher (`release_notes_procedure`),
+/// not a widening of `rust_policy` -- `$TAG` is the only token free to vary, mirroring
+/// `gh_release_create`'s own precedent for the same reason (the release tag cannot be enumerated
+/// in advance).
+#[test]
+fn recognizes_rfc107_release_notes_assembly_procedure() {
+    for command in [
+        "cargo run -p prikk-release-policy --locked -- release-notes \"$TAG\" dist > release-notes.md",
+    ] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+        }
+    }
+
+    for command in [
+        "cargo run -p prikk-release-policy --locked -- release-notes \"$TAG\" dist",
+        "cargo run -p prikk-release-policy --locked -- release-notes \"$TAG\" other-dir > release-notes.md",
+        "cargo run -p prikk-release-policy --locked -- boundary-check > release-notes.md",
+        "cargo run -p prikk-release-policy --locked -- release-notes \"$TAG\" dist > notes.md",
     ] {
         assert!(!scan_shell(command).errors.is_empty(), "{command}");
         assert!(
