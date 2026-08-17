@@ -109,9 +109,23 @@ is a one-way door.
 If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
 reviewed commit restores agreement.
 
-**Current release lane:** `parked`.
+**Current release lane:** `active`.
 
-**Current activated release target:** none.
+**Current activated release target:** 0.22.0.
+
+**0.22.0 activated 2026-08-17 by the project owner.** Windows capability parity and the verification
+work behind it. **User-facing content is two Windows capabilities**: `prikk unlock` now returns a real
+liveness answer there (it previously reported `unknown` unconditionally, leaving every stale-lock
+decision to the operator), and anchor identity uses the 128-bit form where the filesystem supports it,
+which matters on ReFS — Windows 11's Dev Drive. **A Linux or macOS user receives no observable change**;
+everything else since 0.21.0 is Windows-specific or internal, and the release notes must say so rather
+than imply otherwise.
+
+Behind those: DC-97 classified all nine `DurabilityContract` guarantees on Windows, DC-98 demonstrated
+crash-safety there with nine controls each watched to fail and retired the orphaned
+`promote`/`publish_immutable` surface, RFC 105 turned RFC 100's naming rule into a `boundary-check`
+control, and RFC 106 proved the anchor identity guard that 936 tests had not depended on. Windows tests
+**909 → 956**.
 
 **0.21.0 released 2026-08-16** — tag `0.21.0` signed with the owner's key
 (RSA `25757DA6CBF7022C4E14CCAC1B3066B87DB99A34`) on `4a33b49`, 12/12 CI green at that commit, GitHub
