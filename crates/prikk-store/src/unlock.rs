@@ -87,7 +87,21 @@ fn check_pid_liveness(pid: u32) -> PidLiveness {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+/// DC-99: mirrors the Unix implementation's own reasoning, including its subtlety --
+/// `prikk_ffi::ProcessLiveness::Exists` covers both a confirmed-running handle and the
+/// access-denied case (`ERROR_ACCESS_DENIED`, the kernel found a process to check permissions
+/// against), the same two situations Linux/macOS's `Ok(())`/`EPERM` arms both map to
+/// `AppearsRunning`.
+#[cfg(target_os = "windows")]
+fn check_pid_liveness(pid: u32) -> PidLiveness {
+    match prikk_ffi::process_liveness(pid) {
+        prikk_ffi::ProcessLiveness::Exists => PidLiveness::AppearsRunning,
+        prikk_ffi::ProcessLiveness::DoesNotExist => PidLiveness::DoesNotAppearRunning,
+        prikk_ffi::ProcessLiveness::Indeterminate => PidLiveness::Unknown,
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 fn check_pid_liveness(_pid: u32) -> PidLiveness {
     PidLiveness::Unknown
 }

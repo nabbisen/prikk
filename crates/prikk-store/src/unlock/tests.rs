@@ -18,10 +18,9 @@ fn a_fresh_repository_holds_no_locks() -> Result<()> {
 }
 
 /// Every lock kind is enumerated, and the current process's own PID (definitely alive, it is the
-/// process running this test) is correctly reported as `AppearsRunning` on Linux/macOS -- the one case
-/// the advisory check can prove reliably rather than merely claim. On every other platform, including
-/// Windows, `check_pid_liveness` has no real primitive and always reports `Unknown` regardless of
-/// whether the PID is alive -- see the module doc and `platform-support.md`.
+/// process running this test) is correctly reported as `AppearsRunning` -- the one case the advisory
+/// check can prove reliably rather than merely claim, on all three platforms as of DC-99 (Linux/macOS
+/// via `kill(pid, 0)`, Windows via `OpenProcess`/`WaitForSingleObject`, `prikk_ffi::process_liveness`).
 #[test]
 fn every_held_lock_kind_is_enumerated_with_its_own_pid_live() -> Result<()> {
     let root = unique_temp_dir("unlock-enumerate-all-kinds");
@@ -35,13 +34,7 @@ fn every_held_lock_kind_is_enumerated_with_its_own_pid_live() -> Result<()> {
     assert_eq!(locks.len(), 3);
     for lock in &locks {
         assert_eq!(lock.recorded_pid, Some(std::process::id()));
-        // `check_pid_liveness` (unlock.rs) only has a real kill(pid, 0) primitive on Linux/macOS;
-        // every other platform, Windows included, stubs to `PidLiveness::Unknown` unconditionally --
-        // assert what each platform actually promises rather than an outcome Windows cannot produce.
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
         assert_eq!(lock.liveness, PidLiveness::AppearsRunning);
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-        assert_eq!(lock.liveness, PidLiveness::Unknown);
     }
     let kinds: Vec<&str> = locks.iter().map(|lock| lock.kind.as_str()).collect();
     assert!(kinds.contains(&"active"));
@@ -55,26 +48,23 @@ fn every_held_lock_kind_is_enumerated_with_its_own_pid_live() -> Result<()> {
     Ok(())
 }
 
-/// A lock recording a PID that does not exist on this host is reported `DoesNotAppearRunning` on
-/// Linux/macOS -- advisory, not a claim the lock is safe to clear (see the module's own doc for why).
-/// `Unknown` elsewhere, same platform split as above.
+/// A lock recording a PID that does not exist on this host is reported `DoesNotAppearRunning` on all
+/// three platforms as of DC-99 -- advisory, not a claim the lock is safe to clear (see the module's
+/// own doc for why).
 #[test]
 fn a_lock_recording_a_nonexistent_pid_is_reported_as_not_appearing_to_run() -> Result<()> {
     let root = unique_temp_dir("unlock-dead-pid");
     let layout = RepositoryLayout::init(root.clone())?;
     let path = layout.default_active_lock_path();
     // A PID within the valid range but astronomically unlikely to name a real process in a test
-    // environment -- `test_kill_process` returns `ESRCH` for it.
+    // environment -- `test_kill_process` returns `ESRCH` for it on Linux/macOS, and `OpenProcess`
+    // fails with `ERROR_INVALID_PARAMETER` for it on Windows.
     std::fs::write(&path, "pid=999999\nkind=active\nnote=test\n")?;
 
     let locks = list_held_locks(&layout)?;
     assert_eq!(locks.len(), 1);
     assert_eq!(locks[0].recorded_pid, Some(999_999));
-    // Same platform split as above: the real primitive exists only on Linux/macOS.
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     assert_eq!(locks[0].liveness, PidLiveness::DoesNotAppearRunning);
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    assert_eq!(locks[0].liveness, PidLiveness::Unknown);
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())
