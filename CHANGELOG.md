@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.22.0 — unreleased
+
+**Windows catches up on two capabilities, and the durability claims made for it in 0.21.0 are now
+tested rather than argued.** No repository format change, no command-surface change, nothing to do
+before upgrading.
+
+**If you use Linux or macOS, this release changes nothing you can observe.** Everything below is either
+Windows-specific or internal. What you get is a more thoroughly tested implementation of what 0.21.0
+already shipped — the Windows suite grew from 909 tests to 956 — and that is worth saying plainly rather
+than dressing up.
+
+### Changed
+
+- **`prikk unlock` now reports real process liveness on Windows.** It previously returned *unknown* for
+  every recorded process id, so recovering a wedged repository there meant deciding alone whether the
+  process that left the lock was gone. It now answers, using the same asymmetry the other platforms
+  use: a process that exists but cannot be queried is reported as **running**, because that is what
+  "the operating system found something to check permissions against" means. **The check remains
+  advisory** — trusted to refuse, never to authorise. A negative result is still not proof a lock is
+  safe to clear.
+- **Anchor identity uses Windows' 128-bit file identifier where the filesystem provides one.** The
+  64-bit identifier this previously relied on is documented by Microsoft as *not unique on ReFS*, which
+  is the filesystem behind Windows 11's Dev Drive — a location Microsoft recommends for source
+  repositories. Filesystems that do not support the 128-bit form fall back to the previous behaviour,
+  and the two forms cannot be compared against each other.
+
+### Verified rather than assumed
+
+None of this changes behaviour. It changes what is known about behaviour.
+
+- **Crash-safety on Windows is demonstrated.** 0.21.0 shipped a durability implementation whose
+  crash-safety rested on the code being correct. Fault injection is now wired into the Windows
+  durability path, and every one of the nine controls has been observed to fail when the guarantee it
+  covers is removed — which is the only way to show a durability test is testing durability.
+- **All nine durability guarantees are classified per platform**, with either a demonstrated control or
+  a specific stated reason none can exist. Two of them have no Windows equivalent at all, and the
+  reference documentation now says which and why.
+- **Two guards that protected nothing observable are now proven.** Both were found the same way: by
+  disabling them and watching the test suite stay green.
+- **Two internal methods were retired** — unreachable from any command, weaker on Windows than
+  elsewhere, and therefore a documented guarantee nothing could rely on.
+
+### Why
+
+0.21.0 made Windows a mutating platform. That release named four places where Windows offered a
+narrower guarantee than Linux or macOS. This release closes two of them and replaces argument with
+evidence for the rest. **The remaining two are still named** in the
+[platform support reference](./docs/src/reference/platform-support.md), including the resolution race
+Windows cannot close by construction — it has no `openat` equivalent — and prikk does not claim
+otherwise.
+
 ## 0.21.0 — 2026-08-16
 
 **Windows becomes a mutating platform.** Until now prikk could only read a repository on Windows;
