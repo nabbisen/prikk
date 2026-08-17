@@ -269,9 +269,9 @@ pub fn import_bundle(
 
     let received_ref_name = format!("remotes/{origin_ref_name}");
     // RFC 102 Stage 6 Step 2, design-v1.md §15.8: `import_bundle` held no lock at all before this
-    // stage -- the gap the received-index investigation surfaced (`FINDINGS.md`). Scoped to the
-    // received-index write alone, not the object writes above: those have their own, separately
-    // registered concurrency gap (the orphaned `DurabilityContract::publish_immutable` row) that is
+    // stage. Scoped to the received-index write alone, not the object writes above: those have
+    // their own, separately registered concurrency gap -- see
+    // docs/src/reference/concurrency-locking.md#object-container-writes-are-not-among-the-four-locked-containers,
     // out of this stage's scope.
     let _received_index_lock =
         acquire_container_locks(layout, &[LockableContainer::ReceivedIndex])?;
