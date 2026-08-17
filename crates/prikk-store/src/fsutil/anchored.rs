@@ -50,6 +50,8 @@ pub(crate) use none::NoDurability;
 #[cfg(target_os = "windows")]
 pub(crate) use windows::WindowsDurability;
 
+#[cfg(all(test, target_os = "windows"))]
+pub(crate) use failpoints::set_anchor_verification_barrier as set_anchor_verification_barrier_for_test;
 #[cfg(all(
     test,
     any(target_os = "linux", target_os = "macos", target_os = "windows")

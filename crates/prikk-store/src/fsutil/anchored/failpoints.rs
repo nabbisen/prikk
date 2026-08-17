@@ -41,6 +41,8 @@ pub(crate) enum Point {
 std::thread_local! {
     static NEXT: RefCell<Option<(Point, usize)>> = const { RefCell::new(None) };
     static DIRECTORY_CREATE_BARRIER: RefCell<Option<Arc<Barrier>>> = const { RefCell::new(None) };
+    #[cfg(target_os = "windows")]
+    static ANCHOR_VERIFICATION_BARRIER: RefCell<Option<Arc<Barrier>>> = const { RefCell::new(None) };
 }
 
 #[cfg(test)]
@@ -58,8 +60,24 @@ pub(crate) fn set_directory_create_barrier(barrier: Arc<Barrier>) {
     DIRECTORY_CREATE_BARRIER.with(|slot| *slot.borrow_mut() = Some(barrier));
 }
 
+// RFC 106: Windows-only -- `wait_at_anchor_verification`'s only caller is `windows_authority.rs`,
+// which `anchored.rs` compiles only `#[cfg(target_os = "windows")]`. An ungated barrier here would
+// have zero callers on Linux/macOS and trip the same dead-code trap DC-98 already hit once on five
+// directory-sync `Point` variants (this module's own comment on `Point`, above) -- the compiler is
+// the reason, not symmetry with `DIRECTORY_CREATE_BARRIER`'s cross-platform gating.
+#[cfg(target_os = "windows")]
+#[cfg(test)]
+pub(crate) fn set_anchor_verification_barrier(barrier: Arc<Barrier>) {
+    ANCHOR_VERIFICATION_BARRIER.with(|slot| *slot.borrow_mut() = Some(barrier));
+}
+
 pub(super) fn wait_at_directory_create() {
     wait_at_test_barrier(TestBarrier::DirectoryCreate);
+}
+
+#[cfg(target_os = "windows")]
+pub(super) fn wait_at_anchor_verification() {
+    wait_at_test_barrier(TestBarrier::AnchorVerification);
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -182,19 +200,44 @@ impl From<TestPoint> for Point {
 #[derive(Clone, Copy)]
 enum TestBarrier {
     DirectoryCreate,
+    #[cfg(target_os = "windows")]
+    AnchorVerification,
 }
 
 fn wait_at_test_barrier(barrier: TestBarrier) {
     #[cfg(test)]
     {
-        let slot = match barrier {
-            TestBarrier::DirectoryCreate => &DIRECTORY_CREATE_BARRIER,
-        };
-        slot.with(|slot| {
-            if let Some(barrier) = slot.borrow_mut().take() {
-                barrier.wait();
+        match barrier {
+            TestBarrier::DirectoryCreate => {
+                DIRECTORY_CREATE_BARRIER.with(|slot| {
+                    if let Some(barrier) = slot.borrow_mut().take() {
+                        barrier.wait();
+                    }
+                });
             }
-        });
+            #[cfg(target_os = "windows")]
+            TestBarrier::AnchorVerification => {
+                ANCHOR_VERIFICATION_BARRIER.with(|slot| {
+                    if let Some(barrier) = slot.borrow_mut().take() {
+                        // Two `wait()` calls on the same reusable barrier, not one: a single call
+                        // cannot express "block here until the driver thread has both confirmed
+                        // this call was reached and finished mutating the filesystem," because
+                        // `Barrier::wait()` releases every party at once -- a driver that swaps
+                        // then waits could swap before this call is ever reached, and a driver
+                        // that waits then swaps races its own swap against whatever this thread
+                        // does immediately after being released. The first `wait()` is the
+                        // rendezvous that proves to the driver this call has been reached (and so
+                        // `current_path_of` above already ran); the second is what actually holds
+                        // this thread here until the driver's swap is complete. `Barrier` is
+                        // explicitly reusable across generations, so this is two ordinary cycles on
+                        // one object, not a new primitive. See `windows_authority/tests.rs`'s race
+                        // test for the driver side of this pair.
+                        barrier.wait();
+                        barrier.wait();
+                    }
+                });
+            }
+        }
     }
     #[cfg(not(test))]
     {

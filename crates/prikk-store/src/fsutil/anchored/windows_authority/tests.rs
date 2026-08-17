@@ -4,8 +4,12 @@
 //! for the wrong reason.
 
 use std::path::Path;
+use std::sync::{Arc, Barrier};
 
-use crate::fsutil::{MutationRoot, create_new_file_required, read_file_if_exists};
+use crate::fsutil::{
+    MutationRoot, create_new_file_required, read_file_if_exists,
+    set_anchor_verification_barrier_for_test,
+};
 use crate::test_support::unique_temp_dir;
 
 fn mutation_root(path: &Path) -> MutationRoot {
@@ -58,4 +62,79 @@ fn a_users_own_rename_of_the_anchor_succeeds_while_the_handle_is_retained() {
 
     drop(root);
     let _ = std::fs::remove_dir_all(&renamed_path);
+}
+
+/// RFC 106: constructs the race `verified_anchor_path`'s identity comparison exists to catch --
+/// DC-99's own negative control found no test depended on it (936/936 with the comparison
+/// neutralised). One thread blocks at `failpoints::wait_at_anchor_verification` with
+/// `current_path` already captured from the retained handle; while it is blocked, this thread
+/// renames the anchor aside (not an ancestor -- NTFS refuses that while a descendant handle is
+/// open, but permits renaming the held object itself, as
+/// `full_verification_retains_wal_objects_trust_and_recovery_diagnosis_after_root_replacement`
+/// already demonstrates) and creates a replacement directory at the original path; the blocked
+/// thread then resumes, opens the replacement, and must refuse it by name -- `is_err()` alone
+/// would also pass if the open failed for an unrelated reason, so the specific diagnostic is
+/// asserted.
+#[test]
+fn a_replacement_installed_between_path_re_derivation_and_open_is_refused()
+-> prikk_error::Result<()> {
+    let root_path = unique_temp_dir("windows-authority-anchor-race");
+    let root = mutation_root(&root_path);
+    let aside_path = root_path.with_extension("raced-aside");
+    let _ = std::fs::remove_dir_all(&aside_path);
+
+    let barrier = Arc::new(Barrier::new(2));
+
+    let thread_root = root.clone();
+    let thread_barrier = Arc::clone(&barrier);
+    let handle = std::thread::spawn(move || {
+        // `ANCHOR_VERIFICATION_BARRIER` is a thread-local: it must be installed on the thread that
+        // will call `wait_at_anchor_verification`, not on the driver thread that merely constructs
+        // it. Installing it before spawning would leave the spawned thread's own slot empty, so
+        // its `wait_at_anchor_verification` call would find nothing and run straight through --
+        // and the driver would then block on `barrier.wait()` for a party that never arrives, a
+        // hang rather than a failure (ruled in `RFC-106-implementation-ruling-v1.md` §1).
+        set_anchor_verification_barrier_for_test(thread_barrier);
+        create_new_file_required(&thread_root, Path::new("state"), b"raced")
+    });
+
+    // Rendezvous 1: the operation thread's first `wait()` (inside
+    // `wait_at_anchor_verification`) only happens after `current_path_of` above it has already
+    // returned, so this proving it has been reached is what lets the rename below run strictly
+    // after the retained path was captured, not before -- the ordering the race depends on.
+    barrier.wait();
+    let rename_result = std::fs::rename(&root_path, &aside_path);
+    let create_result = std::fs::create_dir(&root_path);
+    // Rendezvous 2: releases the operation thread now that the replacement is in place.
+    barrier.wait();
+
+    let join_result = handle
+        .join()
+        .map_err(|_| prikk_error::PrikkError::Io("anchor race thread panicked".to_string()))?;
+
+    let _ = std::fs::remove_dir_all(&root_path);
+    let _ = std::fs::remove_dir_all(&aside_path);
+
+    rename_result.map_err(|error| {
+        prikk_error::PrikkError::Io(format!("renaming the anchor aside: {error}"))
+    })?;
+    create_result.map_err(|error| {
+        prikk_error::PrikkError::Io(format!("creating the replacement anchor: {error}"))
+    })?;
+
+    match join_result {
+        Ok(()) => panic!(
+            "an operation that opens a replacement installed at the anchor's own path must be \
+             refused, not succeed against the impostor"
+        ),
+        Err(error) => {
+            let message = error.to_string();
+            assert!(
+                message.contains("Windows anchor replaced"),
+                "expected the specific anchor-replaced diagnostic, not merely any error: {message}"
+            );
+        }
+    }
+
+    Ok(())
 }

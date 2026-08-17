@@ -71,16 +71,18 @@ DC-90. Three residual properties, stated precisely rather than left to be inferr
 - **Anchor replacement racing a *single* operation** — swapped between the post-open identity check
   and the open that immediately follows it — **is still possible.** The window is narrowed from "any
   time before the next operation" to one check-then-open pair; it is not closed, because Windows still
-  offers no `openat`-equivalent to close it by construction the way Linux and macOS do. **The
-  confirmation step guarding this window is not currently exercised by any test** (DC-99 Stage 2,
-  stage-2-implementation-ruling-v1 §2-§4): a negative control neutralized
-  `WindowsAuthority::verified_anchor_path`'s identity comparison and the full suite stayed green,
-  936/936, identical to the unmodified branch — neither DC-96 acceptance test constructs the narrow
-  race this comparison exists for. The comparison itself is correct and unchanged in behavior by
-  DC-99 (only its representation moved to the 128-bit form where available); what is missing is a
-  test that actually races a replacement into this window, which needs deliberate failpoint-style
-  injection (DC-98's `wait_at_directory_create` barrier is the mechanism) and is its own increment,
-  not something DC-99 built.
+  offers no `openat`-equivalent to close it by construction the way Linux and macOS do. DC-99 Stage 2
+  found the confirmation step guarding this window unexercised by any test: a negative control
+  neutralized `WindowsAuthority::verified_anchor_path`'s identity comparison and the full suite stayed
+  green, 936/936, identical to the unmodified branch — neither DC-96 acceptance test constructs the
+  narrow race this comparison exists for. **RFC 106 built the failpoint barrier this needed
+  (`TestBarrier::AnchorVerification`, mirroring DC-98's `wait_at_directory_create`) and constructed
+  the race directly**: a test holds the window open, installs a replacement at the anchor's own path,
+  and confirms the operation is refused with the specific "Windows anchor replaced" diagnostic —
+  passing on real Windows CI (run `32002318009`). Repeating DC-99's negative control against this new
+  test reproduced the same failure shape deliberately: with the comparison neutralized, that one test
+  failed and was the only failure in the suite (run `32002319494`). **The comparison now has a
+  control that depends on it.**
 - **Intermediate path components are unchanged** — this is exactly the G1 mid-walk window above, and
   DC-96 does not touch it.
 
