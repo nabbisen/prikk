@@ -13,7 +13,7 @@ use std::path::Path;
 use prikk_error::{PrikkError, Result};
 
 mod directory;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 mod failpoints;
 #[cfg(target_os = "linux")]
 mod linux;
@@ -50,11 +50,18 @@ pub(crate) use none::NoDurability;
 #[cfg(target_os = "windows")]
 pub(crate) use windows::WindowsDurability;
 
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
 pub(crate) use failpoints::{
-    Point as TestFailPoint, fail_after as fail_after_for_test, fail_once as fail_once_for_test,
+    Point as TestFailPoint, fail_once as fail_once_for_test,
     set_directory_create_barrier as set_directory_create_barrier_for_test,
 };
+// DC-98 Stage 2: see `fsutil.rs`'s own re-export of this -- no Windows test needs a specific
+// skip-count yet.
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+pub(crate) use failpoints::fail_after as fail_after_for_test;
 
 /// The one gated symbol DC-82 exists to introduce: picks the active `DurabilityContract`
 /// implementor for this build. Every function below calls through it unconditionally.

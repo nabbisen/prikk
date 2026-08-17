@@ -8,11 +8,17 @@ use prikk_error::{PrikkError, Result};
 mod anchored;
 mod contract;
 
-// DC-97: split. `caller_tests` (including its matrix submodules) is unix-only by wiring, not by
-// nature -- every one of its 18 tests calls the failpoint injection mechanism
-// (`anchored::TestFailPoint`), which has no Windows implementation; nothing in it uses a unix-only
-// OS facility directly. Blocked on a Windows failpoint mechanism being built (tracked as follow-up
-// scope, same reason DC-97's G3 row is "no"), not on anything unix-specific about the matrix itself.
+// DC-97 gated this whole module off Windows because the failpoint mechanism itself had no Windows
+// implementation. DC-98 built and wired that mechanism -- re-evaluated per its own criterion 5, and
+// the gate stays Unix-only, but the reason changes: every one of these 18 tests exercises
+// `CreatedDirectoryParentSync`/`ObservedDirectoryParentSync`/`RequiredDirectorySync`/
+// `MutableParentSync`, the directory-entry-sync points DC-98's classification (rows #10-#14) found
+// have no Windows operation to inject at at all (no `FlushFileBuffers` contract for a directory
+// handle) -- not a missing mechanism, a missing operation. Nothing in this module uses a unix-only
+// OS facility directly either; if a future caller-level test exercises only the points DC-98 did
+// wire (`RequiredOpen`, `DirectoryCreate`, `MutableFileSync`, `MutableRename`, `RequiredFileSync`,
+// `AppendWrite`, `Truncate`, `Unlink`), that test can be Windows-portable even though this module,
+// as it exists today, is not.
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod caller_tests;
 // `tests` (and its `conformance`/`directory` submodules) is genuinely mixed: some tests use
@@ -65,10 +71,23 @@ pub(crate) use anchored::remove_file_required;
 ))]
 pub(crate) use contract::DurabilityContract;
 
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
+pub(crate) use anchored::{TestFailPoint, fail_once_for_test};
+// DC-98 Stage 2: no Windows test needs a specific skip-count yet -- every Windows control wired so
+// far uses `fail_once_for_test` (the ordinal-free case; see the classification ruling §3's warning
+// about `fail_after`'s skip-count needing a counted call ordinal, which nothing here has verified).
+// Left Unix-only rather than widened speculatively; widen this gate when a Windows test genuinely
+// needs it, with the ordinal it targets stated at the call site.
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
-pub(crate) use anchored::{TestFailPoint, fail_after_for_test, fail_once_for_test};
+pub(crate) use anchored::fail_after_for_test;
 
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
 pub(crate) use anchored::set_directory_create_barrier_for_test;
 
 /// Return a process-unique temporary path next to the destination.
