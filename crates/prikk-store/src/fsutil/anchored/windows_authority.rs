@@ -61,6 +61,20 @@ impl WindowsAuthority {
             .map_err(|error| io_error(Path::new("<retained Windows anchor handle>"), error))?;
         let file = windows::open_directory_no_follow(&current_path)?;
         let identity = windows::identity_no_follow(&file, &current_path)?;
+        // DC-99 Stage 2, stage-2-implementation-ruling-v1 §2-§4: this comparison is real and
+        // correct, but no test in the suite depends on it -- confirmed by a negative control that
+        // neutralized it (`if identity != self.identity` replaced with `if false`) and watched the
+        // full suite stay green, 936/936, identical to the real branch. Neither DC-96 acceptance
+        // test constructs the race this guards: `worktree_checks_and_writes_remain_on_retained_root`
+        // returns at the refused rename on Windows and never walks; the `.prikk`-swap test completes
+        // its rename before anything else runs, so `current_path_of`'s re-derivation alone already
+        // finds the retained directory and this check confirms trivially. What it actually guards --
+        // a replacement racing the narrow window between the `current_path_of` call above and the
+        // `open_directory_no_follow` call before it -- needs deliberate race injection to construct,
+        // which no existing test attempts. DC-98's `wait_at_directory_create`-style failpoint
+        // barrier is the mechanism to build one; ruled its own increment, not squeezed into DC-99.
+        // Insurance against a documented-open window (`platform-support.md`'s anchor-replacement
+        // section), not dead code -- just unverified rather than assumed proven.
         if identity != self.identity {
             return Err(PrikkError::Integrity(format!(
                 "Windows anchor replaced: {} no longer identifies the directory this authority \
