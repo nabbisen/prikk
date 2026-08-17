@@ -190,9 +190,9 @@ the release lane is parked; see `MILESTONES.md` under Baseline and release postu
 
 ## Release Candidate Increment
 
-- Release lane state: **active**.
-- Activated release target: **0.22.1**.
-- **0.22.1 activated 2026-08-17** — RFC 107: macOS and Windows prebuilt binaries, and release pages that
+- Release lane state: **parked**.
+- Activated release target: **none**.
+- **0.22.1 released 2026-08-17** — RFC 107: macOS and Windows prebuilt binaries, and release pages that
   describe the release. No product code. See `MILESTONES.md`.
 - **0.22.0 released 2026-08-17** — Windows capability parity: `prikk unlock` answers on Windows, and
   anchor identity uses the 128-bit form where available (ReFS/Dev Drive). No observable change for Linux

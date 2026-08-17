@@ -109,9 +109,17 @@ is a one-way door.
 If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
 reviewed commit restores agreement.
 
-**Current release lane:** `active`.
+**Current release lane:** `parked`.
 
-**Current activated release target:** 0.22.1.
+**Current activated release target:** none.
+
+**0.22.1 released 2026-08-17** — tag `0.22.1` signed with the owner's key
+(RSA `25757DA6CBF7022C4E14CCAC1B3066B87DB99A34`) on `df0a951`, 12/12 CI green at that commit, and **the
+first release cut through RFC 107's new workflow**: four build targets, twelve assets, and a release page
+assembled from this version's own changelog entry. **Every published checksum was verified by hand with
+`sha256sum -c` after the cut** — all four `OK`, including the Windows `.zip`, which discharges RFC 107's
+criterion-7 residual with a real artifact rather than an argument. All eight crates published to
+crates.io. The lane was parked the same day.
 
 **0.22.1 activated 2026-08-17 by the project owner.** RFC 107, the release distribution surface, from two
 defects the owner found directly: prebuilt binaries were Linux-only although macOS and Windows have been
