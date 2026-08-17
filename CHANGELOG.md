@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.22.1 — 2026-08-17
+
+**Downloadable binaries for macOS and Windows, and a release page that tells you what changed.** No
+product code changed in this release — only how it is distributed and described.
+
+### Added
+
+- **Prebuilt binaries for macOS (`aarch64-apple-darwin`) and Windows (`x86_64-pc-windows-msvc`)**,
+  alongside the two Linux targets. Windows ships as a `.zip` containing `prikk.exe`; macOS and Linux as
+  `.tar.gz`. Each archive still carries its own `.sha256` checksum and a `.build-info.txt` recording the
+  exact toolchain and command that produced it.
+
+  These are the two triples this project's CI actually exercises. `x86_64-apple-darwin` is deliberately
+  **not** published: no build of it has ever run here, and shipping a binary whose platform has never been
+  tested would be a claim we cannot support.
+
+- **`cargo binstall prikk` now has something to fetch on all three platforms**, rather than falling back
+  to a source build off Linux.
+
+### Fixed
+
+- **Release pages describe their release.** Every prikk release until now published the same static
+  page, so a visitor could not tell what a version contained. Each release page is now assembled at
+  publish time from that version's own `CHANGELOG.md` entry.
+- **A false statement is gone from the release pages.** The static page claimed *"repository mutation is
+  Linux-only project-wide"* — true when it was written, and false from 0.21.0 onward, which is to say it
+  was wrong on the two release pages whose entire content was making mutation work on Windows. The
+  platform list is now derived from the artifacts actually published, so that class of drift cannot
+  recur.
+- **The documentation badge** in `README.md` points at the documentation site.
+
+### Known limitation
+
+**macOS binaries are unsigned.** Gatekeeper will warn on first run; right-click and choose Open, or clear
+the quarantine attribute with `xattr -d com.apple.quarantine <path>`. Notarization needs an Apple
+Developer identity and is a stated gap for a future increment, not an oversight. This sits alongside the
+release-authority position already published with every release: **no prikk release passes the signer
+audit**, and a checksum proves integrity of transport, not authority of origin.
+
 ## 0.22.0 — 2026-08-17
 
 **Windows catches up on two capabilities, and the durability claims made for it in 0.21.0 are now
