@@ -118,6 +118,7 @@ fn windows_set_content(tail: &[String]) -> bool {
             "dist/prikk-x86_64-pc-windows-msvc.zip.sha256",
             "-Value",
             "$((Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash.ToLower())  prikk-x86_64-pc-windows-msvc.zip",
+            "-NoNewline",
         ]
 }
 

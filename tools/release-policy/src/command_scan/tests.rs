@@ -375,7 +375,10 @@ fn recognizes_rfc107_macos_package_procedure() {
 /// literals (`RFC-107-stage-2-report-ruling-v1.md` §3). The checksum line embeds `Get-FileHash` as
 /// a `$(...)` subexpression inside a quoted `Set-Content -Value`, not a standalone command with its
 /// raw table output redirected -- the latter is not a `sha256sum`-verifiable checksum at all
-/// (`RFC-107-stage-2-implementation-ruling-v1.md` §1).
+/// (`RFC-107-stage-2-implementation-ruling-v1.md` §1). `-NoNewline` makes the file's byte content
+/// deterministic (`Set-Content` otherwise terminates with the platform newline, CRLF on Windows)
+/// rather than leaving `sha256sum -c`'s tolerance for a trailing `\r` an open question only a real
+/// artifact could answer (`RFC-107-stage-2-checksum-fix-ruling-v1.md` §2).
 #[test]
 fn recognizes_rfc107_windows_package_procedure() {
     for command in [
@@ -383,7 +386,7 @@ fn recognizes_rfc107_windows_package_procedure() {
         "Copy-Item target/x86_64-pc-windows-msvc/release/prikk.exe stage/prikk.exe",
         "Copy-Item LICENSE stage/LICENSE",
         "Compress-Archive -Path stage/prikk.exe, stage/LICENSE -DestinationPath dist/prikk-x86_64-pc-windows-msvc.zip",
-        "Set-Content -Path dist/prikk-x86_64-pc-windows-msvc.zip.sha256 -Value \"$((Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash.ToLower())  prikk-x86_64-pc-windows-msvc.zip\"",
+        "Set-Content -Path dist/prikk-x86_64-pc-windows-msvc.zip.sha256 -Value \"$((Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash.ToLower())  prikk-x86_64-pc-windows-msvc.zip\" -NoNewline",
         "Set-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value \"target: x86_64-pc-windows-msvc\"",
         "Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value \"commit: $env:GITHUB_SHA\"",
         "Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value \"tag: $env:GITHUB_REF_NAME\"",
@@ -403,6 +406,9 @@ fn recognizes_rfc107_windows_package_procedure() {
         // non-checksum the first time.
         "Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256 > dist/prikk-x86_64-pc-windows-msvc.zip.sha256",
         "Get-FileHash /etc/passwd -Algorithm SHA256",
+        // The checksum line without `-NoNewline` -- the shape that left a CRLF question only a
+        // real artifact could answer -- must also stay rejected now that the flag is required.
+        "Set-Content -Path dist/prikk-x86_64-pc-windows-msvc.zip.sha256 -Value \"$((Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash.ToLower())  prikk-x86_64-pc-windows-msvc.zip\"",
         "Set-Content -Path /tmp/evil.txt -Value \"anything\"",
         "Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value \"commit: $(evil)\"",
         "New-Item -ItemType File -Force -Path evil.exe",

@@ -116,7 +116,11 @@ jobs:
       # bare filename, no path -- via a `$(...)` subexpression embedded inside a quoted
       # `Set-Content -Value`, not `Get-FileHash`'s raw redirected table output, which is neither a
       # checksum `sha256sum -c` can verify nor free of the build machine's absolute path
-      # (`RFC-107-stage-2-implementation-ruling-v1.md` §1).
+      # (`RFC-107-stage-2-implementation-ruling-v1.md` §1). `-NoNewline`: `Set-Content` otherwise
+      # terminates with the platform newline (CRLF on Windows), and whether `sha256sum -c` strips a
+      # trailing `\r` when reading the filename is exactly the kind of question only a real artifact
+      # could answer -- cheaper to make the byte content deterministic than to find out
+      # (`RFC-107-stage-2-checksum-fix-ruling-v1.md` §2).
       - name: Package (x86_64-pc-windows-msvc)
         if: matrix.target == 'x86_64-pc-windows-msvc'
         run: |
@@ -124,7 +128,7 @@ jobs:
           Copy-Item target/x86_64-pc-windows-msvc/release/prikk.exe stage/prikk.exe
           Copy-Item LICENSE stage/LICENSE
           Compress-Archive -Path stage/prikk.exe, stage/LICENSE -DestinationPath dist/prikk-x86_64-pc-windows-msvc.zip
-          Set-Content -Path dist/prikk-x86_64-pc-windows-msvc.zip.sha256 -Value "$((Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash.ToLower())  prikk-x86_64-pc-windows-msvc.zip"
+          Set-Content -Path dist/prikk-x86_64-pc-windows-msvc.zip.sha256 -Value "$((Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash.ToLower())  prikk-x86_64-pc-windows-msvc.zip" -NoNewline
           Set-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value "target: x86_64-pc-windows-msvc"
           Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value "commit: $env:GITHUB_SHA"
           Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value "tag: $env:GITHUB_REF_NAME"
