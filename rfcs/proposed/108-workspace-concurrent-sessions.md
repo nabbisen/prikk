@@ -228,3 +228,40 @@ Workspace lifecycle, concurrent activation, and the isolation guarantees.
 - **Not a networked feature.** Even if §8's connection holds, the transport half stays out.
 - **Not a replacement for branches.** How Workspaces relate to refs is a design question, not an
   assumption.
+
+## 13. Is this one RFC? — asked by the owner 2026-08-18
+
+**By this project's own test, it is already more than one; but it cannot be split yet.**
+
+**The test.** RFC 102 was one RFC across six stages and that was correct, because every stage served one
+guarantee. **DC-42 was superseded into DC-56, DC-57 and DC-58** after design review found it *"bundled
+three unrelated increments."* What separates the two cases is whether **one increment can satisfy the
+acceptance criteria**. §5's ten safety invariants span materialization, concurrency, lifecycle, recovery
+and integration; no single increment could meet all ten, so none could be accepted against them.
+
+**Why it cannot be split now.** The fault lines depend on §6 and §7, which are unanswered:
+
+- **One `.prikk` shared** → the concurrency piece is an increment on the existing lock surface, and
+  Workspace-to-Workspace transfer is a local operation.
+- **Many `.prikk`** → transfer *becomes* history exchange, and that piece is no longer a Workspace RFC at
+  all. It is the sync RFC, badge criterion 1.
+
+**So the topology answer does not merely inform the split — it determines which pieces exist.** Splitting
+first would produce RFCs that each look complete and collectively miss the guarantee: DC-42's failure mode
+reached from the opposite direction.
+
+**Expected shape once topology lands** — dependency-ordered, not a menu:
+
+| RFC | Scope |
+|---|---|
+| **108** (this one) | Umbrella: vocabulary, requirements, and **the ten invariants** |
+| **Foundation** | Topology, sealing, relationship to refs. **Blocks every other piece** |
+| **Materialization & isolation** | Physical mechanism, per-platform feasibility, measured storage cost, `target/` scoping |
+| **Lifecycle** | Create, fork, abandon, recover — and §6.1's block-reclamation question |
+| **Transfer** | Or this becomes the sync RFC instead, per §8 |
+| **Session model** | §3 already states this should be designed separately |
+
+**The condition that must hold however it splits:** the ten invariants stay here, and **each child RFC
+names which of them it discharges.** Otherwise ten guarantees become ten orphans — which is exactly how
+DC-70's criterion 3 sat mis-scoped across four releases, satisfied by a mechanism other than the one it
+named, with nobody able to tell.
