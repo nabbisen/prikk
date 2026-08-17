@@ -69,7 +69,6 @@ pub(super) fn allowed(tokens: &[String], index: usize, head: &str) -> bool {
         "New-Item" => windows_new_item(tail),
         "Copy-Item" => windows_copy_item(tail),
         "Compress-Archive" => windows_compress_archive(tail),
-        "Get-FileHash" => windows_get_file_hash(tail),
         "Set-Content" => windows_set_content(tail),
         "Add-Content" => windows_add_content(tail),
         _ => inert_head(head),
@@ -101,23 +100,25 @@ fn windows_compress_archive(tail: &[String]) -> bool {
     ]
 }
 
-fn windows_get_file_hash(tail: &[String]) -> bool {
-    tail == [
-        "dist/prikk-x86_64-pc-windows-msvc.zip",
-        "-Algorithm",
-        "SHA256",
-        ">",
-        "dist/prikk-x86_64-pc-windows-msvc.zip.sha256",
-    ]
-}
-
+/// Two shapes: the build-info `target:` line, and the checksum line. The checksum value is a
+/// `$(...)` subexpression embedded inside the quoted `-Value` string, not a bare unquoted one --
+/// the lexer's quote-tracking keeps the whole thing as a single token this way, confirmed directly
+/// (an earlier, unquoted-parenthesized attempt split into multiple commands the same way a pipe
+/// does). The two literal spaces before the filename match `sha256sum`'s own output shape exactly
+/// (`RFC-107-stage-2-implementation-ruling-v1.md` §1).
 fn windows_set_content(tail: &[String]) -> bool {
     tail == [
         "-Path",
         "dist/prikk-x86_64-pc-windows-msvc.build-info.txt",
         "-Value",
         "target: x86_64-pc-windows-msvc",
-    ]
+    ] || tail
+        == [
+            "-Path",
+            "dist/prikk-x86_64-pc-windows-msvc.zip.sha256",
+            "-Value",
+            "$((Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash.ToLower())  prikk-x86_64-pc-windows-msvc.zip",
+        ]
 }
 
 fn windows_add_content(tail: &[String]) -> bool {

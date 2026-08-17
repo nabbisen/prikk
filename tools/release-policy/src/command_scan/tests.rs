@@ -372,7 +372,10 @@ fn recognizes_rfc107_macos_package_procedure() {
 /// commas and backslashes are both stripped by tokenization (`normalize_token`'s trailing-
 /// punctuation trim, and the lexer's own POSIX-style unquoted-backslash escape handling), which is
 /// exactly why the workflow uses forward slashes and no trailing comma survives into these
-/// literals (`RFC-107-stage-2-report-ruling-v1.md` §3).
+/// literals (`RFC-107-stage-2-report-ruling-v1.md` §3). The checksum line embeds `Get-FileHash` as
+/// a `$(...)` subexpression inside a quoted `Set-Content -Value`, not a standalone command with its
+/// raw table output redirected -- the latter is not a `sha256sum`-verifiable checksum at all
+/// (`RFC-107-stage-2-implementation-ruling-v1.md` §1).
 #[test]
 fn recognizes_rfc107_windows_package_procedure() {
     for command in [
@@ -380,7 +383,7 @@ fn recognizes_rfc107_windows_package_procedure() {
         "Copy-Item target/x86_64-pc-windows-msvc/release/prikk.exe stage/prikk.exe",
         "Copy-Item LICENSE stage/LICENSE",
         "Compress-Archive -Path stage/prikk.exe, stage/LICENSE -DestinationPath dist/prikk-x86_64-pc-windows-msvc.zip",
-        "Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256 > dist/prikk-x86_64-pc-windows-msvc.zip.sha256",
+        "Set-Content -Path dist/prikk-x86_64-pc-windows-msvc.zip.sha256 -Value \"$((Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash.ToLower())  prikk-x86_64-pc-windows-msvc.zip\"",
         "Set-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value \"target: x86_64-pc-windows-msvc\"",
         "Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value \"commit: $env:GITHUB_SHA\"",
         "Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value \"tag: $env:GITHUB_REF_NAME\"",
@@ -395,6 +398,10 @@ fn recognizes_rfc107_windows_package_procedure() {
     for command in [
         "Copy-Item target/x86_64-pc-windows-msvc/release/prikk.exe /tmp/evil.exe",
         "Compress-Archive -Path stage/prikk.exe -DestinationPath /tmp/evil.zip",
+        // The raw, unformatted `Get-FileHash` redirect this Stage 2 round replaced -- must stay
+        // rejected, not merely absent from the positive list, since it is what silently shipped a
+        // non-checksum the first time.
+        "Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256 > dist/prikk-x86_64-pc-windows-msvc.zip.sha256",
         "Get-FileHash /etc/passwd -Algorithm SHA256",
         "Set-Content -Path /tmp/evil.txt -Value \"anything\"",
         "Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value \"commit: $(evil)\"",

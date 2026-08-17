@@ -112,9 +112,11 @@ jobs:
       # No pipes and no `$var = …` assignment either: both are individually well-formed PowerShell
       # but the lexer splits a pipe into separate commands and unconditionally rejects a `$`-led
       # command head as dynamic. Every line here is one command, no pipe, no assignment.
-      # `Get-FileHash`'s own table-formatted output goes straight into the `.sha256` file via `>` —
-      # a real, disclosed difference from Linux/macOS's compact `sha256sum`/`shasum` line, not
-      # concealed by trying to reformat it into that shape.
+      # The checksum line matches `sha256sum`'s own shape exactly -- lowercase hex, two spaces,
+      # bare filename, no path -- via a `$(...)` subexpression embedded inside a quoted
+      # `Set-Content -Value`, not `Get-FileHash`'s raw redirected table output, which is neither a
+      # checksum `sha256sum -c` can verify nor free of the build machine's absolute path
+      # (`RFC-107-stage-2-implementation-ruling-v1.md` §1).
       - name: Package (x86_64-pc-windows-msvc)
         if: matrix.target == 'x86_64-pc-windows-msvc'
         run: |
@@ -122,7 +124,7 @@ jobs:
           Copy-Item target/x86_64-pc-windows-msvc/release/prikk.exe stage/prikk.exe
           Copy-Item LICENSE stage/LICENSE
           Compress-Archive -Path stage/prikk.exe, stage/LICENSE -DestinationPath dist/prikk-x86_64-pc-windows-msvc.zip
-          Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256 > dist/prikk-x86_64-pc-windows-msvc.zip.sha256
+          Set-Content -Path dist/prikk-x86_64-pc-windows-msvc.zip.sha256 -Value "$((Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash.ToLower())  prikk-x86_64-pc-windows-msvc.zip"
           Set-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value "target: x86_64-pc-windows-msvc"
           Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value "commit: $env:GITHUB_SHA"
           Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value "tag: $env:GITHUB_REF_NAME"
