@@ -90,6 +90,11 @@ false claim, and independent of packaging questions.
 
 **Stage 2 — the matrix and criterion 3.** Defects 3, plus criteria 3-6.
 
+**Both stages ship in 0.22.1 — owner ruling 2026-08-17.** A patch release existing only to republish
+eight byte-identical crates for a `.github/` fix is thin; the binaries are what a user gains. So the
+release that stops telling macOS and Windows users that mutation is Linux-only is also the one that gives
+them something to download. Both stages land on one branch and merge once, as DC-98 and DC-99 did.
+
 **Report before implementing, per stage.** For Stage 1: how the per-version section is extracted from
 `CHANGELOG.md` and what happens when a tag has no matching entry. For Stage 2: what each platform's
 artifact looks like, and how criterion 7 is satisfied given the workflow only fires on a tag.
