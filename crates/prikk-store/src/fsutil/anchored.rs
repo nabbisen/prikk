@@ -58,9 +58,15 @@ pub(crate) use failpoints::{
     Point as TestFailPoint, fail_once as fail_once_for_test,
     set_directory_create_barrier as set_directory_create_barrier_for_test,
 };
-// DC-98 Stage 2: see `fsutil.rs`'s own re-export of this -- no Windows test needs a specific
-// skip-count yet.
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+// DC-98: `windows/tests.rs::object_write_sync_failure_retains_and_classifies_windows` needs a
+// specific skip-count -- `RequiredFileSync` at skip 0 (container append's own sync) and skip 1
+// (index append's own sync), the same two ordinals `caller_tests::sync_matrix`'s Unix original
+// uses. Confirmed identical on Windows by a probe (`.git-exclude/reviewed/DC-98-stage-2-followups-\
+// ruling-v1.md` §2, CI run `31983187612`) before this widening, not assumed from the call graph.
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
 pub(crate) use failpoints::fail_after as fail_after_for_test;
 
 /// The one gated symbol DC-82 exists to introduce: picks the active `DurabilityContract`

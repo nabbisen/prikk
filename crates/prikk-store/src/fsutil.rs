@@ -10,22 +10,22 @@ mod contract;
 
 // DC-97 gated this whole module off Windows because the failpoint mechanism itself had no Windows
 // implementation. DC-98 built and wired that mechanism -- re-evaluated per its own criterion 5, and
-// the gate stays Unix-only, but the reason changes and is per-test, not per-file (an earlier version
-// of this comment claimed "every one of these 18," found false for one test by review: a per-file
-// grep is not a per-test count). 17 of 18 exercise `CreatedDirectoryParentSync`/
+// the gate stays Unix-only for what remains here, but the reason is per-test, not per-file (an
+// earlier version of this comment claimed "every one of these 18," found false for one test by
+// review: a per-file grep is not a per-test count). 17 of 18 exercise `CreatedDirectoryParentSync`/
 // `ObservedDirectoryParentSync`/`RequiredDirectorySync`/`MutableParentSync`, the directory-entry-sync
 // points DC-98's classification (rows #10-#14) found have no Windows operation to inject at at all
 // (no `FlushFileBuffers` contract for a directory handle) -- not a missing mechanism, a missing
-// operation. The exception, `sync_matrix::object_write_sync_failure_retains_and_classifies`, uses
-// only `RequiredFileSync` (row #6, wired on Windows) at two specific call ordinals
-// (`fail_after_for_test(RequiredFileSync, 0)` then `1`, to land on the container append's sync vs.
-// the index append's sync) -- gated here anyway because porting it needs the Windows ordinals
-// established by observation first (classification ruling §3's warning about carrying a Unix
-// skip-count across), not assumed from this comment. Nothing in this module uses a unix-only OS
-// facility directly; a future caller-level test exercising only the points DC-98 did wire
-// (`RequiredOpen`, `DirectoryCreate`, `MutableFileSync`, `MutableRename`, `RequiredFileSync`,
-// `AppendWrite`, `Truncate`, `Unlink`) can be Windows-portable even though this module, as it exists
-// today, mostly is not.
+// operation. The 18th, `sync_matrix::object_write_sync_failure_retains_and_classifies`, uses only
+// `RequiredFileSync` (row #6, wired on Windows) and its Windows ordinals are now established by
+// observation (`anchored.rs`'s own `fail_after_for_test` re-export doc comment) -- it stays here
+// unmoved, but has its own Windows twin,
+// `windows::tests::object_write_sync_failure_retains_and_classifies_windows`, rather than this
+// module being restructured to free one test from three files' worth of shared per-file `use`
+// statements. Nothing in this module uses a unix-only OS facility directly; a future caller-level
+// test exercising only the points DC-98 did wire (`RequiredOpen`, `DirectoryCreate`,
+// `MutableFileSync`, `MutableRename`, `RequiredFileSync`, `AppendWrite`, `Truncate`, `Unlink`) can be
+// Windows-portable the same way.
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod caller_tests;
 // `tests` (and its `conformance`/`directory` submodules) is genuinely mixed: some tests use
@@ -83,12 +83,12 @@ pub(crate) use contract::DurabilityContract;
     any(target_os = "linux", target_os = "macos", target_os = "windows")
 ))]
 pub(crate) use anchored::{TestFailPoint, fail_once_for_test};
-// DC-98 Stage 2: no Windows test needs a specific skip-count yet -- every Windows control wired so
-// far uses `fail_once_for_test` (the ordinal-free case; see the classification ruling §3's warning
-// about `fail_after`'s skip-count needing a counted call ordinal, which nothing here has verified).
-// Left Unix-only rather than widened speculatively; widen this gate when a Windows test genuinely
-// needs it, with the ordinal it targets stated at the call site.
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+// DC-98: see `anchored.rs`'s own re-export of this for the established Windows ordinals it exists
+// to carry.
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
 pub(crate) use anchored::fail_after_for_test;
 
 #[cfg(all(

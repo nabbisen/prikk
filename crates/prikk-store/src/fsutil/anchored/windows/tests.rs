@@ -12,9 +12,10 @@ use std::sync::{Arc, Barrier};
 use crate::RepositoryLayout;
 use crate::fsutil::{
     MutationRoot, TestFailPoint, append_file_required, create_new_file_required,
-    ensure_directory_required, fail_once_for_test, read_file_if_exists, remove_file_required,
-    set_directory_create_barrier_for_test, set_regular_file_mode_required, sync_directory_required,
-    truncate_existing_file_required, truncate_file_empty_required, write_file_atomically,
+    ensure_directory_required, fail_after_for_test, fail_once_for_test, read_file_if_exists,
+    remove_file_required, set_directory_create_barrier_for_test, set_regular_file_mode_required,
+    sync_directory_required, truncate_existing_file_required, truncate_file_empty_required,
+    write_file_atomically,
 };
 use crate::test_support::unique_temp_dir;
 
@@ -539,4 +540,42 @@ fn unlink_failure_retains_file_and_is_retryable() {
     assert!(!root_path.join("entry").exists());
 
     let _ = std::fs::remove_dir_all(root_path);
+}
+
+/// Windows twin of `caller_tests::sync_matrix::object_write_sync_failure_retains_and_classifies`
+/// (row #6's own caller-level control, the object-write path). `caller_tests` as a whole stays
+/// Unix-only (17 of its 18 tests depend on a directory-entry-sync point Windows has no operation
+/// for -- `fsutil.rs`'s own gate comment), so this test lives here instead of moving one test out
+/// of that module's shared per-file imports, which would need splitting three files' worth of
+/// `use` statements for a single test's sake. Same body, same `skip` values, reusing
+/// `windows.rs`'s own `ACTIVE_DURABILITY.durable_append` call path unchanged.
+///
+/// **The two `RequiredFileSync` ordinals below are an established fact, not a call-graph
+/// assumption**: a probe ported this exact body to Windows unchanged and it passed
+/// (`.git-exclude/reviewed/DC-98-stage-2-followups-ruling-v1.md` §2, CI run `31983187612`) --
+/// `RequiredFileSync` fires at the same two ordinals on Windows as on Linux/macOS: the container
+/// append's own sync (skip 0), then the index append's own sync (skip 1).
+#[test]
+fn object_write_sync_failure_retains_and_classifies_windows() -> prikk_error::Result<()> {
+    use crate::{FileObjectStore, ObjectWriter};
+    use prikk_object::{ObjectEnvelope, ObjectType};
+
+    for (skip, indexed_after_error) in [(0, false), (1, true)] {
+        let root = unique_temp_dir("windows-object-sync-matrix");
+        let layout = RepositoryLayout::init(root.clone())?;
+        let mut object = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"sync".to_vec());
+        object.add_signature(crate::test_support::dummy_signature())?;
+        let object_id = object.object_id();
+        let mut store = FileObjectStore::new(layout);
+        fail_after_for_test(TestFailPoint::RequiredFileSync, skip);
+        assert!(store.write_object(&object).is_err());
+        assert_eq!(
+            store.contains_object(ObjectType::Blob, object_id),
+            indexed_after_error
+        );
+        assert_eq!(store.write_object(&object)?, object_id);
+        assert!(store.contains_object(ObjectType::Blob, object_id));
+        let _ = std::fs::remove_dir_all(root);
+    }
+    Ok(())
 }
