@@ -97,6 +97,9 @@ pub(crate) use anchored::fail_after_for_test;
 ))]
 pub(crate) use anchored::set_directory_create_barrier_for_test;
 
+#[cfg(all(test, target_os = "windows"))]
+pub(crate) use anchored::set_anchor_verification_barrier_for_test;
+
 /// Return a process-unique temporary path next to the destination.
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub(crate) fn temporary_path(path: &Path) -> Result<PathBuf> {

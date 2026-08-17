@@ -33,7 +33,7 @@ use std::sync::Arc;
 use prikk_error::{PrikkError, Result};
 
 use super::directory::{PlatformAuthority, relative_components};
-use super::windows;
+use super::{failpoints, windows};
 
 /// The retained handle is the mechanism; `identity` is the confirmation that the object found at
 /// the handle's re-derived current path is still the one `bind` (or the last walk) validated --
@@ -59,6 +59,10 @@ impl WindowsAuthority {
     fn verified_anchor_path(&self) -> Result<PathBuf> {
         let current_path = prikk_ffi::current_path_of(&self.handle)
             .map_err(|error| io_error(Path::new("<retained Windows anchor handle>"), error))?;
+        // RFC 106: the only window this function's identity comparison guards -- a replacement
+        // installed at `current_path` after it is captured above but before it is opened below.
+        // No-op outside test builds, matching `failpoints::wait_at_directory_create` exactly.
+        failpoints::wait_at_anchor_verification();
         let file = windows::open_directory_no_follow(&current_path)?;
         let identity = windows::identity_no_follow(&file, &current_path)?;
         // DC-99 Stage 2, stage-2-implementation-ruling-v1 §2-§4: this comparison is real and
