@@ -18,6 +18,15 @@ jobs:
             os: ubuntu-latest
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
+          # RFC 107 Stage 2: matches ci.yml's macos-mutation/windows-mutation jobs' own runners
+          # exactly, not Linux's two-architecture shape -- x86_64-apple-darwin has never actually
+          # built or run in this project's CI, only been cross-compile-checked, and shipping it
+          # would repeat this RFC's own defect (a platform claim resting on something unverified)
+          # one level down (`RFC-107-stage-2-report-ruling-v1.md` §1).
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
     name: build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     steps:
@@ -36,6 +45,12 @@ jobs:
       - name: Build (aarch64-unknown-linux-gnu)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: cargo build -p prikk --release --target aarch64-unknown-linux-gnu --locked
+      - name: Build (aarch64-apple-darwin)
+        if: matrix.target == 'aarch64-apple-darwin'
+        run: cargo build -p prikk --release --target aarch64-apple-darwin --locked
+      - name: Build (x86_64-pc-windows-msvc)
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        run: cargo build -p prikk --release --target x86_64-pc-windows-msvc --locked
 
       # Repository mutation is Linux-only (DC-37); both matrix targets are Linux, so no
       # download-surface mutation-limit statement is needed for these artifacts.
@@ -66,6 +81,60 @@ jobs:
           echo "build: cargo build -p prikk --release --target aarch64-unknown-linux-gnu --locked" >> dist/prikk-aarch64-unknown-linux-gnu.build-info.txt
           rustc -vV >> dist/prikk-aarch64-unknown-linux-gnu.build-info.txt
 
+      # RFC 107 Stage 2: identical shape to the Linux packaging steps above -- macOS ships GNU
+      # Tar natively, matching what macos-mutation already builds and runs on. `shasum -a 256`,
+      # not `sha256sum`: the current runner-image manifest lists GNU Tar/Git/curl/wget/7-Zip/gpg
+      # under its utilities but no coreutils/sha256sum entry, while `shasum` is part of the base
+      # OS regardless -- checked rather than assumed Linux parity
+      # (`RFC-107-stage-2-report-ruling-v1.md` §2), and produces the same `<hash>  <filename>`
+      # line shape `sha256sum` does.
+      - name: Package (aarch64-apple-darwin)
+        if: matrix.target == 'aarch64-apple-darwin'
+        run: |
+          mkdir -p stage dist
+          cp target/aarch64-apple-darwin/release/prikk stage/prikk
+          cp LICENSE stage/LICENSE
+          tar -C stage -czf dist/prikk-aarch64-apple-darwin.tar.gz prikk LICENSE
+          ( cd dist && shasum -a 256 prikk-aarch64-apple-darwin.tar.gz > prikk-aarch64-apple-darwin.tar.gz.sha256 )
+          echo "target: aarch64-apple-darwin" > dist/prikk-aarch64-apple-darwin.build-info.txt
+          echo "commit: ${GITHUB_SHA}" >> dist/prikk-aarch64-apple-darwin.build-info.txt
+          echo "tag: ${GITHUB_REF_NAME}" >> dist/prikk-aarch64-apple-darwin.build-info.txt
+          echo "build: cargo build -p prikk --release --target aarch64-apple-darwin --locked" >> dist/prikk-aarch64-apple-darwin.build-info.txt
+          rustc -vV >> dist/prikk-aarch64-apple-darwin.build-info.txt
+
+      # RFC 107 Stage 2: `.zip` via `Compress-Archive`, not `.tar.gz` -- a tarball containing an
+      # `.exe` is technically fine and practically wrong for a Windows user
+      # (design-v1.md, "What differs per platform"). Forward slashes, not backslashes: PowerShell
+      # accepts `/` as a path separator on Windows exactly as it accepts `\`, and the scanner's
+      # POSIX-oriented lexer treats an unquoted `\` as an escape character and silently drops it --
+      # confirmed directly against the lexer, not assumed, after backslash-separated paths produced
+      # tokens with the separators stripped entirely (`RFC-107-stage-2-report-ruling-v1.md` §3).
+      # No pipes and no `$var = …` assignment either: both are individually well-formed PowerShell
+      # but the lexer splits a pipe into separate commands and unconditionally rejects a `$`-led
+      # command head as dynamic. Every line here is one command, no pipe, no assignment.
+      # The checksum line matches `sha256sum`'s own shape exactly -- lowercase hex, two spaces,
+      # bare filename, no path -- via a `$(...)` subexpression embedded inside a quoted
+      # `Set-Content -Value`, not `Get-FileHash`'s raw redirected table output, which is neither a
+      # checksum `sha256sum -c` can verify nor free of the build machine's absolute path
+      # (`RFC-107-stage-2-implementation-ruling-v1.md` §1). `-NoNewline`: `Set-Content` otherwise
+      # terminates with the platform newline (CRLF on Windows), and whether `sha256sum -c` strips a
+      # trailing `\r` when reading the filename is exactly the kind of question only a real artifact
+      # could answer -- cheaper to make the byte content deterministic than to find out
+      # (`RFC-107-stage-2-checksum-fix-ruling-v1.md` §2).
+      - name: Package (x86_64-pc-windows-msvc)
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        run: |
+          New-Item -ItemType Directory -Force -Path stage, dist
+          Copy-Item target/x86_64-pc-windows-msvc/release/prikk.exe stage/prikk.exe
+          Copy-Item LICENSE stage/LICENSE
+          Compress-Archive -Path stage/prikk.exe, stage/LICENSE -DestinationPath dist/prikk-x86_64-pc-windows-msvc.zip
+          Set-Content -Path dist/prikk-x86_64-pc-windows-msvc.zip.sha256 -Value "$((Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash.ToLower())  prikk-x86_64-pc-windows-msvc.zip" -NoNewline
+          Set-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value "target: x86_64-pc-windows-msvc"
+          Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value "commit: $env:GITHUB_SHA"
+          Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value "tag: $env:GITHUB_REF_NAME"
+          Add-Content -Path dist/prikk-x86_64-pc-windows-msvc.build-info.txt -Value "build: cargo build -p prikk --release --target x86_64-pc-windows-msvc --locked"
+          rustc -vV >> dist/prikk-x86_64-pc-windows-msvc.build-info.txt
+
       - uses: actions/upload-artifact@v7
         with:
           name: prikk-${{ matrix.target }}
@@ -80,10 +149,22 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
       - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
+
+      # RFC 107 Stage 1: notes are assembled from CHANGELOG.md and dist/*.build-info.txt at
+      # publish time rather than restated in a static file — a static file is what let the
+      # platform claim go stale (rfcs/accepted/107-release-distribution-surface.md §0). $TAG is
+      # not enumerable in advance, so the scanner (procedure.rs's release_notes_procedure) matches
+      # on shape: every other token fixed, $TAG free to vary but the same token release-policy
+      # itself will read from the environment below.
+      - name: Assemble release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: cargo run -p prikk-release-policy --locked -- release-notes "$TAG" dist > release-notes.md
 
       # $TAG and the repository slug are written out as the literal tokens the scanner sees
       # (procedure.rs's gh() match), not templated — the tag itself cannot be enumerated in
@@ -94,4 +175,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title "$TAG" --notes-file .github/release-notes-template.md
+        run: gh release create "$TAG" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.zip dist/*.zip.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title "$TAG" --notes-file release-notes.md

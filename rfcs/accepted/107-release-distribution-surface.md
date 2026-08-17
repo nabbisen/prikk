@@ -90,6 +90,30 @@ false claim, and independent of packaging questions.
 
 **Stage 2 — the matrix and criterion 3.** Defects 3, plus criteria 3-6.
 
+**Both stages ship in 0.22.1 — owner ruling 2026-08-17.** A patch release existing only to republish
+eight byte-identical crates for a `.github/` fix is thin; the binaries are what a user gains. So the
+release that stops telling macOS and Windows users that mutation is Linux-only is also the one that gives
+them something to download. Both stages land on one branch and merge once, as DC-98 and DC-99 did.
+
 **Report before implementing, per stage.** For Stage 1: how the per-version section is extracted from
 `CHANGELOG.md` and what happens when a tag has no matching entry. For Stage 2: what each platform's
 artifact looks like, and how criterion 7 is satisfied given the workflow only fires on a tag.
+
+## Addendum (2026-08-17): criterion 3 was pointed at the wrong artifact class
+
+DC-70's carried criterion — *"release evidence describes what was actually published, every artifact"* —
+named `release/fixtures/release-evidence-*.json`'s schema, which describes a single crates.io-adjacent
+source tarball (`prikk-v{version}.tar.gz`, `tools/release-policy/src/policy/evidence.rs:115`) under
+DC-35/DC-45's signer and publication governance. **It does not model any of this RFC's per-target
+binaries**, and nothing in that schema reads `dist/`, `.build-info.txt`, or any filename `release.yml`
+produces.
+
+The criterion's substance — every published artifact carries its own checksum and provenance, with nothing
+assuming a fixed count — has been true since DC-70 shipped, via a different mechanism than the one the
+criterion named: each artifact's own co-located `.sha256` and `.build-info.txt`, now verified against
+`dist/`'s actual contents by Stage 2's `verify_artifact_present`.
+
+**So criterion 3 is discharged as mis-scoped rather than deferred again**, and RFC 107 §3.6 inherited the
+ambiguity from DC-70 without checking which surface it named. Recorded here because in this project
+**"release evidence" means the DC-35/DC-45 governance schema specifically, not the release download
+surface** — a future increment should not re-inherit the same confusion.

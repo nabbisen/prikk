@@ -9,6 +9,7 @@ pub(super) fn allowed(tokens: &[String], index: usize, head: &str) -> bool {
         "cargo" => {
             rust_policy(tail)
                 || publication(tail).is_some()
+                || release_notes_procedure(tail)
                 || tail
                     .split_first()
                     .is_some_and(|(command, arguments)| cargo(command, arguments))
@@ -43,10 +44,95 @@ pub(super) fn allowed(tokens: &[String], index: usize, head: &str) -> bool {
                     ">>",
                     "dist/prikk-aarch64-unknown-linux-gnu.build-info.txt",
                 ]
+                // RFC 107 Stage 2: same shape, the two new targets' own build-info files.
+                || tail
+                    == [
+                        "-vV",
+                        ">>",
+                        "dist/prikk-aarch64-apple-darwin.build-info.txt",
+                    ]
+                || tail
+                    == [
+                        "-vV",
+                        ">>",
+                        "dist/prikk-x86_64-pc-windows-msvc.build-info.txt",
+                    ]
         }
         "gh" => gh_release_create(tail),
+        // RFC 107 Stage 2: the Windows package step's PowerShell cmdlets. Each is exact-match for
+        // the same `tar`/`rustc`/`gh` reason -- `Copy-Item`, `Compress-Archive`, and the rest can
+        // all reach outside `dist`/`stage` under some argument shape. Confirmed against the real
+        // lexer before writing release.yml, not assumed to parse
+        // (`RFC-107-stage-2-report-ruling-v1.md` §3): no pipe and no `$var = …` assignment appear
+        // in any of these, since the lexer splits the former into separate commands and
+        // unconditionally rejects the latter as a dynamic command head.
+        "New-Item" => windows_new_item(tail),
+        "Copy-Item" => windows_copy_item(tail),
+        "Compress-Archive" => windows_compress_archive(tail),
+        "Set-Content" => windows_set_content(tail),
+        "Add-Content" => windows_add_content(tail),
         _ => inert_head(head),
     }
+}
+
+fn windows_new_item(tail: &[String]) -> bool {
+    // The lexer trims trailing punctuation from tokens (`normalize_token`, the same rule that
+    // reduces `tar`'s trailing `.` argument elsewhere in this file) -- "stage," lexes as "stage",
+    // not "stage,", confirmed directly rather than assumed from the comma's presence in the
+    // source line.
+    tail == ["-ItemType", "Directory", "-Force", "-Path", "stage", "dist"]
+}
+
+fn windows_copy_item(tail: &[String]) -> bool {
+    tail == [
+        "target/x86_64-pc-windows-msvc/release/prikk.exe",
+        "stage/prikk.exe",
+    ] || tail == ["LICENSE", "stage/LICENSE"]
+}
+
+fn windows_compress_archive(tail: &[String]) -> bool {
+    tail == [
+        "-Path",
+        "stage/prikk.exe",
+        "stage/LICENSE",
+        "-DestinationPath",
+        "dist/prikk-x86_64-pc-windows-msvc.zip",
+    ]
+}
+
+/// Two shapes: the build-info `target:` line, and the checksum line. The checksum value is a
+/// `$(...)` subexpression embedded inside the quoted `-Value` string, not a bare unquoted one --
+/// the lexer's quote-tracking keeps the whole thing as a single token this way, confirmed directly
+/// (an earlier, unquoted-parenthesized attempt split into multiple commands the same way a pipe
+/// does). The two literal spaces before the filename match `sha256sum`'s own output shape exactly
+/// (`RFC-107-stage-2-implementation-ruling-v1.md` §1).
+fn windows_set_content(tail: &[String]) -> bool {
+    tail == [
+        "-Path",
+        "dist/prikk-x86_64-pc-windows-msvc.build-info.txt",
+        "-Value",
+        "target: x86_64-pc-windows-msvc",
+    ] || tail
+        == [
+            "-Path",
+            "dist/prikk-x86_64-pc-windows-msvc.zip.sha256",
+            "-Value",
+            "$((Get-FileHash dist/prikk-x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash.ToLower())  prikk-x86_64-pc-windows-msvc.zip",
+            "-NoNewline",
+        ]
+}
+
+fn windows_add_content(tail: &[String]) -> bool {
+    let path = "dist/prikk-x86_64-pc-windows-msvc.build-info.txt";
+    tail == ["-Path", path, "-Value", "commit: $env:GITHUB_SHA"]
+        || tail == ["-Path", path, "-Value", "tag: $env:GITHUB_REF_NAME"]
+        || tail
+            == [
+                "-Path",
+                path,
+                "-Value",
+                "build: cargo build -p prikk --release --target x86_64-pc-windows-msvc --locked",
+            ]
 }
 
 fn tar(tail: &[String]) -> bool {
@@ -66,6 +152,16 @@ fn tar(tail: &[String]) -> bool {
             "prikk",
             "LICENSE",
         ]
+        // RFC 107 Stage 2: macOS's package step, identical shape to the two Linux targets above.
+        || tail
+            == [
+                "-C",
+                "stage",
+                "-czf",
+                "dist/prikk-aarch64-apple-darwin.tar.gz",
+                "prikk",
+                "LICENSE",
+            ]
         // DC-71 B2 ruling: the CI fixture round-trip through tar, not the artifact zip, which
         // does not preserve empty directories — create on the fixture job, extract on the
         // conformance job. The lexer's sentence-trailing-period trim (normalize_token) reduces
@@ -107,6 +203,8 @@ fn gh_release_create(tail: &[String]) -> bool {
             == [
                 "dist/*.tar.gz",
                 "dist/*.tar.gz.sha256",
+                "dist/*.zip",
+                "dist/*.zip.sha256",
                 "dist/*.build-info.txt",
             ]
         && repo_flag == "--repo"
@@ -114,7 +212,29 @@ fn gh_release_create(tail: &[String]) -> bool {
         && title_flag == "--title"
         && title == tag
         && notes_flag == "--notes-file"
-        && notes == ".github/release-notes-template.md"
+        && notes == "release-notes.md"
+}
+
+/// `cargo run -p prikk-release-policy --locked -- release-notes $TAG dist > release-notes.md`.
+/// RFC 107 Stage 1. Mirrors `gh_release_create`'s shape-matching for the same reason: the release
+/// tag cannot be enumerated in advance, so every other token is fixed and the tag is free to vary.
+/// A dedicated matcher rather than widening `rust_policy` -- that helper pins the literal `check`
+/// subcommand `reference-check` uses to verify what the docs advertise
+/// (`RFC-107-stage-1-report-ruling-v1.md` §1), and widening a shared predicate as a side effect of
+/// an unrelated procedure is how allowlists rot.
+fn release_notes_procedure(tail: &[String]) -> bool {
+    tail == [
+        "run",
+        "-p",
+        "prikk-release-policy",
+        "--locked",
+        "--",
+        "release-notes",
+        "$TAG",
+        "dist",
+        ">",
+        "release-notes.md",
+    ]
 }
 
 fn cargo(command: &str, arguments: &[String]) -> bool {
@@ -176,6 +296,25 @@ fn cargo(command: &str, arguments: &[String]) -> bool {
                         "--release",
                         "--target",
                         "aarch64-unknown-linux-gnu",
+                        "--locked",
+                    ]
+                // RFC 107 Stage 2: the two new release-binary builds, same exact-entry shape.
+                || arguments
+                    == [
+                        "-p",
+                        "prikk",
+                        "--release",
+                        "--target",
+                        "aarch64-apple-darwin",
+                        "--locked",
+                    ]
+                || arguments
+                    == [
+                        "-p",
+                        "prikk",
+                        "--release",
+                        "--target",
+                        "x86_64-pc-windows-msvc",
                         "--locked",
                     ]
                 // DC-71: ci.yml's read-only-fixture jobs build only the prikk binary, debug

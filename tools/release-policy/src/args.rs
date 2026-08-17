@@ -6,6 +6,7 @@ use crate::error::{Error, Result};
 use crate::oracle;
 use crate::policy;
 use crate::reference;
+use crate::release_notes;
 
 pub(crate) fn run(arguments: Vec<String>) -> Result<()> {
     let (command, rest) = arguments.split_first().ok_or_else(|| Error::new(usage()))?;
@@ -16,6 +17,7 @@ pub(crate) fn run(arguments: Vec<String>) -> Result<()> {
         "differential-check" => differential_check(&root, rest),
         "boundary-check" => boundary_check(&root, rest),
         "reference-check" => reference_check(&root, rest),
+        "release-notes" => release_notes_command(&root, rest),
         "-h" | "--help" | "help" if rest.is_empty() => {
             println!("{}", usage());
             Ok(())
@@ -68,6 +70,15 @@ fn reference_check(root: &std::path::Path, arguments: &[String]) -> Result<()> {
     }
 }
 
+fn release_notes_command(root: &std::path::Path, arguments: &[String]) -> Result<()> {
+    let [tag, dist_dir] = arguments else {
+        return Err(Error::new(usage()));
+    };
+    let notes = release_notes::assemble(root, tag, std::path::Path::new(dist_dir))?;
+    print!("{notes}");
+    Ok(())
+}
+
 fn parse_json_mode(arguments: &[String], self_test_allowed: bool) -> Result<bool> {
     let mut self_test = false;
     let mut index = 0;
@@ -96,5 +107,5 @@ fn repository_root() -> Result<PathBuf> {
 }
 
 fn usage() -> &'static str {
-    "usage: prikk-release-policy <check|oracle-check|differential-check|boundary-check|reference-check> [--format json] [--self-test]"
+    "usage: prikk-release-policy <check|oracle-check|differential-check|boundary-check|reference-check> [--format json] [--self-test]\n       prikk-release-policy release-notes <tag> <dist-dir>"
 }

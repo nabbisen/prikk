@@ -5,8 +5,12 @@ not "write better notes."
 
 **Owner direction 2026-08-17:** published release pages are **not** being retroactively corrected; the
 fix reaches users through the next release, and that release should be soon (0.22.1). **Stage 1 is
-therefore the near-term path.** Whether Stage 2 rides in the same release is the owner's call and is being
-put to them; build Stage 1 so it does not depend on the answer.
+therefore the near-term path.**
+
+**Answered 2026-08-17: both stages ship in 0.22.1.** Stage 1 is complete and green
+(`.git-exclude/reviewed/RFC-107-stage-1-implementation-ruling-v1.md`); **Stage 2 continues on the same
+branch and the two merge once.** So 0.22.1 is not cut until Stage 2 is accepted — the release waits on the
+binaries, not the other way round.
 
 ## Stage 1 — the notes describe the release, and cannot go stale again
 
