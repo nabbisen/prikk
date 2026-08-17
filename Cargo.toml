@@ -49,7 +49,7 @@ sha2                        = "0.11"
 # DC-96: pinned to the version already resolved in the dependency graph (via rustix->errno and
 # tempfile) so this direct edge does not add a second copy. Verify against Cargo.lock before
 # bumping, not just this comment.
-windows-sys                 = { version = "=0.61.2", features = ["Win32_Storage_FileSystem", "Win32_Foundation"] }
+windows-sys                 = { version = "=0.61.2", features = ["Win32_Storage_FileSystem", "Win32_Foundation", "Win32_System_Threading"] }
 
 # Testing
 proptest                    = "1"
