@@ -109,9 +109,20 @@ is a one-way door.
 If the three authorities disagree, the release lane is parked. No release-lane work may begin until a
 reviewed commit restores agreement.
 
-**Current release lane:** `parked`.
+**Current release lane:** `active`.
 
-**Current activated release target:** none.
+**Current activated release target:** 0.22.1.
+
+**0.22.1 activated 2026-08-17 by the project owner.** RFC 107, the release distribution surface, from two
+defects the owner found directly: prebuilt binaries were Linux-only although macOS and Windows have been
+supported since 0.21.0, and a release page told a visitor nothing about the release it belonged to. **A
+third was found while fixing them**: the static notes template claimed *"repository mutation is Linux-only
+project-wide (DC-37)"* — true when written for 0.20.0, false on the 0.21.0 and 0.22.0 pages, i.e. the two
+releases whose entire content was making mutation work on Windows.
+
+**User-facing content**: prebuilt binaries for macOS (`aarch64-apple-darwin`) and Windows
+(`x86_64-pc-windows-msvc`) alongside the two Linux targets, and release pages that carry the version's own
+changelog entry. No product code changed; this is the distribution surface only.
 
 **0.22.0 released 2026-08-17** — tag `0.22.0` signed with the owner's key
 (RSA `25757DA6CBF7022C4E14CCAC1B3066B87DB99A34`) on `16313fe`, 12/12 CI green at that commit, GitHub
