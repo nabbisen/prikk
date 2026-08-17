@@ -154,19 +154,21 @@ its three siblings in the same module, which use a no-follow stat. That last one
 one file rather than a platform limitation, and it is stated here rather than left implicit because the
 guarantee is otherwise described per-function.
 
-**`prikk unlock`'s PID liveness check is held on Linux/macOS and documented-weaker on Windows** — the
-same shape as `set_permission_bits`/`durable_directory_entry` above, outside the `DurabilityContract`
-table because it lives in a different module (`crates/prikk-store/src/unlock.rs`). Linux/macOS have a
-real `kill(pid, 0)` primitive via `rustix::process::test_kill_process`; every other platform, Windows
-included, has always stubbed `check_pid_liveness` to an unconditional `PidLiveness::Unknown`
-(`unlock.rs:90-93`) — no `OpenProcess`/`GetExitCodeProcess` equivalent has been written. This is safe:
-`Unknown` is the conservative outcome and never authorizes clearing a lock, the same as a negative
-result on Linux/macOS. **The operational consequence is what changed with Stage 2, not the stub
-itself.** Before Windows could mutate, it could never hold a lock, so the stub was unreachable in
-practice. Stage 2 makes Windows a mutating platform: a Windows repository can now wedge, and on
-Windows, `prikk unlock` returns no positive liveness signal at all — every stale-lock decision there
-rests entirely on the operator, with no automated "this process is still running, don't clear it"
-refusal available. A real Windows primitive is tracked as follow-up scope, not part of Stage 2.
+**`prikk unlock`'s PID liveness check now has a real primitive on all three platforms (DC-99 Stage
+1)** — the same shape as `set_permission_bits`/`durable_directory_entry` above, outside the
+`DurabilityContract` table because it lives in a different module
+(`crates/prikk-store/src/unlock.rs`). Linux/macOS use `kill(pid, 0)` via
+`rustix::process::test_kill_process`; Windows uses `OpenProcess`/`WaitForSingleObject`
+(`prikk_ffi::process_liveness`) — `OpenProcess` failing with `ERROR_INVALID_PARAMETER` and a
+successfully-opened handle's `WaitForSingleObject` reporting it signaled both mean the process is
+gone; `ERROR_ACCESS_DENIED` on open means it exists but this caller cannot query it further, the
+same reasoning Linux/macOS's `EPERM` branch already applies. Both platforms trust a positive result
+(`AppearsRunning`) and never a negative or unknown one — `PidLiveness`'s own advisory contract is
+unchanged; a real primitive makes the refusal better informed, it does not make clearing safe. One
+platform-specific guard: PID 0 names the Windows System Idle Process, a real but never
+lock-file-legitimate PID, and is rejected before the OS call so a malformed `pid=0` lock body
+produces `Unknown` on Windows the same way `rustix::process::Pid::from_raw(0)` already makes it
+produce `Unknown` on Linux/macOS.
 
 **Read-only commands build and run everywhere.** They never reach a mutation primitive — verified by
 tracing every command's call graph to `crates/prikk-store/src/fsutil`'s mutation set (`ensure_root`,
