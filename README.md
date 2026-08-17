@@ -4,7 +4,7 @@
 [![CI](https://github.com/nabbisen/prikk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nabbisen/prikk/actions/workflows/ci.yml)
 [![license](https://img.shields.io/crates/l/prikk.svg)](LICENSE)
 [![crates.io](https://img.shields.io/crates/v/prikk.svg?label=prikk)](https://crates.io/crates/prikk)
-[![docs.rs](https://img.shields.io/docsrs/prikk?version=latest)](https://docs.rs/prikk)
+[![documetation](https://img.shields.io/badge/docs-github_pages-brightgreen)](https://nabbisen.github.io/prikk/)
 [![Dependency Status](https://deps.rs/crate/prikk/latest/status.svg)](https://deps.rs/crate/prikk)
 
 [![crates.io](https://img.shields.io/crates/v/prikk-crypto.svg?label=crypto)](https://crates.io/crates/prikk-crypto)
