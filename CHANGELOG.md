@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.22.0 — unreleased
+## 0.22.0 — 2026-08-17
 
 **Windows catches up on two capabilities, and the durability claims made for it in 0.21.0 are now
 tested rather than argued.** No repository format change, no command-surface change, nothing to do
