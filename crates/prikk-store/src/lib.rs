@@ -78,6 +78,8 @@ mod dc55_identity_evidence;
 #[cfg(test)]
 mod rfc111_index_decode_cost_gate;
 #[cfg(test)]
+mod rfc111_seal_decode_cost_gate;
+#[cfg(test)]
 mod signature_contract_tests;
 #[cfg(test)]
 mod test_support;
