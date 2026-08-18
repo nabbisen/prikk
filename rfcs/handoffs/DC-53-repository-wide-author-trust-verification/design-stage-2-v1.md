@@ -122,10 +122,35 @@ it should be a committed literal like vectors 1-5. Add:
 
 Two reviewable steps, both required before criterion 5 can be reassessed:
 
-- **Step 1 — pinning.** D8's one-key-per-`key_id` rule, the migration scan reported first, D5's
-  documentation, vector 6. **Local only; no format change.** This is where the Stage 1 exposure closes.
-- **Step 2 — transport.** D6's bundle version bump and author-key section, D7's import recording,
-  vectors 7-8, and §2's threat-model text.
+- **Step 1 — pinning. COMPLETE, merged 2026-08-18 at `27088c9`.** D8's one-key-per-`key_id` rule
+  enforced at record time and again at verify time, the migration scan (empty), D5's documentation,
+  vector 6. The Stage 1 exposure is closed: nobody able to author can append material under another
+  `key_id` to make a forged signature Sound. **A lock-ordering hole found in review was fixed with it** —
+  `rollback_draft` recorded key material outside `ActiveLock`, so the check-then-append could race into
+  the unrecoverable conflict state.
+- **Step 2 — transport. THIS IS THE LIVE STEP.** D6's bundle version bump and author-key section,
+  D7's import recording, vectors 7-8, and §2's threat-model text.
+
+  **Three conditions carried from Step 1's reviews, binding on Step 2:**
+
+  1. **Import must be structurally unable to write a conflicting key** into a receiver's container. A
+     hostile or merely stale bundle must fail the **whole** import — never partially succeed into a state
+     `verify` cannot recover from, because a conflicted `key_id` has no remedy (no prune, no compaction,
+     no `doctor` repair) and fails `verify` permanently.
+  2. **The deferred lock-ordering test lands here.** Step 1 fixed the ordering and shipped without a test
+     for it, on the argument that a concurrency test would be indistinguishable from testing
+     `ActiveLock`. **Import makes the container's third writer**, so the concurrency surface grows and the
+     ordering now deserves a barrier-based race test — RFC 106's failpoint barriers are the precedent —
+     **or a concrete statement of why that machinery cannot reach these call sites.**
+  3. **State the honest limit in `docs/src/reference/trust-threat-model.md`**, per §2: transported
+     material is sender-supplied, so what this buys is **continuity of authorship, not authenticity of
+     first contact.** A reader must be able to tell "prikk verified this author" from "prikk verified
+     this is the same author as last time." Only the second is true.
+
+  **Note on that page:** it is stale beyond this obligation — it opens *"describes the released
+  implementation through 0.16.0"* and still claims prikk *"does not currently implement a repository-wide
+  AUTHOR trust store."* **The broad refresh is the architect's and is not yours**; add only the sentence
+  §2 requires.
 
 **Pinning first, deliberately.** Transport without pinning verifies nothing (§2), so shipping transport
 first would add a mechanism whose only guarantee is not yet enforced. The reverse order leaves a useful
