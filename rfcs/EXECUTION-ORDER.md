@@ -373,10 +373,26 @@ These apply to all work above and are not restated in each handoff.
 10. **Report counts before and after.** Test counts per touched crate, and locked package count where
     dependencies change, so no silent loss or growth can hide.
 
-    **Baseline, measured 2026-08-16 at `96d7e3d` (dead-surface consolidation merged), covering every
-    workspace member:** `prikk-store` **738**, `prikk` (the CLI) **117**, `prikk-release-policy` 83,
-    `prikk-object` 80, `prikk-replay` 44, `prikk-hash` 14, `prikk-crypto` 7, `prikk-error` 0;
-    **179 locked packages**.
+    **Baseline, re-measured 2026-08-18 at `aade1cc`, covering all nine workspace members:**
+    `prikk-store` **723**, `prikk` (the CLI) **117**, `prikk-release-policy` **124**, `prikk-object` 80,
+    `prikk-replay` 44, `prikk-hash` 14, `prikk-crypto` 7, `prikk-error` 0, `prikk-ffi` 0 (Windows-only
+    code; 0 is the Linux figure, not an absence of tests); **180 locked packages**. Workspace total
+    **1109**.
+
+    > **`prikk-store` fell 738 → 723 since the previous baseline, and no tests were lost.** Reported by
+    > the dev team in the DC-53 Stage 1 implementation report, which correctly declined to explain it.
+    > Checked rather than assumed: `96d7e3d` measures **738** on demand, so the old figure was accurate
+    > when written, and the workspace total rose **1083 → 1109**. The −15 is relocation across DC-87 and
+    > DC-95 plus growth elsewhere. **The failure was that this baseline went un-updated across four
+    > merged increments and two releases**, so every increment since 2026-08-16 compared against a figure
+    > that no longer described `main`.
+    >
+    > **And the crate list was wrong again.** It named eight members; `prikk-ffi` — added by DC-96, the
+    > workspace's only `unsafe` crate — was never entered. **That is the identical failure the blockquote
+    > below already records**, recurring in this same paragraph after it was written down. A correction
+    > that lives only as prose is not a control; RFC 105 made that argument about RFC 100's naming rule
+    > and it applies here unchanged. **Whether this baseline belongs in `release-policy` rather than in
+    > memory is an open question, raised 2026-08-18.**
 
     > **The crate list itself was wrong until 2026-08-15, and that is worse than the figures ever were.**
     > This baseline named **six of eight** workspace members. `prikk` — the CLI, with **113 tests** — and
