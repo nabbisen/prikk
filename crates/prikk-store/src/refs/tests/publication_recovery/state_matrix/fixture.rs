@@ -15,9 +15,9 @@ use crate::test_support::{
     signed_patch_envelope, unique_temp_dir,
 };
 use crate::{
-    Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication,
-    RefStore, RepositoryLayout, Wal, add_trusted_maintainer, derive_next_state_root,
-    maintainer_signature, write_active_ref_metadata,
+    Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectReader, ObjectWriter,
+    RefPublication, RefStore, RepositoryLayout, Wal, add_trusted_maintainer,
+    derive_next_state_root, maintainer_signature, write_active_ref_metadata,
 };
 
 #[derive(Debug, Clone, Copy)]

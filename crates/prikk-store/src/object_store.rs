@@ -21,7 +21,8 @@ pub trait ObjectReader {
     /// Read and require a specific object type. Default-implemented in terms of `read_object` alone
     /// (RFC 111 §6.1: every implementor -- `FileObjectStore`, `ObjectReadSnapshot`,
     /// `ObjectWriteSession`, `MemoryObjectStore` -- gets this for free, and any function generic over
-    /// `impl ObjectReader` can call it without depending on a concrete type).
+    /// `impl ObjectReader` can call it without depending on a concrete type). One body, not one per
+    /// implementor (Stage 1 review v1 §3): every concrete type's own `read_typed` delegates here too.
     fn read_typed(&self, id: ObjectId, object_type: ObjectType) -> Result<Option<ObjectEnvelope>> {
         let Some(envelope) = self.read_object(id)? else {
             return Ok(None);
@@ -72,15 +73,6 @@ impl FileObjectStore {
             Ok(Some(entry)) if entry.object_type == object_type
         )
     }
-
-    /// Read and require a specific object type.
-    pub fn read_typed(
-        &self,
-        id: ObjectId,
-        object_type: ObjectType,
-    ) -> Result<Option<ObjectEnvelope>> {
-        read_typed_via(self, id, object_type)
-    }
 }
 
 impl ObjectReader for FileObjectStore {
@@ -118,7 +110,7 @@ impl ObjectWriter for FileObjectStore {
             WriteDecision::AlreadyPresent(id) => Ok(id),
             WriteDecision::New => {
                 append_object_to_container(&self.layout, envelope.object_type, envelope)
-                    .map(|appended| appended.entry.object_id)
+                    .map(|entry| entry.object_id)
             }
         }
     }
@@ -254,15 +246,6 @@ impl ObjectReadSnapshot {
         }
         matches!(self.snapshot.lookup(id), Some(entry) if entry.object_type == object_type)
     }
-
-    /// Read and require a specific object type.
-    pub fn read_typed(
-        &self,
-        id: ObjectId,
-        object_type: ObjectType,
-    ) -> Result<Option<ObjectEnvelope>> {
-        read_typed_via(self, id, object_type)
-    }
 }
 
 impl ObjectReader for ObjectReadSnapshot {
@@ -276,10 +259,10 @@ impl ObjectReader for ObjectReadSnapshot {
 
 /// Read-write object access for one writing operation's lifetime (RFC 111 §6.1). Holds the same kind
 /// of in-memory index snapshot `ObjectReadSnapshot` does, but every write decision first calls
-/// `IndexSnapshot::ensure_current` (see its own doc) and every successful write updates the snapshot
-/// incrementally -- appending the entry it just wrote and recording the true post-append index
-/// extent `append_object_to_container` measured, never a length this type accumulates itself (RFC 111
-/// §6.1 addendum §3.3).
+/// `IndexSnapshot::ensure_current` (see its own doc), and every successful write calls it again
+/// afterward instead of computing what changed itself (Stage 1 review v1, B1) -- `ensure_current`'s
+/// own tail-decode is the only thing ever allowed to grow `entries`/`known_length`, whether what it
+/// finds is this session's own write, a concurrent one, or both.
 pub struct ObjectWriteSession {
     layout: RepositoryLayout,
     snapshot: IndexSnapshot,
@@ -302,15 +285,6 @@ impl ObjectWriteSession {
         }
         self.snapshot.ensure_current(&self.layout)?;
         Ok(matches!(self.snapshot.lookup(id), Some(entry) if entry.object_type == object_type))
-    }
-
-    /// Read and require a specific object type.
-    pub fn read_typed(
-        &self,
-        id: ObjectId,
-        object_type: ObjectType,
-    ) -> Result<Option<ObjectEnvelope>> {
-        read_typed_via(self, id, object_type)
     }
 }
 
@@ -337,32 +311,19 @@ impl ObjectWriter for ObjectWriteSession {
         match decide_write_outcome(&self.layout, envelope.object_type, envelope, existing)? {
             WriteDecision::AlreadyPresent(id) => Ok(id),
             WriteDecision::New => {
-                let appended =
-                    append_object_to_container(&self.layout, envelope.object_type, envelope)?;
-                let object_id = appended.entry.object_id;
-                self.snapshot.entries.push(appended.entry);
-                self.snapshot.known_length = appended.index_extent;
+                let object_id = envelope.object_id();
+                append_object_to_container(&self.layout, envelope.object_type, envelope)?;
+                // Do not trust the append's own return value for what changed (RFC 111 Stage 1
+                // review v1, B1): re-derive by re-checking freshness through the same primitive
+                // every other read decision uses. `ensure_current`'s tail-decode is frame-aligned
+                // by construction and correctly picks up this write, a concurrent writer's, or
+                // both -- a stat taken immediately after only this call's own append cannot tell
+                // those apart.
+                self.snapshot.ensure_current(&self.layout)?;
                 Ok(object_id)
             }
         }
     }
-}
-
-fn read_typed_via(
-    reader: &impl ObjectReader,
-    id: ObjectId,
-    object_type: ObjectType,
-) -> Result<Option<ObjectEnvelope>> {
-    let Some(envelope) = reader.read_object(id)? else {
-        return Ok(None);
-    };
-    if envelope.object_type != object_type {
-        return Err(PrikkError::ObjectTypeMismatch {
-            expected: object_type.to_string(),
-            actual: envelope.object_type.to_string(),
-        });
-    }
-    Ok(Some(envelope))
 }
 
 // DC-97 correction of the comment this replaced: the Linux/macOS-only reasoning was true when

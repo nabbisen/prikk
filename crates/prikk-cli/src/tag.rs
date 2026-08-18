@@ -20,7 +20,7 @@ use prikk_object::{
     RefUpdatePayload, TagPayload,
 };
 use prikk_store::{
-    FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication, RefStore,
+    FileObjectStore, MaintainerSigner, ObjectReader, ObjectWriter, RefPublication, RefStore,
     maintainer_signature, validate_local_tag_ref,
 };
 

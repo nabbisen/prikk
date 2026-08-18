@@ -38,8 +38,9 @@ use prikk_object::{
     RefUpdatePayload,
 };
 use prikk_store::{
-    DEFAULT_CHECKOUT_REF, FileObjectStore, MaintainerSigner, RefPublication, RefStore, Wal,
-    maintainer_signature, require_active_ref_for_non_empty_wal, validate_local_branch_ref,
+    DEFAULT_CHECKOUT_REF, FileObjectStore, MaintainerSigner, ObjectReader, RefPublication,
+    RefStore, Wal, maintainer_signature, require_active_ref_for_non_empty_wal,
+    validate_local_branch_ref,
 };
 
 /// Envelope schema version for a `RefState` carrying no `closed` field (every ordinary

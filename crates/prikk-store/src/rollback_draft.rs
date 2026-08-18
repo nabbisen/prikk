@@ -15,7 +15,7 @@ use crate::active::prepare_empty_active_ref_for_append;
 use crate::author_signing::{AuthorSigner, author_signature};
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
-use crate::object_store::ObjectReadSnapshot;
+use crate::object_store::{ObjectReadSnapshot, ObjectReader};
 use crate::patch_inverse::{PatchInverseOperationSummary, prepare_patch_inverse_plan};
 use crate::refs::RefStore;
 use crate::rollback_preview::{RollbackPreviewChange, prepare_rollback_preview};

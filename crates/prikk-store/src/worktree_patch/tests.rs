@@ -20,7 +20,7 @@ use crate::test_support::{
 use crate::worktree_patch::commit_worktree_changes_with_generator;
 use crate::{
     ActiveLock, ActiveRefMetadata, AuthorSigner, Ed25519AuthorSigner, FileObjectStore,
-    ObjectWriter, RefPublication, RefStore, RepoPath, RepositoryLayout, Wal,
+    ObjectReader, ObjectWriter, RefPublication, RefStore, RepoPath, RepositoryLayout, Wal,
     WorktreePatchCommitOptions, WorktreePatchOperationKind, finish_active_publication_cleanup,
     read_active_ref_metadata,
 };

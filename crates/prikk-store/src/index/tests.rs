@@ -28,8 +28,9 @@ fn write_object_to_container_for_test(
     let existing = lookup_object_location(layout, envelope.object_id())?;
     match decide_write_outcome(layout, object_type, envelope, existing.as_ref())? {
         WriteDecision::AlreadyPresent(id) => Ok(id),
-        WriteDecision::New => append_object_to_container(layout, object_type, envelope)
-            .map(|appended| appended.entry.object_id),
+        WriteDecision::New => {
+            append_object_to_container(layout, object_type, envelope).map(|entry| entry.object_id)
+        }
     }
 }
 

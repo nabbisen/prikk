@@ -27,9 +27,7 @@ use crate::byte_cursor::ByteCursor;
 use crate::container::{self, ContainerRecordStatus, container_magic};
 use crate::file_codec::push_u16;
 use crate::frame_resync::resync_to_next_magic;
-use crate::fsutil::{
-    append_file_required, len_to_u64, read_file_if_exists, stat_file_state_if_exists,
-};
+use crate::fsutil::{append_file_required, len_to_u64, read_file_if_exists};
 use crate::layout::{ContainerSlot, RepositoryLayout, persisted_object_types};
 use prikk_hash::sha256;
 
@@ -467,24 +465,26 @@ pub(crate) fn decide_write_outcome(
     Ok(WriteDecision::AlreadyPresent(object_id))
 }
 
-/// One object's durable write, plus the object index's resulting total byte length -- stated,
-/// measured after the append, not derived by a caller accumulating its own running total (RFC 111
-/// §6.1 addendum §3.3: an accumulated total can drift high, which is the dangerous direction here).
-pub(crate) struct AppendedObject {
-    pub(crate) entry: IndexEntry,
-    pub(crate) index_extent: u64,
-}
-
 /// The write protocol (design §5, handoff §3): append the object record to its container and make
 /// it durable, **then and only then** append the index entry. Never `atomic_replace` -- both appends
 /// go through `append_file_required` (`durable_append`), matching every other durability-bearing
 /// write in this codebase. Unconditional -- no idempotency check here; callers decide via
 /// [`decide_write_outcome`] first and only reach this on [`WriteDecision::New`].
+///
+/// **Deliberately does not report the resulting index extent** (RFC 111 Stage 1 review v1, B1): a stat
+/// taken here immediately after this call's own append cannot distinguish "just this record" from
+/// "this record plus a concurrent writer's" -- both make the file longer, and a caller that trusted
+/// this return value to set its own `known_length` could set it *past* the extent it has actually
+/// decoded, which is `known_length`'s one invariant to never violate (a later genuine append could
+/// then make a stat coincidentally match, and a stale idempotency decision would pass the freshness
+/// check that exists to catch exactly that). The caller re-derives ground truth the same way every
+/// other freshness check does -- by calling `IndexSnapshot::ensure_current` again, whose own
+/// tail-decode is frame-aligned by construction and picks up this write, any concurrent one, or both.
 pub(crate) fn append_object_to_container(
     layout: &RepositoryLayout,
     object_type: ObjectType,
     envelope: &ObjectEnvelope,
-) -> Result<AppendedObject> {
+) -> Result<IndexEntry> {
     let object_id = envelope.object_id();
     let record_bytes = container::encode_container_record(object_type, envelope)?;
     let container_relative =
@@ -523,22 +523,7 @@ pub(crate) fn append_object_to_container(
         &index_bytes,
     )?;
 
-    // Stated, not accumulated: the true post-append extent, read back now that the append is
-    // durable. A cheap stat, not a decode.
-    let index_extent =
-        stat_file_state_if_exists(layout.repository_mutation_root(), &index_relative)?
-            .map(|stat| stat.size)
-            .ok_or_else(|| {
-                PrikkError::Integrity(
-                    "object index file missing immediately after a durable append to it"
-                        .to_string(),
-                )
-            })?;
-
-    Ok(AppendedObject {
-        entry,
-        index_extent,
-    })
+    Ok(entry)
 }
 
 /// Extract a just-encoded container record's own frame checksum (the 32 bytes immediately following

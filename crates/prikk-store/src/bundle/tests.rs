@@ -12,7 +12,9 @@ use crate::test_support::{
     signed_block, signed_patch_blob_envelope, signed_patch_envelope, signed_ref_state_envelope,
     signed_ref_update_envelope, unique_temp_dir,
 };
-use crate::{FileObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout};
+use crate::{
+    FileObjectStore, ObjectReader, ObjectWriter, RefPublication, RefStore, RepositoryLayout,
+};
 
 /// Seal a two-block `heads/main` (a Root block plus a Normal child referencing one Patch, whose
 /// `CreateFile` operation itself references one Blob) into `layout`, returning the tip Block id —

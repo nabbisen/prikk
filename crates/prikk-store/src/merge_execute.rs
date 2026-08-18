@@ -26,8 +26,9 @@ use crate::merge_evidence::{
 };
 use crate::received::validate_received_ref;
 use crate::{
-    FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication, RefStore, RepositoryLayout,
-    derive_next_state_root, maintainer_signature, validate_local_branch_ref, verify_signer_trusted,
+    FileObjectStore, MaintainerSigner, ObjectReader, ObjectWriter, RefPublication, RefStore,
+    RepositoryLayout, derive_next_state_root, maintainer_signature, validate_local_branch_ref,
+    verify_signer_trusted,
 };
 
 /// Result of a completed merge execution.

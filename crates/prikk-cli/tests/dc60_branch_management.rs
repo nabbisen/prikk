@@ -15,7 +15,8 @@ mod support;
 
 use prikk_object::{ObjectType, RefKind, RefStatePayload};
 use prikk_store::{
-    Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, RefStore, RepositoryLayout,
+    Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectReader, RefStore,
+    RepositoryLayout,
 };
 
 fn prikk(repo: &Path) -> Command {

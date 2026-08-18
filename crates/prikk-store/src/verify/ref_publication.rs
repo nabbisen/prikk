@@ -5,7 +5,7 @@ use prikk_object::{BlockPayload, ObjectType, RefStatePayload, RefUpdatePayload};
 
 use super::ActiveWalMetadataStatus;
 use crate::layout::RepositoryLayout;
-use crate::object_store::FileObjectStore;
+use crate::object_store::{FileObjectStore, ObjectReader};
 use crate::refs::{RefPublicationIssue, RefStore};
 use crate::wal::WalRecord;
 
