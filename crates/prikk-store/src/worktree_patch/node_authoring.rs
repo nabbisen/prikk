@@ -192,7 +192,7 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     // either loses the lock here (LockConflict) or, if it runs after this releases, sees the appended
     // record and fails the "seal first" guard. Released on return (RAII). The append below uses the
     // raw WAL under this held lock (not `ActiveSession::append_patch`, which would re-acquire).
-    let _active_lock = ActiveLock::acquire(layout).map_err(AuthorError::Store)?;
+    let active_lock = ActiveLock::acquire(layout).map_err(AuthorError::Store)?;
     crate::refs::ensure_no_incomplete_publication(layout).map_err(AuthorError::Store)?;
 
     // RFC 102 Stage 1: a dirty worktree marker means a prior materialization call did not complete
@@ -590,6 +590,7 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
         layout,
         signer.key_id(),
         signer.public_key_bytes(),
+        &active_lock,
     )
     .map_err(AuthorError::Store)?;
 

@@ -15,10 +15,29 @@ use proptest::prelude::*;
 
 use prikk_object::{ObjectEnvelope, ObjectType, Signature, SignatureAlgorithm, SignerRole};
 
+use crate::author_key_index::AuthorKeyEntry;
+
 use super::super::{DEFAULT_BUNDLE_MAX_OBJECT_COUNT, decode_bundle, encode_bundle};
 
 fn key_id_strategy() -> impl Strategy<Value = String> {
     "[a-zA-Z0-9_-]{1,8}"
+}
+
+/// DC-53 Stage 2: `key_id_strategy`'s own charset already matches
+/// `Signature::validate_key_id`'s rule exactly, so it doubles as a strategy for author-key entries
+/// -- `decode_bundle` now rejects a key_id outside that charset, and a round-trip property must only
+/// ever generate what a real `encode_bundle` caller could produce.
+fn author_key_strategy() -> impl Strategy<Value = AuthorKeyEntry> {
+    (
+        key_id_strategy(),
+        proptest::collection::vec(any::<u8>(), 32),
+    )
+        .prop_map(|(key_id, public_key_bytes)| AuthorKeyEntry {
+            key_id,
+            public_key: public_key_bytes
+                .try_into()
+                .expect("the strategy above always generates exactly 32 bytes"),
+        })
 }
 
 fn signature_strategy() -> impl Strategy<Value = Signature> {
@@ -61,15 +80,17 @@ proptest! {
     #[test]
     fn bundle_round_trips_an_arbitrary_object_set(
         ref_name in ref_name_strategy(),
-        objects in proptest::collection::vec(envelope_strategy(), 0..8)
+        objects in proptest::collection::vec(envelope_strategy(), 0..8),
+        author_keys in proptest::collection::vec(author_key_strategy(), 0..8)
     ) {
-        let bytes = encode_bundle(&ref_name, &objects)
-            .expect("generation invariants keep the ref name and objects encodable");
-        let (decoded_ref_name, decoded_objects) =
+        let bytes = encode_bundle(&ref_name, &objects, &author_keys)
+            .expect("generation invariants keep the ref name, objects, and author keys encodable");
+        let (decoded_ref_name, decoded_objects, decoded_author_keys) =
             decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)
                 .expect("a bundle this small must decode under the default object-count limit");
         prop_assert_eq!(decoded_ref_name, ref_name);
         prop_assert_eq!(decoded_objects, objects);
+        prop_assert_eq!(decoded_author_keys, author_keys);
     }
 
     #[test]

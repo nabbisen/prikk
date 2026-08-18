@@ -8,21 +8,52 @@
 //! receiver's confidence comes from running ordinary, unmodified `verify_repository` afterward: this
 //! module adds a serialization boundary and an import path, and deliberately no new verification
 //! machinery (§D6's "no new verification path").
+//!
+//! **DC-53 Stage 2, D6: `PBNDL002` carries an AUTHOR key-material section.** The section's scope is
+//! exactly the AUTHOR `key_id`s of the Patches this bundle carries, derived from the exported objects
+//! themselves, never the whole local `author_key_index` container -- exporting everything this
+//! repository has ever seen would leak every author it has observed to every recipient, a disclosure
+//! the sender did not choose. Material is optional per-`key_id`: a bundle omits a `key_id` this
+//! repository never recorded material for (import still succeeds; the Patch reads Unverifiable, not
+//! Sound and not a failure). **Import records material; `verify` decides (D7)** -- import performs no
+//! cryptographic check of whether a transported key actually matches any Patch's signature, the same
+//! way it already writes objects without re-verifying them; a transported key that doesn't verify a
+//! Patch's signature is recorded anyway and `verify` reports that Patch `Failed`, reached through the
+//! transport path rather than local authoring but the same underlying check (D3's third row).
+//!
+//! **Two independent conflict checks, not one.** Before any write: the bundle's own author-key section
+//! must not itself claim two different public keys for one `key_id` -- a hostile or merely stale bundle
+//! must fail the whole import rather than leave a receiver with an unresolvable, permanently
+//! unverifiable `key_id` (`author_key_index.rs`'s own container has no prune/repair path). After that
+//! passes: each transported key is recorded through the same `record_author_key_material` Step 1 built
+//! for local authoring, so a key that conflicts with material this repository *already* has is refused
+//! there too -- no separate transport-side pinning rule, reusing Step 1's rather than a second copy of
+//! it (which is exactly what Step 1's C2 ruling was written against).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload};
+use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, Signature, SignerRole};
 
+use crate::author_key_index::{
+    AuthorKeyEntry, lookup_author_key_entries, record_author_key_material,
+};
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_bytes_u64, push_u64};
 use crate::fsutil::len_to_u64;
 use crate::layout::{LockableContainer, RepositoryLayout};
-use crate::lock::acquire_container_locks;
+use crate::lock::{ActiveLock, acquire_container_locks};
 use crate::object_store::{ObjectReadSnapshot, ObjectReader, ObjectWriteSession, ObjectWriter};
 use crate::refs::RefStore;
 
-const BUNDLE_MAGIC: &[u8; 8] = b"PBNDL001";
+/// DC-53 Stage 2, D6: the format bump that made room for the author-key section. `PBNDL001` bundles
+/// (Stage 1 and earlier) are refused by name, not folded into the generic malformed-magic case --
+/// see `decode_bundle`'s refusal message.
+const BUNDLE_MAGIC: &[u8; 8] = b"PBNDL002";
+/// The retired magic, kept only so a `PBNDL001` bundle gets a specific refusal message rather than
+/// the generic "invalid bundle magic" one -- see `docs/src/reference/release-compatibility.md`'s
+/// Bundle Format Transitions section.
+const RETIRED_BUNDLE_MAGIC_V1: &[u8; 8] = b"PBNDL001";
 
 /// DC-86 default hard block on a bundle's declared object count, checked as early as the format
 /// allows — right after the count header field, before a single object is decoded. Not a claim about
@@ -79,6 +110,10 @@ pub struct BundleExportReport {
     pub tip_block_id: ObjectId,
     /// Total objects carried in the bundle (the RefState plus its full genesis-complete closure).
     pub object_count: usize,
+    /// DC-53 Stage 2, D6: AUTHOR key entries carried in the bundle's author-key section -- one per
+    /// distinct `key_id` among the bundle's Patches for which this repository has local material,
+    /// never a count of the Patches themselves.
+    pub author_key_count: usize,
 }
 
 /// Summary of a bundle import.
@@ -92,6 +127,11 @@ pub struct BundleImportReport {
     pub object_count: usize,
     /// Objects that did not already exist in this repository's object store before this import.
     pub written_object_count: usize,
+    /// DC-53 Stage 2, D7: AUTHOR key entries the bundle carried and this import recorded locally.
+    /// Continuity only, not a trust decision -- unlike a trusted maintainer key, recording this
+    /// grants no admission judgement, only lets `verify` distinguish Sound from Unverifiable for the
+    /// Patches it covers.
+    pub recorded_author_key_count: usize,
 }
 
 /// Export a genesis-complete, verifiable subset of objects for `ref_name` (DC-78 §D4/§D6). Walks the
@@ -215,13 +255,58 @@ pub fn export_bundle(
         )?);
     }
 
+    // DC-53 Stage 2, D6: the author-key section's scope is exactly the AUTHOR key_ids of the
+    // Patches this bundle carries -- derived from `objects` itself, never the whole local
+    // `author_key_index` container (which would leak every author this repository has ever seen).
+    let mut author_key_ids: BTreeSet<String> = BTreeSet::new();
+    for envelope in &objects {
+        if envelope.object_type != ObjectType::Patch {
+            continue;
+        }
+        if let Some(signature) = envelope
+            .signatures
+            .iter()
+            .find(|signature| signature.signer_role == SignerRole::Author)
+        {
+            author_key_ids.insert(signature.key_id.clone());
+        }
+    }
+    let mut author_keys: Vec<AuthorKeyEntry> = Vec::with_capacity(author_key_ids.len());
+    for key_id in &author_key_ids {
+        let entries = lookup_author_key_entries(layout, key_id)?;
+        let mut distinct = entries.iter().map(|entry| entry.public_key);
+        let Some(first) = distinct.next() else {
+            // No local material for this key_id -- omitted from the section, not an error (§3's
+            // "material is optional per-author", vector 7).
+            continue;
+        };
+        if distinct.any(|public_key| public_key != first) {
+            // A legacy local conflict for a key_id this export would otherwise carry. Only possible
+            // from a repository predating Stage 2's own rejection of new conflicts (Step 1's
+            // migration scan found none in this project's own fixtures). Fail rather than silently
+            // pick one: presenting the receiver with an arbitrarily-chosen key would look like a
+            // provenance claim this sender's own repository does not actually make.
+            return Err(PrikkError::Integrity(format!(
+                "author key_id {key_id} has more than one distinct recorded public key locally; \
+                 refusing to export a provenance claim this repository's own material does not \
+                 agree on -- run doctor, though no repair exists for this container"
+            )));
+        }
+        author_keys.push(AuthorKeyEntry {
+            key_id: key_id.clone(),
+            public_key: first,
+        });
+    }
+
     let object_count = objects.len();
-    let bytes = encode_bundle(ref_name, &objects)?;
+    let author_key_count = author_keys.len();
+    let bytes = encode_bundle(ref_name, &objects, &author_keys)?;
     Ok((
         BundleExportReport {
             ref_name: ref_name.to_string(),
             tip_block_id,
             object_count,
+            author_key_count,
         },
         bytes,
     ))
@@ -245,7 +330,7 @@ pub fn import_bundle(
             options.max_total_bytes
         )));
     }
-    let (origin_ref_name, objects) = decode_bundle(bytes, options.max_object_count)?;
+    let (origin_ref_name, objects, author_keys) = decode_bundle(bytes, options.max_object_count)?;
     let Some(ref_state_envelope) = objects.first() else {
         return Err(PrikkError::MalformedData(
             "bundle contains no objects".to_string(),
@@ -257,6 +342,30 @@ pub fn import_bundle(
         ));
     }
     let ref_state_id = ref_state_envelope.object_id();
+
+    // DC-53 Stage 2, D7/C2: reject the whole import before any write if the bundle's own
+    // author-key section already disagrees with itself -- a hostile or stale bundle must not be
+    // able to leave a receiver with an unresolvable, permanently unverifiable key_id.
+    // `record_author_key_material` below still catches a conflict against *this repository's*
+    // existing material; this catches a conflict *within the bundle*, which that call alone
+    // wouldn't see if the bundle's own two conflicting entries happened to be processed in an order
+    // where the first one matched nothing local yet.
+    let mut bundle_key_ids: BTreeMap<&str, [u8; 32]> = BTreeMap::new();
+    for entry in &author_keys {
+        match bundle_key_ids.get(entry.key_id.as_str()) {
+            Some(existing) if *existing != entry.public_key => {
+                return Err(PrikkError::MalformedData(format!(
+                    "bundle's author-key section carries two different public keys for key_id {} \
+                     -- refusing the whole import",
+                    entry.key_id
+                )));
+            }
+            Some(_) => {}
+            None => {
+                bundle_key_ids.insert(&entry.key_id, entry.public_key);
+            }
+        }
+    }
 
     // RFC 111 §6.1 Stage 2: `import_bundle`'s ref-equivalent write is `received::write_received_-
     // pointer`, a wholly separate mechanism (received-ref index, not the pointer-index/ref-log
@@ -274,6 +383,28 @@ pub fn import_bundle(
         object_store.write_object(envelope)?;
     }
 
+    // DC-53 Stage 2, D7: import records material, `verify` decides -- no cryptographic check here,
+    // matching the object writes above. `import_bundle` is now a third caller of
+    // `record_author_key_material` (`node_authoring.rs`, `rollback_draft.rs` are the other two),
+    // so it acquires `ActiveLock` around this section the same way they do -- the same container,
+    // the same check-then-act, the same unrecoverable conflict state, one lock path per
+    // repository so this also serializes against a concurrent commit or rollback-draft, not only
+    // against another import. A conflict here (against this repository's own existing material,
+    // distinct from the bundle-internal check above) fails the whole import, not just this entry.
+    let mut recorded_author_key_count = 0_usize;
+    {
+        let active_lock = ActiveLock::acquire(layout)?;
+        for entry in &author_keys {
+            record_author_key_material(layout, &entry.key_id, entry.public_key, &active_lock)?;
+            recorded_author_key_count =
+                recorded_author_key_count.checked_add(1).ok_or_else(|| {
+                    PrikkError::Integrity(
+                        "bundle import recorded-author-key count overflow".to_string(),
+                    )
+                })?;
+        }
+    }
+
     let received_ref_name = format!("remotes/{origin_ref_name}");
     // RFC 102 Stage 6 Step 2, design-v1.md §15.8: `import_bundle` held no lock at all before this
     // stage. Scoped to the received-index write alone, not the object writes above: those have
@@ -289,6 +420,7 @@ pub fn import_bundle(
         ref_state_id,
         object_count: objects.len(),
         written_object_count,
+        recorded_author_key_count,
     })
 }
 
@@ -302,7 +434,11 @@ fn read_required(
         .ok_or_else(|| PrikkError::Integrity(format!("missing {object_type} object: {id}")))
 }
 
-fn encode_bundle(ref_name: &str, objects: &[ObjectEnvelope]) -> Result<Vec<u8>> {
+fn encode_bundle(
+    ref_name: &str,
+    objects: &[ObjectEnvelope],
+    author_keys: &[AuthorKeyEntry],
+) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     out.extend_from_slice(BUNDLE_MAGIC);
     push_bytes_u64(&mut out, ref_name.as_bytes())?;
@@ -310,13 +446,33 @@ fn encode_bundle(ref_name: &str, objects: &[ObjectEnvelope]) -> Result<Vec<u8>> 
     for envelope in objects {
         push_bytes_u64(&mut out, &encode_envelope_file(envelope)?)?;
     }
+    // DC-53 Stage 2, D6: the author-key section, appended after the object list.
+    push_u64(&mut out, len_to_u64(author_keys.len())?);
+    for entry in author_keys {
+        push_bytes_u64(&mut out, entry.key_id.as_bytes())?;
+        out.extend_from_slice(&entry.public_key);
+    }
     Ok(out)
 }
 
-fn decode_bundle(bytes: &[u8], max_object_count: usize) -> Result<(String, Vec<ObjectEnvelope>)> {
+fn decode_bundle(
+    bytes: &[u8],
+    max_object_count: usize,
+) -> Result<(String, Vec<ObjectEnvelope>, Vec<AuthorKeyEntry>)> {
     let mut cursor = ByteCursor::new(bytes);
     let magic = cursor.read_array::<8>()?;
     if &magic != BUNDLE_MAGIC {
+        if &magic == RETIRED_BUNDLE_MAGIC_V1 {
+            // DC-53 Stage 2, D6: named rather than folded into the generic case below -- an old
+            // client meeting a new bundle already gets a clear refusal from its own hardcoded magic
+            // check (that binary is already built; nothing here changes it). What's in scope is
+            // this new client's own refusal of an old bundle, made specific rather than generic.
+            return Err(PrikkError::MalformedData(
+                "this bundle uses format PBNDL001, which prikk no longer supports (this version \
+                 requires PBNDL002). re-export with a current prikk build."
+                    .to_string(),
+            ));
+        }
         return Err(PrikkError::MalformedData(
             "invalid bundle magic".to_string(),
         ));
@@ -339,12 +495,37 @@ fn decode_bundle(bytes: &[u8], max_object_count: usize) -> Result<(String, Vec<O
         let encoded = cursor.read_bytes_u64()?;
         objects.push(decode_envelope_file(&encoded)?);
     }
+    // DC-53 Stage 2, D6/C1 (plan review): the same declared-count bound DC-86 already applies to
+    // the object count, applied here too -- a second declared count in a format a hostile sender
+    // fully controls, with no bound of its own, would reopen the hole DC-86 closed. An
+    // author-key entry can never legitimately outnumber the Patches in the same bundle, so reusing
+    // `max_object_count` as the ceiling needs no new option surface.
+    let author_key_count = cursor.read_u64()?;
+    if author_key_count > len_to_u64(max_object_count)? {
+        return Err(PrikkError::MalformedData(format!(
+            "bundle declares {author_key_count} author key entries, over the configured limit of \
+             {max_object_count}"
+        )));
+    }
+    let mut author_keys = Vec::new();
+    for _ in 0..author_key_count {
+        let key_id_bytes = cursor.read_bytes_u64()?;
+        let key_id = String::from_utf8(key_id_bytes).map_err(|err| {
+            PrikkError::MalformedData(format!("invalid bundle author key_id utf-8: {err}"))
+        })?;
+        // DC-53 Stage 2, plan review: reuse `Signature::validate_key_id` rather than a second
+        // notion of what a legal key id is -- it is the same rule these ids must satisfy to ever
+        // match a signature's own `key_id`.
+        Signature::validate_key_id(&key_id)?;
+        let public_key = cursor.read_array::<32>()?;
+        author_keys.push(AuthorKeyEntry { key_id, public_key });
+    }
     if !cursor.is_finished() {
         return Err(PrikkError::MalformedData(
             "trailing bytes in bundle".to_string(),
         ));
     }
-    Ok((ref_name, objects))
+    Ok((ref_name, objects, author_keys))
 }
 
 #[cfg(all(test, target_os = "linux"))]

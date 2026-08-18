@@ -978,10 +978,12 @@ fn verify_repository_fails_a_tampered_author_signature_against_recorded_key_mate
     let root = unique_temp_dir("verify-author-signature-fails");
     let layout = RepositoryLayout::init(root.clone())?;
     let signer = Ed25519AuthorSigner::from_seed("fails-author", &[0x61; 32])?;
+    let active_lock = crate::lock::ActiveLock::acquire(&layout)?;
     crate::author_key_index::record_author_key_material(
         &layout,
         signer.key_id(),
         signer.public_key_bytes(),
+        &active_lock,
     )?;
     write_author_signed_patch(&layout, 0x61, "fails-author", true)?;
 
@@ -1008,10 +1010,12 @@ fn verify_repository_fails_for_a_key_id_with_conflicting_recorded_keys() -> Resu
     let root = unique_temp_dir("verify-author-signature-conflict");
     let layout = RepositoryLayout::init(root.clone())?;
     let signer = Ed25519AuthorSigner::from_seed("conflict-author", &[0x91; 32])?;
+    let active_lock = crate::lock::ActiveLock::acquire(&layout)?;
     crate::author_key_index::record_author_key_material(
         &layout,
         signer.key_id(),
         signer.public_key_bytes(),
+        &active_lock,
     )?;
     crate::author_key_index::force_conflicting_author_key_entry_for_test(
         &layout,
@@ -1037,10 +1041,12 @@ fn verify_repository_reports_sound_for_a_signature_verifying_against_recorded_ma
     let root = unique_temp_dir("verify-author-signature-sound");
     let layout = RepositoryLayout::init(root.clone())?;
     let signer = Ed25519AuthorSigner::from_seed("sound-author", &[0x71; 32])?;
+    let active_lock = crate::lock::ActiveLock::acquire(&layout)?;
     crate::author_key_index::record_author_key_material(
         &layout,
         signer.key_id(),
         signer.public_key_bytes(),
+        &active_lock,
     )?;
     let (key_id, object_id) = write_author_signed_patch(&layout, 0x71, "sound-author", false)?;
 

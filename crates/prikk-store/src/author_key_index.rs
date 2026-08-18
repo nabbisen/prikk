@@ -66,6 +66,7 @@ use crate::fsutil::{
     append_file_required, create_new_file_required, len_to_u64, read_file_if_exists,
 };
 use crate::layout::RepositoryLayout;
+use crate::lock::ActiveLock;
 
 const AUTHOR_KEY_MAGIC: &[u8; 8] = b"PAUTKEY1";
 const AUTHOR_KEY_VERSION: u16 = 1;
@@ -308,15 +309,19 @@ pub(crate) fn lookup_author_key_entries(
 /// `key_id`** -- one `key_id` binds to one public key; see the module doc for why this state, once
 /// created, has no way out, and why this is what a key-rotation attempt looks like from the inside.
 ///
-/// **Callers must hold `ActiveLock` before calling this** (DC-53 Stage 2 gate-and-design review C1):
-/// the read-then-append below is a check-then-act, and the resulting conflict state is unrecoverable,
-/// so two concurrent authoring operations racing this check must be serialized by the caller, not by
-/// this function -- it has no lock of its own to take. `worktree_patch/node_authoring.rs` and
-/// `rollback_draft.rs` both call this from inside their own held `ActiveLock`.
+/// **Takes `&ActiveLock` structurally, not as a documented precondition** (DC-53 Stage 2 Step 2
+/// review, superseding Step 1's own "callers must hold `ActiveLock`" comment): the read-then-append
+/// below is a check-then-act, and the resulting conflict state is unrecoverable, so a barrier test
+/// proving today's three callers happen to hold the lock would prove nothing about a fourth caller
+/// added tomorrow without one. Requiring the guard in the signature makes the hazard impossible to
+/// construct rather than something to police by review -- the lock parameter is otherwise unused by
+/// this function's own body; its only job is to exist. `worktree_patch/node_authoring.rs`,
+/// `rollback_draft.rs`, and `bundle.rs`'s `import_bundle` all pass their own held `ActiveLock`.
 pub(crate) fn record_author_key_material(
     layout: &RepositoryLayout,
     key_id: &str,
     public_key: [u8; ED25519_KEY_LEN],
+    _active_lock: &ActiveLock,
 ) -> Result<()> {
     let existing = lookup_author_key_entries(layout, key_id)?;
     if existing.iter().any(|entry| entry.public_key == public_key) {

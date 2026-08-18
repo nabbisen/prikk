@@ -49,6 +49,25 @@ AUTHOR signatures identify the key used by the authoring path for Patch envelope
 and rollback-draft authoring use real Ed25519 AUTHOR signatures. Prikk does not currently implement a
 repository-wide AUTHOR trust store, AUTHOR revocation, AUTHOR rotation, or AUTHOR identity policy.
 
+**What AUTHOR key material proves, stated precisely (DC-53 Stage 2).** A repository records each
+`key_id`'s public key the first time it observes a Patch signed under that name — trust-on-first-use,
+and that first observation is **not** itself verified against anything. Every subsequent appearance of
+the same `key_id` is checked against the key recorded at first contact, and one `key_id` is permanently
+bound to one public key for the life of that repository. **What this proves is "the same `key_id` has
+always signed under this name here" — not "this author's claimed identity is genuine."** A reader must
+be able to tell *"prikk verified this author"* apart from *"prikk verified this author is the same one
+as last time"*, because only the second is true.
+
+When AUTHOR key material travels in a bundle (`prikk bundle export`/`import`, DC-53 Stage 2), the same
+limit applies with one further step: a transported key is supplied by the sender. A signature that
+verifies against a key which arrived in the same bundle proves only that the two are internally
+consistent — an attacker who re-signs a Patch with their own key and ships that key in the bundle
+produces a bundle that verifies perfectly. Import records transported material under the same
+first-contact rule as local material; it performs no additional check of who actually holds the key.
+Transport does not weaken the maintainer signature's own role in DC-78's exchange claim — a receiver
+still relies on that signature for the decision to include imported patches at all; AUTHOR verification
+adds continuity of authorship on top of it, and does not replace it.
+
 MAINTAINER signatures identify publication objects. Seal uses real role-bound Ed25519 MAINTAINER
 signatures for Block, RefState, and RefUpdate envelopes and verifies the signer against the local
 maintainer trust policy before publishing.

@@ -2,18 +2,30 @@
 
 mod proptest_decode_bundle;
 
-use prikk_object::{BlockKind, ObjectType};
+use prikk_object::{
+    BlockKind, CanonicalEncode, CreateFile, NodeId, ObjectEnvelope, ObjectId, ObjectType,
+    Operation, OperationKind, PatchPayload, PatchPurpose,
+};
 
-use crate::bundle::{BundleImportOptions, export_bundle, import_bundle};
+use crate::author_key_index::{
+    AuthorKeyEntry, force_conflicting_author_key_entry_for_test, lookup_author_key_entries,
+    record_author_key_material, verify_author_signature,
+};
+use crate::author_signing::{AuthorSigner, author_signature};
+use crate::bundle::{
+    BundleImportOptions, DEFAULT_BUNDLE_MAX_OBJECT_COUNT, decode_bundle, encode_bundle,
+    export_bundle, import_bundle,
+};
 use crate::layout::LockableContainer;
-use crate::lock::acquire_container_locks;
+use crate::lock::{ActiveLock, acquire_container_locks};
 use crate::received::read_received_pointer;
 use crate::test_support::{
     signed_block, signed_patch_blob_envelope, signed_patch_envelope, signed_ref_state_envelope,
     signed_ref_update_envelope, unique_temp_dir,
 };
 use crate::{
-    FileObjectStore, ObjectReader, ObjectWriter, RefPublication, RefStore, RepositoryLayout,
+    Ed25519AuthorSigner, FileObjectStore, ObjectReader, ObjectWriter, RefPublication, RefStore,
+    RepositoryLayout,
 };
 
 /// Seal a two-block `heads/main` (a Root block plus a Normal child referencing one Patch, whose
@@ -47,6 +59,121 @@ fn seal_two_block_history(
         ref_update,
     })?;
     Ok(child_block_id)
+}
+
+/// DC-53 Stage 2: a fixed-seed AUTHOR signer, distinct across callers via `discriminant` so tests
+/// signing more than one Patch under this helper get distinct `key_id`s and object ids.
+fn transport_test_signer(discriminant: u8) -> prikk_error::Result<Ed25519AuthorSigner> {
+    Ed25519AuthorSigner::from_seed(
+        format!("dc53-stage2-transport-{discriminant}"),
+        &[discriminant; 32],
+    )
+}
+
+/// Seal a two-block `heads/main` whose Patch carries a real AUTHOR signature from `signer`, rather
+/// than `seal_two_block_history`'s fixed structural fixture -- DC-53 Stage 2's transport tests need
+/// a signature `record_author_key_material`/`verify_author_signature` can actually be asked about.
+/// If `record_locally` is true, `signer`'s key material is recorded on `layout` before this returns
+/// (real authoring's own order, `node_authoring.rs:589`); if false, the Patch is signed but no local
+/// material exists for it yet -- vector 7's starting state.
+fn seal_two_block_history_with_author(
+    layout: &RepositoryLayout,
+    signer: &Ed25519AuthorSigner,
+    record_locally: bool,
+) -> prikk_error::Result<ObjectId> {
+    let mut object_store = FileObjectStore::new(layout.clone());
+    let blob = signed_patch_blob_envelope();
+    object_store.write_object(&blob)?;
+
+    let payload = PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::CreateFile(CreateFile {
+                path: "transport.txt".to_string(),
+                node_id: NodeId::from_bytes([0x54; 32]),
+                blob_id: blob.object_id(),
+                mode: 0o100_644,
+            }),
+        }],
+        parent_patch_ids: Vec::new(),
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+    };
+    let mut patch = ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);
+    let patch_object_id = patch.object_id();
+    let signature = author_signature(signer, patch_object_id)?;
+    patch.add_signature(signature)?;
+    let patch_id = object_store.write_object(&patch)?;
+
+    if record_locally {
+        let active_lock = ActiveLock::acquire(layout)?;
+        record_author_key_material(
+            layout,
+            signer.key_id(),
+            signer.public_key_bytes(),
+            &active_lock,
+        )?;
+    }
+
+    let root_block = signed_block(BlockKind::Root, Vec::new(), Vec::new(), None);
+    let root_block_id = object_store.write_object(&root_block)?;
+    let child_block = signed_block(BlockKind::Normal, vec![root_block_id], vec![patch_id], None);
+    let child_block_id = object_store.write_object(&child_block)?;
+
+    let ref_store = RefStore::new(layout.clone());
+    let ref_state = signed_ref_state_envelope("heads/main", None, child_block_id, 1);
+    let ref_state_id = ref_state.object_id();
+    let ref_update =
+        signed_ref_update_envelope("heads/main", None, ref_state_id, child_block_id, 1);
+    ref_store.publish(&RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_state,
+        ref_update,
+    })?;
+    Ok(child_block_id)
+}
+
+/// Find the imported Patch in `target`'s object store by scanning for the one carrying
+/// `transport.txt` -- `seal_two_block_history_with_author`'s own fixture path, distinct from
+/// `seal_two_block_history`'s `a.txt`.
+fn find_imported_transport_patch(target: &RepositoryLayout) -> prikk_error::Result<ObjectEnvelope> {
+    // The Patch's object id is derived from its canonical payload, which the sender and receiver
+    // both compute identically -- recompute it here rather than threading it through `import_bundle`'s
+    // own report, which deliberately reports only counts (DC-53 Stage 2, D6/D7's own "no new
+    // verification path" -- this helper is test-only introspection, not part of the transport
+    // contract).
+    let target_store = FileObjectStore::new(target.clone());
+    let ref_state_id = read_received_pointer(target, "remotes/heads/main")?
+        .ok_or_else(|| {
+            prikk_error::PrikkError::Integrity("received ref state missing".to_string())
+        })?
+        .ref_state_id;
+    let ref_state_envelope = target_store
+        .read_typed(ref_state_id, ObjectType::RefState)?
+        .ok_or_else(|| {
+            prikk_error::PrikkError::Integrity("received RefState missing".to_string())
+        })?;
+    let ref_state_payload = prikk_object::RefStatePayload::decode_canonical(
+        &ref_state_envelope.canonical_payload,
+        ref_state_envelope.schema_version,
+    )?;
+    let block_envelope = target_store
+        .read_typed(ref_state_payload.target_object_id, ObjectType::Block)?
+        .ok_or_else(|| prikk_error::PrikkError::Integrity("received Block missing".to_string()))?;
+    let block_payload =
+        prikk_object::BlockPayload::decode_canonical(&block_envelope.canonical_payload)?;
+    for patch_id in &block_payload.patch_ids {
+        if let Some(envelope) = target_store.read_typed(*patch_id, ObjectType::Patch)? {
+            return Ok(envelope);
+        }
+    }
+    Err(prikk_error::PrikkError::Integrity(
+        "no Patch found in received Block".to_string(),
+    ))
 }
 
 #[test]
@@ -301,5 +428,267 @@ fn import_refused_over_the_object_count_limit_writes_nothing() -> prikk_error::R
 
     let _ = std::fs::remove_dir_all(source_root);
     let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// DC-53 Stage 2, §7 vector 7: a bundle whose author-key section omits a key for a Patch it
+/// contains -- material is optional per-author -- must still import, and the Patch must read
+/// Unverifiable, not Sound and not a failure.
+#[test]
+fn dc53_stage2_vector7_omitted_material_imports_as_unverifiable() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc53-vector7-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    let signer = transport_test_signer(0xa1)?;
+    seal_two_block_history_with_author(&source, &signer, false)?;
+
+    let (report, bytes) = export_bundle(&source, "heads/main")?;
+    assert_eq!(
+        report.author_key_count, 0,
+        "no local material exists for this key_id, so the section must omit it"
+    );
+
+    let target_root = unique_temp_dir("dc53-vector7-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let import_report = import_bundle(&target, &bytes, &BundleImportOptions::default_limits())?;
+    assert_eq!(import_report.recorded_author_key_count, 0);
+
+    let imported_patch = find_imported_transport_patch(&target)?;
+    let outcome = verify_author_signature(&target, &imported_patch)?;
+    assert_eq!(
+        outcome,
+        Some((signer.key_id().to_string(), false)),
+        "expected Unverifiable, got {outcome:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// Positive control alongside vector 7: material that *is* recorded locally transports and the
+/// imported Patch reads Sound, not merely "not a failure" -- `Unverifiable` would also pass that
+/// weaker bar.
+#[test]
+fn dc53_stage2_transported_material_imports_as_sound() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc53-vector-sound-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    let signer = transport_test_signer(0xa2)?;
+    seal_two_block_history_with_author(&source, &signer, true)?;
+
+    let (report, bytes) = export_bundle(&source, "heads/main")?;
+    assert_eq!(report.author_key_count, 1);
+
+    let target_root = unique_temp_dir("dc53-vector-sound-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let import_report = import_bundle(&target, &bytes, &BundleImportOptions::default_limits())?;
+    assert_eq!(import_report.recorded_author_key_count, 1);
+
+    let imported_patch = find_imported_transport_patch(&target)?;
+    let outcome = verify_author_signature(&target, &imported_patch)?;
+    assert_eq!(outcome, Some((signer.key_id().to_string(), true)));
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// DC-53 Stage 2, §7 vector 8: a bundle whose author-key section carries a key that does not
+/// verify the Patch's signature -- the transport-layer forgery case. Import records the material
+/// anyway (D7: import records, `verify` decides, no cryptographic check at the transport layer,
+/// matching how objects are written without re-verifying them); `verify_author_signature` on the
+/// imported Patch is what fails, reached through the transport path rather than local authoring
+/// but the same underlying check as D3's third row.
+#[test]
+fn dc53_stage2_vector8_a_transported_key_that_does_not_verify_reads_failed()
+-> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc53-vector8-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    let signer = transport_test_signer(0xa3)?;
+    seal_two_block_history_with_author(&source, &signer, true)?;
+
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, mut author_keys) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    assert_eq!(author_keys.len(), 1);
+    if let Some(entry) = author_keys.first_mut() {
+        // Swap in an unrelated public key for the same key_id -- the forgery this vector targets.
+        entry.public_key = [0xbb; 32];
+    }
+    let tampered = encode_bundle(&ref_name, &objects, &author_keys)?;
+
+    let target_root = unique_temp_dir("dc53-vector8-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let import_report = import_bundle(&target, &tampered, &BundleImportOptions::default_limits())?;
+    assert_eq!(
+        import_report.recorded_author_key_count, 1,
+        "import records material without checking it, D7"
+    );
+
+    let imported_patch = find_imported_transport_patch(&target)?;
+    let outcome = verify_author_signature(&target, &imported_patch);
+    assert!(
+        outcome.is_err(),
+        "the transported key must not verify the Patch's real signature -- got {outcome:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// DC-53 Stage 2, D7/C2: a bundle whose own author-key section carries two different public keys
+/// for one `key_id` must be refused before any write -- a hostile or merely stale bundle must not
+/// be able to leave a receiver with an unresolvable, permanently unverifiable `key_id`.
+#[test]
+fn import_rejects_a_bundle_whose_author_key_section_disagrees_with_itself()
+-> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc53-bundle-internal-conflict-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    let signer = transport_test_signer(0xa4)?;
+    seal_two_block_history_with_author(&source, &signer, true)?;
+
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, mut author_keys) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    assert_eq!(author_keys.len(), 1);
+    let key_id = author_keys
+        .first()
+        .map(|entry| entry.key_id.clone())
+        .ok_or_else(|| {
+            prikk_error::PrikkError::Integrity("expected one decoded author-key entry".to_string())
+        })?;
+    author_keys.push(AuthorKeyEntry {
+        key_id: key_id.clone(),
+        public_key: [0xcc; 32],
+    });
+    let hostile = encode_bundle(&ref_name, &objects, &author_keys)?;
+
+    let target_root = unique_temp_dir("dc53-bundle-internal-conflict-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let before = crate::verify_repository(&target)?.checked_objects;
+    let result = import_bundle(&target, &hostile, &BundleImportOptions::default_limits());
+    assert!(
+        result.is_err(),
+        "a bundle whose own author-key section disagrees with itself must be refused"
+    );
+    let after = crate::verify_repository(&target)?.checked_objects;
+    assert_eq!(
+        before, after,
+        "refused before any write -- the object store must be untouched"
+    );
+    assert_eq!(before, Some(0));
+    // DC-53 Stage 2 implementation review v1, C1: the object store is not the container this
+    // check protects -- the hazard is a partial write to the author-key container itself, which
+    // has no prune/repair path. Asserted directly, not inferred from the object store happening
+    // to move together with it (a coincidence of today's ordering, not a guarantee).
+    assert_eq!(
+        lookup_author_key_entries(&target, &key_id)?,
+        Vec::new(),
+        "a refused hostile bundle must leave no author-key entry behind, not even the attacker's \
+         first-listed one"
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// DC-53 Stage 2, D7: reusing Step 1's `record_author_key_material` at import means a transported
+/// key conflicting with material this receiver *already* has locally is refused too -- distinct
+/// from the bundle-internal case above, and the receiver's own existing material must survive
+/// untouched.
+#[test]
+fn import_rejects_a_transported_key_conflicting_with_local_material() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc53-import-local-conflict-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    let signer = transport_test_signer(0xa5)?;
+    seal_two_block_history_with_author(&source, &signer, true)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+
+    let target_root = unique_temp_dir("dc53-import-local-conflict-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let active_lock = ActiveLock::acquire(&target)?;
+    record_author_key_material(&target, signer.key_id(), [0xdd; 32], &active_lock)?;
+    drop(active_lock);
+
+    let result = import_bundle(&target, &bytes, &BundleImportOptions::default_limits());
+    assert!(
+        result.is_err(),
+        "a transported key conflicting with existing local material must be refused"
+    );
+    assert!(
+        read_received_pointer(&target, "remotes/heads/main")?.is_none(),
+        "a refused import must not create the received pointer"
+    );
+    let entries = lookup_author_key_entries(&target, signer.key_id())?;
+    assert_eq!(
+        entries,
+        vec![AuthorKeyEntry {
+            key_id: signer.key_id().to_string(),
+            public_key: [0xdd; 32],
+        }],
+        "the transported conflicting key must never be recorded -- {entries:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// DC-53 Stage 2, §1's ratified edge case: exporting a `key_id` whose *local* material already
+/// disagrees with itself (only reachable via a legacy pre-Stage-2 state, planted directly here)
+/// must fail the export rather than silently pick one of the two conflicting keys -- presenting the
+/// receiver with an arbitrarily-chosen key would look like a provenance claim this sender's own
+/// repository does not actually make.
+#[test]
+fn export_fails_when_local_material_already_conflicts_for_an_exported_key_id()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("dc53-export-local-conflict");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let signer = transport_test_signer(0xa6)?;
+    seal_two_block_history_with_author(&layout, &signer, true)?;
+    force_conflicting_author_key_entry_for_test(&layout, signer.key_id(), [0xee; 32])?;
+
+    let result = export_bundle(&layout, "heads/main");
+    assert!(
+        result.is_err(),
+        "export must refuse rather than silently pick one of two conflicting local keys"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-53 Stage 2, C1 (plan review): the author-key section's own declared count needs the same
+/// DC-86 bound the object count already has -- a second declared count in a format a hostile
+/// sender fully controls, with no bound, would reopen the hole DC-86 closed.
+#[test]
+fn author_key_count_limit_fires_exactly_at_the_boundary() -> prikk_error::Result<()> {
+    let ref_name = "heads/main".to_string();
+    let objects: Vec<ObjectEnvelope> = Vec::new();
+    let author_keys = vec![
+        AuthorKeyEntry {
+            key_id: "a".to_string(),
+            public_key: [1; 32],
+        },
+        AuthorKeyEntry {
+            key_id: "b".to_string(),
+            public_key: [2; 32],
+        },
+    ];
+    let bytes = encode_bundle(&ref_name, &objects, &author_keys)?;
+
+    let refused = decode_bundle(&bytes, 1);
+    assert!(
+        refused.is_err(),
+        "a limit one below the actual author-key count (2) must refuse"
+    );
+
+    let accepted = decode_bundle(&bytes, 2);
+    assert!(
+        accepted.is_ok(),
+        "a limit exactly at the actual author-key count (2) must accept"
+    );
+
     Ok(())
 }

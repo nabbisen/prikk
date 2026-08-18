@@ -44,6 +44,10 @@ fn run_export(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
     println!("exported {}", report.ref_name);
     println!("tip block: {}", report.tip_block_id);
     println!("objects: {}", report.object_count);
+    println!(
+        "author key material: {} included (continuity only, not a trust decision)",
+        report.author_key_count
+    );
     println!("wrote {}", parsed.output.display());
     Ok(())
 }
@@ -63,6 +67,10 @@ fn run_import(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
     println!("RefState: {}", report.ref_state_id);
     println!("objects: {}", report.object_count);
     println!("new objects: {}", report.written_object_count);
+    println!(
+        "author key material: {} recorded (continuity only, not a trust decision)",
+        report.recorded_author_key_count
+    );
     println!(
         "note: no local ref was created or advanced, and no MAINTAINER key was trusted; run \
          `trust maintainer add` to trust the sealing key, then `merge` to incorporate this history"

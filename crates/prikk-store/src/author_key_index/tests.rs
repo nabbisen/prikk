@@ -7,6 +7,7 @@ use super::{
     lookup_author_key_entries, record_author_key_material,
 };
 use crate::layout::RepositoryLayout;
+use crate::lock::ActiveLock;
 use crate::test_support::unique_temp_dir;
 
 fn sample_public_key(seed: u8) -> [u8; 32] {
@@ -108,7 +109,8 @@ fn record_author_key_material_creates_a_missing_container_before_appending() -> 
     let layout = RepositoryLayout::init(root.clone())?;
     std::fs::remove_file(layout.author_key_container_path())?;
     assert!(!layout.author_key_container_path().is_file());
-    record_author_key_material(&layout, "alice", sample_public_key(1))?;
+    let lock = ActiveLock::acquire(&layout)?;
+    record_author_key_material(&layout, "alice", sample_public_key(1), &lock)?;
     assert!(layout.author_key_container_path().is_file());
     let entries = lookup_author_key_entries(&layout, "alice")?;
     assert_eq!(
@@ -126,8 +128,9 @@ fn record_author_key_material_creates_a_missing_container_before_appending() -> 
 fn record_author_key_material_is_idempotent_for_the_same_pair() -> Result<()> {
     let root = unique_temp_dir("author-key-index-idempotent");
     let layout = RepositoryLayout::init(root.clone())?;
-    record_author_key_material(&layout, "alice", sample_public_key(1))?;
-    record_author_key_material(&layout, "alice", sample_public_key(1))?;
+    let lock = ActiveLock::acquire(&layout)?;
+    record_author_key_material(&layout, "alice", sample_public_key(1), &lock)?;
+    record_author_key_material(&layout, "alice", sample_public_key(1), &lock)?;
     let entries = lookup_author_key_entries(&layout, "alice")?;
     assert_eq!(entries.len(), 1, "{entries:?}");
     let _ = std::fs::remove_dir_all(root);
@@ -140,8 +143,9 @@ fn record_author_key_material_is_idempotent_for_the_same_pair() -> Result<()> {
 fn record_author_key_material_rejects_a_conflicting_key() -> Result<()> {
     let root = unique_temp_dir("author-key-index-conflict-rejected");
     let layout = RepositoryLayout::init(root.clone())?;
-    record_author_key_material(&layout, "alice", sample_public_key(1))?;
-    assert!(record_author_key_material(&layout, "alice", sample_public_key(2)).is_err());
+    let lock = ActiveLock::acquire(&layout)?;
+    record_author_key_material(&layout, "alice", sample_public_key(1), &lock)?;
+    assert!(record_author_key_material(&layout, "alice", sample_public_key(2), &lock).is_err());
     let entries = lookup_author_key_entries(&layout, "alice")?;
     assert_eq!(
         entries,
@@ -159,8 +163,9 @@ fn record_author_key_material_rejects_a_conflicting_key() -> Result<()> {
 fn lookup_only_returns_entries_for_the_requested_key_id() -> Result<()> {
     let root = unique_temp_dir("author-key-index-scoped-lookup");
     let layout = RepositoryLayout::init(root.clone())?;
-    record_author_key_material(&layout, "alice", sample_public_key(1))?;
-    record_author_key_material(&layout, "bob", sample_public_key(2))?;
+    let lock = ActiveLock::acquire(&layout)?;
+    record_author_key_material(&layout, "alice", sample_public_key(1), &lock)?;
+    record_author_key_material(&layout, "bob", sample_public_key(2), &lock)?;
     assert_eq!(
         lookup_author_key_entries(&layout, "alice")?,
         vec![AuthorKeyEntry {

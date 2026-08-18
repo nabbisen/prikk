@@ -124,7 +124,7 @@ pub fn append_rollback_draft(
     let inverse_patch_id = envelope.object_id();
 
     let wal = Wal::for_layout(layout);
-    let _lock = ActiveLock::acquire(layout)?;
+    let active_lock = ActiveLock::acquire(layout)?;
     crate::refs::ensure_no_incomplete_publication(layout)?;
     let replay = wal.replay()?;
     if replay.trailing_partial_bytes != 0 {
@@ -175,6 +175,7 @@ pub fn append_rollback_draft(
         layout,
         signer.key_id(),
         signer.public_key_bytes(),
+        &active_lock,
     )?;
     let wal_sequence = wal.append_patch(&envelope)?;
 
