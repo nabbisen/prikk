@@ -95,15 +95,38 @@ criterion 3 gave a harness; it is not where the cost is confined.
 container migration on this path, and **NFR-PERF-01's warm-path claims should be re-measured**, not
 assumed to carry.
 
+## 5.1 Which of the two reads costs — measured, because the obvious answer was wrong
+
+The two O(N) reads were memoized **separately**, same repository at N=160, 7 runs each, median:
+
+| | N=160 | share of the regression |
+|---|---:|---:|
+| baseline | 164.90 ms | — |
+| **container full-read** memoized | 156.30 ms | **~5%** |
+| **index replay** memoized | **29.20 ms** | **~82%** |
+| both memoized | 27.28 ms | 100% |
+
+**The index replay is essentially the whole regression; the container read is nearly free.** The reason is
+that a repeated full read of the same file is served from the OS page cache and costs a copy, while
+`replay_index` **decodes and validates every entry on every lookup** — CPU work no cache absorbs.
+
+**This inverts the design ordering below.** Positional reads — the fix suggested by reading
+`object_store.rs:80`'s claim — address the 5%. **The 82% is a decode, not a read**, and no I/O change
+touches it. Recorded because the plausible fix and the effective fix are different ones here.
+
 ## 6. What a design must decide
 
-1. **Positional reads.** Decode at `entry.offset` without materializing the container — the thing
-   `object_store.rs:80` already claims. Whether the anchored-fd primitive layer exposes a positional read
-   on all three platforms (Windows has no `pread`; it has `ReadFile` with `OVERLAPPED`) is the first
-   question, and it lands on DC-87/DC-96's authority split.
-2. **Index snapshot scope.** One replay per *operation*, not per read. What object owns that snapshot, and
-   what invalidates it, is a correctness question — a stale snapshot inside a writing operation is the
-   failure mode, and it must fail closed.
+1. **Eliminate the per-lookup index decode.** This is the whole increment. One decoded snapshot per
+   *operation*, not per read. **What owns that snapshot and what invalidates it is a correctness
+   question** — a stale snapshot inside a writing operation is the failure mode, and it must fail closed.
+   The probe used a process-lifetime thread-local, which is exactly the unsound version.
+2. **Positional reads, second and optional.** Decode at `entry.offset` without materializing the
+   container — the thing `object_store.rs:80` already claims. **Feasible on all three platforms with safe
+   std APIs** (`pread` via the existing `rustix` fd on POSIX, `seek_read` on Windows, read-and-slice for
+   the `PathOnlyReader` fallback), so DC-90's `forbid(unsafe_code)` boundary is untouched and no new
+   dependency is needed. `AnchoredReader` already anticipates extension — its doc describes adding a
+   platform impl "with no change to the four public functions below." **Worth ~5%; do it only if it falls
+   out of §6.1's work, and not before.**
 3. **Whether a cost gate exists at all.** This regression passed every gate, three releases, and multiple
    implementation reviews. A curve that silently changes shape is exactly what rule 10's test-count
    discipline does for tests. **A benchmark that runs only when someone remembers to run it did not
