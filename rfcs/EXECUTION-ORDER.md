@@ -7,8 +7,20 @@ backlog narrative, `rfcs/IMPLEMENTATION-STATUS.md` the current-state snapshot, a
 authority. This file answers only one question the others do not: **what do I pick up next, and what is it
 waiting on?**
 
-Last reconciled: 2026-07-31, after DC-56's scope finding (`8748f00`). **Complete:** DC-59, DC-60, DC-62,
-DC-63. **Implemented, awaiting architect review:** DC-58's N1 (`6f53da3`), DC-61 (`ca4c044`).
+**Last reconciled: 2026-08-18.** Since the previous reconciliation the **Windows programme completed and
+shipped** — DC-87 (mutation), DC-96 (anchor identity), DC-97 (durability evidence), DC-98 (crash
+injection), DC-99 (capability parity) — along with RFC 102 (container durability), RFC 105 (RFC naming
+gate), RFC 106 (anchor race control) and RFC 107 (release distribution surface). **Four releases shipped:
+0.19.0, 0.20.0, 0.21.0, 0.22.1.** Windows tests went 0 → 956; mutation now works on all three platforms
+and is verified there rather than assumed.
+
+**The development lane is now empty of scheduled work.** What remains open is the badge board's five
+criteria plus three concepts recorded 2026-08-18 as RFCs 108, 109 and 110 — see "The current picture"
+below, which is the authority for what to pick up next.
+
+Historical, from the 2026-07-31 reconciliation after DC-56's scope finding (`8748f00`). **Complete:**
+DC-59, DC-60, DC-62, DC-63. **Implemented, awaiting architect review:** DC-58's N1 (`6f53da3`),
+DC-61 (`ca4c044`).
 **DC-56 closes partial** — its index works, but NFR-PERF-01's dominant violator was misidentified in its
 RFC and is carried to **DC-64**, which **also closes partial** (implemented; eliminates the O(operations
 replayed) cost but not the O(live node count) remainder — see §1 row 4). **DC-57 held** — handoff withdrawn. Its premise is no longer unreachable: the owner **decided 2026-08-02 that multi-commit queuing is a scheduled capability**, so DC-57 is blocked on that increment rather than on a decision. **There is now no outstanding owner decision** in the development lane. The release-lane decision
@@ -21,6 +33,74 @@ bootstrap, hold, or release candidate exists, and `release-signers.toml` is empt
 Everything in §1 proceeds regardless. Nothing in §1 activates the release lane; activation requires the
 three-authority commit described in `MILESTONES.md`, and neither implementation completion nor an
 architect recommendation is authoritative for it.
+
+## The current picture — themes and recommended order (2026-08-18)
+
+Derived from `MILESTONES.md`'s status-claim criteria and this file, not from recollection. **This section
+is what to read first**; §1 below is largely a completed record.
+
+### The three themes
+
+**Theme A — the verification promise itself.** Three of the five open criteria, and they are one story:
+
+- **No sync** (criterion 1). Two machines cannot exchange sealed history. Recorded as *"nothing built,
+  unowned"* and **the largest single gap**. DC-78 delivered the trust groundwork — adopted-key sets,
+  per-block signature attribution — and `bundle export`/`import` move objects, but there is no
+  machine-to-machine path. **A distributed VCS that cannot distribute.**
+- **`verify` never checks author signatures** (criterion 5). DC-53 has a design brief and no schedule. The
+  README states every change is signed by its author *and verifiable by anyone*; the only cryptographic
+  verification in the product is one policy-signature call site.
+- **`verify` is roughly O(N³)** (criterion 3) — 34 s at 160 blocks. Measured, unowned, fix named. Offline
+  verifiability that stops being practical at a few hundred commits is not offline verifiability.
+
+**Theme B — whether the promise survives time.** Criterion 2, unanswered: *what minimum must never change
+for a verification claim made today to hold in ten years.* 0.20.0 moved the format five times with no
+migration path. Until this is settled, the badge's *"future releases may require migration"* is
+load-bearing.
+
+**Theme C — release authority.** Criterion 4: the signer bootstrap has never happened.
+`release-signers.toml` is empty and fail-closed, and every release to date — including 0.22.0 and 0.22.1 —
+went out on one person's key without DC-35's two-person authority transaction. It also blocks **DC-43** and
+**DC-49** in §2.
+
+**Outside the themes**, two capability gaps DC-67's conformance suite found and left unowned:
+`checkout --patch-materialize` cannot replay `ReplaceBinary`/`ChangePerm`, and there is **no
+working-directory branch switch** — the second being the kind of thing a new user meets in the first ten
+minutes.
+
+### Why the new concepts do not come first
+
+RFCs 108, 109 and 110 each depend on criteria that are open:
+
+| Concept | Depends on | Why |
+|---|---|---|
+| **RFC 110** — agent safety and provenance | **Criterion 5** | Its audit, compliance and IP-lineage value has no floor while `verify` never checks who signed anything |
+| **RFC 109** — agent-native interface | **Criterion 3**, then 2 | An agent-native tool multiplies commit volume, and at O(N³) three times the history is roughly twenty-seven times the verification cost. Criterion 2 gates its AST-sealing ruling |
+| **RFC 108** — Workspace | **Criterion 3**, then 1 | Sealed Workspaces multiply history the same way; and its §6/§7 topology answer decides whether Workspace transfer *is* sync |
+
+**So the badge board is these concepts' foundation, not their competitor.** Scheduling them first would
+build an audit story on unverified authorship, a high-volume tool on superlinear verification, and
+permanent metadata on an unsettled format.
+
+### Recommended order
+
+| # | Work | Why here |
+|---|---|---|
+| 1 | **DC-53** — repository-wide author trust verification (criterion 5) | Cheapest of the five; closes the only place the README promises what the code does not do; unblocks RFC 110's second pillar entirely |
+| 2 | **Criterion 3** — `verify` cost | Prerequisite of RFC 108 and RFC 109. Measured, fix named — **it needs an owner more than it needs a discovery** |
+| 3 | **Criterion 2** — format stability | Gates every sealing decision in RFCs 109 and 110 |
+| 4 | **RFC 108 topology** (§6/§7) | Decides whether Workspace transfer *is* sync, and therefore whether criterion 1 is attacked directly or arrives as a by-product |
+| 5 | **Criterion 1** — sync | The largest gap; its shape is determined by item 4 |
+
+**The project owner may reorder by product value.** The dependencies above are what constrain order; the
+sequence within them is a judgement.
+
+### The one item that is not engineering work
+
+**Criterion 4 — the signer bootstrap — requires two distinct natural persons** under DC-35's authority
+transaction. Neither the architect nor the developer can perform it, and no increment unblocks it. **Only
+the project owner can start it**, it can run in parallel with everything above, and it independently
+unblocks DC-43 and DC-49.
 
 ## 1. Development lane — available now
 
