@@ -551,12 +551,16 @@ fn import_rejects_a_bundle_whose_author_key_section_disagrees_with_itself()
     let (ref_name, objects, mut author_keys) =
         decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     assert_eq!(author_keys.len(), 1);
-    if let Some(first) = author_keys.first() {
-        author_keys.push(AuthorKeyEntry {
-            key_id: first.key_id.clone(),
-            public_key: [0xcc; 32],
-        });
-    }
+    let key_id = author_keys
+        .first()
+        .map(|entry| entry.key_id.clone())
+        .ok_or_else(|| {
+            prikk_error::PrikkError::Integrity("expected one decoded author-key entry".to_string())
+        })?;
+    author_keys.push(AuthorKeyEntry {
+        key_id: key_id.clone(),
+        public_key: [0xcc; 32],
+    });
     let hostile = encode_bundle(&ref_name, &objects, &author_keys)?;
 
     let target_root = unique_temp_dir("dc53-bundle-internal-conflict-target");
@@ -573,6 +577,16 @@ fn import_rejects_a_bundle_whose_author_key_section_disagrees_with_itself()
         "refused before any write -- the object store must be untouched"
     );
     assert_eq!(before, Some(0));
+    // DC-53 Stage 2 implementation review v1, C1: the object store is not the container this
+    // check protects -- the hazard is a partial write to the author-key container itself, which
+    // has no prune/repair path. Asserted directly, not inferred from the object store happening
+    // to move together with it (a coincidence of today's ordering, not a guarantee).
+    assert_eq!(
+        lookup_author_key_entries(&target, &key_id)?,
+        Vec::new(),
+        "a refused hostile bundle must leave no author-key entry behind, not even the attacker's \
+         first-listed one"
+    );
 
     let _ = std::fs::remove_dir_all(source_root);
     let _ = std::fs::remove_dir_all(target_root);
