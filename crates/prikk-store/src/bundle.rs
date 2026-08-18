@@ -19,7 +19,7 @@ use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_bytes_u
 use crate::fsutil::len_to_u64;
 use crate::layout::{LockableContainer, RepositoryLayout};
 use crate::lock::acquire_container_locks;
-use crate::object_store::{FileObjectStore, ObjectReadSnapshot, ObjectReader, ObjectWriter};
+use crate::object_store::{ObjectReadSnapshot, ObjectReader, ObjectWriteSession, ObjectWriter};
 use crate::refs::RefStore;
 
 const BUNDLE_MAGIC: &[u8; 8] = b"PBNDL001";
@@ -258,11 +258,15 @@ pub fn import_bundle(
     }
     let ref_state_id = ref_state_envelope.object_id();
 
-    let mut object_store = FileObjectStore::new(layout.clone());
+    // RFC 111 §6.1 Stage 2: `import_bundle`'s ref-equivalent write is `received::write_received_-
+    // pointer`, a wholly separate mechanism (received-ref index, not the pointer-index/ref-log
+    // `RefStore::publish` touches) with no `FileObjectStore` construction of its own -- confirmed by
+    // reading `received.rs`. No ref-publication threading needed, only the plain swap.
+    let mut object_store = ObjectWriteSession::open(layout)?;
     let mut written_object_count = 0_usize;
     for envelope in &objects {
         let id = envelope.object_id();
-        if !object_store.contains_object(envelope.object_type, id) {
+        if !object_store.contains_object(envelope.object_type, id)? {
             written_object_count = written_object_count.checked_add(1).ok_or_else(|| {
                 PrikkError::Integrity("bundle import written-object count overflow".to_string())
             })?;

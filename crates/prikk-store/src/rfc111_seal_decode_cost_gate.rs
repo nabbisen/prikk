@@ -14,161 +14,46 @@
 //! process's memory. Making it observable across that boundary (a debug log, an env-gated dump) would
 //! be new machinery built only for this gate, and a wall-clock proxy through the subprocess is exactly
 //! what the handoff rules out (`seal` is dominated by `fsync`, not decode cost, at small N). The gate is
-//! therefore built at the store level: [`simulate_one_seal`] below reproduces `seal_active_no_audit`'s
-//! own "new content" sequence (`crates/prikk-cli/src/seal.rs`, lines 123-229 as of RFC 111 Stage 2),
-//! object read and write for object read and write, so that what this gate measures is what `seal`
-//! actually does -- not something adjacent to it. One thing is deliberately left out: the idempotent
-//! "tip already matches the WAL" shortcut, never reached here since [`simulate_one_seal`] is always
-//! called immediately after a real commit whose WAL record cannot yet match any existing tip.
+//! therefore built at the store level: `simulate_one_seal` (`crate::rfc111_seal_simulation`) reproduces
+//! `seal_active_no_audit`'s own "new content" sequence (`crates/prikk-cli/src/seal.rs`, lines 123-229 as
+//! of RFC 111 Stage 2), object read and write for object read and write, so that what this gate measures
+//! is what `seal` actually does -- not something adjacent to it. One thing is deliberately left out: the
+//! idempotent "tip already matches the WAL" shortcut, never reached here since `simulate_one_seal` is
+//! always called immediately after a real commit whose WAL record cannot yet match any existing tip.
 //! `verify_signer_trusted`'s own explicit pre-check *is* skipped as redundant, not as out of scope --
 //! `finish_interrupted_publication` performs its own trust verification internally
 //! (`refs/evidence.rs::validate_signer_backed_recovery`, found empirically: this gate's first draft
 //! assumed trust checking was confined to the explicit pre-check and failed with "publication trust
 //! policy is missing or unreadable" until a real adopted maintainer key was wired in), so a real,
 //! adopted `Ed25519MaintainerSigner` is required regardless of whether the pre-check itself runs.
-//! **If `seal.rs`'s own sequence changes, this function must be updated to match, or the gate silently
-//! stops covering `seal`.**
+//! **If `seal.rs`'s own sequence changes, `simulate_one_seal` must be updated to match, or the gate
+//! silently stops covering `seal`.**
+//!
+//! **Replica-fidelity risk, and how it is now bounded (Stage 2 gate review C1).** This gate's own
+//! decode counter proves nothing about `simulate_one_seal`'s fidelity to `seal.rs` -- the two could
+//! silently diverge and the count would still look right. Discharged by a separate drift guard,
+//! `crates/prikk-cli/tests/rfc111_seal_drift_guard.rs`: it runs the real `prikk seal` binary against a
+//! fixture and `simulate_one_seal` (exposed cross-crate via `crate::rfc111_seal_simulation`'s
+//! `test-support`-gated wrapper) against an identical one, and asserts the two resulting repositories
+//! agree on object ids and ref state. `simulate_one_seal` now has exactly one implementation, called by
+//! both this gate and that drift guard, so the two cannot drift from *each other* -- only from `seal.rs`
+//! itself, which is what the drift guard checks.
 
 use prikk_error::Result;
-use prikk_object::{
-    BlockKind, BlockPayload, CanonicalEncode, ObjectId, ObjectType, RefKind, RefStatePayload,
-    RefUpdatePayload,
-};
 
 use crate::index::{replay_index_decode_count_for_test, reset_replay_index_decode_count_for_test};
+use crate::rfc111_seal_simulation::simulate_one_seal;
 use crate::test_support::unique_temp_dir;
 use crate::worktree_patch::{WorktreePatchCommitOptions, commit_worktree_changes_signed};
 use crate::{
-    ActiveLock, Ed25519AuthorSigner, Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner,
-    ObjectReader, ObjectWriter, RefPublication, RefStore, RepositoryLayout, Wal,
-    add_trusted_maintainer, derive_next_state_root, finish_active_publication_cleanup,
-    maintainer_signature,
+    Ed25519AuthorSigner, Ed25519MaintainerSigner, MaintainerSigner, RepositoryLayout,
+    add_trusted_maintainer,
 };
 
 const REF_NAME: &str = "heads/main";
 
 fn maintainer_signer() -> Result<Ed25519MaintainerSigner> {
     Ed25519MaintainerSigner::from_seed("rfc111-seal-gate-maintainer", &[0x72; 32])
-}
-
-fn signed_envelope(
-    object_type: ObjectType,
-    schema_version: u32,
-    canonical_payload: Vec<u8>,
-    signer: &Ed25519MaintainerSigner,
-) -> Result<prikk_object::ObjectEnvelope> {
-    let mut envelope =
-        prikk_object::ObjectEnvelope::unsigned(object_type, schema_version, canonical_payload);
-    let object_id = envelope.object_id();
-    envelope.add_signature(maintainer_signature(signer, object_type, object_id)?)?;
-    Ok(envelope)
-}
-
-/// Mirrors `seal_active_no_audit`'s "new content" path -- see the module doc for exactly what is and
-/// is not reproduced, and why. Must be called with a non-empty active WAL already present for
-/// `ref_name` (a real commit, immediately before this call) and returns the published RefState id.
-fn simulate_one_seal(
-    layout: &RepositoryLayout,
-    ref_name: &str,
-    signer: &Ed25519MaintainerSigner,
-) -> Result<ObjectId> {
-    let active_lock = ActiveLock::acquire(layout)?;
-    let wal = Wal::for_layout(layout);
-    let replay = wal.replay()?;
-
-    let mut object_store = FileObjectStore::new(layout.clone());
-    let ref_store = RefStore::new(layout.clone());
-    let current = match ref_store.read_current_ref_state_id(ref_name)? {
-        Some(ref_state_id) => {
-            let envelope = object_store
-                .read_typed(ref_state_id, ObjectType::RefState)?
-                .ok_or_else(|| {
-                    prikk_error::PrikkError::Integrity("current RefState missing".to_string())
-                })?;
-            let payload = RefStatePayload::decode_canonical(
-                &envelope.canonical_payload,
-                envelope.schema_version,
-            )?;
-            Some((ref_state_id, payload))
-        }
-        None => None,
-    };
-
-    let mut patch_ids = Vec::with_capacity(replay.records.len());
-    for record in &replay.records {
-        patch_ids.push(object_store.write_object(&record.envelope)?);
-    }
-
-    let parent = current
-        .as_ref()
-        .map(|(_, payload)| payload.target_object_id);
-    let state_merkle_root = derive_next_state_root(&object_store, parent, &patch_ids)?;
-    let block_payload = BlockPayload {
-        parent_block_ids: parent.into_iter().collect(),
-        kind: if current.is_some() {
-            BlockKind::Normal
-        } else {
-            BlockKind::Root
-        },
-        patch_ids: patch_ids.clone(),
-        state_merkle_root,
-        snapshot_blob_ref: None,
-        mainline_parent_id: None,
-        merge_baseline_block_id: None,
-    };
-    let block_envelope = signed_envelope(
-        ObjectType::Block,
-        2,
-        block_payload.to_canonical_bytes()?,
-        signer,
-    )?;
-    let block_id = object_store.write_object(&block_envelope)?;
-
-    let update_seq = current
-        .as_ref()
-        .map(|(_, payload)| payload.update_seq + 1)
-        .unwrap_or(1);
-    let previous_ref_state_id = current.as_ref().map(|(id, _)| *id);
-    let ref_state_payload = RefStatePayload {
-        ref_name: ref_name.to_string(),
-        kind: RefKind::Branch,
-        target_object_id: block_id,
-        update_seq,
-        previous_ref_state_id,
-        required_attestation_ids: Vec::new(),
-        closed: false,
-    };
-    let ref_state_envelope = signed_envelope(
-        ObjectType::RefState,
-        1,
-        ref_state_payload.to_canonical_bytes()?,
-        signer,
-    )?;
-    let ref_state_id = ref_state_envelope.object_id();
-    let ref_update_payload = RefUpdatePayload {
-        ref_name: ref_name.to_string(),
-        old_ref_state_id: previous_ref_state_id,
-        new_ref_state_id: ref_state_id,
-        new_target_object_id: block_id,
-        update_seq,
-        created_at: 0,
-        author_key_id: signer.key_id().to_string(),
-    };
-    let ref_update_envelope = signed_envelope(
-        ObjectType::RefUpdate,
-        1,
-        ref_update_payload.to_canonical_bytes()?,
-        signer,
-    )?;
-    let publication = RefPublication {
-        ref_name: ref_name.to_string(),
-        expected_previous_ref_state_id: previous_ref_state_id,
-        ref_state: ref_state_envelope,
-        ref_update: ref_update_envelope,
-    };
-    let published = ref_store.finish_interrupted_publication(&active_lock, &publication)?;
-    finish_active_publication_cleanup(layout, &active_lock)?;
-    Ok(published)
 }
 
 fn author_signer() -> Result<Ed25519AuthorSigner> {

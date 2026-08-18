@@ -20,8 +20,8 @@ use prikk_object::{
     RefUpdatePayload, TagPayload,
 };
 use prikk_store::{
-    FileObjectStore, MaintainerSigner, ObjectReader, ObjectWriter, RefPublication, RefStore,
-    maintainer_signature, validate_local_tag_ref,
+    FileObjectStore, MaintainerSigner, ObjectReader, ObjectWriteSession, ObjectWriter,
+    RefPublication, RefStore, maintainer_signature, validate_local_tag_ref,
 };
 
 /// Dispatch `prikk tag [list|create]`.
@@ -93,7 +93,7 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
         .map_err(|err| err.to_string())?;
     let canonical = validate_local_tag_ref(&parsed.name).map_err(|err| err.to_string())?;
     let ref_store = RefStore::new(layout.clone());
-    let mut object_store = FileObjectStore::new(layout.clone());
+    let mut object_store = ObjectWriteSession::open(&layout).map_err(|err| err.to_string())?;
 
     if ref_store
         .read_current_ref_state_id(&canonical)
@@ -167,7 +167,7 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
         ref_update: ref_update_envelope,
     };
     let published_ref_state_id = ref_store
-        .publish(&publication)
+        .publish_with_object_store(&mut object_store, &publication)
         .map_err(|err| err.to_string())?;
 
     println!("created tag {canonical}");
@@ -181,7 +181,7 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
 /// target is a block.
 fn resolve_target_block(
     ref_store: &RefStore,
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     target: &str,
 ) -> std::result::Result<ObjectId, String> {
     if let Ok(block_id) = target.parse::<ObjectId>() {

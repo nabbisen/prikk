@@ -34,7 +34,7 @@ use crate::lifecycle_cache::incremental::resolve_baseline_state;
 use crate::lock::ActiveLock;
 use crate::node_id_gen::{NodeIdEntropySource, NodeIdGenerator};
 use crate::node_lifecycle::{LiveNode, NodeContent, NodeLifecycleState};
-use crate::object_store::{FileObjectStore, ObjectReader, ObjectWriter};
+use crate::object_store::{ObjectReader, ObjectWriteSession, ObjectWriter};
 use crate::patch_replay::{WorktreeBaseline, resolve_worktree_baseline};
 use crate::path::RepoPath;
 use crate::text_span;
@@ -258,7 +258,11 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
         require_active_ref_for_non_empty_wal(layout, &canonical_ref).map_err(AuthorError::Store)?;
     }
 
-    let object_store = FileObjectStore::new(layout.clone());
+    // RFC 111 §6.1 Stage 2: `author_worktree_patch` never publishes a ref itself (that happens at
+    // seal time, a different operation) -- confirmed by grep, no `.publish(`/
+    // `finish_interrupted_publication`/`RefPublication` anywhere in this file -- so it needs no
+    // ref-publication threading, only the plain object-write-session swap.
+    let mut object_store = ObjectWriteSession::open(layout).map_err(AuthorError::Store)?;
 
     // Baseline node lifecycle state from authoritative replay only (E3), or an empty genesis
     // baseline (4.4b) when the target ref has never been published. DC-64: `resolve_baseline_state`
@@ -413,7 +417,7 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
                             Some(bytes) => bytes,
                             None => read_existing_file_bytes(layout, path, BlobKind::Binary)?,
                         };
-                        planned.push(plan_replace_binary(&object_store, base, &bytes, path)?);
+                        planned.push(plan_replace_binary(&mut object_store, base, &bytes, path)?);
                     }
                 }
                 NodeKind::Symlink => {
@@ -488,7 +492,7 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     for (path, bytes, mode) in &create_candidates {
         let repo_path = RepoPath::parse(path).map_err(AuthorError::Store)?;
         let (blob_kind, node_kind) = classify_new(bytes);
-        let blob_id = write_content_blob(&object_store, blob_kind, bytes)?;
+        let blob_id = write_content_blob(&mut object_store, blob_kind, bytes)?;
         let node_id = generator
             .mint_fresh(&working_state)
             .map_err(AuthorError::Mint)?;
@@ -606,7 +610,7 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
 /// True if the baseline block carries a snapshot blob reference. Used to reject a snapshot-only
 /// baseline (review E3) while still allowing a genuinely empty node repo to create its first file.
 fn baseline_block_has_snapshot_ref(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     baseline_block: ObjectId,
 ) -> std::result::Result<bool, AuthorError> {
     let envelope = object_store
@@ -634,7 +638,7 @@ fn classify_new(bytes: &[u8]) -> (BlobKind, NodeKind) {
 /// Plan an arbitrary-span `EditText` for a modified existing `TextFile`, with all span identity computed
 /// through the shared `text_span` module (no authoring-local span logic).
 fn plan_edit_text(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     base: &BaselineFile,
     new_bytes: &[u8],
     path: &str,
@@ -676,7 +680,7 @@ fn plan_edit_text(
     })
 }
 fn plan_replace_binary(
-    object_store: &FileObjectStore,
+    object_store: &mut impl ObjectWriter,
     base: &BaselineFile,
     new_bytes: &[u8],
     path: &str,
@@ -840,15 +844,20 @@ fn read_worktree_file_bytes(
 }
 
 fn write_content_blob(
-    object_store: &FileObjectStore,
+    object_store: &mut impl ObjectWriter,
     kind: BlobKind,
     bytes: &[u8],
 ) -> std::result::Result<ObjectId, AuthorError> {
     let payload = BlobPayload::new(kind, bytes.to_vec());
     let canonical = payload.to_canonical_bytes().map_err(AuthorError::Store)?;
     let envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, canonical);
-    let mut store = object_store.clone();
-    store.write_object(&envelope).map_err(AuthorError::Store)
+    // RFC 111 §6.1 Stage 2: no longer clones the store to get a mutable local (`FileObjectStore`
+    // tolerated that -- stateless, so a clone was harmless -- but cloning `ObjectWriteSession` would
+    // fork its in-memory snapshot, silently discarding this write from the caller's own copy). Takes
+    // `object_store` mutably instead, threaded all the way up to where the session is opened.
+    object_store
+        .write_object(&envelope)
+        .map_err(AuthorError::Store)
 }
 
 /// Read a text node's baseline content from a directly-stored `Blob`, when one exists. `Ok(None)`
@@ -856,7 +865,7 @@ fn write_content_blob(
 /// `EditText` (DC-65: its `blob_id` is a content identity, never a stored object), not an error by
 /// itself; the caller falls back to replay-based materialization.
 fn read_file_blob_bytes_if_present(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     blob_id: ObjectId,
 ) -> std::result::Result<Option<Vec<u8>>, AuthorError> {
     let Some(envelope) = object_store
@@ -880,7 +889,7 @@ fn read_file_blob_bytes_if_present(
 /// exceptional, for any node whose most recent *sealed* operation was an `EditText`; see the invariant
 /// document at `rfcs/handoffs/DC-65-text-edit-baseline-content/prerequisite-questions-v1.md`.
 fn current_text_for_node(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     base: &BaselineFile,
     path: &str,
     lineage_baseline_block_id: Option<ObjectId>,

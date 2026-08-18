@@ -26,7 +26,7 @@ use crate::merge_evidence::{
 };
 use crate::received::validate_received_ref;
 use crate::{
-    FileObjectStore, MaintainerSigner, ObjectReader, ObjectWriter, RefPublication, RefStore,
+    MaintainerSigner, ObjectReader, ObjectWriteSession, ObjectWriter, RefPublication, RefStore,
     RepositoryLayout, derive_next_state_root, maintainer_signature, validate_local_branch_ref,
     verify_signer_trusted,
 };
@@ -117,7 +117,7 @@ pub fn execute_merge(
     // Only proceeding to seal needs a trusted signer.
     let policy = verify_signer_trusted(layout, signer)?;
 
-    let object_store = FileObjectStore::new(layout.clone());
+    let mut object_store = ObjectWriteSession::open(layout)?;
 
     // DC-85 §3A.1's mandatory criterion: a received ref's blocks never passed a trust check on the
     // way in (`import_bundle` performs none, deliberately). Checked here, before any write, reusing
@@ -176,7 +176,6 @@ pub fn execute_merge(
         mainline_parent_id: Some(parent_block_id),
         merge_baseline_block_id: Some(baseline_block_id),
     };
-    let mut object_store = object_store;
     let block_envelope = signed_envelope(
         ObjectType::Block,
         2,
@@ -225,7 +224,8 @@ pub fn execute_merge(
         ref_state: ref_state_envelope,
         ref_update: ref_update_envelope,
     };
-    let published_ref_state_id = ref_store.publish(&publication)?;
+    let published_ref_state_id =
+        ref_store.publish_with_object_store(&mut object_store, &publication)?;
 
     Ok(MergeExecutionReport {
         into_ref,

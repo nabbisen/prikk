@@ -4,12 +4,12 @@ use prikk_object::{
     BlockPayload, CanonicalEncode, ObjectEnvelope, ObjectType, RefStatePayload, RefUpdatePayload,
 };
 use prikk_store::{
-    ActiveLock, FileObjectStore, MaintainerSigner, ObjectReader, ObjectWriter, RefPublication,
-    RefStore, RepositoryFormat, maintainer_signature,
+    ActiveLock, MaintainerSigner, ObjectReader, ObjectWriter, RefPublication, RefStore,
+    RepositoryFormat, RepositoryLayout, maintainer_signature,
 };
 
 pub(super) fn persist_wal_patches(
-    object_store: &mut FileObjectStore,
+    object_store: &mut impl ObjectWriter,
     records: &[prikk_store::WalRecord],
 ) -> Result<Vec<prikk_object::ObjectId>, String> {
     let mut patch_ids = Vec::with_capacity(records.len());
@@ -46,7 +46,7 @@ fn require_patch_record(record: &prikk_store::WalRecord) -> Result<(), String> {
 }
 
 pub(super) fn current_tip_matches_wal_patches(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     current: &CurrentRefState,
     wal_patch_ids: &[prikk_object::ObjectId],
 ) -> Result<bool, String> {
@@ -65,7 +65,8 @@ pub(super) fn current_tip_matches_wal_patches(
 }
 
 pub(super) fn current_ref_state(
-    object_store: &FileObjectStore,
+    layout: &RepositoryLayout,
+    object_store: &impl ObjectReader,
     ref_store: &RefStore,
     ref_name: &str,
 ) -> Result<Option<CurrentRefState>, String> {
@@ -91,8 +92,7 @@ pub(super) fn current_ref_state(
             ));
         }
         if !log.records.is_empty()
-            && (object_store.layout().format() == RepositoryFormat::CurrentV6
-                || log.records.len() > 1)
+            && (layout.format() == RepositoryFormat::CurrentV6 || log.records.len() > 1)
         {
             return Err(format!(
                 "ref {ref_name} pointer/log state does not match the expected publication \
@@ -137,6 +137,7 @@ pub(super) fn current_ref_state(
 
 pub(super) fn finish_current_publication(
     ref_store: &RefStore,
+    object_store: &mut impl ObjectWriter,
     active_lock: &ActiveLock,
     ref_name: &str,
     current: &CurrentRefState,
@@ -158,7 +159,8 @@ pub(super) fn finish_current_publication(
         signer,
     )?;
     ref_store
-        .finish_interrupted_publication(
+        .finish_interrupted_publication_with_object_store(
+            object_store,
             active_lock,
             &RefPublication {
                 ref_name: ref_name.to_string(),

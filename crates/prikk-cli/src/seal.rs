@@ -11,10 +11,10 @@ use prikk_object::{
     RefUpdatePayload,
 };
 use prikk_store::{
-    ActiveLock, ActiveRefMetadata, FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication,
-    RefStore, RepositoryLayout, Wal, derive_next_state_root, finish_active_publication_cleanup,
-    read_active_ref_metadata, remove_active_ref_metadata, validate_local_branch_ref,
-    verify_signer_trusted,
+    ActiveLock, ActiveRefMetadata, MaintainerSigner, ObjectWriteSession, ObjectWriter,
+    RefPublication, RefStore, RepositoryLayout, Wal, derive_next_state_root,
+    finish_active_publication_cleanup, read_active_ref_metadata, remove_active_ref_metadata,
+    validate_local_branch_ref, verify_signer_trusted,
 };
 
 mod support;
@@ -120,14 +120,21 @@ fn seal_active_no_audit(
         }
     }
 
-    let mut object_store = FileObjectStore::new(layout.clone());
+    let mut object_store = ObjectWriteSession::open(&layout).map_err(|err| err.to_string())?;
     let ref_store = RefStore::new(layout.clone());
-    let current = current_ref_state(&object_store, &ref_store, &ref_name)?;
+    let current = current_ref_state(&layout, &object_store, &ref_store, &ref_name)?;
     let wal_patch_ids = collect_wal_patch_ids(&replay.records)?;
     if let Some(current) = current.as_ref() {
         if current_tip_matches_wal_patches(&object_store, current, &wal_patch_ids)? {
             verify_signer_trusted(&layout, signer).map_err(|err| err.to_string())?;
-            finish_current_publication(&ref_store, &active_lock, &ref_name, current, signer)?;
+            finish_current_publication(
+                &ref_store,
+                &mut object_store,
+                &active_lock,
+                &ref_name,
+                current,
+                signer,
+            )?;
             finish_active_publication_cleanup(&layout, &active_lock)
                 .map_err(|err| err.to_string())?;
             return Ok(SealCommandResult {
@@ -218,7 +225,11 @@ fn seal_active_no_audit(
         ref_update: ref_update_envelope,
     };
     let published_ref_state_id = ref_store
-        .finish_interrupted_publication(&active_lock, &publication)
+        .finish_interrupted_publication_with_object_store(
+            &mut object_store,
+            &active_lock,
+            &publication,
+        )
         .map_err(|err| err.to_string())?;
     finish_active_publication_cleanup(&layout, &active_lock).map_err(|err| err.to_string())?;
     Ok(SealCommandResult {

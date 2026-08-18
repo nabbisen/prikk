@@ -46,7 +46,7 @@ use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, RefUpd
 
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
-use crate::object_store::{FileObjectStore, ObjectReader};
+use crate::object_store::{FileObjectStore, ObjectReader, ObjectWriter};
 
 /// Test-only convenience matching the retired `refs/log.rs::append_log_record`'s own 3-argument
 /// call shape exactly, for fixtures that need to plant a specific log record directly without going
@@ -155,17 +155,49 @@ impl RefStore {
         &self.layout
     }
 
-    /// Publish a signed RefState with ref-specific locking and CAS.
+    /// Publish a signed RefState with ref-specific locking and CAS. Writes through a freshly
+    /// decoded `FileObjectStore` -- the safe default for any caller not holding its own session. See
+    /// [`Self::publish_with_object_store`] for a caller that already has one (RFC 111 §6.1 Stage 2).
     pub fn publish(&self, publication: &RefPublication) -> Result<ObjectId> {
+        self.publish_with_object_store(&mut FileObjectStore::new(self.layout.clone()), publication)
+    }
+
+    /// Same as [`Self::publish`], but writes the RefState through the caller's own object store
+    /// instead of constructing a fresh one -- required for any caller holding an `ObjectWriteSession`
+    /// (RFC 111 §6.1 Stage 2 addendum, C1: this is the nested-writer site that must be threaded at or
+    /// before the first writer migration, not after).
+    pub fn publish_with_object_store(
+        &self,
+        object_store: &mut impl ObjectWriter,
+        publication: &RefPublication,
+    ) -> Result<ObjectId> {
         self.layout.require_current_format()?;
         crate::format::validate_object_envelope(self.layout.format(), &publication.ref_state)?;
         crate::format::validate_object_envelope(self.layout.format(), &publication.ref_update)?;
-        publication::publish(self, publication)
+        publication::publish(self, object_store, publication)
     }
 
     /// Finish an exact signer-backed interrupted publication, including a framing-incomplete tail.
+    /// Writes through a freshly decoded `FileObjectStore` -- see
+    /// [`Self::finish_interrupted_publication_with_object_store`] for a caller that already has one.
     pub fn finish_interrupted_publication(
         &self,
+        active_lock: &ActiveLock,
+        publication: &RefPublication,
+    ) -> Result<ObjectId> {
+        self.finish_interrupted_publication_with_object_store(
+            &mut FileObjectStore::new(self.layout.clone()),
+            active_lock,
+            publication,
+        )
+    }
+
+    /// Same as [`Self::finish_interrupted_publication`], but writes the RefState through the
+    /// caller's own object store instead of constructing a fresh one (RFC 111 §6.1 Stage 2 addendum,
+    /// C1).
+    pub fn finish_interrupted_publication_with_object_store(
+        &self,
+        object_store: &mut impl ObjectWriter,
         active_lock: &ActiveLock,
         publication: &RefPublication,
     ) -> Result<ObjectId> {
@@ -174,7 +206,7 @@ impl RefStore {
         crate::format::validate_read_schema(self.layout.format(), &publication.ref_state)?;
         crate::format::validate_read_schema(self.layout.format(), &publication.ref_update)?;
         evidence::validate_signer_backed_recovery(&self.layout, publication)?;
-        publication::finish_interrupted(self, publication)
+        publication::finish_interrupted(self, object_store, publication)
     }
 
     #[cfg(all(test, target_os = "linux"))]
@@ -182,7 +214,11 @@ impl RefStore {
         &self,
         publication: &RefPublication,
     ) -> Result<ObjectId> {
-        publication::finish_interrupted(self, publication)
+        publication::finish_interrupted(
+            self,
+            &mut FileObjectStore::new(self.layout.clone()),
+            publication,
+        )
     }
 
     /// Read the current RefState object ID for a ref name.
