@@ -64,6 +64,22 @@ format change, use `prikk bundle export` on a version that still opens the old r
 `prikk bundle import` into a new one. Do not copy `.prikk/` or edit `FORMAT` to simulate migration —
 editing the marker does not change the on-disk shape it describes.
 
+## Bundle Format Transitions
+
+The bundle exchange artifact (`prikk bundle export`/`import`) carries its own magic and version,
+independent of the repository format above. Current bundles use magic **`PBNDL002`** (DC-53 Stage 2),
+which added an AUTHOR key-material section after the object list — an addition the prior `PBNDL001`
+format has no room for and cannot be extended into silently, so the bump is fail-closed rather than
+additive: `decode_bundle` ends by requiring every byte to be consumed, so an older client meeting a
+newer bundle already refuses it outright with its own hardcoded magic check, and a current client
+meeting a `PBNDL001` bundle refuses it by name (*"this bundle uses format PBNDL001, which prikk no
+longer supports... re-export with a current prikk build"*) rather than a generic malformed-input
+message.
+
+As with repository formats, **there is no migration path for an old bundle** — no in-place upgrade
+from `PBNDL001` to `PBNDL002`. Re-export from a version of prikk that still produces the format the
+receiver needs.
+
 The workspace's declared minimum Rust version is exactly 1.85.0. The locked product workspace must
 check, test, and build on that toolchain:
 

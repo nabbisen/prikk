@@ -248,16 +248,19 @@ fn dc53_vector_6_a_conflicting_key_is_rejected_at_record_time() -> prikk_error::
 
     let root = crate::test_support::unique_temp_dir("dc53-vector6-record");
     let layout = crate::layout::RepositoryLayout::init(root.clone())?;
+    let active_lock = crate::lock::ActiveLock::acquire(&layout)?;
     crate::author_key_index::record_author_key_material(
         &layout,
         VECTOR6_KEY_ID,
         VECTOR6_KEY_A_PUBLIC,
+        &active_lock,
     )?;
     assert!(
         crate::author_key_index::record_author_key_material(
             &layout,
             VECTOR6_KEY_ID,
             VECTOR6_KEY_B_PUBLIC,
+            &active_lock,
         )
         .is_err()
     );
@@ -274,10 +277,12 @@ fn dc53_vector_6_verification_fails_closed_against_a_conflicting_key_id() -> pri
 {
     let root = crate::test_support::unique_temp_dir("dc53-vector6-verify");
     let layout = crate::layout::RepositoryLayout::init(root.clone())?;
+    let active_lock = crate::lock::ActiveLock::acquire(&layout)?;
     crate::author_key_index::record_author_key_material(
         &layout,
         VECTOR6_KEY_ID,
         VECTOR6_KEY_A_PUBLIC,
+        &active_lock,
     )?;
     crate::author_key_index::force_conflicting_author_key_entry_for_test(
         &layout,
