@@ -29,6 +29,10 @@ Prikk uses a native `.prikk/` repository format. It is not a Git wrapper and doe
 storage backend. The project aims to combine patch-based semantic precision with practical performance
 by sealing history into immutable blocks and keeping expensive patch reasoning bounded to active work.
 
+> **About the name.** *Prikk* is the Norwegian word for *dot*. It was chosen because it opens with the
+> **p** of *patches*, and because a patch history is exactly that: dots — patches as nodes — connected
+> into a DAG.
+
 ## Project Goals
 
 Prikk is designed to be:
