@@ -1,9 +1,12 @@
 # RFC 111 — Object read cost regression: every object read is O(N)
 
-**Status.** **Proposed.** Found 2026-08-18 by the architect while measuring whether badge criterion 3 was
-still open. **Not a design; a measured defect with a located cause.** Independence: author-reviewed, the
-standing ceiling — the measurements in §2-§4 are reproducible from the named harness and commits, which
-is what compensates for it here.
+**Status.** **ACCEPTED by the project owner 2026-08-18** ("RFC 111 is accepted. Proceed."). Found
+2026-08-18 by the architect while measuring whether badge criterion 3 was still open. **§6.3 — whether a
+cost gate should exist — is NOT settled by this acceptance and remains an open question for the owner.**
+
+**Not a design; a measured defect with a located cause.** Independence: author-reviewed, the standing
+ceiling — the measurements in §2-§5.1 are reproducible from the named harness and commits, which is what
+compensates for it here.
 
 **Arises from.** The owner's 2026-08-18 direction to take criterion 3 next. The investigation found the
 criterion's board row was stale, and then found something the row did not describe.
