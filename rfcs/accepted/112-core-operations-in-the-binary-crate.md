@@ -1,7 +1,9 @@
 # RFC 112 — Three core write operations live in the binary crate
 
-**Status.** **Proposed.** Raised by the architect 2026-08-18, at the project owner's request, from a
-finding surfaced by RFC 111 Stage 2. **Not a design.** Independence: author-reviewed, the standing
+**Status.** **ACCEPTED by the project owner 2026-08-18** ("RFC 112 is accepted."). Raised by the
+architect the same day, at the owner's request, from a finding surfaced by RFC 111 Stage 2.
+**Acceptance clears the direction, not the schedule and not the implementation** — §4's five questions
+still precede any design, and this increment remains unscheduled. **Not a design.** Independence: author-reviewed, the standing
 ceiling — every claim below is a file-level fact that can be re-derived in one command.
 
 **Arises from.** RFC 111 Stage 2 needed a cost gate on `seal` and could not write one, because `seal` is
