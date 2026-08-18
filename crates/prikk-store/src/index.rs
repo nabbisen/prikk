@@ -292,7 +292,33 @@ pub(crate) fn replay_index(layout: &RepositoryLayout) -> Result<IndexReplay> {
             record_outcomes: Vec::new(),
         });
     };
+    #[cfg(test)]
+    record_replay_index_decode_for_test();
     decode_index_records(&bytes)
+}
+
+// RFC 111 §7/§8's cost gate: counts how many times this function actually decodes the on-disk index
+// (the line above, not the early "missing file" return above it, which decodes nothing). Thread-local,
+// matching `fsutil/anchored/failpoints.rs`'s existing counting shape -- so parallel `cargo test`
+// threads never see each other's counts.
+#[cfg(test)]
+std::thread_local! {
+    static REPLAY_INDEX_DECODE_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn record_replay_index_decode_for_test() {
+    REPLAY_INDEX_DECODE_COUNT.with(|count| count.set(count.get() + 1));
+}
+
+#[cfg(test)]
+pub(crate) fn reset_replay_index_decode_count_for_test() {
+    REPLAY_INDEX_DECODE_COUNT.with(|count| count.set(0));
+}
+
+#[cfg(test)]
+pub(crate) fn replay_index_decode_count_for_test() -> usize {
+    REPLAY_INDEX_DECODE_COUNT.with(|count| count.get())
 }
 
 /// Look up one object's container location. Trusts the index for location (design §12/§10.3): one
