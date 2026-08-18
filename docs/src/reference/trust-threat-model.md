@@ -1,8 +1,10 @@
 # Trust and Threat Model
 
 This page is the authoritative current-state reference for Prikk's trust and threat model. It
-describes the released implementation through 0.16.0 and is grounded in the code, released RFCs, and
-implementation status records listed in the anchor table at the foot of the page.
+describes the implementation on `main` as of 2026-08-18 (released through 0.22.1) and is grounded in
+the code, released RFCs, and implementation status records listed in the anchor table at the foot of the
+page. **Refreshed 2026-08-18 after DC-53 completed**; before that refresh this page still described 0.16.0
+and stated several AUTHOR claims that DC-53 had falsified.
 
 ## Core Caveats
 
@@ -46,8 +48,10 @@ and strict verification live in `prikk-crypto`; trust stores, key persistence, r
 and policy are outside that crate.
 
 AUTHOR signatures identify the key used by the authoring path for Patch envelopes. Production commit
-and rollback-draft authoring use real Ed25519 AUTHOR signatures. Prikk does not currently implement a
-repository-wide AUTHOR trust store, AUTHOR revocation, AUTHOR rotation, or AUTHOR identity policy.
+and rollback-draft authoring use real Ed25519 AUTHOR signatures. **Since DC-53 (2026-08-18) Prikk does
+maintain a repository-local AUTHOR key-material store and `verify` checks every reachable Patch's AUTHOR
+signature against it.** Prikk still implements **no** AUTHOR revocation, rotation, expiration, or
+identity policy.
 
 **What AUTHOR key material proves, stated precisely (DC-53 Stage 2).** A repository records each
 `key_id`'s public key the first time it observes a Patch signed under that name — trust-on-first-use,
@@ -107,9 +111,11 @@ Block references, ref pointer/log consistency, active WAL records, active WAL me
 rollback-draft structure for active and sealed rollback-marked Patches, and publication trust for
 Block, RefState, and RefUpdate envelopes against the repository-local maintainer trust policy.
 
-`verify` does not prove that a repository is globally trustworthy. It does not enforce repository-wide
-AUTHOR trust, historical PKI semantics, revocation, rotation, threshold policy beyond `required = 1`,
-remote policy, hosted identity, or complete crash-proof durability.
+`verify` does not prove that a repository is globally trustworthy. **It does check every reachable
+Patch's AUTHOR signature against recorded key material (DC-53), and fails when one does not verify or
+when a `key_id`'s recorded material contradicts itself** — but that is continuity, not identity. It does
+not enforce historical PKI semantics, AUTHOR revocation, rotation, expiration, threshold policy beyond
+`required = 1`, remote policy, hosted identity, or complete crash-proof durability.
 
 ## Rollback-Draft Boundary
 
@@ -120,7 +126,8 @@ placeholder marker key id, requires 64-byte signature payloads, and compares the
 the inverse Patch derived from the current ref.
 
 This is structural and semantic validation for the supported rollback subset. It is not rollback
-authorization, does not publish rollback refs, and does not enforce repository-wide AUTHOR trust.
+authorization and does not publish rollback refs. **Repository-wide AUTHOR verification is performed by
+`verify`, not here** (DC-53); this path's own checks are unchanged.
 
 ## Threat Boundaries
 
@@ -141,12 +148,12 @@ and stable repository-format migration.
 | Ed25519 is the only current signing and verification algorithm. | [`prikk-crypto`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-crypto/src/lib.rs), [`signature.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/signature.rs) |
 | Signature preimages bind algorithm, object type, object id, signer role, and key id. | [`signature.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/signature.rs), [`author_signing.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/author_signing.rs), [`maintainer_signing.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/maintainer_signing.rs) |
 | AUTHOR signing is real Ed25519 on Patch envelopes, not a placeholder. | [`author_signing.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/author_signing.rs), [`node_authoring.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/worktree_patch/node_authoring.rs), [DC-10](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-10-ROLLBACK-DRAFT-SIGNING.md) |
-| AUTHOR key material comes from environment variables and is not persisted by Prikk. | [`main.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/main.rs), [`author_signing.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/author_signing.rs), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
+| AUTHOR *private* key material comes from environment variables and is never persisted by Prikk. **The public half is persisted** in the repository-local author-key container, recorded at authoring time (DC-53), because an Ed25519 signature cannot be verified without it. | [`main.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/main.rs), [`author_signing.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/author_signing.rs), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
 | MAINTAINER publication signing is real Ed25519 and role-bound. | [`maintainer_signing.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/maintainer_signing.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-11](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-11-MAINTAINER-TRUST-STORE.md) |
 | Maintainer trust is repository-local, held as a set of adopted keys, with `required = 1` meaning any one adopted key's signature suffices. | [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-11 FDD-04 handoff](https://github.com/nabbisen/prikk/blob/main/rfcs/handoffs/DC-11-maintainer-trust-store/fdd-04-update.md) |
 | Seal validates the maintainer signer against local trust before publication. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs) |
 | Verify checks publication trust for Block, RefState, and RefUpdate envelopes. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs) |
-| Verify does not enforce repository-wide AUTHOR trust. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`rollback_verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/rollback_verify.rs), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
+| Verify enforces repository-wide AUTHOR verification (DC-53): every reachable Patch's AUTHOR signature is checked against recorded key material, one `key_id` binds to one public key, and material travels with a `PBNDL002` bundle. It remains trust-on-first-use — continuity, not identity. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`rollback_verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/rollback_verify.rs), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
 | Rollback-draft verification is structural and semantic for the supported subset only. | [`rollback_verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/rollback_verify.rs), [DC-14](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-14-ARBITRARY-SPAN-TEXT-INVERSE-ROLLBACK.md), [DC-14 FDD-04 handoff](https://github.com/nabbisen/prikk/blob/main/rfcs/handoffs/DC-14-arbitrary-span-text-inverse-rollback/fdd-04-update.md) |
 | Active WAL metadata integrity is part of verification and doctor diagnostics. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [DC-15](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md) |
 | Durability and platform claims remain limited by current test evidence. | [DC-24 baseline recap](https://github.com/nabbisen/prikk/blob/main/rfcs/handoffs/DC-24-data-model-trust-threat-docs/baseline-recap.md), [DC-24](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md) |
