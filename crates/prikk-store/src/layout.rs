@@ -251,7 +251,10 @@ impl RepositoryLayout {
         // DC-53 Stage 1: allocated at `init` like every other container name, for new repositories.
         // A repository initialized before this increment simply has no such file --
         // `author_key_index.rs` reads that identically to an empty container, so no format bump or
-        // migration step is needed for existing repositories.
+        // migration step is needed for existing repositories. True for writes too, not just reads:
+        // `record_author_key_material` creates the container lazily on first write if it is still
+        // absent (`author_key_index.rs::ensure_author_key_container_exists`), since
+        // `append_file_required` -- unlike the read path -- requires the target to already exist.
         create_empty_file_once(&layout, &layout.author_key_container_path())?;
         create_empty_file_once(
             &layout,

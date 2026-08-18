@@ -41,10 +41,14 @@ use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;
 use prikk_object::{ObjectEnvelope, Signature, SignatureAlgorithm, SignerRole};
 
+use std::path::Path;
+
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::push_string_u16;
 use crate::frame_resync::resync_to_next_magic;
-use crate::fsutil::{append_file_required, len_to_u64, read_file_if_exists};
+use crate::fsutil::{
+    append_file_required, create_new_file_required, len_to_u64, read_file_if_exists,
+};
 use crate::layout::RepositoryLayout;
 
 const AUTHOR_KEY_MAGIC: &[u8; 8] = b"PAUTKEY1";
@@ -301,7 +305,27 @@ pub(crate) fn record_author_key_material(
         public_key,
     })?;
     let relative = layout.repository_relative(&layout.author_key_container_path())?;
+    ensure_author_key_container_exists(layout, &relative)?;
     append_file_required(layout.repository_mutation_root(), &relative, &record)
+}
+
+/// A repository initialized before this container existed has no such file. `append_file_required`
+/// -- unlike the read path -- requires the target to already exist, so a repository this old fails to
+/// author until its container is created. Create it lazily, on first write, so `layout.rs`'s "no
+/// format bump, no migration step" claim holds for writes as well as reads. Crash-safe by inspection:
+/// a crash between the create and the append below leaves an empty container, which reads identically
+/// to a repository that has never authored anything yet. Tolerates a losing race against a concurrent
+/// creator (`AlreadyExists`) -- the desired end state, the container existing, holds either way; the
+/// callers that reach this do not hold a lock scoped to this specific container.
+fn ensure_author_key_container_exists(layout: &RepositoryLayout, relative: &Path) -> Result<()> {
+    if read_file_if_exists(layout.repository_mutation_root(), relative)?.is_some() {
+        return Ok(());
+    }
+    match create_new_file_required(layout.repository_mutation_root(), relative, &[]) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(err) => Err(err.into()),
+    }
 }
 
 /// Check `envelope`'s AUTHOR signature (DC-53 Stage 1, D3's first three rows). Returns `Ok(None)`

@@ -97,6 +97,31 @@ fn a_repository_with_no_container_file_reads_as_empty_not_an_error() -> Result<(
     Ok(())
 }
 
+/// DC-53 Stage 1 implementation review v1, B1: a repository initialized before this container
+/// existed must still be able to *author* afterward, not just read as empty.
+/// `append_file_required` requires the target to exist, unlike the read path -- this reproduces
+/// the review's own probe (remove the container after `init`, then try to record) and proves
+/// `record_author_key_material` self-heals the container rather than failing.
+#[test]
+fn record_author_key_material_creates_a_missing_container_before_appending() -> Result<()> {
+    let root = unique_temp_dir("author-key-index-missing-container-write");
+    let layout = RepositoryLayout::init(root.clone())?;
+    std::fs::remove_file(layout.author_key_container_path())?;
+    assert!(!layout.author_key_container_path().is_file());
+    record_author_key_material(&layout, "alice", sample_public_key(1))?;
+    assert!(layout.author_key_container_path().is_file());
+    let entries = lookup_author_key_entries(&layout, "alice")?;
+    assert_eq!(
+        entries,
+        vec![AuthorKeyEntry {
+            key_id: "alice".to_string(),
+            public_key: sample_public_key(1),
+        }]
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 #[test]
 fn record_author_key_material_is_idempotent_for_the_same_pair() -> Result<()> {
     let root = unique_temp_dir("author-key-index-idempotent");
