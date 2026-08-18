@@ -16,6 +16,7 @@
 //! plugin execution, and remote sync remain separate increments.
 
 mod active;
+mod author_key_index;
 mod author_signing;
 mod blob_access;
 mod block_state;
@@ -161,9 +162,10 @@ pub use trust::{
 };
 pub use unlock::{HeldLock, PidLiveness, clear_lock, find_held_lock, list_held_locks};
 pub use verify::{
-    ActiveWalMetadataStatus, ActiveWalOrderingIssue, BlockSealVerification, ObjectItemOutcome,
-    ObjectItemStatus, ObjectVerification, RepositoryVerification, StageOutcome, StageStatus,
-    VerificationStage, VerifyOptions, verify_repository, verify_repository_with_options,
+    ActiveWalMetadataStatus, ActiveWalOrderingIssue, AuthorSignatureVerification,
+    BlockSealVerification, ObjectItemOutcome, ObjectItemStatus, ObjectVerification,
+    RepositoryVerification, StageOutcome, StageStatus, VerificationStage, VerifyOptions,
+    verify_repository, verify_repository_with_options,
 };
 pub use wal::{Wal, WalRecord, WalRepair, WalReplay};
 pub use worktree::{SnapshotMaterializationReport, materialize_snapshot_checkout};

@@ -1,6 +1,6 @@
 use prikk_store::{
-    ActiveWalMetadataStatus, BlockStateStatus, DoctorSeverity, ObjectItemStatus, RefFileStatus,
-    RefItemStatus, RepositoryLayout, StageStatus,
+    ActiveWalMetadataStatus, AuthorSignatureVerification, BlockStateStatus, DoctorSeverity,
+    ObjectItemStatus, RefFileStatus, RefItemStatus, RepositoryLayout, StageStatus,
 };
 
 /// Render a count sourced from one verification stage. `None` means that stage did not evaluate to
@@ -88,6 +88,36 @@ pub(crate) fn print_verify_report(
                 outcome.object_type
             );
         }
+    }
+    // DC-53 Stage 1: an unverifiable AUTHOR signature is not a failure (D3's second row) -- verify
+    // still passes -- but must be visible, not silent, so it is surfaced here the same way failed
+    // objects are above.
+    let unverifiable_author_patches: Vec<_> = report
+        .object_outcomes
+        .iter()
+        .filter_map(|outcome| match &outcome.status {
+            ObjectItemStatus::Evaluated(verification)
+            | ObjectItemStatus::Unindexed(verification) => {
+                match &verification.author_verification {
+                    Some(AuthorSignatureVerification::Unverifiable { key_id }) => {
+                        Some((outcome, key_id))
+                    }
+                    _ => None,
+                }
+            }
+            ObjectItemStatus::Failed { .. } => None,
+        })
+        .collect();
+    println!(
+        "unverifiable author signatures: {}",
+        unverifiable_author_patches.len()
+    );
+    for (outcome, key_id) in unverifiable_author_patches {
+        println!(
+            "object {} ({}): unverifiable author signature: no key material recorded for {key_id}",
+            outcome.path.display(),
+            outcome.object_type
+        );
     }
     let incomplete_blocks: Vec<_> = report
         .block_state_outcomes

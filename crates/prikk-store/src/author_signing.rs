@@ -22,6 +22,12 @@ pub trait AuthorSigner {
     fn key_id(&self) -> &str;
     /// Produce the detached signature bytes over the role-bound `preimage`.
     fn sign(&self, preimage: &[u8]) -> Result<Vec<u8>>;
+    /// The public key half of this signer's key material (DC-53 Stage 1). The signer is the only
+    /// party that holds it, so recording AUTHOR key material at authoring time -- the mechanism
+    /// verification depends on, since Ed25519 signatures are not public-key-recoverable -- requires
+    /// it from here, not from anything persisted in the `Signature` itself (`key_id` is a label, not
+    /// key material).
+    fn public_key_bytes(&self) -> [u8; prikk_crypto::ED25519_KEY_LEN];
 }
 
 /// Build a role-bound AUTHOR [`Signature`] for the unsigned patch `object_id` using `signer`.
@@ -72,12 +78,6 @@ impl Ed25519AuthorSigner {
     ) -> Result<Self> {
         Self::new(key_id, Ed25519KeyPair::from_seed(seed))
     }
-
-    /// The 32-byte public key, for verifying patches this signer produced.
-    #[must_use]
-    pub fn public_key_bytes(&self) -> [u8; prikk_crypto::ED25519_KEY_LEN] {
-        self.keypair.public_key_bytes()
-    }
 }
 
 impl AuthorSigner for Ed25519AuthorSigner {
@@ -87,5 +87,9 @@ impl AuthorSigner for Ed25519AuthorSigner {
 
     fn sign(&self, preimage: &[u8]) -> Result<Vec<u8>> {
         Ok(self.keypair.sign(preimage).to_vec())
+    }
+
+    fn public_key_bytes(&self) -> [u8; prikk_crypto::ED25519_KEY_LEN] {
+        self.keypair.public_key_bytes()
     }
 }

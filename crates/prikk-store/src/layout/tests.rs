@@ -204,6 +204,7 @@ fn init_allocates_every_trust_container_name_once() -> Result<()> {
         layout.trust_policy_container_slot_path(ContainerSlot::A),
         layout.trust_policy_container_slot_path(ContainerSlot::B),
         layout.trust_policy_generation_log_path(),
+        layout.author_key_container_path(),
     ];
     for path in &trust_container_paths {
         assert!(path.is_file(), "expected {path:?} to exist after init");

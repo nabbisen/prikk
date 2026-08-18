@@ -5,7 +5,7 @@ use prikk_object::{
 };
 
 use crate::{
-    Ed25519AuthorSigner, Ed25519MaintainerSigner, MaintainerSigner, author_signature,
+    AuthorSigner, Ed25519AuthorSigner, Ed25519MaintainerSigner, MaintainerSigner, author_signature,
     maintainer_signature,
 };
 
