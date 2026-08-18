@@ -184,7 +184,28 @@ of constraining it."* Here the argument is stronger, because a live regression i
 written after the fix is a gate nobody has ever seen detect anything.** This one gets its negative control
 for free, and the failing run is the evidence that it works.
 
-## 8. Non-goals
+## 8. Closure — what happens when Stage 2 lands
+
+**Badge criterion 3's `MILESTONES.md` row is updated when Stage 2 merges, not before. Authorized by the
+project owner 2026-08-18** ("Update criterion 3's row after Stage 2 lands"), and recorded here rather
+than carried in anyone's head — the row has already been stale once, for seven days, and that staleness
+is what sent the schedule at a closed problem (see §2's own history).
+
+**What the row must say at that point, honestly:**
+
+- `verify` is linear in history length (Stage 1, merged `13f7a4b`) — 27.04 ms at N=160, tail ratio 1.97,
+  against 167.85 ms and ×3.51 before.
+- Whether `seal` satisfies the criterion depends on Stage 2's measured curve, **and on the residual recorded in `handoffs/111-object-read-cost-regression/stage-2-handoff-v1.md` §4**:
+  `seal` stays O(N) per call even after Stage 2, because `derive_next_state_root` walks the lineage from
+  genesis with a deliberately fresh memo. The criterion reads *"`verify` is not superlinear in history
+  length"* — so decide explicitly whether it is about `verify` alone, as written, or about the cost of
+  using the tool, which is what the claim behind it is really about. **Do not settle that by whichever
+  reading happens to let the row be marked met.**
+
+**Also update RFC 111's own status to done and move it out of `proposed/`** when Stage 2 merges; a
+regression RFC left in `proposed/` after it is fixed is the same staleness in a different file.
+
+## 9. Non-goals
 
 - **Not a redesign of RFC 102's container model.** Containers are correct; reading them whole is not.
 - **Not a caching layer.** §6.1 removes the need to read the whole file rather than remembering it.
