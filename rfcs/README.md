@@ -53,6 +53,7 @@ These records are under design review. All proposed RFCs must respect the depend
 | 108 | [Workspace Concurrent Sessions](./proposed/108-workspace-concurrent-sessions.md) | Unscheduled. Owner concept, 2026-08-18, recorded with the architect's assessment. **No design exists**; its one blocking question — whether Workspace patches are sealed or unsealed — is unanswered, and everything else follows from it |
 | 109 | [Agent-Native Interface](./proposed/109-agent-native-interface.md) | Unscheduled. Owner concept, 2026-08-18. Depends on criterion 3 (now met) and criterion 2 (open — it gates the AST-sealing question). **No design exists** |
 | 110 | [Agent Safety and Provenance](./proposed/110-agent-safety-and-provenance.md) | Unscheduled. Owner concept, 2026-08-18, **direction not yet established** and recorded as such. Pillar 1 largely redistributes into RFC 108; Pillar 2 needs criterion 5 as a floor, since provenance sealed over unverified authorship manufactures the appearance of verification. **No design exists** |
+| 112 | [Core Operations in the Binary Crate](./proposed/112-core-operations-in-the-binary-crate.md) | Unscheduled. Raised 2026-08-18 from an RFC 111 Stage 2 finding: `seal`, `branch create`/`close` and `tag create` are implemented in the binary-only `prikk-cli`, while every comparable operation lives in `prikk-store`. Consequences: the published library cannot seal, branch or tag; those operations cannot be tested in-process; and a 167-line seal replica plus a drift guard already exist to work around it. **No design exists** |
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / **0.20.0** (retargeted from 0.19.0, owner ruling 2026-08-08). **Release-blocked** — inherits key lifecycle from DC-35, which needs amendment, and blocked behind criterion 4's signer bootstrap |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
@@ -66,7 +67,8 @@ changed.
 inherits DC-35's unamended key lifecycle and criterion 4's signer bootstrap, which only the project owner
 can begin. **DC-44** is scheduled beyond M2.
 
-**Recorded, not scheduled:** **108, 109 and 110** are the project owner's concepts of 2026-08-18, written
+**Recorded, not scheduled:** **112** is a structural-debt finding with a known price and no urgency —
+nothing is broken for users today. **108, 109 and 110** are the project owner's concepts of 2026-08-18, written
 down with the architect's assessment so the direction is reviewable before anyone designs against it.
 **None has a design, and implementation must not start from these records.** RFC 110's own direction is
 explicitly not yet established.
