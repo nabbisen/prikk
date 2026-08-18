@@ -1,8 +1,12 @@
 # RFC 111 — prerequisite handoff v1
 
 **RFC:** `rfcs/proposed/111-object-read-cost-regression.md` (ACCEPTED 2026-08-18)
-**Scope of this handoff:** RFC 111 §6.1 only. **§6.2 (positional reads) is held back** — it is worth ~5%
-and must not be bundled in. **§6.3 (a cost gate) is an open question for the owner** and is not yours.
+**Scope of this handoff:** RFC 111 §6.1 **and the cost gate in §7**. **§6.2 (positional reads) is held
+back** — it is worth ~5% and must not be bundled in.
+
+**Amended 2026-08-18, same day it was issued.** The owner ruled the cost gate in ("Yes, add the cost
+gate"), so §7 is now part of this increment and **it is the part that goes first** — see §8 below. The
+paragraph this replaces said the gate was not yours; it is.
 
 **Answer these before designing, and report.** The cause is already located and measured, so this is not
 an investigation into *what* is slow — §2-§5.1 settle that. It is an investigation into **what a snapshot
@@ -79,9 +83,36 @@ implied.
 
 ## 7. What to report
 
+**Order of work: §8's Stage 0 gate first, then this report.** They are independent — the gate does not
+depend on any answer below — and Stage 0's failing run is what makes the rest worth doing.
+
 Q1's classified inventory, Q2's recommendation with rationale, Q3's concrete failure scenario, Q4's
 guarantee. **Report before designing**, per this project's standing shape — and per RFC 111's own history,
 where reading the code produced a plausible fix that measurement showed addressed 5% of the problem.
 
 **If any question turns out to be the wrong question, say so and say why.** That is a finding, not a
 deviation.
+
+## 8. Stage 0 — the cost gate, and it lands before the fix
+
+**Build this first, on current `main`, where it must FAIL.** Then §6.1's fix turns it green. Read RFC 111
+§7 in full; the reasoning is load-bearing and the mechanism follows from it.
+
+**Not a wall-clock threshold.** The same `verify` at N=160 measured 2534 ms in debug and 28.88 ms in
+release on identical code — a number that moves 88× with a build flag cannot be a threshold, and a flaky
+gate gets muted, which is worse than no gate.
+
+**Count full index decodes instead.** Assert that verifying a repository performs a number of index
+decodes that does **not grow with repository size** — measured at two sizes and required equal, or bounded
+by a small stated constant, rather than proportional. Deterministic, milliseconds to run, belongs in the
+ordinary suite. `fsutil/anchored/failpoints.rs` already counts matching calls for `fail_after`; a
+test-only counter in that thread-local shape extends an existing pattern rather than inventing one.
+
+**Report the failing run.** A gate that has never been observed detecting anything is not evidence. This
+one has a live regression available to prove it works — **that failing output is the deliverable**, and I
+want to see it before the fix exists. If the gate passes on current `main`, it is measuring the wrong
+thing and that is a finding to report, not something to tighten until it fails.
+
+**Two questions for Stage 0, answer with it:** what exactly is counted (the `replay_index` call, or
+something narrower), and what the bound is stated as — an exact equality across sizes, or a constant with
+a named reason for its value.

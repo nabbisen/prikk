@@ -2,7 +2,8 @@
 
 **Status.** **ACCEPTED by the project owner 2026-08-18** ("RFC 111 is accepted. Proceed."). Found
 2026-08-18 by the architect while measuring whether badge criterion 3 was still open. **§6.3 — whether a
-cost gate should exist — is NOT settled by this acceptance and remains an open question for the owner.**
+cost gate should exist — RULED 2026-08-18 by the owner: "Yes, add the cost gate." §7 states its shape and
+sequencing.**
 
 **Not a design; a measured defect with a located cause.** Independence: author-reviewed, the standing
 ceiling — the measurements in §2-§5.1 are reproducible from the named harness and commits, which is what
@@ -130,12 +131,60 @@ touches it. Recorded because the plausible fix and the effective fix are differe
    dependency is needed. `AnchoredReader` already anticipates extension — its doc describes adding a
    platform impl "with no change to the four public functions below." **Worth ~5%; do it only if it falls
    out of §6.1's work, and not before.**
-3. **Whether a cost gate exists at all.** This regression passed every gate, three releases, and multiple
-   implementation reviews. A curve that silently changes shape is exactly what rule 10's test-count
-   discipline does for tests. **A benchmark that runs only when someone remembers to run it did not
-   catch a 5.8× regression for seven days.**
+3. **A cost gate. Ruled in by the owner 2026-08-18** — see §7, which is now part of this increment
+   rather than an open question. This regression passed every gate, three releases, and multiple
+   implementation reviews. **A benchmark that runs only when someone remembers to run it did not catch a
+   5.8× regression for seven days.**
 
-## 7. Non-goals
+## 7. The cost gate — count operations, not milliseconds
+
+**Ruled by the owner 2026-08-18.** The shape below is the architect's, and the reasoning matters more than
+the mechanism.
+
+### 7.1 Why a wall-clock threshold is the wrong gate
+
+CI hardware varies run to run, so an absolute-millisecond threshold is either loose enough to miss a
+regression or tight enough to fail spuriously — and **a flaky gate gets muted, which is worse than no
+gate.** This project has the evidence in hand: the same `verify` at N=160 measured **2534 ms** in debug and
+**28.88 ms** in release on identical code. A number that moves 88× with a build flag is not a threshold.
+
+**What actually regressed is the shape**, and the mechanism behind the shape is countable: *the number of
+full index decodes performed while verifying a repository of N objects*. Today it is proportional to N. It
+should be bounded.
+
+### 7.2 The gate
+
+**Assert that a `verify` of a repository performs a number of full index decodes that does not grow with
+repository size** — measured at two sizes (e.g. N=20 and N=80) and required to be equal, or bounded by a
+small stated constant, rather than proportional.
+
+Properties that make this the right instrument:
+
+- **Deterministic.** No timing, no hardware dependence, no flake. It fails for a comprehensible reason and
+  names the mechanism, not a number.
+- **Fast.** Milliseconds, so it belongs in the ordinary suite rather than a nightly job nobody watches.
+- **It fails for the right reason.** A future change that reintroduces per-read decoding trips it even if
+  the machine is fast enough to hide the cost.
+
+Counting infrastructure has precedent: `fsutil/anchored/failpoints.rs` already counts matching calls for
+`fail_after(point, matching_calls_to_skip)`. A test-only counter in that thread-local shape is an
+extension of an existing pattern, not a new facility.
+
+**If a timing check is also wanted**, gate the **doubling ratio**, never absolute milliseconds — a ratio is
+self-normalising against hardware speed, and it is the quantity that actually moved here (1.97 → 3.51).
+The existing `dc92_lineage_replay_benchmark.rs` stays a manual instrument either way.
+
+### 7.3 Sequencing — the gate lands first, and must fail
+
+**Write the gate before the fix, on current `main`, where it is required to FAIL.** Then §6.1 turns it
+green.
+
+DC-90 already made half of this argument — *"a boundary added afterwards documents what happened instead
+of constraining it."* Here the argument is stronger, because a live regression is available: **a gate
+written after the fix is a gate nobody has ever seen detect anything.** This one gets its negative control
+for free, and the failing run is the evidence that it works.
+
+## 8. Non-goals
 
 - **Not a redesign of RFC 102's container model.** Containers are correct; reading them whole is not.
 - **Not a caching layer.** §6.1 removes the need to read the whole file rather than remembering it.
