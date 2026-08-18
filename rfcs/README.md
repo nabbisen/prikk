@@ -50,29 +50,33 @@ These records are under design review. All proposed RFCs must respect the depend
 
 | ID | Title | Milestone |
 |---|---|---|
-| DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / **0.20.0 (retargeted from 0.19.0 by owner ruling 2026-08-08 — 0.19.0 is the next ordinary minor, gated on DC-75 alone)**; **release-blocked** — inherits key lifecycle from DC-35, which needs amendment |
+| 108 | [Workspace Concurrent Sessions](./proposed/108-workspace-concurrent-sessions.md) | Unscheduled. Owner concept, 2026-08-18, recorded with the architect's assessment. **No design exists**; its one blocking question — whether Workspace patches are sealed or unsealed — is unanswered, and everything else follows from it |
+| 109 | [Agent-Native Interface](./proposed/109-agent-native-interface.md) | Unscheduled. Owner concept, 2026-08-18. Depends on criterion 3 (now met) and criterion 2 (open — it gates the AST-sealing question). **No design exists** |
+| 110 | [Agent Safety and Provenance](./proposed/110-agent-safety-and-provenance.md) | Unscheduled. Owner concept, 2026-08-18, **direction not yet established** and recorded as such. Pillar 1 largely redistributes into RFC 108; Pillar 2 needs criterion 5 as a floor, since provenance sealed over unverified authorship manufactures the appearance of verification. **No design exists** |
+| DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / **0.20.0** (retargeted from 0.19.0, owner ruling 2026-08-08). **Release-blocked** — inherits key lifecycle from DC-35, which needs amendment, and blocked behind criterion 4's signer bootstrap |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
-| DC-52 | [Python and Oracle Decommissioning](./archive/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | M2 / **0.20.0 (retargeted from 0.19.0, 2026-08-08)**; **UNBLOCKED 2026-08-08** — `DC-45:419`'s condition discharged by 0.19.0's release and its accepted post-release stability rerun; deletion remains a separate architect-reviewed change, and fixture compaction only after deletion review. Previously release-blocked — `DC-45:419` forbids deletion before the first Rust-gated 0.19.0 release |
-| DC-53 | [Repository-Wide AUTHOR Trust Verification](./proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md) | Post-M2, unscheduled |
+| DC-53 | [Repository-Wide AUTHOR Trust Verification](./proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md) | **In progress — Stage 1 merged 2026-08-18 (`970bc27`)**, closing the integrity half of badge criterion 5: a forged AUTHOR signature over recorded key material now fails `verify`'s exit status. **Stage 2 is next in the recommended order** now that criterion 3 is met, and its scope grew: author key material does not travel with a bundle, so Stage 2 must deliver **transport and pinning together** |
 
-**None of these five is a live design-review candidate** — all are blocked or unscheduled. DC-66 was accepted 2026-08-02 and has moved to `accepted/`.
-DC-56, DC-60, DC-61, DC-62 and DC-63 have all moved to `accepted/`:
+**Live now:** **DC-53 Stage 2** — the only proposed record with an active increment. See
+`handoffs/DC-53-repository-wide-author-trust-verification/design-v1.md` (amended v1.2) for why its scope
+changed.
 
-- **DC-43** and **DC-52** cannot proceed while release stabilization is deferred. `DC-45:419` forbids
-  Python deletion before the first Rust-gated 0.19.0 release; DC-43's scope *is* release security and it
-  inherits key-lifecycle obligations from DC-35, which needs a fitness amendment. Both were moved to
-  `EXECUTION-ORDER.md` §2 on 2026-07-30 — they had been listed as available, which was wrong.
-- **DC-49** cannot complete while the release lane is parked.
-- **DC-44** and **DC-53** have design briefs but no designs, and are scheduled after M2 / unscheduled.
+**Blocked, not available:** **DC-43** and **DC-49** both wait on release-lane events; DC-43 additionally
+inherits DC-35's unamended key lifecycle and criterion 4's signer bootstrap, which only the project owner
+can begin. **DC-44** is scheduled beyond M2.
 
-**DC-42 was superseded** on 2026-07-29 into DC-56, DC-57, and DC-58 after design review found it bundled
-three unrelated increments; it is in `archive/`. Of those, DC-58 and **DC-57 are both complete**
-(DC-57's premise was unreachable until DC-66 landed; its hold lifted 2026-08-02), and DC-56 is accepted
-and cleared. **DC-59** and **DC-62** (both split from DC-56) are complete, as are **DC-60** and **DC-63**.
+**Recorded, not scheduled:** **108, 109 and 110** are the project owner's concepts of 2026-08-18, written
+down with the architect's assessment so the direction is reviewable before anyone designs against it.
+**None has a design, and implementation must not start from these records.** RFC 110's own direction is
+explicitly not yet established.
+
+**Superseded history.** DC-42 was split on 2026-07-29 into DC-56, DC-57 and DC-58 after design review
+found it bundled three unrelated increments; DC-56, DC-57, DC-58, DC-59, DC-60, DC-62 and DC-63 are all
+complete or accepted. DC-45 through DC-48 are accepted preparatory work already landed, not competing
+future increments. **DC-52 moved to `archive/`** and is listed there.
 
 See [`EXECUTION-ORDER.md`](./EXECUTION-ORDER.md) for what each is blocked on and what to hand developers.
-DC-45 through DC-48 are accepted preparatory work already landed, not competing future increments.
 
 ## Accepted
 
@@ -213,6 +217,7 @@ These records currently live under `archive/`.
 |---|---|---|
 | DC-09 | [Phase 4 Node Model and Operation Application](./archive/DC-09-PHASE-4-NODE-MODEL.md) | Superseded / partially implemented historical umbrella. |
 | DC-42 | [Performance and Maintainability Gates](./archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md) | Superseded 2026-07-29 into DC-56, DC-57, DC-58. Never implemented; design review found it bundled three unrelated increments. |
+| DC-52 | [Python and Oracle Decommissioning](./archive/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | Moved to `archive/`. **Unblocked 2026-08-08** — `DC-45:419`'s condition was discharged by 0.19.0's release and its accepted post-release stability rerun. Deletion remains a separate architect-reviewed change, and fixture compaction only after deletion review. Listed under *Proposed* until 2026-08-18 while its file already lived here |
 | 101 | [First-Appearance Durability](./archive/101-first-appearance-durability.md) | **Closed 2026-08-12 with a negative result; superseded by RFC 102.** Accepted and closed the same day, no code produced. Its own §5.2 trace disproved its §1 problem statement: prikk is content-addressed, so *every* object write creates a new name, and the fix as scoped would have made Windows worse. Established that no Windows primitive provides new-name durability and that Transactional NTFS is unusable. Its transition table and three `FINDINGS.md` rows survive it. |
 | 104 | [Windows Mutation](./archive/104-windows-mutation.md) | **Withdrawn 2026-08-16, the day it was accepted — a duplicate of [DC-87](./accepted/DC-87-WINDOWS-MUTATION.md)**, accepted 2026-08-10, whose §3 poses the same prerequisites. Written after an RFC-number check that could only match numerically-prefixed files and silently dropped every `DC-` one. Its one original contribution, the post-RFC-102 caller inventory, was folded into DC-87 §0 |
 
