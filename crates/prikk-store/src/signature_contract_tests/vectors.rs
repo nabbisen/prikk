@@ -306,7 +306,11 @@ fn dc53_vector_6_verification_fails_closed_against_a_conflicting_key_id() -> pri
     let added_signature = envelope.signatures.first().ok_or_else(|| {
         prikk_error::PrikkError::Integrity("envelope carries the signature just added".to_string())
     })?;
-    verify_ed25519(&VECTOR6_KEY_A_PUBLIC, &preimage, &added_signature.signature_bytes)?;
+    verify_ed25519(
+        &VECTOR6_KEY_A_PUBLIC,
+        &preimage,
+        &added_signature.signature_bytes,
+    )?;
 
     let result = crate::author_key_index::verify_author_signature(&layout, &envelope);
     assert!(
