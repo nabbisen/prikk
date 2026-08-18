@@ -10,6 +10,16 @@ cheapest of the five badge criteria and the only one where the README promises w
 before DC-43 became blocked on a release-lane event. Recorded here so the documents do not contradict each
 other.
 
+**Correction, 2026-08-18 — v1.1.** The dev team's Stage 1 pre-implementation report
+(`.git-exclude/review-request/prikk-dc53-stage1-v1.md`, ruled on in
+`.git-exclude/reviewed/DC-53-stage-1-report-ruling-v1.md`) established that **Stage 1 as staged in §5 was
+not executable**: verifying an Ed25519 signature requires the public key, `Signature` carries only a
+`key_id` label (`signature.rs:83`), Ed25519 keys are not recoverable from signatures, and **no `key_id →
+public_key` mapping exists for authors anywhere in this codebase** — `trust_index.rs:61`'s
+`TrustKeyEntry { key_id, public_key }` is MAINTAINER-only. **This design error was the architect's**: the
+increment was split on validity-versus-membership without noticing that validity itself requires key
+material, all of which had been placed in Stage 2. **§3's D3 and D4 and §5 are amended below.**
+
 ## 1. The finding that reframes this increment
 
 The RFC and brief both describe the gap as: AUTHOR signatures are *"validated structurally — role,
@@ -38,7 +48,7 @@ verify` today.** Not "signed by an untrusted key" — *not signed at all*, and r
 
 | | Question answered | Needs |
 |---|---|---|
-| **Stage 1 — validity** | Is this patch actually signed by the key it names? | **No trust source, no policy, no adoption step.** A valid signature is valid regardless of trust |
+| **Stage 1 — validity** | Is this patch actually signed by the key it names? | **Key material, and nothing else** — no policy, no adoption step, no conflict rejection. A valid signature is valid regardless of trust, but it cannot be checked without the key *(amended v1.1: the original read "no trust source", which made the stage unexecutable — see the correction above)* |
 | **Stage 2 — membership** | Is that key one this repository accepts? | All five brief decisions |
 
 **Stage 1 carries most of the claim and almost none of the decisions.** It is also the half that closes an
@@ -81,23 +91,40 @@ not a measurement.** Report the delta on a real repository before and after.
 Today `verify` separates *structural corruption* from *publication-trust failure*. That distinction is
 deliberate and this design keeps it, adding a third:
 
+**Amended v1.1 — a fourth outcome.** Because AUTHOR key material is recorded at authoring time (see D4),
+a Patch may name a `key_id` for which **no key material exists**. That is neither valid nor invalid, and
+the original three rows collapsed it into one of them.
+
 | Condition | Class | Exit status |
 |---|---|---|
-| Signature does not verify against its own claimed key | **Authorship-integrity failure** | **Fails.** This is forgery or corruption, not a trust opinion |
-| `key_id` seen for the first time | Pin recorded | Passes |
-| `key_id` seen before with a **different** public key | **Authorship-integrity failure** | **Fails.** This is impersonation |
+| Verifies against recorded key material | Sound | Passes |
+| **No key material recorded for this `key_id`** | **Unverifiable — reported, never silent** | Passes, and says so |
+| Signature does not verify against recorded key material | **Authorship-integrity failure** | **Fails.** This is forgery or corruption, not a trust opinion |
+| `key_id` recorded with a **different** public key | **Authorship-integrity failure** | **Fails.** This is impersonation |
 
-**The first row is the important one.** A signature that does not verify is not "untrusted" — it is
+**The third row is the important one.** A signature that does not verify is not "untrusted" — it is
 evidence the object is not what it claims. Reporting that as a trust warning would repeat the mistake of
 treating a broken guarantee as a policy preference.
 
+**The second row must appear in `verify` output.** A repository where most patches are unverifiable must
+say so; the difference between "verified" and "nothing objected" is the whole point of this increment.
+
 ### D4 — Migration: no grandfathering for validity; pins bootstrap naturally
 
-**Stage 1 grandfathers nothing.** A signature that does not verify was never valid; admitting it because it
-is old would make the check meaningless on exactly the repositories that predate it. **Run it against real
-repositories and report what happens** — if prikk's own authoring path has always signed correctly, nothing
-fails, and that is evidence rather than assumption. If something does fail, that is a finding and it stops
-the stage.
+**Amended v1.1.** "No grandfathering" is retained **for signatures that fail**, and is **not a policy this
+design can hold for signatures that cannot be evaluated.** A signature that does not verify was never
+valid; admitting it because it is old would make the check meaningless on exactly the repositories that
+predate it. But **every Patch authored before this increment has no recorded key material and can never be
+verified by any future work** — that is unverifiable in principle, not leniency, and D3's second row is
+where it belongs. The original text collapsed the two.
+
+**AUTHOR key material is recorded at authoring time**, by the signer, which is the only party that holds
+it. Recording it on first *sight* is impossible: the signature carries no key, so observing one teaches
+nothing about the key it names. This is why the mechanism differs from DC-78's maintainer TOFU, where
+adoption is itself the act that supplies the key.
+
+**Run Stage 1 against real repositories and report what happens.** If something *fails* — as opposed to
+being reported unverifiable — that is a finding and it stops the stage.
 
 **Stage 2 needs no migration step.** Pins are established on first verification, so an existing repository
 bootstraps its pin set by being verified once. **No persisted byte is rewritten**, per the RFC's
@@ -138,10 +165,20 @@ around here.
 
 ## 5. Staging
 
-**Stage 1 — cryptographic validity.** D2, D3's first row, D4's first half, and vectors 1–5. No trust store,
-no pinning, no policy. Closes the integrity gap.
+**Amended v1.1 — restaged.**
 
-**Stage 2 — pinning.** D1, D3's remaining rows, D4's second half, D5's documentation, vector 6.
+**Stage 1 — record and report.**
+- **Persist AUTHOR key material at authoring time** (`author_signing.rs`'s path), in a store shaped after
+  `trust_index.rs`'s key-material half. **Material only — no admission judgement, no conflict rejection.**
+- Widen `verify/objects.rs:298`'s type gate so `Patch` reaches verification. D2 needs nothing further: the
+  existing scan already visits every record in every persisted-type container, with no reachability filter.
+- D3's first three rows; D4's authoring-time recording; vectors 1–5 (committed).
+
+**Stage 2 — pin and reject.** D1's TOFU conflict semantics, D3's fourth row, D5's documentation, vector 6.
+
+**What Stage 1 honestly closes:** every Patch authored after it can be verified, and every Patch before it
+is reported unverifiable rather than reported sound. **The integrity gap closes going forward and becomes
+visible looking backward** — the most achievable without rewriting persisted bytes, which the RFC forbids.
 
 **Report before implementing each stage**, per this project's standing shape.
 
