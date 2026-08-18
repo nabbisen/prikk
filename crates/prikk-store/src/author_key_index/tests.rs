@@ -134,27 +134,22 @@ fn record_author_key_material_is_idempotent_for_the_same_pair() -> Result<()> {
     Ok(())
 }
 
-/// The module doc's own decision: a second, different key for an existing `key_id` is appended,
-/// not refused -- Stage 1 makes no admission judgement about it.
+/// DC-53 Stage 2, D8: a second, different key for an existing `key_id` is refused, not appended --
+/// superseding Stage 1's own permissive behaviour, which this test used to assert.
 #[test]
-fn record_author_key_material_appends_rather_than_rejects_a_conflicting_key() -> Result<()> {
-    let root = unique_temp_dir("author-key-index-conflict-appends");
+fn record_author_key_material_rejects_a_conflicting_key() -> Result<()> {
+    let root = unique_temp_dir("author-key-index-conflict-rejected");
     let layout = RepositoryLayout::init(root.clone())?;
     record_author_key_material(&layout, "alice", sample_public_key(1))?;
-    record_author_key_material(&layout, "alice", sample_public_key(2))?;
+    assert!(record_author_key_material(&layout, "alice", sample_public_key(2)).is_err());
     let entries = lookup_author_key_entries(&layout, "alice")?;
     assert_eq!(
         entries,
-        vec![
-            AuthorKeyEntry {
-                key_id: "alice".to_string(),
-                public_key: sample_public_key(1),
-            },
-            AuthorKeyEntry {
-                key_id: "alice".to_string(),
-                public_key: sample_public_key(2),
-            },
-        ]
+        vec![AuthorKeyEntry {
+            key_id: "alice".to_string(),
+            public_key: sample_public_key(1),
+        }],
+        "a rejected conflicting key must not be appended -- {entries:?}"
     );
     let _ = std::fs::remove_dir_all(root);
     Ok(())

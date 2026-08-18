@@ -13,6 +13,10 @@ implementation status records listed in the anchor table at the foot of the page
 - `verify` is not a global trust proof.
 - MAINTAINER key revocation exists (`prikk trust maintainer remove`); there is no key rotation, hardware
   signing, remote trust, sync trust, or stable migration policy yet, and no AUTHOR-identity revocation.
+  For AUTHOR keys specifically (DC-53 Stage 2): one `key_id` is permanently bound to the first public
+  key ever recorded for it in a given repository; attempting to sign under the same `key_id` with a
+  different key — whether from a genuine rotation attempt or an impersonation attempt — is refused
+  identically, and is indistinguishable as the reason for the refusal.
 - Durability and recovery claims are supported by current unit and integration tests, not by a
   completed crash-matrix or fuzzing campaign.
 - Repository *mutation* is exercised by project gates on Linux, macOS, and Windows (DC-87 Stage 2).

@@ -25,16 +25,32 @@
 //! not leniency; it is unverifiable in principle, and `verify` must report it as a distinct outcome
 //! (DC-53's restaged D3, second row), not silently as sound.
 //!
-//! **No conflict rejection, on purpose, for Stage 1.** If two different public keys are ever
-//! recorded for the same `key_id` (a coincidental collision, or a legitimate future key rotation),
-//! this module appends both rather than refusing the second -- judging that collision is Stage 2's
-//! job (D1's TOFU conflict semantics). `lookup_author_key_entries` therefore returns *every* entry
-//! ever recorded for a `key_id`, not just the most recent, and a signature is `Sound` if it verifies
-//! against *any* of them -- a Patch that was genuinely valid when authored must not fail Stage 1
-//! verification later merely because a different key subsequently claimed the same `key_id`. Framed
-//! as a choice, not hidden in the lookup's own return type: see the DC-53 Stage 1 implementation
-//! report for the alternative (verify only against the *last* recorded entry) and why it was not
-//! taken.
+//! **One `key_id` binds to one public key (DC-53 Stage 2, D8).** Stage 1 shipped without conflict
+//! rejection -- it appended a second, different key for an existing `key_id` rather than refusing it,
+//! deferring TOFU conflict semantics to Stage 2. Stage 2 closes that: [`record_author_key_material`]
+//! now refuses a conflicting key outright (`Err`), and `verify` (`verify_author_signature`) treats a
+//! `key_id` that already carries more than one distinct recorded key as an authorship-integrity
+//! failure, the same as a signature that does not verify -- D3's fourth row.
+//!
+//! **This state has no way out.** There is no prune, remove, or rewrite for this container (unlike
+//! `trust_index.rs`'s maintainer material, it is not among `compact.rs`'s targets), and no `doctor`
+//! repair. Once two distinct keys are recorded under one `key_id` -- which Stage 2's own
+//! `record_author_key_material` now refuses to create, but a Stage-1-era repository may already carry
+//! from before this rule existed -- `verify` fails for every Patch signed under that `key_id`,
+//! permanently. This is fail-closed by deliberate choice, not an oversight: D8's ruling is that a
+//! `key_id` whose recorded material disagrees with itself is not a state `verify` may paper over.
+//! `record_author_key_material`'s rejection is what keeps a healthy repository from ever reaching it
+//! going forward; nothing in this module can recover one that already has.
+//!
+//! **Why this reads as "no key rotation," not a defect (D5).** There is no rotation mechanism --
+//! signing a fresh keypair under the same `key_id` you have always used is, from this container's
+//! point of view, indistinguishable from an attacker who compromised the `key_id` and is asserting a
+//! different key for it. Stage 2 refuses both identically. See
+//! `docs/src/reference/trust-threat-model.md`'s rotation caveat.
+//!
+//! `lookup_author_key_entries` still returns *every* entry ever recorded for a `key_id`, not just the
+//! most recent -- that return shape did not change; what changed is that Stage 2 forbids more than one
+//! *distinct* public key from ever accumulating there through this module's own write path.
 
 use prikk_crypto::{ED25519_KEY_LEN, verify_ed25519};
 use prikk_error::{PrikkError, Result};
@@ -288,9 +304,15 @@ pub(crate) fn lookup_author_key_entries(
 
 /// Record `key_id`'s public key at authoring time. Idempotent if this exact `(key_id, public_key)`
 /// pair was already recorded (an author signing many patches over time must not grow the container
-/// once per patch); appends unconditionally otherwise, including when a *different* public key is
-/// already on file for `key_id` -- Stage 1 makes no admission judgement about that, per the module
-/// doc.
+/// once per patch). **Refuses (DC-53 Stage 2, D8) if a *different* public key is already on file for
+/// `key_id`** -- one `key_id` binds to one public key; see the module doc for why this state, once
+/// created, has no way out, and why this is what a key-rotation attempt looks like from the inside.
+///
+/// **Callers must hold `ActiveLock` before calling this** (DC-53 Stage 2 gate-and-design review C1):
+/// the read-then-append below is a check-then-act, and the resulting conflict state is unrecoverable,
+/// so two concurrent authoring operations racing this check must be serialized by the caller, not by
+/// this function -- it has no lock of its own to take. `worktree_patch/node_authoring.rs` and
+/// `rollback_draft.rs` both call this from inside their own held `ActiveLock`.
 pub(crate) fn record_author_key_material(
     layout: &RepositoryLayout,
     key_id: &str,
@@ -299,6 +321,14 @@ pub(crate) fn record_author_key_material(
     let existing = lookup_author_key_entries(layout, key_id)?;
     if existing.iter().any(|entry| entry.public_key == public_key) {
         return Ok(());
+    }
+    if let Some(conflicting) = existing.first() {
+        return Err(PrikkError::Integrity(format!(
+            "author key_id {key_id} already has a different recorded public key ({}); one key_id \
+             binds to one public key -- this looks like a key-rotation attempt, which is not \
+             supported and is indistinguishable from impersonation",
+            prikk_hash::to_hex(&conflicting.public_key)
+        )));
     }
     let record = encode_author_key_record(&AuthorKeyEntry {
         key_id: key_id.to_string(),
@@ -328,14 +358,38 @@ fn ensure_author_key_container_exists(layout: &RepositoryLayout, relative: &Path
     }
 }
 
-/// Check `envelope`'s AUTHOR signature (DC-53 Stage 1, D3's first three rows). Returns `Ok(None)`
-/// if the envelope carries no AUTHOR-role signature at all -- out of this increment's scope; a
-/// Patch with no AUTHOR signature is a pre-existing structural gap this increment does not newly
-/// police, not something Stage 1 introduces a defect for. Returns `Ok(Some((key_id, sound)))`
-/// otherwise, `sound` distinguishing D3's first row (verifies against recorded material, `true`)
-/// from its second (no material recorded for this `key_id`, `false` -- **not** a failure). Returns
-/// `Err` only for D3's third row: material *is* recorded and the signature does not verify against
-/// any of it -- propagated so the caller's item-containment reports this Patch as failed, matching
+/// Plant a second, distinct public key for an already-recorded `key_id`, bypassing
+/// `record_author_key_material`'s own rejection -- for tests only, to construct the state DC-53
+/// Stage 2's own rule is meant to make unreachable through normal operation (a legacy Stage-1-era
+/// repository, or a race this repository's own write path no longer permits). Production code has no
+/// equivalent: creating this state is exactly what Stage 2 exists to prevent.
+#[cfg(test)]
+pub(crate) fn force_conflicting_author_key_entry_for_test(
+    layout: &RepositoryLayout,
+    key_id: &str,
+    public_key: [u8; ED25519_KEY_LEN],
+) -> Result<()> {
+    let record = encode_author_key_record(&AuthorKeyEntry {
+        key_id: key_id.to_string(),
+        public_key,
+    })?;
+    let relative = layout.repository_relative(&layout.author_key_container_path())?;
+    ensure_author_key_container_exists(layout, &relative)?;
+    append_file_required(layout.repository_mutation_root(), &relative, &record)
+}
+
+/// Check `envelope`'s AUTHOR signature (DC-53 Stage 1, D3's first three rows; Stage 2, D3's fourth).
+/// Returns `Ok(None)` if the envelope carries no AUTHOR-role signature at all -- out of this
+/// increment's scope; a Patch with no AUTHOR signature is a pre-existing structural gap this
+/// increment does not newly police, not something Stage 1 introduces a defect for. Returns
+/// `Ok(Some((key_id, sound)))` otherwise, `sound` distinguishing D3's first row (verifies against
+/// recorded material, `true`) from its second (no material recorded for this `key_id`, `false` --
+/// **not** a failure). Returns `Err` for D3's third row (material *is* recorded and the signature
+/// does not verify against any of it) and for its fourth (DC-53 Stage 2, D8: more than one *distinct*
+/// public key is recorded for this `key_id` -- checked, and failed, before any signature-verification
+/// attempt, since D8's rule is an invariant on the recorded material itself, not a claim about
+/// whether this particular signature happens to verify against one of the conflicting keys) --
+/// propagated so the caller's item-containment reports this Patch as failed, matching
 /// forgery/corruption rather than the softer "issue" shape MAINTAINER admission failures use.
 pub(crate) fn verify_author_signature(
     layout: &RepositoryLayout,
@@ -356,6 +410,22 @@ pub(crate) fn verify_author_signature(
     let entries = lookup_author_key_entries(layout, &signature.key_id)?;
     if entries.is_empty() {
         return Ok(Some((signature.key_id.clone(), false)));
+    }
+    // DC-53 Stage 2, D8, D3's fourth row: one key_id binds to one public key. A key_id whose
+    // recorded material already disagrees with itself is structurally unsound regardless of whether
+    // this particular signature would verify against one of the conflicting entries -- checked, and
+    // failed, before attempting verification at all (ratified explicitly in the Stage 2 Step 1
+    // review: this is the correct order, not inferred).
+    let first_public_key = entries.first().map(|entry| entry.public_key);
+    if entries
+        .iter()
+        .any(|entry| Some(entry.public_key) != first_public_key)
+    {
+        return Err(PrikkError::Integrity(format!(
+            "author key_id {} has more than one distinct recorded public key -- authorship \
+             integrity for this key_id cannot be established",
+            signature.key_id
+        )));
     }
     let preimage = Signature::signed_bytes(
         SignatureAlgorithm::Ed25519,

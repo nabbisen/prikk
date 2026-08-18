@@ -212,3 +212,107 @@ fn dc53_vector_5_a_signature_valid_over_a_different_preimage_fails() -> prikk_er
     assert!(verify_ed25519(&DC53_PUBLIC_KEY, &preimage, &other_signature).is_err());
     Ok(())
 }
+
+// DC-53 Stage 2, design-stage-2-v1.md §7: vector 6, a pin-conflict pair -- one `key_id`, two public
+// keys. Different in kind from vectors 1-5: those exercise only `verify_ed25519`/
+// `Signature::signed_bytes`, this exercises the container-level conflict rule (D8), so it needs a
+// `RepositoryLayout` and `author_key_index`'s own functions. Same literal-value discipline: both
+// keypairs' public key bytes are fixed-seed and asserted, not left as opaque generated values.
+
+const VECTOR6_KEY_ID: &str = "dc53-vector6";
+
+const VECTOR6_KEY_A_SEED: [u8; 32] = [0x62; 32];
+const VECTOR6_KEY_A_PUBLIC: [u8; 32] = [
+    0x2d, 0xf0, 0x41, 0x25, 0xf0, 0x01, 0x5a, 0xfb, 0x47, 0xce, 0x85, 0x3a, 0xef, 0x87, 0x72, 0x09,
+    0x4f, 0xf9, 0x49, 0x8c, 0x14, 0xcb, 0x1b, 0x9e, 0x12, 0x97, 0x3c, 0x29, 0x27, 0xda, 0x0f, 0xa6,
+];
+
+const VECTOR6_KEY_B_SEED: [u8; 32] = [0x63; 32];
+const VECTOR6_KEY_B_PUBLIC: [u8; 32] = [
+    0xa7, 0xf6, 0xdf, 0xaf, 0x8f, 0x38, 0xb8, 0x9b, 0xa8, 0xce, 0x64, 0x9b, 0x59, 0x4f, 0x91, 0xe4,
+    0xd0, 0x1f, 0xdc, 0x57, 0xf9, 0xc9, 0x49, 0x3d, 0xf4, 0x3b, 0x5e, 0x50, 0xa9, 0x98, 0x73, 0x67,
+];
+
+/// Vector 6, half 1: `record_author_key_material` rejects a second, distinct public key for a
+/// `key_id` that already has one recorded -- D8's rule at the write path.
+#[test]
+fn dc53_vector_6_a_conflicting_key_is_rejected_at_record_time() -> prikk_error::Result<()> {
+    assert_eq!(
+        Ed25519KeyPair::from_seed(&VECTOR6_KEY_A_SEED).public_key_bytes(),
+        VECTOR6_KEY_A_PUBLIC
+    );
+    assert_eq!(
+        Ed25519KeyPair::from_seed(&VECTOR6_KEY_B_SEED).public_key_bytes(),
+        VECTOR6_KEY_B_PUBLIC
+    );
+
+    let root = crate::test_support::unique_temp_dir("dc53-vector6-record");
+    let layout = crate::layout::RepositoryLayout::init(root.clone())?;
+    crate::author_key_index::record_author_key_material(
+        &layout,
+        VECTOR6_KEY_ID,
+        VECTOR6_KEY_A_PUBLIC,
+    )?;
+    assert!(
+        crate::author_key_index::record_author_key_material(
+            &layout,
+            VECTOR6_KEY_ID,
+            VECTOR6_KEY_B_PUBLIC,
+        )
+        .is_err()
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// Vector 6, half 2: once a `key_id` carries two distinct recorded keys (planted directly, since
+/// half 1 already proved the production write path refuses to create this state itself),
+/// `verify_author_signature` fails closed -- D8's rule at the verify path, D3's fourth row -- for a
+/// Patch signed by key A even though that signature genuinely verifies against key A.
+#[test]
+fn dc53_vector_6_verification_fails_closed_against_a_conflicting_key_id() -> prikk_error::Result<()>
+{
+    let root = crate::test_support::unique_temp_dir("dc53-vector6-verify");
+    let layout = crate::layout::RepositoryLayout::init(root.clone())?;
+    crate::author_key_index::record_author_key_material(
+        &layout,
+        VECTOR6_KEY_ID,
+        VECTOR6_KEY_A_PUBLIC,
+    )?;
+    crate::author_key_index::force_conflicting_author_key_entry_for_test(
+        &layout,
+        VECTOR6_KEY_ID,
+        VECTOR6_KEY_B_PUBLIC,
+    )?;
+
+    let signer = Ed25519AuthorSigner::from_seed(VECTOR6_KEY_ID, &VECTOR6_KEY_A_SEED)?;
+    assert_eq!(signer.public_key_bytes(), VECTOR6_KEY_A_PUBLIC);
+    let payload = dc53_patch_payload();
+    let canonical = payload.to_canonical_bytes()?;
+    let mut envelope = prikk_object::ObjectEnvelope::unsigned(ObjectType::Patch, 1, canonical);
+    let object_id = envelope.object_id();
+    let signature = author_signature(&signer, object_id)?;
+    envelope.add_signature(signature)?;
+
+    // Sanity: the signature genuinely verifies against key A on its own -- this vector is about the
+    // container's own conflicting state, not a malformed or wrong-preimage signature.
+    let preimage = Signature::signed_bytes(
+        SignatureAlgorithm::Ed25519,
+        ObjectType::Patch,
+        object_id,
+        SignerRole::Author,
+        VECTOR6_KEY_ID,
+    )?;
+    let added_signature = envelope.signatures.first().ok_or_else(|| {
+        prikk_error::PrikkError::Integrity("envelope carries the signature just added".to_string())
+    })?;
+    verify_ed25519(&VECTOR6_KEY_A_PUBLIC, &preimage, &added_signature.signature_bytes)?;
+
+    let result = crate::author_key_index::verify_author_signature(&layout, &envelope);
+    assert!(
+        matches!(&result, Err(err) if err.to_string().contains("has more than one distinct recorded public key")),
+        "expected a conflicting-key_id failure, got: {result:?}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
