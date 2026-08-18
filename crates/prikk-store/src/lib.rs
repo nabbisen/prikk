@@ -76,6 +76,8 @@ mod worktree_status;
 #[cfg(test)]
 mod dc55_identity_evidence;
 #[cfg(test)]
+mod rfc111_index_decode_cost_gate;
+#[cfg(test)]
 mod signature_contract_tests;
 #[cfg(test)]
 mod test_support;
@@ -120,7 +122,9 @@ pub use merge_evidence::{
     prepare_merge_plan,
 };
 pub use merge_execute::{MergeExecutionReport, execute_merge};
-pub use object_store::{FileObjectStore, ObjectReader, ObjectWriter};
+pub use object_store::{
+    FileObjectStore, ObjectReadSnapshot, ObjectReader, ObjectWriteSession, ObjectWriter,
+};
 pub use patch_checkout::{
     PatchDeletionConflict, PatchDeletionPlan, PatchMaterializationReport,
     materialize_patch_checkout, materialize_patch_checkout_with_deletions,

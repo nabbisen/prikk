@@ -4,8 +4,8 @@ use prikk_object::{
     BlockPayload, CanonicalEncode, ObjectEnvelope, ObjectType, RefStatePayload, RefUpdatePayload,
 };
 use prikk_store::{
-    ActiveLock, FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication, RefStore,
-    RepositoryFormat, maintainer_signature,
+    ActiveLock, FileObjectStore, MaintainerSigner, ObjectReader, ObjectWriter, RefPublication,
+    RefStore, RepositoryFormat, maintainer_signature,
 };
 
 pub(super) fn persist_wal_patches(

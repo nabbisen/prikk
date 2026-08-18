@@ -6,7 +6,7 @@ use prikk_object::{BlockPayload, ObjectType, RefStatePayload};
 use super::{RefPublication, RefStore};
 use crate::active::{ActiveRefMetadata, read_active_ref_metadata};
 use crate::layout::RepositoryLayout;
-use crate::object_store::FileObjectStore;
+use crate::object_store::{FileObjectStore, ObjectReader};
 use crate::trust::{load_maintainer_trust_policy, verify_trusted_publication_envelope};
 use crate::wal::Wal;
 

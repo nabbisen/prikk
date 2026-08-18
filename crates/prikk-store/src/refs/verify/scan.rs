@@ -11,7 +11,7 @@ use prikk_object::{
 };
 
 use crate::layout::{ContainerSlot, RepositoryLayout, ref_name_key_bytes};
-use crate::object_store::FileObjectStore;
+use crate::object_store::ObjectReader;
 use crate::refs::container::{
     RefContainerRecordStatus, RefLogRecordStatus, RefLogReplay, decode_ref_container_records,
     replay_ref_subsequence,
@@ -95,7 +95,7 @@ fn log_locator(layout: &RepositoryLayout, offset: usize) -> PathBuf {
 #[allow(clippy::type_complexity)]
 pub(super) fn read_pointers(
     layout: &RepositoryLayout,
-    objects: &FileObjectStore,
+    objects: &impl ObjectReader,
 ) -> Result<(
     BTreeMap<String, PointerState>,
     BTreeMap<[u8; 32], String>,
@@ -149,7 +149,7 @@ pub(super) fn read_pointers(
 }
 
 fn read_one_pointer_entry(
-    objects: &FileObjectStore,
+    objects: &impl ObjectReader,
     entry: &PointerIndexEntry,
 ) -> Result<(String, PointerState)> {
     // The entry's own internal coherence: its claimed `ref_name_key` must actually be
@@ -191,7 +191,7 @@ fn read_one_pointer_entry(
 #[allow(clippy::type_complexity)]
 pub(super) fn read_logs(
     layout: &RepositoryLayout,
-    objects: &FileObjectStore,
+    objects: &impl ObjectReader,
     _pointers: &BTreeMap<String, PointerState>,
 ) -> Result<(
     BTreeMap<String, LogState>,
@@ -292,7 +292,7 @@ pub(super) fn read_logs(
 
 #[allow(clippy::type_complexity)]
 fn validate_log_replay(
-    objects: &FileObjectStore,
+    objects: &impl ObjectReader,
     ref_name_key: [u8; 32],
     replay: &RefLogReplay,
 ) -> Result<Option<(String, LogState, Vec<RefLogEnvelope>)>> {
@@ -361,7 +361,7 @@ fn validate_log_replay(
     )))
 }
 
-fn verify_update(objects: &FileObjectStore, update: &RefUpdatePayload) -> Result<()> {
+fn verify_update(objects: &impl ObjectReader, update: &RefUpdatePayload) -> Result<()> {
     let state = verified_ref_state_payload(objects, update.new_ref_state_id)?;
     if state.ref_name != update.ref_name
         || state.previous_ref_state_id != update.old_ref_state_id
@@ -382,7 +382,7 @@ fn verify_update(objects: &FileObjectStore, update: &RefUpdatePayload) -> Result
 }
 
 fn verified_ref_state_payload(
-    objects: &FileObjectStore,
+    objects: &impl ObjectReader,
     ref_state_id: ObjectId,
 ) -> Result<RefStatePayload> {
     let envelope = objects
@@ -403,7 +403,7 @@ fn verified_ref_state_payload(
 /// must target a `Block` directly; `RefKind::Tag` must target a `Tag` object whose own
 /// `target_block_id` is a `Block` — the two-hop indirection §6.6 requires.
 fn ensure_ref_target_valid(
-    objects: &FileObjectStore,
+    objects: &impl ObjectReader,
     kind: RefKind,
     target_object_id: ObjectId,
     owner: ObjectId,
@@ -425,7 +425,7 @@ fn ensure_ref_target_valid(
 }
 
 fn ensure_block_exists(
-    objects: &FileObjectStore,
+    objects: &impl ObjectReader,
     block_id: ObjectId,
     owner: ObjectId,
 ) -> Result<()> {

@@ -23,7 +23,7 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::ObjectId;
 
 use crate::layout::RepositoryLayout;
-use crate::object_store::FileObjectStore;
+use crate::object_store::ObjectReadSnapshot;
 use crate::path::RepoPath;
 use crate::refs::RefStore;
 use crate::snapshot::SnapshotManifest;
@@ -153,7 +153,11 @@ pub(crate) fn replay_supported_patch_chain(
     layout: &RepositoryLayout,
     ref_name: &str,
 ) -> Result<PatchReplaySnapshot> {
-    let object_store = FileObjectStore::new(layout.clone());
+    // RFC 111 §6.1: safe as a read-only snapshot because every production caller
+    // (`patch_checkout.rs`, `rollback_preview.rs`) only reads -- neither ever writes an object.
+    // If a future caller reaches this from a writing operation, confirm its own write happens
+    // after this function returns (Stage 1 review v1 §4) before assuming this stays safe.
+    let object_store = ObjectReadSnapshot::open(layout)?;
     let target_block_id = current_target_block(layout, &object_store, ref_name)?;
     let block_ids = single_parent_chain(&object_store, target_block_id)?;
     let mut files = BTreeMap::new();
@@ -208,7 +212,14 @@ pub(crate) fn resolve_node_lineage_bounds(
     layout: &RepositoryLayout,
     ref_name: &str,
 ) -> Result<(ObjectId, ObjectId)> {
-    let object_store = FileObjectStore::new(layout.clone());
+    // RFC 111 §6.1: safe as a read-only snapshot even though this is reached from a writing
+    // operation (`node_authoring.rs::author_worktree_patch`, via `resolve_worktree_baseline`) --
+    // this function's own read completes and the snapshot is dropped entirely before that
+    // caller's own writes begin later in the same call (Stage 1 review v1 §4). If this call is
+    // ever hoisted to live across that caller's writes, or a new caller writes before calling
+    // this, that guarantee breaks silently -- check this comment still describes reality before
+    // assuming it's still safe.
+    let object_store = ObjectReadSnapshot::open(layout)?;
     let baseline = current_target_block(layout, &object_store, ref_name)?;
     let chain = single_parent_chain(&object_store, baseline)?;
     let horizon = *chain

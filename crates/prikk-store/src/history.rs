@@ -9,7 +9,7 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::{BlockKind, BlockPayload, ObjectId, ObjectType, RefStatePayload};
 
 use crate::layout::RepositoryLayout;
-use crate::object_store::{FileObjectStore, ObjectReader};
+use crate::object_store::{ObjectReadSnapshot, ObjectReader};
 use crate::refs::RefStore;
 use crate::rollback_verify::verify_rollback_patch_envelope;
 
@@ -68,7 +68,7 @@ pub fn load_ref_history(
     limit: usize,
 ) -> Result<RefHistory> {
     let ref_store = RefStore::new(layout.clone());
-    let object_store = FileObjectStore::new(layout.clone());
+    let object_store = ObjectReadSnapshot::open(layout)?;
     let mut current = ref_store.read_current_ref_state_id(ref_name)?;
     let mut entries = Vec::new();
     let mut seen = HashSet::new();
@@ -130,7 +130,7 @@ pub fn load_received_ref_history(
             "{received_ref_name} is not a received ref"
         )));
     };
-    let object_store = FileObjectStore::new(layout.clone());
+    let object_store = ObjectReadSnapshot::open(layout)?;
     let mut current = Some(pointer.ref_state_id);
     let mut entries = Vec::new();
     let mut seen = HashSet::new();
@@ -170,7 +170,7 @@ pub fn load_received_ref_history(
 }
 
 fn read_ref_state(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     ref_state_id: ObjectId,
     ref_name: &str,
 ) -> Result<RefStatePayload> {
@@ -197,7 +197,7 @@ fn read_ref_state(
 }
 
 fn count_rollback_patches(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     block_id: ObjectId,
     patch_ids: &[ObjectId],
 ) -> Result<usize> {
@@ -218,7 +218,7 @@ fn count_rollback_patches(
     Ok(count)
 }
 
-fn read_block(object_store: &FileObjectStore, block_id: ObjectId) -> Result<BlockPayload> {
+fn read_block(object_store: &impl ObjectReader, block_id: ObjectId) -> Result<BlockPayload> {
     let Some(envelope) = object_store.read_object(block_id)? else {
         return Err(PrikkError::Integrity(format!(
             "history Block {block_id} is missing"

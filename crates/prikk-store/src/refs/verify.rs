@@ -7,7 +7,7 @@ use prikk_error::{PrikkError, Result};
 
 use crate::fsutil::{EntryKind, list_directory};
 use crate::layout::RepositoryLayout;
-use crate::object_store::FileObjectStore;
+use crate::object_store::ObjectReadSnapshot;
 use crate::signature_diagnostics::{
     SignatureEnvelopeIssue, SignatureEnvelopeSource, classify_signature_envelope,
 };
@@ -103,7 +103,13 @@ impl RefVerification {
 }
 
 pub(crate) fn verify_refs(layout: &RepositoryLayout) -> Result<RefVerification> {
-    let objects = FileObjectStore::new(layout.clone());
+    // RFC 111 §6.1: `verify_refs` is read-only (never calls `write_object`), so it takes its own
+    // decoded index snapshot here rather than sharing `verify_repository_with_options`'s -- they are
+    // two separate top-level constructions today (this one predates this change), and unifying them
+    // into one shared snapshot across the whole `verify` run is a further optimization this RFC does
+    // not require: RFC 111's own gate measures decode *count*, not construction count, and each of
+    // these two snapshots is still exactly one decode regardless of repository size.
+    let objects = ObjectReadSnapshot::open(layout)?;
     let (pointers, pointer_failures_by_key, pointer_outcomes) = read_pointers(layout, &objects)?;
     let (logs, log_record_count, ref_log_envelopes, log_failures_by_key, log_outcomes) =
         read_logs(layout, &objects, &pointers)?;

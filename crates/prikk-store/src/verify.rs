@@ -310,7 +310,7 @@ use crate::layout::{RepositoryFormat, RepositoryLayout};
 use crate::lifecycle_cache::incremental::{
     LifecycleCacheDivergence, verify_divergence as verify_lifecycle_cache_divergence,
 };
-use crate::object_store::FileObjectStore;
+use crate::object_store::{ObjectReadSnapshot, ObjectReader};
 use crate::refs::verify_refs;
 use crate::rollback_verify::{verify_rollback_draft_wal_records, verify_rollback_patch_envelope};
 use crate::signature_diagnostics::{
@@ -930,7 +930,10 @@ pub fn verify_repository_with_options(
     layout: &RepositoryLayout,
     options: VerifyOptions,
 ) -> Result<RepositoryVerification> {
-    let object_store = FileObjectStore::new(layout.clone());
+    // RFC 111 §6.1: `verify` is read-only end to end (never calls `write_object` anywhere in its own
+    // call graph, confirmed by RFC 111 Q1's inventory), so it takes one decoded index snapshot here,
+    // once, instead of the O(N) per-object-read decode `FileObjectStore` used to pay.
+    let object_store = ObjectReadSnapshot::open(layout)?;
     let mut trust_verifier = PublicationTrustVerifier::new(layout);
     let mut pipeline = StagePipeline::new(options.stop_on_first_error);
 
@@ -1317,7 +1320,7 @@ fn classify_active_wal_metadata(
 /// discarding it. See that function's own doc for why deferring is what bounds
 /// `LineageStateMemo`'s memory instead of merely avoiding redundant re-derivation.
 fn verify_block_payload(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     block_id: ObjectId,
     format: RepositoryFormat,
     canonical_payload: &[u8],
@@ -1374,7 +1377,7 @@ fn verify_block_payload(
 /// content. Cost is the same full-parent reachability walk measured linear in
 /// `baseline-recording-answer-v1.md` §1 — unconditional, not a gated "deep verify" mode.
 fn verify_merge_baseline(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     block_id: ObjectId,
     payload: &BlockPayload,
 ) -> Result<Option<MergeBaselineDivergence>> {
@@ -1413,7 +1416,7 @@ fn verify_merge_baseline(
 }
 
 fn ensure_object_exists(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     object_type: ObjectType,
     object_id: ObjectId,
     role: &str,
@@ -1429,7 +1432,7 @@ fn ensure_object_exists(
 }
 
 fn verify_wal_persistence(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     records: &[crate::WalRecord],
 ) -> Result<usize> {
     let mut persisted = 0_usize;
@@ -1440,7 +1443,16 @@ fn verify_wal_persistence(
                 record.seq, record.envelope.object_type
             )));
         }
-        if object_store.contains_object(ObjectType::Patch, record.envelope.object_id()) {
+        // `FileObjectStore::contains_object`'s exact existing semantics, reproduced generically:
+        // "does this exist, as this type" -- and, matching its own silent-on-error tolerance, any
+        // read error here means "not found," not a propagated failure. `contains_object` itself is
+        // inherent, not on `ObjectReader`, so a generic reader uses `read_object` directly instead.
+        if object_store
+            .read_object(record.envelope.object_id())
+            .ok()
+            .flatten()
+            .is_some_and(|envelope| envelope.object_type == ObjectType::Patch)
+        {
             persisted = persisted.checked_add(1).ok_or_else(|| {
                 PrikkError::Integrity("persisted WAL patch count overflow".to_string())
             })?;

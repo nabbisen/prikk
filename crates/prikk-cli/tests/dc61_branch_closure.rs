@@ -21,8 +21,8 @@ use prikk_object::{
     RefStatePayload, RefUpdatePayload,
 };
 use prikk_store::{
-    Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, RefPublication, RefStore,
-    RepositoryLayout, maintainer_signature, remove_active_ref_metadata,
+    Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectReader, RefPublication,
+    RefStore, RepositoryLayout, maintainer_signature, remove_active_ref_metadata,
 };
 
 fn prikk(repo: &Path) -> Command {

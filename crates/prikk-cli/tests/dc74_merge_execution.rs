@@ -12,7 +12,7 @@ mod support;
 use support::*;
 
 use prikk_object::{BlockPayload, ObjectId, ObjectType, RefStatePayload};
-use prikk_store::{FileObjectStore, RefStore, RepositoryLayout};
+use prikk_store::{FileObjectStore, ObjectReader, RefStore, RepositoryLayout};
 
 fn genesis_block_id(repo: &std::path::Path) -> ObjectId {
     let layout = RepositoryLayout::open(repo.to_path_buf()).unwrap();

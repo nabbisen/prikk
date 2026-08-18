@@ -16,8 +16,8 @@ use prikk_object::{
     RefUpdatePayload, TagPayload,
 };
 use prikk_store::{
-    Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, RefPublication, RefStore,
-    RepositoryLayout, maintainer_signature,
+    Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectReader, RefPublication,
+    RefStore, RepositoryLayout, maintainer_signature,
 };
 
 fn prikk(repo: &Path) -> Command {

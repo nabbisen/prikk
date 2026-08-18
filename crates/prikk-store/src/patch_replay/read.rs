@@ -10,7 +10,7 @@ use prikk_object::{
 };
 
 use crate::layout::RepositoryLayout;
-use crate::object_store::FileObjectStore;
+use crate::object_store::ObjectReader;
 use crate::path::RepoPath;
 use crate::refs::RefStore;
 use crate::snapshot::{SnapshotEntry, SnapshotManifest};
@@ -20,7 +20,7 @@ use super::{ReplayManifest, ReplayManifestEntry};
 
 pub(super) fn current_target_block(
     layout: &RepositoryLayout,
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     ref_name: &str,
 ) -> Result<ObjectId> {
     let ref_store = RefStore::new(layout.clone());
@@ -46,7 +46,7 @@ pub(super) fn current_target_block(
 }
 
 pub(super) fn single_parent_chain(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     target: ObjectId,
 ) -> Result<Vec<ObjectId>> {
     let mut newest_first = Vec::new();
@@ -93,7 +93,7 @@ fn mainline_or_sole_parent(block: &BlockPayload) -> Option<Option<ObjectId>> {
 }
 
 pub(super) fn read_block(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     block_id: ObjectId,
 ) -> Result<BlockPayload> {
     let envelope = object_store
@@ -103,7 +103,7 @@ pub(super) fn read_block(
 }
 
 pub(super) fn read_patch(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     patch_id: ObjectId,
 ) -> Result<ObjectEnvelope> {
     object_store
@@ -112,7 +112,7 @@ pub(super) fn read_patch(
 }
 
 pub(super) fn load_snapshot_files(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     snapshot_blob_ref: ObjectId,
 ) -> Result<BTreeMap<String, Vec<u8>>> {
     let envelope = object_store
@@ -178,7 +178,7 @@ pub(super) fn files_to_replay_manifest(
 }
 
 pub(super) fn read_blob_bytes_with_kind(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     blob_id: ObjectId,
 ) -> Result<(NodeKind, Vec<u8>)> {
     let envelope = object_store

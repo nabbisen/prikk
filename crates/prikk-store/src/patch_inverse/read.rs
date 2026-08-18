@@ -8,14 +8,14 @@ use prikk_object::{
 };
 
 use crate::layout::RepositoryLayout;
-use crate::object_store::FileObjectStore;
+use crate::object_store::ObjectReader;
 use crate::refs::RefStore;
 use crate::snapshot::SnapshotManifest;
 
 /// Read the current target Block ID for a ref.
 pub(super) fn current_target_block(
     layout: &RepositoryLayout,
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     ref_name: &str,
 ) -> Result<ObjectId> {
     let ref_store = RefStore::new(layout.clone());
@@ -42,7 +42,7 @@ pub(super) fn current_target_block(
 
 /// Return the single-parent chain from oldest to newest.
 pub(super) fn single_parent_chain(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     target: ObjectId,
 ) -> Result<Vec<ObjectId>> {
     let mut newest_first = Vec::new();
@@ -89,7 +89,7 @@ fn mainline_or_sole_parent(block: &BlockPayload) -> Option<Option<ObjectId>> {
 
 /// Read and decode a Block payload.
 pub(super) fn read_block(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     block_id: ObjectId,
 ) -> Result<BlockPayload> {
     let envelope = object_store
@@ -100,7 +100,7 @@ pub(super) fn read_block(
 
 /// Read a Patch envelope.
 pub(super) fn read_patch(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     patch_id: ObjectId,
 ) -> Result<ObjectEnvelope> {
     object_store
@@ -110,7 +110,7 @@ pub(super) fn read_patch(
 
 /// Load a snapshot manifest into a path-to-bytes map.
 pub(super) fn load_snapshot_files(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     snapshot_blob_ref: ObjectId,
 ) -> Result<BTreeMap<String, Vec<u8>>> {
     let envelope = object_store
@@ -130,7 +130,7 @@ pub(super) fn load_snapshot_files(
 /// Read a file-content Blob, returning the derived node kind and bytes. Used to
 /// fill `DeleteNode.old_node_kind` when inverting a `CreateFile`.
 pub(super) fn read_blob_bytes_with_kind(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     blob_id: ObjectId,
 ) -> Result<(prikk_object::NodeKind, Vec<u8>)> {
     let envelope = object_store
