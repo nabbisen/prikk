@@ -31,7 +31,7 @@ use crate::{
 #[test]
 fn repository_format_create_sync_failure_retains_and_retries() -> prikk_error::Result<()> {
     let root = unique_temp_dir("repository-sync-matrix");
-    fail_after_for_test(TestFailPoint::RequiredDirectorySync, 29);
+    fail_after_for_test(TestFailPoint::RequiredDirectorySync, 30);
     assert!(RepositoryLayout::init(root.clone()).is_err());
     assert!(
         root.join(".prikk/FORMAT").is_file(),

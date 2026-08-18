@@ -9,7 +9,8 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::{BlockPayload, ObjectEnvelope, ObjectId, ObjectType};
 
 use super::{
-    BlockSealVerification, ObjectVerification, PublicationTrustVerifier, verify_block_payload,
+    AuthorSignatureVerification, BlockSealVerification, ObjectVerification,
+    PublicationTrustVerifier, verify_block_payload,
 };
 use crate::block_state::{BlockStateOutcome, LineageStateMemo, verify_blocks_topological};
 use crate::container::{self, ContainerRecordStatus};
@@ -300,6 +301,23 @@ fn verify_object_record(
     } else {
         None
     };
+    // DC-53 Stage 1: a Patch's AUTHOR signature is checked against recorded key material here. A
+    // signature that fails to verify against *recorded* material propagates as an `Err` via `?`
+    // below -- it never reaches `author_verification` -- because that outcome is a genuine
+    // authorship-integrity defect (forgery or corruption), not a trust opinion (D3).
+    let author_verification = if object_type == ObjectType::Patch {
+        crate::author_key_index::verify_author_signature(layout, envelope)?.map(
+            |(key_id, sound)| {
+                if sound {
+                    AuthorSignatureVerification::Sound { key_id }
+                } else {
+                    AuthorSignatureVerification::Unverifiable { key_id }
+                }
+            },
+        )
+    } else {
+        None
+    };
     let (rollback_patch_count, merge_baseline_divergence) = if object_type == ObjectType::Block {
         verify_block_payload(
             object_store,
@@ -318,6 +336,7 @@ fn verify_object_record(
             path: locator.to_path_buf(),
             rollback_patch_count,
             sealed_by_key_id,
+            author_verification,
         },
         signature_issues,
         merge_baseline_divergence,

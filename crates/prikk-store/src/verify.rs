@@ -337,6 +337,33 @@ pub struct ObjectVerification {
     /// For a Block or RefState, the adopted MAINTAINER key id whose signature was trusted (DC-78
     /// §D3). `None` for other object types, or when publication trust could not be established.
     pub sealed_by_key_id: Option<String>,
+    /// For a Patch, the outcome of checking its AUTHOR signature against recorded key material
+    /// (DC-53 Stage 1). `None` for other object types, or when the Patch carries no AUTHOR-role
+    /// signature at all (out of this increment's scope). A signature that does not verify against
+    /// *recorded* material never reaches this field -- it fails this object's own item check
+    /// instead, the same as any other authorship-integrity defect.
+    pub author_verification: Option<AuthorSignatureVerification>,
+}
+
+/// The result of checking one Patch's AUTHOR signature (DC-53 Stage 1, D3's first two rows --
+/// there is no `Fails` variant here because that outcome is a genuine item-level failure,
+/// propagated as an `Err` the same way every other authorship-integrity defect in this pipeline is,
+/// not a value this type carries).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuthorSignatureVerification {
+    /// The signature verifies against key material recorded for this `key_id`.
+    Sound {
+        /// The AUTHOR key id the signature named and verified against.
+        key_id: String,
+    },
+    /// No key material has ever been recorded for this `key_id` -- authored before this
+    /// increment, or by a signer whose material this repository never observed. **Not a
+    /// failure**: `verify` still passes, but this must be visible, not silent (DC-53 Stage 1 D3's
+    /// second row).
+    Unverifiable {
+        /// The AUTHOR key id named, for which no key material is on file.
+        key_id: String,
+    },
 }
 
 /// Which adopted MAINTAINER key sealed a given Block (DC-78 §D3). Reporting only: the sealer's key

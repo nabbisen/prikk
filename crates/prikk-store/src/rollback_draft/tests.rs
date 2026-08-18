@@ -53,6 +53,10 @@ impl AuthorSigner for AdvancingSigner {
         }
         self.inner.sign(preimage)
     }
+
+    fn public_key_bytes(&self) -> [u8; prikk_crypto::ED25519_KEY_LEN] {
+        self.inner.public_key_bytes()
+    }
 }
 
 fn advance_main_ref(layout: &RepositoryLayout) -> prikk_error::Result<()> {

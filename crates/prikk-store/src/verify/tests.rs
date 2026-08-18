@@ -16,9 +16,10 @@ use prikk_object::{
 use crate::maintainer_signing::MaintainerSigner;
 use crate::wal::{WalRecord, encode_record_for_test};
 use crate::{
-    ActiveWalMetadataStatus, BlockStateStatus, FileObjectStore, ObjectItemStatus, ObjectWriter,
+    ActiveWalMetadataStatus, AuthorSignatureVerification, AuthorSigner, BlockStateStatus,
+    Ed25519AuthorSigner, FileObjectStore, ObjectItemStatus, ObjectVerification, ObjectWriter,
     RepositoryLayout, RepositoryVerification, StageStatus, VerificationStage, Wal,
-    derive_next_state_root, verify_repository, write_active_ref_metadata,
+    author_signature, derive_next_state_root, verify_repository, write_active_ref_metadata,
 };
 
 use crate::test_support::{
@@ -889,6 +890,163 @@ fn verify_repository_detects_envelope_type_mismatch() -> Result<()> {
 
     let report = verify_repository(&layout)?;
     assert_object_item_failed(&report, "is under type");
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-53 Stage 1: a minimal single-operation Patch payload, distinguished only by `discriminant` so
+/// each of the three `verify_author_signature` tests below gets its own object id.
+fn author_verification_test_patch_payload(discriminant: u8) -> PatchPayload {
+    PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::CreateFile(CreateFile {
+                path: format!("dc53-author-verify-{discriminant}.txt"),
+                node_id: NodeId::from_bytes([discriminant; 32]),
+                blob_id: ObjectId::from_bytes([discriminant.wrapping_add(1); 32]),
+                mode: 0o100_644,
+            }),
+        }],
+        parent_patch_ids: Vec::new(),
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+    }
+}
+
+/// Writes a real-Ed25519-signed Patch envelope directly into the Patch container's slot A (no index
+/// entry -- `Unindexed` is a valid non-failure classification, and every other object-item test in
+/// this file that doesn't need indexedness skips it the same way, e.g.
+/// `verify_repository_detects_envelope_type_mismatch` above). Returns the signer's `key_id` and the
+/// written object's id.
+fn write_author_signed_patch(
+    layout: &RepositoryLayout,
+    discriminant: u8,
+    key_id: &str,
+    corrupt_signature: bool,
+) -> Result<(String, ObjectId)> {
+    let payload = author_verification_test_patch_payload(discriminant);
+    let canonical = payload.to_canonical_bytes()?;
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, canonical);
+    let object_id = envelope.object_id();
+    let signer = Ed25519AuthorSigner::from_seed(key_id, &[discriminant; 32])?;
+    let mut signature = author_signature(&signer, object_id)?;
+    if corrupt_signature {
+        if let Some(byte) = signature.signature_bytes.get_mut(0) {
+            *byte ^= 1;
+        }
+    }
+    envelope.add_signature(signature)?;
+    let record_bytes = crate::container::encode_container_record(ObjectType::Patch, &envelope)?;
+    std::fs::write(
+        layout.container_slot_path(ObjectType::Patch, crate::layout::ContainerSlot::A),
+        &record_bytes,
+    )?;
+    Ok((signer.key_id().to_string(), object_id))
+}
+
+fn find_object_verification(
+    report: &RepositoryVerification,
+    object_id: ObjectId,
+) -> &ObjectVerification {
+    report
+        .object_outcomes
+        .iter()
+        .find_map(|outcome| match &outcome.status {
+            ObjectItemStatus::Evaluated(verification)
+            | ObjectItemStatus::Unindexed(verification)
+                if verification.object_id == object_id =>
+            {
+                Some(verification)
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("expected an evaluated outcome for {object_id}, got: {report:?}"))
+}
+
+/// DC-53 Stage 1 implementation review v1, B2: a forged AUTHOR signature must not silently pass.
+/// Reproduces the review's own negative control in reverse -- with `verify_author_signature`'s real
+/// body, a tampered signature against *recorded* key material must surface as an object item
+/// `Failed`, reached through `verify_repository` end to end (not asserted only against the module
+/// function directly), so `verify/objects.rs:298`'s `?` propagation is what this test actually
+/// exercises.
+#[test]
+fn verify_repository_fails_a_tampered_author_signature_against_recorded_key_material() -> Result<()>
+{
+    let root = unique_temp_dir("verify-author-signature-fails");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let signer = Ed25519AuthorSigner::from_seed("fails-author", &[0x61; 32])?;
+    crate::author_key_index::record_author_key_material(
+        &layout,
+        signer.key_id(),
+        signer.public_key_bytes(),
+    )?;
+    write_author_signed_patch(&layout, 0x61, "fails-author", true)?;
+
+    let report = verify_repository(&layout)?;
+    assert_object_item_failed(
+        &report,
+        "AUTHOR signature does not verify against recorded key material",
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-53 Stage 1 implementation review v1, B2: the production authoring path and production
+/// verification must agree. Records material the same way `author_signature()`'s real callers do
+/// (`crate::author_key_index::record_author_key_material`, not a shortcut), signs through
+/// `author_signature()` itself, and asserts `verify_repository` reports `Sound` -- not merely that it
+/// passes, which `Unverifiable` would also do.
+#[test]
+fn verify_repository_reports_sound_for_a_signature_verifying_against_recorded_material()
+-> Result<()> {
+    let root = unique_temp_dir("verify-author-signature-sound");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let signer = Ed25519AuthorSigner::from_seed("sound-author", &[0x71; 32])?;
+    crate::author_key_index::record_author_key_material(
+        &layout,
+        signer.key_id(),
+        signer.public_key_bytes(),
+    )?;
+    let (key_id, object_id) = write_author_signed_patch(&layout, 0x71, "sound-author", false)?;
+
+    let report = verify_repository(&layout)?;
+    assert!(
+        !report.has_item_failure(),
+        "expected no item failure, got: {report:?}"
+    );
+    let verification = find_object_verification(&report, object_id);
+    assert_eq!(
+        verification.author_verification,
+        Some(AuthorSignatureVerification::Sound { key_id })
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// DC-53 Stage 1 implementation review v1, B2: D3's second row must be asserted deliberately, not
+/// inferred from other tests that would pass either way regardless of whether it fires. No call to
+/// `record_author_key_material` at all -- a genuinely valid signature naming a `key_id` this
+/// repository has never recorded material for.
+#[test]
+fn verify_repository_reports_unverifiable_for_a_key_id_with_no_recorded_material() -> Result<()> {
+    let root = unique_temp_dir("verify-author-signature-unverifiable");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let (key_id, object_id) =
+        write_author_signed_patch(&layout, 0x81, "unverifiable-author", false)?;
+
+    let report = verify_repository(&layout)?;
+    assert!(
+        !report.has_item_failure(),
+        "expected no item failure, got: {report:?}"
+    );
+    let verification = find_object_verification(&report, object_id);
+    assert_eq!(
+        verification.author_verification,
+        Some(AuthorSignatureVerification::Unverifiable { key_id })
+    );
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }

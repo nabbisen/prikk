@@ -1,0 +1,382 @@
+//! AUTHOR key-material container (DC-53 Stage 1, restaged per
+//! `.git-exclude/reviewed/DC-53-stage-1-report-ruling-v1.md` §2-§3).
+//!
+//! **Material only -- no admission judgement, no conflict rejection.** This is deliberately the
+//! narrower half of what `trust_index.rs` provides for MAINTAINER keys: that module also has a
+//! *policy* container (which key ids are currently adopted), layered over its key-material
+//! container. AUTHOR trust has no policy layer yet -- Stage 2 owns TOFU conflict semantics -- so
+//! this module mirrors only `trust_index.rs`'s key-material half, not its policy half.
+//!
+//! **Why this container exists at all, and why it cannot be populated the way MAINTAINER's is.**
+//! Ed25519 signatures are not public-key-recoverable: verifying one requires the verifier to already
+//! hold the claimed public key, and nothing else in a persisted `Patch` carries it (`Signature`
+//! carries a `key_id` *label*, `signature.rs:83`; `PatchPayload` carries no key field at all). MAINTAINER
+//! key material is supplied by an explicit adoption act (`trust::add_trusted_maintainer`) that a
+//! repository operator performs once, deliberately. **There is no equivalent act for authors** --
+//! observing a Patch's signature teaches nothing about the key that produced it, so pinning on first
+//! *sight* (as this module's own first draft assumed) has no source to pin from. **AUTHOR key
+//! material is therefore recorded at authoring time, by the signer itself**, the only party that
+//! ever holds the public key -- see `record_author_key_material`'s callers in `worktree_patch/-
+//! node_authoring.rs` and `rollback_draft.rs`.
+//!
+//! **Consequence, stated rather than discovered later:** every Patch authored before this
+//! increment -- and every Patch authored by a signer this repository's own `RepositoryLayout` never
+//! observed -- has no recorded key material and can never be verified by any future work. That is
+//! not leniency; it is unverifiable in principle, and `verify` must report it as a distinct outcome
+//! (DC-53's restaged D3, second row), not silently as sound.
+//!
+//! **No conflict rejection, on purpose, for Stage 1.** If two different public keys are ever
+//! recorded for the same `key_id` (a coincidental collision, or a legitimate future key rotation),
+//! this module appends both rather than refusing the second -- judging that collision is Stage 2's
+//! job (D1's TOFU conflict semantics). `lookup_author_key_entries` therefore returns *every* entry
+//! ever recorded for a `key_id`, not just the most recent, and a signature is `Sound` if it verifies
+//! against *any* of them -- a Patch that was genuinely valid when authored must not fail Stage 1
+//! verification later merely because a different key subsequently claimed the same `key_id`. Framed
+//! as a choice, not hidden in the lookup's own return type: see the DC-53 Stage 1 implementation
+//! report for the alternative (verify only against the *last* recorded entry) and why it was not
+//! taken.
+
+use prikk_crypto::{ED25519_KEY_LEN, verify_ed25519};
+use prikk_error::{PrikkError, Result};
+use prikk_hash::sha256;
+use prikk_object::{ObjectEnvelope, Signature, SignatureAlgorithm, SignerRole};
+
+use std::path::Path;
+
+use crate::byte_cursor::ByteCursor;
+use crate::file_codec::push_string_u16;
+use crate::frame_resync::resync_to_next_magic;
+use crate::fsutil::{
+    append_file_required, create_new_file_required, len_to_u64, read_file_if_exists,
+};
+use crate::layout::RepositoryLayout;
+
+const AUTHOR_KEY_MAGIC: &[u8; 8] = b"PAUTKEY1";
+const AUTHOR_KEY_VERSION: u16 = 1;
+const AUTHOR_KEY_HEADER_LEN: usize = 8 + 2 + 8 + 32;
+
+/// One recorded AUTHOR key's material.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AuthorKeyEntry {
+    pub(crate) key_id: String,
+    pub(crate) public_key: [u8; ED25519_KEY_LEN],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AuthorKeyRecordStatus {
+    Evaluated,
+    Failed { message: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AuthorKeyRecordOutcome {
+    pub(crate) offset: usize,
+    pub(crate) status: AuthorKeyRecordStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AuthorKeyReplay {
+    pub(crate) entries: Vec<AuthorKeyEntry>,
+    pub(crate) trailing_partial_bytes: usize,
+    pub(crate) record_outcomes: Vec<AuthorKeyRecordOutcome>,
+}
+
+impl AuthorKeyReplay {
+    #[must_use]
+    pub(crate) fn has_item_failure(&self) -> bool {
+        self.record_outcomes
+            .iter()
+            .any(|outcome| matches!(outcome.status, AuthorKeyRecordStatus::Failed { .. }))
+    }
+}
+
+fn encode_author_key_body(entry: &AuthorKeyEntry) -> Result<Vec<u8>> {
+    let mut body = Vec::new();
+    push_string_u16(&mut body, &entry.key_id)?;
+    body.extend_from_slice(&entry.public_key);
+    Ok(body)
+}
+
+fn decode_author_key_body(body: &[u8]) -> Result<AuthorKeyEntry> {
+    let mut cursor = ByteCursor::new(body);
+    let key_id = cursor.read_string_u16()?;
+    let public_key = cursor.read_array::<ED25519_KEY_LEN>()?;
+    if !cursor.is_finished() {
+        return Err(PrikkError::MalformedData(
+            "trailing bytes in author key entry body".to_string(),
+        ));
+    }
+    Ok(AuthorKeyEntry { key_id, public_key })
+}
+
+fn encode_author_key_record(entry: &AuthorKeyEntry) -> Result<Vec<u8>> {
+    let body = encode_author_key_body(entry)?;
+    let body_len = len_to_u64(body.len())?;
+    let checksum = author_key_checksum(body_len, &body);
+    let mut out = Vec::with_capacity(AUTHOR_KEY_HEADER_LEN + body.len());
+    out.extend_from_slice(AUTHOR_KEY_MAGIC);
+    crate::file_codec::push_u16(&mut out, AUTHOR_KEY_VERSION);
+    out.extend_from_slice(&body_len.to_be_bytes());
+    out.extend_from_slice(&checksum);
+    out.extend_from_slice(&body);
+    Ok(out)
+}
+
+fn author_key_checksum(body_len: u64, body: &[u8]) -> [u8; 32] {
+    let mut preimage = Vec::new();
+    preimage.extend_from_slice(AUTHOR_KEY_MAGIC);
+    preimage.extend_from_slice(&AUTHOR_KEY_VERSION.to_be_bytes());
+    preimage.extend_from_slice(&body_len.to_be_bytes());
+    preimage.extend_from_slice(body);
+    sha256(&preimage)
+}
+
+enum AuthorKeyFrameAttempt {
+    Record {
+        entry: AuthorKeyEntry,
+        next_offset: usize,
+    },
+    TrailingPartial {
+        remaining: usize,
+    },
+    Invalid {
+        message: String,
+    },
+}
+
+fn parse_author_key_frame_at(bytes: &[u8], offset: usize) -> AuthorKeyFrameAttempt {
+    let remaining = bytes.len().saturating_sub(offset);
+    if remaining < AUTHOR_KEY_HEADER_LEN {
+        return AuthorKeyFrameAttempt::TrailingPartial { remaining };
+    }
+    let header_end = offset + AUTHOR_KEY_HEADER_LEN;
+    let Some(header) = bytes.get(offset..header_end) else {
+        return AuthorKeyFrameAttempt::TrailingPartial { remaining };
+    };
+    let mut cursor = ByteCursor::new(header);
+    let (magic, version, body_len, checksum) = match (|| -> Result<_> {
+        let magic = cursor.read_array::<8>()?;
+        let version = cursor.read_u16()?;
+        let body_len = cursor.read_u64()?;
+        let checksum = cursor.read_array::<32>()?;
+        Ok((magic, version, body_len, checksum))
+    })() {
+        Ok(values) => values,
+        Err(err) => {
+            return AuthorKeyFrameAttempt::Invalid {
+                message: err.to_string(),
+            };
+        }
+    };
+    if &magic != AUTHOR_KEY_MAGIC {
+        return AuthorKeyFrameAttempt::Invalid {
+            message: "invalid author key record magic".to_string(),
+        };
+    }
+    if version != AUTHOR_KEY_VERSION {
+        return AuthorKeyFrameAttempt::Invalid {
+            message: format!("unsupported author key record version {version}"),
+        };
+    }
+    let Ok(body_len_usize) = usize::try_from(body_len) else {
+        return AuthorKeyFrameAttempt::Invalid {
+            message: "author key body length does not fit usize".to_string(),
+        };
+    };
+    let Some(body_end) = header_end.checked_add(body_len_usize) else {
+        return AuthorKeyFrameAttempt::Invalid {
+            message: "author key body end overflow".to_string(),
+        };
+    };
+    let Some(body) = bytes.get(header_end..body_end) else {
+        return AuthorKeyFrameAttempt::TrailingPartial { remaining };
+    };
+    let expected = author_key_checksum(body_len, body);
+    if expected != checksum {
+        return AuthorKeyFrameAttempt::Invalid {
+            message: format!("author key checksum mismatch at byte offset {offset}"),
+        };
+    }
+    match decode_author_key_body(body) {
+        Ok(entry) => AuthorKeyFrameAttempt::Record {
+            entry,
+            next_offset: body_end,
+        },
+        Err(err) => AuthorKeyFrameAttempt::Invalid {
+            message: err.to_string(),
+        },
+    }
+}
+
+/// Isolate-and-continue reading, matching every other container's decode loop in this codebase
+/// (`trust_index.rs::decode_trust_key_records` is the closest precedent).
+fn decode_author_key_records(bytes: &[u8]) -> Result<AuthorKeyReplay> {
+    let mut entries = Vec::new();
+    let mut record_outcomes = Vec::new();
+    let mut offset = 0_usize;
+    loop {
+        match parse_author_key_frame_at(bytes, offset) {
+            AuthorKeyFrameAttempt::Record { entry, next_offset } => {
+                record_outcomes.push(AuthorKeyRecordOutcome {
+                    offset,
+                    status: AuthorKeyRecordStatus::Evaluated,
+                });
+                entries.push(entry);
+                offset = next_offset;
+            }
+            AuthorKeyFrameAttempt::TrailingPartial { remaining } => {
+                return Ok(AuthorKeyReplay {
+                    entries,
+                    trailing_partial_bytes: remaining,
+                    record_outcomes,
+                });
+            }
+            AuthorKeyFrameAttempt::Invalid { message } => {
+                record_outcomes.push(AuthorKeyRecordOutcome {
+                    offset,
+                    status: AuthorKeyRecordStatus::Failed { message },
+                });
+                match resync_to_next_magic(bytes, offset + 1, AUTHOR_KEY_MAGIC.as_slice()) {
+                    Some(next) => offset = next,
+                    None => {
+                        return Ok(AuthorKeyReplay {
+                            entries,
+                            trailing_partial_bytes: 0,
+                            record_outcomes,
+                        });
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn replay_author_keys(layout: &RepositoryLayout) -> Result<AuthorKeyReplay> {
+    let relative = layout.repository_relative(&layout.author_key_container_path())?;
+    let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &relative)? else {
+        // A repository initialized before this container existed has no such file; that reads
+        // identically to an empty one (no key material recorded for anything) -- exactly the
+        // "unverifiable, not failed" outcome D3's second row describes, not a structural defect.
+        return Ok(AuthorKeyReplay {
+            entries: Vec::new(),
+            trailing_partial_bytes: 0,
+            record_outcomes: Vec::new(),
+        });
+    };
+    decode_author_key_records(&bytes)
+}
+
+/// Every entry ever recorded for `key_id`, oldest first -- deliberately not just the most recent
+/// one; see the module doc's "no conflict rejection" note. Refuses if the container has any damaged
+/// entry, matching `trust_index::lookup_trust_key_entry`'s fail-closed reasoning.
+pub(crate) fn lookup_author_key_entries(
+    layout: &RepositoryLayout,
+    key_id: &str,
+) -> Result<Vec<AuthorKeyEntry>> {
+    let replay = replay_author_keys(layout)?;
+    if replay.has_item_failure() {
+        return Err(PrikkError::Integrity(
+            "author key container has a damaged entry; run doctor before reading".to_string(),
+        ));
+    }
+    Ok(replay
+        .entries
+        .into_iter()
+        .filter(|entry| entry.key_id == key_id)
+        .collect())
+}
+
+/// Record `key_id`'s public key at authoring time. Idempotent if this exact `(key_id, public_key)`
+/// pair was already recorded (an author signing many patches over time must not grow the container
+/// once per patch); appends unconditionally otherwise, including when a *different* public key is
+/// already on file for `key_id` -- Stage 1 makes no admission judgement about that, per the module
+/// doc.
+pub(crate) fn record_author_key_material(
+    layout: &RepositoryLayout,
+    key_id: &str,
+    public_key: [u8; ED25519_KEY_LEN],
+) -> Result<()> {
+    let existing = lookup_author_key_entries(layout, key_id)?;
+    if existing.iter().any(|entry| entry.public_key == public_key) {
+        return Ok(());
+    }
+    let record = encode_author_key_record(&AuthorKeyEntry {
+        key_id: key_id.to_string(),
+        public_key,
+    })?;
+    let relative = layout.repository_relative(&layout.author_key_container_path())?;
+    ensure_author_key_container_exists(layout, &relative)?;
+    append_file_required(layout.repository_mutation_root(), &relative, &record)
+}
+
+/// A repository initialized before this container existed has no such file. `append_file_required`
+/// -- unlike the read path -- requires the target to already exist, so a repository this old fails to
+/// author until its container is created. Create it lazily, on first write, so `layout.rs`'s "no
+/// format bump, no migration step" claim holds for writes as well as reads. Crash-safe by inspection:
+/// a crash between the create and the append below leaves an empty container, which reads identically
+/// to a repository that has never authored anything yet. Tolerates a losing race against a concurrent
+/// creator (`AlreadyExists`) -- the desired end state, the container existing, holds either way; the
+/// callers that reach this do not hold a lock scoped to this specific container.
+fn ensure_author_key_container_exists(layout: &RepositoryLayout, relative: &Path) -> Result<()> {
+    if read_file_if_exists(layout.repository_mutation_root(), relative)?.is_some() {
+        return Ok(());
+    }
+    match create_new_file_required(layout.repository_mutation_root(), relative, &[]) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(err) => Err(err.into()),
+    }
+}
+
+/// Check `envelope`'s AUTHOR signature (DC-53 Stage 1, D3's first three rows). Returns `Ok(None)`
+/// if the envelope carries no AUTHOR-role signature at all -- out of this increment's scope; a
+/// Patch with no AUTHOR signature is a pre-existing structural gap this increment does not newly
+/// police, not something Stage 1 introduces a defect for. Returns `Ok(Some((key_id, sound)))`
+/// otherwise, `sound` distinguishing D3's first row (verifies against recorded material, `true`)
+/// from its second (no material recorded for this `key_id`, `false` -- **not** a failure). Returns
+/// `Err` only for D3's third row: material *is* recorded and the signature does not verify against
+/// any of it -- propagated so the caller's item-containment reports this Patch as failed, matching
+/// forgery/corruption rather than the softer "issue" shape MAINTAINER admission failures use.
+pub(crate) fn verify_author_signature(
+    layout: &RepositoryLayout,
+    envelope: &ObjectEnvelope,
+) -> Result<Option<(String, bool)>> {
+    let Some(signature) = envelope
+        .signatures
+        .iter()
+        .find(|signature| signature.signer_role == SignerRole::Author)
+    else {
+        return Ok(None);
+    };
+    if signature.algorithm != SignatureAlgorithm::Ed25519 {
+        return Err(PrikkError::InvalidSignature(
+            "AUTHOR signature is not Ed25519".to_string(),
+        ));
+    }
+    let entries = lookup_author_key_entries(layout, &signature.key_id)?;
+    if entries.is_empty() {
+        return Ok(Some((signature.key_id.clone(), false)));
+    }
+    let preimage = Signature::signed_bytes(
+        SignatureAlgorithm::Ed25519,
+        envelope.object_type,
+        envelope.object_id(),
+        SignerRole::Author,
+        &signature.key_id,
+    )?;
+    let verifies = entries.iter().any(|entry| {
+        verify_ed25519(&entry.public_key, &preimage, &signature.signature_bytes).is_ok()
+    });
+    if !verifies {
+        return Err(PrikkError::InvalidSignature(format!(
+            "{} {} AUTHOR signature does not verify against recorded key material for {}",
+            envelope.object_type,
+            envelope.object_id(),
+            signature.key_id
+        )));
+    }
+    Ok(Some((signature.key_id.clone(), true)))
+}
+
+#[cfg(test)]
+mod tests;

@@ -578,6 +578,16 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     let signature =
         crate::author_signing::author_signature(signer, patch_id).map_err(AuthorError::Store)?;
     patch.add_signature(signature).map_err(AuthorError::Store)?;
+    // DC-53 Stage 1: record this signer's key material now, while it is still available -- the
+    // signer is the only party that ever holds it, and Ed25519 signatures are not
+    // public-key-recoverable, so `verify` has nothing to check this Patch's signature against
+    // later unless it is captured here.
+    crate::author_key_index::record_author_key_material(
+        layout,
+        signer.key_id(),
+        signer.public_key_bytes(),
+    )
+    .map_err(AuthorError::Store)?;
 
     prepare_empty_active_ref_for_append(layout, &canonical_ref).map_err(AuthorError::Store)?;
     let wal_sequence = wal.append_patch(&patch).map_err(AuthorError::Store)?;

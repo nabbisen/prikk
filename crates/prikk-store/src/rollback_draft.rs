@@ -121,6 +121,13 @@ pub fn append_rollback_draft(
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, canonical_payload);
     let signature = author_signature(signer, envelope.object_id())?;
     envelope.add_signature(signature)?;
+    // DC-53 Stage 1: same reasoning as `worktree_patch/node_authoring.rs` -- record this signer's
+    // key material now, since it is not recoverable from the signature later.
+    crate::author_key_index::record_author_key_material(
+        layout,
+        signer.key_id(),
+        signer.public_key_bytes(),
+    )?;
     let inverse_patch_id = envelope.object_id();
 
     let wal = Wal::for_layout(layout);

@@ -1,6 +1,6 @@
 use prikk_store::{
-    ActiveWalMetadataStatus, BlockStateStatus, DoctorSeverity, ObjectItemStatus, RefFileStatus,
-    RefItemStatus, RepositoryLayout, StageStatus,
+    ActiveWalMetadataStatus, AuthorSignatureVerification, BlockStateStatus, DoctorSeverity,
+    ObjectItemStatus, RefFileStatus, RefItemStatus, RepositoryLayout, StageStatus,
 };
 
 /// Render a count sourced from one verification stage. `None` means that stage did not evaluate to
@@ -89,6 +89,28 @@ pub(crate) fn print_verify_report(
             );
         }
     }
+    // DC-53 Stage 1: an unverifiable AUTHOR signature is not a failure (D3's second row) -- verify
+    // still passes -- but must be visible, not silent, so it is counted here. Count only, no
+    // per-object enumeration: unlike a failed object (rare, the reason the precedent above prints
+    // one line each), an unrecorded key is the default state of every patch authored before this
+    // increment -- on an existing repository that is the count of patches, not a short list of
+    // outliers, and printing one identical line per patch would bury the informative count line
+    // rather than surface it (DC-53 Stage 1 implementation review v2).
+    let unverifiable_author_patch_count = report
+        .object_outcomes
+        .iter()
+        .filter(|outcome| match &outcome.status {
+            ObjectItemStatus::Evaluated(verification)
+            | ObjectItemStatus::Unindexed(verification) => {
+                matches!(
+                    verification.author_verification,
+                    Some(AuthorSignatureVerification::Unverifiable { .. })
+                )
+            }
+            ObjectItemStatus::Failed { .. } => false,
+        })
+        .count();
+    println!("unverifiable author signatures: {unverifiable_author_patch_count}");
     let incomplete_blocks: Vec<_> = report
         .block_state_outcomes
         .iter()

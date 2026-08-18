@@ -27,6 +27,10 @@ impl AuthorSigner for LengthSigner {
     fn sign(&self, _preimage: &[u8]) -> prikk_error::Result<Vec<u8>> {
         Ok(vec![1; self.length])
     }
+
+    fn public_key_bytes(&self) -> [u8; 32] {
+        [0; 32]
+    }
 }
 
 impl MaintainerSigner for LengthSigner {

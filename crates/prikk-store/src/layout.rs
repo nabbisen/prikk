@@ -248,6 +248,14 @@ impl RepositoryLayout {
         create_empty_file_once(&layout, &layout.received_index_slot_path(ContainerSlot::B))?;
         create_empty_file_once(&layout, &layout.received_index_generation_log_path())?;
         create_empty_file_once(&layout, &layout.trust_key_container_path())?;
+        // DC-53 Stage 1: allocated at `init` like every other container name, for new repositories.
+        // A repository initialized before this increment simply has no such file --
+        // `author_key_index.rs` reads that identically to an empty container, so no format bump or
+        // migration step is needed for existing repositories. True for writes too, not just reads:
+        // `record_author_key_material` creates the container lazily on first write if it is still
+        // absent (`author_key_index.rs::ensure_author_key_container_exists`), since
+        // `append_file_required` -- unlike the read path -- requires the target to already exist.
+        create_empty_file_once(&layout, &layout.author_key_container_path())?;
         create_empty_file_once(
             &layout,
             &layout.trust_policy_container_slot_path(ContainerSlot::A),
@@ -652,6 +660,18 @@ impl RepositoryLayout {
     #[must_use]
     pub fn trust_key_container_path(&self) -> PathBuf {
         self.trust_dir().join("keys.container")
+    }
+
+    /// Return the AUTHOR key-material container path (DC-53 Stage 1,
+    /// `.git-exclude/reviewed/DC-53-stage-1-report-ruling-v1.md` §5). Its own container, not a
+    /// third role folded into `trust_key_container_path` -- that one is MAINTAINER key material
+    /// with a policy layered over it; this one is material only, populated by the authoring path
+    /// rather than an adoption command (`author_key_index.rs`'s own module doc). A repository
+    /// initialized before this container existed has no such file, which `author_key_index.rs`
+    /// reads identically to an empty one, not a structural defect.
+    #[must_use]
+    pub fn author_key_container_path(&self) -> PathBuf {
+        self.trust_dir().join("author-keys.container")
     }
 
     /// Return the trust policy container path for a given slot (RFC 102 Stage 5, design-v1.md
