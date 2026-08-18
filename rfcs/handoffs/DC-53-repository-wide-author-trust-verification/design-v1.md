@@ -176,6 +176,25 @@ around here.
 
 **Stage 2 — pin and reject.** D1's TOFU conflict semantics, D3's fourth row, D5's documentation, vector 6.
 
+**Added v1.2, 2026-08-18, after Stage 1 merged at `970bc27`. Stage 2's scope is larger than "local
+pinning", and badge criterion 5 is not closed by Stage 1.** AUTHOR key material is recorded at authoring
+time in the authoring repository, and **it does not travel** — `bundle.rs` references neither
+`author_key_container_path` nor `author_key_index`. So a patch received from another party is
+**permanently `Unverifiable` on the receiver's side**, which is exactly the case criterion 5 names when it
+warns that *"shipping exchange makes this criterion more important, not less, since other people's history
+then arrives with authorship unchecked."* Stage 1 delivers *verifiable by its author's own repository*;
+criterion 5's claim is *verifiable by anyone*.
+
+**Stage 2 must therefore carry author key material across the exchange path**, not only pin it locally.
+The material is then attacker-supplied and proves only self-consistency — which is precisely why pinning
+is what gives it meaning: TOFU on first receipt, and a conflicting key for a known `key_id` is
+impersonation. **Pinning without transport verifies nothing for a receiver; transport without pinning
+verifies nothing at all. Stage 2 needs both, and neither is useful alone.**
+
+Putting the public key in the `Signature` or `PatchPayload` instead is **not available** — DC-39/DC-40
+freeze the preimage, canonical encoding and object identity, and the RFC forbids rewriting persisted
+bytes. Material must travel *alongside* objects, as its own container, the way it is stored.
+
 **What Stage 1 honestly closes:** every Patch authored after it can be verified, and every Patch before it
 is reported unverifiable rather than reported sound. **The integrity gap closes going forward and becomes
 visible looking backward** — the most achievable without rewriting persisted bytes, which the RFC forbids.
