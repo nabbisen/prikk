@@ -23,7 +23,7 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::ObjectId;
 
 use crate::layout::RepositoryLayout;
-use crate::object_store::FileObjectStore;
+use crate::object_store::ObjectReadSnapshot;
 use crate::path::RepoPath;
 use crate::refs::RefStore;
 use crate::snapshot::SnapshotManifest;
@@ -153,7 +153,7 @@ pub(crate) fn replay_supported_patch_chain(
     layout: &RepositoryLayout,
     ref_name: &str,
 ) -> Result<PatchReplaySnapshot> {
-    let object_store = FileObjectStore::new(layout.clone());
+    let object_store = ObjectReadSnapshot::open(layout)?;
     let target_block_id = current_target_block(layout, &object_store, ref_name)?;
     let block_ids = single_parent_chain(&object_store, target_block_id)?;
     let mut files = BTreeMap::new();
@@ -208,7 +208,7 @@ pub(crate) fn resolve_node_lineage_bounds(
     layout: &RepositoryLayout,
     ref_name: &str,
 ) -> Result<(ObjectId, ObjectId)> {
-    let object_store = FileObjectStore::new(layout.clone());
+    let object_store = ObjectReadSnapshot::open(layout)?;
     let baseline = current_target_block(layout, &object_store, ref_name)?;
     let chain = single_parent_chain(&object_store, baseline)?;
     let horizon = *chain

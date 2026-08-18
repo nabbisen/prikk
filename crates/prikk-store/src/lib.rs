@@ -122,7 +122,9 @@ pub use merge_evidence::{
     prepare_merge_plan,
 };
 pub use merge_execute::{MergeExecutionReport, execute_merge};
-pub use object_store::{FileObjectStore, ObjectReader, ObjectWriter};
+pub use object_store::{
+    FileObjectStore, ObjectReadSnapshot, ObjectReader, ObjectWriteSession, ObjectWriter,
+};
 pub use patch_checkout::{
     PatchDeletionConflict, PatchDeletionPlan, PatchMaterializationReport,
     materialize_patch_checkout, materialize_patch_checkout_with_deletions,

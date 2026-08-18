@@ -17,7 +17,7 @@ use crate::container::{self, ContainerRecordStatus};
 use crate::fsutil::{EntryKind, inspect_entry, list_directory, read_file_if_exists};
 use crate::index::replay_index;
 use crate::layout::{ContainerSlot, RepositoryLayout, persisted_object_types};
-use crate::object_store::FileObjectStore;
+use crate::object_store::ObjectReader;
 use crate::signature_diagnostics::{
     SignatureEnvelopeIssue, SignatureEnvelopeSource, classify_signature_envelope,
 };
@@ -99,7 +99,7 @@ impl ObjectSummary {
 
 pub(super) fn verify_objects(
     layout: &RepositoryLayout,
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     trust_verifier: &mut PublicationTrustVerifier<'_>,
 ) -> Result<ObjectSummary> {
     // DC-92 §4.2: Phase A (below) collects every CurrentV6 Block's already-decoded payload instead
@@ -180,7 +180,7 @@ pub(super) fn verify_objects(
 
 fn verify_object_type_container(
     layout: &RepositoryLayout,
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     object_type: ObjectType,
     trust_verifier: &mut PublicationTrustVerifier<'_>,
     pending_v3_blocks: &mut Vec<(ObjectId, BlockPayload)>,
@@ -272,7 +272,7 @@ fn verify_object_type_container(
 
 fn verify_object_record(
     layout: &RepositoryLayout,
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     object_type: ObjectType,
     locator: &Path,
     envelope: &ObjectEnvelope,

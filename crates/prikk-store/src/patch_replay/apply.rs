@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use prikk_error::{PrikkError, Result};
 use prikk_object::{NodeId, NodeKind, ObjectId, text_span_hash};
 
-use crate::object_store::FileObjectStore;
+use crate::object_store::ObjectReader;
 use crate::path::RepoPath;
 use crate::text_span;
 
@@ -29,7 +29,7 @@ pub(super) struct ReplayLiveNode {
 }
 
 pub(super) fn apply_decoded_operation(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     files: &mut BTreeMap<String, Vec<u8>>,
     live_nodes: &mut BTreeMap<NodeId, ReplayLiveNode>,
     deleted_files: &mut BTreeMap<String, PatchReplayDeletedFile>,
@@ -154,7 +154,7 @@ pub(super) fn apply_decoded_operation(
 /// Apply a `ReplaceBinary` operation (DC-73): fold the node's content forward from `old_blob_id` to
 /// `new_blob_id`. Node-addressed with no path field — `live_nodes` supplies the current path.
 fn apply_replace_binary(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     files: &mut BTreeMap<String, Vec<u8>>,
     live_nodes: &BTreeMap<NodeId, ReplayLiveNode>,
     node_id: NodeId,

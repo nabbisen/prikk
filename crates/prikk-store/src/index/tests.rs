@@ -2,15 +2,36 @@
 
 use prikk_error::Result;
 use prikk_object::{
-    CanonicalEncode, CreateFile, NodeId, ObjectEnvelope, ObjectType, Operation, OperationKind,
-    PatchPayload, PatchPurpose,
+    CanonicalEncode, CreateFile, NodeId, ObjectEnvelope, ObjectId, ObjectType, Operation,
+    OperationKind, PatchPayload, PatchPurpose,
 };
 
-use super::{lookup_object_location, rebuild_index_from_containers, write_object_to_container};
+use super::{
+    WriteDecision, append_object_to_container, decide_write_outcome, lookup_object_location,
+    rebuild_index_from_containers,
+};
 use crate::container;
 use crate::fsutil::append_file_required;
 use crate::layout::{ContainerSlot, RepositoryLayout};
 use crate::test_support::{sample_object_id, signed_patch_blob_envelope, signed_patch_envelope};
+
+/// Composes the pieces `write_object_to_container` used to be, exactly reproducing its old
+/// behavior (idempotency check, then unconditional append on `New`) -- for the tests below that are
+/// about the container/index write pipeline itself (append-only, rebuild, damaged-index handling),
+/// not about the idempotency decision specifically (RFC 111 §6.1 addendum, C2 moved those two tests
+/// down to `decide_write_outcome` directly, below).
+fn write_object_to_container_for_test(
+    layout: &RepositoryLayout,
+    object_type: ObjectType,
+    envelope: &ObjectEnvelope,
+) -> Result<ObjectId> {
+    let existing = lookup_object_location(layout, envelope.object_id())?;
+    match decide_write_outcome(layout, object_type, envelope, existing.as_ref())? {
+        WriteDecision::AlreadyPresent(id) => Ok(id),
+        WriteDecision::New => append_object_to_container(layout, object_type, envelope)
+            .map(|appended| appended.entry.object_id),
+    }
+}
 
 fn normal_patch_envelope(label: &str) -> Result<ObjectEnvelope> {
     let payload = PatchPayload {
@@ -41,7 +62,7 @@ fn write_then_lookup_round_trips() -> Result<()> {
     let root = crate::test_support::unique_temp_dir("index-write-lookup");
     let layout = RepositoryLayout::init(root.clone())?;
     let envelope = signed_patch_envelope();
-    let id = write_object_to_container(&layout, ObjectType::Patch, &envelope)?;
+    let id = write_object_to_container_for_test(&layout, ObjectType::Patch, &envelope)?;
     assert_eq!(id, envelope.object_id());
 
     let entry = lookup_object_location(&layout, id)?.expect("entry must be found after write");
@@ -68,13 +89,17 @@ fn container_and_index_writes_append_rather_than_replace() -> Result<()> {
     let container_path = layout.container_slot_path(ObjectType::Patch, ContainerSlot::A);
     let index_path = layout.container_index_path();
 
-    write_object_to_container(&layout, ObjectType::Patch, &normal_patch_envelope("first")?)?;
+    write_object_to_container_for_test(
+        &layout,
+        ObjectType::Patch,
+        &normal_patch_envelope("first")?,
+    )?;
     let container_after_first = std::fs::read(&container_path)?;
     let index_after_first = std::fs::read(&index_path)?;
     assert!(!container_after_first.is_empty());
     assert!(!index_after_first.is_empty());
 
-    write_object_to_container(
+    write_object_to_container_for_test(
         &layout,
         ObjectType::Patch,
         &normal_patch_envelope("second")?,
@@ -91,19 +116,33 @@ fn container_and_index_writes_append_rather_than_replace() -> Result<()> {
     Ok(())
 }
 
+/// RFC 111 §6.1 addendum, C2: moved down onto `decide_write_outcome` itself, proving the rule
+/// independent of either caller (`FileObjectStore` and `ObjectWriteSession` both reach this same
+/// function; only where their `existing` lookup comes from differs).
 #[test]
-fn rewriting_the_same_object_is_idempotent_not_a_second_entry() -> Result<()> {
+fn decide_write_outcome_is_idempotent_for_a_matching_existing_object() -> Result<()> {
     let root = crate::test_support::unique_temp_dir("index-idempotent-rewrite");
     let layout = RepositoryLayout::init(root.clone())?;
     let envelope = signed_patch_envelope();
-    write_object_to_container(&layout, ObjectType::Patch, &envelope)?;
-    write_object_to_container(&layout, ObjectType::Patch, &envelope)?;
+    write_object_to_container_for_test(&layout, ObjectType::Patch, &envelope)?;
+    let existing = lookup_object_location(&layout, envelope.object_id())?;
+
+    assert_eq!(
+        decide_write_outcome(&layout, ObjectType::Patch, &envelope, existing.as_ref())?,
+        WriteDecision::AlreadyPresent(envelope.object_id()),
+        "the same envelope against its own existing entry must be a no-op decision"
+    );
+    assert_eq!(
+        decide_write_outcome(&layout, ObjectType::Patch, &envelope, None)?,
+        WriteDecision::New,
+        "with no existing entry the same envelope must decide New, regardless of what is on disk"
+    );
 
     let replay = super::replay_index(&layout)?;
     assert_eq!(
         replay.entries.len(),
         1,
-        "re-writing the same object must not grow the index"
+        "the index itself must still hold exactly one entry: this test never appends a second one"
     );
 
     let _ = std::fs::remove_dir_all(root);
@@ -116,8 +155,8 @@ fn rebuild_recovers_every_sound_object_across_all_container_types() -> Result<()
     let layout = RepositoryLayout::init(root.clone())?;
     let patch = normal_patch_envelope("rebuild-patch")?;
     let blob = signed_patch_blob_envelope();
-    write_object_to_container(&layout, ObjectType::Patch, &patch)?;
-    write_object_to_container(&layout, ObjectType::Blob, &blob)?;
+    write_object_to_container_for_test(&layout, ObjectType::Patch, &patch)?;
+    write_object_to_container_for_test(&layout, ObjectType::Blob, &blob)?;
 
     let rebuilt = rebuild_index_from_containers(&layout)?;
     let ids: Vec<_> = rebuilt.iter().map(|entry| entry.object_id).collect();
@@ -172,17 +211,19 @@ fn crash_between_container_and_index_append_leaves_the_object_unindexed_and_reco
     Ok(())
 }
 
-/// Preserves `publish_immutable_file`'s exact idempotency contract (the loose-file mechanism this
-/// replaces): a same-`object_id` rewrite is a silent no-op only when its full envelope bytes match
-/// what is already stored. `object_id` does not cover signatures, so two envelopes can share an id
-/// while differing in signature content -- that must still be a reported conflict, not silently
-/// accepted, exactly as the old `compare_existing`'s `bytes != candidate` check enforced.
+/// RFC 111 §6.1 addendum, C2: moved down onto `decide_write_outcome` itself. Preserves
+/// `publish_immutable_file`'s exact idempotency contract (the loose-file mechanism this replaces): a
+/// same-`object_id` rewrite is a silent no-op only when its full envelope bytes match what is already
+/// stored. `object_id` does not cover signatures, so two envelopes can share an id while differing in
+/// signature content -- that must still be a reported conflict, not silently accepted, exactly as the
+/// old `compare_existing`'s `bytes != candidate` check enforced.
 #[test]
-fn rewriting_the_same_object_id_with_different_signatures_is_an_error() -> Result<()> {
+fn decide_write_outcome_rejects_a_same_id_rewrite_with_different_signatures() -> Result<()> {
     let root = crate::test_support::unique_temp_dir("index-conflicting-rewrite");
     let layout = RepositoryLayout::init(root.clone())?;
     let first = signed_patch_envelope();
-    write_object_to_container(&layout, ObjectType::Patch, &first)?;
+    write_object_to_container_for_test(&layout, ObjectType::Patch, &first)?;
+    let existing = lookup_object_location(&layout, first.object_id())?;
 
     // Same canonical_payload/type/schema -- hence the same object_id, which does not cover
     // signatures -- but a different signature.
@@ -197,7 +238,7 @@ fn rewriting_the_same_object_id_with_different_signatures_is_an_error() -> Resul
         "the two envelopes must share an object_id for this test to prove anything"
     );
 
-    assert!(write_object_to_container(&layout, ObjectType::Patch, &second).is_err());
+    assert!(decide_write_outcome(&layout, ObjectType::Patch, &second, existing.as_ref()).is_err());
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())
@@ -208,7 +249,7 @@ fn a_damaged_index_entry_blocks_lookup_as_a_reported_defect() -> Result<()> {
     let root = crate::test_support::unique_temp_dir("index-damaged-entry");
     let layout = RepositoryLayout::init(root.clone())?;
     let envelope = signed_patch_envelope();
-    write_object_to_container(&layout, ObjectType::Patch, &envelope)?;
+    write_object_to_container_for_test(&layout, ObjectType::Patch, &envelope)?;
 
     let index_path = layout.container_index_path();
     let mut bytes = std::fs::read(&index_path)?;

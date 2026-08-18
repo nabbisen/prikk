@@ -19,7 +19,7 @@ use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_bytes_u
 use crate::fsutil::len_to_u64;
 use crate::layout::{LockableContainer, RepositoryLayout};
 use crate::lock::acquire_container_locks;
-use crate::object_store::{FileObjectStore, ObjectWriter};
+use crate::object_store::{FileObjectStore, ObjectReadSnapshot, ObjectReader, ObjectWriter};
 use crate::refs::RefStore;
 
 const BUNDLE_MAGIC: &[u8; 8] = b"PBNDL001";
@@ -104,7 +104,10 @@ pub fn export_bundle(
     ref_name: &str,
 ) -> Result<(BundleExportReport, Vec<u8>)> {
     let ref_store = RefStore::new(layout.clone());
-    let object_store = FileObjectStore::new(layout.clone());
+    // RFC 111 §6.1: export is read-only end to end (never calls `write_object`), so it takes one
+    // decoded index snapshot here instead of paying a fresh decode per `read_required` call below --
+    // and there can be many, one per object in the whole exported closure.
+    let object_store = ObjectReadSnapshot::open(layout)?;
     let Some(ref_state_id) = ref_store.read_current_ref_state_id(ref_name)? else {
         return Err(PrikkError::Integrity(format!(
             "ref {ref_name} does not exist, nothing to export"
@@ -286,7 +289,7 @@ pub fn import_bundle(
 }
 
 fn read_required(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     id: ObjectId,
     object_type: ObjectType,
 ) -> Result<ObjectEnvelope> {

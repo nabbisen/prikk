@@ -8,7 +8,10 @@
 
 use prikk_object::{ObjectEnvelope, ObjectType};
 
-use crate::{FileObjectStore, MemoryObjectStore, ObjectReader, ObjectWriter, RepositoryLayout};
+use crate::{
+    FileObjectStore, MemoryObjectStore, ObjectReadSnapshot, ObjectReader, ObjectWriteSession,
+    ObjectWriter, RepositoryLayout,
+};
 
 use crate::test_support::{dummy_signature, unique_temp_dir};
 
@@ -77,6 +80,183 @@ fn object_reads_and_writes_remain_on_retained_repository_root() -> prikk_error::
     let second_id = store.write_object(&second)?;
     assert!(store.read_object(second_id)?.is_some());
     assert_eq!(std::fs::read(root.join(".prikk/FORMAT"))?, b"replacement");
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+// --- RFC 111 §6.1: ObjectReadSnapshot / ObjectWriteSession -------------------------------------
+
+#[test]
+fn read_snapshot_roundtrips_an_object_written_before_it_was_opened() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("read-snapshot-roundtrip");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"before".to_vec());
+    envelope.add_signature(dummy_signature())?;
+    let mut store = FileObjectStore::new(layout.clone());
+    let id = store.write_object(&envelope)?;
+
+    let snapshot = ObjectReadSnapshot::open(&layout)?;
+    assert_eq!(snapshot.read_object(id)?, Some(envelope.clone()));
+    assert!(snapshot.contains_object(ObjectType::Blob, id));
+    assert_eq!(snapshot.read_typed(id, ObjectType::Blob)?, Some(envelope));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+#[test]
+fn read_snapshot_does_not_see_an_object_written_after_it_was_opened() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("read-snapshot-staleness");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let snapshot = ObjectReadSnapshot::open(&layout)?;
+
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"after".to_vec());
+    envelope.add_signature(dummy_signature())?;
+    let mut store = FileObjectStore::new(layout.clone());
+    let id = store.write_object(&envelope)?;
+
+    // RFC 111 Q3/Q4: a reader's staleness under-reports, it never returns wrong content -- the
+    // snapshot taken before this write simply does not know about it.
+    assert_eq!(snapshot.read_object(id)?, None);
+    assert!(!snapshot.contains_object(ObjectType::Blob, id));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+#[test]
+fn write_session_rewriting_the_same_object_is_a_no_op() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("write-session-idempotent");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"stable".to_vec());
+    envelope.add_signature(dummy_signature())?;
+
+    let mut session = ObjectWriteSession::open(&layout)?;
+    let first_id = session.write_object(&envelope)?;
+    let length_after_first = session.known_index_length_for_test();
+    let count_after_first = session.entry_count_for_test();
+
+    let second_id = session.write_object(&envelope)?;
+    assert_eq!(first_id, second_id);
+    assert_eq!(
+        session.known_index_length_for_test(),
+        length_after_first,
+        "a same-id-same-bytes rewrite must not grow the index"
+    );
+    assert_eq!(session.entry_count_for_test(), count_after_first);
+
+    let on_disk_length = std::fs::metadata(layout.container_index_path())?.len();
+    assert_eq!(session.known_index_length_for_test(), on_disk_length);
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+#[test]
+fn write_session_rejects_a_same_id_rewrite_with_different_bytes() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("write-session-conflict");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut first = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"conflict".to_vec());
+    first.add_signature(dummy_signature())?;
+
+    let mut session = ObjectWriteSession::open(&layout)?;
+    session.write_object(&first)?;
+
+    let mut second = first.clone();
+    second.signatures.clear();
+    let mut signature = dummy_signature();
+    if let Some(byte) = signature.signature_bytes.get_mut(0) {
+        *byte ^= 0x01;
+    }
+    second.add_signature(signature)?;
+    assert_eq!(second.object_id(), first.object_id());
+
+    let mut file_store = FileObjectStore::new(layout.clone());
+    let Err(file_store_error) = file_store.write_object(&second) else {
+        panic!("expected FileObjectStore to reject a same-id-different-bytes rewrite");
+    };
+    let Err(session_error) = session.write_object(&second) else {
+        panic!("expected ObjectWriteSession to reject a same-id-different-bytes rewrite");
+    };
+    assert_eq!(
+        session_error.to_string(),
+        file_store_error.to_string(),
+        "the session must report the same conflict FileObjectStore does"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+#[test]
+fn write_session_appending_a_new_object_updates_the_snapshot() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("write-session-new-object");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"new".to_vec());
+    envelope.add_signature(dummy_signature())?;
+
+    let mut session = ObjectWriteSession::open(&layout)?;
+    assert_eq!(session.entry_count_for_test(), 0);
+    let id = session.write_object(&envelope)?;
+    assert_eq!(session.entry_count_for_test(), 1);
+    assert_eq!(
+        session.known_index_length_for_test(),
+        std::fs::metadata(layout.container_index_path())?.len()
+    );
+    assert_eq!(session.read_object(id)?, Some(envelope));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 111 §6.1 addendum, C1's own scenario made executable: a writer *not* routed through the
+/// session (exactly `refs/publication.rs`'s current shape) writes while a session is open. The
+/// session's next write decision -- for a *different* object -- must see the nested write's entry via
+/// `ensure_current`'s tail-decode, not duplicate it, and its own view of the index extent must land on
+/// the true current file length, not a value it accumulated itself.
+#[test]
+fn write_session_catches_up_after_a_nested_unmediated_writer() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("write-session-nested-writer");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    let mut session = ObjectWriteSession::open(&layout)?;
+    let mut own = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"session-own".to_vec());
+    own.add_signature(dummy_signature())?;
+    session.write_object(&own)?;
+
+    // A separate, unmediated writer -- exactly `refs/publication.rs`'s current shape -- appends while
+    // the session above is open and does not know about it.
+    let mut nested = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"nested-writer".to_vec());
+    nested.add_signature(dummy_signature())?;
+    let mut nested_store = FileObjectStore::new(layout.clone());
+    let nested_id = nested_store.write_object(&nested)?;
+
+    // The session's next decision, for yet another new object, must first catch up.
+    let mut third = ObjectEnvelope::unsigned(ObjectType::Blob, 1, b"session-third".to_vec());
+    third.add_signature(dummy_signature())?;
+    session.write_object(&third)?;
+
+    assert_eq!(
+        session.entry_count_for_test(),
+        3,
+        "the session must see the nested writer's entry, not just its own two"
+    );
+    assert!(
+        session.read_object(nested_id)?.is_some(),
+        "the session must be able to read the object it never wrote itself"
+    );
+    let on_disk_length = std::fs::metadata(layout.container_index_path())?.len();
+    assert_eq!(
+        session.known_index_length_for_test(),
+        on_disk_length,
+        "known_length must land on the true current extent, not the session's own running total"
+    );
+
+    // Ground truth: exactly one index entry per object id, never a duplicate from the session
+    // re-appending something it thought was missing.
+    let fresh = ObjectReadSnapshot::open(&layout)?;
+    assert_eq!(fresh.read_object(nested_id)?, Some(nested));
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

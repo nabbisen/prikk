@@ -15,7 +15,7 @@ use prikk_object::{
 };
 
 use crate::layout::RepositoryLayout;
-use crate::object_store::FileObjectStore;
+use crate::object_store::{ObjectReadSnapshot, ObjectReader};
 use crate::patch_replay::decode::{
     DecodedDeletePreimage, DecodedOperationKind, DecodedPatchOperation, decode_patch_operations,
 };
@@ -99,7 +99,7 @@ pub fn prepare_patch_inverse_plan(
     layout: &RepositoryLayout,
     ref_name: &str,
 ) -> Result<PatchInversePlan> {
-    let object_store = FileObjectStore::new(layout.clone());
+    let object_store = ObjectReadSnapshot::open(layout)?;
     let target_block_id = current_target_block(layout, &object_store, ref_name)?;
     let block_ids = single_parent_chain(&object_store, target_block_id)?;
     let mut files = BTreeMap::new();
@@ -168,7 +168,7 @@ struct InverseLiveNode {
 }
 
 fn derive_inverse_operation(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     files: &mut BTreeMap<String, Vec<u8>>,
     live_nodes: &mut BTreeMap<NodeId, InverseLiveNode>,
     operation: DecodedPatchOperation,

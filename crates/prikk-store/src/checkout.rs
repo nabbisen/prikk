@@ -8,7 +8,7 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::{BlockKind, BlockPayload, ObjectId, ObjectType, RefStatePayload};
 
 use crate::layout::RepositoryLayout;
-use crate::object_store::FileObjectStore;
+use crate::object_store::{ObjectReadSnapshot, ObjectReader};
 use crate::refs::RefStore;
 use crate::snapshot::SnapshotManifest;
 
@@ -96,7 +96,7 @@ pub fn prepare_snapshot_checkout_plan(
             "checkout target for {ref_name} does not contain a snapshot blob"
         )));
     };
-    let object_store = FileObjectStore::new(layout.clone());
+    let object_store = ObjectReadSnapshot::open(layout)?;
     let Some(envelope) = object_store.read_typed(snapshot_blob_id, ObjectType::Blob)? else {
         return Err(PrikkError::Integrity(format!(
             "snapshot Blob {snapshot_blob_id} is missing"
@@ -121,7 +121,7 @@ pub fn prepare_snapshot_checkout_plan(
 /// Prepare a checkout plan for a ref without modifying the worktree.
 pub fn prepare_checkout_plan(layout: &RepositoryLayout, ref_name: &str) -> Result<CheckoutPlan> {
     let ref_store = RefStore::new(layout.clone());
-    let object_store = FileObjectStore::new(layout.clone());
+    let object_store = ObjectReadSnapshot::open(layout)?;
     let Some(ref_state_id) = ref_store.read_current_ref_state_id(ref_name)? else {
         return Ok(CheckoutPlan {
             ref_name: ref_name.to_string(),
@@ -153,7 +153,7 @@ pub fn prepare_checkout_plan(layout: &RepositoryLayout, ref_name: &str) -> Resul
 }
 
 fn load_ref_state(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     ref_state_id: ObjectId,
     ref_name: &str,
 ) -> Result<RefStatePayload> {
@@ -173,7 +173,7 @@ fn load_ref_state(
     Ok(payload)
 }
 
-fn load_block(object_store: &FileObjectStore, block_id: ObjectId) -> Result<BlockPayload> {
+fn load_block(object_store: &impl ObjectReader, block_id: ObjectId) -> Result<BlockPayload> {
     let Some(envelope) = object_store.read_typed(block_id, ObjectType::Block)? else {
         return Err(PrikkError::Integrity(format!(
             "checkout target Block {block_id} is missing"
@@ -182,7 +182,7 @@ fn load_block(object_store: &FileObjectStore, block_id: ObjectId) -> Result<Bloc
     BlockPayload::decode_canonical(&envelope.canonical_payload)
 }
 
-fn validate_block_references(object_store: &FileObjectStore, block: &BlockPayload) -> Result<()> {
+fn validate_block_references(object_store: &impl ObjectReader, block: &BlockPayload) -> Result<()> {
     for parent in &block.parent_block_ids {
         if object_store
             .read_typed(*parent, ObjectType::Block)?

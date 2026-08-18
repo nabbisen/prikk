@@ -27,7 +27,9 @@ use crate::byte_cursor::ByteCursor;
 use crate::container::{self, ContainerRecordStatus, container_magic};
 use crate::file_codec::push_u16;
 use crate::frame_resync::resync_to_next_magic;
-use crate::fsutil::{append_file_required, len_to_u64, read_file_if_exists};
+use crate::fsutil::{
+    append_file_required, len_to_u64, read_file_if_exists, stat_file_state_if_exists,
+};
 use crate::layout::{ContainerSlot, RepositoryLayout, persisted_object_types};
 use prikk_hash::sha256;
 
@@ -240,10 +242,16 @@ fn parse_frame_at(bytes: &[u8], offset: usize) -> FrameAttempt {
 /// Isolate-and-continue reading, matching the WAL/ref-log/container read path exactly (RFC 102
 /// Stage 2's reader, reused via `frame_resync::resync_to_next_magic`, not re-derived): a damaged
 /// index entry is named at its own offset and the scan continues past it.
-pub(crate) fn decode_index_records(bytes: &[u8]) -> Result<IndexReplay> {
+///
+/// `start_offset` lets a caller resume scanning partway through an already-known-current prefix
+/// (RFC 111 §6.1, `ObjectWriteSession`'s tail-decode) rather than always from the beginning --
+/// offsets in the returned `IndexRecordOutcome`s and any `checksum mismatch at byte offset` messages
+/// stay absolute (true file position), not relative to `start_offset`, since callers report and
+/// compare against the real file. Every existing caller passes `0`, unchanged.
+pub(crate) fn decode_index_records(bytes: &[u8], start_offset: usize) -> Result<IndexReplay> {
     let mut entries = Vec::new();
     let mut record_outcomes = Vec::new();
-    let mut offset = 0_usize;
+    let mut offset = start_offset;
     loop {
         match parse_frame_at(bytes, offset) {
             FrameAttempt::Record { entry, next_offset } => {
@@ -284,17 +292,61 @@ pub(crate) fn decode_index_records(bytes: &[u8]) -> Result<IndexReplay> {
 /// Read and replay the on-disk index, off the durability path (design §4) -- a missing file replays
 /// as empty, the same reader-equivalence rule Stage 1 established for the WAL.
 pub(crate) fn replay_index(layout: &RepositoryLayout) -> Result<IndexReplay> {
+    Ok(replay_index_with_extent(layout)?.0)
+}
+
+/// Like [`replay_index`], but also returns the byte length actually decoded into `entries` --
+/// `bytes.len() - trailing_partial_bytes`, never the raw stat size -- the exact quantity
+/// `ObjectWriteSession`'s snapshot needs to stay self-checking without ever mistaking a torn trailing
+/// write for "decoded" (RFC 111 §6.1 addendum §3.2). Counted identically to `replay_index` (same
+/// call, underneath).
+pub(crate) fn replay_index_with_extent(layout: &RepositoryLayout) -> Result<(IndexReplay, u64)> {
     let relative = layout.repository_relative(&layout.container_index_path())?;
     let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &relative)? else {
-        return Ok(IndexReplay {
-            entries: Vec::new(),
-            trailing_partial_bytes: 0,
-            record_outcomes: Vec::new(),
-        });
+        return Ok((
+            IndexReplay {
+                entries: Vec::new(),
+                trailing_partial_bytes: 0,
+                record_outcomes: Vec::new(),
+            },
+            0,
+        ));
     };
     #[cfg(test)]
     record_replay_index_decode_for_test();
-    decode_index_records(&bytes)
+    let replay = decode_index_records(&bytes, 0)?;
+    let extent = len_to_u64(bytes.len().saturating_sub(replay.trailing_partial_bytes))?;
+    Ok((replay, extent))
+}
+
+/// Decode only from `start_offset` onward -- the byte length an `ObjectWriteSession`'s snapshot
+/// already knows is current. Still reads the whole file (this path only runs when something else grew
+/// the index since the snapshot was taken, which is expected to be rare) but decodes only the new
+/// portion, reusing `decode_index_records`'s own frame parser entered partway through rather than
+/// re-deriving one. Counted identically to `replay_index_with_extent` -- a tail decode is still a real
+/// index decode, even if cheaper.
+pub(crate) fn replay_index_tail_with_extent(
+    layout: &RepositoryLayout,
+    start_offset: u64,
+) -> Result<(IndexReplay, u64)> {
+    let relative = layout.repository_relative(&layout.container_index_path())?;
+    let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &relative)? else {
+        return Ok((
+            IndexReplay {
+                entries: Vec::new(),
+                trailing_partial_bytes: 0,
+                record_outcomes: Vec::new(),
+            },
+            0,
+        ));
+    };
+    #[cfg(test)]
+    record_replay_index_decode_for_test();
+    let start = usize::try_from(start_offset)
+        .map_err(|_| PrikkError::Integrity("index start offset exceeds usize".to_string()))?;
+    let replay = decode_index_records(&bytes, start)?;
+    let extent = len_to_u64(bytes.len().saturating_sub(replay.trailing_partial_bytes))?;
+    Ok((replay, extent))
 }
 
 // RFC 111 §7/§8's cost gate: counts how many times this function actually decodes the on-disk index
@@ -373,37 +425,67 @@ pub(crate) fn read_object_envelope_at(
     Ok(record.envelope)
 }
 
-/// The write protocol (design §5, handoff §3): append the object record to its container and make
-/// it durable, **then and only then** append the index entry. Never `atomic_replace` -- both appends
-/// go through `append_file_required` (`durable_append`), matching every other durability-bearing
-/// write in this codebase.
-pub(crate) fn write_object_to_container(
+/// The outcome of deciding what a write should do, given the object's existing index location (if
+/// any) -- wherever that location came from: a fresh decode (`FileObjectStore`) or an in-memory
+/// snapshot (`ObjectWriteSession`). The decision logic itself does not care which, so it exists once
+/// (RFC 111 §6.1 addendum, C2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WriteDecision {
+    /// No existing entry names this object id: append it.
+    New,
+    /// An existing entry already names this exact object (same id, same bytes): no-op.
+    AlreadyPresent(ObjectId),
+}
+
+/// RFC 102 Stage 3 preserves `publish_immutable_file`'s exact idempotency contract (the loose-file
+/// mechanism this replaces): a same-id rewrite is a silent no-op only when its full envelope bytes
+/// match what is already stored -- signatures included, which `object_id` itself does not cover. A
+/// same-id rewrite with different bytes is an error, not a silent accept, exactly as
+/// `compare_existing`'s `bytes != candidate` check already enforced.
+pub(crate) fn decide_write_outcome(
     layout: &RepositoryLayout,
     object_type: ObjectType,
     envelope: &ObjectEnvelope,
-) -> Result<ObjectId> {
+    existing: Option<&IndexEntry>,
+) -> Result<WriteDecision> {
     let object_id = envelope.object_id();
-    if let Some(existing) = lookup_object_location(layout, object_id)? {
-        if existing.object_type != object_type {
-            return Err(PrikkError::Integrity(format!(
-                "existing index entry for {object_id} has type {}, expected {object_type}",
-                existing.object_type
-            )));
-        }
-        // RFC 102 Stage 3 preserves `publish_immutable_file`'s exact idempotency contract (the
-        // loose-file mechanism this replaces): a same-id rewrite is a silent no-op only when its
-        // full envelope bytes match what is already stored -- signatures included, which `object_id`
-        // itself does not cover. A same-id rewrite with different bytes is an error, not a silent
-        // accept, exactly as `compare_existing`'s `bytes != candidate` check already enforced.
-        let existing_envelope = read_object_envelope_at(layout, &existing)?;
-        if existing_envelope != *envelope {
-            return Err(PrikkError::Integrity(format!(
-                "existing container record for {object_id} differs from candidate"
-            )));
-        }
-        return Ok(object_id);
+    let Some(existing) = existing else {
+        return Ok(WriteDecision::New);
+    };
+    if existing.object_type != object_type {
+        return Err(PrikkError::Integrity(format!(
+            "existing index entry for {object_id} has type {}, expected {object_type}",
+            existing.object_type
+        )));
     }
+    let existing_envelope = read_object_envelope_at(layout, existing)?;
+    if existing_envelope != *envelope {
+        return Err(PrikkError::Integrity(format!(
+            "existing container record for {object_id} differs from candidate"
+        )));
+    }
+    Ok(WriteDecision::AlreadyPresent(object_id))
+}
 
+/// One object's durable write, plus the object index's resulting total byte length -- stated,
+/// measured after the append, not derived by a caller accumulating its own running total (RFC 111
+/// §6.1 addendum §3.3: an accumulated total can drift high, which is the dangerous direction here).
+pub(crate) struct AppendedObject {
+    pub(crate) entry: IndexEntry,
+    pub(crate) index_extent: u64,
+}
+
+/// The write protocol (design §5, handoff §3): append the object record to its container and make
+/// it durable, **then and only then** append the index entry. Never `atomic_replace` -- both appends
+/// go through `append_file_required` (`durable_append`), matching every other durability-bearing
+/// write in this codebase. Unconditional -- no idempotency check here; callers decide via
+/// [`decide_write_outcome`] first and only reach this on [`WriteDecision::New`].
+pub(crate) fn append_object_to_container(
+    layout: &RepositoryLayout,
+    object_type: ObjectType,
+    envelope: &ObjectEnvelope,
+) -> Result<AppendedObject> {
+    let object_id = envelope.object_id();
     let record_bytes = container::encode_container_record(object_type, envelope)?;
     let container_relative =
         layout.repository_relative(&layout.container_slot_path(object_type, ContainerSlot::A))?;
@@ -441,7 +523,22 @@ pub(crate) fn write_object_to_container(
         &index_bytes,
     )?;
 
-    Ok(object_id)
+    // Stated, not accumulated: the true post-append extent, read back now that the append is
+    // durable. A cheap stat, not a decode.
+    let index_extent =
+        stat_file_state_if_exists(layout.repository_mutation_root(), &index_relative)?
+            .map(|stat| stat.size)
+            .ok_or_else(|| {
+                PrikkError::Integrity(
+                    "object index file missing immediately after a durable append to it"
+                        .to_string(),
+                )
+            })?;
+
+    Ok(AppendedObject {
+        entry,
+        index_extent,
+    })
 }
 
 /// Extract a just-encoded container record's own frame checksum (the 32 bytes immediately following
@@ -528,7 +625,7 @@ pub(crate) fn remove_index_entry_for_test(
 ) -> Result<()> {
     let path = layout.container_index_path();
     let bytes = std::fs::read(&path)?;
-    let replay = decode_index_records(&bytes)?;
+    let replay = decode_index_records(&bytes, 0)?;
     let mut entries = replay.entries.iter();
     for outcome in &replay.record_outcomes {
         let IndexRecordStatus::Evaluated = &outcome.status else {

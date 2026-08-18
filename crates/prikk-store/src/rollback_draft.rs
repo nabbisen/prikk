@@ -15,7 +15,7 @@ use crate::active::prepare_empty_active_ref_for_append;
 use crate::author_signing::{AuthorSigner, author_signature};
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
-use crate::object_store::FileObjectStore;
+use crate::object_store::ObjectReadSnapshot;
 use crate::patch_inverse::{PatchInverseOperationSummary, prepare_patch_inverse_plan};
 use crate::refs::RefStore;
 use crate::rollback_preview::{RollbackPreviewChange, prepare_rollback_preview};
@@ -195,7 +195,9 @@ fn read_target_tip(layout: &RepositoryLayout, ref_name: &str) -> Result<Rollback
     let ref_state_id = ref_store
         .read_current_ref_state_id(ref_name)?
         .ok_or_else(|| PrikkError::InvalidName(format!("ref {ref_name} is not published")))?;
-    let object_store = FileObjectStore::new(layout.clone());
+    // RFC 111 §6.1: `read_target_tip` never writes an object (this module's own doc: "writes no
+    // object files"), so it takes one decoded index snapshot here instead of a fresh decode.
+    let object_store = ObjectReadSnapshot::open(layout)?;
     let envelope = object_store
         .read_typed(ref_state_id, ObjectType::RefState)?
         .ok_or_else(|| {

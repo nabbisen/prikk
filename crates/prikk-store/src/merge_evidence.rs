@@ -15,7 +15,7 @@ pub use display::{
 pub use merge_plan::MergePlanDisplay;
 
 use crate::lifecycle_cache::replay_derived_state;
-use crate::object_store::FileObjectStore;
+use crate::object_store::{ObjectReadSnapshot, ObjectReader};
 use crate::patch_algebra::{EvidenceScope, StorePatchAlgebraEvidence, analyze_merge_evidence};
 use crate::patch_replay::decode::{DecodedPatchOperation, decode_patch_operations};
 use crate::received::read_received_pointer;
@@ -42,7 +42,11 @@ pub fn prepare_merge_evidence(
     left_target: MergeEvidenceTarget,
     right_target: MergeEvidenceTarget,
 ) -> Result<MergeEvidenceDisplay> {
-    let object_store = FileObjectStore::new(layout.clone());
+    // RFC 111 §6.1: this function is read-only end to end (it never calls `write_object`; shared as
+    // infrastructure by `execute_merge`, which writes separately, afterward, through its own store --
+    // see `merge_execute.rs`), so it takes one decoded index snapshot here instead of paying a fresh
+    // decode per object read.
+    let object_store = ObjectReadSnapshot::open(layout)?;
     let baseline_horizon = lineage_horizon(&object_store, baseline_block_id)?;
     let replay = replay_derived_state(&object_store, baseline_block_id, baseline_horizon)?;
     let evidence =
@@ -89,7 +93,7 @@ pub fn prepare_merge_plan(
 
 fn resolve_target(
     layout: &RepositoryLayout,
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     target: MergeEvidenceTarget,
 ) -> Result<MergeEvidenceDisplaySelector> {
     match target {
@@ -156,7 +160,7 @@ fn resolve_target(
     }
 }
 
-fn lineage_horizon(object_store: &FileObjectStore, baseline: ObjectId) -> Result<ObjectId> {
+fn lineage_horizon(object_store: &impl ObjectReader, baseline: ObjectId) -> Result<ObjectId> {
     let mut visited = BTreeSet::new();
     let mut current = baseline;
     loop {
@@ -209,7 +213,7 @@ fn mainline_or_sole_parent(block: &BlockPayload) -> Option<Option<ObjectId>> {
 /// state-derivation walks (`block_state.rs`, `lineage_horizon` above) retain explicit cycle errors,
 /// since those sit on the actual trust boundary.
 pub(crate) fn ancestors_inclusive(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     start: ObjectId,
 ) -> Result<std::collections::BTreeMap<ObjectId, BlockPayload>> {
     let mut ancestors = std::collections::BTreeMap::new();
@@ -295,7 +299,7 @@ fn topological_order(
 /// — the same candidate set, not a second walk of the ancestor graph) so the walk is defined exactly
 /// once.
 fn candidate_blocks(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     baseline: ObjectId,
     target: ObjectId,
 ) -> Result<Vec<(ObjectId, BlockPayload)>> {
@@ -328,7 +332,7 @@ fn candidate_blocks(
 /// content, and feeding it to confluence analysis breaks the proof rather than refusing cleanly
 /// (`reachability-vs-state-derivation-answer-v1.md` §2: `PairReplayFailed`, not a conflict).
 fn baseline_reachable_patch_ids(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     baseline: ObjectId,
 ) -> Result<BTreeSet<ObjectId>> {
     let ancestors = ancestors_inclusive(object_store, baseline)?;
@@ -339,7 +343,7 @@ fn baseline_reachable_patch_ids(
 }
 
 fn candidate_sequence(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     baseline: ObjectId,
     target: ObjectId,
 ) -> Result<Vec<DecodedPatchOperation>> {
@@ -363,7 +367,7 @@ fn candidate_sequence(
 /// they were sealed — the set merge execution adopts verbatim onto the other side (DC-74). Excludes
 /// any patch already reachable from `baseline` (DC-75 addendum-5) — see `baseline_reachable_patch_ids`.
 pub(crate) fn candidate_patch_ids(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     baseline: ObjectId,
     target: ObjectId,
 ) -> Result<Vec<ObjectId>> {
@@ -389,7 +393,7 @@ pub(crate) fn candidate_patch_ids(
 /// never gated on entry — so it must be gated here, before `into_ref` advances, not deferred to a
 /// later `verify` run.
 pub(crate) fn verify_candidate_blocks_trusted(
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     policy: &MaintainerTrustPolicy,
     baseline: ObjectId,
     target: ObjectId,
@@ -408,7 +412,7 @@ pub(crate) fn verify_candidate_blocks_trusted(
     Ok(())
 }
 
-fn read_block(object_store: &FileObjectStore, block_id: ObjectId) -> Result<BlockPayload> {
+fn read_block(object_store: &impl ObjectReader, block_id: ObjectId) -> Result<BlockPayload> {
     let envelope = object_store
         .read_typed(block_id, ObjectType::Block)?
         .ok_or_else(|| PrikkError::Integrity(format!("missing Block {block_id}")))?;
