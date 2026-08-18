@@ -1,9 +1,15 @@
 # RFC 111 — Object read cost regression: every object read is O(N)
 
-**Status.** **ACCEPTED by the project owner 2026-08-18** ("RFC 111 is accepted. Proceed."). Found
+**Status.** **COMPLETE, merged 2026-08-18.** Stage 1 at `13f7a4b`, Stage 2 at `ffaab08`, both after green
+CI. **ACCEPTED by the project owner 2026-08-18** ("RFC 111 is accepted. Proceed."). Found
 2026-08-18 by the architect while measuring whether badge criterion 3 was still open. **§6.3 — whether a
 cost gate should exist — RULED 2026-08-18 by the owner: "Yes, add the cost gate." §7 states its shape and
-sequencing.**
+sequencing. **Delivered as two gates**: `rfc111_index_decode_cost_gate.rs` (`verify`) and
+`rfc111_seal_decode_cost_gate.rs` (`seal`), each written before its fix and each observed failing first.**
+
+**Outcome, measured.** `verify`: 167.85 ms → **27.04 ms** at N=160, tail ratio 3.51 → **1.97**. `seal`, on
+the repository's own disk: 93.86 ms → **46.96 ms** at N=160, neutral at small N, ratios flat. Both are now
+held by a decode-count gate rather than by a one-time measurement.
 
 **Not a design; a measured defect with a located cause.** Independence: author-reviewed, the standing
 ceiling — the measurements in §2-§5.1 are reproducible from the named harness and commits, which is what

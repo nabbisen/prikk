@@ -41,17 +41,23 @@ is what to read first**; §1 below is largely a completed record.
 
 ### The three themes
 
-**Theme A — the verification promise itself.** Three of the five open criteria, and they are one story:
+**Theme A — the verification promise itself.** Two of the four open criteria, and they are one story (criterion 3 closed 2026-08-18 and is kept below as the third entry, struck, because its history is the reason this section exists):
 
 - **No sync** (criterion 1). Two machines cannot exchange sealed history. Recorded as *"nothing built,
   unowned"* and **the largest single gap**. DC-78 delivered the trust groundwork — adopted-key sets,
   per-block signature attribution — and `bundle export`/`import` move objects, but there is no
   machine-to-machine path. **A distributed VCS that cannot distribute.**
-- **`verify` never checks author signatures** (criterion 5). DC-53 has a design brief and no schedule. The
-  README states every change is signed by its author *and verifiable by anyone*; the only cryptographic
-  verification in the product is one policy-signature call site.
-- **`verify` is roughly O(N³)** (criterion 3) — 34 s at 160 blocks. Measured, unowned, fix named. Offline
-  verifiability that stops being practical at a few hundred commits is not offline verifiability.
+- **`verify` checks author signatures, but only where key material exists** (criterion 5, **half
+  delivered 2026-08-18**, DC-53 Stage 1 at `970bc27`). A forged AUTHOR signature over recorded key
+  material now fails `verify`'s exit status; a Patch whose signer this repository never observed is
+  reported *unverifiable* rather than sound. **The remaining gap is "by anyone"**: key material is
+  recorded at authoring time and does not travel with a bundle, so a received Patch is permanently
+  unverifiable on the receiver's side. Stage 2 must deliver transport *and* pinning together.
+- **~~`verify` is roughly O(N³)~~ — criterion 3 is MET (2026-08-18).** DC-92 took it O(N³)→O(N)
+  (`b718623`); RFC 111 found and fixed a regression that had taken it back to ~O(N^1.8) for seven days
+  unnoticed (`13f7a4b`, `ffaab08`). Now **27.04 ms at N=160, ratio 1.97**, and held by a decode-count
+  gate rather than a measurement. **`seal` is not covered by that criterion and still performs O(N) reads
+  per call** — a residual owned by no increment.
 
 **Theme B — whether the promise survives time.** Criterion 2, unanswered: *what minimum must never change
 for a verification claim made today to hold in ten years.* 0.20.0 moved the format five times with no
