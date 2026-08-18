@@ -10,13 +10,19 @@
 //! - directories under `rfcs/handoffs/`: `^[0-9]{3}-[a-z0-9]+(-[a-z0-9]+)*$` (no `.md`)
 //!
 //! **The self-guard (RFC criterion 3).** Every allowlisted name must correspond to an entry that
-//! actually exists **at that specific location** -- so pre-authorising a name before it exists (the
-//! cheap "reserve `DC-100`" bypass) fails, and a file-form entry does not cover a directory of the
-//! same identifier or vice versa, since each of the five lists below is checked only against its
-//! own directory's listing. This does not, and is not meant to, stop a deliberate two-line edit
-//! adding both a new legacy entry and its file/directory together -- that is the same standard
-//! `unsafe_boundary.rs`'s `UNSAFE_EXEMPT_CRATES` sets: a visible edit to a reviewed constant is the
-//! control, invisibility was the problem.
+//! exists **exactly once** across the locations governing its entry kind -- not "at least one", and
+//! not "at one specific location" (RFC 105 lifecycle-move-friction handoff §3, amended by its own
+//! plan review §1). Zero matches still fails as a pre-authorisation bypass (the cheap "reserve
+//! `DC-100`" trick); more than one now fails too, as a duplicate -- this project has shipped one
+//! before (RFC 104, withdrawn the day it was accepted as a duplicate of DC-87), and the four file
+//! locations (`proposed/`, `accepted/`, `done/`, `archive/`) are checked together for this because a
+//! legacy RFC is expected to *move* between them over its lifecycle, never to exist at two of them at
+//! once. A file-form entry still does not cover a directory of the same identifier or vice versa --
+//! the search never crosses from a file-governed location into `rfcs/handoffs/` or back, only among
+//! locations sharing the same governed kind. This does not, and is not meant to, stop a deliberate
+//! two-line edit adding both a new legacy entry and its file/directory together -- that is the same
+//! standard `unsafe_boundary.rs`'s `UNSAFE_EXEMPT_CRATES` sets: a visible edit to a reviewed constant
+//! is the control, invisibility was the problem.
 //!
 //! **How the five lists below were generated (RFC 105 design-v1.md §3: derive, never
 //! transcribe).** At the commit this module first landed:
@@ -280,36 +286,103 @@ const RFC_HANDOFFS_LEGACY: &[&str] = &[
     "DC-99-windows-capability-parity",
 ];
 
+/// The four file-governed locations, paired with their own legacy list -- a legacy RFC is expected
+/// to *move* among these over its lifecycle (`proposed/` → `accepted/` → `done/`, or → `archive/`),
+/// so they are checked together, both for conformance (a name from any of the four lists is accepted
+/// at any of the four locations) and for the self-guard (a name declared in exactly one of the four
+/// lists must exist exactly once among all four, not just at the location whose list happens to
+/// declare it -- see `check`'s own doc for the one exception, entries declared in *more than one*
+/// list, which are never movable identities).
+const FILE_LOCATIONS: &[(&str, &[&str])] = &[
+    ("rfcs/proposed", RFC_PROPOSED_LEGACY),
+    ("rfcs/accepted", RFC_ACCEPTED_LEGACY),
+    ("rfcs/done", RFC_DONE_LEGACY),
+    ("rfcs/archive", RFC_ARCHIVE_LEGACY),
+];
+
 pub(super) fn check(root: &std::path::Path, errors: &mut Vec<BoundaryError>) {
-    check_location(
-        root,
-        "rfcs/proposed",
-        EntryKind::File,
-        RFC_PROPOSED_LEGACY,
-        errors,
-    );
-    check_location(
-        root,
-        "rfcs/accepted",
-        EntryKind::File,
-        RFC_ACCEPTED_LEGACY,
-        errors,
-    );
-    check_location(root, "rfcs/done", EntryKind::File, RFC_DONE_LEGACY, errors);
-    check_location(
-        root,
-        "rfcs/archive",
-        EntryKind::File,
-        RFC_ARCHIVE_LEGACY,
-        errors,
-    );
-    check_location(
+    let file_search_locations: Vec<&str> = FILE_LOCATIONS
+        .iter()
+        .map(|(location, _)| *location)
+        .collect();
+    let combined_file_legacy: Vec<&str> = FILE_LOCATIONS
+        .iter()
+        .flat_map(|(_, legacy)| legacy.iter().copied())
+        .collect();
+
+    for (location, _) in FILE_LOCATIONS {
+        check_entries(
+            root,
+            location,
+            EntryKind::File,
+            &combined_file_legacy,
+            errors,
+        );
+    }
+    // Self-guard, split by whether a name is a movable RFC identity or an intentionally-repeated
+    // placeholder. `.gitkeep` is declared independently in three of the four lists (one entry per
+    // directory that needs one) precisely because it is *not* one identity that moved -- three
+    // unrelated housekeeping files that happen to share a literal name. Searching for it "exactly
+    // once among all four" would report each of its three genuine, correct copies as a duplicate of
+    // the others. A name declared in only one list has no such ambiguity: it names one thing, so it
+    // is searched across all four locations for that one thing. A name declared in more than one
+    // list is checked once per declaring location instead, each independently, matching what the
+    // self-guard did before this change -- unaffected by the relaxation, because it was never the
+    // "one RFC that might have moved" case the relaxation exists for.
+    for (location, legacy) in FILE_LOCATIONS.iter().copied() {
+        for name in legacy.iter().copied() {
+            let single_name = [name];
+            if file_declaration_count(name) > 1 {
+                check_self_guard(
+                    root,
+                    location,
+                    &[location],
+                    EntryKind::File,
+                    &single_name,
+                    errors,
+                );
+            } else {
+                check_self_guard(
+                    root,
+                    location,
+                    &file_search_locations,
+                    EntryKind::File,
+                    &single_name,
+                    errors,
+                );
+            }
+        }
+    }
+
+    // `rfcs/handoffs/` has no sibling location to move between -- routed through the same two
+    // functions as the file locations above rather than a third code path, with its search set
+    // simply itself, so there is one mechanism for a future reader to understand rather than two.
+    check_entries(
         root,
         "rfcs/handoffs",
         EntryKind::Directory,
         RFC_HANDOFFS_LEGACY,
         errors,
     );
+    check_self_guard(
+        root,
+        "rfcs/handoffs",
+        &["rfcs/handoffs"],
+        EntryKind::Directory,
+        RFC_HANDOFFS_LEGACY,
+        errors,
+    );
+}
+
+/// How many of the four file lists declare `name` -- pulled out of `check` so this decision has its
+/// own test against the real, current data, independent of any directory tree. More than one means
+/// `name` is an intentionally-repeated placeholder (in practice, only `.gitkeep`, declared in three
+/// of the four lists), never a movable RFC identity.
+fn file_declaration_count(name: &str) -> usize {
+    FILE_LOCATIONS
+        .iter()
+        .filter(|(_, legacy)| legacy.contains(&name))
+        .count()
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -318,11 +391,15 @@ enum EntryKind {
     Directory,
 }
 
-fn check_location(
+/// Scan `location`'s directory; flag every entry that neither conforms to the naming pattern nor
+/// appears in `allowlist`. `allowlist` may be wider than any single legacy `const` -- for the four
+/// file locations it is their union, since a legacy name is allowed at any of them (RFC 105
+/// lifecycle-move-friction handoff §3).
+fn check_entries(
     root: &std::path::Path,
     location: &str,
     kind: EntryKind,
-    legacy: &[&str],
+    allowlist: &[&str],
     errors: &mut Vec<BoundaryError>,
 ) {
     let directory = root.join(location);
@@ -366,7 +443,7 @@ fn check_location(
             EntryKind::File => conforms_file(&name),
             EntryKind::Directory => conforms_slug(&name),
         };
-        if !conforms && !legacy.contains(&name.as_ref()) {
+        if !conforms && !allowlist.contains(&name.as_ref()) {
             push(
                 errors,
                 "rfc-naming",
@@ -374,22 +451,55 @@ fn check_location(
             );
         }
     }
-    // The self-guard (RFC criterion 3): every allowlisted name must correspond to an entry that
-    // actually exists at this location, checked directly against the filesystem rather than
-    // trusted -- a name here for something that does not exist would be a bypass ("pre-authorise
-    // DC-100 before creating it") the allowlist must not offer.
+}
+
+/// The self-guard (RFC criterion 3, amended by RFC 105 lifecycle-move-friction handoff §3's plan
+/// review §1): every name in `legacy` must exist as `kind` **exactly once** across
+/// `search_locations` -- checked directly against the filesystem, never trusted. Zero matches is the
+/// original bypass this guard exists for (pre-authorise a name before it exists). More than one match
+/// is a duplicate -- this project has shipped one before (RFC 104, withdrawn the day it was accepted
+/// as a duplicate of DC-87) -- and combining the four file locations for conformance above would have
+/// silently reopened that hole if this guard still only asked "at least one", so it asks for exactly
+/// one instead. `declared_in` is kept only for the error message's provenance (which `const` to go
+/// edit), separate from `search_locations` (where existence is actually checked).
+fn check_self_guard(
+    root: &std::path::Path,
+    declared_in: &str,
+    search_locations: &[&str],
+    kind: EntryKind,
+    legacy: &[&str],
+    errors: &mut Vec<BoundaryError>,
+) {
     for name in legacy {
-        let path = directory.join(name);
-        let exists = match kind {
-            EntryKind::File => path.is_file(),
-            EntryKind::Directory => path.is_dir(),
-        };
-        if !exists {
-            push(
+        let matches: Vec<&str> = search_locations
+            .iter()
+            .copied()
+            .filter(|location| {
+                let path = root.join(location).join(name);
+                match kind {
+                    EntryKind::File => path.is_file(),
+                    EntryKind::Directory => path.is_dir(),
+                }
+            })
+            .collect();
+        match matches.len() {
+            0 => push(
                 errors,
                 "rfc-naming",
-                format!("{location}/{name}: allowlisted but does not exist"),
-            );
+                format!(
+                    "{declared_in}/{name}: allowlisted but does not exist under any of {}",
+                    search_locations.join(", ")
+                ),
+            ),
+            1 => {}
+            _ => push(
+                errors,
+                "rfc-naming",
+                format!(
+                    "{declared_in}/{name}: allowlisted but exists more than once, at {}",
+                    matches.join(", ")
+                ),
+            ),
         }
     }
 }
