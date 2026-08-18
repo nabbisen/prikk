@@ -90,35 +90,27 @@ pub(crate) fn print_verify_report(
         }
     }
     // DC-53 Stage 1: an unverifiable AUTHOR signature is not a failure (D3's second row) -- verify
-    // still passes -- but must be visible, not silent, so it is surfaced here the same way failed
-    // objects are above.
-    let unverifiable_author_patches: Vec<_> = report
+    // still passes -- but must be visible, not silent, so it is counted here. Count only, no
+    // per-object enumeration: unlike a failed object (rare, the reason the precedent above prints
+    // one line each), an unrecorded key is the default state of every patch authored before this
+    // increment -- on an existing repository that is the count of patches, not a short list of
+    // outliers, and printing one identical line per patch would bury the informative count line
+    // rather than surface it (DC-53 Stage 1 implementation review v2).
+    let unverifiable_author_patch_count = report
         .object_outcomes
         .iter()
-        .filter_map(|outcome| match &outcome.status {
+        .filter(|outcome| match &outcome.status {
             ObjectItemStatus::Evaluated(verification)
             | ObjectItemStatus::Unindexed(verification) => {
-                match &verification.author_verification {
-                    Some(AuthorSignatureVerification::Unverifiable { key_id }) => {
-                        Some((outcome, key_id))
-                    }
-                    _ => None,
-                }
+                matches!(
+                    verification.author_verification,
+                    Some(AuthorSignatureVerification::Unverifiable { .. })
+                )
             }
-            ObjectItemStatus::Failed { .. } => None,
+            ObjectItemStatus::Failed { .. } => false,
         })
-        .collect();
-    println!(
-        "unverifiable author signatures: {}",
-        unverifiable_author_patches.len()
-    );
-    for (outcome, key_id) in unverifiable_author_patches {
-        println!(
-            "object {} ({}): unverifiable author signature: no key material recorded for {key_id}",
-            outcome.path.display(),
-            outcome.object_type
-        );
-    }
+        .count();
+    println!("unverifiable author signatures: {unverifiable_author_patch_count}");
     let incomplete_blocks: Vec<_> = report
         .block_state_outcomes
         .iter()
