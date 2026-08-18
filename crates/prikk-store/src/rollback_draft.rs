@@ -121,13 +121,6 @@ pub fn append_rollback_draft(
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, canonical_payload);
     let signature = author_signature(signer, envelope.object_id())?;
     envelope.add_signature(signature)?;
-    // DC-53 Stage 1: same reasoning as `worktree_patch/node_authoring.rs` -- record this signer's
-    // key material now, since it is not recoverable from the signature later.
-    crate::author_key_index::record_author_key_material(
-        layout,
-        signer.key_id(),
-        signer.public_key_bytes(),
-    )?;
     let inverse_patch_id = envelope.object_id();
 
     let wal = Wal::for_layout(layout);
@@ -170,6 +163,19 @@ pub fn append_rollback_draft(
         }
     }
     prepare_empty_active_ref_for_append(layout, &canonical_ref)?;
+    // DC-53 Stage 2 C1: record this signer's key material under the held `ActiveLock`, immediately
+    // before the append it gates -- not while planning, before the lock existed. Stage 1's version of
+    // this call sat before lock acquisition; Stage 2's reject-on-conflict rule turns "check the
+    // container, then append" into a check-then-act that a concurrent rollback-draft (or a
+    // rollback-draft racing a commit) could otherwise both pass before either one appends,
+    // undetected, since a rejected conflict here is unrecoverable (no prune/rewrite path exists for
+    // this container). `worktree_patch/node_authoring.rs` already does this under its own lock; this
+    // matches that shape.
+    crate::author_key_index::record_author_key_material(
+        layout,
+        signer.key_id(),
+        signer.public_key_bytes(),
+    )?;
     let wal_sequence = wal.append_patch(&envelope)?;
 
     Ok(RollbackDraftReport {

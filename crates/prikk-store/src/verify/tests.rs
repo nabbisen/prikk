@@ -994,6 +994,38 @@ fn verify_repository_fails_a_tampered_author_signature_against_recorded_key_mate
     Ok(())
 }
 
+/// DC-53 Stage 2, D3's fourth row: a `key_id` whose recorded material already disagrees with itself
+/// fails `verify` even though the Patch's own signature genuinely verifies against the *first*
+/// recorded key -- D8's rule is an invariant on the container, not a claim about any one signature.
+/// The conflict is planted directly (`force_conflicting_author_key_entry_for_test`), bypassing
+/// `record_author_key_material`'s own Stage 2 rejection, because that rejection is exactly what
+/// makes this state unreachable through normal operation -- this test exercises `verify`'s
+/// defense-in-depth for a state that predates the rule or arrived some other way, reached through
+/// `verify_repository` end to end, matching this file's own established discipline for every other
+/// D3 row (Stage 1 implementation review v1, B2).
+#[test]
+fn verify_repository_fails_for_a_key_id_with_conflicting_recorded_keys() -> Result<()> {
+    let root = unique_temp_dir("verify-author-signature-conflict");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let signer = Ed25519AuthorSigner::from_seed("conflict-author", &[0x91; 32])?;
+    crate::author_key_index::record_author_key_material(
+        &layout,
+        signer.key_id(),
+        signer.public_key_bytes(),
+    )?;
+    crate::author_key_index::force_conflicting_author_key_entry_for_test(
+        &layout,
+        signer.key_id(),
+        [0xee; 32],
+    )?;
+    write_author_signed_patch(&layout, 0x91, "conflict-author", false)?;
+
+    let report = verify_repository(&layout)?;
+    assert_object_item_failed(&report, "has more than one distinct recorded public key");
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 /// DC-53 Stage 1 implementation review v1, B2: the production authoring path and production
 /// verification must agree. Records material the same way `author_signature()`'s real callers do
 /// (`crate::author_key_index::record_author_key_material`, not a shortcut), signs through
