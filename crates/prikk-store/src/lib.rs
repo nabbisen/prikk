@@ -56,6 +56,7 @@ mod path;
 mod received;
 mod received_index;
 mod refs;
+mod rfc111_seal_simulation;
 mod rollback_draft;
 mod rollback_preview;
 mod rollback_verify;
@@ -77,6 +78,8 @@ mod worktree_status;
 mod dc55_identity_evidence;
 #[cfg(test)]
 mod rfc111_index_decode_cost_gate;
+#[cfg(test)]
+mod rfc111_seal_decode_cost_gate;
 #[cfg(test)]
 mod signature_contract_tests;
 #[cfg(test)]
@@ -149,6 +152,8 @@ pub use refs::{
     force_ref_pointer_to_arbitrary_state_for_test_support,
     remove_ref_pointer_entry_for_test_support,
 };
+#[cfg(feature = "test-support")]
+pub use rfc111_seal_simulation::simulate_one_seal_for_test_support;
 pub use rollback_draft::{RollbackDraftReport, append_rollback_draft};
 pub use rollback_preview::{
     RollbackPreviewChange, RollbackPreviewChangeKind, RollbackPreviewPlan, prepare_rollback_preview,

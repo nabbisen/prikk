@@ -10,7 +10,7 @@ use super::{
 };
 use crate::layout::{LockableContainer, RepositoryFormat, ref_name_key_bytes};
 use crate::lock::{RefLock, acquire_container_locks};
-use crate::object_store::{FileObjectStore, ObjectWriter};
+use crate::object_store::ObjectWriter;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PublicationState {
@@ -19,19 +19,25 @@ enum PublicationState {
     Complete,
 }
 
-pub(super) fn publish(store: &RefStore, publication: &RefPublication) -> Result<ObjectId> {
-    publish_locked(store, publication, false)
+pub(super) fn publish(
+    store: &RefStore,
+    object_store: &mut impl ObjectWriter,
+    publication: &RefPublication,
+) -> Result<ObjectId> {
+    publish_locked(store, object_store, publication, false)
 }
 
 pub(super) fn finish_interrupted(
     store: &RefStore,
+    object_store: &mut impl ObjectWriter,
     publication: &RefPublication,
 ) -> Result<ObjectId> {
-    publish_locked(store, publication, true)
+    publish_locked(store, object_store, publication, true)
 }
 
 fn publish_locked(
     store: &RefStore,
+    object_store: &mut impl ObjectWriter,
     publication: &RefPublication,
     allow_partial_tail_repair: bool,
 ) -> Result<ObjectId> {
@@ -67,7 +73,6 @@ fn publish_locked(
     // `remove_candidate_write_temps` here) has no equivalent under an append-only pointer index --
     // an append-only record has no candidate value to stage, the append *is* the publish. `refs/tmp/`
     // is never written by this function again.
-    let mut object_store = FileObjectStore::new(store.layout.clone());
     match store.layout.format() {
         RepositoryFormat::CurrentV6 => {
             object_store.write_object(&publication.ref_state)?;

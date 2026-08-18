@@ -38,8 +38,8 @@ use prikk_object::{
     RefUpdatePayload,
 };
 use prikk_store::{
-    DEFAULT_CHECKOUT_REF, FileObjectStore, MaintainerSigner, ObjectReader, RefPublication,
-    RefStore, Wal, maintainer_signature, require_active_ref_for_non_empty_wal,
+    DEFAULT_CHECKOUT_REF, FileObjectStore, MaintainerSigner, ObjectReader, ObjectWriteSession,
+    RefPublication, RefStore, Wal, maintainer_signature, require_active_ref_for_non_empty_wal,
     validate_local_branch_ref,
 };
 
@@ -130,7 +130,7 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
         .map_err(|err| err.to_string())?;
     let canonical = validate_local_branch_ref(&parsed.name).map_err(|err| err.to_string())?;
     let ref_store = RefStore::new(layout.clone());
-    let object_store = FileObjectStore::new(layout.clone());
+    let mut object_store = ObjectWriteSession::open(&layout).map_err(|err| err.to_string())?;
 
     if ref_store
         .read_current_ref_state_id(&canonical)
@@ -203,7 +203,7 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
         ref_update: ref_update_envelope,
     };
     let published_ref_state_id = ref_store
-        .publish(&publication)
+        .publish_with_object_store(&mut object_store, &publication)
         .map_err(|err| err.to_string())?;
 
     println!("created branch {canonical}");
@@ -233,7 +233,7 @@ fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
         .map_err(|err| err.to_string())?;
     let canonical = validate_local_branch_ref(&name).map_err(|err| err.to_string())?;
     let ref_store = RefStore::new(layout.clone());
-    let object_store = FileObjectStore::new(layout.clone());
+    let mut object_store = ObjectWriteSession::open(&layout).map_err(|err| err.to_string())?;
 
     let Some(current_ref_state_id) = ref_store
         .read_current_ref_state_id(&canonical)
@@ -330,7 +330,7 @@ fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
         ref_update: ref_update_envelope,
     };
     let published_ref_state_id = ref_store
-        .publish(&publication)
+        .publish_with_object_store(&mut object_store, &publication)
         .map_err(|err| err.to_string())?;
 
     println!("closed branch {canonical}");
@@ -344,7 +344,7 @@ fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
 /// Resolve `--from`'s target block, requiring it to be a currently published ref.
 fn resolve_published_target(
     ref_store: &RefStore,
-    object_store: &FileObjectStore,
+    object_store: &impl ObjectReader,
     from_ref: &str,
 ) -> std::result::Result<ObjectId, String> {
     let from_ref_state_id = ref_store
