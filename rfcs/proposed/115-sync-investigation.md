@@ -125,6 +125,69 @@ those terms.
 **This is also why block recognition must travel (item 3).** Without it a receiver cannot tell whether
 the sender considered a patch published, only that it exists.
 
+### 2.5 Is anything actually lost? — and divergent blocks are **not** forced
+
+**The owner's question, 2026-08-19:** *"Is it unnecessary to reconcile or arbitrate it? I care about
+whether verification or guarantee is lost… If a person sees A and another person sees A', may somebody be
+confused or untrusting?"*
+
+**Taking the guarantees one at a time, against the code:**
+
+| Guarantee | Under divergent blocks | Why |
+|---|---|---|
+| **Content integrity** | **Not lost** | Object ids are content hashes. Both parties verify the same patch bytes. |
+| **Authorship** | **Not lost** | The AUTHOR signature is over the *patch's* own object id and travels with the patch (DC-53 Stage 2). Both verify identically, subject to criterion 5's TOFU limit. |
+| **Publication trust** | **Not lost — and this is by design** | DC-78 already rules that a receiver's claim is *"sealed by a Maintainer key **you** adopted."* Bob's repository asserting Bob's maintainer vouched for it is the intended semantics, not a degradation. |
+| **Lineage / state-root integrity** | **Not lost within a repository** | Each repository re-derives and verifies its own lineage. Both are valid. |
+| **Cross-repository comparison by one identifier** | **Lost** | "We are both at block X" stops working. This is the real cost. |
+| **Citable identifier** | **Not lost, but it moves** | The patch id is stable across repositories and is what should be cited. Darcs does exactly this — patches keep *"the same identifier as from the source repository"* while their representation is adjusted to context. |
+
+**So no verification is lost. One convenience is** — and the confusion risk is real but is a naming
+problem, not a trust problem: a person who sees a different block id may conclude history was altered.
+**The mitigation is that the patch id is the global identifier and the block id is local publication
+detail**, stated in the UI and the docs rather than left for users to infer.
+
+**A cheap restoration of the lost comparison:** a **patch-set digest** — a canonical hash over the sorted
+set of patch ids reachable from a ref. Two repositories with the same content produce the same digest
+regardless of block structure, restoring the one-hash "are we the same?" check at the level where
+identity actually holds.
+
+### 2.6 The surprise: canonical sealing would make blocks converge
+
+**`BlockPayload` contains no local nondeterminism at all** (`payload/block.rs:49-68`): parent block ids
+(sorted), kind, patch ids (canonical order), state Merkle root, an optional snapshot ref, and two
+merge-only fields. **No timestamp, no maintainer identity, no machine identity, no nonce.** And
+**signatures are excluded from the object-id preimage** (`envelope.rs:29`).
+
+**Therefore two repositories that seal the same patches, with the same parents and the same grouping,
+produce the *same block id* — each carrying its own maintainer's signature.** Divergence is not imposed
+by the format; it comes only from **how patches are grouped into blocks**, which today is a human and
+temporal choice.
+
+**So there is a third option nobody has named: canonical sealing.** Make grouping a deterministic
+function of the patch DAG, and block identity becomes global again — with per-repository trust preserved,
+because the signature is outside the id.
+
+**The cost is real and it is why I do not recommend it yet.** Blocks exist partly to *bound expensive
+patch reasoning* by batching; the most obviously canonical grouping — one patch per block — discards that
+rationale entirely. **Canonical grouping trades the performance argument blocks were built for against
+global block identity**, and that trade deserves its own evaluation rather than being made in passing.
+
+### 2.7 Recommendation on reconciliation
+
+**Do not arbitrate. Accept patch-level identity, and make it visible.**
+
+1. **Patch id is the citable, global identifier.** Issue trackers, advisories, release notes and CLI
+   output should lead with it.
+2. **Block id is local publication detail**, and prikk should say so where a user would otherwise assume
+   otherwise.
+3. **Add a patch-set digest** so "are these two repositories the same?" has a one-hash answer again.
+4. **Record canonical sealing (§2.6) as a genuine option that was declined for a stated reason**, not as
+   something nobody considered — because the data model permits it and a future reader will notice.
+
+**Arbitration — electing one repository's block structure as authoritative — is the one thing to avoid.**
+It would need a coordinator, which is precisely what a distributed VCS must not require.
+
 ## 3. Transport survey — downstream of §2.2, retained for when it is decided
 
 **Superseded as the primary question by §2.1.** The four options below remain open and any of them can
