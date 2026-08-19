@@ -52,6 +52,84 @@ maintainer-signed. Therefore:
 into a namespace the receiver controls, then let the receiver decide* — which is what the code already
 does.
 
+## 2.1 The owner's reframing, 2026-08-19 — and it is correct
+
+> *"I feel the subject is not network connection (exchange) but design on data model interface on what
+> to be shared."*
+
+**Agreed, and §3's four transport options were the wrong centre of gravity.** Transport is
+**downstream and largely interchangeable**: a file, a file plus a basis, SSH with prikk on both ends, or
+a protocol all deliver the same thing once *what* travels is settled. **The data-model interface is
+upstream and hard to reverse** — it fixes what a receiver can verify, what claims ride along, and what
+it may do with them.
+
+The evidence was already in this RFC and the architect did not act on it: **§3.1e's finding is a
+data-model finding, not a transport one.** prikk's merge-per-sync cost comes from exchanging *blocks*
+rather than *patches*, and no choice of transport changes that by a single line.
+
+**§3 is retained below as the transport survey it is, and demoted.** It should be settled *after* §2.2,
+and any of its four options remains available.
+
+## 2.2 The ruling: the exchange unit is the Patch; block recognition travels as a claim
+
+**Ruled by the project owner 2026-08-19:** *"the unit should be patch… The exchange should be done per
+patch-level instead of block-level. In addition, of course, block-level recognition should be shared."*
+
+**The data model already supports this, which is the strongest evidence it is right.** Verified:
+
+- **`PatchPayload` carries `parent_patch_ids`** (`payload/patch.rs:57`) — **patches already form a DAG
+  independent of any block.** Patch-level exchange needs no new ordering field.
+- **`PatchPayload` carries `preconditions`** (`:61`) — a patch already states what it requires to apply,
+  which is what makes out-of-order arrival checkable rather than hopeful.
+- Patches are **content-addressed** and **AUTHOR-signed**, and since DC-53 Stage 2 their signing key
+  material travels. **Set reconciliation — "which patch ids do you have that I do not" — is expressible
+  today over objects that already exist.**
+
+**So the Block is what it always was: a publication envelope.** Exchanging envelopes forced prikk into
+Git's shape at the exchange layer (§3.1e); exchanging patches puts it back where Darcs and Pijul are.
+
+### 2.3 What the shared interface must define
+
+Five things, and none of them is a network question:
+
+1. **The unit and its closure.** A patch plus the transitive `parent_patch_ids` the receiver lacks —
+   plus its author key material, so authorship is checkable on arrival (DC-53 Stage 2).
+2. **The "have" representation.** At patch level this is a **set of patch ids**, not a chain — simpler
+   than the block-level basis §3.1b proposed, and the reason patch-level makes incremental exchange
+   natural rather than negotiated.
+3. **Block recognition as a claim, not as the carrier.** The receiver learns *which patches the sender
+   sealed into which block, under which maintainer key*. **That is an assertion about patches, which is
+   attestation-shaped** — the same structural argument RFC 110 §4.1 and RFC 113 §4.1 already made:
+   a claim *about* history, separable from it, rather than the thing that carries it.
+4. **What the receiver may do with a received patch.** It has an AUTHOR signature but **no maintainer
+   seal** — so DC-78's *"sealed by a Maintainer key you adopted"* does not cover it. **The coherent
+   answer is that the receiver's own maintainer seals what it accepts**, which is exactly how Darcs and
+   Pijul work and preserves DC-78's rule rather than weakening it: every block in your repository is
+   still sealed by someone you trust, because you sealed it.
+5. **Where an accepted-but-unsealed patch lives** before that happens. The WAL is the receiver's *own*
+   active work; received patches are not that. This is genuinely undecided and is the one item with no
+   existing home.
+
+### 2.4 The consequence that must be accepted explicitly
+
+**Two repositories can agree on every patch and disagree on every block.** If the receiver seals what it
+accepts, its blocks have different ids, different lineage, and different state roots from the sender's —
+**with identical content**.
+
+**That is not a defect; it is what patch-level exchange means**, and it is Darcs's *"adjusted to fit the
+new context"* stated in prikk's vocabulary. But it must be accepted deliberately, because it changes
+what "the same history" means: **identity holds at patch level and not at block level.** Every
+comparison, report, and user-facing statement about two repositories being in sync has to be written in
+those terms.
+
+**This is also why block recognition must travel (item 3).** Without it a receiver cannot tell whether
+the sender considered a patch published, only that it exists.
+
+## 3. Transport survey — downstream of §2.2, retained for when it is decided
+
+**Superseded as the primary question by §2.1.** The four options below remain open and any of them can
+carry §2.3's interface.
+
 ## 3. The question that decides everything: is sync a protocol, or a transfer?
 
 **Two readings, and they differ by an order of magnitude in scope.**
