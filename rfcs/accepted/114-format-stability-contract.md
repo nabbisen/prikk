@@ -1,9 +1,9 @@
 # RFC 114 — The format-stability contract
 
 **Status.** **ACCEPTED by the project owner 2026-08-19.** Answers **badge criterion 2**, scheduled by the
-owner the same day as the next work. **Acceptance clears the direction, not the design** — §5's five
-decisions precede any implementation, and **§5.2 and §5.3 are the owner's**, not the architect's: they
-are support commitments, not technical rulings. **Independence:** author-reviewed, the standing ceiling; every claim below cites the code or
+owner the same day as the next work. **All five of §5's decisions were resolved the same day** — §5.2 and §5.3 by the
+owner, §5.1/§5.4/§5.5 by the architect. **§5.6 states what remains**, which is smaller than the original
+framing implied: the contract only ever concerned format 6 and everything after. **Independence:** author-reviewed, the standing ceiling; every claim below cites the code or
 the record it came from.
 
 **The criterion, in its own answerable form:** *what minimum must never change for a verification claim
@@ -96,7 +96,70 @@ A promise with no check is the state we are already in. Two gates, and the secon
 `dc55_identity_evidence.rs` is the existing precedent for both, and the design should extend it rather
 than start beside it.
 
-## 5. What a design must decide
+## 5. Decisions — all five resolved 2026-08-19
+
+**Resolved the day the RFC was accepted.** §5.2 and §5.3 by the project owner; §5.1, §5.4 and §5.5 by the
+architect, as ruled at acceptance.
+
+**The reframing that made the rest simple, in the owner's words:** *"prikk has never been used in
+production. Therefore we don't have to care about old formats. Consider around the latest format only."*
+**That is correct, and this RFC's substance never depended on old formats** — criterion 2 asks what must
+hold for a claim made *today* to survive ten years, which is a question about format 6 and everything
+after. **The architect's investigation of formats 1-5 was effort spent on the wrong side of the
+question**, and the record should say so rather than leave the detour looking load-bearing.
+
+**5.1 — Where the contract is published. Ruled:** `docs/src/reference/release-compatibility.md`, which
+already owns the release boundary and is where a user looking for a compatibility promise will go. **A
+promise users cannot find is not a promise.**
+
+**5.2 — Migration as a first-class operation. Ruled by the owner: yes — but the question dissolves in the
+form this RFC asked it.** There is no historical migration left to bless (§5.3). **The live obligation is
+forward: when format 7 arrives, there must be a supported, tested way to carry a format-6 repository
+across, and it must exist before the change ships, not after.**
+
+**The existing exchange primitive is not that operation**, and this must not be assumed away:
+`export_bundle(layout, ref_name)` exports **one ref**, and `import_bundle` lands history at
+**`remotes/<origin_ref_name>`** — the received namespace. A repository "migrated" this way has its
+history at `remotes/heads/main`, not `heads/main`, and every other branch and tag is left behind.
+**Whatever carries a repository forward must actually carry a repository.**
+
+**5.3 — Formats 1-5. Ruled by the owner: not supported.** prikk has never been in production; there is
+nothing to protect.
+
+**Consequence, and it is the only work this decision creates:** `layout.rs`'s five retired-format
+messages currently *offer* a migration path. **They must say "no longer supported" plainly instead.**
+Three of them name a prikk version that supports formats 3, 4 or 5 — **and no such release exists**: all
+four bumps (3→6) happened inside the 0.19.0→0.20.0 window and 0.20.0 shipped carrying format 6, so
+formats 3, 4 and 5 never appeared in any release. Those three instructions are unfulfillable by
+construction.
+
+**An architect correction belongs here.** This RFC's first draft said formats 1 and 2 "require binaries
+nobody keeps." **That was wrong** — `prikk 0.19.0` is published on crates.io and installable, so those
+repositories were genuinely migratable. The owner's ruling is a scope choice, not a forced one.
+
+**5.4 — Unshipped `schema_version` values. Ruled: the contract names shipped releases, not every commit.**
+A schema version written only by a pre-release build is owed nothing. This is the same principle §5.3
+applies to repository formats, and it keeps the forever-obligation finite: **what shipped is permanent;
+what merely existed in git is not.**
+
+**5.5 — If SHA-256 or Ed25519 breaks. Ruled now rather than under pressure: add an identifier, never
+redefine one.** A broken algorithm gets a **new** algorithm identifier used by new objects; every object
+already written continues to verify under the identifier it was written with, unchanged. **Redefining an
+existing identifier would retroactively alter what past objects mean, which is precisely the failure this
+contract exists to prevent** — and "we had no choice, the algorithm was broken" is exactly the pressure
+under which that mistake gets made.
+
+**This is why §2's frozen list includes the algorithm *identifiers* and not merely the algorithms.**
+
+## 5.6 What remains for the design
+
+With §5 resolved, the design has one job and a much smaller one than the original framing implied:
+
+1. **State the contract** in `release-compatibility.md`, per §5.1 and §3.
+2. **Build §4's two gates.** The historical half now has **one** case to cover, not five.
+3. **Correct `layout.rs`'s five messages**, per §5.3.
+4. **Name what the forward carry-forward operation will be**, per §5.2 — or state explicitly that it does
+   not exist yet and must exist before format 7, which is itself a checkable commitment.
 
 1. **Where the contract is published.** `docs/src/reference/release-compatibility.md` is the obvious
    home, and it currently states the *release* boundary rather than the format promise. A promise users
