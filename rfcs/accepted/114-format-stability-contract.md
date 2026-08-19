@@ -1,7 +1,9 @@
 # RFC 114 — The format-stability contract
 
-**Status.** **Proposed.** Answers **badge criterion 2**, scheduled by the project owner 2026-08-19 as the
-next work. **Independence:** author-reviewed, the standing ceiling; every claim below cites the code or
+**Status.** **ACCEPTED by the project owner 2026-08-19.** Answers **badge criterion 2**, scheduled by the
+owner the same day as the next work. **Acceptance clears the direction, not the design** — §5's five
+decisions precede any implementation, and **§5.2 and §5.3 are the owner's**, not the architect's: they
+are support commitments, not technical rulings. **Independence:** author-reviewed, the standing ceiling; every claim below cites the code or
 the record it came from.
 
 **The criterion, in its own answerable form:** *what minimum must never change for a verification claim
