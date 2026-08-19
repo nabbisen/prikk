@@ -162,11 +162,32 @@ From RFC 115 §5.1.2 and Checkpoint 1's threat model, as refusals:
    `Unverifiable`** — never `Sound`.
 7. **Replay is inert.** Re-receiving known patches records nothing new and changes no state.
 
-**One that must be answered before implementation and is not answered here:** `OperationCondition`'s
-variants assert **the sender's worktree state** (`payload/common.rs`). What a received patch's
-preconditions mean in a different repository is a correctness question, and **`accept` cannot be
-specified until it is settled.** Checkpoint 1 raised this; it is promoted to a blocking prerequisite of
-the implementation handoff, not deferred into it.
+**The precondition question — resolved 2026-08-19, and the answer removes it as a blocker.**
+
+Checkpoint 1 raised `OperationCondition`'s variants as asserting **the sender's** worktree state, and I
+promoted it to a blocking prerequisite. **Investigating it first found a prior fact that settles it:
+preconditions are never evaluated anywhere.**
+
+**Verified:** every occurrence of `preconditions` in `prikk-store` is `Vec::new()` — construction only —
+and `OperationCondition` does not appear in `prikk-store` or `prikk-cli` at all. **The schema defines
+them, the wire format carries them, and no code has ever checked one.**
+
+**This is the third declared-but-unused surface found this week**, after `parent_patch_ids` (D1) and
+`Attestation` (RFC 114 Gate A). The pattern is worth naming: **prikk's schema is consistently ahead of
+its behaviour**, and any design reading capability from the schema must confirm the behaviour separately.
+That mistake has now been made twice — once by me in RFC 115 §2.2, once here.
+
+**Ruled: `accept` does not evaluate preconditions.** They stay inert, exactly as they are for locally
+authored patches today.
+
+- **Consistency:** exchange must not be the place a dormant mechanism silently acquires meaning. If
+  preconditions should be checked, they should be checked for local patches first, and that is its own
+  increment with its own reasoning.
+- **The threat shrinks with it.** Checkpoint 1's item 4 assumed preconditions carry force; they do not,
+  so a hostile sender's preconditions are as inert as an honest one's. **What remains is only that they
+  are attacker-controlled bytes**, which §8's bounds already cover.
+- **What is *not* ruled:** whether preconditions should ever be evaluated. That question is now clearer
+  for having been asked — a third dormant surface — and belongs in its own record.
 
 ## 9. Deliberately excluded
 
@@ -181,7 +202,7 @@ the implementation handoff, not deferred into it.
 1. **The digest** (D4) — self-contained, no artifact format involved, immediately useful for "are we the
    same?", and it exercises RFC 114's documentation obligation on a small surface.
 2. **The recognition claim object** (D3) — with its Gate A vector in the same increment.
-3. **The exchange artifact and accept path** (D1, D2, D5) — gated on §8's precondition question.
+3. **The exchange artifact and accept path** (D1, D2, D5). **No longer gated** — §8's precondition question is resolved.
 
 **Report before implementing each**, and §5.1's discipline — threat model, adversarial byte fixtures, a
 two-repository harness, a negative control per refusal — applies to each stage, not once at the end.
