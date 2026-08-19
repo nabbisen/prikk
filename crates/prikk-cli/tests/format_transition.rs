@@ -102,6 +102,7 @@ fn assert_rejection_contract(
     output: &Output,
     detected_format: &str,
     version_claim: Option<&str>,
+    no_migration_claim: &str,
 ) {
     assert!(
         !output.status.success(),
@@ -115,50 +116,76 @@ fn assert_rejection_contract(
     // name no specific "removed after X.Y.Z" version, since none could be verified from the release
     // record (`layout.rs`'s `LEGACY_FORMAT_3_VERSION`/`LEGACY_FORMAT_4_VERSION`/
     // `LEGACY_FORMAT_5_VERSION` arm doc comments).
-    for expected in [
-        detected_format,
-        "requires format 6",
-        "bundle export",
-        "bundle import",
-    ]
-    .into_iter()
-    .chain(version_claim)
+    //
+    // RFC 114 §5.3: the message states no-longer-supported plainly and offers no migration step --
+    // `bundle export`/`bundle import` are no longer named here (that path was retired by this RFC;
+    // see `layout.rs`'s five retired-format match arms). `no_migration_claim` differs by group:
+    // formats 1-2 genuinely had a reader once (0.19.0) and say so was withdrawn, not absent; formats
+    // 3-5 never shipped in any release and say so plainly.
+    for expected in [detected_format, "requires format 6", no_migration_claim]
+        .into_iter()
+        .chain(version_claim)
     {
         assert!(
             stderr.contains(expected),
             "{args:?}: rejection message missing {expected:?}: {stderr}"
         );
     }
+    for unexpected in ["bundle export", "bundle import"] {
+        assert!(
+            !stderr.contains(unexpected),
+            "{args:?}: rejection message offers a migration step ({unexpected:?}) RFC 114 §5.3 \
+             says must not be offered: {stderr}"
+        );
+    }
 }
 
 /// RFC 103 §4/design-v1.md §2 (format 1), RFC 102 Stage 3, design-v1.md §12.1 (format 2), RFC 102
-/// Stage 4 (format 3), RFC 102 Stage 5, design-v1.md §14.7 (format 4), and RFC 102 Stage 6,
-/// design-v1.md §15.6 (format 5, the same proof re-run one format later again): a retired-format
-/// repository is rejected at `RepositoryLayout::open`, with a message naming the detected format, the
-/// required format, and the bundle export/import remedy (formats 3, 4, and 5's own messages omit "the
-/// last supporting version" specifically -- see `layout.rs`'s `LEGACY_FORMAT_3_VERSION`/
-/// `LEGACY_FORMAT_4_VERSION`/`LEGACY_FORMAT_5_VERSION` arms: unlike formats 1 and 2, none of 3, 4, or 5
-/// was ever itself the subject of a tagged release, so no specific version can be named without
-/// guessing) — for every command, not a command-specific subset, since rejection now happens before any
-/// command-specific logic runs. Proven against real fixtures (`build_legacy_fixture`, differing only in
-/// what kind of active-session state they carry and which format byte was flipped), not hand-built
-/// ones.
+/// Stage 4 (format 3), RFC 102 Stage 5, design-v1.md §14.7 (format 4), RFC 102 Stage 6,
+/// design-v1.md §15.6 (format 5, the same proof re-run one format later again), and RFC 114 §5.3
+/// (the message no longer offers a bundle export/import remedy -- that path was withdrawn, see
+/// `layout.rs`'s five retired-format match arms): a retired-format repository is rejected at
+/// `RepositoryLayout::open`, with a message naming the detected format, the required format, and a
+/// plain no-migration statement (formats 1 and 2 state withdrawal -- 0.19.0 genuinely read them
+/// once; formats 3, 4, and 5 state they were never in a released version, since none could be
+/// verified from the release record -- see `layout.rs`'s `LEGACY_FORMAT_3_VERSION`/
+/// `LEGACY_FORMAT_4_VERSION`/`LEGACY_FORMAT_5_VERSION` arms) — for every command, not a
+/// command-specific subset, since rejection now happens before any command-specific logic runs.
+/// Proven against real fixtures (`build_legacy_fixture`, differing only in what kind of
+/// active-session state they carry and which format byte was flipped), not hand-built ones.
 #[test]
 fn retired_format_repository_is_rejected_at_open_for_every_command() -> TestResult {
-    for (target_format, detected_format, version_claim) in [
+    for (target_format, detected_format, version_claim, no_migration_claim) in [
         (
             b"1\n".as_slice(),
             "this repository uses format 1",
             Some("removed after 0.19.0"),
+            "migration from format 1 is not supported",
         ),
         (
             b"2\n".as_slice(),
             "this repository uses format 2",
             Some("removed after 0.19.0"),
+            "migration from format 2 is not supported",
         ),
-        (b"3\n".as_slice(), "this repository uses format 3", None),
-        (b"4\n".as_slice(), "this repository uses format 4", None),
-        (b"5\n".as_slice(), "this repository uses format 5", None),
+        (
+            b"3\n".as_slice(),
+            "this repository uses format 3",
+            None,
+            "there is no supported migration path",
+        ),
+        (
+            b"4\n".as_slice(),
+            "this repository uses format 4",
+            None,
+            "there is no supported migration path",
+        ),
+        (
+            b"5\n".as_slice(),
+            "this repository uses format 5",
+            None,
+            "there is no supported migration path",
+        ),
     ] {
         for active in [
             ActiveFixture::RollbackDraft,
@@ -193,7 +220,13 @@ fn retired_format_repository_is_rejected_at_open_for_every_command() -> TestResu
                 // construction and never reaches (or proves) the rejection this test is checking.
                 let owned_args = args.iter().map(ToString::to_string).collect::<Vec<_>>();
                 let output = run_owned(&root, &owned_args)?;
-                assert_rejection_contract(&args, &output, detected_format, version_claim);
+                assert_rejection_contract(
+                    &args,
+                    &output,
+                    detected_format,
+                    version_claim,
+                    no_migration_claim,
+                );
                 assert_eq!(
                     snapshot_tree(&root)?,
                     before,

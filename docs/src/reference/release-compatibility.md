@@ -46,6 +46,52 @@ canonical identity schema, or domain change requires accepted design authority, 
 or domain, refusal or migration behavior, and literal compatibility vectors. Existing identity
 versions are never reinterpreted.
 
+## Format Stability Contract
+
+**RFC 114, answering badge criterion 2** — what minimum must never change for a verification claim
+made today to hold in ten years. Stated as a promise a user can rely on:
+
+> Any prikk release can read every object any prior **supported** release wrote, and verifies it to
+> the same conclusion. Storage may require a migration step, which is documented and tested. Object
+> identity and signatures never require one.
+
+This splits every byte in a repository into two categories, and they have opposite rules.
+
+**Frozen forever — verification-bearing, never changes once shipped:**
+
+- The object-id preimage: `OBJECT_ID_DOMAIN` (`b"PRIKK-OBJECT-ID-v1"`) ‖ type code (u16 BE) ‖
+  `schema_version` (u32 BE) ‖ payload length (u64 BE) ‖ canonical payload, hashed SHA-256.
+- The canonical encoding of each `(object_type, schema_version)` pair that has ever been written by a
+  shipped release.
+- The signature preimage, per signer role.
+- The algorithm identifiers themselves (Ed25519, SHA-256) — not merely the algorithms.
+
+**May change, and must carry a tested migration path:**
+
+- Repository format version and on-disk directory layout.
+- Container framing, the object index, the WAL.
+- The bundle exchange format.
+
+Freezing is not "never add a field." A schema version lives inside the object-id preimage, so a new
+field means a new schema version and new ids for objects written under it — with no change whatsoever
+to objects already written under an earlier schema version. The obligation is to keep every version
+ever shipped decodable forever, hashing exactly the way it did on the day it was written — not to stop
+evolving.
+
+**If SHA-256 or Ed25519 is ever broken:** a broken algorithm gets a **new** algorithm identifier, used
+by new objects going forward. Every object already written continues to verify under the identifier it
+was written with, unchanged. An existing identifier is never redefined — doing so would retroactively
+alter what past objects mean, which is exactly what this contract exists to prevent.
+
+**The obligation covers shipped releases, not every commit.** A schema version or format that only
+ever existed in an unreleased build is owed nothing under this contract; what shipped is permanent,
+what merely existed in git history is not.
+
+**Formats 1 through 5 are not supported under this contract** (owner decision, RFC 114 §5.3) — prikk
+has never been used in production, so there is nothing to protect there. See
+[Repository Format Transitions](#repository-format-transitions) below for what that means for each
+retired format specifically.
+
 ## Repository Format Transitions
 
 New repositories use format **6** and schema-2 Blocks with replay-derived clean-state Merkle roots.
