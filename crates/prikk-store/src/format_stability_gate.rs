@@ -59,8 +59,11 @@ fn migration_fixture_dir(format: u32) -> PathBuf {
 // The range below is `6..6`, empty today by construction (RFC 114 §0: nothing to test yet) --
 // clippy statically proves this and flags it; that is the correct state to be in until
 // `CURRENT_FORMAT_VERSION_NUMERIC` moves past `FIRST_SUPPORTED_FORMAT`, at which point the range
-// becomes genuinely non-empty and this allow stops mattering.
-#[allow(clippy::reversed_empty_ranges)]
+// becomes genuinely non-empty. `#[expect]`, not `#[allow]`: the day that happens, this lint stops
+// firing and the suppression itself fails to compile -- a tripwire on the tripwire, so the
+// suppression cannot quietly outlive the state it was written for (review's non-blocking
+// suggestion, RFC-114-implementation-review-v1.md §6).
+#[expect(clippy::reversed_empty_ranges)]
 #[test]
 fn layer_1_every_retired_format_below_current_has_migration_coverage_listed() {
     for format in FIRST_SUPPORTED_FORMAT..layout::CURRENT_FORMAT_VERSION_NUMERIC {
@@ -101,7 +104,8 @@ fn layer_2_every_listed_format_has_a_committed_fixture() {
 // This loop panics unconditionally on its first iteration by design: layer 3 has zero real
 // migration-conformance cases wired up today (`FORMATS_WITH_MIGRATION_COVERAGE` is empty), and any
 // future entry added without a matching case here must fail loudly rather than silently pass.
-#[allow(clippy::never_loop)]
+// `#[expect]`, not `#[allow]`, for the same self-retiring reason as layer 1's suppression above.
+#[expect(clippy::never_loop)]
 #[test]
 fn layer_3_every_listed_format_migrates_to_a_repository_that_opens_and_verifies() {
     for &format in FORMATS_WITH_MIGRATION_COVERAGE {
