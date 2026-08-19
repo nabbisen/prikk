@@ -17,7 +17,15 @@ const LEGACY_FORMAT_2_VERSION: &[u8] = b"2\n";
 const LEGACY_FORMAT_3_VERSION: &[u8] = b"3\n";
 const LEGACY_FORMAT_4_VERSION: &[u8] = b"4\n";
 const LEGACY_FORMAT_5_VERSION: &[u8] = b"5\n";
-const CURRENT_FORMAT_VERSION: &[u8] = b"6\n";
+/// Visible at `pub(crate)` so `format_stability_gate.rs`'s pinning test can assert this byte form
+/// and `CURRENT_FORMAT_VERSION_NUMERIC` against literal expected values side by side.
+pub(crate) const CURRENT_FORMAT_VERSION: &[u8] = b"6\n";
+/// Numeric companion to `CURRENT_FORMAT_VERSION`, for `format_stability_gate.rs`'s own range
+/// arithmetic (RFC 114 §4, Gate B layer 1). Kept as an independent literal, not parsed from
+/// `CURRENT_FORMAT_VERSION` at compile or test time -- see
+/// `format_stability_gate::current_format_version_byte_and_numeric_forms_agree` for why.
+#[cfg(test)]
+pub(crate) const CURRENT_FORMAT_VERSION_NUMERIC: u32 = 6;
 
 /// Repository format selected by the authoritative `.prikk/FORMAT` marker.
 ///
@@ -760,10 +768,13 @@ mod tests;
 fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
     let version = read_file_required(root, Path::new("FORMAT"))?;
     match version.as_slice() {
+        // RFC 114 §5.3 (owner decision): formats 1-5 are not supported. A real released version can
+        // still read this one -- 0.19.0 and earlier, confirmed against the release record -- so the
+        // message must not claim otherwise; it states withdrawal, not absence.
         LEGACY_FORMAT_VERSION => Err(PrikkError::Integrity(
             "this repository uses format 1, which prikk no longer supports (this version \
-             requires format 6). format-1 support was removed after 0.19.0. to migrate: use \
-             prikk 0.19.0 or earlier to `prikk bundle export`, then `prikk bundle import` here"
+             requires format 6). format-1 support was removed after 0.19.0; migration from \
+             format 1 is not supported."
                 .to_string(),
         )),
         // RFC 102 Stage 3, design-v1.md §12.1 (owner decision): bump to format 3, reject format-2 at
@@ -771,10 +782,12 @@ fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
         // release format-1's own rejection message above already points at), so it is the last
         // release able to open a format-2 repository -- established from the release record
         // (`CHANGELOG.md`, `git tag`), not guessed.
+        // RFC 114 §5.3: same as format 1's arm -- 0.19.0 genuinely reads format 2 (confirmed against
+        // the release record), so this states withdrawal, not absence of a reader.
         LEGACY_FORMAT_2_VERSION => Err(PrikkError::Integrity(
             "this repository uses format 2, which prikk no longer supports (this version \
-             requires format 6). format-2 support was removed after 0.19.0. to migrate: use \
-             prikk 0.19.0 or earlier to `prikk bundle export`, then `prikk bundle import` here"
+             requires format 6). format-2 support was removed after 0.19.0; migration from \
+             format 2 is not supported."
                 .to_string(),
         )),
         // RFC 102 Stage 4: bump to format 4, reject format-3 at open, no dual-layout bridge --
@@ -784,10 +797,12 @@ fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
         // began) -- no specific "removed after X.Y.Z" version is named here, since none can be
         // verified from the release record yet; naming one would be guessing, which this project's
         // own discipline for these messages does not do.
+        // RFC 114 §5.3: unlike formats 1-2, no released version ever shipped format 3 -- the message
+        // says so plainly rather than offering a step the product cannot honour.
         LEGACY_FORMAT_3_VERSION => Err(PrikkError::Integrity(
             "this repository uses format 3, which prikk no longer supports (this version \
-             requires format 6). to migrate: use a prikk version that supports format 3 to \
-             `prikk bundle export`, then `prikk bundle import` here"
+             requires format 6). format 3 was never used in a released prikk version; there is \
+             no supported migration path."
                 .to_string(),
         )),
         // RFC 102 Stage 5, design-v1.md §14.7 (owner decision): bump to format 5, reject format-4 at
@@ -796,10 +811,11 @@ fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
         // the release record (`CHANGELOG.md`, `git tag`) rather than assumed from format 3's own
         // no-version precedent -- naming one anyway would be guessing, which this project's own
         // discipline for these messages does not do.
+        // RFC 114 §5.3: same as format 3's arm -- format 4 never shipped in a released version either.
         LEGACY_FORMAT_4_VERSION => Err(PrikkError::Integrity(
             "this repository uses format 4, which prikk no longer supports (this version \
-             requires format 6). to migrate: use a prikk version that supports format 4 to \
-             `prikk bundle export`, then `prikk bundle import` here"
+             requires format 6). format 4 was never used in a released prikk version; there is \
+             no supported migration path."
                 .to_string(),
         )),
         // RFC 102 Stage 6, design-v1.md §15.6 (owner decision): bump to format 6, reject format-5 at
@@ -807,10 +823,11 @@ fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
         // format 5 either (still 0.19.0, format 2, verified against `git tag` fresh rather than
         // assumed from the format-4 arm's own finding), so no version is named here for the same
         // reason.
+        // RFC 114 §5.3: same as formats 3-4's arms -- format 5 never shipped in a released version.
         LEGACY_FORMAT_5_VERSION => Err(PrikkError::Integrity(
             "this repository uses format 5, which prikk no longer supports (this version \
-             requires format 6). to migrate: use a prikk version that supports format 5 to \
-             `prikk bundle export`, then `prikk bundle import` here"
+             requires format 6). format 5 was never used in a released prikk version; there is \
+             no supported migration path."
                 .to_string(),
         )),
         CURRENT_FORMAT_VERSION => Ok(RepositoryFormat::CurrentV6),
