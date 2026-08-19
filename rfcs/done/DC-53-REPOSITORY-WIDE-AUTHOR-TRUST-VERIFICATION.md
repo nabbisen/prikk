@@ -1,6 +1,9 @@
-# RFC (proposed) - DC-53 Repository-Wide AUTHOR Trust Verification
+# RFC (done) - DC-53 Repository-Wide AUTHOR Trust Verification
 
-**Status.** Proposed; design review required. This is a **feature** increment, not a corrective or
+**Status.** **COMPLETE, merged 2026-08-18.** Stage 1 at `970bc27`, Stage 2 Step 1 at `27088c9`,
+Step 2 at `89036bf`, each after green CI. **Badge criterion 5 is MET with a stated limit** — see
+`MILESTONES.md`: this delivers continuity of authorship (trust-on-first-use plus pinning), **not**
+authenticity of first contact. Originally proposed; design review required. This is a **feature** increment, not a corrective or
 assurance one, and it is the largest remaining item from the original architect review's trust findings.
 **Target milestone.** Unscheduled — post-M2 at the earliest. Sequenced after DC-43 (release security
 controls) because both touch trust posture and public claims.
