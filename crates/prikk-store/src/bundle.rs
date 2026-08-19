@@ -29,6 +29,16 @@
 //! for local authoring, so a key that conflicts with material this repository *already* has is refused
 //! there too -- no separate transport-side pinning rule, reusing Step 1's rather than a second copy of
 //! it (which is exactly what Step 1's C2 ruling was written against).
+//!
+//! **`PBNDL001` (Stage 1 and earlier) is accepted on import, never emitted on export** (DC-53 Stage 2
+//! follow-up, `bundle-v1-import-regression-v1.md`). `layout.rs`'s own retired-repository-format
+//! messages instruct a user to open an old repository with an old prikk build and `bundle export`
+//! from it; that build only ever produces `PBNDL001`, and refusing to import it here severed the one
+//! migration path those messages promise, in both directions at once -- found and fixed the same day
+//! it shipped. A `PBNDL001` bundle decodes exactly like a `PBNDL002` one with an empty author-key
+//! section: not a special case, since DC-53 already defines "no recorded material" as `Unverifiable`
+//! (vector 7). Read compatibility only, the same asymmetry every repository-format transition in this
+//! project already has -- read what the past wrote, write only the present.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -46,13 +56,12 @@ use crate::lock::{ActiveLock, acquire_container_locks};
 use crate::object_store::{ObjectReadSnapshot, ObjectReader, ObjectWriteSession, ObjectWriter};
 use crate::refs::RefStore;
 
-/// DC-53 Stage 2, D6: the format bump that made room for the author-key section. `PBNDL001` bundles
-/// (Stage 1 and earlier) are refused by name, not folded into the generic malformed-magic case --
-/// see `decode_bundle`'s refusal message.
+/// DC-53 Stage 2, D6: the format bump that made room for the author-key section. Always emitted on
+/// export; `PBNDL001` is still accepted on import (see `RETIRED_BUNDLE_MAGIC_V1`), so this is a
+/// write-side-only version, not a hard cutover.
 const BUNDLE_MAGIC: &[u8; 8] = b"PBNDL002";
-/// The retired magic, kept only so a `PBNDL001` bundle gets a specific refusal message rather than
-/// the generic "invalid bundle magic" one -- see `docs/src/reference/release-compatibility.md`'s
-/// Bundle Format Transitions section.
+/// `PBNDL001` (Stage 1 and earlier bundles, no author-key section). Accepted on import -- see
+/// `decode_bundle`'s own doc and the module doc's follow-up note -- never emitted on export.
 const RETIRED_BUNDLE_MAGIC_V1: &[u8; 8] = b"PBNDL001";
 
 /// DC-86 default hard block on a bundle's declared object count, checked as early as the format
@@ -455,28 +464,50 @@ fn encode_bundle(
     Ok(out)
 }
 
+/// Encode a `PBNDL001`-shaped bundle -- what a Stage-1-or-earlier build actually produced, and the
+/// only thing `decode_bundle`'s `PBNDL001` acceptance needs to handle correctly. Test-only: no
+/// production caller ever emits this format (`encode_bundle` above always writes `BUNDLE_MAGIC`).
+/// Built from the same encoding primitives as `encode_bundle`, mirroring its pre-author-key-section
+/// body exactly, rather than hand-editing bytes -- a hand-built fixture would prove the parser
+/// accepts a byte shape, not that the real historical format actually decodes.
+#[cfg(all(test, target_os = "linux"))]
+fn encode_bundle_v1_for_test(ref_name: &str, objects: &[ObjectEnvelope]) -> Result<Vec<u8>> {
+    let mut out = Vec::new();
+    out.extend_from_slice(RETIRED_BUNDLE_MAGIC_V1);
+    push_bytes_u64(&mut out, ref_name.as_bytes())?;
+    push_u64(&mut out, len_to_u64(objects.len())?);
+    for envelope in objects {
+        push_bytes_u64(&mut out, &encode_envelope_file(envelope)?)?;
+    }
+    Ok(out)
+}
+
 fn decode_bundle(
     bytes: &[u8],
     max_object_count: usize,
 ) -> Result<(String, Vec<ObjectEnvelope>, Vec<AuthorKeyEntry>)> {
     let mut cursor = ByteCursor::new(bytes);
     let magic = cursor.read_array::<8>()?;
-    if &magic != BUNDLE_MAGIC {
-        if &magic == RETIRED_BUNDLE_MAGIC_V1 {
-            // DC-53 Stage 2, D6: named rather than folded into the generic case below -- an old
-            // client meeting a new bundle already gets a clear refusal from its own hardcoded magic
-            // check (that binary is already built; nothing here changes it). What's in scope is
-            // this new client's own refusal of an old bundle, made specific rather than generic.
-            return Err(PrikkError::MalformedData(
-                "this bundle uses format PBNDL001, which prikk no longer supports (this version \
-                 requires PBNDL002). re-export with a current prikk build."
-                    .to_string(),
-            ));
-        }
+    // DC-53 Stage 2 follow-up (bundle-v1-import-regression-v1.md): `PBNDL001` is accepted here, not
+    // refused. `layout.rs`'s own retired-format messages instruct a user to open an old repository
+    // with an old prikk build and `bundle export` from it -- that build only ever emits `PBNDL001`,
+    // and a current build refusing to import it severed the one migration path those messages
+    // promise, in both directions at once. Export still only ever emits `BUNDLE_MAGIC`
+    // (`PBNDL002`) -- this is read compatibility only, the same asymmetry every repository-format
+    // transition in this project already has (read what the past wrote, write only the present).
+    // A `PBNDL001` bundle is a `PBNDL002` bundle without the author-key section: not a special case,
+    // since DC-53 already defines "no recorded material" as `Unverifiable` (vector 7), so decoding
+    // one simply treats the author-key set as empty rather than reading a section that was never
+    // written.
+    let has_author_key_section = if &magic == BUNDLE_MAGIC {
+        true
+    } else if &magic == RETIRED_BUNDLE_MAGIC_V1 {
+        false
+    } else {
         return Err(PrikkError::MalformedData(
             "invalid bundle magic".to_string(),
         ));
-    }
+    };
     let ref_name_bytes = cursor.read_bytes_u64()?;
     let ref_name = String::from_utf8(ref_name_bytes).map_err(|err| {
         PrikkError::MalformedData(format!("invalid bundle ref name utf-8: {err}"))
@@ -500,26 +531,31 @@ fn decode_bundle(
     // fully controls, with no bound of its own, would reopen the hole DC-86 closed. An
     // author-key entry can never legitimately outnumber the Patches in the same bundle, so reusing
     // `max_object_count` as the ceiling needs no new option surface.
-    let author_key_count = cursor.read_u64()?;
-    if author_key_count > len_to_u64(max_object_count)? {
-        return Err(PrikkError::MalformedData(format!(
-            "bundle declares {author_key_count} author key entries, over the configured limit of \
-             {max_object_count}"
-        )));
-    }
     let mut author_keys = Vec::new();
-    for _ in 0..author_key_count {
-        let key_id_bytes = cursor.read_bytes_u64()?;
-        let key_id = String::from_utf8(key_id_bytes).map_err(|err| {
-            PrikkError::MalformedData(format!("invalid bundle author key_id utf-8: {err}"))
-        })?;
-        // DC-53 Stage 2, plan review: reuse `Signature::validate_key_id` rather than a second
-        // notion of what a legal key id is -- it is the same rule these ids must satisfy to ever
-        // match a signature's own `key_id`.
-        Signature::validate_key_id(&key_id)?;
-        let public_key = cursor.read_array::<32>()?;
-        author_keys.push(AuthorKeyEntry { key_id, public_key });
+    if has_author_key_section {
+        let author_key_count = cursor.read_u64()?;
+        if author_key_count > len_to_u64(max_object_count)? {
+            return Err(PrikkError::MalformedData(format!(
+                "bundle declares {author_key_count} author key entries, over the configured limit \
+                 of {max_object_count}"
+            )));
+        }
+        for _ in 0..author_key_count {
+            let key_id_bytes = cursor.read_bytes_u64()?;
+            let key_id = String::from_utf8(key_id_bytes).map_err(|err| {
+                PrikkError::MalformedData(format!("invalid bundle author key_id utf-8: {err}"))
+            })?;
+            // DC-53 Stage 2, plan review: reuse `Signature::validate_key_id` rather than a second
+            // notion of what a legal key id is -- it is the same rule these ids must satisfy to
+            // ever match a signature's own `key_id`.
+            Signature::validate_key_id(&key_id)?;
+            let public_key = cursor.read_array::<32>()?;
+            author_keys.push(AuthorKeyEntry { key_id, public_key });
+        }
     }
+    // A `PBNDL001` bundle's bytes end right after the object list -- no author-key section was ever
+    // written, so there is nothing further to consume and this check still catches genuine trailing
+    // garbage on either format.
     if !cursor.is_finished() {
         return Err(PrikkError::MalformedData(
             "trailing bytes in bundle".to_string(),

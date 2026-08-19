@@ -14,7 +14,7 @@ use crate::author_key_index::{
 use crate::author_signing::{AuthorSigner, author_signature};
 use crate::bundle::{
     BundleImportOptions, DEFAULT_BUNDLE_MAX_OBJECT_COUNT, decode_bundle, encode_bundle,
-    export_bundle, import_bundle,
+    encode_bundle_v1_for_test, export_bundle, import_bundle,
 };
 use crate::layout::LockableContainer;
 use crate::lock::{ActiveLock, acquire_container_locks};
@@ -24,8 +24,8 @@ use crate::test_support::{
     signed_ref_update_envelope, unique_temp_dir,
 };
 use crate::{
-    Ed25519AuthorSigner, FileObjectStore, ObjectReader, ObjectWriter, RefPublication, RefStore,
-    RepositoryLayout,
+    Ed25519AuthorSigner, Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectReader,
+    ObjectWriter, RefPublication, RefStore, RepositoryLayout,
 };
 
 /// Seal a two-block `heads/main` (a Root block plus a Normal child referencing one Patch, whose
@@ -690,5 +690,79 @@ fn author_key_count_limit_fires_exactly_at_the_boundary() -> prikk_error::Result
         "a limit exactly at the actual author-key count (2) must accept"
     );
 
+    Ok(())
+}
+
+/// DC-53 Stage 2 follow-up (bundle-v1-import-regression-v1.md): the actual migration path
+/// `layout.rs`'s retired-format messages promise, walked end to end. A `PBNDL001` bundle -- encoded
+/// the way a Stage-1-or-earlier build really produced one, not hand-edited bytes -- must import, its
+/// Patch must read `Unverifiable` (never `Sound`: this bundle carries no author-key section at all,
+/// regardless of what material the sender happened to have locally), and `verify_repository` must
+/// pass and say so.
+#[test]
+fn a_pbndl001_bundle_imports_and_its_patch_reads_unverifiable() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc53-pbndl001-import-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+
+    // A genuinely, fully sealed history -- real commit, real seal, real adopted maintainer -- not
+    // the lightweight `signed_block` structural fixture other tests in this file use, which never
+    // computes a real state-merkle-root and so would fail `verify_repository`'s block-state stage
+    // for reasons unrelated to this test. `verify passes and says so` (handoff §4) means a genuine
+    // pass, not one read past unrelated fixture noise.
+    let author = transport_test_signer(0xa8)?;
+    let maintainer = Ed25519MaintainerSigner::from_seed("dc53-pbndl001-maintainer", &[0xa9; 32])?;
+    crate::trust::add_trusted_maintainer(
+        &source,
+        maintainer.key_id(),
+        &prikk_hash::to_hex(&maintainer.public_key_bytes()),
+    )?;
+    std::fs::write(source.root().join("v1-import.txt"), b"v1 import\n")?;
+    crate::worktree_patch::commit_worktree_changes_signed(
+        &source,
+        "heads/main",
+        "dc53 pbndl001 fixture",
+        crate::worktree_patch::WorktreePatchCommitOptions::default(),
+        &author,
+    )?;
+    // Records `author`'s key material locally on `source` as a side effect (the same production
+    // path `node_authoring.rs` uses) -- the sender genuinely has material to carry, so the v1
+    // path's own omission below is a real assertion, not an accident of the fixture having
+    // nothing to drop.
+    crate::rfc111_seal_simulation::simulate_one_seal(&source, "heads/main", &maintainer)?;
+
+    let (_, v2_bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, author_keys) =
+        decode_bundle(&v2_bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    assert_eq!(
+        author_keys.len(),
+        1,
+        "sanity: the sender really did have material to carry"
+    );
+    let v1_bytes = encode_bundle_v1_for_test(&ref_name, &objects)?;
+
+    let target_root = unique_temp_dir("dc53-pbndl001-import-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let import_report = import_bundle(&target, &v1_bytes, &BundleImportOptions::default_limits())?;
+    assert_eq!(
+        import_report.recorded_author_key_count, 0,
+        "a PBNDL001 bundle carries no author-key section to record"
+    );
+
+    let imported_patch = find_imported_transport_patch(&target)?;
+    let outcome = verify_author_signature(&target, &imported_patch)?;
+    assert_eq!(
+        outcome,
+        Some((author.key_id().to_string(), false)),
+        "expected Unverifiable, got {outcome:?}"
+    );
+
+    let report = crate::verify_repository(&target)?;
+    assert!(
+        !report.has_item_failure(),
+        "verify must pass against a v1-imported repository: {report:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
     Ok(())
 }

@@ -67,18 +67,21 @@ editing the marker does not change the on-disk shape it describes.
 ## Bundle Format Transitions
 
 The bundle exchange artifact (`prikk bundle export`/`import`) carries its own magic and version,
-independent of the repository format above. Current bundles use magic **`PBNDL002`** (DC-53 Stage 2),
-which added an AUTHOR key-material section after the object list — an addition the prior `PBNDL001`
-format has no room for and cannot be extended into silently, so the bump is fail-closed rather than
-additive: `decode_bundle` ends by requiring every byte to be consumed, so an older client meeting a
-newer bundle already refuses it outright with its own hardcoded magic check, and a current client
-meeting a `PBNDL001` bundle refuses it by name (*"this bundle uses format PBNDL001, which prikk no
-longer supports... re-export with a current prikk build"*) rather than a generic malformed-input
-message.
+independent of the repository format above. Bundles are always **exported** as `PBNDL002` (DC-53
+Stage 2), which added an AUTHOR key-material section after the object list — an addition the prior
+`PBNDL001` format has no room for and cannot be extended into silently, so the bump is fail-closed on
+the write side: an older client meeting a newer bundle refuses it outright with its own hardcoded
+magic check.
 
-As with repository formats, **there is no migration path for an old bundle** — no in-place upgrade
-from `PBNDL001` to `PBNDL002`. Re-export from a version of prikk that still produces the format the
-receiver needs.
+**`PBNDL001` bundles are still accepted on import** (corrected shortly after the `PBNDL002` bump
+shipped — `bundle-v1-import-regression-v1.md`). This is read compatibility only, the same asymmetry
+every repository-format transition on this page already has: read what an older client wrote, write
+only the current format. This is also what keeps the repository-format migration path above actually
+usable — an old repository can only be opened by an old prikk build, and that build only ever produces
+a `PBNDL001` bundle, so refusing to import one would sever that migration in both directions at once.
+A `PBNDL001` bundle decodes exactly like a `PBNDL002` one whose author-key section is empty: the
+Patches it carries read `Unverifiable`, the same outcome DC-53 already defines for any Patch this
+repository never recorded AUTHOR key material for.
 
 The workspace's declared minimum Rust version is exactly 1.85.0. The locked product workspace must
 check, test, and build on that toolchain:
