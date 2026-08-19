@@ -994,7 +994,7 @@ fn export_of_a_tag_ref_succeeds_and_the_imported_bundle_verifies() -> prikk_erro
     let tip_block_id = sealed_ref_state_payload.target_object_id;
 
     let mut object_store = FileObjectStore::new(source.clone());
-    publish_tag(
+    let tag_id = publish_tag(
         &source,
         &mut object_store,
         "tags/v1",
@@ -1012,6 +1012,18 @@ fn export_of_a_tag_ref_succeeds_and_the_imported_bundle_verifies() -> prikk_erro
     assert!(
         !report.has_item_failure(),
         "verify must pass against a repository that imported a tag bundle: {report:?}"
+    );
+
+    // Review condition (`DC-78-bundle-tag-gap-implementation-review-v1.md` §4): the export-side
+    // closure-count test does not prove the Tag object actually *arrived* -- if import ever grew
+    // object-type filtering, the exported count would stay +1 while the Tag stopped landing here,
+    // and nothing above would notice. Assert arrival directly, on the receiving side, by id.
+    let target_object_store = FileObjectStore::new(target.clone());
+    assert!(
+        target_object_store
+            .read_typed(tag_id, ObjectType::Tag)?
+            .is_some(),
+        "the Tag object must be present in the receiving repository's store after import"
     );
 
     let _ = std::fs::remove_dir_all(source_root);
