@@ -54,16 +54,17 @@ These records are under design review. All proposed RFCs must respect the depend
 | 109 | [Agent-Native Interface](./proposed/109-agent-native-interface.md) | Unscheduled. Owner concept, 2026-08-18. Depends on criterion 3 (now met) and criterion 2 (open — it gates the AST-sealing question). **No design exists** |
 | 110 | [Agent Safety and Provenance](./proposed/110-agent-safety-and-provenance.md) | Unscheduled. Owner concept, 2026-08-18, **direction not yet established** and recorded as such. Pillar 1 largely redistributes into RFC 108; Pillar 2 needs criterion 5 as a floor, since provenance sealed over unverified authorship manufactures the appearance of verification. **No design exists** |
 | 113 | [History Import Foundations](./proposed/113-history-import-foundations.md) | Unscheduled. Owner direction 2026-08-19: migrate from Git, Subversion and CVS with history preserved. **Amended the same day — the decoder/encoder tooling becomes its own project**, because prikk's whole third-party runtime surface is five crates and a Git decoder needs `gix` or `libgit2`. **This RFC is therefore prikk's import *contract***, not an importer plan. Records the shared problem (prikk records node identity these systems never had; imported commits cannot carry valid prikk AUTHOR signatures — **DC-53's `Unverifiable` is already the right vocabulary**) and §3.1's three IR questions: what a record is, what must be preserved, what may be omitted. Depends on criteria 2 and 1. **No design exists** |
+| 114 | [The Format-Stability Contract](./proposed/114-format-stability-contract.md) | **Answers badge criterion 2**, scheduled by the owner 2026-08-19. prikk's de-facto policy was migration-by-bundle, stated only inside five error messages — and severed on 2026-08-18 by the `PBNDL002` bump, undetected by review, nine gates and CI, **because an unstated policy cannot be broken, only found absent**. Proposes: verification-bearing bytes (object-id preimage, per-schema canonical encoding, signature preimage, algorithms) frozen forever; representation (repository format, containers, index, WAL, bundle) free to change behind a *tested* migration path. **`schema_version` is inside the id preimage, so evolving a payload is already safe** — the obligation is keeping every version ever written decodable. **No design exists** |
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / **0.20.0** (retargeted from 0.19.0, owner ruling 2026-08-08). **Release-blocked** — inherits key lifecycle from DC-35, which needs amendment, and blocked behind criterion 4's signer bootstrap |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
 
-**Nothing here is live.** DC-53 completed 2026-08-18 and moved to `done/`; no proposed record
-currently has an active increment.
-
 **Blocked, not available:** **DC-43** and **DC-49** both wait on release-lane events; DC-43 additionally
 inherits DC-35's unamended key lifecycle and criterion 4's signer bootstrap, which only the project owner
 can begin. **DC-44** is scheduled beyond M2.
+
+**Scheduled:** **114** is the current work — badge criterion 2, the only proposed record the owner has
+scheduled.
 
 **Recorded, not scheduled:** **113** is the owner's migration direction of 2026-08-19, recorded with the
 architect's assessment before any importer exists to set precedent. **108, 109 and 110** are the project
