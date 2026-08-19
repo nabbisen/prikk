@@ -184,6 +184,24 @@ pub(crate) fn decode_patch_operations(bytes: &[u8]) -> Result<Vec<DecodedPatchOp
     Ok(operations)
 }
 
+/// Decode a Patch's `parent_patch_ids` (tag 2, repeated `object_id`) from its canonical payload
+/// bytes. Every authoring path today writes this field empty (RFC 115 Stage 3 handoff §0/§4.2 item
+/// 6: populating it needs its own RFC), and `decode_patch_operations` above deliberately skips tags
+/// 2..=4 without inspecting them -- structural decode for replay/apply has never needed this field.
+/// The exchange accept path does need it, for exactly one purpose: refuse the whole exchange if a
+/// carried patch ever has a non-empty one, because a patch replay walk that silently ignored a real
+/// ancestry edge here would be the wrong kind of quiet.
+pub(crate) fn decode_patch_parent_ids(bytes: &[u8]) -> Result<Vec<ObjectId>> {
+    let mut cursor = TlvCursor::new(bytes);
+    let mut parent_patch_ids = Vec::new();
+    while let Some(field) = cursor.next_field()? {
+        if field.tag == 2 {
+            parent_patch_ids.push(field.read_object_id_typed()?);
+        }
+    }
+    Ok(parent_patch_ids)
+}
+
 fn decode_operation(bytes: &[u8], index: usize) -> Result<DecodedPatchOperation> {
     let mut cursor = TlvCursor::new(bytes);
     let mut op_seq = None;

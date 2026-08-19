@@ -1,5 +1,6 @@
 //! Repository verification tests.
 
+mod received_refs;
 mod ref_cluster;
 mod root_authority;
 mod stage_containment;
@@ -120,11 +121,17 @@ pub(super) fn assert_ref_failed(report: &RepositoryVerification, expected_substr
         })
         || report.ref_item_outcomes.iter().any(|outcome| {
             matches!(&outcome.status, crate::refs::RefItemStatus::Failed { message } if message.contains(expected_substring))
+        })
+        || report.received_ref_item_outcomes.iter().any(|outcome| {
+            matches!(&outcome.status, crate::refs::RefItemStatus::Failed { message } if message.contains(expected_substring))
         });
     assert!(
         found,
-        "expected a ref-related outcome Failed with a message containing {expected_substring:?}, got: pointer_outcomes={:?} log_outcomes={:?} ref_item_outcomes={:?}",
-        report.pointer_outcomes, report.log_outcomes, report.ref_item_outcomes
+        "expected a ref-related outcome Failed with a message containing {expected_substring:?}, got: pointer_outcomes={:?} log_outcomes={:?} ref_item_outcomes={:?} received_ref_item_outcomes={:?}",
+        report.pointer_outcomes,
+        report.log_outcomes,
+        report.ref_item_outcomes,
+        report.received_ref_item_outcomes
     );
 }
 
