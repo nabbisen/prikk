@@ -53,6 +53,7 @@ These records are under design review. All proposed RFCs must respect the depend
 | 108 | [Workspace Concurrent Sessions](./proposed/108-workspace-concurrent-sessions.md) | Unscheduled. Owner concept, 2026-08-18, recorded with the architect's assessment. **No design exists**; its one blocking question — whether Workspace patches are sealed or unsealed — is unanswered, and everything else follows from it |
 | 109 | [Agent-Native Interface](./proposed/109-agent-native-interface.md) | Unscheduled. Owner concept, 2026-08-18. Depends on criterion 3 (now met) and criterion 2 (open — it gates the AST-sealing question). **No design exists** |
 | 110 | [Agent Safety and Provenance](./proposed/110-agent-safety-and-provenance.md) | Unscheduled. Owner concept, 2026-08-18, **direction not yet established** and recorded as such. Pillar 1 largely redistributes into RFC 108; Pillar 2 needs criterion 5 as a floor, since provenance sealed over unverified authorship manufactures the appearance of verification. **No design exists** |
+| 113 | [History Import Foundations](./proposed/113-history-import-foundations.md) | Unscheduled. Owner direction 2026-08-19: migrate from Git, Subversion and CVS with history preserved. Records the shared problem — prikk records node identity and operations that these systems never had, and imported commits cannot carry valid prikk AUTHOR signatures. **DC-53's `Unverifiable` outcome is already the right vocabulary for imported history.** Depends on criteria 2 and 1 being answered first. **No design exists** |
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / **0.20.0** (retargeted from 0.19.0, owner ruling 2026-08-08). **Release-blocked** — inherits key lifecycle from DC-35, which needs amendment, and blocked behind criterion 4's signer bootstrap |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 | DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
@@ -64,7 +65,9 @@ currently has an active increment.
 inherits DC-35's unamended key lifecycle and criterion 4's signer bootstrap, which only the project owner
 can begin. **DC-44** is scheduled beyond M2.
 
-**Recorded, not scheduled:** **108, 109 and 110** are the project owner's concepts of 2026-08-18, written
+**Recorded, not scheduled:** **113** is the owner's migration direction of 2026-08-19, recorded with the
+architect's assessment before any importer exists to set precedent. **108, 109 and 110** are the project
+owner's concepts of 2026-08-18, written
 down with the architect's assessment so the direction is reviewable before anyone designs against it.
 **None has a design, and implementation must not start from these records.** RFC 110's own direction is
 explicitly not yet established.
