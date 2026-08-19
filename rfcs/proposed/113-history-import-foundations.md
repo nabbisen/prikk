@@ -8,6 +8,24 @@ growth and maintenance of such great ancestors."*
 **Recorded with the architect's assessment so the direction is reviewable before anyone designs against
 it. No design exists and implementation must not start from this record.**
 
+**Amended 2026-08-19 — the work splits across two projects.** The owner ruled that the decoding and
+encoding tooling becomes **its own project**, so other VCS projects can use it for their own migrations:
+decoders for Git/Subversion/CVS into an intermediate representation, and encoders from it.
+
+**The decisive reason is dependency surface, not tidiness.** prikk's entire third-party runtime
+dependency set is **five crates** — `ed25519-dalek`, `getrandom`, `rustix`, `sha2`, `windows-sys`. A Git
+decoder needs `gix` (on the order of a hundred crates) or `libgit2` (C, and `forbid(unsafe_code)` holds
+everywhere outside `prikk-ffi`). Either is a step change in the audited surface of a product whose claim
+is verifiability, and SVN and CVS follow. **RFC 112 is the same lesson one size down**: three core
+operations ended up in the wrong crate. Three VCS parsers inside prikk would be that mistake, larger and
+harder to reverse.
+
+**So this RFC is now prikk's *import contract*, not an importer plan.** It states what prikk accepts,
+how import provenance is recorded, what `verify` says about imported history, and which source features
+must be refused rather than approximated. **The separate project is the tooling that satisfies this
+contract.** Every decision in §4 remains prikk's and remains necessary; they simply stop being entangled
+with Git parsing.
+
 **Scope.** The **shared** problem, not any one source. Git, Subversion and CVS differ enormously in
 difficulty (§5), but they fail against prikk's model in the *same three places*, and answering those
 once is what makes three importers possible instead of three separate research projects.
@@ -73,6 +91,60 @@ history that looks like native history, in a tool whose selling point is verifia
 import — it is the manufactured-verification failure RFC 110 §4 already names, arriving through a
 different door.
 
+## 3.1 The three questions the intermediate representation turns on
+
+**Raised by the project owner 2026-08-19**, and they are the design, not preliminaries to it: *"What is
+'record'? What should be preserved? What can be omitted?"*
+
+**The trap they identify is real.** An IR designed to be *neutral* across Git, SVN and CVS converges on
+their common denominator — **snapshots plus metadata** — which is precisely what prikk is not. Encoding
+prikk from a snapshot IR would require exactly the identity inference §1 warns about, and a neutral IR
+offers nowhere to record that the inference happened. **Design the IR for faithfulness with provenance,
+not for neutrality.**
+
+### What is a "record"?
+
+The atom differs per source, and not only in size: Git's is a commit (a snapshot plus metadata), SVN's a
+revision, CVS's a **per-file** revision with changesets that must be *reconstructed*, prikk's a Patch of
+operations against node identity.
+
+**So the IR must decide what its own atom asserts**, and — more importantly — **carry how that atom came
+to be**: stated by the source, or derived by the decoder. A CVS changeset and a Git commit may occupy
+the same slot in the IR while being epistemically different things, and an IR that cannot say so is
+lying by omission.
+
+### What should be preserved?
+
+**The test: preserve what a future reader's ability to *check something* depends on.** Not "everything",
+which is unachievable, and not "what looks important", which drifts.
+
+That reasoning keeps content, structure, ancestry, messages, authorship metadata **as claims rather than
+verified facts**, and — the one most likely to be dropped as useless — **the source's own identifiers and
+signatures**. A Git commit SHA and its GPG signature cannot verify anything in prikk, but they are **the
+only cryptographic link back to the original**, and preserving them opaquely is what lets a third party
+check the import against the source it claims to come from. **That is what §3's "safely preserved" can
+actually mean**, and it is lost forever if the decoder discards it as unverifiable-here.
+
+### What can be omitted?
+
+Two classes are safe: **representation rather than assertion** (packfile layout, delta encoding, index
+state, reflogs — reconstructible or purely local), and **advisory data known to be unreliable**, of which
+SVN's mergeinfo is the standing example. **Preserving wrong data as though authoritative is worse than
+dropping it.**
+
+One class is never safe to omit silently: **anything whose absence makes a remaining claim look
+stronger than it is.**
+
+**And the governing rule across all three questions: the boundary itself is recorded.** An import states
+what class of information it dropped and what it derived, so a reader knows the *shape* of the loss
+without re-deriving it. This is the same discipline as DC-53's `Unverifiable` and RFC 111's refusal of
+silent caps: **a known limit that is written down is a property; the same limit unwritten is a defect
+waiting to be discovered by whoever trusts the output.**
+
+**These answers must be shared across decoders even though they resolve differently per source.** If each
+decoder invents its own notion of loss, the IR cannot compare them, and "how faithful was this import?"
+stops having an answer.
+
 ## 4. What a design must decide
 
 1. **Where import provenance lives: attestation or payload.** `payload/attestation.rs` already carries a
@@ -131,3 +203,6 @@ easier to make before an importer exists than after one has shipped and set prec
 - **Not authorship laundering.** No mechanism here may make imported history appear natively authored or
   natively verified.
 - **Not a promise of completeness.** §4.5's refusal list is a feature.
+- **Not this project's implementation.** The decoders, the IR and the encoders live in the separate
+  project ruled above. What lives here is the contract they must satisfy — and prikk must be able to
+  state that contract without depending on any of them.
