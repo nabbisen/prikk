@@ -169,6 +169,61 @@ an architectural one.
 **This deserves to be evaluated as a first-class option rather than a footnote**, and the first draft's
 binary framing is what hid it.
 
+### 3.1c What (c) costs a user in production
+
+**Asked by the owner 2026-08-19.** Ordered by how often a user would meet them. **Two are not (c)'s
+fault — but (c) makes them the daily case, which is the same thing from the user's chair.**
+
+1. **Every sync would seal a merge block, even for a purely linear update.** `merge_execute.rs:172`
+   sets `kind: BlockKind::Merge` unconditionally; **there is no ancestor check and no fast-forward
+   path** — the only refusal defined is non-confluence. So a user who has diverged in no way, pulling a
+   straight series of someone else's commits, still gets a two-parent merge block per exchange. **Git
+   fast-forwards and creates nothing.** Over a week of syncing this is visible history pollution, and it
+   is the objection a Git migrant would raise first. **Pre-existing, but today it is only met by people
+   who actually merge; under (c) it is met by everyone, every time.**
+
+2. **Two transfers per exchange, in one direction only.** Basis out, artifact back. Bidirectional means
+   four. `git pull` is one command. **This is (c)'s core ergonomic cost and it does not go away with
+   polish** — it is inherent to not having a live peer.
+
+3. **A stale basis is silently wasteful, and a wrong basis is not silent.** Stale (the receiver has
+   advanced since publishing) merely over-transfers — harmless. **Wrong** — a basis from a different
+   machine, or from before a restore — produces an artifact whose prerequisites the receiver lacks.
+   **Import must detect missing prerequisites and refuse with a clear message**; if it trusts the basis
+   blindly, the receiver gets a partial history and finds out later. Git bundles refuse exactly this
+   way, and prikk must too.
+
+4. **The first exchange is whole-repository and will exceed today's limits.** With an empty basis, the
+   artifact is the entire closure. `DEFAULT_BUNDLE_MAX_OBJECT_COUNT` is 100,000 and
+   `DEFAULT_BUNDLE_MAX_TOTAL_BYTES` is 256 MB — bounds sized by DC-86 for a single ref. **Onboarding a
+   real repository is the case most likely to hit them**, and raising a security bound to make a feature
+   work is exactly the trade that needs deciding deliberately, not discovered.
+
+5. **Trust setup is O(n²) and manual.** A receiver must adopt each sender's MAINTAINER key or their
+   history reads untrusted (DC-78, by design). For a team of five that is twenty adoptions. **Correct
+   security, real friction** — and the friction is worst at exactly the moment a team is evaluating
+   prikk.
+
+6. **A user cannot answer "am I up to date?" without an exchange.** A protocol can be asked; a file
+   cannot. Nor can divergence be discovered before transferring — you import, then find out.
+
+7. **Author verification is weakest at first contact.** DC-53's pinning gives continuity, not
+   authenticity, so the first artifact from a new colleague is trust-on-first-use. **A user who believes
+   "prikk verified the author" is believing more than is true** — which is why criterion 5's row states
+   the limit, and why the CLI wording matters here more than anywhere.
+
+8. **File hygiene.** Bases and artifacts accumulate, are emailed, are mixed up between peers. Nothing
+   corrupts — signatures and prerequisites see to that — but it is untidy in a way a protocol is not.
+
+**The honest summary:** (c)'s architectural objections are answerable; **its costs are ergonomic and
+they are concentrated at onboarding** — first sync is largest, trust setup is heaviest, and the merge-
+block behaviour is most surprising, all in a new user's first hour. **That is the worst possible place
+for friction in a product seeking adoption**, and it is a stronger argument for eventually adding (a)
+than any of §3's architectural points were.
+
+**Item 1 is separable and worth fixing regardless of which option wins.** A fast-forward path is a
+missing capability in `merge_execute`, not a sync question.
+
 ### 3.2 The architect's refined position
 
 **Not "start with (b) and add a protocol later" — that framing bundles two claims and one of them is
