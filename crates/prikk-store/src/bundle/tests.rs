@@ -4,7 +4,8 @@ mod proptest_decode_bundle;
 
 use prikk_object::{
     BlockKind, CanonicalEncode, CreateFile, NodeId, ObjectEnvelope, ObjectId, ObjectType,
-    Operation, OperationKind, PatchPayload, PatchPurpose,
+    Operation, OperationKind, PatchPayload, PatchPurpose, RefKind, RefStatePayload,
+    RefUpdatePayload, TagPayload,
 };
 
 use crate::author_key_index::{
@@ -859,5 +860,212 @@ fn a_pbndl001_bundle_imports_and_its_patch_reads_unverifiable() -> prikk_error::
 
     let _ = std::fs::remove_dir_all(source_root);
     let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+// DC-78 bundle-export tag-ref gap follow-up (`bundle-export-tag-ref-gap-v1.md`): a tag ref must
+// resolve its second hop (ref -> Tag object -> Block) and the Tag envelope itself must travel,
+// not just the Block closure it points to -- omitting it hands the receiver a signed RefState
+// naming an object they do not have, and their own `verify` fails on exactly that (ruling §1).
+
+/// Publish `tag_name` (a `tags/*` ref) pointing, via a Tag object, at `target_block_id`, every
+/// object genuinely MAINTAINER-signed by `maintainer` -- matching `tag.rs`'s own doc, tags are
+/// "maintainer-signed, on the same terms as `seal`/`branch create`", not the dummy structural
+/// signature `test_support::signed_ref_state_envelope` uses (which cannot pass a real trust check).
+fn publish_tag(
+    layout: &RepositoryLayout,
+    object_store: &mut FileObjectStore,
+    tag_name: &str,
+    target_block_id: ObjectId,
+    maintainer: &Ed25519MaintainerSigner,
+) -> prikk_error::Result<ObjectId> {
+    let tag_payload = TagPayload {
+        name: tag_name.to_string(),
+        target_block_id,
+        message: None,
+        created_at: 0,
+        author_key_id: maintainer.key_id().to_string(),
+    };
+    let mut tag_envelope =
+        ObjectEnvelope::unsigned(ObjectType::Tag, 1, tag_payload.to_canonical_bytes()?);
+    let tag_object_id = tag_envelope.object_id();
+    tag_envelope.add_signature(crate::maintainer_signature(
+        maintainer,
+        ObjectType::Tag,
+        tag_object_id,
+    )?)?;
+    let tag_id = object_store.write_object(&tag_envelope)?;
+
+    let ref_state_payload = RefStatePayload {
+        ref_name: tag_name.to_string(),
+        kind: RefKind::Tag,
+        target_object_id: tag_id,
+        update_seq: 1,
+        previous_ref_state_id: None,
+        required_attestation_ids: Vec::new(),
+        closed: false,
+    };
+    let mut ref_state_envelope = ObjectEnvelope::unsigned(
+        ObjectType::RefState,
+        1,
+        ref_state_payload.to_canonical_bytes()?,
+    );
+    let ref_state_id = ref_state_envelope.object_id();
+    ref_state_envelope.add_signature(crate::maintainer_signature(
+        maintainer,
+        ObjectType::RefState,
+        ref_state_id,
+    )?)?;
+
+    let ref_update_payload = RefUpdatePayload {
+        ref_name: tag_name.to_string(),
+        old_ref_state_id: None,
+        new_ref_state_id: ref_state_id,
+        new_target_object_id: tag_id,
+        update_seq: 1,
+        created_at: 0,
+        author_key_id: maintainer.key_id().to_string(),
+    };
+    let mut ref_update_envelope = ObjectEnvelope::unsigned(
+        ObjectType::RefUpdate,
+        1,
+        ref_update_payload.to_canonical_bytes()?,
+    );
+    let ref_update_id = ref_update_envelope.object_id();
+    ref_update_envelope.add_signature(crate::maintainer_signature(
+        maintainer,
+        ObjectType::RefUpdate,
+        ref_update_id,
+    )?)?;
+
+    let ref_store = RefStore::new(layout.clone());
+    ref_store.publish_with_object_store(
+        object_store,
+        &RefPublication {
+            ref_name: tag_name.to_string(),
+            expected_previous_ref_state_id: None,
+            ref_state: ref_state_envelope,
+            ref_update: ref_update_envelope,
+        },
+    )?;
+    Ok(tag_id)
+}
+
+/// Ruling §3's required addition, stronger than asserting the Tag object is merely present:
+/// exporting a tag ref succeeds, and the receiver's own `verify_repository` passes against the
+/// imported result -- the property that fails today (before the fix) because the receiver holds a
+/// signed RefState naming a Tag object it never received.
+///
+/// Uses a genuinely, fully sealed history -- real commit, real seal, real adopted maintainer, the
+/// same discipline `a_pbndl001_bundle_imports_and_its_patch_reads_unverifiable` documents above --
+/// not the lightweight `signed_block` structural fixture, which never computes a real
+/// state-merkle-root and would fail `verify_repository`'s block-state stage for reasons unrelated
+/// to this test.
+#[test]
+fn export_of_a_tag_ref_succeeds_and_the_imported_bundle_verifies() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc78-tag-export-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+
+    let author = transport_test_signer(0xb4)?;
+    let maintainer = Ed25519MaintainerSigner::from_seed("dc78-tag-maintainer", &[0xb5; 32])?;
+    crate::trust::add_trusted_maintainer(
+        &source,
+        maintainer.key_id(),
+        &prikk_hash::to_hex(&maintainer.public_key_bytes()),
+    )?;
+    std::fs::write(source.root().join("dc78-tag.txt"), b"dc78 tag fixture\n")?;
+    crate::worktree_patch::commit_worktree_changes_signed(
+        &source,
+        "heads/main",
+        "dc78 tag fixture",
+        crate::worktree_patch::WorktreePatchCommitOptions::default(),
+        &author,
+    )?;
+    let sealed_ref_state_id =
+        crate::rfc111_seal_simulation::simulate_one_seal(&source, "heads/main", &maintainer)?;
+    let source_object_store = FileObjectStore::new(source.clone());
+    let sealed_ref_state_envelope = source_object_store
+        .read_typed(sealed_ref_state_id, ObjectType::RefState)?
+        .ok_or_else(|| prikk_error::PrikkError::Integrity("missing sealed RefState".to_string()))?;
+    let sealed_ref_state_payload = RefStatePayload::decode_canonical(
+        &sealed_ref_state_envelope.canonical_payload,
+        sealed_ref_state_envelope.schema_version,
+    )?;
+    let tip_block_id = sealed_ref_state_payload.target_object_id;
+
+    let mut object_store = FileObjectStore::new(source.clone());
+    publish_tag(
+        &source,
+        &mut object_store,
+        "tags/v1",
+        tip_block_id,
+        &maintainer,
+    )?;
+
+    let (_, bytes) = export_bundle(&source, "tags/v1")?;
+
+    let target_root = unique_temp_dir("dc78-tag-export-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    import_bundle(&target, &bytes, &BundleImportOptions::default_limits())?;
+
+    let report = crate::verify_repository(&target)?;
+    assert!(
+        !report.has_item_failure(),
+        "verify must pass against a repository that imported a tag bundle: {report:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// Ruling §1's structural claim, made executable: a tag ref and a `heads/*` ref pointing at the
+/// same block export the identical Block/Patch/Blob closure -- the property that says the second
+/// hop landed in the right place, not merely that it landed somewhere.
+#[test]
+fn tag_ref_and_heads_ref_at_the_same_block_export_the_same_object_closure()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("dc78-tag-vs-heads-closure");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let tip_block_id = seal_two_block_history(&layout)?;
+    let maintainer =
+        Ed25519MaintainerSigner::from_seed("dc78-tag-vs-heads-maintainer", &[0xb6; 32])?;
+    let mut object_store = FileObjectStore::new(layout.clone());
+    publish_tag(
+        &layout,
+        &mut object_store,
+        "tags/v1",
+        tip_block_id,
+        &maintainer,
+    )?;
+
+    let (_, heads_bytes) = export_bundle(&layout, "heads/main")?;
+    let (_, tag_bytes) = export_bundle(&layout, "tags/v1")?;
+
+    let (_, heads_objects, _) = decode_bundle(&heads_bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let (_, tag_objects, _) = decode_bundle(&tag_bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+
+    let closure_only = |objects: &[ObjectEnvelope]| {
+        objects
+            .iter()
+            .filter(|envelope| {
+                matches!(
+                    envelope.object_type,
+                    ObjectType::Block | ObjectType::Patch | ObjectType::Blob
+                )
+            })
+            .map(|envelope| (envelope.object_type, envelope.object_id()))
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    assert_eq!(
+        closure_only(&heads_objects),
+        closure_only(&tag_objects),
+        "a tag ref and a heads ref at the same block must export the identical Block/Patch/Blob \
+         closure"
+    );
+    // The tag bundle carries one more object than the heads bundle: the Tag envelope itself.
+    assert_eq!(tag_objects.len(), heads_objects.len() + 1);
+
+    let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
