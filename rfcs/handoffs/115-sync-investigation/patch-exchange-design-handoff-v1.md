@@ -3,9 +3,33 @@
 **RFC:** `rfcs/accepted/115-sync-investigation.md` (ACCEPTED 2026-08-19). **Read §2 and §5.1 in full
 before starting.** This handoff does not restate them.
 
-**This asks for a design, not code**, and its first stage is answering §2's open questions rather than
-proposing a shape. **Report before designing, then report before implementing** — two checkpoints, not
-one, because §3 and §4 below can invalidate a design produced without them.
+**CORRECTED 2026-08-19 — Checkpoint 2 is withdrawn from the dev team and returns to the architect.**
+
+**As originally written this handoff was out of role, and the error was the architect's.** The
+architect's own operating instructions state that *"the Handoff must be specific enough that the
+mid-capability model can implement the work without inventing important product or architecture
+decisions"* (line 176), and name the architect **design authority** (line 5). The dev team's
+instructions say to **escalate anything architectural** (line 284) and list *"continue by guessing when a
+material design decision is unresolved"* among the things not to do (line 332).
+
+**Checkpoint 2 as drafted asked them to invent exactly those decisions** — where an accepted-but-unsealed
+patch lives, the object shape for block recognition, and the resolution of the DC-78 question. **That is
+the architect's to decide, not theirs to propose.**
+
+**Checkpoint 1 was correctly scoped and stands**: investigation, code-level findings, options with
+consequences, and challenges to the questions themselves. It produced a finding that changed the design
+space (`parent_patch_ids` has never been populated), which is exactly what an investigation is for — and
+the dev team's report stayed in role despite this handoff's framing, giving options and asking for
+rulings rather than presenting a settled design.
+
+**What remains for the dev team: nothing, until the architect issues the design.** The implementation
+handoff will follow from it, per §176's standard.
+
+---
+
+**Original framing, retained so the correction is legible:** *"This asks for a design, not code, and its
+first stage is answering §2's open questions rather than proposing a shape. Report before designing, then
+report before implementing."* **The first half was right; the second was not.**
 
 ## 0. What is settled, and must not be re-opened
 
@@ -122,7 +146,8 @@ versions, RFC 114's frozen surface applies to it.
 **Checkpoint 1 — before designing:** Q1-Q5 answered, the threat model drafted, and **any question you
 believe is the wrong question**, with why. §4 in particular invites disagreement.
 
-**Checkpoint 2 — before implementing:** the design itself, plus §7's deliverables named against it.
+**Checkpoint 2 — WITHDRAWN.** The design is the architect's, written from Checkpoint 1's answers. An
+implementation handoff follows it.
 
 **Take the time this needs.** The interface decided here is hard to reverse: it determines what two
 prikk repositories can ever say to each other, and every transport built later inherits it.
