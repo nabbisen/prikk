@@ -72,11 +72,60 @@ the work is not spent twice.
 **Reading (a)'s honest advantage** is that (b) is not what most users mean by sync, and "use `scp`" may
 read as an unfinished product regardless of whether it is sufficient.
 
-**My assessment, offered as a lean and not a ruling: start from (b) and let (a) be a later transport
-that reuses it.** If the artifact is right, a protocol is a delivery mechanism over it; if the artifact
-is wrong, a protocol will encode the wrongness in a wire format that then needs its own migration path.
-**The owner should settle this before any design**, because nearly every subsequent decision follows
-from it.
+### 3.1 The case against (b), examined properly
+
+**Asked by the owner 2026-08-19 to steelman the opposite, and it is stronger than the architect's first
+lean allowed.** Five reasons, two of which attack the argument for (b) directly.
+
+1. **(b) may close criterion 1 on a technicality while leaving the claim it exists for unsupported.**
+   The criterion's words — *"two machines can exchange sealed history"* — are literally satisfied by
+   producing a file and moving it with `scp`. But the criterion exists to support *"prikk is a
+   distributed VCS"*, and **this project has twice ruled that a criterion must not be closed by
+   whichever reading happens to let the row be marked met** (RFC 111 §8, criterion 5). That ruling
+   applies here against the architect's own preference.
+
+2. **Incremental exchange is the normal case, and (b) does not do it.** A repository that syncs daily
+   needs O(delta), not O(repository), per exchange. (b) can only scope an artifact to a delta if the
+   sender knows what the receiver already has — **which is negotiation, which is a protocol.** So (b)
+   either stays whole-repository, and becomes impractical at exactly the scale that matters, or it grows
+   the thing it was chosen to avoid.
+
+3. **(b) is not uniformly smaller — on consistency it is larger.** §6.2's snapshot problem is (b)'s
+   alone: a repository-complete artifact needs **repository-wide** consistency across many refs, with no
+   mechanism today. A protocol could serve refs individually with per-ref consistency and let the
+   receiver reconcile, which is a weaker requirement. **The architect's "smaller" claim holds for
+   surface area and fails for this axis.**
+
+4. **"The work is not spent twice" is conditional, not certain.** It holds if a future protocol
+   negotiates and then ships a scoped bundle. It fails if the protocol streams objects individually —
+   the more usual design — in which case the monolithic artifact is not reused and (b)'s composition
+   argument evaporates. **This was stated as a fact in the first draft and is properly a hypothesis.**
+
+5. **Adoption.** A user migrating from Git expects `push`/`pull`. "Produce a file and move it yourself"
+   may read as unfinished regardless of technical sufficiency, which matters to a project whose stated
+   aim includes growth.
+
+**What survives in (b)'s favour**, after that: prikk's trust is **object-level, not channel-level** —
+signatures and adopted keys, not TLS and sessions — so an artifact moved by any means is verified
+exactly as well as one delivered by a protocol. **That is a real and unusual advantage**, and it is why
+(b) is defensible at all.
+
+### 3.2 The architect's refined position
+
+**Not "start with (b) and add a protocol later" — that framing bundles two claims and one of them is
+weak.** Separating them:
+
+- **Build the repository-complete artifact, and do not call it sync.** RFC 114 §5.2's format-7
+  carry-forward needs it, paikuli's prikk encoder needs a repository-complete landing, and criterion 1
+  will need it whatever shape sync takes. **Three independent needs converge on it**, which is the
+  strongest evidence available that it is a real unit — and if it is built for sync alone, the other two
+  will each grow their own half-version.
+- **Leave criterion 1 open until incremental exchange has an answer.** §3.1's reason 2 is the one the
+  architect cannot argue away: whole-repository transfer per exchange is not what the criterion is for.
+
+**This is a weaker claim than the first draft made, and deliberately so.** The owner should decide
+whether the artifact ships as *migration and carry-forward* — where it is clearly right — or as *sync*,
+where reasons 1 and 2 say it is not yet enough.
 
 ## 4. Divergence — probably already answered, and worth confirming rather than assuming
 
