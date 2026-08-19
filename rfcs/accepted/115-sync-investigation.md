@@ -1,7 +1,9 @@
 # RFC 115 — Sync: what it can mean for prikk (investigation)
 
-**Status.** **Proposed — investigation, not design.** Started on the project owner's direction
-2026-08-19, after badge criterion 2 closed. **Answers badge criterion 1's prerequisite question:** not
+**Status.** **ACCEPTED by the project owner 2026-08-19** — **an investigation, not a design.**
+Acceptance adopts §2's findings and rulings and §5.1's binding test discipline. **It settles neither the
+transport (§3, four options open) nor §6's design decisions.** Started on the owner's direction the same
+day, after badge criterion 2 closed. **Answers badge criterion 1's prerequisite question:** not
 *how* to build sync, but *what sync is* for a VCS with no rewrite, no force-push, and immutable sealed
 history. **No design exists and implementation must not start from this record.**
 
