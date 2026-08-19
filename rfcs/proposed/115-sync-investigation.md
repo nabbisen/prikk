@@ -110,6 +110,65 @@ signatures and adopted keys, not TLS and sessions — so an artifact moved by an
 exactly as well as one delivered by a protocol. **That is a real and unusual advantage**, and it is why
 (b) is defensible at all.
 
+### 3.1a The case against (a), examined with the same care
+
+**Asked by the owner 2026-08-19, excluding initial cost.** Six reasons; the first two are the ones that
+would be hard to undo.
+
+1. **A protocol is a second compatibility surface, and it is strictly harder than the one prikk just
+   struggled with.** RFC 114 froze identity and gated the repository format — and prikk still severed
+   every migration path with a format change two days before that gate existed. **Protocol compatibility
+   is harder than format compatibility**: a repository can be migrated before it is opened, but two live
+   peers on different versions must interoperate *as they are*. There is no "migrate then connect".
+   **Every prikk release would owe interoperability with every prior release, permanently.**
+
+2. **It creates a network attack surface prikk does not currently have.** Today there is **zero** network
+   code in the workspace and **zero** async/TLS dependencies — the entire third-party runtime surface is
+   five crates. A protocol means parsing adversary-controlled bytes off a socket, concurrently, with
+   resource exhaustion and denial-of-service as first-class concerns. **DC-86 already had to add
+   declared-count and byte bounds because *file* input is untrusted; network input is worse in every
+   dimension** — unbounded, adversarial, and concurrent. And it arrives with an async runtime and a TLS
+   stack, which is a step change in the audited surface of a product whose claim is verifiability.
+
+3. **It drags in access control, which prikk has no concept of.** Object-level trust answers *"is this
+   history authentic?"* It does not answer *"may this peer read this repository?"* A server needs the
+   second, and prikk has no model for it — nor has criterion 4's signer bootstrap happened.
+
+4. **It presumes a topology the product has not chosen.** Client/server, peer-to-peer, federated, hosted
+   — a protocol commits to one before RFC 108's workspace concept and the owner's hosted-versus-local
+   direction are settled.
+
+5. **A protocol designed now would probably be Git's protocol with different nouns** — ref-advertisement,
+   have/want negotiation, packfile transfer. **That is the same trap RFC 113 §3.1 named for the
+   intermediate representation**: a design that converges on the familiar model imports the assumptions
+   prikk exists to reject, and then the wire format makes them permanent.
+
+6. **It does not fit this project's testing discipline.** prikk's quality regime is deterministic tests
+   and gates that can be observed failing. Two live processes, timing, partial failure and resumption
+   are a different discipline, and the weakest part of the regime would become the part guarding the
+   largest new surface.
+
+### 3.1b A third option the first draft missed: **(c) artifact plus a published basis**
+
+**(b)'s fatal objection was reason 2 — no incremental transfer without negotiation.** That is only true
+if the *sender* must discover what the receiver has **interactively**.
+
+**It does not have to be interactive.** The receiver publishes a small, static **basis** — the ref-state
+ids it already holds. The sender reads it and exports an artifact **bounded by that basis**, carrying
+only what is missing. **O(delta) transfer, no live peer, no socket, no negotiation, no protocol.**
+
+**This is not novel and that is the point: Git bundles already do it.** A Git bundle carries
+*prerequisite* commits and is refused if the receiver lacks them. The design space is proven, and prikk's
+`export_bundle` already walks a closure — bounding that walk by a set of known-present object ids is an
+extension of what it does, not a new mechanism.
+
+**It answers (b)'s strongest objection while incurring none of (a)'s six.** It does not answer
+"discoverability" — someone still has to move two files instead of one — but that is a usability gap, not
+an architectural one.
+
+**This deserves to be evaluated as a first-class option rather than a footnote**, and the first draft's
+binary framing is what hid it.
+
 ### 3.2 The architect's refined position
 
 **Not "start with (b) and add a protocol later" — that framing bundles two claims and one of them is
@@ -126,6 +185,13 @@ weak.** Separating them:
 **This is a weaker claim than the first draft made, and deliberately so.** The owner should decide
 whether the artifact ships as *migration and carry-forward* — where it is clearly right — or as *sync*,
 where reasons 1 and 2 say it is not yet enough.
+
+**Amended after §3.1a and §3.1b:** with the basis mechanism, **(c) removes the objection that kept the
+artifact from being a credible sync answer.** The remaining gap between (c) and (a) is *discoverability
+and convenience* — moving two files rather than invoking one command — which is a real product concern
+and **not** an architectural one. **A protocol can then be added later as a transport over exactly the
+same artifact and basis**, which is the composition claim §3.1 reason 4 correctly said was unproven for
+(b) alone — and which (c) makes concrete rather than hoped-for.
 
 ## 4. Divergence — probably already answered, and worth confirming rather than assuming
 
