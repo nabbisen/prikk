@@ -79,8 +79,18 @@ patch-level instead of block-level. In addition, of course, block-level recognit
 
 **The data model already supports this, which is the strongest evidence it is right.** Verified:
 
-- **`PatchPayload` carries `parent_patch_ids`** (`payload/patch.rs:57`) — **patches already form a DAG
-  independent of any block.** Patch-level exchange needs no new ordering field.
+- **`PatchPayload` carries `parent_patch_ids`** (`payload/patch.rs:57`) — the schema models a patch DAG
+  independent of any block.
+  **Corrected 2026-08-19 (RFC 115 Checkpoint 1 §0): this is true of the schema and false of the data.**
+  **No production code has ever populated the field** — `worktree_patch/node_authoring.rs:567` and
+  `patch_inverse.rs:142` both set `Vec::new()`, and every other construction site is a test. Verified
+  independently. The original sentence read *"patches already form a DAG"*, which conflated capability
+  with behaviour; **the ordering it claimed exists does not exist in any patch that has ever been
+  written.** The owner's ruling stands — it rested on the exchange unit, and this was corroborating
+  evidence, not its basis — but **a design must derive closure ordering rather than read it**, and the
+  accepted answer is to derive it at export time from block lineage the sender already holds.
+  **Consequence worth carrying forward:** a hostile sender would be the **first real-world producer** of
+  a non-empty `parent_patch_ids` any receiver has ever seen.
 - **`PatchPayload` carries `preconditions`** (`:61`) — a patch already states what it requires to apply,
   which is what makes out-of-order arrival checkable rather than hopeful.
 - Patches are **content-addressed** and **AUTHOR-signed**, and since DC-53 Stage 2 their signing key
@@ -101,8 +111,11 @@ Five things, and none of them is a network question:
    natural rather than negotiated.
 3. **Block recognition as a claim, not as the carrier.** The receiver learns *which patches the sender
    sealed into which block, under which maintainer key*. **That is an assertion about patches, which is
-   attestation-shaped** — the same structural argument RFC 110 §4.1 and RFC 113 §4.1 already made:
-   a claim *about* history, separable from it, rather than the thing that carries it.
+   attestation-shaped**: a claim *about* history, separable from it, rather than the thing that carries
+   it. **The reasoning stands on its own structural merits.** RFC 110 §4.1 and RFC 113 §4.1 reach for
+   the same shape, but **both are unaccepted proposals and RFC 113's text calls itself a recommendation
+   rather than a ruling** — corrected 2026-08-19 after Checkpoint 1 noted the original wording lent them
+   an authority neither has.
 4. **What the receiver may do with a received patch.** It has an AUTHOR signature but **no maintainer
    seal** — so DC-78's *"sealed by a Maintainer key you adopted"* does not cover it. **The coherent
    answer is that the receiver's own maintainer seals what it accepts**, which is exactly how Darcs and
