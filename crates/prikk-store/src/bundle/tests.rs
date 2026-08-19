@@ -635,6 +635,101 @@ fn import_rejects_a_transported_key_conflicting_with_local_material() -> prikk_e
     Ok(())
 }
 
+/// DC-53 Stage 2 follow-up (`multi-key-import-partial-write-v1.md`): with `m > 1` transported keys,
+/// a conflict at a later entry must not leave an earlier, non-conflicting entry durably recorded --
+/// the container that leak would land in has no prune, no compaction and no repair. Built by
+/// exporting one signer's real bundle, then splicing in a second, synthetic transported key whose
+/// `key_id` the target already holds under a *different* public key -- the first entry has nothing
+/// wrong with it; the second is the one that must refuse the whole import.
+#[test]
+fn import_rejects_a_later_conflicting_key_without_recording_an_earlier_one()
+-> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc53-multi-key-import-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    let signer_a = transport_test_signer(0xb1)?;
+    seal_two_block_history_with_author(&source, &signer_a, true)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, mut author_keys) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    assert_eq!(
+        author_keys.len(),
+        1,
+        "expected exactly one transported key from a single-author export"
+    );
+
+    let signer_b = transport_test_signer(0xb2)?;
+    author_keys.push(AuthorKeyEntry {
+        key_id: signer_b.key_id().to_string(),
+        public_key: signer_b.public_key_bytes(),
+    });
+    let hostile = encode_bundle(&ref_name, &objects, &author_keys)?;
+
+    let target_root = unique_temp_dir("dc53-multi-key-import-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let active_lock = ActiveLock::acquire(&target)?;
+    record_author_key_material(&target, signer_b.key_id(), [0xdd; 32], &active_lock)?;
+    drop(active_lock);
+
+    let result = import_bundle(&target, &hostile, &BundleImportOptions::default_limits());
+    assert!(
+        result.is_err(),
+        "a later transported key conflicting with local material must refuse the whole import"
+    );
+    assert!(
+        read_received_pointer(&target, "remotes/heads/main")?.is_none(),
+        "a refused import must not create the received pointer"
+    );
+    assert_eq!(
+        lookup_author_key_entries(&target, signer_a.key_id())?,
+        Vec::new(),
+        "the earlier entry, which conflicted with nothing, must not have been recorded either -- \
+         the whole import is refused before any entry is written"
+    );
+    assert_eq!(
+        lookup_author_key_entries(&target, signer_b.key_id())?,
+        vec![AuthorKeyEntry {
+            key_id: signer_b.key_id().to_string(),
+            public_key: [0xdd; 32],
+        }],
+        "the target's own pre-existing material for the conflicting key_id must survive untouched"
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// `multi-key-import-partial-write-v1.md` §5.3: re-importing an unchanged bundle must stay
+/// idempotent under the new pre-validation pass too -- a repeat import must hit
+/// `check_author_key_conflict`'s `AlreadyRecorded` outcome, not a manufactured conflict, and must
+/// not grow the container.
+#[test]
+fn reimporting_the_same_bundle_records_no_new_author_key_entries() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc53-multi-key-reimport-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    let signer = transport_test_signer(0xb3)?;
+    seal_two_block_history_with_author(&source, &signer, true)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+
+    let target_root = unique_temp_dir("dc53-multi-key-reimport-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let options = BundleImportOptions::default_limits();
+    import_bundle(&target, &bytes, &options)?;
+    let after_first = lookup_author_key_entries(&target, signer.key_id())?;
+    assert_eq!(after_first.len(), 1);
+
+    import_bundle(&target, &bytes, &options)?;
+    let after_second = lookup_author_key_entries(&target, signer.key_id())?;
+    assert_eq!(
+        after_second, after_first,
+        "re-importing an unchanged bundle must not grow the author-key container"
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
 /// DC-53 Stage 2, §1's ratified edge case: exporting a `key_id` whose *local* material already
 /// disagrees with itself (only reachable via a legacy pre-Stage-2 state, planted directly here)
 /// must fail the export rather than silently pick one of the two conflicting keys -- presenting the

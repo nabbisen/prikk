@@ -21,14 +21,19 @@
 //! Patch's signature is recorded anyway and `verify` reports that Patch `Failed`, reached through the
 //! transport path rather than local authoring but the same underlying check (D3's third row).
 //!
-//! **Two independent conflict checks, not one.** Before any write: the bundle's own author-key section
-//! must not itself claim two different public keys for one `key_id` -- a hostile or merely stale bundle
-//! must fail the whole import rather than leave a receiver with an unresolvable, permanently
-//! unverifiable `key_id` (`author_key_index.rs`'s own container has no prune/repair path). After that
-//! passes: each transported key is recorded through the same `record_author_key_material` Step 1 built
-//! for local authoring, so a key that conflicts with material this repository *already* has is refused
-//! there too -- no separate transport-side pinning rule, reusing Step 1's rather than a second copy of
-//! it (which is exactly what Step 1's C2 ruling was written against).
+//! **Two independent conflict checks, and both are fully pre-write.** Before any write: the bundle's
+//! own author-key section must not itself claim two different public keys for one `key_id` -- a
+//! hostile or merely stale bundle must fail the whole import rather than leave a receiver with an
+//! unresolvable, permanently unverifiable `key_id` (`author_key_index.rs`'s own container has no
+//! prune/repair path). The second check -- a transported key conflicting with material this
+//! repository *already* has -- is checked the same way: **every** transported key is validated
+//! against local material, via `check_author_key_conflict`, before any of them is recorded, both
+//! inside the one `ActiveLock` held for the section. This is why: a refused import must leave the
+//! author-key container exactly as untouched as a refused bundle-internal check leaves it -- checking
+//! and recording one entry at a time let a conflict at entry `k` leave entries `1..k-1` durably
+//! appended first (DC-53 Stage 2 follow-up, `multi-key-import-partial-write-v1.md`). Recording itself
+//! still goes through `record_author_key_material`, Step 1's own function, unchanged -- no separate
+//! transport-side pinning rule, and no second copy of the conflict definition (Step 1's C2 ruling).
 //!
 //! **`PBNDL001` (Stage 1 and earlier) is accepted on import, never emitted on export** (DC-53 Stage 2
 //! follow-up, `bundle-v1-import-regression-v1.md`). `layout.rs`'s own retired-repository-format
@@ -46,7 +51,8 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, Signature, SignerRole};
 
 use crate::author_key_index::{
-    AuthorKeyEntry, lookup_author_key_entries, record_author_key_material,
+    AuthorKeyEntry, check_author_key_conflict, lookup_author_key_entries,
+    record_author_key_material,
 };
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_bytes_u64, push_u64};
@@ -400,9 +406,21 @@ pub fn import_bundle(
     // repository so this also serializes against a concurrent commit or rollback-draft, not only
     // against another import. A conflict here (against this repository's own existing material,
     // distinct from the bundle-internal check above) fails the whole import, not just this entry.
+    //
+    // DC-53 Stage 2 follow-up (`multi-key-import-partial-write-v1.md`): with `m > 1` transported
+    // keys, checking-then-recording one entry at a time let a conflict at entry `k` leave entries
+    // `1..k-1` durably appended to a container with no prune, no compaction, and no repair --
+    // exactly the partial-write hazard layer 1's bundle-internal check exists to prevent, just one
+    // layer later. Fixed the same way: validate every entry against local material *before*
+    // recording any of it, both passes inside the one `ActiveLock` already held (a validate-then-
+    // record split across the lock boundary would be a check-then-act race across the two passes,
+    // the same defect this fixes).
     let mut recorded_author_key_count = 0_usize;
     {
         let active_lock = ActiveLock::acquire(layout)?;
+        for (&key_id, &public_key) in &bundle_key_ids {
+            check_author_key_conflict(layout, key_id, public_key)?;
+        }
         for entry in &author_keys {
             record_author_key_material(layout, &entry.key_id, entry.public_key, &active_lock)?;
             recorded_author_key_count =
