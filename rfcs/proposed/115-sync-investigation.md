@@ -224,6 +224,75 @@ than any of §3's architectural points were.
 **Item 1 is separable and worth fixing regardless of which option wins.** A fast-forward path is a
 missing capability in `merge_execute`, not a sync question.
 
+### 3.1d Prior art: how Darcs and Pijul actually do it
+
+**Checked against both projects' own documentation 2026-08-19, not recalled.** They are the closest prior
+art — the only two patch-theory VCSs in real use — and the finding is not what the (a)-versus-(c) framing
+predicted.
+
+**Neither chose. Both ship (a) and (c) simultaneously.**
+
+- **Darcs** — *"The send and apply commands use patch bundle files that people tend to exchange by
+  email"* (darcs.net/Using/Model), **alongside** `push`/`pull`. The bundle workflow is first-class and
+  still used, not a legacy path. `darcs pull` is **interactive**: it offers patches one at a time and
+  refuses a selection whose dependencies are not also taken.
+- **Pijul** — `clone`/`pull`/`push` against a local path, over **SSH**, or over **HTTP/HTTPS**, which is
+  **pull-only**: *"Pijul is not (yet) able to push patches to an HTTP URL."* And `pijul apply [CHANGE]...`
+  reads *"the change in text format on the standard input"* when given no file — an offline path
+  equivalent to (c).
+
+**So the binary framing in §3 was wrong about the industry, not only about prikk.** The mature answer in
+this space is both, with the file path arriving first and never being removed.
+
+### 3.1e The difference that matters more than the transport
+
+**Darcs and Pijul do not have prikk's §3.1c problem 1, and the reason is theoretical, not ergonomic.**
+
+Darcs describes pulling as patches being *"concatenated to the latter repository's sequence (or unioned
+with its set)"*, with patches **adjusted to fit the new context** by commutation. Pijul's changes apply
+in any order subject to dependencies. **In both, exchange is set reconciliation: which patches do you
+have that I do not.** Divergence dissolves — there is nothing to fast-forward past and no merge object to
+create.
+
+**prikk is not in that position, and it is prikk's own design that puts it outside.** Patches are sealed
+into immutable, maintainer-signed **Blocks** with a lineage chain and state roots. The exchange unit is a
+block lineage, not a commutative patch set — so two machines that both sealed produce two chains, and
+reconciliation needs a merge block. **prikk is patch-based underneath and Git-shaped at the exchange
+layer.**
+
+**That is worth stating plainly because it inverts an easy assumption:** prikk's merge-per-sync cost is
+**not** inherited from patch theory. Darcs and Pijul demonstrate that patch theory *removes* this
+problem. prikk reintroduced it by sealing — for good reasons (immutability, signed publication,
+verifiable history), but the cost belongs to that choice and should be attributed to it.
+
+**The question this raises, and this RFC does not answer:** prikk's real unit is the Patch; the Block is
+a publication envelope. **Could exchange operate at patch level, with sealing remaining a local act?**
+That would put prikk back in Darcs and Pijul's position — and it may be incompatible with DC-78's rule
+that a receiver trusts a *maintainer's seal*, since unsealed patches carry no maintainer signature at
+all. **Worth investigating before any design commits to block-level exchange.**
+
+### 3.1f A fourth option prior art suggests: **(d) SSH transport, prikk on both ends**
+
+**Pijul's SSH support is not a custom wire protocol** — *"A working Pijul needs to be installed on the
+remote machine"*. The transport is SSH; the "protocol" is two Pijul processes over stdin/stdout.
+
+**Applied to prikk, that answers most of §3.1a's objections to (a) without becoming (a):**
+
+- **No TLS stack, no async runtime** — SSH is the transport and it is already on the machine.
+- **No authentication model to invent** — SSH keys and the remote account are the answer, and they are
+  the answer operators already administer.
+- **No listening service and no new attack surface in prikk** — the remote side is the same binary
+  invoked over an authenticated channel, not a server exposed to the internet.
+- **`push`/`pull` ergonomics**, which is §3.1c's dominant cost and the adoption objection in one.
+
+**What it does not remove:** an over-the-wire compatibility obligation between versions (§3.1a reason 1)
+still applies, because the two processes must agree — though it is bounded to what the two binaries
+exchange rather than to a published protocol other implementations depend on. **And HTTP would remain
+pull-only** for the same reason it is in Pijul: serving is easy, accepting is not.
+
+**(d) composes with (c) rather than replacing it** — the artifact and basis are what travels; SSH just
+carries them and runs the command at the far end.
+
 ### 3.2 The architect's refined position
 
 **Not "start with (b) and add a protocol later" — that framing bundles two claims and one of them is
