@@ -303,6 +303,41 @@ pub(crate) fn lookup_author_key_entries(
         .collect())
 }
 
+/// Whether `key_id`/`public_key` is already on file, or would be a fresh append -- the read half of
+/// the conflict rule, returned so a caller can tell the two apart without re-deriving the rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AuthorKeyCheck {
+    AlreadyRecorded,
+    New,
+}
+
+/// Checks `key_id`/`public_key` against this repository's existing author-key material **without
+/// recording anything**. This is the single definition of what counts as a conflict (DC-53 Stage 2,
+/// D8: one `key_id` binds to one public key) -- `record_author_key_material` below is a thin
+/// check-then-append wrapper around it, and `bundle.rs`'s `import_bundle` calls it directly to
+/// validate an entire transported key set before recording any entry of it, so a caller that must
+/// validate many entries up front does not hand-write a second notion of conflict (DC-53 Stage 2
+/// follow-up, `multi-key-import-partial-write-v1.md`).
+pub(crate) fn check_author_key_conflict(
+    layout: &RepositoryLayout,
+    key_id: &str,
+    public_key: [u8; ED25519_KEY_LEN],
+) -> Result<AuthorKeyCheck> {
+    let existing = lookup_author_key_entries(layout, key_id)?;
+    if existing.iter().any(|entry| entry.public_key == public_key) {
+        return Ok(AuthorKeyCheck::AlreadyRecorded);
+    }
+    if let Some(conflicting) = existing.first() {
+        return Err(PrikkError::Integrity(format!(
+            "author key_id {key_id} already has a different recorded public key ({}); one key_id \
+             binds to one public key -- this looks like a key-rotation attempt, which is not \
+             supported and is indistinguishable from impersonation",
+            prikk_hash::to_hex(&conflicting.public_key)
+        )));
+    }
+    Ok(AuthorKeyCheck::New)
+}
+
 /// Record `key_id`'s public key at authoring time. Idempotent if this exact `(key_id, public_key)`
 /// pair was already recorded (an author signing many patches over time must not grow the container
 /// once per patch). **Refuses (DC-53 Stage 2, D8) if a *different* public key is already on file for
@@ -323,17 +358,8 @@ pub(crate) fn record_author_key_material(
     public_key: [u8; ED25519_KEY_LEN],
     _active_lock: &ActiveLock,
 ) -> Result<()> {
-    let existing = lookup_author_key_entries(layout, key_id)?;
-    if existing.iter().any(|entry| entry.public_key == public_key) {
+    if check_author_key_conflict(layout, key_id, public_key)? == AuthorKeyCheck::AlreadyRecorded {
         return Ok(());
-    }
-    if let Some(conflicting) = existing.first() {
-        return Err(PrikkError::Integrity(format!(
-            "author key_id {key_id} already has a different recorded public key ({}); one key_id \
-             binds to one public key -- this looks like a key-rotation attempt, which is not \
-             supported and is indistinguishable from impersonation",
-            prikk_hash::to_hex(&conflicting.public_key)
-        )));
     }
     let record = encode_author_key_record(&AuthorKeyEntry {
         key_id: key_id.to_string(),
