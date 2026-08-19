@@ -356,6 +356,7 @@ const ALL_OBJECT_TYPES: &[ObjectType] = &[
     ObjectType::BlockSummaryCache,
     ObjectType::RecoveryNote,
     ObjectType::ProjectGenesis,
+    ObjectType::RecognitionClaim,
 ];
 
 #[test]
@@ -371,10 +372,11 @@ fn all_object_types_is_exhaustive() {
             | ObjectType::Blob
             | ObjectType::BlockSummaryCache
             | ObjectType::RecoveryNote
-            | ObjectType::ProjectGenesis => {}
+            | ObjectType::ProjectGenesis
+            | ObjectType::RecognitionClaim => {}
         }
     }
-    assert_eq!(ALL_OBJECT_TYPES.len(), 10);
+    assert_eq!(ALL_OBJECT_TYPES.len(), 11);
 }
 
 /// RFC 114 §3's completeness self-guard: call the *real* `validate_format2_schema` -- not a copy
@@ -392,6 +394,7 @@ fn rfc114_gate_a_every_admitted_pair_is_frozen_or_declared_unwritten() {
         ObjectType::RefUpdate,
         ObjectType::Tag,
         ObjectType::Blob,
+        ObjectType::RecognitionClaim,
     ];
     for &object_type in ALL_OBJECT_TYPES {
         for schema_version in 0u32..=8 {
@@ -704,6 +707,102 @@ fn rfc114_vector_12_blob_schema_1_identity() -> prikk_error::Result<()> {
     assert_eq!(
         id.to_string(),
         "95a222e07ad6730efb2430aa7a20cd70cd9113687ad5715694577e3473610e4a"
+    );
+    Ok(())
+}
+
+/// Vector 13: `(RecognitionClaim, 1)`, RFC 115 Stage 2 (design-v1.md D3), MAINTAINER-signed.
+fn rfc114_recognition_claim_payload() -> prikk_object::RecognitionClaimPayload {
+    prikk_object::RecognitionClaimPayload {
+        block_id: ObjectId::from_bytes([0x79; 32]),
+        patch_ids: vec![ObjectId::from_bytes([0x7a; 32])],
+    }
+}
+
+const RFC114_RECOGNITION_CLAIM_SIGNATURE: [u8; 64] = [
+    0x6b, 0x55, 0xdd, 0xaa, 0x45, 0x51, 0x28, 0x33, 0x88, 0xe8, 0xa1, 0x92, 0xf5, 0xae, 0xf8, 0xe1,
+    0xae, 0x7a, 0x4e, 0x7b, 0x94, 0x79, 0xb0, 0x97, 0xa8, 0xcf, 0x8c, 0xd9, 0xba, 0xad, 0x6c, 0x89,
+    0x5c, 0x0c, 0x6c, 0x5e, 0xac, 0xb3, 0x30, 0xf6, 0x39, 0x45, 0xf6, 0xca, 0x47, 0x92, 0xf7, 0x41,
+    0x58, 0x15, 0xa5, 0xb2, 0x07, 0x82, 0xc3, 0x87, 0x4c, 0x2b, 0x2e, 0xca, 0x82, 0x67, 0x0b, 0x06,
+];
+
+#[test]
+fn rfc114_vector_13_recognition_claim_schema_1_identity_and_signature() -> prikk_error::Result<()> {
+    let canonical = rfc114_recognition_claim_payload().to_canonical_bytes()?;
+    assert_eq!(
+        prikk_hash::to_hex(&canonical),
+        "0001120000000000000020797979797979797979797979797979797979797979797979797979797979797900021200000000000000207a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a"
+    );
+    let id = ObjectId::from_canonical_payload(ObjectType::RecognitionClaim, 1, &canonical);
+    assert_eq!(
+        id.to_string(),
+        "bd29bf5710e04a595c6309bf2ab7c3bca1e28f8e40da796e1a32ef5f3931528f"
+    );
+    let preimage = rfc114_maintainer_preimage(ObjectType::RecognitionClaim, id)?;
+    assert_eq!(
+        prikk_hash::to_hex(&preimage),
+        "7072696b6b2e7369672e76310001000bbd29bf5710e04a595c6309bf2ab7c3bca1e28f8e40da796e1a32ef5f3931528f000200187266633131342d766563746f722d6d61696e7461696e6572"
+    );
+    assert_eq!(
+        Ed25519KeyPair::from_seed(&RFC114_MAINTAINER_SEED).sign(&preimage),
+        RFC114_RECOGNITION_CLAIM_SIGNATURE
+    );
+    verify_ed25519(
+        &RFC114_MAINTAINER_PUBLIC_KEY,
+        &preimage,
+        &RFC114_RECOGNITION_CLAIM_SIGNATURE,
+    )
+}
+
+/// RFC 115 Stage 2 §7 row 1: a claim signed by key K verifies only against K's material -- a
+/// signature genuinely valid against the real maintainer key must fail against a different one.
+#[test]
+fn rfc115_recognition_claim_signature_fails_against_a_different_maintainer_key()
+-> prikk_error::Result<()> {
+    let canonical = rfc114_recognition_claim_payload().to_canonical_bytes()?;
+    let id = ObjectId::from_canonical_payload(ObjectType::RecognitionClaim, 1, &canonical);
+    let preimage = rfc114_maintainer_preimage(ObjectType::RecognitionClaim, id)?;
+    let signature = Ed25519KeyPair::from_seed(&RFC114_MAINTAINER_SEED).sign(&preimage);
+    // Sanity: genuinely valid against the real key -- this is a wrong-key test, not a malformed one.
+    verify_ed25519(&RFC114_MAINTAINER_PUBLIC_KEY, &preimage, &signature)?;
+
+    let other_public_key = Ed25519KeyPair::from_seed(&[0x9a; 32]).public_key_bytes();
+    assert_ne!(other_public_key, RFC114_MAINTAINER_PUBLIC_KEY);
+    assert!(
+        verify_ed25519(&other_public_key, &preimage, &signature).is_err(),
+        "a signature genuinely valid against the real maintainer key must fail against a \
+         different one"
+    );
+    Ok(())
+}
+
+/// RFC 115 Stage 2 §7 row 2: a signature over a `RecognitionClaim` cannot be presented as a
+/// signature over any other type. Generically covered already by
+/// `every_signature_preimage_field_is_cryptographically_bound` (flips a byte at offset 14, inside
+/// `object_type`); this exercises the same domain-separation property for this specific type
+/// through the production signing path, so the relationship is on the record rather than the two
+/// tests later being read as duplicates.
+#[test]
+fn rfc115_recognition_claim_signature_is_not_valid_for_another_object_type()
+-> prikk_error::Result<()> {
+    let canonical = rfc114_recognition_claim_payload().to_canonical_bytes()?;
+    let id = ObjectId::from_canonical_payload(ObjectType::RecognitionClaim, 1, &canonical);
+    let preimage = rfc114_maintainer_preimage(ObjectType::RecognitionClaim, id)?;
+    let signature = Ed25519KeyPair::from_seed(&RFC114_MAINTAINER_SEED).sign(&preimage);
+    verify_ed25519(&RFC114_MAINTAINER_PUBLIC_KEY, &preimage, &signature)?;
+
+    let block_preimage = Signature::signed_bytes(
+        SignatureAlgorithm::Ed25519,
+        ObjectType::Block,
+        id,
+        SignerRole::Maintainer,
+        RFC114_MAINTAINER_KEY_ID,
+    )?;
+    assert_ne!(preimage, block_preimage);
+    assert!(
+        verify_ed25519(&RFC114_MAINTAINER_PUBLIC_KEY, &block_preimage, &signature).is_err(),
+        "a signature over a RecognitionClaim preimage must not verify against the same id/role/key \
+         rebuilt with ObjectType::Block"
     );
     Ok(())
 }

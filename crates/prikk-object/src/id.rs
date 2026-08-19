@@ -36,6 +36,10 @@ pub enum ObjectType {
     RecoveryNote = 0x09,
     /// Project identity anchor; its `ObjectId` is the `project_id` (FDD-03 §9.13).
     ProjectGenesis = 0x0A,
+    /// RFC 115 Stage 2 (design-v1.md D3): a signed claim that named patches were sealed into a
+    /// named block, under the signer's key. Never trust-conferring and never existence-checked
+    /// against the block/patches it names — see `RecognitionClaimPayload`'s own doc.
+    RecognitionClaim = 0x0B,
 }
 
 impl ObjectType {
@@ -58,6 +62,7 @@ impl ObjectType {
             0x08 => Ok(Self::BlockSummaryCache),
             0x09 => Ok(Self::RecoveryNote),
             0x0A => Ok(Self::ProjectGenesis),
+            0x0B => Ok(Self::RecognitionClaim),
             other => Err(PrikkError::MalformedData(format!(
                 "unknown object type code: {other}"
             ))),
@@ -78,6 +83,7 @@ impl ObjectType {
             Self::BlockSummaryCache => "block-summary-cache",
             Self::RecoveryNote => "recovery-note",
             Self::ProjectGenesis => "project-genesis",
+            Self::RecognitionClaim => "recognition-claim",
         }
     }
 }

@@ -56,6 +56,7 @@ mod patch_set_digest;
 mod path;
 mod received;
 mod received_index;
+mod recognition_claim;
 mod refs;
 mod rfc111_seal_simulation;
 mod rollback_draft;
@@ -149,6 +150,7 @@ pub use path::{RepoPath, validate_no_path_collisions, validate_repo_path};
 pub use received::{
     ReceivedPointer, list_received_pointers, read_received_pointer, validate_received_ref,
 };
+pub use recognition_claim::{RecognitionClaimConsistency, check_recognition_claim_consistency};
 pub use refs::{
     RefFileOutcome, RefFileStatus, RefItemOutcome, RefItemStatus, RefLogRecord, RefLogReplay,
     RefPointerSummary, RefPublication, RefPublicationIssue, RefRecoveryCandidate, RefStore,

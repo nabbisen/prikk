@@ -6,6 +6,7 @@ pub mod block;
 pub mod common;
 pub mod node;
 pub mod patch;
+pub mod recognition_claim;
 pub mod refs;
 pub mod tag;
 
@@ -22,5 +23,6 @@ pub use patch::{
     OperationKind, PatchPayload, PatchPurpose, RenamePath, ReplaceBinary, TEXT_SPAN_HASH_BYTES,
     text_span_hash, validate_text_anchor_id,
 };
+pub use recognition_claim::{RECOGNITION_CLAIM_MAX_PATCH_IDS, RecognitionClaimPayload};
 pub use refs::{REF_STATE_CLOSED_SCHEMA, RefKind, RefStatePayload, RefUpdatePayload};
 pub use tag::TagPayload;
