@@ -7,8 +7,13 @@
 //!
 //! **Must**: if the receiver *does* hold the referenced block, the claim's `patch_ids` must match
 //! that block's own `patch_ids` — a claim contradicting a block already held is a detected lie.
+//!
+//! **Also must**: a malformed claim (unsorted or duplicate `patch_ids`) is refused outright, never
+//! compared and reported as `Contradicted` — that outcome must mean "this sender lied," never "this
+//! caller built the struct wrong" (review v1 §2).
 
-use prikk_error::Result;
+use prikk_error::{PrikkError, Result};
+use prikk_object::canonical::is_strictly_sorted;
 use prikk_object::{BlockPayload, ObjectId, ObjectType, RecognitionClaimPayload};
 
 use crate::object_store::ObjectReader;
@@ -41,10 +46,29 @@ pub enum RecognitionClaimConsistency {
 /// authoring order and `ObjectId` sort order are unrelated. A claim asserts *which* patches were
 /// sealed, not in what order — sorting the block's own list before comparing is what "the claim's
 /// `patch_ids` must equal the block's own `patch_ids`" (design §3) actually means.
+///
+/// **Refuses, rather than normalizes, a claim whose own `patch_ids` are unsorted or contain
+/// duplicates.** `RecognitionClaimPayload`'s fields are `pub` with no invariant-enforcing
+/// constructor: the encoder and decoder both reject unsorted/duplicate input, so anything that
+/// round-tripped through bytes is already sorted, but a claim built in-process (Stage 3's own
+/// path, before encoding) is not checked by anything else before it reaches here. Comparing an
+/// out-of-order claim against a normalized block would report a truthful claim as `Contradicted`
+/// -- the exact failure mode the block-side normalization above exists to prevent, reintroduced
+/// through the one door that skips it (review v1 §2). `Contradicted` must mean "this sender lied,"
+/// never "this caller built the struct wrong" -- so this is a hard refusal, the same rule Stage 1's
+/// `compute_patch_set_digest` and this type's own encoder/decoder already follow, not a silent sort.
 pub fn check_recognition_claim_consistency(
     object_store: &impl ObjectReader,
     claim: &RecognitionClaimPayload,
 ) -> Result<RecognitionClaimConsistency> {
+    if !is_strictly_sorted(&claim.patch_ids) {
+        return Err(PrikkError::Integrity(
+            "RecognitionClaim patch_ids are not sorted and unique -- refusing rather than \
+             comparing, since an out-of-order claim would misreport as contradicted against a \
+             normalized block"
+                .to_string(),
+        ));
+    }
     let Some(block_envelope) = object_store.read_typed(claim.block_id, ObjectType::Block)? else {
         return Ok(RecognitionClaimConsistency::BlockAbsent);
     };

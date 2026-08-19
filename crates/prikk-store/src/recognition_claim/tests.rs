@@ -80,6 +80,45 @@ fn claim_matching_a_held_block_is_consistent_regardless_of_the_blocks_own_patch_
     Ok(())
 }
 
+/// Review v1 §2's condition: a claim built in-process with unsorted `patch_ids` (bypassing the
+/// encoder/decoder's own checks, exactly Stage 3's own path before encoding) must be refused
+/// outright, never compared and reported as `Contradicted` -- even when the claim is, in substance,
+/// entirely truthful about the block it names. Reproduces the review's own probe: a block genuinely
+/// containing two patches, and a claim listing the *same* two, descending.
+#[test]
+fn claim_with_unsorted_patch_ids_is_refused_not_compared() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc115-recognition-claim-unsorted-refused");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout);
+    let low = ObjectId::from_bytes([0x11; 32]);
+    let high = ObjectId::from_bytes([0x22; 32]);
+    let block = signed_block(BlockKind::Normal, Vec::new(), vec![low, high], None);
+    let block_id = store.write_object(&block)?;
+
+    let unsorted_claim = RecognitionClaimPayload {
+        block_id,
+        // Descending -- unsorted, even though it names the block's own real patches.
+        patch_ids: vec![high, low],
+    };
+    let result = check_recognition_claim_consistency(&store, &unsorted_claim);
+    assert!(
+        result.is_err(),
+        "an unsorted claim must be refused, not compared and reported: {result:?}"
+    );
+
+    let duplicated_claim = RecognitionClaimPayload {
+        block_id,
+        patch_ids: vec![low, low],
+    };
+    assert!(
+        check_recognition_claim_consistency(&store, &duplicated_claim).is_err(),
+        "a claim with duplicate patch_ids must be refused the same way"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 /// §7 row 7: trust never expands across a claim check -- neither an absent-block claim, nor a
 /// contradicted one, nor a consistent one may change the repository's adopted-key set. Checked
 /// directly against `load_maintainer_trust_policy`, before and after each of the three outcomes.
