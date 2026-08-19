@@ -491,6 +491,70 @@ design should be held to the stronger reading:
 **A sync design must not quietly upgrade that claim.** "Both verified" means both ran the checks that
 exist, not that either learned who the other really is.
 
+## 5.1 Test, plan and process discipline — binding on this work
+
+**Directed by the project owner 2026-08-19:** *"we should take careful steps of tests, plan and process
+of them. Networking and data sharing should be verified especially carefully on both function and
+security."*
+
+**Recorded as binding before any design**, because a test regime assembled during implementation tests
+what was built rather than what was required.
+
+### 5.1.1 What sync adds that prikk's existing regime does not already cover
+
+prikk's quality regime is strong and **most of it transfers**: deterministic tests, gates observed
+failing before the fix (RFC 111, RFC 114), negative controls on every guarantee, property tests
+(`proptest_decode_bundle.rs`, `proptest_decoders.rs`, `proptest_round_trip.rs`), crash injection
+(`failpoints.rs`'s `Point` and `TestBarrier`), and three-platform CI.
+
+**Four things are genuinely new:**
+
+1. **Adversarial input becomes the normal case, not an edge case.** Today one file path takes untrusted
+   bytes and DC-86 bounds it. Under sync, everything received is attacker-controlled by default.
+2. **Two-party state.** Every meaningful test needs two repositories and an assertion about the *pair*.
+   `dc78_bundle_exchange.rs` and `dc85_merge_from_received_ref.rs` are the precedent to build on rather
+   than start beside.
+3. **Partial failure mid-transfer.** An interrupted exchange must leave the receiver sound. This is
+   crash-injection territory and prikk already has the machinery.
+4. **A lying peer, not merely malformed bytes.** Fuzzing finds parse defects; it does not find a peer
+   that is syntactically perfect and semantically dishonest.
+
+### 5.1.2 The security properties to test, stated as refusals
+
+**Each is a specific expected refusal, not a general aspiration** — and each is derived from something
+this project has already learned the hard way:
+
+- **A hostile artifact must not leave the receiver in an unrecoverable state.** DC-53 Stage 2 already
+  proved this is reachable: a refused bundle leaked one author-key entry into a container with no prune,
+  no compaction and no repair. **Whole-import refusal, never partial.**
+- **Trust must not expand on receipt.** A sender must not be able to cause the receiver to adopt a
+  maintainer key. DC-78's rule is that the receiver decides; the test is that a crafted artifact cannot
+  make it decide otherwise.
+- **TOFU pinning must hold across transport.** A conflicting public key for a known `key_id` is refused,
+  whatever route it arrives by (DC-53 Stage 2, criterion 5).
+- **Missing prerequisites refuse the whole exchange.** A basis-scoped artifact whose dependencies the
+  receiver lacks must not partially apply (§3.1c problem 3).
+- **Resource bounds hold under adversarial input**, including declared counts, declared sizes, and
+  deeply nested or pathological patch DAGs. DC-86's *"a declared count over the limit must not cost more
+  than reading one u64 to reject"* is the standard.
+- **Replay of an old artifact is inert**, not a downgrade.
+- **A patch whose AUTHOR signature does not verify against transported material fails**, and one with no
+  material reads `Unverifiable` — never `Sound` (DC-53's D3 rows, reached through the transport path).
+
+### 5.1.3 Process
+
+- **A written threat model precedes the design**, not the implementation review. The list above is its
+  starting point, not its conclusion.
+- **Adversarial fixtures are committed as bytes**, following RFC 114's approach — a hostile artifact
+  reconstructed at test time from today's encoder proves the parser accepts a shape, not that the shape
+  occurs.
+- **Every refusal above gets a negative control**: disable the check, watch the test fail, restore. A
+  refusal nobody has seen fire is not evidence.
+- **Staged, with report-before-implement at each stage**, as every increment in this project now runs.
+- **If a transport with a listening surface is ever chosen** (§3's option (a)), it does not ship on the
+  same evidence as a file path. That is a different risk class and needs its own review, stated now so
+  the bar cannot be lowered later by momentum.
+
 ## 6. What a design must decide
 
 1. **§3's question — protocol or transfer.** Everything else follows.
