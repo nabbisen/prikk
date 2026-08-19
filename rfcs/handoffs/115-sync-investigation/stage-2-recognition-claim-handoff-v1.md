@@ -42,7 +42,8 @@ Read these before writing anything. Every one of them is the thing you should be
 | `Signature::signed_bytes` | `prikk-object/src/signature.rs:120-144` | `SIGNATURE_DOMAIN ‖ algorithm ‖ object_type ‖ object_id ‖ signer_role ‖ key_id_len ‖ key_id`. |
 | `maintainer_signature` | `prikk-store/src/maintainer_signing.rs:21-44` | The production signing path. Use it. Not `test_support`'s dummy. |
 | `TagPayload` | `prikk-object/src/payload/tag.rs` | The shape model for a small canonical payload: `encode_canonical` + a field-tag cursor decoder that **rejects unknown tags**. |
-| Identity snapshot | `prikk-object/src/vectors/snapshot.txt` + `snapshot.rs` | **This is Gate A.** Columns: `name\|type_code\|schema_version\|payload_hex\|object_id_hex`. |
+| Identity snapshot | `prikk-object/src/vectors/snapshot.txt` + `snapshot.rs` | Frozen ids, all types. Columns: `name\|type_code\|schema_version\|payload_hex\|object_id_hex`. |
+| **Gate A proper** | `prikk-store/src/signature_contract_tests/vectors.rs` | Per-pair identity+signature vectors, the frozen preimage literal, and the self-enforcing admitted-pair guard. **§5.** |
 | Format admission | `prikk-store/src/format.rs:22-45` | Decides which `(type, schema)` pairs may exist as stored objects at all. |
 | Object verification | `prikk-store/src/verify/objects.rs:273-315` | Where a stored object's signatures get classified, and where the `Block \| RefState` trust gate lives. |
 
@@ -158,44 +159,51 @@ not design anything new there.
 
 ---
 
-## 5. Gate A — and a real RFC 114 shortfall this stage must close
+## 5. Gate A — already built; satisfy it, do not rebuild it
 
-### 5.1 The identity vectors (required)
+**CORRECTED 2026-08-20, and the correction is mine.** The first issue of this handoff claimed the
+signature-preimage half of RFC 114 §4 gate 1 "was never built" and told you to construct it. **That was
+wrong.** I grepped `prikk-object` only, found nothing, and concluded absence; the machinery lives in
+`prikk-store`. Everything in this section is what is actually there. The withdrawn claim is recorded
+rather than deleted so that nobody re-derives it from the same bad search.
 
-Add **two** rows to `prikk-object/src/vectors/snapshot.txt`:
+**What exists, in `crates/prikk-store/src/signature_contract_tests/vectors.rs`:**
 
-- `empty_recognition_claim|11|1||<id>` — empty payload, matching every other type's empty row.
-- `recognition_claim_populated|11|1|<payload_hex>|<id>` — one block id, at least two patch ids.
+- `dc39_literal_vector_signs_and_verifies_through_production_apis` — freezes the **full signature
+  preimage as literal hex**. `SIGNATURE_DOMAIN` and `signed_bytes`' field order are frozen.
+- `every_signature_preimage_field_is_cryptographically_bound` — flips a byte at each field offset
+  (0, 12, 14, 16, 48, 50, 52) and requires verification to fail. **Index 14 is inside the
+  `object_type` field, so cross-type domain separation is already covered.**
+- `rfc114_vector_7` … `rfc114_vector_12` — per-pair **identity *and* signature** vectors for Block
+  schema 2, RefState schema 1, RefState closed, RefUpdate, Tag, and Blob.
+- `rfc114_gate_a_every_admitted_pair_is_frozen_or_declared_unwritten` — **the self-enforcing guard.**
+  It calls the real `validate_format2_schema` over every `(type, schema)` pair and asserts each
+  admitted pair is either frozen with a vector or listed in `RFC114_ADMITTED_BUT_UNWRITTEN`.
 
-**Read `snapshot.rs`'s own header before touching that file.** Adding a new type is a legitimate
-reason for the snapshot to grow; it is **never** a reason for an existing row to change. If any
-pre-existing row moves, that is a stop-work finding — escalate with the differing rows, do not
-regenerate. `PRIKK_REGEN=1` is not the tool for this increment.
+### 5.1 What this means for you, concretely
 
-### 5.2 The signature-preimage vectors (also required — and this is the shortfall)
+Because §4 has you add `ObjectType::RecognitionClaim => &[1]` to `validate_format2_schema`, **that guard
+starts failing the moment you make that edit.** That is the design working: you cannot land an admitted
+pair without a vector. Do not add `RecognitionClaim` to `RFC114_ADMITTED_BUT_UNWRITTEN` to quiet it —
+this stage *does* write the pair.
 
-RFC 114 §4 gate 1 specifies frozen vectors of *"committed bytes plus their expected object id **and
-signature preimage**."* **The signature-preimage half was never built.** I checked: no
-`signature_preimage` vector exists anywhere in `prikk-object`, and `snapshot.txt` freezes object ids
-only. Gate A is currently half-delivered.
+Deliver instead:
 
-Stage 2 is where that bites, because this is the first *signed* object type added since RFC 114 was
-accepted, and a claim whose only value is its signature is exactly the thing an unfrozen preimage
-would silently break.
+1. **A per-pair vector**, `rfc114_vector_13_recognition_claim_schema_1_identity_and_signature`, modeled
+   on `rfc114_vector_11_...` (Tag) — the closest existing shape. Identity **and** signature, using the
+   existing `RFC114_MAINTAINER_SEED` / `RFC114_MAINTAINER_KEY_ID` fixtures.
+2. **Add `ObjectType::RecognitionClaim` to `frozen`** in the Gate A guard, and to `ALL_OBJECT_TYPES`
+   (its `all_object_types_is_exhaustive` companion asserts the length — update it to 11).
+3. **Two rows in `prikk-object/src/vectors/snapshot.txt`**:
+   `empty_recognition_claim|11|1||<id>` and `recognition_claim_populated|11|1|<payload_hex>|<id>`.
 
-**Ruled: freeze the signature preimage for every current `(ObjectType, SignerRole)` combination, not
-only for `RecognitionClaim`.** A vector covering only the newest type would not catch a change to
-`SIGNATURE_DOMAIN` or to `signed_bytes`' field order — the surfaces actually at risk — and those
-affect all ten types equally. The preimage is a pure function of
-`(algorithm, object_type, object_id, signer_role, key_id)`, so this is a generated snapshot in the
-same shape as the existing one, over a fixed synthetic object id and a fixed `key_id`. It is cheap.
+**Read `snapshot.rs`'s header before touching that file.** A new type is a legitimate reason for the
+snapshot to *grow*; it is never a reason for an existing row to *change*. If any pre-existing row moves,
+that is a stop-work finding — escalate with the differing rows. `PRIKK_REGEN=1` is not the tool here.
 
-**I am aware this is wider than "Stage 2".** It is delivering an obligation RFC 114 already accepted
-rather than new scope, and the standing principle is that correctness beats initial effort. If the
-owner would rather split it into its own increment, that is their call to make — **say so in your
-report and implement Stage 2 without it**; do not decide unilaterally in either direction.
-
----
+**Observe the guard failing before you satisfy it.** Make the `format.rs` edit first, run the suite, and
+record the actual failure text from `rfc114_gate_a_every_admitted_pair_is_frozen_or_declared_unwritten`
+in your report. A gate nobody has seen fire is not evidence — and this one you get for free.
 
 ## 6. The received-namespace finding, folded in
 
@@ -235,8 +243,11 @@ Design §8 lists seven refusals. These are the ones Stage 2 can actually exercis
 | 7 | Trust never expands (§8.2) | Assert no adopted-key set changes across claim verification |
 
 Property 2 is the domain-separation one and is the reason `object_type` is in the preimage at all.
-It is currently untested for **any** type — §5.2's vectors and this test are the same argument
-arriving from two directions.
+**It is already covered generically** by `every_signature_preimage_field_is_cryptographically_bound`,
+which flips a byte at offset 14 — inside the `object_type` field. What that test does not do is
+exercise it for *this* type through the production signing path, which is what row 2 adds. Cite the
+existing test in your new one so the relationship is on the record and nobody later reads them as
+duplicates.
 
 **On negative controls, from this week's DC-78 review:** mutate **the narrowest line that should
 break the claim**, not the whole function. A control that reverts two things at once will report
@@ -271,10 +282,10 @@ vacuously through two rounds.
    contains `#[cfg(target_os)]`** — check this diff, do not carry the answer forward.
 3. Test counts before and after, per crate.
 4. **Whether any pre-existing `snapshot.txt` row changed.** If one did: stop and escalate, per §5.1.
-5. **Your decision on §5.2's scope**, and whether you implemented it or deferred it for the owner.
-6. Anything in this handoff that turned out to be wrong. **Say so plainly** — three of my documents
-   this month contained an error the dev team found by building against it, and each was worth more
-   to me than the parts that were right.
+5. Anything in this handoff that turned out to be wrong. **Say so plainly.** §5 of this very document
+   was wrong in its first issue and I corrected it before you started; several of my documents this
+   month have contained an error found by building against them, and each was worth more to me than
+   the parts that were right.
 
 **Stop and escalate, do not guess**, if: a decision in §2–§5 turns out to be unimplementable as
 stated; a compiler-forced site in §1 wants a semantic choice this handoff does not make; or adding
