@@ -9,6 +9,16 @@
 //! module adds a serialization boundary and an import path, and deliberately no new verification
 //! machinery (§D6's "no new verification path").
 //!
+//! **`heads/*` and `tags/*` both export** (`resolve_ref_target_block`). A branch's `target_object_id`
+//! names its Block directly; a tag's names a Tag object one hop away
+//! (`TagPayload.target_block_id` is the Block), mirroring the two-hop model
+//! `refs/verify/scan.rs`'s own `ensure_block_exists`/tag-target check already uses. **The Tag
+//! envelope itself is part of the exported object set, not just the Block closure it points to**:
+//! the tag ref's `RefState` travels unconditionally either way, and a receiver holding a signed
+//! RefState that names a Tag object they do not have fails `verify` with a message naming exactly
+//! that (DC-78 bundle-export tag gap follow-up, `bundle-export-tag-ref-gap-v1.md` — found while
+//! investigating RFC 115 Stage 1's own reachable-set question, fixed independently of it).
+//!
 //! **DC-53 Stage 2, D6: `PBNDL002` carries an AUTHOR key-material section.** The section's scope is
 //! exactly the AUTHOR `key_id`s of the Patches this bundle carries, derived from the exported objects
 //! themselves, never the whole local `author_key_index` container -- exporting everything this
@@ -48,7 +58,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, Signature, SignerRole};
+use prikk_object::{
+    ObjectEnvelope, ObjectId, ObjectType, RefKind, RefStatePayload, Signature, SignerRole,
+    TagPayload,
+};
 
 use crate::author_key_index::{
     AuthorKeyEntry, check_author_key_conflict, lookup_author_key_entries,
@@ -175,7 +188,9 @@ pub fn export_bundle(
         &ref_state_envelope.canonical_payload,
         ref_state_envelope.schema_version,
     )?;
-    let tip_block_id = ref_state_payload.target_object_id;
+    let mut tag_envelopes: Vec<ObjectEnvelope> = Vec::new();
+    let tip_block_id =
+        resolve_ref_target_block(&object_store, &ref_state_payload, &mut tag_envelopes)?;
 
     // Genesis-complete (ruling 2) covers the publication chain too, not only the Block DAG: a
     // received ref's `log --ref` walks `previous_ref_state_id` exactly as a local ref's does, so
@@ -201,9 +216,11 @@ pub fn export_bundle(
             envelope.schema_version,
         )?;
         required_attestation_ids.extend(payload.required_attestation_ids.iter().copied());
+        let target_block_id =
+            resolve_ref_target_block(&object_store, &payload, &mut tag_envelopes)?;
         ancestors.extend(crate::merge_evidence::ancestors_inclusive(
             &object_store,
-            payload.target_object_id,
+            target_block_id,
         )?);
         previous = payload.previous_ref_state_id;
         ref_state_chain.push(envelope);
@@ -219,6 +236,7 @@ pub fn export_bundle(
     }
 
     let mut objects: Vec<ObjectEnvelope> = ref_state_chain;
+    objects.append(&mut tag_envelopes);
     for block_id in ancestors.keys() {
         objects.push(read_required(&object_store, *block_id, ObjectType::Block)?);
     }
@@ -459,6 +477,37 @@ fn read_required(
     object_store
         .read_typed(id, object_type)?
         .ok_or_else(|| PrikkError::Integrity(format!("missing {object_type} object: {id}")))
+}
+
+/// Resolve `ref_state_payload.target_object_id` to the Block it ultimately names -- one hop for a
+/// `Branch` (the target *is* the Block), two hops for a `Tag` (the target is a Tag object; its own
+/// `target_block_id` is the Block). `refs/verify/scan.rs`'s own `ensure_block_exists`/tag-target
+/// check already models this same two-hop shape; `export_bundle` did not (DC-78 bundle-export tag
+/// gap follow-up, `bundle-export-tag-ref-gap-v1.md`).
+///
+/// **Exhaustive match, no wildcard**: a future `RefKind` variant must fail to compile here rather
+/// than silently resolve to nothing and surface as a misleading "missing Block" error the way the
+/// original defect did.
+///
+/// For a `Tag`, the resolved Tag envelope is pushed onto `tag_envelopes` so the caller can include
+/// it in the exported object set -- omitting it would hand a receiver a signed RefState naming an
+/// object they do not have, which fails their `verify` with a message naming exactly that.
+fn resolve_ref_target_block(
+    object_store: &impl ObjectReader,
+    ref_state_payload: &RefStatePayload,
+    tag_envelopes: &mut Vec<ObjectEnvelope>,
+) -> Result<ObjectId> {
+    match ref_state_payload.kind {
+        RefKind::Branch => Ok(ref_state_payload.target_object_id),
+        RefKind::Tag => {
+            let tag_id = ref_state_payload.target_object_id;
+            let tag_envelope = read_required(object_store, tag_id, ObjectType::Tag)?;
+            let tag_payload = TagPayload::decode_canonical(&tag_envelope.canonical_payload)?;
+            let target_block_id = tag_payload.target_block_id;
+            tag_envelopes.push(tag_envelope);
+            Ok(target_block_id)
+        }
+    }
 }
 
 fn encode_bundle(
