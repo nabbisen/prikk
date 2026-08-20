@@ -46,6 +46,10 @@ fn object_type_codes_match_fdd_section_3() {
         (ObjectType::BlockSummaryCache, 0x08),
         (ObjectType::RecoveryNote, 0x09),
         (ObjectType::ProjectGenesis, 0x0A),
+        // RFC 115 Stage 2 (design-v1.md D3): the first code assigned after FDD-03 §3's original
+        // ratified list. Same pinning discipline -- part of the ObjectId preimage, frozen on
+        // first write.
+        (ObjectType::RecognitionClaim, 0x0B),
     ];
     for &(ty, code) in expected {
         assert_eq!(ty.code(), code, "{ty} has wrong FDD-03 §3 code");

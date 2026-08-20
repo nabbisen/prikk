@@ -52,6 +52,7 @@ fn format2_allowlist_covers_every_registered_type() {
         (ObjectType::Tag, 1, true),
         (ObjectType::Attestation, 1, true),
         (ObjectType::Blob, 1, true),
+        (ObjectType::RecognitionClaim, 1, true),
         (ObjectType::BlockSummaryCache, 1, false),
         (ObjectType::RecoveryNote, 1, false),
         (ObjectType::ProjectGenesis, 1, false),
@@ -71,6 +72,7 @@ fn format2_rejects_wrong_schema_for_every_allowed_type() {
         ObjectType::Tag,
         ObjectType::Attestation,
         ObjectType::Blob,
+        ObjectType::RecognitionClaim,
     ] {
         // RefState alone accepts two schemas (1 and REF_STATE_CLOSED_SCHEMA = 2, DC-61), so a
         // single "required + 1" probe is not wrong for it the way it is for every other type;

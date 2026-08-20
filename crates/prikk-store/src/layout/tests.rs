@@ -27,14 +27,14 @@ fn files_under(dir: &std::path::Path) -> Result<HashSet<PathBuf>> {
 
 /// RFC 102 Stage 3 acceptance criterion 1 (handoff §5): "No container or index name is created
 /// after `init` — proven by enumeration." Enumerates every container-family path
-/// `RepositoryLayout` knows about (12 container slots, the index, the generation log), confirms each
+/// `RepositoryLayout` knows about (14 container slots, the index, the generation log), confirms each
 /// exists and is empty immediately after `init`, then re-runs `init` on the same root and confirms
 /// nothing about them changed -- an idempotent re-`init` must not clobber or recreate any of them,
 /// the same rule Stage 1 established for the worktree marker and the active WAL. Finally writes real
 /// objects of every persisted type through `FileObjectStore` (ordinary use, not just re-`init`) and
-/// re-enumerates the whole `containers/` tree from the filesystem itself -- not just the 14 paths
-/// `RepositoryLayout` names -- confirming the file *set* is still exactly those 14: ordinary writes
-/// grow existing files, they never create a fifteenth.
+/// re-enumerates the whole `containers/` tree from the filesystem itself -- not just the 16 paths
+/// `RepositoryLayout` names -- confirming the file *set* is still exactly those 16: ordinary writes
+/// grow existing files, they never create a seventeenth.
 #[test]
 fn init_allocates_every_container_index_and_generation_log_name_once() -> Result<()> {
     let root = unique_temp_dir("layout-container-allocation");
@@ -50,8 +50,8 @@ fn init_allocates_every_container_index_and_generation_log_name_once() -> Result
 
     assert_eq!(
         container_paths.len(),
-        14,
-        "6 object types x 2 slots + index + generation log"
+        16,
+        "7 object types x 2 slots + index + generation log"
     );
     for path in &container_paths {
         assert!(path.is_file(), "expected {path:?} to exist after init");
@@ -293,16 +293,19 @@ fn init_allocates_every_active_default_container_name_once_excluding_the_runtime
     Ok(())
 }
 
-/// Dead-surface consolidation, acceptance criterion 3: `required_directories()` dropping ten
-/// directories (`objects/` + its six type subdirectories, `refs/by-id/`, `refs/logs/`,
+/// Dead-surface consolidation, acceptance criterion 3: `required_directories()` dropping this
+/// project's dead directories (`objects/` + its type subdirectories, `refs/by-id/`, `refs/logs/`,
 /// `quarantine/`) is asserted, not argued, to be genuinely "not a format change" -- a fresh
 /// repository must still `init`, accept ordinary use (a real object write, a real ref publish), and
-/// `verify` clean, with none of the ten directories ever having existed. `refs/tmp/` is the control:
-/// it stays in `required_directories()` (`refs/verify.rs`'s `candidate_issues` scans it on every
-/// `verify`), so its continued presence -- proven the same way the other ten's absence is -- is what
-/// distinguishes "removed because nothing reads it" from "removed and something broke."
+/// `verify` clean, with none of them ever having existed. `refs/tmp/` is the control: it stays in
+/// `required_directories()` (`refs/verify.rs`'s `candidate_issues` scans it on every `verify`), so
+/// its continued presence -- proven the same way the others' absence is -- is what distinguishes
+/// "removed because nothing reads it" from "removed and something broke." The subdirectory count
+/// tracks `persisted_object_types()` (RFC 115 Stage 2 added `RecognitionClaim`, making eleven total
+/// absent paths where the criterion was originally written against ten), so this is computed, not
+/// hardcoded to whatever count existed the day the test was written.
 #[test]
-fn a_fresh_repository_opens_and_verifies_without_the_ten_removed_directories() -> Result<()> {
+fn a_fresh_repository_opens_and_verifies_without_the_dead_directories() -> Result<()> {
     let root = unique_temp_dir("layout-no-dead-directories");
     let layout = RepositoryLayout::init(root.clone())?;
 
@@ -322,14 +325,13 @@ fn a_fresh_repository_opens_and_verifies_without_the_ten_removed_directories() -
     }
     assert_eq!(
         absent_paths.len(),
-        10,
-        "objects/ + its six subdirectories + three others"
+        4 + persisted_object_types().len(),
+        "objects/ + one subdirectory per persisted object type + three others"
     );
     for absent in &absent_paths {
         assert!(
             !absent.exists(),
-            "expected {absent:?} to not exist after init -- it is one of the ten removed \
-             directories"
+            "expected {absent:?} to not exist after init -- it is one of the removed directories"
         );
     }
     assert!(
@@ -352,7 +354,7 @@ fn a_fresh_repository_opens_and_verifies_without_the_ten_removed_directories() -
     let report = verify_repository(&layout)?;
     assert!(
         !report.has_stage_failure(),
-        "expected a clean verify on a repository that never had the ten removed directories, got: \
+        "expected a clean verify on a repository that never had the removed directories, got: \
          {report:?}"
     );
 

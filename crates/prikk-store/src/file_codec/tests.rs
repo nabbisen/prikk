@@ -118,7 +118,8 @@ proptest! {
             | ObjectType::RefUpdate
             | ObjectType::Tag
             | ObjectType::Attestation
-            | ObjectType::Blob => schema_version == 1,
+            | ObjectType::Blob
+            | ObjectType::RecognitionClaim => schema_version == 1,
             ObjectType::BlockSummaryCache
             | ObjectType::RecoveryNote
             | ObjectType::ProjectGenesis => false,

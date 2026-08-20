@@ -121,6 +121,12 @@ pub(crate) const SNAPSHOT_CASES: &[IdCase] = &[
         schema_version: 1,
         payload: b"",
     },
+    IdCase {
+        name: "empty_recognition_claim",
+        object_type: ObjectType::RecognitionClaim,
+        schema_version: 1,
+        payload: b"",
+    },
 ];
 
 /// Populated Block payload exercising the DC-09 Phase 3 granular value types
@@ -133,6 +139,25 @@ pub(crate) const SNAPSHOT_CASES: &[IdCase] = &[
 pub(crate) fn blob_populated_payload() -> Vec<u8> {
     let blob = crate::BlobPayload::new(crate::BlobKind::Binary, vec![0xAB, 0xCD, 0xEF]);
     blob.to_canonical_bytes().expect("blob encodes")
+}
+
+/// Populated RecognitionClaim payload (RFC 115 Stage 2, D3): a real `block_id` plus two sorted,
+/// distinct `patch_ids`, so the repeated `object_id` framing (tag 2, emitted twice) is witnessed,
+/// not just the single-`block_id` field an empty-`patch_ids` case could not have (and the type
+/// refuses anyway -- `patch_ids` must be non-empty).
+// infallible: patch_ids sorted and non-empty.
+#[allow(clippy::expect_used)]
+pub(crate) fn recognition_claim_populated_payload() -> Vec<u8> {
+    let claim = crate::RecognitionClaimPayload {
+        block_id: ObjectId::from_bytes([0x11; 32]),
+        patch_ids: vec![
+            ObjectId::from_bytes([0x22; 32]),
+            ObjectId::from_bytes([0x33; 32]),
+        ],
+    };
+    claim
+        .to_canonical_bytes()
+        .expect("recognition claim encodes")
 }
 
 /// Populated Patch payload carrying one operation, so the `operations` list
@@ -321,6 +346,15 @@ pub(crate) fn generate_snapshot() -> String {
         ObjectType::Blob.code(),
         to_hex(&blob_p),
         blob_id.to_hex(),
+    ));
+    let recognition_claim_p = recognition_claim_populated_payload();
+    let recognition_claim_id =
+        ObjectId::from_canonical_payload(ObjectType::RecognitionClaim, 1, &recognition_claim_p);
+    out.push_str(&format!(
+        "recognition_claim_populated|{}|1|{}|{}\n",
+        ObjectType::RecognitionClaim.code(),
+        to_hex(&recognition_claim_p),
+        recognition_claim_id.to_hex(),
     ));
     out
 }

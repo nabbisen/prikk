@@ -27,7 +27,8 @@ pub(crate) fn validate_format2_schema(envelope: &ObjectEnvelope) -> Result<()> {
         | ObjectType::RefUpdate
         | ObjectType::Tag
         | ObjectType::Attestation
-        | ObjectType::Blob => &[1],
+        | ObjectType::Blob
+        | ObjectType::RecognitionClaim => &[1],
         ObjectType::BlockSummaryCache | ObjectType::RecoveryNote | ObjectType::ProjectGenesis => {
             return Err(PrikkError::Integrity(format!(
                 "{} is not authorized in a format-2 identity position",

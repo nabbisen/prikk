@@ -6,8 +6,8 @@ mod proptest_decoders;
 use super::{
     AttestationPayload, AttestationStatus, BlobKind, BlobPayload, BlockKind, BlockPayload,
     EditText, MerkleRoot, Operation, OperationKind, PatchPayload, PatchPurpose, PluginResultEntry,
-    REF_STATE_CLOSED_SCHEMA, RefKind, RefStatePayload, RefUpdatePayload, text_span_hash,
-    validate_text_anchor_id,
+    RECOGNITION_CLAIM_MAX_PATCH_IDS, REF_STATE_CLOSED_SCHEMA, RecognitionClaimPayload, RefKind,
+    RefStatePayload, RefUpdatePayload, text_span_hash, validate_text_anchor_id,
 };
 use crate::{CanonicalEncode, ObjectId, ObjectType, WireType};
 
@@ -256,6 +256,126 @@ fn ref_update_payload_decodes_its_canonical_bytes() {
         let decoded = RefUpdatePayload::decode_canonical(&bytes);
         assert_eq!(decoded, Ok(payload));
     }
+}
+
+#[test]
+fn recognition_claim_payload_decodes_its_canonical_bytes() {
+    let block = ObjectId::from_canonical_payload(ObjectType::Block, 2, b"block");
+    let patch_a = ObjectId::from_canonical_payload(ObjectType::Patch, 1, b"a");
+    let patch_b = ObjectId::from_canonical_payload(ObjectType::Patch, 1, b"b");
+    let (first, second) = if patch_a < patch_b {
+        (patch_a, patch_b)
+    } else {
+        (patch_b, patch_a)
+    };
+    let payload = RecognitionClaimPayload {
+        block_id: block,
+        patch_ids: vec![first, second],
+    };
+    let bytes = payload.to_canonical_bytes();
+    assert!(bytes.is_ok());
+    if let Ok(bytes) = bytes {
+        let decoded = RecognitionClaimPayload::decode_canonical(&bytes);
+        assert_eq!(decoded, Ok(payload));
+    }
+}
+
+/// Hand-write one canonical TLV field: tag (u16 BE) ‖ wire type (u8) ‖ length (u64 BE) ‖ value.
+fn write_field(out: &mut Vec<u8>, tag: u16, wire_type: WireType, value: &[u8]) {
+    out.extend_from_slice(&tag.to_be_bytes());
+    out.push(wire_type as u8);
+    out.extend_from_slice(&(value.len() as u64).to_be_bytes());
+    out.extend_from_slice(value);
+}
+
+#[test]
+fn recognition_claim_payload_rejects_unsorted_patch_ids_at_encode_and_decode() {
+    let block = ObjectId::from_canonical_payload(ObjectType::Block, 2, b"block");
+    let patch_a = ObjectId::from_canonical_payload(ObjectType::Patch, 1, b"a");
+    let patch_b = ObjectId::from_canonical_payload(ObjectType::Patch, 1, b"b");
+    let (first, second) = if patch_a < patch_b {
+        (patch_a, patch_b)
+    } else {
+        (patch_b, patch_a)
+    };
+
+    // Encoder: deliberately descending -- must be refused, not silently sorted.
+    let payload = RecognitionClaimPayload {
+        block_id: block,
+        patch_ids: vec![second, first],
+    };
+    assert!(payload.to_canonical_bytes().is_err());
+
+    // Decoder: hand it unsorted bytes directly, built by hand rather than through the encoder
+    // (which would itself refuse) -- per §7 row 5, the decoder must refuse independently, not
+    // merely inherit the encoder's own check.
+    let mut bytes = Vec::new();
+    write_field(&mut bytes, 1, WireType::ObjectId, block.as_bytes());
+    write_field(&mut bytes, 2, WireType::ObjectId, second.as_bytes());
+    write_field(&mut bytes, 2, WireType::ObjectId, first.as_bytes());
+    assert!(RecognitionClaimPayload::decode_canonical(&bytes).is_err());
+}
+
+#[test]
+fn recognition_claim_payload_rejects_duplicate_patch_ids_at_decode() {
+    let block = ObjectId::from_canonical_payload(ObjectType::Block, 2, b"block");
+    let patch = ObjectId::from_canonical_payload(ObjectType::Patch, 1, b"patch");
+    let mut bytes = Vec::new();
+    write_field(&mut bytes, 1, WireType::ObjectId, block.as_bytes());
+    write_field(&mut bytes, 2, WireType::ObjectId, patch.as_bytes());
+    write_field(&mut bytes, 2, WireType::ObjectId, patch.as_bytes());
+    assert!(RecognitionClaimPayload::decode_canonical(&bytes).is_err());
+}
+
+#[test]
+fn recognition_claim_payload_rejects_empty_patch_ids() {
+    let block = ObjectId::from_canonical_payload(ObjectType::Block, 2, b"block");
+    let payload = RecognitionClaimPayload {
+        block_id: block,
+        patch_ids: Vec::new(),
+    };
+    assert!(payload.to_canonical_bytes().is_err());
+}
+
+#[allow(clippy::expect_used)]
+#[test]
+fn recognition_claim_payload_rejects_unknown_field_tag() {
+    let block = ObjectId::from_canonical_payload(ObjectType::Block, 2, b"block");
+    let patch = ObjectId::from_canonical_payload(ObjectType::Patch, 1, b"patch");
+    let payload = RecognitionClaimPayload {
+        block_id: block,
+        patch_ids: vec![patch],
+    };
+    let mut bytes = payload.to_canonical_bytes().expect("payload must encode");
+    // Append one well-formed but unrecognized field (tag 99, empty string) after the real fields.
+    bytes.extend_from_slice(&99_u16.to_be_bytes());
+    bytes.push(WireType::String as u8);
+    bytes.extend_from_slice(&0_u64.to_be_bytes());
+    assert!(RecognitionClaimPayload::decode_canonical(&bytes).is_err());
+}
+
+#[allow(clippy::expect_used)]
+#[test]
+fn recognition_claim_payload_rejects_patch_ids_over_the_declared_limit() {
+    let block = ObjectId::from_canonical_payload(ObjectType::Block, 2, b"block");
+    // RECOGNITION_CLAIM_MAX_PATCH_IDS + 1 strictly ascending patch ids -- exceeds the bound by
+    // exactly one, so decode must refuse at the boundary, per §7 row 6.
+    let mut patch_ids = Vec::with_capacity(RECOGNITION_CLAIM_MAX_PATCH_IDS + 1);
+    for index in 0..=RECOGNITION_CLAIM_MAX_PATCH_IDS {
+        let mut seed = [0_u8; 32];
+        seed[..8].copy_from_slice(&(index as u64).to_be_bytes());
+        patch_ids.push(ObjectId::from_bytes(seed));
+    }
+    patch_ids.sort();
+    let payload = RecognitionClaimPayload {
+        block_id: block,
+        patch_ids,
+    };
+    let bytes = payload
+        .to_canonical_bytes()
+        .expect("over-limit payload must still encode -- the bound is enforced on decode");
+    let result = RecognitionClaimPayload::decode_canonical(&bytes);
+    assert!(result.is_err(), "decode must refuse over-limit patch_ids");
 }
 
 fn plugin_result(plugin_id: &str, plugin_version: &str, report_byte: u8) -> PluginResultEntry {

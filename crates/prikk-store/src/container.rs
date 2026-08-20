@@ -37,6 +37,7 @@ pub(crate) fn container_magic(object_type: ObjectType) -> Result<&'static [u8; 8
         ObjectType::Tag => Ok(b"PCONTAG1"),
         ObjectType::Attestation => Ok(b"PCONATT1"),
         ObjectType::Blob => Ok(b"PCONBLB1"),
+        ObjectType::RecognitionClaim => Ok(b"PCONRCL1"),
         other => Err(PrikkError::UnsupportedObjectType(format!(
             "{other} has no object container"
         ))),

@@ -837,7 +837,7 @@ fn read_repository_format(root: &MutationRoot) -> Result<RepositoryFormat> {
 
 /// Return persisted object types. RefUpdate is log-inline in v1 and is intentionally absent.
 #[must_use]
-pub fn persisted_object_types() -> [ObjectType; 6] {
+pub fn persisted_object_types() -> [ObjectType; 7] {
     [
         ObjectType::Patch,
         ObjectType::Block,
@@ -845,6 +845,7 @@ pub fn persisted_object_types() -> [ObjectType; 6] {
         ObjectType::Tag,
         ObjectType::Attestation,
         ObjectType::Blob,
+        ObjectType::RecognitionClaim,
     ]
 }
 
@@ -858,6 +859,7 @@ pub fn object_type_directory_name(object_type: ObjectType) -> &'static str {
         ObjectType::Tag => "tag",
         ObjectType::Attestation => "attestation",
         ObjectType::Blob => "blob",
+        ObjectType::RecognitionClaim => "recognition-claim",
         ObjectType::RefUpdate => "ref-update-inline-only",
         // New FDD-03 §3 types. Full storage-layout placement (`objects/genesis/`,
         // `cache/block-summary/`, `refs/recovery/`) is reconciled in the FDD-02

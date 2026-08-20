@@ -20,18 +20,20 @@ use crate::{
 /// occurrence (the last one, since §14.2 orders it last) needs a skip count derived from the exact
 /// sequence, not assumed. RFC 102 Stage 6 Step 1 (design-v1.md §15.6) gives each of the three genuine
 /// compaction targets (ref pointer index, received index, trust policy container) its own A/B slot
-/// pair and generation log -- 3 names apiece instead of the 1 each carried before this stage.
+/// pair and generation log -- 3 names apiece instead of the 1 each carried before this stage. RFC 115
+/// Stage 2 added `ObjectType::RecognitionClaim` as a seventh persisted object type (two more slot
+/// creations, A and B).
 /// Recomputed directly from `init`'s own call sequence: 3 fixed names (worktree marker, WAL,
-/// active-ref metadata) + 6 persisted object types × 2 slots (12) + the object index + generation log
+/// active-ref metadata) + 7 persisted object types × 2 slots (14) + the object index + generation log
 /// (2) + 2 ref-log slots + 3 ref-pointer-index (A/B/genlog) + 3 received-index (A/B/genlog) + 1 trust
-/// key + 3 trust-policy (A/B/genlog) = 29 names before `FORMAT` itself, so skip 29 to land on the 30th
+/// key + 3 trust-policy (A/B/genlog) = 31 names before `FORMAT` itself, so skip 31 to land on the 32nd
 /// occurrence. If a future stage adds another `init`-time name before `FORMAT`, this count needs
 /// updating -- the same maintenance `ref_log_parent_sync_failure_retains_one_update_and_retries` below
 /// already carries for the same reason.
 #[test]
 fn repository_format_create_sync_failure_retains_and_retries() -> prikk_error::Result<()> {
     let root = unique_temp_dir("repository-sync-matrix");
-    fail_after_for_test(TestFailPoint::RequiredDirectorySync, 30);
+    fail_after_for_test(TestFailPoint::RequiredDirectorySync, 32);
     assert!(RepositoryLayout::init(root.clone()).is_err());
     assert!(
         root.join(".prikk/FORMAT").is_file(),
