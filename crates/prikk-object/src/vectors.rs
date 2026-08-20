@@ -144,7 +144,9 @@ pub(crate) fn blob_populated_payload() -> Vec<u8> {
 /// Populated RecognitionClaim payload (RFC 115 Stage 2, D3): a real `block_id` plus two sorted,
 /// distinct `patch_ids`, so the repeated `object_id` framing (tag 2, emitted twice) is witnessed,
 /// not just the single-`block_id` field an empty-`patch_ids` case could not have (and the type
-/// refuses anyway -- `patch_ids` must be non-empty).
+/// refuses anyway -- `patch_ids` must be non-empty). `parent_block_ids` empty -- a root block has
+/// none, and RFC 116 N3's own amendment requires this frozen vector's bytes not move: an empty
+/// repeated field (tag 3) writes nothing, so this case is unchanged from before N3 landed.
 // infallible: patch_ids sorted and non-empty.
 #[allow(clippy::expect_used)]
 pub(crate) fn recognition_claim_populated_payload() -> Vec<u8> {
@@ -154,10 +156,31 @@ pub(crate) fn recognition_claim_populated_payload() -> Vec<u8> {
             ObjectId::from_bytes([0x22; 32]),
             ObjectId::from_bytes([0x33; 32]),
         ],
+        parent_block_ids: Vec::new(),
     };
     claim
         .to_canonical_bytes()
         .expect("recognition claim encodes")
+}
+
+/// A second RecognitionClaim vector (RFC 116 design-v1.md §3, N3), witnessing the new
+/// `parent_block_ids` field (tag 3) with real content -- the existing `recognition_claim_populated`
+/// case above stays empty-parented on purpose, so this is the only vector that actually exercises
+/// tag 3's repeated `object_id` framing.
+// infallible: patch_ids and parent_block_ids both sorted and non-empty.
+#[allow(clippy::expect_used)]
+pub(crate) fn recognition_claim_with_parents_payload() -> Vec<u8> {
+    let claim = crate::RecognitionClaimPayload {
+        block_id: ObjectId::from_bytes([0x44; 32]),
+        patch_ids: vec![ObjectId::from_bytes([0x55; 32])],
+        parent_block_ids: vec![
+            ObjectId::from_bytes([0x66; 32]),
+            ObjectId::from_bytes([0x77; 32]),
+        ],
+    };
+    claim
+        .to_canonical_bytes()
+        .expect("recognition claim with parents encodes")
 }
 
 /// Populated Patch payload carrying one operation, so the `operations` list
@@ -355,6 +378,18 @@ pub(crate) fn generate_snapshot() -> String {
         ObjectType::RecognitionClaim.code(),
         to_hex(&recognition_claim_p),
         recognition_claim_id.to_hex(),
+    ));
+    let recognition_claim_with_parents_p = recognition_claim_with_parents_payload();
+    let recognition_claim_with_parents_id = ObjectId::from_canonical_payload(
+        ObjectType::RecognitionClaim,
+        1,
+        &recognition_claim_with_parents_p,
+    );
+    out.push_str(&format!(
+        "recognition_claim_with_parents|{}|1|{}|{}\n",
+        ObjectType::RecognitionClaim.code(),
+        to_hex(&recognition_claim_with_parents_p),
+        recognition_claim_with_parents_id.to_hex(),
     ));
     out
 }

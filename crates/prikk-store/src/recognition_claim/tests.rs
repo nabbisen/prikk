@@ -1,8 +1,9 @@
-//! RFC 115 Stage 2 tests for `check_recognition_claim_consistency`. §7 rows 3 and 4.
+//! RFC 115 Stage 2 tests for `check_recognition_claim_consistency`. §7 rows 3 and 4. RFC 116 N3's
+//! own §7 rows 3 and 4 (the field-discriminator pair) live at the bottom of this file.
 
 use prikk_object::{BlockKind, CanonicalEncode, ObjectId, RecognitionClaimPayload};
 
-use super::{RecognitionClaimConsistency, check_recognition_claim_consistency};
+use super::{ContradictedField, RecognitionClaimConsistency, check_recognition_claim_consistency};
 use crate::test_support::{signed_block, unique_temp_dir};
 use crate::trust::load_maintainer_trust_policy;
 use crate::{FileObjectStore, ObjectWriter, RepositoryLayout};
@@ -18,6 +19,7 @@ fn claim_about_an_absent_block_reads_block_absent() -> prikk_error::Result<()> {
     let claim = RecognitionClaimPayload {
         block_id: ObjectId::from_bytes([0x71; 32]),
         patch_ids: vec![ObjectId::from_bytes([0x72; 32])],
+        parent_block_ids: Vec::new(),
     };
     let outcome = check_recognition_claim_consistency(&store, &claim)?;
     assert_eq!(outcome, RecognitionClaimConsistency::BlockAbsent);
@@ -40,11 +42,13 @@ fn claim_contradicting_a_held_block_is_contradicted() -> prikk_error::Result<()>
     let claim = RecognitionClaimPayload {
         block_id,
         patch_ids: vec![lying_patch],
+        parent_block_ids: Vec::new(),
     };
     let outcome = check_recognition_claim_consistency(&store, &claim)?;
     assert_eq!(
         outcome,
         RecognitionClaimConsistency::Contradicted {
+            field: ContradictedField::PatchIds,
             claimed: vec![lying_patch],
             actual: vec![real_patch],
         }
@@ -73,6 +77,7 @@ fn claim_carrying_the_blocks_own_verbatim_order_round_trips_and_reads_consistent
     let claim = RecognitionClaimPayload {
         block_id,
         patch_ids: vec![high, low],
+        parent_block_ids: Vec::new(),
     };
     let bytes = claim.to_canonical_bytes()?;
     let decoded = RecognitionClaimPayload::decode_canonical(&bytes)?;
@@ -113,11 +118,13 @@ fn claim_permuting_a_held_blocks_own_order_is_contradicted() -> prikk_error::Res
     let claim = RecognitionClaimPayload {
         block_id,
         patch_ids: vec![low, high],
+        parent_block_ids: Vec::new(),
     };
     let outcome = check_recognition_claim_consistency(&store, &claim)?;
     assert_eq!(
         outcome,
         RecognitionClaimConsistency::Contradicted {
+            field: ContradictedField::PatchIds,
             claimed: vec![low, high],
             actual: vec![high, low],
         }
@@ -152,6 +159,7 @@ fn checking_a_recognition_claim_never_changes_the_adopted_key_set() -> prikk_err
     let absent_claim = RecognitionClaimPayload {
         block_id: ObjectId::from_bytes([0x78; 32]),
         patch_ids: vec![patch],
+        parent_block_ids: Vec::new(),
     };
     check_recognition_claim_consistency(&store, &absent_claim)?;
     assert_eq!(load_maintainer_trust_policy(&layout)?, before);
@@ -159,6 +167,7 @@ fn checking_a_recognition_claim_never_changes_the_adopted_key_set() -> prikk_err
     let contradicted_claim = RecognitionClaimPayload {
         block_id,
         patch_ids: vec![ObjectId::from_bytes([0x79; 32])],
+        parent_block_ids: Vec::new(),
     };
     check_recognition_claim_consistency(&store, &contradicted_claim)?;
     assert_eq!(load_maintainer_trust_policy(&layout)?, before);
@@ -166,10 +175,75 @@ fn checking_a_recognition_claim_never_changes_the_adopted_key_set() -> prikk_err
     let consistent_claim = RecognitionClaimPayload {
         block_id,
         patch_ids: vec![patch],
+        parent_block_ids: Vec::new(),
     };
     check_recognition_claim_consistency(&store, &consistent_claim)?;
     assert_eq!(load_maintainer_trust_policy(&layout)?, before);
 
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 116 N3 §7 row 3: a claim whose `parent_block_ids` disagree with a held block's own is
+/// `Contradicted`, naming the parent field specifically -- not reported as a patch disagreement,
+/// even though `patch_ids` themselves match exactly.
+#[test]
+fn claim_with_wrong_parents_is_contradicted_naming_the_parent_field() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc116-recognition-claim-parent-contradicted");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout);
+    let real_parent = ObjectId::from_bytes([0x81; 32]);
+    let patch = ObjectId::from_bytes([0x82; 32]);
+    let block = signed_block(BlockKind::Normal, vec![real_parent], vec![patch], None);
+    let block_id = store.write_object(&block)?;
+
+    let lying_parent = ObjectId::from_bytes([0x83; 32]);
+    let claim = RecognitionClaimPayload {
+        block_id,
+        patch_ids: vec![patch],
+        parent_block_ids: vec![lying_parent],
+    };
+    let outcome = check_recognition_claim_consistency(&store, &claim)?;
+    assert_eq!(
+        outcome,
+        RecognitionClaimConsistency::Contradicted {
+            field: ContradictedField::ParentBlockIds,
+            claimed: vec![lying_parent],
+            actual: vec![real_parent],
+        }
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 116 N3 §7 row 4: a claim whose `patch_ids` disagree with a held block still reports as a
+/// *patch* mismatch, even when the claim carries a real, matching `parent_block_ids` -- the field
+/// discriminator must not garble or default to the wrong field just because both are present.
+#[test]
+fn claim_with_wrong_patches_still_reports_as_a_patch_mismatch() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc116-recognition-claim-patch-mismatch-with-parents");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout);
+    let real_parent = ObjectId::from_bytes([0x84; 32]);
+    let real_patch = ObjectId::from_bytes([0x85; 32]);
+    let block = signed_block(BlockKind::Normal, vec![real_parent], vec![real_patch], None);
+    let block_id = store.write_object(&block)?;
+
+    let lying_patch = ObjectId::from_bytes([0x86; 32]);
+    let claim = RecognitionClaimPayload {
+        block_id,
+        patch_ids: vec![lying_patch],
+        parent_block_ids: vec![real_parent],
+    };
+    let outcome = check_recognition_claim_consistency(&store, &claim)?;
+    assert_eq!(
+        outcome,
+        RecognitionClaimConsistency::Contradicted {
+            field: ContradictedField::PatchIds,
+            claimed: vec![lying_patch],
+            actual: vec![real_patch],
+        }
+    );
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }

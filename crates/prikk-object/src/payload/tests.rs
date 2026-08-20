@@ -271,6 +271,7 @@ fn recognition_claim_payload_decodes_its_canonical_bytes() {
     let payload = RecognitionClaimPayload {
         block_id: block,
         patch_ids: vec![first, second],
+        parent_block_ids: Vec::new(),
     };
     let bytes = payload.to_canonical_bytes();
     assert!(bytes.is_ok());
@@ -299,6 +300,7 @@ fn recognition_claim_payload_preserves_unsorted_order_through_encode_and_decode(
     let payload = RecognitionClaimPayload {
         block_id: block,
         patch_ids: vec![second, first],
+        parent_block_ids: Vec::new(),
     };
     let bytes = payload.to_canonical_bytes();
     assert!(bytes.is_ok());
@@ -322,6 +324,7 @@ fn recognition_claim_payload_preserves_duplicate_patch_ids_through_encode_and_de
     let payload = RecognitionClaimPayload {
         block_id: block,
         patch_ids: vec![patch, patch],
+        parent_block_ids: Vec::new(),
     };
     let bytes = payload.to_canonical_bytes();
     assert!(bytes.is_ok());
@@ -341,6 +344,7 @@ fn recognition_claim_payload_rejects_empty_patch_ids() {
     let payload = RecognitionClaimPayload {
         block_id: block,
         patch_ids: Vec::new(),
+        parent_block_ids: Vec::new(),
     };
     assert!(payload.to_canonical_bytes().is_err());
 }
@@ -353,6 +357,7 @@ fn recognition_claim_payload_rejects_unknown_field_tag() {
     let payload = RecognitionClaimPayload {
         block_id: block,
         patch_ids: vec![patch],
+        parent_block_ids: Vec::new(),
     };
     let mut bytes = payload.to_canonical_bytes().expect("payload must encode");
     // Append one well-formed but unrecognized field (tag 99, empty string) after the real fields.
@@ -378,12 +383,94 @@ fn recognition_claim_payload_rejects_patch_ids_over_the_declared_limit() {
     let payload = RecognitionClaimPayload {
         block_id: block,
         patch_ids,
+        parent_block_ids: Vec::new(),
     };
     let bytes = payload
         .to_canonical_bytes()
         .expect("over-limit payload must still encode -- the bound is enforced on decode");
     let result = RecognitionClaimPayload::decode_canonical(&bytes);
     assert!(result.is_err(), "decode must refuse over-limit patch_ids");
+}
+
+/// RFC 116 N3 §7 row 1: `parent_block_ids` round-trips verbatim -- unsorted order and a duplicate
+/// both preserved, exactly as D6 already established for `patch_ids`.
+#[test]
+fn recognition_claim_payload_preserves_parent_block_ids_order_and_duplicates() {
+    let block = ObjectId::from_canonical_payload(ObjectType::Block, 2, b"block");
+    let patch = ObjectId::from_canonical_payload(ObjectType::Patch, 1, b"patch");
+    let parent_a = ObjectId::from_canonical_payload(ObjectType::Block, 2, b"parent-a");
+    let parent_b = ObjectId::from_canonical_payload(ObjectType::Block, 2, b"parent-b");
+    // Deliberately descending, with a duplicate -- neither sorted nor deduplicated.
+    let (first, second) = if parent_a > parent_b {
+        (parent_a, parent_b)
+    } else {
+        (parent_b, parent_a)
+    };
+    let payload = RecognitionClaimPayload {
+        block_id: block,
+        patch_ids: vec![patch],
+        parent_block_ids: vec![first, second, first],
+    };
+    let bytes = payload.to_canonical_bytes();
+    assert!(bytes.is_ok());
+    if let Ok(bytes) = bytes {
+        let decoded = RecognitionClaimPayload::decode_canonical(&bytes);
+        assert_eq!(
+            decoded.map(|payload| payload.parent_block_ids),
+            Ok(vec![first, second, first]),
+            "decoded parent order must match the encoded order exactly, duplicate included"
+        );
+    }
+}
+
+/// RFC 116 N3 §7 row 2: an empty `parent_block_ids` -- the root-block case -- round-trips and is
+/// not an error. Not a degenerate value; the common case.
+#[test]
+fn recognition_claim_payload_with_empty_parent_block_ids_is_not_an_error() {
+    let block = ObjectId::from_canonical_payload(ObjectType::Block, 2, b"block");
+    let patch = ObjectId::from_canonical_payload(ObjectType::Patch, 1, b"patch");
+    let payload = RecognitionClaimPayload {
+        block_id: block,
+        patch_ids: vec![patch],
+        parent_block_ids: Vec::new(),
+    };
+    let bytes = payload.to_canonical_bytes();
+    assert!(
+        bytes.is_ok(),
+        "an empty parent_block_ids must encode successfully"
+    );
+    if let Ok(bytes) = bytes {
+        let decoded = RecognitionClaimPayload::decode_canonical(&bytes);
+        assert_eq!(decoded, Ok(payload));
+    }
+}
+
+/// RFC 116 N3 §7 row 5: an over-limit declared `parent_block_ids` count is rejected before
+/// allocating the over-limit entry -- the same per-push bound `patch_ids` already has.
+#[allow(clippy::expect_used)]
+#[test]
+fn recognition_claim_payload_rejects_parent_block_ids_over_the_declared_limit() {
+    let block = ObjectId::from_canonical_payload(ObjectType::Block, 2, b"block");
+    let patch = ObjectId::from_canonical_payload(ObjectType::Patch, 1, b"patch");
+    let mut parent_block_ids = Vec::with_capacity(RECOGNITION_CLAIM_MAX_PATCH_IDS + 1);
+    for index in 0..=RECOGNITION_CLAIM_MAX_PATCH_IDS {
+        let mut seed = [0_u8; 32];
+        seed[..8].copy_from_slice(&(index as u64).to_be_bytes());
+        parent_block_ids.push(ObjectId::from_bytes(seed));
+    }
+    let payload = RecognitionClaimPayload {
+        block_id: block,
+        patch_ids: vec![patch],
+        parent_block_ids,
+    };
+    let bytes = payload
+        .to_canonical_bytes()
+        .expect("over-limit payload must still encode -- the bound is enforced on decode");
+    let result = RecognitionClaimPayload::decode_canonical(&bytes);
+    assert!(
+        result.is_err(),
+        "decode must refuse over-limit parent_block_ids"
+    );
 }
 
 fn plugin_result(plugin_id: &str, plugin_version: &str, report_byte: u8) -> PluginResultEntry {

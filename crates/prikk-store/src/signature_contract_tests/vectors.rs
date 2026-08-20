@@ -716,6 +716,7 @@ fn rfc114_recognition_claim_payload() -> prikk_object::RecognitionClaimPayload {
     prikk_object::RecognitionClaimPayload {
         block_id: ObjectId::from_bytes([0x79; 32]),
         patch_ids: vec![ObjectId::from_bytes([0x7a; 32])],
+        parent_block_ids: Vec::new(),
     }
 }
 

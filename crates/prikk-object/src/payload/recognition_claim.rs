@@ -27,21 +27,32 @@
 //! starts being acted upon (Stage 4). See `prikk-store`'s recognition-claim consistency check for
 //! why sequence equality, not set equality, is what detects an order-lie now that order is
 //! load-bearing.
+//!
+//! **`parent_block_ids` carries the block's own parents verbatim (RFC 116 design-v1.md §3, N3).**
+//! Amended in `schema_version` 1, in place, for the same reason and by the same argument as D6:
+//! still no release has ever shipped this object, so this is again a free amendment and again
+//! zero frozen bytes move (an empty repeated field writes nothing). Sealing one claim per call
+//! (RFC 115 Stage 4) leaves no way to order two claims spanning a multi-block delta without this
+//! field -- the topological sort RFC 116's negotiation stage performs over a claim batch consumes
+//! it. `BlockPayload` imposes no order or uniqueness invariant on `parent_block_ids`, and the
+//! claim mirrors it exactly -- not sorted, not deduplicated, and **may be empty** (a root block has
+//! no parents; that is the correct, common case, not a degenerate one -- no non-empty guard).
 
 use prikk_error::{PrikkError, Result};
 
 use crate::canonical::WireType;
 use crate::{CanonicalEncode, CanonicalWriter, ObjectId};
 
-/// DC-86 bound on `patch_ids`' length, matching `DEFAULT_BUNDLE_MAX_OBJECT_COUNT`
-/// (`prikk-store/src/bundle.rs`, 100_000). This wire shape has no declared-count prefix to check
-/// before allocating (unlike the bundle format) -- each repeated field is its own TLV record, so
-/// the bound is enforced the same way: refused the moment the count would exceed the limit,
-/// before the over-limit entry is even read, not after decoding everything and counting.
+/// DC-86 bound on `patch_ids`'/`parent_block_ids`' length, matching
+/// `DEFAULT_BUNDLE_MAX_OBJECT_COUNT` (`prikk-store/src/bundle.rs`, 100_000). This wire shape has
+/// no declared-count prefix to check before allocating (unlike the bundle format) -- each repeated
+/// field is its own TLV record, so the bound is enforced the same way: refused the moment the
+/// count would exceed the limit, before the over-limit entry is even read, not after decoding
+/// everything and counting.
 pub const RECOGNITION_CLAIM_MAX_PATCH_IDS: usize = 100_000;
 
-/// A signed claim that `patch_ids` were sealed into `block_id`, under the signer's key. Never
-/// trust-conferring on its own -- see the module doc.
+/// A signed claim that `patch_ids` were sealed into `block_id`, on top of `parent_block_ids`,
+/// under the signer's key. Never trust-conferring on its own -- see the module doc.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecognitionClaimPayload {
     /// The block this claim is about.
@@ -50,6 +61,9 @@ pub struct RecognitionClaimPayload {
     /// (design-v1.md §11, D6) -- not sorted, not deduplicated, non-empty. A claim about no patches
     /// asserts nothing and is a decode error, not a degenerate value.
     pub patch_ids: Vec<ObjectId>,
+    /// `block_id`'s own `parent_block_ids`, verbatim (RFC 116 design-v1.md §3, N3) -- not sorted,
+    /// not deduplicated, and may be empty (a root block has no parents).
+    pub parent_block_ids: Vec<ObjectId>,
 }
 
 impl CanonicalEncode for RecognitionClaimPayload {
@@ -61,18 +75,21 @@ impl CanonicalEncode for RecognitionClaimPayload {
         }
         writer.field_object_id(1, &self.block_id)?;
         writer.repeated_object_id(2, &self.patch_ids)?;
+        writer.repeated_object_id(3, &self.parent_block_ids)?;
         Ok(())
     }
 }
 
 impl RecognitionClaimPayload {
-    /// Decode a RecognitionClaim payload from Prikk canonical TLV bytes. `patch_ids` decodes in
-    /// wire order, unsorted and with duplicates preserved (design-v1.md §11, D6) -- it is the
-    /// block's own verbatim sequence, not a set.
+    /// Decode a RecognitionClaim payload from Prikk canonical TLV bytes. `patch_ids` and
+    /// `parent_block_ids` both decode in wire order, unsorted and with duplicates preserved
+    /// (design-v1.md §11 D6; RFC 116 design-v1.md §3 N3) -- each is the block's own verbatim
+    /// sequence, not a set.
     pub fn decode_canonical(bytes: &[u8]) -> Result<Self> {
         let mut cursor = RecognitionClaimCursor::new(bytes);
         let mut block_id = None;
         let mut patch_ids = Vec::new();
+        let mut parent_block_ids = Vec::new();
         while let Some(field) = cursor.next_field()? {
             match field.tag {
                 1 => block_id = Some(field.read_object_id()?),
@@ -84,6 +101,15 @@ impl RecognitionClaimPayload {
                         )));
                     }
                     patch_ids.push(field.read_object_id()?);
+                }
+                3 => {
+                    if parent_block_ids.len() >= RECOGNITION_CLAIM_MAX_PATCH_IDS {
+                        return Err(PrikkError::MalformedData(format!(
+                            "RecognitionClaim parent_block_ids exceeds the limit of \
+                             {RECOGNITION_CLAIM_MAX_PATCH_IDS}"
+                        )));
+                    }
+                    parent_block_ids.push(field.read_object_id()?);
                 }
                 other => {
                     return Err(PrikkError::MalformedData(format!(
@@ -97,6 +123,7 @@ impl RecognitionClaimPayload {
                 PrikkError::MalformedData("RecognitionClaim missing block_id".to_string())
             })?,
             patch_ids,
+            parent_block_ids,
         };
         if payload.patch_ids.is_empty() {
             return Err(PrikkError::MalformedData(

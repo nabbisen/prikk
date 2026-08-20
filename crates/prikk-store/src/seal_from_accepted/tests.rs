@@ -110,6 +110,7 @@ fn write_claim(
     let payload = RecognitionClaimPayload {
         block_id,
         patch_ids,
+        parent_block_ids: Vec::new(),
     };
     let mut envelope = ObjectEnvelope::unsigned(
         ObjectType::RecognitionClaim,
