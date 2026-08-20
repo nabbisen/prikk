@@ -36,7 +36,7 @@
 //!
 //! # DC-95 Stage 2, Level 1: scope containment
 //!
-//! `verify_repository`'s pipeline is twelve stages (see [`VerificationStage`]), each a `?`-propagating
+//! `verify_repository`'s pipeline is thirteen stages (see [`VerificationStage`]), each a `?`-propagating
 //! call in the pre-Stage-2 source. Stage 1 (above) proved which checks inside those stages are load-
 //! bearing; Stage 2 Level 1 changed what happens when one fails. **Before:** the first hard error
 //! anywhere aborted `verify_repository` entirely -- every later stage silently never ran, and
@@ -59,7 +59,7 @@
 //! their failures propagate out of `verify_repository`. What changed is the shape a reader (or
 //! `doctor_repository`, or `prikk verify`'s own exit-code chain) sees a failing check through: a
 //! `StageOutcome` against the owning stage, not a bare `Result::Err` from the whole function. Checks
-//! were not rewritten, moved, or deleted to get here -- only the twelve top-level boundaries around
+//! were not rewritten, moved, or deleted to get here -- only the thirteen top-level boundaries around
 //! them.
 //!
 //! # RFC 103: format-1 retirement, and its effect on the table below
@@ -196,7 +196,7 @@
 //! finding neither. A third pair (duplicate identity) describes a scenario the new "last entry wins"
 //! model makes structurally impossible to even attempt, not merely astronomically unlikely. All three
 //! retirements are marked below rather than silently dropped -- **the sixteen are still all sixteen,
-//! four now retired with a named reason and, where one exists, a named replacement**, not thirteen.
+//! four now retired with a named reason and, where one exists, a named replacement**, not twelve.
 //!
 //! - **Non-canonical ref pointer path** and **`ensure_ref_path_shape`** (`by-id/`, `logs/`, both
 //!   sub-arms) retired: there is no per-ref file and no per-entry path under the shared-container
@@ -301,7 +301,7 @@ mod ref_publication;
 mod trust;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{BlockPayload, ObjectId, ObjectType};
+use prikk_object::{BlockPayload, ObjectId, ObjectType, RefStatePayload};
 
 use crate::active::{ActiveRefMetadata, read_active_ref_metadata};
 use crate::block_state::{BlockStateOutcome, BlockStateStatus};
@@ -311,7 +311,8 @@ use crate::lifecycle_cache::incremental::{
     LifecycleCacheDivergence, verify_divergence as verify_lifecycle_cache_divergence,
 };
 use crate::object_store::{ObjectReadSnapshot, ObjectReader};
-use crate::refs::verify_refs;
+use crate::received::list_received_pointers;
+use crate::refs::{RefItemOutcome, RefItemStatus, ensure_ref_target_valid, verify_refs};
 use crate::rollback_verify::{verify_rollback_draft_wal_records, verify_rollback_patch_envelope};
 use crate::signature_diagnostics::{
     SignatureEnvelopeIssue, SignatureEnvelopeSource, classify_signature_envelope,
@@ -376,7 +377,7 @@ pub struct BlockSealVerification {
     pub sealed_by_key_id: String,
 }
 
-/// One of the twelve top-level scopes `verify_repository`'s pipeline is organized into (DC-95 Stage 2
+/// One of the thirteen top-level scopes `verify_repository`'s pipeline is organized into (DC-95 Stage 2
 /// Level 1: scope containment). Named in pipeline order; the order itself is load-bearing for
 /// `NotEvaluated` naming (`StageStatus::NotEvaluated`'s `blocked_by` is always an earlier stage).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -408,6 +409,10 @@ pub enum VerificationStage {
     LifecycleCache,
     /// DC-66 active-WAL queue-ordering check.
     WalOrdering,
+    /// RFC 115 Stage 3 §6: received (`remotes/*`) ref target validation -- the same kind-aware
+    /// two-hop check local refs already get, applied to the received namespace, which nothing
+    /// scanned before this stage existed.
+    ReceivedRefs,
 }
 
 impl VerificationStage {
@@ -427,6 +432,7 @@ impl VerificationStage {
             Self::CommitIndex => "commit-index",
             Self::LifecycleCache => "lifecycle-cache",
             Self::WalOrdering => "wal-ordering",
+            Self::ReceivedRefs => "received-refs",
         }
     }
 }
@@ -487,7 +493,7 @@ impl StageStatus {
 /// One stage's resolved outcome.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StageOutcome {
-    /// Which of the twelve stages this outcome is for.
+    /// Which of the thirteen stages this outcome is for.
     pub stage: VerificationStage,
     /// How that stage resolved.
     pub status: StageStatus,
@@ -496,8 +502,8 @@ pub struct StageOutcome {
 /// Repository verification summary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepositoryVerification {
-    /// Outcome of each of the twelve verification stages (DC-95 Stage 2 Level 1), in pipeline order.
-    /// Always exactly twelve entries — no stage may be silently absent.
+    /// Outcome of each of the thirteen verification stages (DC-95 Stage 2 Level 1), in pipeline order.
+    /// Always exactly thirteen entries — no stage may be silently absent.
     pub stage_outcomes: Vec<StageOutcome>,
     /// Phase A: one outcome per persisted object file scanned, in scan order (DC-95 Stage 2 Level 2).
     /// Empty when the `Objects` stage itself did not evaluate (a structural directory-shape error) —
@@ -600,6 +606,14 @@ pub struct RepositoryVerification {
     /// Reporting only — surfaces provenance that was already intrinsic to each block's own
     /// signature, so an auditor can ask "which parts of this history did I seal" and get an answer.
     pub block_seals: Vec<BlockSealVerification>,
+    /// RFC 115 Stage 3 §6: one outcome per received (`remotes/*`) pointer, in
+    /// `list_received_pointers`' sorted-by-name order — the same kind-aware two-hop target check
+    /// local refs already get, applied here for the first time. Empty when the `ReceivedRefs` stage
+    /// itself did not evaluate. A repository with a genuinely dangling received ref (its target
+    /// object was never shipped) now reports an item failure here where nothing reported anything
+    /// before this stage existed — see the stage's own module note for what that means for a
+    /// repository that already holds one.
+    pub received_ref_item_outcomes: Vec<RefItemOutcome>,
 }
 
 /// A `Merge` block (DC-75) whose recorded `merge_baseline_block_id` is not a common ancestor of its
@@ -631,7 +645,7 @@ pub struct ActiveWalOrderingIssue {
 }
 
 impl RepositoryVerification {
-    /// Return true when any of the twelve verification stages did not evaluate cleanly — either its
+    /// Return true when any of the thirteen verification stages did not evaluate cleanly — either its
     /// own check raised an error (`Failed`) or a dependency's non-evaluation prevented it from running
     /// at all (`NotEvaluated`). A repository whose verification did not run to completion is not
     /// verified, regardless of what the stages that did run found. Checked first, ahead of every
@@ -684,6 +698,10 @@ impl RepositoryVerification {
                 .wal_record_outcomes
                 .iter()
                 .any(|outcome| matches!(outcome.status, crate::wal::WalRecordStatus::Failed { .. }))
+            || self
+                .received_ref_item_outcomes
+                .iter()
+                .any(|outcome| matches!(outcome.status, RefItemStatus::Failed { .. }))
     }
 
     /// Return true when this repository's verification found any blocking reason to refuse it --
@@ -908,7 +926,7 @@ impl StagePipeline {
     }
 }
 
-/// Options controlling how `verify_repository` walks its twelve stages (DC-95 Stage 2 Level 1).
+/// Options controlling how `verify_repository` walks its thirteen stages (DC-95 Stage 2 Level 1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct VerifyOptions {
     /// When true, stop at the first stage that fails or cannot evaluate, leaving every later stage
@@ -920,7 +938,7 @@ pub struct VerifyOptions {
 }
 
 /// Verify a repository layout without modifying it, with the default options (full accumulation
-/// across all twelve stages). See [`verify_repository_with_options`] for `--stop-on-first-error`.
+/// across all thirteen stages). See [`verify_repository_with_options`] for `--stop-on-first-error`.
 pub fn verify_repository(layout: &RepositoryLayout) -> Result<RepositoryVerification> {
     verify_repository_with_options(layout, VerifyOptions::default())
 }
@@ -990,6 +1008,15 @@ pub fn verify_repository_with_options(
 
     // Stage: Refs. No upstream stage dependency.
     let ref_verification = pipeline.run(VerificationStage::Refs, verify_refs(layout));
+
+    // Stage: ReceivedRefs (RFC 115 Stage 3 §6). No upstream stage dependency -- reads the received
+    // index and the object store directly, the same footing `Refs` has.
+    let received_ref_item_outcomes = pipeline
+        .run(
+            VerificationStage::ReceivedRefs,
+            verify_received_refs(layout, &object_store),
+        )
+        .unwrap_or_default();
 
     // Stage: RefUpdateSchemaTrust. Depends on Refs for the envelope list.
     let ref_update_schema_trust_evaluated = if let Some(rv) = &ref_verification {
@@ -1217,6 +1244,7 @@ pub fn verify_repository_with_options(
         active_wal_ordering_issues,
         merge_baseline_divergences,
         block_seals,
+        received_ref_item_outcomes,
     })
 }
 
@@ -1287,6 +1315,56 @@ fn check_active_wal_ordering(records: &[crate::wal::WalRecord]) -> Vec<ActiveWal
             seq: current.seq,
         })
         .collect()
+}
+
+/// RFC 115 Stage 3 §6: the received-namespace verification gap, closed. `verify_repository` never
+/// scanned `remotes/*` before this stage — `ReceivedIndex` appeared nowhere in this file or in
+/// `refs/verify/scan.rs`, so a received ref whose target object was never shipped dangled
+/// invisibly, on both the sender's and receiver's side, discovered while reviewing the DC-78
+/// bundle-export tag-ref gap (`DC-78-bundle-tag-gap-implementation-review-v1.md` §5).
+///
+/// Reuses `ensure_ref_target_valid` as-is — the exact kind-aware, two-hop-for-tags check local refs
+/// already get (`refs/verify/scan.rs`) — applied here for the first time to the received namespace.
+/// This is wiring, not new logic: no new validation rule is introduced, only a new place the
+/// existing one now runs.
+fn verify_received_refs(
+    layout: &RepositoryLayout,
+    object_store: &impl ObjectReader,
+) -> Result<Vec<RefItemOutcome>> {
+    let pointers = list_received_pointers(layout)?;
+    let mut outcomes = Vec::with_capacity(pointers.len());
+    for pointer in pointers {
+        let outcome = (|| -> Result<()> {
+            let envelope = object_store
+                .read_typed(pointer.ref_state_id, ObjectType::RefState)?
+                .ok_or_else(|| {
+                    PrikkError::Integrity(format!(
+                        "received pointer {} names missing RefState {}",
+                        pointer.ref_name, pointer.ref_state_id
+                    ))
+                })?;
+            let payload = RefStatePayload::decode_canonical(
+                &envelope.canonical_payload,
+                envelope.schema_version,
+            )?;
+            ensure_ref_target_valid(
+                object_store,
+                payload.kind,
+                payload.target_object_id,
+                pointer.ref_state_id,
+            )
+        })();
+        outcomes.push(RefItemOutcome {
+            ref_name: pointer.ref_name,
+            status: match outcome {
+                Ok(()) => RefItemStatus::Evaluated,
+                Err(error) => RefItemStatus::Failed {
+                    message: error.to_string(),
+                },
+            },
+        });
+    }
+    Ok(outcomes)
 }
 
 fn classify_active_wal_metadata(

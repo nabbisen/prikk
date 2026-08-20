@@ -78,10 +78,10 @@ pub(crate) fn encode_log_record_for_test(envelope: &ObjectEnvelope) -> Result<Ve
 }
 
 pub use container::{RefLogRecord, RefLogReplay};
-pub(crate) use verify::verify_refs;
 pub use verify::{
     RefFileOutcome, RefFileStatus, RefItemOutcome, RefItemStatus, RefPublicationIssue,
 };
+pub(crate) use verify::{ensure_ref_target_valid, verify_refs};
 
 pub(crate) fn ensure_no_incomplete_publication(layout: &RepositoryLayout) -> Result<()> {
     let verification = verify_refs(layout)?;

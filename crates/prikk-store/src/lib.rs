@@ -50,6 +50,7 @@ mod object_store;
 // DC-22 read-only merge-evidence store boundary.
 mod patch_algebra;
 mod patch_checkout;
+mod patch_exchange;
 mod patch_inverse;
 mod patch_replay;
 mod patch_set_digest;
@@ -136,6 +137,12 @@ pub use patch_checkout::{
     PatchDeletionConflict, PatchDeletionPlan, PatchMaterializationReport,
     materialize_patch_checkout, materialize_patch_checkout_with_deletions,
     plan_patch_checkout_deletions,
+};
+pub use patch_exchange::{
+    AcceptOptions, AcceptReport, ClaimSignatureVerification,
+    DEFAULT_EXCHANGE_ARTIFACT_MAX_OBJECT_COUNT, DEFAULT_EXCHANGE_ARTIFACT_MAX_TOTAL_BYTES,
+    ExchangeExportReport, accept_exchange_artifact, accepted_but_unsealed_patch_ids,
+    export_exchange_artifact,
 };
 pub use patch_inverse::{
     PatchInverseOperationKind, PatchInverseOperationSummary, PatchInversePlan,

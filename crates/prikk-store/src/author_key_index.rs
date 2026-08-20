@@ -433,13 +433,40 @@ pub(crate) fn verify_author_signature(
     else {
         return Ok(None);
     };
+    let entries = lookup_author_key_entries(layout, &signature.key_id)?;
+    verify_author_signature_against_material(envelope, &entries)
+}
+
+/// The verification core, extracted so there is exactly one definition of *how* an AUTHOR signature
+/// is checked, with two key sources (RFC 115 Stage 3 handoff §4.2 item 7): `verify_author_signature`
+/// above passes this repository's own recorded entries for the signature's `key_id`;
+/// the exchange accept path passes the union of the artifact's own transported material and this
+/// repository's already-recorded material for that `key_id` -- neither source alone is complete at
+/// the accept path's own verification phase, since recording the artifact's material happens later,
+/// under lock, and only if the whole exchange succeeds (§4.1: nothing may be recorded from an
+/// exchange that fails). Same shape `check_author_key_conflict` was extracted into, for the same
+/// reason: one policy, parameterized by material source, never a second parallel copy of it.
+///
+/// `candidate_entries` must already be scoped to the signature's own `key_id` -- this function does
+/// not filter by `key_id` itself, matching `lookup_author_key_entries`'s own output shape, which is
+/// what `verify_author_signature` passes directly.
+pub(crate) fn verify_author_signature_against_material(
+    envelope: &ObjectEnvelope,
+    candidate_entries: &[AuthorKeyEntry],
+) -> Result<Option<(String, bool)>> {
+    let Some(signature) = envelope
+        .signatures
+        .iter()
+        .find(|signature| signature.signer_role == SignerRole::Author)
+    else {
+        return Ok(None);
+    };
     if signature.algorithm != SignatureAlgorithm::Ed25519 {
         return Err(PrikkError::InvalidSignature(
             "AUTHOR signature is not Ed25519".to_string(),
         ));
     }
-    let entries = lookup_author_key_entries(layout, &signature.key_id)?;
-    if entries.is_empty() {
+    if candidate_entries.is_empty() {
         return Ok(Some((signature.key_id.clone(), false)));
     }
     // DC-53 Stage 2, D8, D3's fourth row: one key_id binds to one public key. A key_id whose
@@ -447,8 +474,8 @@ pub(crate) fn verify_author_signature(
     // this particular signature would verify against one of the conflicting entries -- checked, and
     // failed, before attempting verification at all (ratified explicitly in the Stage 2 Step 1
     // review: this is the correct order, not inferred).
-    let first_public_key = entries.first().map(|entry| entry.public_key);
-    if entries
+    let first_public_key = candidate_entries.first().map(|entry| entry.public_key);
+    if candidate_entries
         .iter()
         .any(|entry| Some(entry.public_key) != first_public_key)
     {
@@ -465,7 +492,7 @@ pub(crate) fn verify_author_signature(
         SignerRole::Author,
         &signature.key_id,
     )?;
-    let verifies = entries.iter().any(|entry| {
+    let verifies = candidate_entries.iter().any(|entry| {
         verify_ed25519(&entry.public_key, &preimage, &signature.signature_bytes).is_ok()
     });
     if !verifies {

@@ -402,7 +402,7 @@ fn verified_ref_state_payload(
 /// target and its pointer's target are the identical value for the identical kind. `RefKind::Branch`
 /// must target a `Block` directly; `RefKind::Tag` must target a `Tag` object whose own
 /// `target_block_id` is a `Block` — the two-hop indirection §6.6 requires.
-fn ensure_ref_target_valid(
+pub(crate) fn ensure_ref_target_valid(
     objects: &impl ObjectReader,
     kind: RefKind,
     target_object_id: ObjectId,
