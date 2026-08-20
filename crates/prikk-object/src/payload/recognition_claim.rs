@@ -16,10 +16,21 @@
 //! that *does* hold the referenced block must additionally verify (a claim contradicting a held
 //! block is a detected lie, refused loudly) -- that check does not live here, because this payload
 //! type has no access to an object store and must not gain one.
+//!
+//! **`patch_ids` carries the block's own order verbatim (design-v1.md §11, D6).** Amended in
+//! `schema_version` 1, in place -- no release has ever shipped this object, so RFC 114's "every
+//! object any prior release wrote" promise is not engaged, and this is the last moment the change
+//! is free. `Block.patch_ids` has no sorted-or-unique invariant; it is a free sequence consumed in
+//! order by `apply_candidate_patches`, and the claim mirrors it exactly -- not sorted, not
+//! deduplicated. Order moved out of unsigned artifact metadata and into the claim payload,
+//! therefore inside the object id and the signature preimage, at exactly the increment where order
+//! starts being acted upon (Stage 4). See `prikk-store`'s recognition-claim consistency check for
+//! why sequence equality, not set equality, is what detects an order-lie now that order is
+//! load-bearing.
 
 use prikk_error::{PrikkError, Result};
 
-use crate::canonical::{WireType, is_strictly_sorted};
+use crate::canonical::WireType;
 use crate::{CanonicalEncode, CanonicalWriter, ObjectId};
 
 /// DC-86 bound on `patch_ids`' length, matching `DEFAULT_BUNDLE_MAX_OBJECT_COUNT`
@@ -35,18 +46,14 @@ pub const RECOGNITION_CLAIM_MAX_PATCH_IDS: usize = 100_000;
 pub struct RecognitionClaimPayload {
     /// The block this claim is about.
     pub block_id: ObjectId,
-    /// Patch ids claimed to have been sealed into `block_id`. Sorted, deduplicated, non-empty --
-    /// a claim about no patches asserts nothing and is a decode error, not a degenerate value.
+    /// Patch ids claimed to have been sealed into `block_id`, in the block's own verbatim order
+    /// (design-v1.md §11, D6) -- not sorted, not deduplicated, non-empty. A claim about no patches
+    /// asserts nothing and is a decode error, not a degenerate value.
     pub patch_ids: Vec<ObjectId>,
 }
 
 impl CanonicalEncode for RecognitionClaimPayload {
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
-        if !is_strictly_sorted(&self.patch_ids) {
-            return Err(PrikkError::CanonicalEncoding(
-                "RecognitionClaim patch_ids must be sorted and unique".to_string(),
-            ));
-        }
         if self.patch_ids.is_empty() {
             return Err(PrikkError::CanonicalEncoding(
                 "RecognitionClaim patch_ids must not be empty".to_string(),
@@ -59,10 +66,9 @@ impl CanonicalEncode for RecognitionClaimPayload {
 }
 
 impl RecognitionClaimPayload {
-    /// Decode a RecognitionClaim payload from Prikk canonical TLV bytes. Refuses unsorted or
-    /// duplicated `patch_ids` rather than silently normalizing them -- the same discipline RFC 115
-    /// Stage 1's `compute_patch_set_digest` uses, and the same reason: silent normalization turns
-    /// a caller's bug into a well-formed object that is wrong.
+    /// Decode a RecognitionClaim payload from Prikk canonical TLV bytes. `patch_ids` decodes in
+    /// wire order, unsorted and with duplicates preserved (design-v1.md §11, D6) -- it is the
+    /// block's own verbatim sequence, not a set.
     pub fn decode_canonical(bytes: &[u8]) -> Result<Self> {
         let mut cursor = RecognitionClaimCursor::new(bytes);
         let mut block_id = None;
@@ -92,11 +98,6 @@ impl RecognitionClaimPayload {
             })?,
             patch_ids,
         };
-        if !is_strictly_sorted(&payload.patch_ids) {
-            return Err(PrikkError::MalformedData(
-                "RecognitionClaim patch_ids are not sorted and unique".to_string(),
-            ));
-        }
         if payload.patch_ids.is_empty() {
             return Err(PrikkError::MalformedData(
                 "RecognitionClaim patch_ids must not be empty".to_string(),
