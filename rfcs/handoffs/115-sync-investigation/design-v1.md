@@ -212,3 +212,95 @@ authored patches today.
 
 **Report before implementing each**, and §5.1's discipline — threat model, adversarial byte fixtures, a
 two-repository harness, a negative control per refusal — applies to each stage, not once at the end.
+
+## 11. D6 — the seal order comes from the recognition claim, which carries the block's sequence verbatim
+
+**Added 2026-08-20, after Stages 1-3 shipped. Ruled by the owner the same day.** Investigation record:
+`.git-exclude/reviewed/RFC-115-stage-4-ordering-investigation-v1.md`.
+
+### 11.1 The problem is a contradiction between D1 and D2, and it is the architect's
+
+D1 put ordering in the artifact. D2 said the accepted-but-unsealed set is derived, not stored.
+**Together they lose the ordering at the moment of acceptance:** Stage 3 consumes the artifact and
+drops it, and `accepted_but_unsealed_patch_ids` derives a `BTreeSet`, so what comes back is sorted by
+`ObjectId`. A set cannot preserve a sequence.
+
+Order is load-bearing — `apply_patch_ids` applies in list order, so a different order yields a
+different state root and therefore a different block, and some orders do not apply at all.
+
+### 11.2 Why the order cannot be re-derived
+
+`patch_algebra` has the pairwise primitive (`PairClass::OrderedDependency { required_order, .. }`) but
+**cannot produce an order**, for a reason no amount of aggregation fixes: it is fail-closed `Unknown`
+for the cases where order matters most — two `EditText` on the same node at different spans
+(`SameNodeTextCommutationDeferred`), any rename, any symlink, and any sequence with internal
+dependencies. Two patches touching the same file are `Unknown`, which is the normal case. Building a
+topological sort on top would leave edges undetermined exactly where the answer matters.
+
+`has_prefix_dependency` confirms the shape: it returns `bool` and inspects only `sequence[..index]` —
+it **consumes** an order and checks a property of it.
+
+### 11.3 Why not `parent_patch_ids`
+
+It is field 2 of the patch payload, so populating it changes the canonical bytes and therefore the
+patch's own `ObjectId`: the same edit authored on two histories would become two patches. **That
+abandons D1's content-only identity**, which Stage 1's digest and the entire "agree on patches while
+disagreeing on blocks" property rest on. Disproportionate.
+
+### 11.4 The ruling
+
+**A block's `patch_ids` is already the ordered sequence. The recognition claim carries it verbatim.**
+
+- `RecognitionClaimPayload.patch_ids` is the block's list **as-is** — not sorted, not deduplicated.
+  `Block.patch_ids` has no sorted-or-unique invariant; it is a free sequence, and the claim mirrors it.
+- **Amended in `schema_version` 1, in place — there is no version 2.** No release contains the
+  recognition claim (latest tag 0.22.1 precedes all three stages), and **no production path constructs
+  one** — the sole non-test construction site is the Gate A snapshot generator. RFC 114's promise binds
+  *"every object any prior release wrote"*; no prior release wrote one, so the promise is not engaged.
+- **Zero frozen bytes move.** `encode_canonical` refuses unsorted input rather than normalizing it, so
+  relaxing the guard changes no bytes for an already-sorted payload, and the frozen vector
+  `recognition_claim_populated` (ids ascending) stays byte-identical. Gate A's vectors are untouched.
+- **This is the last cheap moment**, and the window closes at the next *release*, not the next
+  increment: once a release ships a claim producer, the same change becomes a real v2 with two
+  contracts to carry forever. **Amend before Stage 4 wires up the first producer.**
+
+### 11.5 What this changes, and what it deliberately does not
+
+The claim stops being a lossy set-projection of a block and becomes a **faithful sequence-projection**.
+Order moves out of unsigned artifact metadata and into the claim payload — therefore inside the object
+id, therefore inside the signature preimage — **at exactly the increment where order starts being acted
+upon.** A new class of lie becomes detectable: under the sorted-set contract a permuted claim was
+*indistinguishable* from a truthful one; now it is not.
+
+**Unchanged: patch identity stays content-only (D1). There is still no stored pending state (D2)** —
+the order lives in a first-class signed object, not in side state about unsealed work.
+
+**The artifact's own patch ordering is no longer meaningful.** The claim is authoritative for order;
+`PEXCH001`'s sequence carries no meaning. No format change is required, but the design says so here so
+that nobody later treats the artifact's order as a second source of truth.
+
+### 11.6 The order is a hint that must be tried, never a fact that is trusted
+
+D3 says a claim is "reportable, never gating." **D6 does not weaken that, and the reconciliation must
+be stated rather than argued later.**
+
+The claim supplies a **candidate order**, not an authority. The receiver applies it; either it applies
+cleanly — yielding a state the receiver can inspect and then seal under their **own** maintainer key,
+with `verify_signer_trusted` unchanged — or it fails and is refused. A hostile order cannot forge a
+state; it can only produce a different valid application or none at all, and the resulting block id is
+determined by what actually happened, not by what was claimed.
+
+**Consequently an `Unverifiable` claim may still supply an order.** The tempting alternative — only a
+`Sound` claim may — would make Stage 4 useless on first contact, where every claim is *permanently*
+`Unverifiable` because no maintainer key material travels in the artifact and none should.
+
+### 11.7 Withdrawn: the Stage 2 unsorted-claim refusal
+
+Review v1 §2 made "refuse an unsorted claim" a condition of Stage 2's acceptance. **That was correct
+under the sorted-set contract** — an unsorted claim was malformed, and reporting it `Contradicted` was
+a false accusation. Under D6's verbatim-order contract, unsorted is the normal and correct case, and
+the refusal would reject every truthful claim. **The condition is withdrawn, not overturned: changing
+the definition changed what is right.**
+
+What survives as the decoder's job: non-empty, the declared-count bound, unknown-tag rejection.
+Duplicates become permissible, mirroring `Block.patch_ids`.
