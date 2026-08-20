@@ -52,6 +52,7 @@ mod patch_algebra;
 mod patch_checkout;
 mod patch_inverse;
 mod patch_replay;
+mod patch_set_digest;
 mod path;
 mod received;
 mod received_index;
@@ -140,6 +141,10 @@ pub use patch_inverse::{
     prepare_patch_inverse_plan,
 };
 pub use patch_replay::{PatchReplayPlan, prepare_patch_replay_plan};
+pub use patch_set_digest::{
+    PatchSetDigest, compute_patch_set_digest, compute_patch_set_digest_for_ref,
+    compute_patch_set_digest_from_block, patch_ids_reachable_from_block, patch_set_digest_preimage,
+};
 pub use path::{RepoPath, validate_no_path_collisions, validate_repo_path};
 pub use received::{
     ReceivedPointer, list_received_pointers, read_received_pointer, validate_received_ref,

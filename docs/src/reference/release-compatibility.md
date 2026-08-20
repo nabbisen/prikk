@@ -65,6 +65,12 @@ This splits every byte in a repository into two categories, and they have opposi
   shipped release.
 - The signature preimage, per signer role.
 - The algorithm identifiers themselves (Ed25519, SHA-256) — not merely the algorithms.
+- The patch-set digest preimage (RFC 115 Stage 1, design-v1.md §5/D4): `PATCH_SET_DIGEST_DOMAIN`
+  (`b"PRIKK-PATCH-SET-DIGEST-v1"`) ‖ count (u64 BE) ‖ each patch id, sorted ascending and
+  deduplicated, 32 bytes each, hashed SHA-256. Not itself a stored object or an `ObjectId` — a
+  comparison value, following `MerkleRoot`'s shape — but identity-bearing all the same: two prikk
+  versions must produce identical bytes over the same patch set, or the "are these two repositories
+  the same?" comparison it exists for means nothing across an upgrade.
 
 **May change, and must carry a tested migration path:**
 
