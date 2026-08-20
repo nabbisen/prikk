@@ -6,7 +6,7 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::{BlockKind, BlockPayload, MerkleRoot, ObjectId, ObjectType};
 
 use crate::lifecycle_cache::replay::{
-    TextCache, apply_candidate_patches, apply_one_block_with_text_cache,
+    LifecycleReplayError, TextCache, apply_candidate_patches, apply_one_block_with_text_cache,
 };
 use crate::node_lifecycle::NodeLifecycleState;
 use crate::object_store::ObjectReader;
@@ -160,6 +160,46 @@ pub(crate) fn derive_next_state_root_with_memo(
     let (mut state, mut text_cache) = resolved_parent_state(reader, parent, memo)?;
     apply_candidate_patches(reader, &mut state, &mut text_cache, patch_ids)?;
     compute_state_root(&entries_from_state(&state)?)
+}
+
+/// Failure of [`derive_next_state_root_for_candidate`], split at exactly the point RFC 115 Stage 4
+/// needs classified: whether *the parent's own already-sealed lineage* failed to resolve (always an
+/// integrity failure -- this repository's own history is broken), or whether *applying the
+/// candidate patches themselves* failed (needs further classification by the caller, since an
+/// accepted-but-unsealed patch failing to apply to a receiver's own tip is an ordinary divergence,
+/// not corruption -- ordinary [`derive_next_state_root`] cannot tell these apart because
+/// `From<LifecycleReplayError> for PrikkError` flattens the variant away before a caller ever sees
+/// it).
+#[derive(Debug)]
+pub(crate) enum CandidateStateDerivationError {
+    /// The parent Block's own lineage did not resolve. This repository's own sealed history is
+    /// broken; the candidate patches were never reached.
+    Lineage(PrikkError),
+    /// Applying `patch_ids` onto the parent's resolved state failed. The caller must classify this
+    /// variant -- see RFC 115 Stage 4 handoff §4's ruled table.
+    Patch(LifecycleReplayError),
+}
+
+/// Same derivation as [`derive_next_state_root`], but for a caller that must distinguish *why* it
+/// failed rather than receive one flattened [`PrikkError`] (RFC 115 Stage 4 handoff §4). The only
+/// caller today is the seal-from-accepted path: the first place prikk applies patches that were not
+/// authored against the state they are being applied to, where conflating "this repository's own
+/// history is broken" with "these two histories merely diverged" would be a serious diagnostic
+/// defect. Every other caller of state derivation replays already-sealed history, where a patch
+/// failing to apply always does mean corruption -- this function changes nothing about that; it only
+/// stops discarding the distinction for the one caller that needs it.
+pub(crate) fn derive_next_state_root_for_candidate(
+    reader: &impl ObjectReader,
+    parent: Option<ObjectId>,
+    patch_ids: &[ObjectId],
+) -> std::result::Result<MerkleRoot, CandidateStateDerivationError> {
+    let (mut state, mut text_cache) =
+        resolved_parent_state(reader, parent, &mut LineageStateMemo::new())
+            .map_err(CandidateStateDerivationError::Lineage)?;
+    apply_candidate_patches(reader, &mut state, &mut text_cache, patch_ids)
+        .map_err(CandidateStateDerivationError::Patch)?;
+    compute_state_root(&entries_from_state(&state).map_err(CandidateStateDerivationError::Lineage)?)
+        .map_err(CandidateStateDerivationError::Lineage)
 }
 
 /// Shared by [`derive_next_state_root_with_memo`] and [`verify_block_v2_state`]: resolve `parent`'s
