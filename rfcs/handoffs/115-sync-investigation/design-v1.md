@@ -203,6 +203,12 @@ authored patches today.
    same?", and it exercises RFC 114's documentation obligation on a small surface.
 2. **The recognition claim object** (D3) — with its Gate A vector in the same increment.
 3. **The exchange artifact and accept path** (D1, D2, D5). **No longer gated** — §8's precondition question is resolved.
+4. **Sealing what you accepted** — **added 2026-08-20, after Stages 1-3 shipped at `0128c91`.** Not an
+   afterthought and not optional: D5 says the receiver's own seal is "a separate, explicit, local act",
+   but `seal` builds blocks from the active WAL and an accepted patch was never in the WAL, so no path
+   from accepted object to sealed block exists. **Criterion 1 — "two machines can exchange sealed
+   history" — cannot be met without it**, because under §2.2's patch-unit ruling the receiver is the one
+   who seals. Scheduled ahead of transport by the owner, 2026-08-20. Its own design section is D6 below.
 
 **Report before implementing each**, and §5.1's discipline — threat model, adversarial byte fixtures, a
 two-repository harness, a negative control per refusal — applies to each stage, not once at the end.
