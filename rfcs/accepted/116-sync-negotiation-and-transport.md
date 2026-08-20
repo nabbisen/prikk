@@ -1,9 +1,26 @@
 # RFC 116 — Sync: negotiation before transport
 
-**Status.** **PROPOSED, 2026-08-20.** An investigation with a recommendation; **not a design, and
-implementation must not start from it.** Written on the owner's direction after RFC 115 closed
-criterion 1's first gap (Stages 1-4 merged, `07d8a47`). **It asks the owner to rule on one thing:
-whether sync's next increment is negotiation-as-artifacts or a network protocol.**
+**Status.** **ACCEPTED by the project owner 2026-08-20.** An investigation with a recommendation;
+**not a design, and implementation must not start from this record.** Written on the owner's direction
+after RFC 115 closed criterion 1's first gap (Stages 1-4 merged, `07d8a47`).
+
+**Both of §6's questions are ruled, 2026-08-20:**
+
+1. **Sync's next increment is negotiation-as-artifacts**, not a network protocol. Negotiation is a
+   *prerequisite* of a protocol rather than a competitor to it — a protocol without it can only send
+   everything and let the receiver deduplicate — so sequencing it first is the one choice that cannot
+   turn out to have been wrong.
+2. **Criterion 1 permits sync-over-any-channel.** The row's load-bearing clause is *"and both verify it
+   afterward"*, which holds identically however the bytes arrive; "exchange" does not name the mover.
+   **`prikk-store` stays bytes-in/bytes-out and prikk stays off the network.**
+
+**Recorded because it bears on the second ruling:** the architect proposed the reading that permits
+sync-over-any-channel, and that reading also makes the architect's own recommended path the one that
+closes the criterion. The conflict was stated to the owner before the ruling rather than left implicit
+(the same disclosure criteria 3 and 5 carry), and the owner confirmed the reading knowing it. **The one
+security property this ruling forgoes is confidentiality** — prikk offers none today, and under "any
+channel" it becomes the user's choice of channel rather than a prikk guarantee. Not a regression; a
+stated limit.
 
 **Independence:** author-reviewed, the standing ceiling. Every claim cites the code or record it came
 from.
