@@ -36,10 +36,21 @@ cheap, and anyone can compare against it before deciding whether a real exchange
 
 1. **B obtains A's `PSYNCSU1`** — by any means. Compares each ref's digest to its own. **All equal →
    in sync, stop.**
-2. **For refs that differ, B sends A a `PSYNCHV1`** carrying B's patch-id lists for exactly those refs.
-3. **A computes A∖B** per ref and builds a `PEXCH001` carrying those patches, their blobs, the author
-   key material for them, and the claims covering them (§3).
+2. **For each ref that differs, B sends A a `PSYNCHV1`** carrying B's patch-id list for **that one ref**.
+3. **A computes A∖B** for that ref and builds a `PEXCH001` carrying those patches, their blobs, the
+   author key material for them, and the claims covering them (§3).
 4. **B accepts it** (Stage 3), then **seals** (Stage 4).
+
+**Amended 2026-08-20 — negotiation and exchange are strictly per ref, not a union across refs.**
+`PEXCH001` carries **no ref name anywhere** (verified: no `ref_name`, `RefState` or `RefKind` in
+`patch_exchange/artifact.rs`), while `seal_from_accepted_claim` requires one per claim — and a claim
+names a block, from which the receiver cannot derive the sender's ref structure. A union artifact would
+therefore hand the receiver claims it could not place. **The first issue of this design said "the
+artifact carries the union"; that was an architect error, caught in the stress round
+(`.git-exclude/reviewed/RFC-116-claim-design-stress-round-v1.md` §1) before implementation.** Per-ref
+sequencing costs more artifacts and buys an unambiguous ref association with **no format or schema
+change** — preferable to putting ref names inside an artifact whose security story is that it carries
+only content-addressed objects and key material.
 
 **One round trip after the summary.** Nothing else is required, and nothing here is a conversation —
 each step is a blob that can be written to a file and moved by any means the user already has.
@@ -122,10 +133,10 @@ forever — exactly D6's situation, repeating because the same surface is still 
 
 ## 4. N4 — which patches, which claims
 
-**Ruled: the delta is computed per ref, and the artifact carries the union.**
+**Ruled: the delta is computed per ref, and each ref gets its own artifact** (§1.2 as amended).
 
-For each ref where the digests differ, A computes `reachable(A.ref) ∖ B.list`. The union across refs is
-the patch set to send. `patch_ids_reachable_from_block` already produces the operand and is exported.
+For each ref where the digests differ, A computes `reachable(A.ref) ∖ B.list` and builds one `PEXCH001`
+for that ref. `patch_ids_reachable_from_block` already produces the operand and is exported.
 
 **Claims to include: every stored claim whose `patch_ids` intersect the delta.** A claim covering
 patches partly held and partly sent is still needed — Stage 4 refuses a partially-sealed claim, so
