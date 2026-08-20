@@ -1,6 +1,6 @@
 //! RFC 115 Stage 2 tests for `check_recognition_claim_consistency`. §7 rows 3 and 4.
 
-use prikk_object::{BlockKind, ObjectId, RecognitionClaimPayload};
+use prikk_object::{BlockKind, CanonicalEncode, ObjectId, RecognitionClaimPayload};
 
 use super::{RecognitionClaimConsistency, check_recognition_claim_consistency};
 use crate::test_support::{signed_block, unique_temp_dir};
@@ -53,15 +53,54 @@ fn claim_contradicting_a_held_block_is_contradicted() -> prikk_error::Result<()>
     Ok(())
 }
 
-/// The ordinary case: a claim whose `patch_ids` match a held block's own, reads `Consistent` --
-/// and this must hold even though the block's own `patch_ids` are in authoring/WAL-replay order,
-/// not sorted, unlike the claim's (see the module doc's ordering note). Two patches, sealed into
-/// the block in *descending* id order, checked against a claim that lists them ascending (as every
-/// `RecognitionClaimPayload` must).
+/// §4.1's replacement for the withdrawn unsorted-claim refusal (D6, `RFC-115-stage-4-ordering-
+/// investigation-v1.md`): a claim carrying a block's own `patch_ids` verbatim -- unsorted, since
+/// that is now the normal case -- round-trips through encode/decode with order preserved, and then
+/// reads `Consistent` against the block it truthfully describes. Two patches, sealed in
+/// *descending* id order (authoring order, never sorted by `ObjectId`), claimed in that same
+/// descending order.
 #[test]
-fn claim_matching_a_held_block_is_consistent_regardless_of_the_blocks_own_patch_order()
+fn claim_carrying_the_blocks_own_verbatim_order_round_trips_and_reads_consistent()
 -> prikk_error::Result<()> {
-    let root = unique_temp_dir("rfc115-recognition-claim-consistent");
+    let root = unique_temp_dir("rfc115-recognition-claim-verbatim-round-trip");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout);
+    let low = ObjectId::from_bytes([0x75; 32]);
+    let high = ObjectId::from_bytes([0x76; 32]);
+    let block = signed_block(BlockKind::Normal, Vec::new(), vec![high, low], None);
+    let block_id = store.write_object(&block)?;
+
+    let claim = RecognitionClaimPayload {
+        block_id,
+        patch_ids: vec![high, low],
+    };
+    let bytes = claim.to_canonical_bytes()?;
+    let decoded = RecognitionClaimPayload::decode_canonical(&bytes)?;
+    assert_eq!(
+        decoded.patch_ids,
+        vec![high, low],
+        "order must survive the round trip unchanged, not be re-sorted"
+    );
+
+    let outcome = check_recognition_claim_consistency(&store, &decoded)?;
+    assert_eq!(outcome, RecognitionClaimConsistency::Consistent);
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// §4.2's inversion (D6): a claim listing a held block's own patches, but in a *different* order
+/// than the block actually sealed them, is now `Contradicted` -- exactly the case a prior version
+/// of this test asserted stayed `Consistent`, under the withdrawn set-equality contract.
+///
+/// A block is content-addressed, so the same `block_id` names the same canonical payload, therefore
+/// the same `patch_ids` sequence. An honest claim about a block the receiver genuinely holds
+/// therefore matches it *in order*, always -- there is no honest way to name the right block and
+/// the right patches in the wrong order. A differently-ordered claim about a held block cannot
+/// arise from honesty; only from a lie or a lossy claim format. So sequence equality cannot produce
+/// a false accusation; it can only detect one -- an order-lie the sorted-set contract could not.
+#[test]
+fn claim_permuting_a_held_blocks_own_order_is_contradicted() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc115-recognition-claim-permuted-contradicted");
     let layout = RepositoryLayout::init(root.clone())?;
     let mut store = FileObjectStore::new(layout);
     let low = ObjectId::from_bytes([0x75; 32]);
@@ -70,51 +109,19 @@ fn claim_matching_a_held_block_is_consistent_regardless_of_the_blocks_own_patch_
     let block = signed_block(BlockKind::Normal, Vec::new(), vec![high, low], None);
     let block_id = store.write_object(&block)?;
 
+    // The claim lists the block's own two real patches, but ascending -- the wrong order.
     let claim = RecognitionClaimPayload {
         block_id,
         patch_ids: vec![low, high],
     };
     let outcome = check_recognition_claim_consistency(&store, &claim)?;
-    assert_eq!(outcome, RecognitionClaimConsistency::Consistent);
-    let _ = std::fs::remove_dir_all(root);
-    Ok(())
-}
-
-/// Review v1 §2's condition: a claim built in-process with unsorted `patch_ids` (bypassing the
-/// encoder/decoder's own checks, exactly Stage 3's own path before encoding) must be refused
-/// outright, never compared and reported as `Contradicted` -- even when the claim is, in substance,
-/// entirely truthful about the block it names. Reproduces the review's own probe: a block genuinely
-/// containing two patches, and a claim listing the *same* two, descending.
-#[test]
-fn claim_with_unsorted_patch_ids_is_refused_not_compared() -> prikk_error::Result<()> {
-    let root = unique_temp_dir("rfc115-recognition-claim-unsorted-refused");
-    let layout = RepositoryLayout::init(root.clone())?;
-    let mut store = FileObjectStore::new(layout);
-    let low = ObjectId::from_bytes([0x11; 32]);
-    let high = ObjectId::from_bytes([0x22; 32]);
-    let block = signed_block(BlockKind::Normal, Vec::new(), vec![low, high], None);
-    let block_id = store.write_object(&block)?;
-
-    let unsorted_claim = RecognitionClaimPayload {
-        block_id,
-        // Descending -- unsorted, even though it names the block's own real patches.
-        patch_ids: vec![high, low],
-    };
-    let result = check_recognition_claim_consistency(&store, &unsorted_claim);
-    assert!(
-        result.is_err(),
-        "an unsorted claim must be refused, not compared and reported: {result:?}"
+    assert_eq!(
+        outcome,
+        RecognitionClaimConsistency::Contradicted {
+            claimed: vec![low, high],
+            actual: vec![high, low],
+        }
     );
-
-    let duplicated_claim = RecognitionClaimPayload {
-        block_id,
-        patch_ids: vec![low, low],
-    };
-    assert!(
-        check_recognition_claim_consistency(&store, &duplicated_claim).is_err(),
-        "a claim with duplicate patch_ids must be refused the same way"
-    );
-
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }

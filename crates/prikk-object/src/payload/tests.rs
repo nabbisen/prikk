@@ -280,16 +280,12 @@ fn recognition_claim_payload_decodes_its_canonical_bytes() {
     }
 }
 
-/// Hand-write one canonical TLV field: tag (u16 BE) ‖ wire type (u8) ‖ length (u64 BE) ‖ value.
-fn write_field(out: &mut Vec<u8>, tag: u16, wire_type: WireType, value: &[u8]) {
-    out.extend_from_slice(&tag.to_be_bytes());
-    out.push(wire_type as u8);
-    out.extend_from_slice(&(value.len() as u64).to_be_bytes());
-    out.extend_from_slice(value);
-}
-
+/// §4.3 of the order-amendment handoff (D6): a descending, unsorted `patch_ids` sequence now
+/// encodes and decodes successfully, with order preserved exactly -- the withdrawn refusal
+/// (`recognition_claim_payload_rejects_unsorted_patch_ids_at_encode_and_decode`) asserted the
+/// opposite contract.
 #[test]
-fn recognition_claim_payload_rejects_unsorted_patch_ids_at_encode_and_decode() {
+fn recognition_claim_payload_preserves_unsorted_order_through_encode_and_decode() {
     let block = ObjectId::from_canonical_payload(ObjectType::Block, 2, b"block");
     let patch_a = ObjectId::from_canonical_payload(ObjectType::Patch, 1, b"a");
     let patch_b = ObjectId::from_canonical_payload(ObjectType::Patch, 1, b"b");
@@ -299,32 +295,44 @@ fn recognition_claim_payload_rejects_unsorted_patch_ids_at_encode_and_decode() {
         (patch_b, patch_a)
     };
 
-    // Encoder: deliberately descending -- must be refused, not silently sorted.
+    // Deliberately descending -- the block's own verbatim order, not sorted.
     let payload = RecognitionClaimPayload {
         block_id: block,
         patch_ids: vec![second, first],
     };
-    assert!(payload.to_canonical_bytes().is_err());
-
-    // Decoder: hand it unsorted bytes directly, built by hand rather than through the encoder
-    // (which would itself refuse) -- per §7 row 5, the decoder must refuse independently, not
-    // merely inherit the encoder's own check.
-    let mut bytes = Vec::new();
-    write_field(&mut bytes, 1, WireType::ObjectId, block.as_bytes());
-    write_field(&mut bytes, 2, WireType::ObjectId, second.as_bytes());
-    write_field(&mut bytes, 2, WireType::ObjectId, first.as_bytes());
-    assert!(RecognitionClaimPayload::decode_canonical(&bytes).is_err());
+    let bytes = payload.to_canonical_bytes();
+    assert!(bytes.is_ok());
+    if let Ok(bytes) = bytes {
+        let decoded = RecognitionClaimPayload::decode_canonical(&bytes);
+        assert_eq!(
+            decoded.map(|payload| payload.patch_ids),
+            Ok(vec![second, first]),
+            "decoded order must match the encoded order exactly, not be sorted"
+        );
+    }
 }
 
+/// §4.3: duplicate `patch_ids` are now permitted and preserved, mirroring `Block.patch_ids`'s own
+/// lack of a uniqueness invariant -- the withdrawn refusal
+/// (`recognition_claim_payload_rejects_duplicate_patch_ids_at_decode`) asserted the opposite.
 #[test]
-fn recognition_claim_payload_rejects_duplicate_patch_ids_at_decode() {
+fn recognition_claim_payload_preserves_duplicate_patch_ids_through_encode_and_decode() {
     let block = ObjectId::from_canonical_payload(ObjectType::Block, 2, b"block");
     let patch = ObjectId::from_canonical_payload(ObjectType::Patch, 1, b"patch");
-    let mut bytes = Vec::new();
-    write_field(&mut bytes, 1, WireType::ObjectId, block.as_bytes());
-    write_field(&mut bytes, 2, WireType::ObjectId, patch.as_bytes());
-    write_field(&mut bytes, 2, WireType::ObjectId, patch.as_bytes());
-    assert!(RecognitionClaimPayload::decode_canonical(&bytes).is_err());
+    let payload = RecognitionClaimPayload {
+        block_id: block,
+        patch_ids: vec![patch, patch],
+    };
+    let bytes = payload.to_canonical_bytes();
+    assert!(bytes.is_ok());
+    if let Ok(bytes) = bytes {
+        let decoded = RecognitionClaimPayload::decode_canonical(&bytes);
+        assert_eq!(
+            decoded.map(|payload| payload.patch_ids),
+            Ok(vec![patch, patch]),
+            "the duplicate must round-trip, not be deduplicated"
+        );
+    }
 }
 
 #[test]
