@@ -324,16 +324,12 @@ pub fn accept_exchange_artifact(
         }
     }
 
-    // Phase D item 10: write the patch, blob, and claim objects. Content-addressed and idempotent --
-    // a replayed accept (§4.3) writes nothing new here.
+    // Phase D item 10 (patches and blobs only -- see the claim-write note below): write the patch
+    // and blob objects. Content-addressed and idempotent -- a replayed accept (§4.3) writes nothing
+    // new here.
     let mut object_store = ObjectWriteSession::open(layout)?;
     let mut written_object_count = 0_usize;
-    for envelope in decoded
-        .patches
-        .iter()
-        .chain(decoded.blobs.iter())
-        .chain(decoded.claims.iter())
-    {
+    for envelope in decoded.patches.iter().chain(decoded.blobs.iter()) {
         let id = envelope.object_id();
         if !object_store.contains_object(envelope.object_type, id)? {
             written_object_count = written_object_count.checked_add(1).ok_or_else(|| {
@@ -362,6 +358,24 @@ pub fn accept_exchange_artifact(
                     )
                 })?;
         }
+    }
+
+    // Claims are written last, only after item 11 has fully succeeded. Design §8.1 names claims
+    // separately from ordinary objects -- "no key material, and no claim, may be recorded from an
+    // exchange that failed" -- unlike patches and blobs, which §8.1 explicitly allows to survive a
+    // failed exchange (content-addressed and harmless). Writing claims earlier, alongside patches
+    // and blobs, would leave a claim behind if the author-key record step above failed after an
+    // earlier claim write -- caught in review (`RFC-115-stage-3-exchange-artifact-review-v1.md`
+    // §2) as reachable, if narrow: a concurrent writer between Phase B's read-only conflict check
+    // and this lock, or an I/O error during `record_author_key_material`.
+    for envelope in &decoded.claims {
+        let id = envelope.object_id();
+        if !object_store.contains_object(envelope.object_type, id)? {
+            written_object_count = written_object_count.checked_add(1).ok_or_else(|| {
+                PrikkError::Integrity("exchange accept written-object count overflow".to_string())
+            })?;
+        }
+        object_store.write_object(envelope)?;
     }
 
     Ok(AcceptReport {

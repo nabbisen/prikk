@@ -169,6 +169,68 @@ fn author_key_container_bytes(layout: &RepositoryLayout) -> Result<Vec<u8>> {
     )
 }
 
+/// Review condition 1 (`RFC-115-stage-3-exchange-artifact-review-v1.md` §2): row 1's own test above
+/// only reaches a **Phase C** failure, which precedes every write -- it cannot exercise the window
+/// this guards. This test forces a failure inside **Phase D itself**, after Phase C has already
+/// verified everything and after patches/blobs have already been written, by holding the receiver's
+/// `ActiveLock` open before calling accept -- the nested `ActiveLock::acquire` inside Phase D then
+/// fails deterministically on exclusive-create contention, the same failure mode design §8.1's
+/// "a concurrent writer... or an I/O error during `record_author_key_material`" describes, without
+/// needing a genuine second thread. Before the fix, the claim (written in the old Phase D item 10,
+/// ahead of the lock) would have survived this exact failure; the reordered code writes claims only
+/// after item 11 succeeds, so it must not.
+#[test]
+fn phase_d_lock_contention_after_verification_leaves_no_claim_behind() -> Result<()> {
+    let signer = author_signer(0x15)?;
+    let claim_signer = maintainer_signer(0x16)?;
+
+    let sender = fresh_repo("pexch-accept-phased-sender")?;
+    let mut objects = FileObjectStore::new(sender.clone());
+    let blob = signed_blob_envelope(b"phase-d fixture\n")?;
+    let blob_id = objects.write_object(&blob)?;
+    let patch = signed_author_patch_envelope(&signer, "phase-d.txt", 0x17, blob_id)?;
+    let patch_id = objects.write_object(&patch)?;
+    let active_lock = ActiveLock::acquire(&sender)?;
+    record_author_key_material(
+        &sender,
+        signer.key_id(),
+        signer.public_key_bytes(),
+        &active_lock,
+    )?;
+    drop(active_lock);
+    // A validly-signed claim -- everything about it passes Phase C on its own; only the later
+    // author-key lock step is made to fail.
+    let claim = signed_claim_envelope(
+        &claim_signer,
+        ObjectId::from_bytes([0x9a; 32]),
+        vec![patch_id],
+    )?;
+    let claim_id = objects.write_object(&claim)?;
+    let (_, bytes) = export_exchange_artifact(&sender, &[patch_id], &[claim_id])?;
+    let _ = std::fs::remove_dir_all(sender.root());
+
+    let receiver = fresh_repo("pexch-accept-phased-receiver")?;
+    // Held for the whole accept call below -- the single line simulating the Phase D window: the
+    // nested `ActiveLock::acquire` inside `accept_exchange_artifact` must fail while this is held.
+    let held_lock = ActiveLock::acquire(&receiver)?;
+
+    let result = accept_exchange_artifact(&receiver, &bytes, &AcceptOptions::default_limits());
+    assert!(
+        result.is_err(),
+        "lock contention during Phase D must fail the whole accept"
+    );
+    drop(held_lock);
+
+    let snapshot = ObjectReadSnapshot::open(&receiver)?;
+    assert!(
+        !snapshot.contains_object(ObjectType::RecognitionClaim, claim_id),
+        "a claim must not survive a Phase D failure, even one that occurs after Phase C's own \
+         verification already passed"
+    );
+    let _ = std::fs::remove_dir_all(receiver.root());
+    Ok(())
+}
+
 /// §7 rows 2 and 3: trust never expands on receipt, and a claim naming an unadopted key still
 /// accepts the exchange -- the key stays unadopted, and the claim reads `Unverifiable`, never
 /// `Sound`.
@@ -261,11 +323,19 @@ fn row4_a_missing_referenced_blob_refuses_the_whole_exchange() -> Result<()> {
 /// §7 row 5: bounds enforced before decoding -- a declared count over the configured limit is
 /// rejected on the integer, at the public `accept_exchange_artifact` entry point (the low-level
 /// decode function's own version of this is `artifact::tests`' own coverage).
+///
+/// Review condition 2 (`RFC-115-stage-3-exchange-artifact-review-v1.md` §3): the fixture must carry
+/// **zero** recorded author-key entries. With one recorded (as an earlier version of this test
+/// built), the artifact's own author-key section also declares a nonzero count, and *that* section's
+/// own bound check independently refuses under `max_object_count: 0` -- so disabling only the
+/// patches/blobs/claims section's shared count guard left this test passing for the wrong reason. A
+/// fixture with no author-key material isolates the control to the one line this test means to
+/// cover.
 #[test]
 fn row5_a_declared_count_over_the_configured_limit_is_rejected() -> Result<()> {
     let signer = author_signer(0x50)?;
     let (bytes, _patch_id) =
-        build_single_patch_artifact("pexch-accept-row5-sender", &signer, true)?;
+        build_single_patch_artifact("pexch-accept-row5-sender", &signer, false)?;
 
     let receiver = fresh_repo("pexch-accept-row5-receiver")?;
     let tight_options = AcceptOptions::default_limits().with_max_object_count(0);
