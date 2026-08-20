@@ -448,7 +448,15 @@ fn row7_a_partially_sealed_claim_refuses() -> Result<()> {
     )?;
 
     let result = seal_from_accepted_claim(&layout, TARGET_REF, claim_mixed, &signer);
-    assert!(result.is_err(), "a partially-sealed claim must refuse");
+    let error = result.expect_err("a partially-sealed claim must refuse");
+    // Checked by message, not just `is_err()`: re-applying the already-sealed patch would also be
+    // caught downstream as an ordinary path conflict (divergence), which would make this control
+    // pass for the wrong reason if it only asserted "refused". The phrase below is unique to §3
+    // item 3's own explicit check, the one this row is actually about.
+    assert!(
+        error.to_string().contains("partially-applied"),
+        "expected §3 item 3's own partial-seal refusal, got: {error}"
+    );
     assert_eq!(
         current_tip(&layout)?,
         tip_after_first,
