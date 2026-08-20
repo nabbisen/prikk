@@ -290,6 +290,16 @@ fn row3_an_unverifiable_claim_still_supplies_the_order() -> Result<()> {
         }
         other => panic!("expected Sealed, got {other:?}"),
     }
+    // §6 row 2, in the one context where an expansion would actually be observable: the claim
+    // signer's own key_id must not have been adopted as a side effect of a successful seal.
+    let policy = crate::trust::load_maintainer_trust_policy(&layout)?;
+    assert!(
+        !policy
+            .keys
+            .iter()
+            .any(|adopted| adopted.key_id == claim_signer.key_id()),
+        "the claim signer's key must not have been adopted by a successful seal"
+    );
     cleanup(&layout);
     Ok(())
 }
