@@ -7,10 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{
-    ObjectEnvelope, ObjectId, ObjectType, RecognitionClaimPayload, Signature, SignatureAlgorithm,
-    SignerRole,
-};
+use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RecognitionClaimPayload, SignerRole};
 
 use crate::author_key_index::{
     check_author_key_conflict, lookup_author_key_entries, record_author_key_material,
@@ -23,10 +20,12 @@ use crate::patch_replay::decode::{
     DecodedDeletePreimage, DecodedOperationKind, decode_patch_operations, decode_patch_parent_ids,
 };
 use crate::patch_set_digest::compute_patch_set_digest;
-use crate::recognition_claim::check_recognition_claim_consistency;
-use crate::trust::{MaintainerTrustPolicy, load_maintainer_trust_policy};
-use crate::trust_index::read_current_trust_policy_snapshot;
+use crate::recognition_claim::{
+    check_recognition_claim_consistency, maintainer_trust_policy_or_empty, verify_claim_signature,
+};
 use crate::verify::AuthorSignatureVerification;
+
+pub use crate::recognition_claim::ClaimSignatureVerification;
 
 use super::artifact::{
     DEFAULT_EXCHANGE_ARTIFACT_MAX_OBJECT_COUNT, DEFAULT_EXCHANGE_ARTIFACT_MAX_TOTAL_BYTES,
@@ -68,30 +67,6 @@ impl AcceptOptions {
         self.max_total_bytes = max_total_bytes;
         self
     }
-}
-
-/// The outcome of checking one `RecognitionClaim`'s own MAINTAINER signature (handoff §4.2 item 8).
-/// Shaped identically to [`AuthorSignatureVerification`] and for the same reason: **never gating**
-/// (design D3) means a claim naming a `key_id` this repository has not adopted still accepts the
-/// exchange -- it reads `Unverifiable`, never `Sound`, and does not by itself refuse. Only a
-/// signature that fails to verify against a `key_id` this repository *has* adopted refuses (a forged
-/// claim under a locally-trusted identity is an integrity failure, not a trust question). There is no
-/// `Fails` variant for the same reason `AuthorSignatureVerification` has none: that outcome is a
-/// genuine refusal, propagated as an `Err`, not a value this type carries.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ClaimSignatureVerification {
-    /// The signature verifies against a `key_id` this repository has adopted as a trusted
-    /// maintainer.
-    Sound {
-        /// The MAINTAINER key id the signature named and verified against.
-        key_id: String,
-    },
-    /// This repository has not adopted `key_id`, so the signature cannot be checked. Not a
-    /// failure and not by itself a refusal -- see the type doc.
-    Unverifiable {
-        /// The MAINTAINER key id named, which this repository has not adopted.
-        key_id: String,
-    },
 }
 
 /// Summary of an exchange-artifact accept.
@@ -260,55 +235,7 @@ pub fn accept_exchange_artifact(
     let mut claim_signature_outcomes = Vec::with_capacity(decoded.claims.len());
     for envelope in &decoded.claims {
         let claim_id = envelope.object_id();
-        let Some(signature) = envelope
-            .signatures
-            .iter()
-            .find(|signature| signature.signer_role == SignerRole::Maintainer)
-        else {
-            return Err(PrikkError::Integrity(format!(
-                "recognition claim {claim_id} carries no MAINTAINER signature -- a claim is, by \
-                 definition, signed by the sender's maintainer key"
-            )));
-        };
-        if signature.algorithm != SignatureAlgorithm::Ed25519 {
-            return Err(PrikkError::InvalidSignature(format!(
-                "recognition claim {claim_id} MAINTAINER signature is not Ed25519"
-            )));
-        }
-        let outcome = match trust_policy
-            .keys
-            .iter()
-            .find(|adopted| adopted.key_id == signature.key_id)
-        {
-            None => ClaimSignatureVerification::Unverifiable {
-                key_id: signature.key_id.clone(),
-            },
-            Some(adopted) => {
-                let preimage = Signature::signed_bytes(
-                    SignatureAlgorithm::Ed25519,
-                    envelope.object_type,
-                    claim_id,
-                    SignerRole::Maintainer,
-                    &signature.key_id,
-                )?;
-                if prikk_crypto::verify_ed25519(
-                    &adopted.public_key,
-                    &preimage,
-                    &signature.signature_bytes,
-                )
-                .is_err()
-                {
-                    return Err(PrikkError::InvalidSignature(format!(
-                        "recognition claim {claim_id} MAINTAINER signature does not verify \
-                         against adopted key {}",
-                        signature.key_id
-                    )));
-                }
-                ClaimSignatureVerification::Sound {
-                    key_id: signature.key_id.clone(),
-                }
-            }
-        };
+        let outcome = verify_claim_signature(envelope, &trust_policy)?;
         claim_signature_outcomes.push((claim_id, outcome));
 
         let payload = RecognitionClaimPayload::decode_canonical(&envelope.canonical_payload)?;
@@ -387,23 +314,6 @@ pub fn accept_exchange_artifact(
         author_signature_outcomes,
         claim_signature_outcomes,
     })
-}
-
-/// `load_maintainer_trust_policy` deliberately errors when no policy snapshot has ever been
-/// appended -- correct for *publication* trust (`trust.rs`'s own module doc: a repository with no
-/// adopted maintainer is a trust failure for every publication), because a Block/RefState needs a
-/// definitively trusted signer to be considered sealed at all. A `RecognitionClaim`'s own signature
-/// check has no such requirement: design D3 rules a claim **never gates** on trust, so a repository
-/// that has never adopted anyone must read every claim's signer as simply not adopted -- the same
-/// outcome as an adopted-but-empty policy would produce -- not refuse the whole exchange over a
-/// question the exchange was never supposed to ask. A genuinely damaged policy or key-material
-/// container still propagates its error unchanged; only the "nothing has ever been adopted" case is
-/// treated as empty here.
-fn maintainer_trust_policy_or_empty(layout: &RepositoryLayout) -> Result<MaintainerTrustPolicy> {
-    match read_current_trust_policy_snapshot(layout)? {
-        Some(_) => load_maintainer_trust_policy(layout),
-        None => Ok(MaintainerTrustPolicy { keys: Vec::new() }),
-    }
 }
 
 /// Every blob id one decoded operation references -- the same three kinds `export_exchange_artifact`

@@ -63,6 +63,7 @@ mod rfc111_seal_simulation;
 mod rollback_draft;
 mod rollback_preview;
 mod rollback_verify;
+mod seal_from_accepted;
 mod signature_diagnostics;
 mod snapshot;
 mod state_root;
@@ -175,6 +176,7 @@ pub use rollback_preview::{
     RollbackPreviewChange, RollbackPreviewChangeKind, RollbackPreviewPlan, prepare_rollback_preview,
 };
 pub use rollback_verify::{RollbackDraftVerification, verify_active_rollback_draft};
+pub use seal_from_accepted::{SealFromAcceptedOutcome, seal_from_accepted_claim};
 pub use signature_diagnostics::{SignatureEnvelopeIssue, SignatureEnvelopeSource};
 pub use snapshot::{SnapshotEntry, SnapshotManifest};
 pub use state_root::{
