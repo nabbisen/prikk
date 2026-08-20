@@ -304,3 +304,60 @@ the definition changed what is right.**
 
 What survives as the decoder's job: non-empty, the declared-count bound, unknown-tag rejection.
 Duplicates become permissible, mirroring `Block.patch_ids`.
+
+## 12. D7 — one classification for "what does this repository already have?"
+
+**Added 2026-08-20, from RFC 116's claim-design stress round
+(`.git-exclude/reviewed/RFC-116-claim-design-stress-round-v1.md` §2). Amends Stage 4's refusal shape,
+which the architect had accepted and reviewed.**
+
+### 12.1 The principle
+
+For every patch a claim names, its state **in the receiving repository** is one of exactly three, and
+each has one defined outcome:
+
+| State here | What it means | Outcome |
+|---|---|---|
+| **Sealed** | its effect is **already in this repository's state** | **skip it** — nothing to do, not an error |
+| **Present, unsealed** | available to apply, effect not yet in state | **seal it** — this is the work |
+| **Absent** | no object, no effect, cannot be applied | **refuse the whole claim** |
+
+> **The operation supplies exactly those patches whose effect is missing and which are available to
+> supply. Absence is the only refusal.**
+
+### 12.2 Why this is correctness, not convenience
+
+**An already-sealed patch's effect is already in the receiver's state.** Skipping it does not skip its
+effect — applying the remainder on top of the current state is precisely right, and re-applying it
+would be wrong. **An absent patch's effect is missing**, so applying later patches on top could fail,
+or worse, succeed and produce a state nobody authored. That asymmetry — effect present versus effect
+missing — is the line, and it is why the two cases must not be collapsed.
+
+### 12.3 This is the rule the codebase already follows everywhere else
+
+`accept_exchange_artifact` implements it exactly: an object already held is **skipped silently**
+(`accept.rs:261`, not even counted as written), while a blob **referenced but absent** refuses the
+whole exchange (`accept.rs:186-190`). Stage 3 got this right. **Stage 4 is the outlier**, refusing on
+"already have it" — a case accept treats as a non-event.
+
+**So this ruling makes Stage 4 consistent with Stage 3 rather than introducing a new behaviour.**
+
+### 12.4 What changes in `seal_from_accepted_claim`
+
+- **Mixed sealed/unsealed no longer refuses.** Seal the unsealed subset, in the claim's own order
+  restricted to that subset — well-defined, since the claim carries a total order (D6).
+- **`AlreadySealed` stops being a separate outcome and becomes the degenerate case** of the same rule:
+  nothing unsealed, so nothing to seal. Two outcomes collapsing into one rule is the signal the
+  classification is right.
+- **A named patch that is absent still refuses the whole claim**, unchanged — that is §12.1's only
+  refusal, and RFC 115 §8.4's no-partial-apply discipline unchanged.
+
+### 12.5 Why it had to change: the deadlock was reachable by ordinary use
+
+`merge_execute.rs:173` sets a merge block's `patch_ids = adopted_patch_ids` — patches **already sealed
+on the other branch in the same repository**. So one patch is listed by two blocks and described by two
+claims, and a receiver that sealed the first claim then meets a second naming that patch plus a new
+one. Under the old rule that refuses forever, and the new patch is reachable through no other claim.
+
+**Not a claim-schema gap — no field fixes it.** The claim correctly describes the sender's block. The
+defect was that Stage 4 collapsed *"you already have some of this"* into *"some of this is missing."*
