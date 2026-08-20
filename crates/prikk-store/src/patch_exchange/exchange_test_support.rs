@@ -76,6 +76,8 @@ pub(super) fn signed_author_patch_envelope(
 }
 
 /// A MAINTAINER-signed `RecognitionClaim` envelope naming `block_id`/`patch_ids`.
+/// `parent_block_ids` is always empty -- none of Stage 3's own fixtures need a multi-block claim;
+/// see `seal_from_accepted`'s own test support for one that does.
 pub(super) fn signed_claim_envelope(
     signer: &Ed25519MaintainerSigner,
     block_id: ObjectId,
@@ -84,6 +86,7 @@ pub(super) fn signed_claim_envelope(
     let payload = RecognitionClaimPayload {
         block_id,
         patch_ids,
+        parent_block_ids: Vec::new(),
     };
     let mut envelope = ObjectEnvelope::unsigned(
         ObjectType::RecognitionClaim,

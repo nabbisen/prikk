@@ -1,25 +1,33 @@
-//! RFC 115 Stage 2 (design-v1.md D3, §3), amended by §11 (D6): what a receiver may check about a
-//! `RecognitionClaim` against its own object store.
+//! RFC 115 Stage 2 (design-v1.md D3, §3), amended by §11 (D6) and by RFC 116 N3: what a receiver
+//! may check about a `RecognitionClaim` against its own object store.
 //!
-//! **Must not**: `block_id`/`patch_ids` are never existence-checked. A claim is verifiable with
-//! none of the objects it names present — that is the entire reason it is a claim object and not a
-//! Block (D3). This module never refuses on absence.
+//! **Must not**: `block_id`/`patch_ids`/`parent_block_ids` are never existence-checked. A claim is
+//! verifiable with none of the objects it names present — that is the entire reason it is a claim
+//! object and not a Block (D3). This module never refuses on absence.
 //!
-//! **Must**: if the receiver *does* hold the referenced block, the claim's `patch_ids` must match
-//! that block's own `patch_ids` **in order** — a claim contradicting a block already held is a
-//! detected lie.
+//! **Must**: if the receiver *does* hold the referenced block, **both** the claim's `patch_ids` and
+//! its `parent_block_ids` must match that block's own, **in order** — a claim contradicting a block
+//! already held is a detected lie, about whichever field disagreed.
 //!
-//! **The comparison is exact sequence equality, not set equality (D6).** A block is
-//! content-addressed, so the same `block_id` names the same canonical payload, therefore the same
-//! `patch_ids` sequence. An honest claim about a block the receiver genuinely holds therefore
-//! matches it in order, always — there is no honest way to name the right block and the right
-//! patches in the wrong order. A differently-ordered claim about a held block cannot arise from
-//! honesty; only from a lie or from a lossy claim format. So sequence equality cannot produce a
-//! false accusation; it can only detect one — which set equality, used before this amendment,
-//! structurally could not do, since order is exactly the information a set discards. Neither side
-//! is sorted or deduplicated before comparing: `Block.patch_ids` is the free sequence
-//! `apply_candidate_patches` actually consumed, and `RecognitionClaimPayload.patch_ids` mirrors it
-//! verbatim by construction (the payload's own decoder/encoder no longer accept anything else).
+//! **The comparison is exact sequence equality, not set equality (D6; extended to
+//! `parent_block_ids` by N3).** A block is content-addressed, so the same `block_id` names the same
+//! canonical payload, therefore the same `patch_ids` sequence **and** the same `parent_block_ids`
+//! sequence. An honest claim about a block the receiver genuinely holds therefore matches it in
+//! order, always, on both fields — there is no honest way to name the right block and the wrong
+//! patches, or the right block and the wrong parents. A differently-ordered (or differently-valued)
+//! claim about a held block cannot arise from honesty; only from a lie or from a lossy claim
+//! format. So sequence equality cannot produce a false accusation; it can only detect one — which
+//! set equality, used before D6, structurally could not do, since order is exactly the information
+//! a set discards. Neither side is sorted or deduplicated before comparing: `Block.patch_ids` and
+//! `Block.parent_block_ids` are the free sequences the block itself carries, and
+//! `RecognitionClaimPayload`'s own two fields mirror them verbatim by construction (the payload's
+//! own decoder/encoder no longer accept anything else).
+//!
+//! **`Contradicted` names which field disagreed (N3 §4).** A parent mismatch reported through
+//! `patch_ids`-shaped output would read as "your patches disagree" when the patches are fine — a
+//! misleading diagnostic of exactly the class RFC 115 Stage 4's divergence-vs-corruption ruling
+//! exists to prevent. A wrong explanation is worse than a vague one: it sends the reader somewhere
+//! false.
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
@@ -32,27 +40,44 @@ use crate::object_store::ObjectReader;
 use crate::trust::{MaintainerTrustPolicy, load_maintainer_trust_policy};
 use crate::trust_index::read_current_trust_policy_snapshot;
 
+/// Which field of a `RecognitionClaimPayload` a `RecognitionClaimConsistency::Contradicted`
+/// outcome names as the one that disagreed with the held block (N3 §4) -- lets a caller
+/// distinguish "the claim lies about which patches" from "the claim lies about which parents"
+/// without parsing a string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContradictedField {
+    /// The claim's `patch_ids` disagree with the held block's own.
+    PatchIds,
+    /// The claim's `parent_block_ids` disagree with the held block's own.
+    ParentBlockIds,
+}
+
 /// The outcome of checking a `RecognitionClaim` against the receiver's own store. Three states,
 /// not a `bool` and not a `Result<()>` that would flatten "absent" into "fine" — `BlockAbsent` is
 /// the expected case in real exchange and must not read as a degraded one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecognitionClaimConsistency {
-    /// The referenced block is held, and its `patch_ids` match the claim's, in order.
+    /// The referenced block is held, and both the claim's `patch_ids` and `parent_block_ids`
+    /// match the block's own, in order.
     Consistent,
     /// The referenced block is not held. Expected, not a defect — the claim is still meaningful.
     BlockAbsent,
-    /// The referenced block is held, and its `patch_ids` do **not** match the claim's, in order —
-    /// a detected lie.
+    /// The referenced block is held, and one of the claim's fields does **not** match the block's
+    /// own, in order — a detected lie. `field` names which one; `patch_ids` is checked first, so a
+    /// claim disagreeing on both fields is reported as a `PatchIds` contradiction.
     Contradicted {
-        /// The claim's own `patch_ids`, verbatim.
+        /// Which field disagreed.
+        field: ContradictedField,
+        /// That field's own value as the claim states it, verbatim.
         claimed: Vec<ObjectId>,
-        /// The held block's own `patch_ids`, verbatim.
+        /// That field's own value as the held block actually has it, verbatim.
         actual: Vec<ObjectId>,
     },
 }
 
 /// Check `claim` against `object_store`. See the module doc for why sequence equality, not set
-/// equality, is the correct comparison under D6's verbatim-order contract.
+/// equality, is the correct comparison under D6/N3's verbatim-order contract, and for why
+/// `Contradicted` names the disagreeing field.
 pub fn check_recognition_claim_consistency(
     object_store: &impl ObjectReader,
     claim: &RecognitionClaimPayload,
@@ -61,15 +86,21 @@ pub fn check_recognition_claim_consistency(
         return Ok(RecognitionClaimConsistency::BlockAbsent);
     };
     let block_payload = BlockPayload::decode_canonical(&block_envelope.canonical_payload)?;
-    let actual = block_payload.patch_ids;
-    if actual == claim.patch_ids {
-        Ok(RecognitionClaimConsistency::Consistent)
-    } else {
-        Ok(RecognitionClaimConsistency::Contradicted {
+    if block_payload.patch_ids != claim.patch_ids {
+        return Ok(RecognitionClaimConsistency::Contradicted {
+            field: ContradictedField::PatchIds,
             claimed: claim.patch_ids.clone(),
-            actual,
-        })
+            actual: block_payload.patch_ids,
+        });
     }
+    if block_payload.parent_block_ids != claim.parent_block_ids {
+        return Ok(RecognitionClaimConsistency::Contradicted {
+            field: ContradictedField::ParentBlockIds,
+            claimed: claim.parent_block_ids.clone(),
+            actual: block_payload.parent_block_ids,
+        });
+    }
+    Ok(RecognitionClaimConsistency::Consistent)
 }
 
 /// The outcome of checking one `RecognitionClaim`'s own MAINTAINER signature (Stage 3 handoff §4.2
