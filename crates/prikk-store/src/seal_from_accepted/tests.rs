@@ -12,6 +12,8 @@ use prikk_object::{
 
 use super::{SealFromAcceptedOutcome, seal_from_accepted_claim};
 use crate::author_signing::author_signature;
+use crate::fsutil::read_file_if_exists;
+use crate::layout::ContainerSlot;
 use crate::maintainer_signing::{
     Ed25519MaintainerSigner, MaintainerSigner as _, maintainer_signature,
 };
@@ -140,6 +142,14 @@ fn current_tip(layout: &RepositoryLayout) -> Result<Option<ObjectId>> {
         envelope.schema_version,
     )?;
     Ok(Some(payload.target_object_id))
+}
+
+/// The raw bytes of the Block container's primary slot -- a byte-for-byte proof that no new Block
+/// was written, not merely that the ref's own tip didn't move.
+fn block_container_bytes(layout: &RepositoryLayout) -> Result<Vec<u8>> {
+    let relative = layout
+        .repository_relative(&layout.container_slot_path(ObjectType::Block, ContainerSlot::A))?;
+    Ok(read_file_if_exists(layout.repository_mutation_root(), &relative)?.unwrap_or_default())
 }
 
 /// The base fixture every other test builds on: one repository, one adopted+trusted maintainer
@@ -535,6 +545,61 @@ fn row9_sealing_the_same_claim_twice_is_a_no_op_the_second_time() -> Result<()> 
         tip_after_first,
         "no second block"
     );
+    cleanup(&fixture.layout);
+    Ok(())
+}
+
+/// Review condition (`RFC-115-stage-4-seal-from-accepted-review-v1.md` §4): pins the invariant the
+/// "signer trust is not checked on the no-op path" inference (§3 of that review) rests on -- that
+/// the no-op path performs no trust-gated act, so it is safe to skip `verify_signer_trusted` there.
+/// That is true today and enforced by nothing; a later edit that records anything on that path would
+/// silently convert an un-gated read into an un-gated write, and no other test here would notice.
+/// An **unadopted** signer, against a claim whose patches are **all already sealed**, must return
+/// `AlreadySealed` and leave the repository byte-identical: no new Block, the ref's own `RefState`
+/// unmoved, and the adopted-maintainer set unchanged.
+#[test]
+fn the_no_op_path_is_byte_identical_even_for_an_unadopted_signer() -> Result<()> {
+    let fixture = base_fixture("seal-from-accepted-noop-byte-identical")?;
+    let first = seal_from_accepted_claim(
+        &fixture.layout,
+        TARGET_REF,
+        fixture.claim_id,
+        &fixture.signer,
+    )?;
+    assert!(matches!(first, SealFromAcceptedOutcome::Sealed { .. }));
+
+    let ref_store = RefStore::new(fixture.layout.clone());
+    let ref_state_before = ref_store.read_current_ref_state_id(TARGET_REF)?;
+    let block_bytes_before = block_container_bytes(&fixture.layout)?;
+    let trust_before = crate::trust::load_maintainer_trust_policy(&fixture.layout)?;
+
+    let unadopted = maintainer_signer(0xB0)?; // never adopted in this repository
+    let outcome =
+        seal_from_accepted_claim(&fixture.layout, TARGET_REF, fixture.claim_id, &unadopted)?;
+    match outcome {
+        SealFromAcceptedOutcome::AlreadySealed { ref_name, claim_id } => {
+            assert_eq!(ref_name, TARGET_REF);
+            assert_eq!(claim_id, fixture.claim_id);
+        }
+        other => panic!("expected AlreadySealed even for an unadopted signer, got {other:?}"),
+    }
+
+    let ref_state_after = ref_store.read_current_ref_state_id(TARGET_REF)?;
+    let block_bytes_after = block_container_bytes(&fixture.layout)?;
+    let trust_after = crate::trust::load_maintainer_trust_policy(&fixture.layout)?;
+    assert_eq!(
+        ref_state_before, ref_state_after,
+        "the ref's RefState must not move"
+    );
+    assert_eq!(
+        block_bytes_before, block_bytes_after,
+        "byte-for-byte: no new block written"
+    );
+    assert_eq!(
+        trust_before, trust_after,
+        "the adopted-maintainer set must not change"
+    );
+
     cleanup(&fixture.layout);
     Ok(())
 }
