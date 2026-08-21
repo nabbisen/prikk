@@ -3,7 +3,7 @@
 //! `prikk-store` stays bytes-in, bytes-out (RFC 116 ruling 2); every function in this module and
 //! its submodules is a pure read or a pure computation over already-decoded bytes.
 //!
-//! **Two artifacts, one computation:**
+//! **Two artifacts, one computation, one sender:**
 //! - [`build_sync_summary`]/[`decode_sync_summary`] (`summary.rs`): `PSYNCSU1`, one message
 //!   covering every local `heads/*` ref -- name, [`patch_set_digest::PatchSetDigest`], patch count.
 //!   32 bytes plus a name per ref (design §1.1): cheap enough that two repositories already in sync
@@ -12,6 +12,9 @@
 //!   patch-id list plus a digest the receiver of the message recomputes and checks (§1.3) --
 //!   self-consistent by construction, never trusted from the wire.
 //! - [`compute_sync_delta`] (N4): `reachable(sender's own ref) ∖ have_list.patch_ids`, sorted.
+//! - [`build_sync_artifact`] (stage 3, `sender.rs`): given a ref and a have-list, produces the
+//!   `PEXCH001` that closes the gap -- see `sender.rs`'s own module doc for why this is the one
+//!   and only place in the crate that ever constructs a `RecognitionClaimPayload`.
 //!
 //! **Representational, not frozen** (RFC 114 §3, restated per artifact): both formats carry objects
 //! whose identity is already frozen (`ObjectId`, [`patch_set_digest::PatchSetDigest`]) and carry no
@@ -34,9 +37,10 @@
 //! including tags here would report differences nothing downstream can act on. Tag sync is its own
 //! question, not answered here.
 //!
-//! **Constructs no [`prikk_object::RecognitionClaimPayload`] anywhere in this module or its
-//! submodules** (§6). Stage 3's sender side is the first claim producer; creating one here would
-//! close the free-schema-amendment window (N3) early.
+//! **This top-level module, `summary.rs`, and `have_list.rs` construct no
+//! [`prikk_object::RecognitionClaimPayload`].** `sender.rs` is the sole exception, deliberately:
+//! it is stage 3's sender side, the first claim producer in the project's history, and closes the
+//! free-schema-amendment window D6 and N3 both used (RFC 114).
 
 use std::collections::BTreeSet;
 
@@ -49,12 +53,14 @@ use crate::patch_set_digest::patch_ids_reachable_from_block;
 use crate::refs::{RefStore, validate_local_branch_ref};
 
 mod have_list;
+mod sender;
 mod summary;
 
 pub use have_list::{
     DEFAULT_HAVE_LIST_MAX_PATCH_COUNT, DEFAULT_HAVE_LIST_MAX_TOTAL_BYTES, HaveList,
     build_have_list, decode_have_list,
 };
+pub use sender::{SyncArtifactBuildReport, SyncArtifactOutcome, build_sync_artifact};
 pub use summary::{
     DEFAULT_SYNC_SUMMARY_MAX_REF_COUNT, DEFAULT_SYNC_SUMMARY_MAX_TOTAL_BYTES, SyncSummaryRefEntry,
     build_sync_summary, decode_sync_summary,
@@ -64,8 +70,8 @@ pub use summary::{
 /// from this repository's own tip for that ref, minus what `have_list` says the other side already
 /// has. **Returned sorted** (§3's own instruction), following naturally from
 /// [`patch_ids_reachable_from_block`]'s own `BTreeSet`-derived order. Does not build a `PEXCH001`
-/// artifact -- that is stage 3 (§6) -- and constructs no `RecognitionClaimPayload`, only a
-/// `Vec<ObjectId>`.
+/// artifact -- see [`build_sync_artifact`] for that -- and constructs no `RecognitionClaimPayload`,
+/// only a `Vec<ObjectId>`.
 ///
 /// **A ref this repository does not hold produces the full reachable set as the delta, not a
 /// refusal** (design §5 item 6 / N5 item 6): an absent local ref behaves as an empty local reach
