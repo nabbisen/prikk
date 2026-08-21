@@ -186,7 +186,8 @@ pub use state_root::{
 pub use sync_negotiation::{
     DEFAULT_HAVE_LIST_MAX_PATCH_COUNT, DEFAULT_HAVE_LIST_MAX_TOTAL_BYTES,
     DEFAULT_SYNC_SUMMARY_MAX_REF_COUNT, DEFAULT_SYNC_SUMMARY_MAX_TOTAL_BYTES, HaveList,
-    SyncSummaryRefEntry, build_have_list, build_sync_summary, compute_sync_delta, decode_have_list,
+    SyncArtifactBuildReport, SyncArtifactOutcome, SyncSummaryRefEntry, build_have_list,
+    build_sync_artifact, build_sync_summary, compute_sync_delta, decode_have_list,
     decode_sync_summary,
 };
 pub use trust::{
