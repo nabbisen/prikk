@@ -70,12 +70,30 @@ fn a_ref_count_over_the_limit_is_rejected_before_allocating() {
     );
 }
 
-/// §5 row 7: total byte length is bounded before decoding starts.
+/// §5 row 7: total byte length is bounded before decoding starts. Built from a genuinely valid,
+/// decodable summary -- not arbitrary bytes that would also fail the magic check downstream -- so
+/// a decode that pressed on past the length check would actually *succeed*, not merely fail for
+/// some other reason.
 #[test]
-fn oversized_total_bytes_is_refused_before_parsing() {
-    let bytes = vec![0_u8; 100];
-    let result = decode_sync_summary(&bytes, 10, REF_COUNT);
-    assert!(result.is_err(), "an oversized summary must be refused");
+fn oversized_total_bytes_is_refused_before_parsing() -> Result<()> {
+    let layout = fresh_repo("sync-summary-oversized")?;
+    publish_branch(
+        &layout,
+        "heads/main",
+        vec![ObjectId::from_bytes([0x22; 32])],
+    )?;
+    let bytes = build_sync_summary(&layout)?;
+    let result = decode_sync_summary(&bytes, bytes.len() - 1, REF_COUNT);
+    let message = match result {
+        Ok(_) => panic!("an oversized summary must be refused before decoding"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        message.contains("over the configured limit"),
+        "expected the total-byte-length refusal, got: {message}"
+    );
+    cleanup(&layout);
+    Ok(())
 }
 
 /// §5 row 4: a repository with a `heads/*`, a `tags/*`, and a `remotes/*` ref reports only the

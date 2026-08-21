@@ -68,12 +68,31 @@ fn a_patch_count_over_the_limit_is_rejected_before_allocating() {
     );
 }
 
-/// §5 row 7: total byte length is bounded before decoding starts.
+/// §5 row 7: total byte length is bounded before decoding starts. Built from a genuinely valid,
+/// self-consistent have-list -- not arbitrary bytes that would also fail the magic or trailing-byte
+/// checks downstream -- so a decode that pressed on past the length check would actually *succeed*,
+/// not merely fail for some other reason. That is the control this row needs: a length check that
+/// silently stopped gating would make this test start passing with `result.is_ok()`.
 #[test]
-fn oversized_total_bytes_is_refused_before_parsing() {
-    let bytes = vec![0_u8; 100];
-    let result = decode_have_list(&bytes, 10, PATCH_COUNT);
-    assert!(result.is_err(), "an oversized have-list must be refused");
+fn oversized_total_bytes_is_refused_before_parsing() -> Result<()> {
+    let layout = fresh_repo("have-list-oversized")?;
+    publish_branch(
+        &layout,
+        "heads/main",
+        vec![ObjectId::from_bytes([0x33; 32])],
+    )?;
+    let bytes = build_have_list(&layout, "heads/main")?;
+    let result = decode_have_list(&bytes, bytes.len() - 1, PATCH_COUNT);
+    let message = match result {
+        Ok(_) => panic!("an oversized have-list must be refused before decoding"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        message.contains("over the configured limit"),
+        "expected the total-byte-length refusal, got: {message}"
+    );
+    cleanup(&layout);
+    Ok(())
 }
 
 /// §5 row 3: a have-list whose declared digest disagrees with its own carried list is refused.
