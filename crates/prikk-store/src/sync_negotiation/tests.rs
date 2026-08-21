@@ -8,7 +8,7 @@
 use std::collections::BTreeSet;
 
 use prikk_error::Result;
-use prikk_object::{ObjectId, ObjectType};
+use prikk_object::ObjectId;
 
 use super::{
     DEFAULT_HAVE_LIST_MAX_PATCH_COUNT, DEFAULT_HAVE_LIST_MAX_TOTAL_BYTES,
@@ -18,12 +18,15 @@ use super::{
 use crate::RefStore;
 use crate::recognition_claim::maintainer_trust_policy_or_empty;
 use crate::sync_negotiation::sync_test_support::{
-    cleanup, container_bytes, fresh_repo, publish_branch,
+    all_container_bytes, cleanup, fresh_repo, publish_branch,
 };
 
 /// §5 row 1: reading a summary, a have-list, or the delta changes no state at all. Checked against
-/// the Patch/Block/RefState containers, the ref pointer index (via the ref's own current RefState
-/// id), and the trust policy -- the same properties `seal_from_accepted`'s own no-op test pins.
+/// **every** persisted object type's own container bytes
+/// (`crate::layout::persisted_object_types`) -- not only Block/RefState, so a mutation that writes
+/// through any object type (e.g. a stray Blob) is still caught -- the ref pointer index (via the
+/// ref's own current RefState id), and the trust policy: the same properties
+/// `seal_from_accepted`'s own no-op test pins.
 #[test]
 fn reading_summary_have_list_and_delta_changes_no_state() -> Result<()> {
     let layout = fresh_repo("sync-negotiation-row1")?;
@@ -33,8 +36,7 @@ fn reading_summary_have_list_and_delta_changes_no_state() -> Result<()> {
         vec![ObjectId::from_bytes([0x51; 32])],
     )?;
 
-    let block_before = container_bytes(&layout, ObjectType::Block)?;
-    let ref_state_before = container_bytes(&layout, ObjectType::RefState)?;
+    let containers_before = all_container_bytes(&layout)?;
     let ref_pointer_before =
         RefStore::new(layout.clone()).read_current_ref_state_id("heads/main")?;
     let trust_before = maintainer_trust_policy_or_empty(&layout)?;
@@ -53,16 +55,14 @@ fn reading_summary_have_list_and_delta_changes_no_state() -> Result<()> {
     )?;
     let _delta = compute_sync_delta(&layout, &have_list)?;
 
-    let block_after = container_bytes(&layout, ObjectType::Block)?;
-    let ref_state_after = container_bytes(&layout, ObjectType::RefState)?;
+    let containers_after = all_container_bytes(&layout)?;
     let ref_pointer_after =
         RefStore::new(layout.clone()).read_current_ref_state_id("heads/main")?;
     let trust_after = maintainer_trust_policy_or_empty(&layout)?;
 
-    assert_eq!(block_before, block_after, "Block container must not change");
     assert_eq!(
-        ref_state_before, ref_state_after,
-        "RefState container must not change"
+        containers_before, containers_after,
+        "no persisted object container may change"
     );
     assert_eq!(
         ref_pointer_before, ref_pointer_after,

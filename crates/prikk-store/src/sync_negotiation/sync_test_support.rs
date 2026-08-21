@@ -162,3 +162,13 @@ pub(super) fn container_bytes(
         layout.repository_relative(&layout.container_slot_path(object_type, ContainerSlot::A))?;
     Ok(read_file_if_exists(layout.repository_mutation_root(), &relative)?.unwrap_or_default())
 }
+
+/// Every persisted object type's own container bytes, in `persisted_object_types()`'s own fixed
+/// order -- row 1's "changes no state" must hold for every kind of object this repository can ever
+/// write, not only the ones a healthy read path happens to touch (`crate::layout::persisted_object_types`).
+pub(super) fn all_container_bytes(layout: &RepositoryLayout) -> Result<Vec<Vec<u8>>> {
+    crate::layout::persisted_object_types()
+        .into_iter()
+        .map(|object_type| container_bytes(layout, object_type))
+        .collect()
+}
