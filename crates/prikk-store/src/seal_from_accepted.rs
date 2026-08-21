@@ -29,6 +29,16 @@
 //! histories that moved differently, not a broken repository, and must be reported as such --
 //! see [`classify_patch_application_failure`].
 //!
+//! **A sealed block may carry fewer patches than the claim names (D7, design-v1.md §12).** For
+//! every patch a claim names, its state in this repository is one of three: sealed (its effect is
+//! already in this repository's state -- skip it), present-and-unsealed (seal it -- this is the
+//! work), or absent (refuse the whole claim). Only the unsealed subset is applied and sealed, in
+//! the claim's own order restricted to that subset -- never sorted, never deduplicated. Skipping an
+//! already-sealed patch does not skip its effect; re-applying it would be wrong. Blocks already
+//! diverge between repositories by design (§2.4-§2.7 above); state converges. If you are looking at
+//! this module because a sealed block's `patch_ids` does not equal the claim's own, that is not a
+//! bug.
+//!
 //! **Out of scope (§7):** resolving divergence (refuse and report; that is `merge`'s job),
 //! transport, and CLI wiring.
 
@@ -68,7 +78,8 @@ pub enum SealFromAcceptedOutcome {
         block_id: ObjectId,
         /// The newly published RefState's id.
         ref_state_id: ObjectId,
-        /// Patches sealed into the new block, in the order they were applied.
+        /// Patches sealed into the new block, in the order they were applied -- possibly fewer
+        /// than the claim named, when some of its patches were already sealed here (D7).
         patch_count: usize,
         /// The selected claim's own MAINTAINER signature outcome (design D6 §11.6: reported, never
         /// gating -- an `Unverifiable` claim can still have supplied the order just sealed).
@@ -116,29 +127,26 @@ pub fn seal_from_accepted_claim(
         }
     }
 
-    // §3 item 3: every named patch must be currently unsealed, or every one of them must already
-    // be sealed (a no-op success -- replay must be inert, §8.7/§6 row 9). Any other split is a
-    // partially-applied state this operation must not deepen.
+    // §3 item 3 (D7, design-v1.md §12): a named patch already sealed here has its effect already
+    // in this repository's state -- skip it, do not refuse the claim over it. Only the unsealed
+    // subset is the work, kept in the claim's own verbatim order (D6) by filtering in place --
+    // never sorted, never deduplicated; restricting a total order to a subset is well-defined. An
+    // empty subset is the degenerate case: every named patch is already sealed, so this is a no-op
+    // success, not an error (§8.7/§6 row 9).
     let unsealed: BTreeSet<ObjectId> = accepted_but_unsealed_patch_ids(layout)?
         .into_iter()
         .collect();
-    let unique_patch_ids: BTreeSet<ObjectId> = claim.patch_ids.iter().copied().collect();
-    let sealed_count = unique_patch_ids
+    let selected_patch_ids: Vec<ObjectId> = claim
+        .patch_ids
         .iter()
-        .filter(|id| !unsealed.contains(*id))
-        .count();
-    if sealed_count == unique_patch_ids.len() {
+        .copied()
+        .filter(|patch_id| unsealed.contains(patch_id))
+        .collect();
+    if selected_patch_ids.is_empty() {
         return Ok(SealFromAcceptedOutcome::AlreadySealed {
             ref_name: canonical_ref,
             claim_id,
         });
-    }
-    if sealed_count != 0 {
-        return Err(PrikkError::Integrity(format!(
-            "recognition claim {claim_id} names {sealed_count} already-sealed patch(es) and \
-             {} not-yet-sealed patch(es) -- refusing a partially-applied seal",
-            unique_patch_ids.len() - sealed_count
-        )));
     }
 
     // §3 item 4: if a stored claim overlaps this one's patch set and disagrees on their relative
@@ -193,7 +201,7 @@ pub fn seal_from_accepted_claim(
     // classification point rather than letting `?` flatten it into an undifferentiated
     // `PrikkError::Integrity` the way ordinary `derive_next_state_root` does.
     let state_merkle_root =
-        match derive_next_state_root_for_candidate(&read_snapshot, parent, &claim.patch_ids) {
+        match derive_next_state_root_for_candidate(&read_snapshot, parent, &selected_patch_ids) {
             Ok(root) => root,
             Err(CandidateStateDerivationError::Lineage(err)) => return Err(err),
             Err(CandidateStateDerivationError::Patch(err)) => {
@@ -202,7 +210,8 @@ pub fn seal_from_accepted_claim(
         };
 
     // Phase D: write nothing until every check above has passed. Build and sign the new Block,
-    // sealed under the receiver's own key, carrying the claim's patch_ids verbatim (§6 row 11).
+    // sealed under the receiver's own key, carrying the claim's own order restricted to the
+    // unsealed subset, verbatim (D7, §6 row 11).
     let block_payload = BlockPayload {
         parent_block_ids: parent.into_iter().collect(),
         kind: if current.is_some() {
@@ -210,7 +219,7 @@ pub fn seal_from_accepted_claim(
         } else {
             BlockKind::Root
         },
-        patch_ids: claim.patch_ids.clone(),
+        patch_ids: selected_patch_ids.clone(),
         state_merkle_root,
         snapshot_blob_ref: None,
         mainline_parent_id: None,
@@ -277,7 +286,7 @@ pub fn seal_from_accepted_claim(
         ref_name: canonical_ref,
         block_id,
         ref_state_id: published_ref_state_id,
-        patch_count: claim.patch_ids.len(),
+        patch_count: selected_patch_ids.len(),
         claim_signature_outcome,
     })
 }
