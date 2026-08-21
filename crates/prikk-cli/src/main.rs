@@ -21,6 +21,7 @@ mod compact;
 mod merge;
 mod output;
 mod seal;
+mod sync;
 mod tag;
 mod unlock;
 
@@ -85,6 +86,7 @@ fn run() -> std::result::Result<(), String> {
         Some("seal") => run_seal(args.collect()),
         Some("branch") => run_branch(args.collect()),
         Some("bundle") => run_bundle(args.collect()),
+        Some("sync") => run_sync(args.collect()),
         Some("tag") => run_tag(args.collect()),
         Some("trust") => run_trust(args.collect()),
         Some("status") => run_status(),
@@ -195,6 +197,11 @@ fn run_tag(args: Vec<String>) -> std::result::Result<(), String> {
 fn run_bundle(args: Vec<String>) -> std::result::Result<(), String> {
     let root = current_dir()?;
     bundle::run_bundle(root, args)
+}
+
+fn run_sync(args: Vec<String>) -> std::result::Result<(), String> {
+    let root = current_dir()?;
+    sync::run_sync(root, args)
 }
 
 fn run_unlock(args: Vec<String>) -> std::result::Result<(), String> {
