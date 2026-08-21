@@ -165,11 +165,16 @@ fn the_artifact_carries_exactly_the_delta_not_the_full_reachable_set() -> Result
     Ok(())
 }
 
-/// §5 row 2: the claim carries the block's full, verbatim `patch_ids` -- proven by having the
-/// receiver already hold the *exact same block* (by id) under a decoy ref, so
+/// §5 row 2: the claim carries the block's full, verbatim `patch_ids` -- proven by a delta that is
+/// a **proper subset** of the claimed block's own patches, so a trimmed claim would actually
+/// differ from a full one (a delta that happens to equal the whole block, as in a simpler fixture,
+/// would make a trim-to-delta mutation invisible). The receiver already holds `patch_a` on its own
+/// `heads/main` (so the delta for `heads/main` is `{patch_b}` only) **and** already holds the
+/// *exact same two-patch block* -- by id -- under a decoy ref, so
 /// `accept_exchange_artifact`'s own `check_recognition_claim_consistency` call fires against it.
-/// A verbatim claim reads `Consistent` and accept succeeds; a trimmed one would read
-/// `Contradicted` and accept would refuse the whole exchange.
+/// A verbatim claim (`patch_ids = [patch_a, patch_b]`) reads `Consistent` and accept succeeds; a
+/// claim trimmed to the delta (`patch_ids = [patch_b]`) would read `Contradicted` and accept would
+/// refuse the whole exchange.
 #[test]
 fn claims_carry_the_blocks_full_verbatim_patch_ids_and_parent_block_ids() -> Result<()> {
     let sender = repo("sender-stage3-row2-sender")?;
@@ -188,8 +193,6 @@ fn claims_carry_the_blocks_full_verbatim_patch_ids_and_parent_block_ids() -> Res
         &sender_signer,
     )?;
 
-    // The receiver already holds the identical block, verbatim, but under a decoy ref -- so
-    // `heads/main` on the receiver's side is still empty, giving a real, non-empty delta.
     let receiver = repo("sender-stage3-row2-receiver")?;
     let receiver_signer = maintainer_signer(0x34)?;
     adopt(&receiver, &receiver_signer)?;
@@ -200,6 +203,16 @@ fn claims_carry_the_blocks_full_verbatim_patch_ids_and_parent_block_ids() -> Res
     let receiver_patch_b = create_file_patch(&author, "row2-b.txt", 0x33, receiver_blob_b)?;
     assert_eq!(receiver_patch_a.object_id(), patch_a.object_id());
     assert_eq!(receiver_patch_b.object_id(), patch_b.object_id());
+    // `patch_a` alone, sealed onto the receiver's own `heads/main` -- makes the delta for
+    // `heads/main` exactly `{patch_b}`, a proper subset of the claimed block's own two patches.
+    seal_patches_onto(
+        &receiver,
+        TARGET_REF,
+        std::slice::from_ref(&receiver_patch_a),
+        &receiver_signer,
+    )?;
+    // The identical two-patch block, verbatim, under a decoy ref -- so the receiver already holds
+    // it as an object even though `heads/main` itself only has `patch_a`.
     seal_patches_onto(
         &receiver,
         "heads/decoy",
@@ -207,7 +220,7 @@ fn claims_carry_the_blocks_full_verbatim_patch_ids_and_parent_block_ids() -> Res
         &receiver_signer,
     )?;
 
-    let have_list_bytes = build_have_list(&receiver, TARGET_REF)?; // heads/main is empty
+    let have_list_bytes = build_have_list(&receiver, TARGET_REF)?; // heads/main has patch_a only
     let outcome = build_sync_artifact(&sender, TARGET_REF, &have_list_bytes, &sender_signer)?;
     let bytes = match outcome {
         SyncArtifactOutcome::Artifact { bytes, .. } => bytes,
