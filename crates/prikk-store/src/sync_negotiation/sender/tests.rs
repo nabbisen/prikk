@@ -165,18 +165,24 @@ fn the_artifact_carries_exactly_the_delta_not_the_full_reachable_set() -> Result
     Ok(())
 }
 
-/// §5 row 2: the claim carries the block's full, verbatim `patch_ids` -- proven by a delta that is
-/// a **proper subset** of the claimed block's own patches, so a trimmed claim would actually
-/// differ from a full one (a delta that happens to equal the whole block, as in a simpler fixture,
-/// would make a trim-to-delta mutation invisible). The receiver already holds `patch_a` on its own
-/// `heads/main` (so the delta for `heads/main` is `{patch_b}` only) **and** already holds the
-/// *exact same two-patch block* -- by id -- under a decoy ref, so
+/// §5 row 2, `patch_ids` half: the claim carries the block's full, verbatim `patch_ids` -- proven
+/// by a delta that is a **proper subset** of the claimed block's own patches, so a trimmed claim
+/// would actually differ from a full one (a delta that happens to equal the whole block, as in a
+/// simpler fixture, would make a trim-to-delta mutation invisible). The receiver already holds
+/// `patch_a` on its own `heads/main` (so the delta for `heads/main` is `{patch_b}` only) **and**
+/// already holds the *exact same two-patch block* -- by id -- under a decoy ref, so
 /// `accept_exchange_artifact`'s own `check_recognition_claim_consistency` call fires against it.
 /// A verbatim claim (`patch_ids = [patch_a, patch_b]`) reads `Consistent` and accept succeeds; a
 /// claim trimmed to the delta (`patch_ids = [patch_b]`) would read `Contradicted` and accept would
 /// refuse the whole exchange.
+///
+/// **Deliberately named for `patch_ids` alone.** Every block in *this* fixture is a root block
+/// (`parent_block_ids` is genuinely empty), so a mutation that trimmed `parent_block_ids` instead
+/// would be a no-op here and this test could not catch it -- see
+/// `claims_carry_the_blocks_full_verbatim_parent_block_ids` below for the field this fixture
+/// cannot exercise (review condition, `RFC-116-stage-3-sender-side-review-v1.md` §2).
 #[test]
-fn claims_carry_the_blocks_full_verbatim_patch_ids_and_parent_block_ids() -> Result<()> {
+fn claims_carry_the_blocks_full_verbatim_patch_ids() -> Result<()> {
     let sender = repo("sender-stage3-row2-sender")?;
     let sender_signer = maintainer_signer(0x30)?;
     adopt(&sender, &sender_signer)?;
@@ -234,6 +240,91 @@ fn claims_carry_the_blocks_full_verbatim_patch_ids_and_parent_block_ids() -> Res
          Contradicted",
     );
     assert_eq!(report.claim_count, 1);
+    cleanup(&sender);
+    cleanup(&receiver);
+    Ok(())
+}
+
+/// §5 row 2, `parent_block_ids` half (review condition, `RFC-116-stage-3-sender-side-review-v1.md`
+/// §2): the claim carries the block's full, verbatim `parent_block_ids` -- proven by a claimed
+/// block that actually **has** a parent, which `claims_carry_the_blocks_full_verbatim_patch_ids`
+/// above cannot exercise (every block there is a root). The sender seals twice onto `heads/main`:
+/// block A (root, `patch_a`), then block B (`parent_block_ids = [A]`, `patch_b`) -- a real,
+/// non-empty parent list. The receiver independently builds the identical two-block chain onto a
+/// decoy ref (same content, same starting state, so the same ids), while `heads/main` on the
+/// receiver's side stays empty, giving a full, genuine delta covering both blocks. Both claims
+/// (for A and for B) must read `Consistent`; a mutation that replaced either claim's
+/// `parent_block_ids` with `Vec::new()` would be a no-op for A's claim (whose real value already is
+/// empty) but would make B's claim disagree with the block B the receiver already holds.
+#[test]
+fn claims_carry_the_blocks_full_verbatim_parent_block_ids() -> Result<()> {
+    let sender = repo("sender-stage3-row2-parent-sender")?;
+    let sender_signer = maintainer_signer(0x35)?;
+    adopt(&sender, &sender_signer)?;
+    let author = author_signer(0x36)?;
+    let mut sender_objects = FileObjectStore::new(sender.clone());
+    let blob_a = write_blob(&mut sender_objects, b"row2-parent a\n")?;
+    let patch_a = create_file_patch(&author, "row2-parent-a.txt", 0x37, blob_a)?;
+    let blob_b = write_blob(&mut sender_objects, b"row2-parent b\n")?;
+    let patch_b = create_file_patch(&author, "row2-parent-b.txt", 0x38, blob_b)?;
+    let block_a = seal_patches_onto(
+        &sender,
+        TARGET_REF,
+        std::slice::from_ref(&patch_a),
+        &sender_signer,
+    )?;
+    let block_b = seal_patches_onto(
+        &sender,
+        TARGET_REF,
+        std::slice::from_ref(&patch_b),
+        &sender_signer,
+    )?;
+    assert_ne!(block_a, block_b);
+
+    let receiver = repo("sender-stage3-row2-parent-receiver")?;
+    let receiver_signer = maintainer_signer(0x39)?;
+    adopt(&receiver, &receiver_signer)?;
+    let mut receiver_objects = FileObjectStore::new(receiver.clone());
+    let receiver_blob_a = write_blob(&mut receiver_objects, b"row2-parent a\n")?;
+    let receiver_patch_a = create_file_patch(&author, "row2-parent-a.txt", 0x37, receiver_blob_a)?;
+    let receiver_blob_b = write_blob(&mut receiver_objects, b"row2-parent b\n")?;
+    let receiver_patch_b = create_file_patch(&author, "row2-parent-b.txt", 0x38, receiver_blob_b)?;
+    assert_eq!(receiver_patch_a.object_id(), patch_a.object_id());
+    assert_eq!(receiver_patch_b.object_id(), patch_b.object_id());
+    // The identical two-block chain, verbatim (same parent, same patches), under a decoy ref --
+    // the receiver already holds both blocks as objects even though `heads/main` has neither.
+    let decoy_a = seal_patches_onto(
+        &receiver,
+        "heads/decoy",
+        std::slice::from_ref(&receiver_patch_a),
+        &receiver_signer,
+    )?;
+    let decoy_b = seal_patches_onto(
+        &receiver,
+        "heads/decoy",
+        std::slice::from_ref(&receiver_patch_b),
+        &receiver_signer,
+    )?;
+    assert_eq!(decoy_a, block_a);
+    assert_eq!(decoy_b, block_b);
+
+    let have_list_bytes = build_have_list(&receiver, TARGET_REF)?; // heads/main is empty
+    let outcome = build_sync_artifact(&sender, TARGET_REF, &have_list_bytes, &sender_signer)?;
+    let bytes = match outcome {
+        SyncArtifactOutcome::Artifact { report, bytes } => {
+            assert_eq!(report.claim_count, 2, "both A and B qualify");
+            bytes
+        }
+        other => panic!("expected Artifact, got {other:?}"),
+    };
+
+    let accept_result =
+        accept_exchange_artifact(&receiver, &bytes, &AcceptOptions::default_limits());
+    let report = accept_result.expect(
+        "verbatim claims about blocks the receiver already holds must read Consistent, not \
+         Contradicted",
+    );
+    assert_eq!(report.claim_count, 2);
     cleanup(&sender);
     cleanup(&receiver);
     Ok(())
