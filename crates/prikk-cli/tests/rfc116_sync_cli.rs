@@ -243,6 +243,45 @@ fn end_to_end_sync_via_the_cli_lands_the_delta_and_is_verified_by_reading_it_bac
         "after the full loop, B must report heads/main as in-sync with A"
     );
 
+    // Handoff §3/§5: on `AlreadyInSync`, `sync build` must print that and write **no** output
+    // file -- not an empty artifact, and not an error. B now genuinely holds the exact same
+    // patch object A does (received through the sync it just completed, not independently
+    // reconstructed -- `prikk commit`'s own `NodeId` assignment is randomized per invocation, so
+    // two separately-committed copies of identical file content would never actually match; the
+    // real sync loop is the only way to get two repositories holding the *same* patch object).
+    let already_in_sync_output = sync_file("already-in-sync-artifact");
+    assert!(
+        !already_in_sync_output.exists(),
+        "the output path must not exist before the subject call below runs"
+    );
+    let build_again = support::prikk(&repo_a)
+        .env("PRIKK_MAINTAINER_KEY_ID", support::MAINTAINER_KEY_ID)
+        .env(
+            "PRIKK_MAINTAINER_SEED",
+            support::hex(&support::MAINTAINER_SEED),
+        )
+        .args([
+            "sync",
+            "build",
+            "heads/main",
+            "--have",
+            have_after_file.to_str().unwrap(),
+            "--output",
+            already_in_sync_output.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    support::ok(&build_again, "sync build (already in sync)");
+    let build_again_stdout = String::from_utf8_lossy(&build_again.stdout);
+    assert!(
+        build_again_stdout.contains("already in sync"),
+        "must report already-in-sync plainly: {build_again_stdout}"
+    );
+    assert!(
+        !already_in_sync_output.exists(),
+        "an already-in-sync build must write no output file: {build_again_stdout}"
+    );
+
     let _ = std::fs::remove_dir_all(repo_a);
     let _ = std::fs::remove_dir_all(repo_b);
     for file in [
