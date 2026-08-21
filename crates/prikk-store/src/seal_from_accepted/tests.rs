@@ -426,10 +426,12 @@ fn row6_a_claim_naming_a_missing_patch_refuses() -> Result<()> {
     Ok(())
 }
 
-/// §6 row 7: a claim naming some already-sealed and some not-yet-sealed patches refuses, rather
-/// than deepening a partially-applied state.
+/// §6 row 7 (D7, inverted from the withdrawn refusal -- `RFC-115-stage-4-d7-refusal-shape-handoff-
+/// v1.md` §3): a claim naming some already-sealed and some not-yet-sealed patches seals the
+/// unsealed remainder rather than refusing. The already-sealed patch's effect is already in this
+/// repository's state; sealing only the new one is precisely right.
 #[test]
-fn row7_a_partially_sealed_claim_refuses() -> Result<()> {
+fn row7_a_mixed_claim_seals_the_unsealed_remainder() -> Result<()> {
     let layout = fresh_repo("seal-from-accepted-row7")?;
     let signer = maintainer_signer(0x70)?;
     adopt(&layout, &signer)?;
@@ -446,7 +448,6 @@ fn row7_a_partially_sealed_claim_refuses() -> Result<()> {
     )?;
     let first = seal_from_accepted_claim(&layout, TARGET_REF, claim_a, &signer)?;
     assert!(matches!(first, SealFromAcceptedOutcome::Sealed { .. }));
-    let tip_after_first = current_tip(&layout)?;
 
     let blob_b = write_blob(&mut objects, b"row7 second\n")?;
     let patch_b = write_create_file_patch(&mut objects, &author, "row7-b.txt", 0x73, blob_b)?;
@@ -458,21 +459,30 @@ fn row7_a_partially_sealed_claim_refuses() -> Result<()> {
         vec![patch_a, patch_b],
     )?;
 
-    let result = seal_from_accepted_claim(&layout, TARGET_REF, claim_mixed, &signer);
-    let error = result.expect_err("a partially-sealed claim must refuse");
-    // Checked by message, not just `is_err()`: re-applying the already-sealed patch would also be
-    // caught downstream as an ordinary path conflict (divergence), which would make this control
-    // pass for the wrong reason if it only asserted "refused". The phrase below is unique to §3
-    // item 3's own explicit check, the one this row is actually about.
-    assert!(
-        error.to_string().contains("partially-applied"),
-        "expected §3 item 3's own partial-seal refusal, got: {error}"
-    );
+    let outcome = seal_from_accepted_claim(&layout, TARGET_REF, claim_mixed, &signer)?;
+    let block_id = match outcome {
+        SealFromAcceptedOutcome::Sealed {
+            patch_count,
+            block_id,
+            ..
+        } => {
+            assert_eq!(patch_count, 1, "only the unsealed patch is new work");
+            block_id
+        }
+        other => panic!("expected Sealed, got {other:?}"),
+    };
+    let object_store = FileObjectStore::new(layout.clone());
+    let block_envelope =
+        crate::object_store::ObjectReader::read_typed(&object_store, block_id, ObjectType::Block)?
+            .expect("sealed block must exist");
+    let block_payload =
+        prikk_object::BlockPayload::decode_canonical(&block_envelope.canonical_payload)?;
     assert_eq!(
-        current_tip(&layout)?,
-        tip_after_first,
-        "nothing new must be written"
+        block_payload.patch_ids,
+        vec![patch_b],
+        "the block carries only the unsealed subset, not the already-sealed patch"
     );
+    assert_eq!(current_tip(&layout)?, Some(block_id));
     cleanup(&layout);
     Ok(())
 }
@@ -667,6 +677,116 @@ fn row11_the_sealed_block_carries_the_claims_order_verbatim() -> Result<()> {
     let block_payload =
         prikk_object::BlockPayload::decode_canonical(&block_envelope.canonical_payload)?;
     assert_eq!(block_payload.patch_ids, vec![first, second]);
+    cleanup(&layout);
+    Ok(())
+}
+
+/// §6 row 11, the mixed case (D7): when one of three claimed patches is already sealed, the block
+/// carries the remaining two in the claim's own verbatim order, restricted to that subset -- not
+/// the claim's order with a gap silently closed some other way, and not re-sorted.
+#[test]
+fn row11_mixed_the_sealed_block_carries_the_unsealed_subset_in_claim_order() -> Result<()> {
+    let layout = fresh_repo("seal-from-accepted-row11-mixed")?;
+    let signer = maintainer_signer(0xA5)?;
+    adopt(&layout, &signer)?;
+    let author = author_signer(0xA6)?;
+    let mut objects = FileObjectStore::new(layout.clone());
+
+    let blob_a = write_blob(&mut objects, b"row11-mixed first\n")?;
+    let patch_a =
+        write_create_file_patch(&mut objects, &author, "row11-mixed-a.txt", 0xA7, blob_a)?;
+    let claim_a = write_claim(
+        &mut objects,
+        &signer,
+        ObjectId::from_bytes([0xA8; 32]),
+        vec![patch_a],
+    )?;
+    let first = seal_from_accepted_claim(&layout, TARGET_REF, claim_a, &signer)?;
+    assert!(matches!(first, SealFromAcceptedOutcome::Sealed { .. }));
+
+    let blob_b = write_blob(&mut objects, b"row11-mixed second\n")?;
+    let patch_b =
+        write_create_file_patch(&mut objects, &author, "row11-mixed-b.txt", 0xA9, blob_b)?;
+    let blob_c = write_blob(&mut objects, b"row11-mixed third\n")?;
+    let patch_c =
+        write_create_file_patch(&mut objects, &author, "row11-mixed-c.txt", 0xAB, blob_c)?;
+    // The claim's own verbatim order is patch_c, patch_a, patch_b -- not sorted, not the order the
+    // two patches were written in -- so the filtered subset's order can only have come from the
+    // claim, not from insertion order or from `ObjectId` order.
+    let claim_mixed = write_claim(
+        &mut objects,
+        &signer,
+        ObjectId::from_bytes([0xAC; 32]),
+        vec![patch_c, patch_a, patch_b],
+    )?;
+
+    let outcome = seal_from_accepted_claim(&layout, TARGET_REF, claim_mixed, &signer)?;
+    let SealFromAcceptedOutcome::Sealed { block_id, .. } = outcome else {
+        panic!("expected Sealed");
+    };
+    let object_store = FileObjectStore::new(layout.clone());
+    let block_envelope =
+        crate::object_store::ObjectReader::read_typed(&object_store, block_id, ObjectType::Block)?
+            .expect("sealed block must exist");
+    let block_payload =
+        prikk_object::BlockPayload::decode_canonical(&block_envelope.canonical_payload)?;
+    assert_eq!(block_payload.patch_ids, vec![patch_c, patch_b]);
+    cleanup(&layout);
+    Ok(())
+}
+
+/// §5's motivating deadlock, end to end (`RFC-115-stage-4-d7-refusal-shape-handoff-v1.md` §5): a
+/// receiver seals one claim, then meets a second claim naming that already-sealed patch plus a new
+/// one. Under the withdrawn rule this refused permanently; under D7 the second seal succeeds, and
+/// -- the assertion that actually proves the deadlock is gone -- the new patch is afterwards
+/// reachable from the ref tip.
+#[test]
+fn d7_a_claim_overlapping_an_already_sealed_patch_no_longer_deadlocks() -> Result<()> {
+    let layout = fresh_repo("seal-from-accepted-d7-deadlock")?;
+    let signer = maintainer_signer(0xB1)?;
+    adopt(&layout, &signer)?;
+    let author = author_signer(0xB2)?;
+    let mut objects = FileObjectStore::new(layout.clone());
+
+    let blob_shared = write_blob(&mut objects, b"d7 shared\n")?;
+    let patch_shared =
+        write_create_file_patch(&mut objects, &author, "d7-shared.txt", 0xB3, blob_shared)?;
+    let claim_first = write_claim(
+        &mut objects,
+        &signer,
+        ObjectId::from_bytes([0xB4; 32]),
+        vec![patch_shared],
+    )?;
+    let first = seal_from_accepted_claim(&layout, TARGET_REF, claim_first, &signer)?;
+    assert!(matches!(first, SealFromAcceptedOutcome::Sealed { .. }));
+
+    let blob_new = write_blob(&mut objects, b"d7 new\n")?;
+    let patch_new = write_create_file_patch(&mut objects, &author, "d7-new.txt", 0xB5, blob_new)?;
+    // As merge_execute.rs's own adopted_patch_ids does: a second claim re-names the already-sealed
+    // patch (from a different block) alongside a genuinely new one.
+    let claim_second = write_claim(
+        &mut objects,
+        &signer,
+        ObjectId::from_bytes([0xB6; 32]),
+        vec![patch_shared, patch_new],
+    )?;
+
+    let outcome = seal_from_accepted_claim(&layout, TARGET_REF, claim_second, &signer)?;
+    let block_id = match outcome {
+        SealFromAcceptedOutcome::Sealed { block_id, .. } => block_id,
+        other => panic!("expected the second seal to succeed, got {other:?}"),
+    };
+
+    // The assertion that matters: the new patch's effect is reachable from the ref tip, not merely
+    // that the refusal is gone.
+    let object_store = FileObjectStore::new(layout.clone());
+    let block_envelope =
+        crate::object_store::ObjectReader::read_typed(&object_store, block_id, ObjectType::Block)?
+            .expect("sealed block must exist");
+    let block_payload =
+        prikk_object::BlockPayload::decode_canonical(&block_envelope.canonical_payload)?;
+    assert_eq!(block_payload.patch_ids, vec![patch_new]);
+    assert_eq!(current_tip(&layout)?, Some(block_id));
     cleanup(&layout);
     Ok(())
 }
