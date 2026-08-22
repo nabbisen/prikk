@@ -1,0 +1,455 @@
+//! `prikk sync` — RFC 116's negotiation loop, driven from the command line (stage 4 handoff).
+//!
+//! **No network. No socket. No new dependency.** Every subcommand reads and writes local files
+//! only; the file moves between repositories by whatever channel the operator already has (RFC
+//! 116 ruling 2). **Every input file is untrusted** -- it arrived by a channel prikk knows nothing
+//! about, and each subcommand's own library call is what refuses a bad one. This module adds no
+//! parsing or bound-checking of its own beyond argument handling and file I/O.
+//!
+//! Modelled directly on `bundle.rs`: one dispatcher, one function per subcommand, the same
+//! argument-parsing idiom, the same "print counts, then note what to do next" reporting style.
+//!
+//! The full loop, across two repositories A (has new content) and B (wants it):
+//! `A: sync summary` → `B: sync compare` → `B: sync have` → `A: sync build` → `B: sync accept` →
+//! `B: sync pending` (optional, observational) → `B: sync seal`.
+
+use std::path::PathBuf;
+
+use prikk_store::{
+    AcceptOptions, ClaimSignatureVerification, DEFAULT_EXCHANGE_ARTIFACT_MAX_OBJECT_COUNT,
+    DEFAULT_EXCHANGE_ARTIFACT_MAX_TOTAL_BYTES, DEFAULT_SYNC_SUMMARY_MAX_REF_COUNT,
+    DEFAULT_SYNC_SUMMARY_MAX_TOTAL_BYTES, SealFromAcceptedOutcome, SyncArtifactOutcome,
+    accept_exchange_artifact, accepted_but_unsealed_patch_ids, build_have_list,
+    build_sync_artifact, build_sync_summary, compare_sync_summary, decode_sync_summary,
+    seal_from_accepted_claim,
+};
+
+use crate::maintainer_signer_from_env;
+
+/// Dispatch `prikk sync [summary|compare|have|build|accept|pending|seal]`.
+pub fn run_sync(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+    let mut iter = args.into_iter();
+    match iter.next().as_deref() {
+        Some("summary") => run_summary(root, iter.collect()),
+        Some("compare") => run_compare(root, iter.collect()),
+        Some("have") => run_have(root, iter.collect()),
+        Some("build") => run_build(root, iter.collect()),
+        Some("accept") => run_accept(root, iter.collect()),
+        Some("pending") => run_pending(root, iter.collect()),
+        Some("seal") => run_seal(root, iter.collect()),
+        Some(other) => Err(format!(
+            "unknown sync subcommand: {other} (expected summary, compare, have, build, accept, \
+             pending, or seal)"
+        )),
+        None => Err(
+            "sync requires a subcommand: summary, compare, have, build, accept, pending, or seal"
+                .to_string(),
+        ),
+    }
+}
+
+fn run_summary(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+    let parsed = parse_output_args(args, "sync summary")?;
+    let layout = crate::open_repository(root)?;
+    let bytes = build_sync_summary(&layout).map_err(|err| err.to_string())?;
+    let entries = decode_sync_summary(
+        &bytes,
+        DEFAULT_SYNC_SUMMARY_MAX_TOTAL_BYTES,
+        DEFAULT_SYNC_SUMMARY_MAX_REF_COUNT,
+    )
+    .map_err(|err| err.to_string())?;
+    std::fs::write(&parsed.output, &bytes).map_err(|err| {
+        format!(
+            "failed to write sync summary to {}: {err}",
+            parsed.output.display()
+        )
+    })?;
+    println!("refs: {}", entries.len());
+    println!("wrote {}", parsed.output.display());
+    Ok(())
+}
+
+fn run_compare(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+    let parsed = parse_summary_input_args(args, "sync compare")?;
+    let layout = crate::open_repository(root)?;
+    let bytes = std::fs::read(&parsed.summary).map_err(|err| {
+        format!(
+            "failed to read sync summary from {}: {err}",
+            parsed.summary.display()
+        )
+    })?;
+    let (max_total_bytes, max_ref_count) = sync_summary_limits_from_env()?;
+    let remote = decode_sync_summary(&bytes, max_total_bytes, max_ref_count)
+        .map_err(|err| err.to_string())?;
+    let comparisons = compare_sync_summary(&layout, &remote).map_err(|err| err.to_string())?;
+    for comparison in &comparisons {
+        println!("{} {}", comparison.ref_name, comparison.state.as_str());
+    }
+    println!("refs compared: {}", comparisons.len());
+    Ok(())
+}
+
+fn run_have(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+    let parsed = parse_ref_and_output_args(args, "sync have")?;
+    let layout = crate::open_repository(root)?;
+    let bytes = build_have_list(&layout, &parsed.ref_name).map_err(|err| err.to_string())?;
+    std::fs::write(&parsed.output, &bytes).map_err(|err| {
+        format!(
+            "failed to write have-list to {}: {err}",
+            parsed.output.display()
+        )
+    })?;
+    println!("have-list for {}", parsed.ref_name);
+    println!("wrote {}", parsed.output.display());
+    Ok(())
+}
+
+fn run_build(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+    let parsed = parse_build_args(args)?;
+    let layout = crate::open_repository(root)?;
+    let have_list_bytes = std::fs::read(&parsed.have).map_err(|err| {
+        format!(
+            "failed to read have-list from {}: {err}",
+            parsed.have.display()
+        )
+    })?;
+    let signer = maintainer_signer_from_env()?;
+    let outcome = build_sync_artifact(&layout, &parsed.ref_name, &have_list_bytes, &signer)
+        .map_err(|err| err.to_string())?;
+    match outcome {
+        SyncArtifactOutcome::AlreadyInSync { ref_name } => {
+            println!("{ref_name} is already in sync -- no artifact written");
+        }
+        SyncArtifactOutcome::Artifact { report, bytes } => {
+            std::fs::write(&parsed.output, &bytes).map_err(|err| {
+                format!(
+                    "failed to write sync artifact to {}: {err}",
+                    parsed.output.display()
+                )
+            })?;
+            println!("built sync artifact for {}", report.ref_name);
+            println!("delta patches: {}", report.delta_patch_count);
+            println!("claims: {}", report.claim_count);
+            println!(
+                "blobs: {} | author key material: {}",
+                report.export_report.blob_count, report.export_report.author_key_count
+            );
+            println!("wrote {}", parsed.output.display());
+        }
+    }
+    Ok(())
+}
+
+fn run_accept(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+    let parsed = parse_single_input_args(args, "sync accept")?;
+    let layout = crate::open_repository(root)?;
+    let bytes = std::fs::read(&parsed.input).map_err(|err| {
+        format!(
+            "failed to read sync artifact from {}: {err}",
+            parsed.input.display()
+        )
+    })?;
+    let options = accept_options_from_env()?;
+    let report =
+        accept_exchange_artifact(&layout, &bytes, &options).map_err(|err| err.to_string())?;
+    println!("accepted sync artifact");
+    println!("patches: {}", report.patch_count);
+    println!("blobs: {}", report.blob_count);
+    println!("claims: {}", report.claim_count);
+    println!("new objects: {}", report.written_object_count);
+    println!(
+        "author key material: {} recorded (continuity only, not a trust decision)",
+        report.recorded_author_key_count
+    );
+    // Load-bearing output (handoff §3): this is the only way an operator learns what to pass to
+    // `sync seal`. Print `Unverifiable` outcomes plainly -- the operator must be able to see they
+    // are about to seal on an unattributed order (D6 §11.6), not have it hidden behind a summary.
+    for (claim_id, outcome) in &report.claim_signature_outcomes {
+        match outcome {
+            ClaimSignatureVerification::Sound { key_id } => {
+                println!("  claim {claim_id}: Sound ({key_id})");
+            }
+            ClaimSignatureVerification::Unverifiable { key_id } => {
+                println!(
+                    "  claim {claim_id}: Unverifiable ({key_id} not adopted here -- its order is \
+                     unattributed)"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+fn run_pending(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+    require_no_args(args, "sync pending")?;
+    let layout = crate::open_repository(root)?;
+    let patch_ids = accepted_but_unsealed_patch_ids(&layout).map_err(|err| err.to_string())?;
+    println!("pending (accepted, unsealed) patches: {}", patch_ids.len());
+    for patch_id in &patch_ids {
+        println!("  {patch_id}");
+    }
+    Ok(())
+}
+
+fn run_seal(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+    let parsed = parse_seal_args(args)?;
+    let layout = crate::open_repository(root)?;
+    let signer = maintainer_signer_from_env()?;
+    let outcome = seal_from_accepted_claim(&layout, &parsed.ref_name, parsed.claim_id, &signer)
+        .map_err(|err| err.to_string())?;
+    match outcome {
+        SealFromAcceptedOutcome::Sealed {
+            ref_name,
+            block_id,
+            ref_state_id,
+            patch_count,
+            claim_signature_outcome,
+        } => {
+            println!(
+                "sealed {patch_count} patch(es) from claim {} into {ref_name}",
+                parsed.claim_id
+            );
+            println!("block id: {block_id}");
+            println!("{ref_name} RefState: {ref_state_id}");
+            match claim_signature_outcome {
+                ClaimSignatureVerification::Sound { key_id } => {
+                    println!("claim signature: Sound ({key_id})");
+                }
+                ClaimSignatureVerification::Unverifiable { key_id } => {
+                    println!("claim signature: Unverifiable ({key_id} not adopted here)");
+                }
+            }
+        }
+        SealFromAcceptedOutcome::AlreadySealed { ref_name, claim_id } => {
+            println!("{ref_name}: claim {claim_id} was already fully sealed -- no-op");
+        }
+    }
+    Ok(())
+}
+
+/// DC-86: `AcceptOptions` from `PRIKK_EXCHANGE_MAX_OBJECTS`/`PRIKK_EXCHANGE_MAX_BYTES`, the same
+/// shape `bundle.rs`'s own `bundle_import_options_from_env` gives `BundleImportOptions` -- absent
+/// means the documented default; present but non-numeric or zero is a hard error, never a silent
+/// fallback.
+fn accept_options_from_env() -> std::result::Result<AcceptOptions, String> {
+    let max_object_count = parse_limit_env(
+        "PRIKK_EXCHANGE_MAX_OBJECTS",
+        DEFAULT_EXCHANGE_ARTIFACT_MAX_OBJECT_COUNT,
+    )?;
+    let max_total_bytes = parse_limit_env(
+        "PRIKK_EXCHANGE_MAX_BYTES",
+        DEFAULT_EXCHANGE_ARTIFACT_MAX_TOTAL_BYTES,
+    )?;
+    Ok(AcceptOptions::default_limits()
+        .with_max_object_count(max_object_count)
+        .with_max_total_bytes(max_total_bytes))
+}
+
+/// `PRIKK_SYNC_SUMMARY_MAX_BYTES`/`PRIKK_SYNC_SUMMARY_MAX_REFS` overrides for decoding a *remote*
+/// summary in `sync compare` -- the one sync subcommand whose own decode step takes bound
+/// parameters directly, so the same override shape applies here.
+fn sync_summary_limits_from_env() -> std::result::Result<(usize, usize), String> {
+    let max_total_bytes = parse_limit_env(
+        "PRIKK_SYNC_SUMMARY_MAX_BYTES",
+        DEFAULT_SYNC_SUMMARY_MAX_TOTAL_BYTES,
+    )?;
+    let max_ref_count = parse_limit_env(
+        "PRIKK_SYNC_SUMMARY_MAX_REFS",
+        DEFAULT_SYNC_SUMMARY_MAX_REF_COUNT,
+    )?;
+    Ok((max_total_bytes, max_ref_count))
+}
+
+fn parse_limit_env(name: &str, default: usize) -> std::result::Result<usize, String> {
+    let Ok(raw) = std::env::var(name) else {
+        return Ok(default);
+    };
+    let trimmed = raw.trim();
+    let value: usize = trimmed
+        .parse()
+        .map_err(|_| format!("{name} must be a positive integer, got {raw:?}"))?;
+    if value == 0 {
+        return Err(format!("{name} must be greater than zero, got 0"));
+    }
+    Ok(value)
+}
+
+struct OutputArgs {
+    output: PathBuf,
+}
+
+fn parse_output_args(args: Vec<String>, command: &str) -> std::result::Result<OutputArgs, String> {
+    let mut output = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--output" => {
+                let Some(value) = iter.next() else {
+                    return Err(format!("{command} --output requires a value"));
+                };
+                output = Some(PathBuf::from(value));
+            }
+            other => return Err(format!("unknown {command} argument: {other}")),
+        }
+    }
+    let output = output.ok_or_else(|| format!("{command} requires --output"))?;
+    Ok(OutputArgs { output })
+}
+
+struct SummaryInputArgs {
+    summary: PathBuf,
+}
+
+fn parse_summary_input_args(
+    args: Vec<String>,
+    command: &str,
+) -> std::result::Result<SummaryInputArgs, String> {
+    let mut summary = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--summary" => {
+                let Some(value) = iter.next() else {
+                    return Err(format!("{command} --summary requires a value"));
+                };
+                summary = Some(PathBuf::from(value));
+            }
+            other => return Err(format!("unknown {command} argument: {other}")),
+        }
+    }
+    let summary = summary.ok_or_else(|| format!("{command} requires --summary"))?;
+    Ok(SummaryInputArgs { summary })
+}
+
+struct SingleInputArgs {
+    input: PathBuf,
+}
+
+fn parse_single_input_args(
+    args: Vec<String>,
+    command: &str,
+) -> std::result::Result<SingleInputArgs, String> {
+    let mut iter = args.into_iter();
+    let Some(input) = iter.next() else {
+        return Err(format!("{command} requires a file path"));
+    };
+    if let Some(extra) = iter.next() {
+        return Err(format!("unknown {command} argument: {extra}"));
+    }
+    Ok(SingleInputArgs {
+        input: PathBuf::from(input),
+    })
+}
+
+fn require_no_args(args: Vec<String>, command: &str) -> std::result::Result<(), String> {
+    if let Some(extra) = args.into_iter().next() {
+        return Err(format!("unknown {command} argument: {extra}"));
+    }
+    Ok(())
+}
+
+struct RefAndOutputArgs {
+    ref_name: String,
+    output: PathBuf,
+}
+
+fn parse_ref_and_output_args(
+    args: Vec<String>,
+    command: &str,
+) -> std::result::Result<RefAndOutputArgs, String> {
+    let mut iter = args.into_iter();
+    let Some(ref_name) = iter.next() else {
+        return Err(format!("{command} requires a ref name"));
+    };
+    if ref_name.starts_with("--") {
+        return Err(format!("{command} requires a ref name before any flags"));
+    }
+    let mut output = None;
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--output" => {
+                let Some(value) = iter.next() else {
+                    return Err(format!("{command} --output requires a value"));
+                };
+                output = Some(PathBuf::from(value));
+            }
+            other => return Err(format!("unknown {command} argument: {other}")),
+        }
+    }
+    let output = output.ok_or_else(|| format!("{command} requires --output"))?;
+    Ok(RefAndOutputArgs { ref_name, output })
+}
+
+struct BuildArgs {
+    ref_name: String,
+    have: PathBuf,
+    output: PathBuf,
+}
+
+fn parse_build_args(args: Vec<String>) -> std::result::Result<BuildArgs, String> {
+    let mut iter = args.into_iter();
+    let Some(ref_name) = iter.next() else {
+        return Err("sync build requires a ref name".to_string());
+    };
+    if ref_name.starts_with("--") {
+        return Err("sync build requires a ref name before any flags".to_string());
+    }
+    let mut have = None;
+    let mut output = None;
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--have" => {
+                let Some(value) = iter.next() else {
+                    return Err("sync build --have requires a value".to_string());
+                };
+                have = Some(PathBuf::from(value));
+            }
+            "--output" => {
+                let Some(value) = iter.next() else {
+                    return Err("sync build --output requires a value".to_string());
+                };
+                output = Some(PathBuf::from(value));
+            }
+            other => return Err(format!("unknown sync build argument: {other}")),
+        }
+    }
+    let have = have.ok_or_else(|| "sync build requires --have".to_string())?;
+    let output = output.ok_or_else(|| "sync build requires --output".to_string())?;
+    Ok(BuildArgs {
+        ref_name,
+        have,
+        output,
+    })
+}
+
+struct SealArgs {
+    ref_name: String,
+    claim_id: prikk_object::ObjectId,
+}
+
+fn parse_seal_args(args: Vec<String>) -> std::result::Result<SealArgs, String> {
+    let mut iter = args.into_iter();
+    let Some(ref_name) = iter.next() else {
+        return Err("sync seal requires a ref name".to_string());
+    };
+    if ref_name.starts_with("--") {
+        return Err("sync seal requires a ref name before any flags".to_string());
+    }
+    let mut claim_id = None;
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--claim" => {
+                let Some(value) = iter.next() else {
+                    return Err("sync seal --claim requires a value".to_string());
+                };
+                claim_id =
+                    Some(value.parse::<prikk_object::ObjectId>().map_err(|err| {
+                        format!("--claim {value:?} is not a valid object id: {err}")
+                    })?);
+            }
+            other => return Err(format!("unknown sync seal argument: {other}")),
+        }
+    }
+    let claim_id = claim_id.ok_or_else(|| "sync seal requires --claim".to_string())?;
+    Ok(SealArgs { ref_name, claim_id })
+}

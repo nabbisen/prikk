@@ -7,10 +7,11 @@ use prikk_error::Result;
 use prikk_object::ObjectId;
 
 use super::{
-    DEFAULT_SYNC_SUMMARY_MAX_REF_COUNT, DEFAULT_SYNC_SUMMARY_MAX_TOTAL_BYTES, build_sync_summary,
+    DEFAULT_SYNC_SUMMARY_MAX_REF_COUNT, DEFAULT_SYNC_SUMMARY_MAX_TOTAL_BYTES,
+    SyncRefComparisonState, SyncSummaryRefEntry, build_sync_summary, compare_sync_summary,
     decode_sync_summary,
 };
-use crate::patch_set_digest::compute_patch_set_digest;
+use crate::patch_set_digest::{PatchSetDigest, compute_patch_set_digest};
 use crate::sync_negotiation::sync_test_support::{
     cleanup, fresh_repo, publish_branch, publish_received, publish_tag,
 };
@@ -113,6 +114,80 @@ fn a_summary_omits_tags_and_remotes() -> Result<()> {
     let entries = decode_sync_summary(&bytes, TOTAL_BYTES, REF_COUNT)?;
     assert_eq!(entries.len(), 1, "only the branch ref must appear");
     assert_eq!(entries[0].ref_name, "heads/main");
+    cleanup(&layout);
+    Ok(())
+}
+
+fn remote_entry(ref_name: &str, digest: PatchSetDigest, patch_count: u64) -> SyncSummaryRefEntry {
+    SyncSummaryRefEntry {
+        ref_name: ref_name.to_string(),
+        digest,
+        patch_count,
+    }
+}
+
+/// §2 (stage 4 handoff): agreeing digests read `InSync`.
+#[test]
+fn compare_reports_in_sync_when_digests_agree() -> Result<()> {
+    let layout = fresh_repo("sync-compare-in-sync")?;
+    let p1 = ObjectId::from_bytes([0x41; 32]);
+    publish_branch(&layout, "heads/main", vec![p1])?;
+    let digest = compute_patch_set_digest(&[p1])?;
+
+    let comparisons = compare_sync_summary(&layout, &[remote_entry("heads/main", digest, 1)])?;
+    assert_eq!(comparisons.len(), 1);
+    assert_eq!(comparisons[0].ref_name, "heads/main");
+    assert_eq!(comparisons[0].state, SyncRefComparisonState::InSync);
+    cleanup(&layout);
+    Ok(())
+}
+
+/// §2: disagreeing digests read `Differs`.
+#[test]
+fn compare_reports_differs_when_digests_disagree() -> Result<()> {
+    let layout = fresh_repo("sync-compare-differs")?;
+    let p1 = ObjectId::from_bytes([0x42; 32]);
+    publish_branch(&layout, "heads/main", vec![p1])?;
+    let wrong_digest = compute_patch_set_digest(&[ObjectId::from_bytes([0x43; 32])])?;
+
+    let comparisons =
+        compare_sync_summary(&layout, &[remote_entry("heads/main", wrong_digest, 1)])?;
+    assert_eq!(comparisons.len(), 1);
+    assert_eq!(comparisons[0].state, SyncRefComparisonState::Differs);
+    cleanup(&layout);
+    Ok(())
+}
+
+/// §2, and the property stage 2's own review flagged as pinned by a passing test and no control:
+/// a ref named only in the remote summary is `RemoteOnly`, not a refusal, and a ref this
+/// repository holds but the remote never mentioned is `LocalOnly`, not a refusal. Both directions
+/// checked in one call, over one repository holding one ref and one remote summary naming a
+/// different one.
+#[test]
+fn compare_reports_asymmetric_refs_not_a_refusal() -> Result<()> {
+    let layout = fresh_repo("sync-compare-asymmetric")?;
+    publish_branch(
+        &layout,
+        "heads/local-only",
+        vec![ObjectId::from_bytes([0x44; 32])],
+    )?;
+    let remote_digest = compute_patch_set_digest(&[ObjectId::from_bytes([0x45; 32])])?;
+
+    let comparisons = compare_sync_summary(
+        &layout,
+        &[remote_entry("heads/remote-only", remote_digest, 1)],
+    )?;
+    assert_eq!(comparisons.len(), 2);
+    let local = comparisons
+        .iter()
+        .find(|c| c.ref_name == "heads/local-only")
+        .expect("heads/local-only must be reported");
+    assert_eq!(local.state, SyncRefComparisonState::LocalOnly);
+    let remote = comparisons
+        .iter()
+        .find(|c| c.ref_name == "heads/remote-only")
+        .expect("heads/remote-only must be reported");
+    assert_eq!(remote.state, SyncRefComparisonState::RemoteOnly);
     cleanup(&layout);
     Ok(())
 }

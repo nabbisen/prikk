@@ -11,6 +11,8 @@
 //!
 //! **Constructs no `RecognitionClaimPayload`** (handoff §6) -- only ref names, counts, and digests.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectType, RefKind, RefStatePayload};
 
@@ -20,7 +22,8 @@ use crate::fsutil::len_to_u64;
 use crate::layout::RepositoryLayout;
 use crate::object_store::{ObjectReadSnapshot, ObjectReader};
 use crate::patch_set_digest::{
-    PatchSetDigest, compute_patch_set_digest, patch_ids_reachable_from_block,
+    PatchSetDigest, compute_patch_set_digest, compute_patch_set_digest_for_ref,
+    patch_ids_reachable_from_block,
 };
 use crate::refs::RefStore;
 
@@ -94,9 +97,7 @@ pub fn build_sync_summary(layout: &RepositoryLayout) -> Result<Vec<u8>> {
 /// Decode a `PSYNCSU1` sync summary structurally. Bounds the total byte length before touching the
 /// bytes at all, then the declared ref count before allocating, the same DC-86 shape
 /// `decode_exchange_artifact` follows. Performs no cross-entry checks and no comparison against
-/// this repository's own refs -- a caller compares the returned entries against its own local
-/// digests itself; that comparison is not this format's job (the "one computation" this stage
-/// builds is the delta, [`super::compute_sync_delta`], not a summary-comparison routine).
+/// this repository's own refs -- see [`compare_sync_summary`] for that.
 pub fn decode_sync_summary(
     bytes: &[u8],
     max_total_bytes: usize,
@@ -138,6 +139,99 @@ pub fn decode_sync_summary(
         ));
     }
     Ok(entries)
+}
+
+/// One ref's own comparison state, from [`compare_sync_summary`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncRefComparisonState {
+    /// Both sides have this ref, and their digests agree.
+    InSync,
+    /// Both sides have this ref, but their digests disagree.
+    Differs,
+    /// Only the remote summary names this ref -- this repository does not hold it.
+    RemoteOnly,
+    /// Only this repository holds this ref -- the remote summary does not name it.
+    LocalOnly,
+}
+
+impl SyncRefComparisonState {
+    /// Stable, lowercase, hyphenated name -- used for CLI output and test assertions alike, so
+    /// there is exactly one spelling to keep in sync.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::InSync => "in-sync",
+            Self::Differs => "differs",
+            Self::RemoteOnly => "remote-only",
+            Self::LocalOnly => "local-only",
+        }
+    }
+}
+
+/// One ref's own comparison result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncRefComparison {
+    /// The branch ref's name.
+    pub ref_name: String,
+    /// How this repository's own state compares to `remote`'s.
+    pub state: SyncRefComparisonState,
+}
+
+/// Compare this repository's own `heads/*` refs against a remote summary's entries (handoff §2).
+/// **None of the four states is a refusal** -- an asymmetric ref set (one side names a ref the
+/// other does not hold) is ordinary, ruled by design §5 item 6 / N5 item 6 and carried forward
+/// through every stage since: a receiver-absent have-list is empty, not a refusal (stage 2/3); a
+/// sender-absent ref reports `AlreadyInSync`, not a refusal (stage 3). This function is the same
+/// principle applied to the summary's own comparison, which stage 2's review flagged as pinned by
+/// a passing test and by no control.
+///
+/// Local digests are computed directly per ref via [`compute_patch_set_digest_for_ref`] -- not by
+/// building and decoding this repository's own summary and diffing the two decoded lists, which
+/// would compute a digest for every local ref whether or not it is even being compared. Branches
+/// only, matching this module's own scope.
+pub fn compare_sync_summary(
+    layout: &RepositoryLayout,
+    remote: &[SyncSummaryRefEntry],
+) -> Result<Vec<SyncRefComparison>> {
+    let ref_store = RefStore::new(layout.clone());
+    let mut local_ref_names: BTreeSet<String> = BTreeSet::new();
+    for pointer in ref_store.list_ref_pointers()? {
+        if pointer.ref_name.starts_with("heads/") {
+            local_ref_names.insert(pointer.ref_name);
+        }
+    }
+    let remote_digests: BTreeMap<&str, PatchSetDigest> = remote
+        .iter()
+        .map(|entry| (entry.ref_name.as_str(), entry.digest))
+        .collect();
+
+    let mut all_ref_names: BTreeSet<&str> = local_ref_names.iter().map(String::as_str).collect();
+    all_ref_names.extend(remote_digests.keys().copied());
+
+    let mut comparisons = Vec::with_capacity(all_ref_names.len());
+    for ref_name in all_ref_names {
+        let is_local = local_ref_names.contains(ref_name);
+        let state = match (is_local, remote_digests.get(ref_name)) {
+            (true, Some(remote_digest)) => {
+                let local_digest = compute_patch_set_digest_for_ref(layout, ref_name)?;
+                if &local_digest == remote_digest {
+                    SyncRefComparisonState::InSync
+                } else {
+                    SyncRefComparisonState::Differs
+                }
+            }
+            (true, None) => SyncRefComparisonState::LocalOnly,
+            (false, Some(_)) => SyncRefComparisonState::RemoteOnly,
+            (false, None) => unreachable!(
+                "ref_name is drawn from local_ref_names or remote_digests, so at least one holds it"
+            ),
+        };
+        comparisons.push(SyncRefComparison {
+            ref_name: ref_name.to_string(),
+            state,
+        });
+    }
+    Ok(comparisons)
 }
 
 #[cfg(test)]

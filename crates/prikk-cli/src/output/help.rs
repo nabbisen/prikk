@@ -90,5 +90,23 @@ pub(crate) fn print_help(version: &str) {
         "                                             Reclaim stale index/policy records \
          (--plan-only previews only)"
     );
+    println!(
+        "  prikk sync summary --output <file>        Write this repository's PSYNCSU1 sync summary"
+    );
+    println!(
+        "  prikk sync compare --summary <file>       Compare local refs against a remote summary"
+    );
+    println!("  prikk sync have <ref> --output <file>     Write a PSYNCHV1 have-list for one ref");
+    println!(
+        "  prikk sync build <ref> --have <file> --output <file>  Build a PEXCH001 artifact closing \
+         the gap"
+    );
+    println!(
+        "  prikk sync accept <file>                  Accept a PEXCH001 artifact (prints claim ids)"
+    );
+    println!("  prikk sync pending                        List accepted-but-unsealed patches");
+    println!(
+        "  prikk sync seal <ref> --claim <id>        Seal an accepted claim's patches into a block"
+    );
     println!("  prikk --version                           Print version");
 }

@@ -62,8 +62,9 @@ pub use have_list::{
 };
 pub use sender::{SyncArtifactBuildReport, SyncArtifactOutcome, build_sync_artifact};
 pub use summary::{
-    DEFAULT_SYNC_SUMMARY_MAX_REF_COUNT, DEFAULT_SYNC_SUMMARY_MAX_TOTAL_BYTES, SyncSummaryRefEntry,
-    build_sync_summary, decode_sync_summary,
+    DEFAULT_SYNC_SUMMARY_MAX_REF_COUNT, DEFAULT_SYNC_SUMMARY_MAX_TOTAL_BYTES, SyncRefComparison,
+    SyncRefComparisonState, SyncSummaryRefEntry, build_sync_summary, compare_sync_summary,
+    decode_sync_summary,
 };
 
 /// N4 (design-v1.md §4): the delta for the one ref `have_list` names -- every patch id reachable
