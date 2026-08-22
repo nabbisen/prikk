@@ -12,16 +12,25 @@
 //! The full loop, across two repositories A (has new content) and B (wants it):
 //! `A: sync summary` → `B: sync compare` → `B: sync have` → `A: sync build` → `B: sync accept` →
 //! `B: sync pending` (optional, observational) → `B: sync seal`.
+//!
+//! **Claim ids move by file, like every other step (RFC 116 stage 5 §2).** `sync accept` can
+//! write them to `--claims-out <file>`; `sync seal <ref> --claims <file>` reads them back,
+//! orders them with [`prikk_store::order_claims_for_sealing`] (parent blocks before children,
+//! derived from the claims' own signed `parent_block_ids` -- never from the file's own order or
+//! from id order), and seals each in turn, stopping at the first failure and reporting exactly how
+//! far it got (§3: no rollback -- each seal is an independent, legitimate act under the receiver's
+//! own key). `sync seal <ref> --claim <id>` still exists for the single-claim case.
 
 use std::path::PathBuf;
 
+use prikk_object::ObjectId;
 use prikk_store::{
     AcceptOptions, ClaimSignatureVerification, DEFAULT_EXCHANGE_ARTIFACT_MAX_OBJECT_COUNT,
     DEFAULT_EXCHANGE_ARTIFACT_MAX_TOTAL_BYTES, DEFAULT_SYNC_SUMMARY_MAX_REF_COUNT,
-    DEFAULT_SYNC_SUMMARY_MAX_TOTAL_BYTES, SealFromAcceptedOutcome, SyncArtifactOutcome,
-    accept_exchange_artifact, accepted_but_unsealed_patch_ids, build_have_list,
-    build_sync_artifact, build_sync_summary, compare_sync_summary, decode_sync_summary,
-    seal_from_accepted_claim,
+    DEFAULT_SYNC_SUMMARY_MAX_TOTAL_BYTES, ObjectReadSnapshot, SealFromAcceptedOutcome,
+    SyncArtifactOutcome, accept_exchange_artifact, accepted_but_unsealed_patch_ids,
+    build_have_list, build_sync_artifact, build_sync_summary, compare_sync_summary,
+    decode_sync_summary, order_claims_for_sealing, seal_from_accepted_claim,
 };
 
 use crate::maintainer_signer_from_env;
@@ -141,7 +150,7 @@ fn run_build(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
 }
 
 fn run_accept(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
-    let parsed = parse_single_input_args(args, "sync accept")?;
+    let parsed = parse_accept_args(args)?;
     let layout = crate::open_repository(root)?;
     let bytes = std::fs::read(&parsed.input).map_err(|err| {
         format!(
@@ -177,6 +186,22 @@ fn run_accept(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
             }
         }
     }
+    // §2: claim ids move by file, the same as every other step in this loop -- not by
+    // string-splitting stdout, the one exception that inconsistency existed for no reason.
+    if let Some(claims_out) = &parsed.claims_out {
+        let mut content = String::new();
+        for (claim_id, _) in &report.claim_signature_outcomes {
+            content.push_str(&claim_id.to_string());
+            content.push('\n');
+        }
+        std::fs::write(claims_out, content).map_err(|err| {
+            format!(
+                "failed to write claim ids to {}: {err}",
+                claims_out.display()
+            )
+        })?;
+        println!("wrote claim ids to {}", claims_out.display());
+    }
     Ok(())
 }
 
@@ -195,8 +220,57 @@ fn run_seal(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String>
     let parsed = parse_seal_args(args)?;
     let layout = crate::open_repository(root)?;
     let signer = maintainer_signer_from_env()?;
-    let outcome = seal_from_accepted_claim(&layout, &parsed.ref_name, parsed.claim_id, &signer)
-        .map_err(|err| err.to_string())?;
+    match parsed.claims {
+        SealClaims::Single(claim_id) => {
+            let outcome = seal_from_accepted_claim(&layout, &parsed.ref_name, claim_id, &signer)
+                .map_err(|err| err.to_string())?;
+            print_seal_outcome(&outcome, claim_id);
+        }
+        SealClaims::Batch(claims_file) => {
+            let content = std::fs::read_to_string(&claims_file).map_err(|err| {
+                format!(
+                    "failed to read claim ids from {}: {err}",
+                    claims_file.display()
+                )
+            })?;
+            let claim_ids: Vec<ObjectId> = content
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(|line| {
+                    line.parse::<ObjectId>().map_err(|err| {
+                        format!(
+                            "{line:?} in {} is not a valid object id: {err}",
+                            claims_file.display()
+                        )
+                    })
+                })
+                .collect::<std::result::Result<_, _>>()?;
+            // §1: order by parent_block_ids, derived from signed data -- never by the file's own
+            // input order or by id.
+            let object_store = ObjectReadSnapshot::open(&layout).map_err(|err| err.to_string())?;
+            let ordered = order_claims_for_sealing(&object_store, &claim_ids)
+                .map_err(|err| err.to_string())?;
+            // §3: stop at the first failure, report it, and leave the successful seals in place --
+            // no rollback. Each `?` below exits before attempting the next claim, and every claim
+            // already printed stays sealed regardless of what happens after it.
+            for claim_id in ordered {
+                let outcome =
+                    seal_from_accepted_claim(&layout, &parsed.ref_name, claim_id, &signer)
+                        .map_err(|err| {
+                            println!("claim {claim_id}: FAILED: {err}");
+                            let _ = std::io::Write::flush(&mut std::io::stdout());
+                            err.to_string()
+                        })?;
+                print_seal_outcome(&outcome, claim_id);
+                let _ = std::io::Write::flush(&mut std::io::stdout());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn print_seal_outcome(outcome: &SealFromAcceptedOutcome, claim_id: ObjectId) {
     match outcome {
         SealFromAcceptedOutcome::Sealed {
             ref_name,
@@ -205,26 +279,22 @@ fn run_seal(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String>
             patch_count,
             claim_signature_outcome,
         } => {
-            println!(
-                "sealed {patch_count} patch(es) from claim {} into {ref_name}",
-                parsed.claim_id
-            );
-            println!("block id: {block_id}");
-            println!("{ref_name} RefState: {ref_state_id}");
+            println!("claim {claim_id}: sealed {patch_count} patch(es) into {ref_name}");
+            println!("  block id: {block_id}");
+            println!("  {ref_name} RefState: {ref_state_id}");
             match claim_signature_outcome {
                 ClaimSignatureVerification::Sound { key_id } => {
-                    println!("claim signature: Sound ({key_id})");
+                    println!("  claim signature: Sound ({key_id})");
                 }
                 ClaimSignatureVerification::Unverifiable { key_id } => {
-                    println!("claim signature: Unverifiable ({key_id} not adopted here)");
+                    println!("  claim signature: Unverifiable ({key_id} not adopted here)");
                 }
             }
         }
-        SealFromAcceptedOutcome::AlreadySealed { ref_name, claim_id } => {
-            println!("{ref_name}: claim {claim_id} was already fully sealed -- no-op");
+        SealFromAcceptedOutcome::AlreadySealed { ref_name, .. } => {
+            println!("claim {claim_id}: {ref_name} was already fully sealed -- no-op");
         }
     }
-    Ok(())
 }
 
 /// DC-86: `AcceptOptions` from `PRIKK_EXCHANGE_MAX_OBJECTS`/`PRIKK_EXCHANGE_MAX_BYTES`, the same
@@ -321,23 +391,34 @@ fn parse_summary_input_args(
     Ok(SummaryInputArgs { summary })
 }
 
-struct SingleInputArgs {
+struct AcceptArgs {
     input: PathBuf,
+    claims_out: Option<PathBuf>,
 }
 
-fn parse_single_input_args(
-    args: Vec<String>,
-    command: &str,
-) -> std::result::Result<SingleInputArgs, String> {
+fn parse_accept_args(args: Vec<String>) -> std::result::Result<AcceptArgs, String> {
     let mut iter = args.into_iter();
     let Some(input) = iter.next() else {
-        return Err(format!("{command} requires a file path"));
+        return Err("sync accept requires a file path".to_string());
     };
-    if let Some(extra) = iter.next() {
-        return Err(format!("unknown {command} argument: {extra}"));
+    if input.starts_with("--") {
+        return Err("sync accept requires a file path before any flags".to_string());
     }
-    Ok(SingleInputArgs {
+    let mut claims_out = None;
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--claims-out" => {
+                let Some(value) = iter.next() else {
+                    return Err("sync accept --claims-out requires a value".to_string());
+                };
+                claims_out = Some(PathBuf::from(value));
+            }
+            other => return Err(format!("unknown sync accept argument: {other}")),
+        }
+    }
+    Ok(AcceptArgs {
         input: PathBuf::from(input),
+        claims_out,
     })
 }
 
@@ -422,9 +503,17 @@ fn parse_build_args(args: Vec<String>) -> std::result::Result<BuildArgs, String>
     })
 }
 
+/// §2: `sync seal <ref> --claim <id>` for the single-claim case (kept, not removed), and
+/// `sync seal <ref> --claims <file>` for a batch, ordered by `order_claims_for_sealing` before
+/// any of them are sealed.
+enum SealClaims {
+    Single(ObjectId),
+    Batch(PathBuf),
+}
+
 struct SealArgs {
     ref_name: String,
-    claim_id: prikk_object::ObjectId,
+    claims: SealClaims,
 }
 
 fn parse_seal_args(args: Vec<String>) -> std::result::Result<SealArgs, String> {
@@ -436,6 +525,7 @@ fn parse_seal_args(args: Vec<String>) -> std::result::Result<SealArgs, String> {
         return Err("sync seal requires a ref name before any flags".to_string());
     }
     let mut claim_id = None;
+    let mut claims_file = None;
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--claim" => {
@@ -443,13 +533,28 @@ fn parse_seal_args(args: Vec<String>) -> std::result::Result<SealArgs, String> {
                     return Err("sync seal --claim requires a value".to_string());
                 };
                 claim_id =
-                    Some(value.parse::<prikk_object::ObjectId>().map_err(|err| {
+                    Some(value.parse::<ObjectId>().map_err(|err| {
                         format!("--claim {value:?} is not a valid object id: {err}")
                     })?);
+            }
+            "--claims" => {
+                let Some(value) = iter.next() else {
+                    return Err("sync seal --claims requires a value".to_string());
+                };
+                claims_file = Some(PathBuf::from(value));
             }
             other => return Err(format!("unknown sync seal argument: {other}")),
         }
     }
-    let claim_id = claim_id.ok_or_else(|| "sync seal requires --claim".to_string())?;
-    Ok(SealArgs { ref_name, claim_id })
+    let claims = match (claim_id, claims_file) {
+        (Some(_), Some(_)) => {
+            return Err("sync seal accepts either --claim or --claims, not both".to_string());
+        }
+        (Some(claim_id), None) => SealClaims::Single(claim_id),
+        (None, Some(claims_file)) => SealClaims::Batch(claims_file),
+        (None, None) => {
+            return Err("sync seal requires --claim <id> or --claims <file>".to_string());
+        }
+    };
+    Ok(SealArgs { ref_name, claims })
 }

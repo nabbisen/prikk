@@ -1,12 +1,40 @@
 //! RFC 115 Stage 2 tests for `check_recognition_claim_consistency`. §7 rows 3 and 4. RFC 116 N3's
 //! own §7 rows 3 and 4 (the field-discriminator pair) live at the bottom of this file.
 
-use prikk_object::{BlockKind, CanonicalEncode, ObjectId, RecognitionClaimPayload};
+use prikk_object::{
+    BlockKind, CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, RecognitionClaimPayload,
+};
 
-use super::{ContradictedField, RecognitionClaimConsistency, check_recognition_claim_consistency};
-use crate::test_support::{signed_block, unique_temp_dir};
+use super::{
+    ContradictedField, RecognitionClaimConsistency, check_recognition_claim_consistency,
+    order_claims_for_sealing,
+};
+use crate::test_support::{maintainer_signature, signed_block, unique_temp_dir};
 use crate::trust::load_maintainer_trust_policy;
 use crate::{FileObjectStore, ObjectWriter, RepositoryLayout};
+
+/// A signed (dummy-signature) `RecognitionClaim` envelope, written directly -- `order_claims_for_
+/// sealing` never checks a claim's signature, only its `block_id`/`parent_block_ids`, so the fixed
+/// dummy signature `patch_set_digest/tests.rs`'s own fixtures use is enough here.
+fn write_claim(
+    objects: &mut FileObjectStore,
+    block_id: ObjectId,
+    patch_ids: Vec<ObjectId>,
+    parent_block_ids: Vec<ObjectId>,
+) -> prikk_error::Result<ObjectId> {
+    let payload = RecognitionClaimPayload {
+        block_id,
+        patch_ids,
+        parent_block_ids,
+    };
+    let mut envelope = ObjectEnvelope::unsigned(
+        ObjectType::RecognitionClaim,
+        1,
+        payload.to_canonical_bytes()?,
+    );
+    envelope.add_signature(maintainer_signature())?;
+    objects.write_object(&envelope)
+}
 
 /// §7 row 4: a claim about a block the receiver does not hold is *accepted*, reading `BlockAbsent`
 /// -- not an error, and not something that reads as a degraded case. This is the expected shape of
@@ -244,6 +272,170 @@ fn claim_with_wrong_patches_still_reports_as_a_patch_mismatch() -> prikk_error::
             actual: vec![real_patch],
         }
     );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 116 stage 5 §4 row 1: a two-block batch seals parent-first regardless of the input order --
+/// the child's claim is listed *before* the parent's own in the call, and the sort must still put
+/// the parent first.
+#[test]
+fn order_claims_row1_two_block_batch_seals_parent_first_regardless_of_input_order()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc116-order-row1");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout);
+    let patch = ObjectId::from_bytes([0x01; 32]);
+    let parent_block = ObjectId::from_bytes([0x10; 32]);
+    let child_block = ObjectId::from_bytes([0x20; 32]);
+
+    let parent_claim = write_claim(&mut store, parent_block, vec![patch], Vec::new())?;
+    let child_claim = write_claim(&mut store, child_block, vec![patch], vec![parent_block])?;
+
+    // Deliberately child-first in the call -- the sort must still put the parent first.
+    let order = order_claims_for_sealing(&store, &[child_claim, parent_claim])?;
+    assert_eq!(order, vec![parent_claim, child_claim]);
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 116 stage 5 §4 row 2 / §6 item 2: ordering is by `parent_block_ids`, not by artifact or id
+/// order. The parent block's own id is constructed larger than the child's, and -- checked, not
+/// assumed -- the resulting *claim* ids are confirmed to disagree with topological order too, or
+/// this test could not tell a real topological sort from an incidental id-sort (the exact trap
+/// that made the `parent_block_ids` control a no-op two increments ago).
+#[test]
+fn order_claims_row2_ordering_is_by_parent_block_ids_not_artifact_or_id_order()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc116-order-row2");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout);
+    let patch = ObjectId::from_bytes([0x01; 32]);
+
+    let parent_block = ObjectId::from_bytes([0xF0; 32]);
+    let child_block = ObjectId::from_bytes([0x00; 32]);
+    assert!(
+        parent_block > child_block,
+        "fixture must put the parent's own block id after the child's"
+    );
+
+    let parent_claim = write_claim(&mut store, parent_block, vec![patch], Vec::new())?;
+    let child_claim = write_claim(&mut store, child_block, vec![patch], vec![parent_block])?;
+    assert!(
+        parent_claim > child_claim,
+        "fixture must also produce a parent claim id that sorts after the child claim id -- \
+         confirmed here, not assumed, or this test cannot distinguish a real topological sort \
+         from sorting by claim id: parent={parent_claim} child={child_claim}"
+    );
+
+    let order = order_claims_for_sealing(&store, &[parent_claim, child_claim])?;
+    assert_eq!(
+        order,
+        vec![parent_claim, child_claim],
+        "the parent's claim must still come first, even though both the block ids and the claim \
+         ids themselves sort the other way"
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 116 stage 5 §4 row 3: a parent named outside the batch (an already-sealed ancestor, or
+/// simply absent) is ignored for ordering, not refused -- the ordinary incremental case.
+#[test]
+fn order_claims_row3_parents_outside_the_batch_are_ignored_not_refused() -> prikk_error::Result<()>
+{
+    let root = unique_temp_dir("rfc116-order-row3");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout);
+    let patch = ObjectId::from_bytes([0x01; 32]);
+    let already_sealed_elsewhere = ObjectId::from_bytes([0xAB; 32]); // not any claim's block_id
+    let block = ObjectId::from_bytes([0x30; 32]);
+
+    let claim = write_claim(
+        &mut store,
+        block,
+        vec![patch],
+        vec![already_sealed_elsewhere],
+    )?;
+
+    let order = order_claims_for_sealing(&store, &[claim])?;
+    assert_eq!(order, vec![claim]);
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 116 stage 5 §4 row 4: a hostile cycle -- claim P asserts block B's parent is C, claim Q
+/// asserts C's parent is B -- is refused, naming both claims. Asserted directly, not via a
+/// timeout: the sort is bounded by the batch size and cannot hang.
+#[test]
+fn order_claims_row4_a_hostile_cycle_is_refused_naming_both_claims() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc116-order-row4");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout);
+    let patch = ObjectId::from_bytes([0x01; 32]);
+    let block_b = ObjectId::from_bytes([0x40; 32]);
+    let block_c = ObjectId::from_bytes([0x50; 32]);
+
+    let claim_p = write_claim(&mut store, block_b, vec![patch], vec![block_c])?;
+    let claim_q = write_claim(&mut store, block_c, vec![patch], vec![block_b])?;
+
+    let result = order_claims_for_sealing(&store, &[claim_p, claim_q]);
+    let message = match result {
+        Ok(order) => panic!("a hostile cycle must be refused, got an order: {order:?}"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        message.contains(&claim_p.to_string()) && message.contains(&claim_q.to_string()),
+        "the refusal must name both claims in the cycle: {message}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 116 stage 5 §4 row 5: the order is deterministic across repeated runs over the identical
+/// batch -- two independent chains with no edge between them, so more than one topologically
+/// valid interleaving exists, and the tie-break must pick the same one every time.
+#[test]
+fn order_claims_row5_the_order_is_deterministic_across_runs() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc116-order-row5");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout);
+    let patch = ObjectId::from_bytes([0x01; 32]);
+
+    let chain_a_root = write_claim(
+        &mut store,
+        ObjectId::from_bytes([0x61; 32]),
+        vec![patch],
+        Vec::new(),
+    )?;
+    let chain_a_leaf = write_claim(
+        &mut store,
+        ObjectId::from_bytes([0x62; 32]),
+        vec![patch],
+        vec![ObjectId::from_bytes([0x61; 32])],
+    )?;
+    let chain_b_root = write_claim(
+        &mut store,
+        ObjectId::from_bytes([0x71; 32]),
+        vec![patch],
+        Vec::new(),
+    )?;
+    let chain_b_leaf = write_claim(
+        &mut store,
+        ObjectId::from_bytes([0x72; 32]),
+        vec![patch],
+        vec![ObjectId::from_bytes([0x71; 32])],
+    )?;
+    let batch = [chain_b_leaf, chain_a_leaf, chain_b_root, chain_a_root];
+
+    let first = order_claims_for_sealing(&store, &batch)?;
+    for _ in 0..4 {
+        let repeat = order_claims_for_sealing(&store, &batch)?;
+        assert_eq!(
+            repeat, first,
+            "repeated runs over the identical batch must agree"
+        );
+    }
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
