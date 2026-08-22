@@ -87,13 +87,16 @@ pub(super) fn publish_tag(
     target_block_id: ObjectId,
 ) -> Result<()> {
     let mut store = FileObjectStore::new(layout.clone());
+    let (patch_set_digest, patch_count) =
+        crate::compute_patch_set_digest_and_count_from_block(&store, target_block_id)?;
     let tag_payload = TagPayload {
         name: tag_name.to_string(),
         target_block_id,
         message: None,
         created_at: 0,
         author_key_id: "maintainer-key".to_string(),
-        patch_set_digest: crate::compute_patch_set_digest_from_block(&store, target_block_id)?,
+        patch_set_digest,
+        patch_count,
     };
     let mut tag_envelope =
         ObjectEnvelope::unsigned(ObjectType::Tag, 1, tag_payload.to_canonical_bytes()?);

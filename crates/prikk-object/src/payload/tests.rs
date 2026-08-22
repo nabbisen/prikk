@@ -721,3 +721,32 @@ fn tag_payload_requires_patch_set_digest_field() {
         "the refusal must name the missing field: {message}"
     );
 }
+
+/// RFC 117 T7 `stage-2a-tag-patch-count-handoff-v1.md` §7 item 3: field 7 (`patch_count`) is
+/// required -- a payload encoding fields 1-6 (the pre-T7 shape) must fail to decode, not default.
+#[allow(clippy::expect_used)]
+#[test]
+fn tag_payload_requires_patch_count_field() {
+    let mut writer = CanonicalWriter::new();
+    writer.field_string(1, "v1").expect("field 1 encodes");
+    writer
+        .field_object_id(2, &ObjectId::from_bytes([0x01; 32]))
+        .expect("field 2 encodes");
+    writer.field_u64(4, 0).expect("field 4 encodes");
+    writer
+        .field_string(5, "maintainer-key")
+        .expect("field 5 encodes");
+    writer.field_bytes(6, &[0x02; 32]).expect("field 6 encodes");
+    let bytes = writer.finish();
+
+    let message = match TagPayload::decode_canonical(&bytes) {
+        Ok(_) => {
+            panic!("a Tag payload without field 7 (patch_count) must fail to decode, not default")
+        }
+        Err(err) => err.to_string(),
+    };
+    assert!(
+        message.contains("patch_count"),
+        "the refusal must name the missing field: {message}"
+    );
+}

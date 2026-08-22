@@ -152,7 +152,8 @@ pub use patch_inverse::{
 };
 pub use patch_replay::{PatchReplayPlan, prepare_patch_replay_plan};
 pub use patch_set_digest::{
-    PatchSetDigest, PatchSetResolution, compute_patch_set_digest, compute_patch_set_digest_for_ref,
+    PatchSetDigest, PatchSetResolution, compute_patch_set_digest,
+    compute_patch_set_digest_and_count_from_block, compute_patch_set_digest_for_ref,
     compute_patch_set_digest_from_block, patch_ids_reachable_from_block, patch_set_digest_preimage,
     resolve_patch_set_digest,
 };

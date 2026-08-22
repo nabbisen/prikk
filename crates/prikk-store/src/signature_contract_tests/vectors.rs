@@ -642,13 +642,19 @@ fn rfc114_vector_10_ref_update_schema_1_identity_and_signature() -> prikk_error:
 
 /// Vector 11: `(Tag, 1)`, MAINTAINER-signed.
 ///
-/// RFC 117 T1 (2026-08-22, owner ruling -- "No project has been created in production in the world
-/// yet. Breaking change is accepted."): `TagPayload` gained a required field 6, `patch_set_digest`,
-/// amended in place at `schema_version` 1 (no schema 2). This moved every one of this vector's
-/// three frozen values -- canonical bytes, object id, and signature preimage -- deliberately,
-/// authorized by that ruling. `patch_set_digest` here is a fixed, arbitrary 32-byte value (this
-/// vector's `target_block_id` names no real block for a real digest to be computed over); only its
-/// presence and fixedness matter for freezing identity, not its relationship to any block.
+/// **Moved twice, both authorized, both recorded here so the record shows when and under which
+/// ruling each time (RFC 117 T7 §4's own instruction -- a vector that moved twice with only one
+/// note reads like it moved once):**
+///
+/// - **Move 1, RFC 117 T1 (2026-08-22, owner ruling -- "No project has been created in production
+///   in the world yet. Breaking change is accepted."):** `TagPayload` gained a required field 6,
+///   `patch_set_digest`, amended in place at `schema_version` 1 (no schema 2).
+/// - **Move 2, RFC 117 T7 (2026-08-22, owner ruling "Take it now", after stage 2 measured
+///   resolution at O(N²)):** `TagPayload` gained a required field 7, `patch_count`, same terms.
+///
+/// Both moves are fixed, arbitrary values -- this vector's `target_block_id` names no real block
+/// for a real digest or count to be computed over; only their presence and fixedness matter for
+/// freezing identity, not their relationship to any block.
 fn rfc114_tag_payload() -> prikk_object::TagPayload {
     prikk_object::TagPayload {
         name: "rfc114-vector".to_string(),
@@ -657,39 +663,41 @@ fn rfc114_tag_payload() -> prikk_object::TagPayload {
         created_at: 0,
         author_key_id: "rfc114-vector-key".to_string(),
         patch_set_digest: prikk_object::PatchSetDigest([0x7b; 32]),
+        patch_count: 7,
     }
 }
 
-// RFC 117 T1 (2026-08-22, owner ruling): moved, deliberately, alongside the canonical bytes, object
-// id, and preimage above -- see `rfc114_vector_11_tag_schema_1_identity_and_signature`'s own comment.
+// RFC 117 T1 (2026-08-22, owner ruling), then RFC 117 T7 (2026-08-22, owner ruling "Take it now"):
+// moved twice, deliberately, alongside the canonical bytes, object id, and preimage above -- see
+// `rfc114_vector_11_tag_schema_1_identity_and_signature`'s own comment for both rulings.
 const RFC114_TAG_SIGNATURE: [u8; 64] = [
-    0xcf, 0x38, 0xbd, 0xd9, 0x69, 0x7a, 0x94, 0x07, 0xac, 0x95, 0x08, 0xf4, 0xc0, 0x2f, 0x5e, 0x45,
-    0x39, 0x4e, 0xb2, 0xc5, 0xdf, 0x97, 0x41, 0xfb, 0xb7, 0x61, 0xa8, 0xda, 0xce, 0xfe, 0xbb, 0x74,
-    0x88, 0x3d, 0x0a, 0x88, 0x93, 0xc3, 0xd1, 0xa5, 0xb8, 0xa6, 0xac, 0xb5, 0x88, 0x5b, 0xab, 0x4f,
-    0xa9, 0x70, 0x48, 0x20, 0xa1, 0x0b, 0xb3, 0xe8, 0xc5, 0xca, 0x35, 0x3e, 0x5a, 0x76, 0x7e, 0x03,
+    0x54, 0xd4, 0xf9, 0x43, 0x82, 0x57, 0x87, 0xfd, 0x63, 0x1b, 0x7f, 0xf6, 0x83, 0x0e, 0x16, 0x32,
+    0xa3, 0x44, 0x68, 0xab, 0x81, 0xda, 0x00, 0x86, 0x7c, 0x92, 0xab, 0x00, 0xe7, 0x4a, 0x01, 0x0b,
+    0x52, 0x41, 0x5f, 0xb2, 0xe9, 0x3c, 0x28, 0xe6, 0xa6, 0x95, 0x24, 0xee, 0x31, 0x87, 0x0a, 0x10,
+    0xf4, 0xad, 0xeb, 0xeb, 0x9e, 0x6d, 0xb2, 0x84, 0xde, 0xab, 0x58, 0xd1, 0x26, 0x1d, 0xcb, 0x08,
 ];
 
 #[test]
 fn rfc114_vector_11_tag_schema_1_identity_and_signature() -> prikk_error::Result<()> {
-    // RFC 117 T1 (2026-08-22, owner ruling -- "No project has been created in production in the
-    // world yet. Breaking change is accepted."): all three values below moved, deliberately, when
-    // `TagPayload` gained a required field 6 (`patch_set_digest`) at `schema_version` 1. Computed
+    // Moved a second time here, RFC 117 T7 (2026-08-22, owner ruling "Take it now"): `TagPayload`
+    // gained a required field 7, `patch_count`, at `schema_version` 1 -- see this test's own
+    // struct-level doc comment (`rfc114_tag_payload`) for both rulings and both moves. Computed
     // once via a throwaway probe test and hardcoded here, the same discipline every other vector in
     // this file follows.
     let canonical = rfc114_tag_payload().to_canonical_bytes()?;
     assert_eq!(
         prikk_hash::to_hex(&canonical),
-        "000110000000000000000d7266633131342d766563746f72000212000000000000002078787878787878787878787878787878787878787878787878787878787878780004040000000000000008000000000000000000051000000000000000117266633131342d766563746f722d6b657900061100000000000000207b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b"
+        "000110000000000000000d7266633131342d766563746f72000212000000000000002078787878787878787878787878787878787878787878787878787878787878780004040000000000000008000000000000000000051000000000000000117266633131342d766563746f722d6b657900061100000000000000207b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b00070400000000000000080000000000000007"
     );
     let id = ObjectId::from_canonical_payload(ObjectType::Tag, 1, &canonical);
     assert_eq!(
         id.to_string(),
-        "2513d88101b0430b2d9f6e376adf60627874c46962de2d25a38f22ef7f2eb86d"
+        "e50d6117efac991dbd43a9f5e2fbae365ba3a3f68f4de58a0384ee2a51942878"
     );
     let preimage = rfc114_maintainer_preimage(ObjectType::Tag, id)?;
     assert_eq!(
         prikk_hash::to_hex(&preimage),
-        "7072696b6b2e7369672e7631000100052513d88101b0430b2d9f6e376adf60627874c46962de2d25a38f22ef7f2eb86d000200187266633131342d766563746f722d6d61696e7461696e6572"
+        "7072696b6b2e7369672e763100010005e50d6117efac991dbd43a9f5e2fbae365ba3a3f68f4de58a0384ee2a51942878000200187266633131342d766563746f722d6d61696e7461696e6572"
     );
     assert_eq!(
         Ed25519KeyPair::from_seed(&RFC114_MAINTAINER_SEED).sign(&preimage),

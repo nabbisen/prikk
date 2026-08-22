@@ -1454,8 +1454,8 @@ fn publish_tag(
     target_block_id: ObjectId,
     maintainer: &Ed25519MaintainerSigner,
 ) -> prikk_error::Result<ObjectId> {
-    let patch_set_digest =
-        crate::compute_patch_set_digest_from_block(object_store, target_block_id)?;
+    let (patch_set_digest, patch_count) =
+        crate::compute_patch_set_digest_and_count_from_block(object_store, target_block_id)?;
     let tag_payload = TagPayload {
         name: tag_name.to_string(),
         target_block_id,
@@ -1463,6 +1463,7 @@ fn publish_tag(
         created_at: 0,
         author_key_id: maintainer.key_id().to_string(),
         patch_set_digest,
+        patch_count,
     };
     let mut tag_envelope =
         ObjectEnvelope::unsigned(ObjectType::Tag, 1, tag_payload.to_canonical_bytes()?);
