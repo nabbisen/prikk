@@ -27,11 +27,11 @@
 //! - Closed refs need no special case: `RefStatePayload.closed` gates further publication, it does
 //!   not change what `target_object_id` names (ruling §2.4).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;
-use prikk_object::{ObjectId, ObjectType, RefKind, RefStatePayload, TagPayload};
+use prikk_object::{BlockPayload, ObjectId, ObjectType, RefKind, RefStatePayload, TagPayload};
 
 use crate::layout::RepositoryLayout;
 use crate::merge_evidence::ancestors_inclusive;
@@ -155,6 +155,210 @@ pub fn compute_patch_set_digest_for_ref(
     let object_store = ObjectReadSnapshot::open(layout)?;
     let tip_block_id = resolve_ref_to_tip_block(layout, &object_store, ref_name)?;
     compute_patch_set_digest_from_block(&object_store, tip_block_id)
+}
+
+/// RFC 117 T2: the outcome of [`resolve_patch_set_digest`]. `NotHeld` is not an error -- the
+/// ordinary "you have not synced that far yet" case -- and ambiguity is never a variant here:
+/// design T2 rules more-than-one-match a refusal, so a caller cannot accidentally proceed on an
+/// ambiguous answer by pattern-matching past it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PatchSetResolution {
+    /// No local block reachable from any `heads/*`/`tags/*` ref has this patch set.
+    NotHeld,
+    /// Exactly one local block has this patch set.
+    Resolved(ObjectId),
+}
+
+/// RFC 117 T2: resolve a patch-set digest to the local block it names, among every block reachable
+/// from any local `heads/*`/`tags/*` ref (`remotes/*` excluded -- unsealed received history the
+/// operator has not adopted, consistent with `resolve_ref_to_tip_block`'s own refusal of it).
+///
+/// **Single pass over the reachable block DAG, not a per-candidate re-walk** (§3): a naive
+/// "for each candidate block, re-walk its ancestry" is O(blocks × closure), the same shape that made
+/// `verify` roughly O(N³) before RFC 111. Instead this computes every candidate's patch-closure
+/// *once*, in topological (parents-before-children) order -- the same Kahn's-algorithm scaffolding
+/// `merge_evidence::topological_order` and `order_claims_for_sealing` already use for their own,
+/// different orderings, restated here rather than shared (each has its own node/edge shape) --
+/// accumulating each block's closure from its parents' already-computed closures plus its own
+/// `patch_ids`. A parent's closure is **moved**, not cloned, into its child whenever that child is
+/// its last remaining consumer (the ordinary single-parent, single-child case, i.e. most of any real
+/// history) -- cloned only at genuine fan-out (a block with more than one child in the candidate
+/// set, or a merge
+/// block with more than one parent) -- and dropped entirely once every consumer has taken it. Peak
+/// memory therefore tracks the DAG's width, not its length.
+///
+/// **What this does *not* make linear:** every candidate's closure is still *hashed* in full
+/// (`compute_patch_set_digest`) to compare against the caller's opaque target -- there is no way to
+/// skip a candidate without computing its real digest, since `PatchSetDigest` reveals nothing about
+/// the closure it was computed over. For one long linear branch the closure size itself grows with
+/// depth, so total hashing work is O(total patches²) in that shape -- a real, measured cost (RFC 117
+/// stage 2 report), not a re-walk artifact, and not what this increment's traversal fix addresses.
+/// What the fix removes is the *redundant ancestry walk* the naive per-candidate approach paid on
+/// top of that -- the closure *sets* themselves are now built in one pass, via the move/clone
+/// scheme above, not rebuilt from scratch per candidate.
+///
+/// **Two or more matching blocks refuse, naming every one** -- never picked, never the ref tip,
+/// never the newest. Ambiguity is reachable in production, not only in fixtures: since RFC 115
+/// Stage 4, accepted patches are sealed locally, so two branches can seal the same accepted patch
+/// set in a different order, giving the same patch-set digest and two distinct block ids (every
+/// block has at least one patch -- `seal`/`merge_execute` both refuse an empty one -- so this can
+/// only happen via a genuinely different patch order, not an accidentally-shared closure).
+pub fn resolve_patch_set_digest(
+    layout: &RepositoryLayout,
+    digest: PatchSetDigest,
+) -> Result<PatchSetResolution> {
+    let object_store = ObjectReadSnapshot::open(layout)?;
+    let ref_store = RefStore::new(layout.clone());
+
+    // §2's candidate set: every block reachable from any local heads/*-or-tags/* ref. Reuses this
+    // module's own `resolve_ref_to_tip_block` (not a fifth ref-tip resolution copy) and
+    // `merge_evidence::ancestors_inclusive` (not a third traversal) -- `list_ref_pointers` itself
+    // never names a `remotes/*` entry, since received pointers live in a wholly separate index
+    // (`received_index.rs`), so no explicit exclusion is needed here beyond what both already do.
+    let mut candidates: BTreeMap<ObjectId, BlockPayload> = BTreeMap::new();
+    for pointer in ref_store.list_ref_pointers()? {
+        let tip_block_id = resolve_ref_to_tip_block(layout, &object_store, &pointer.ref_name)?;
+        candidates.extend(ancestors_inclusive(&object_store, tip_block_id)?);
+    }
+
+    // Build the forward (parent -> child) edges and each block's remaining-parent/remaining-child
+    // counts. Every parent of a candidate block is itself a candidate: `ancestors_inclusive` walks
+    // all the way to genesis for each tip, so the union above is already closed under "parent of".
+    let mut remaining_parents: BTreeMap<ObjectId, usize> = BTreeMap::new();
+    let mut children: BTreeMap<ObjectId, Vec<ObjectId>> = BTreeMap::new();
+    for (&block_id, block) in &candidates {
+        remaining_parents.insert(block_id, block.parent_block_ids.len());
+        for &parent_id in &block.parent_block_ids {
+            children.entry(parent_id).or_default().push(block_id);
+        }
+    }
+    let mut remaining_children: BTreeMap<ObjectId, usize> = candidates
+        .keys()
+        .map(|&block_id| {
+            let count = children.get(&block_id).map_or(0, Vec::len);
+            (block_id, count)
+        })
+        .collect();
+
+    let mut ready: Vec<ObjectId> = remaining_parents
+        .iter()
+        .filter(|&(_, &count)| count == 0)
+        .map(|(&block_id, _)| block_id)
+        .collect();
+    ready.sort_unstable();
+    let mut queue: VecDeque<ObjectId> = ready.into();
+
+    let mut live_closures: BTreeMap<ObjectId, BTreeSet<ObjectId>> = BTreeMap::new();
+    let mut matches: Vec<ObjectId> = Vec::new();
+
+    while let Some(block_id) = queue.pop_front() {
+        let block = candidates.get(&block_id).ok_or_else(|| {
+            PrikkError::Integrity(
+                "patch-set digest resolution lost a tracked candidate -- internal inconsistency"
+                    .to_string(),
+            )
+        })?;
+
+        let mut closure: BTreeSet<ObjectId> = BTreeSet::new();
+        for &parent_id in &block.parent_block_ids {
+            let parent_closure =
+                take_parent_closure(parent_id, &mut live_closures, &mut remaining_children)?;
+            if closure.is_empty() {
+                // First parent (the overwhelmingly common single-parent case): move it in directly
+                // rather than merging into an empty set.
+                closure = parent_closure;
+            } else {
+                closure.extend(parent_closure);
+            }
+        }
+        closure.extend(block.patch_ids.iter().copied());
+
+        let sorted: Vec<ObjectId> = closure.iter().copied().collect();
+        if compute_patch_set_digest(&sorted)? == digest {
+            matches.push(block_id);
+        }
+
+        if remaining_children.get(&block_id).copied().unwrap_or(0) > 0 {
+            live_closures.insert(block_id, closure);
+        }
+
+        for &child_id in children.get(&block_id).into_iter().flatten() {
+            let entry = remaining_parents.get_mut(&child_id).ok_or_else(|| {
+                PrikkError::Integrity(
+                    "patch-set digest resolution lost a tracked child -- internal inconsistency"
+                        .to_string(),
+                )
+            })?;
+            *entry -= 1;
+            if *entry == 0 {
+                queue.push_back(child_id);
+            }
+        }
+    }
+
+    match matches.len() {
+        0 => Ok(PatchSetResolution::NotHeld),
+        1 => {
+            let block_id = matches.pop().ok_or_else(|| {
+                PrikkError::Integrity(
+                    "patch-set digest resolution: exactly one match reported but none present -- \
+                     internal inconsistency"
+                        .to_string(),
+                )
+            })?;
+            Ok(PatchSetResolution::Resolved(block_id))
+        }
+        _ => {
+            matches.sort_unstable();
+            let names = matches
+                .iter()
+                .map(ObjectId::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            Err(PrikkError::Integrity(format!(
+                "patch-set digest resolves to {} distinct local blocks, refusing to pick: {names}",
+                matches.len()
+            )))
+        }
+    }
+}
+
+/// Take one parent's already-computed closure for a child now consuming it: **moved** out of
+/// `live_closures` if this is the parent's last remaining child (the ordinary case), **cloned** if
+/// other children still need it. Either way the parent's own remaining-child count is decremented,
+/// and its stored closure is dropped once that count reaches zero.
+fn take_parent_closure(
+    parent_id: ObjectId,
+    live_closures: &mut BTreeMap<ObjectId, BTreeSet<ObjectId>>,
+    remaining_children: &mut BTreeMap<ObjectId, usize>,
+) -> Result<BTreeSet<ObjectId>> {
+    let count = remaining_children.get_mut(&parent_id).ok_or_else(|| {
+        PrikkError::Integrity(
+            "patch-set digest resolution lost a parent's remaining-child count -- internal \
+             inconsistency"
+                .to_string(),
+        )
+    })?;
+    *count = count.checked_sub(1).ok_or_else(|| {
+        PrikkError::Integrity(
+            "patch-set digest resolution consumed a parent's closure more times than it has \
+             children -- internal inconsistency"
+                .to_string(),
+        )
+    })?;
+    if *count == 0 {
+        live_closures.remove(&parent_id).ok_or_else(|| {
+            PrikkError::Integrity(format!(
+                "patch-set digest resolution: parent {parent_id} has no live closure to take"
+            ))
+        })
+    } else {
+        live_closures.get(&parent_id).cloned().ok_or_else(|| {
+            PrikkError::Integrity(format!(
+                "patch-set digest resolution: parent {parent_id} has no live closure to clone"
+            ))
+        })
+    }
 }
 
 #[cfg(test)]
