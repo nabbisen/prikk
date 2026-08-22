@@ -11,7 +11,8 @@ use std::path::PathBuf;
 mod support;
 
 use prikk_store::{
-    DEFAULT_HAVE_LIST_MAX_PATCH_COUNT, DEFAULT_HAVE_LIST_MAX_TOTAL_BYTES, decode_have_list,
+    DEFAULT_HAVE_LIST_MAX_PATCH_COUNT, DEFAULT_HAVE_LIST_MAX_TOTAL_BYTES, ObjectReadSnapshot,
+    RepositoryLayout, decode_have_list, order_claims_for_sealing,
 };
 
 fn sync_file(tag: &str) -> PathBuf {
@@ -383,14 +384,38 @@ fn row7_multi_block_sync_completes_through_the_cli_alone() {
         "B must accept exactly two claims"
     );
     let claim_ids_written = std::fs::read_to_string(&claims_file).unwrap();
+    let claim_lines: Vec<&str> = claim_ids_written
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .collect();
     assert_eq!(
-        claim_ids_written
-            .lines()
-            .filter(|l| !l.trim().is_empty())
-            .count(),
+        claim_lines.len(),
         2,
         "the claims file must carry exactly two claim ids: {claim_ids_written:?}"
     );
+    // `sync accept` writes claims in the artifact's own order, which the handoff itself confirmed
+    // is `ancestors_inclusive`'s `BTreeMap` order (sorted by block id) -- not necessarily
+    // topological, and possibly *already* topological by chance. A control that removes the sort
+    // must not depend on that incidental order agreeing or disagreeing with lineage, or it would
+    // pass by luck rather than correctness -- the exact trap that made a control a no-op twice
+    // before in this arc. So the correct order is computed independently here (an oracle call to
+    // the same production function, over B's own object store) and its *reverse* is written back
+    // -- deterministically the wrong order for a two-claim batch, regardless of what `sync accept`
+    // happened to emit.
+    let claim_ids: Vec<prikk_object::ObjectId> = claim_lines
+        .iter()
+        .map(|line| line.trim().parse().unwrap())
+        .collect();
+    let receiver_layout = RepositoryLayout::open(repo_b.clone()).unwrap();
+    let receiver_object_store = ObjectReadSnapshot::open(&receiver_layout).unwrap();
+    let correct_order = order_claims_for_sealing(&receiver_object_store, &claim_ids).unwrap();
+    assert_eq!(correct_order.len(), 2);
+    let deliberately_wrong_order: String = correct_order
+        .iter()
+        .rev()
+        .map(|id| format!("{id}\n"))
+        .collect();
+    std::fs::write(&claims_file, deliberately_wrong_order).unwrap();
 
     support::trust_maintainer(&repo_b);
     let seal = support::prikk(&repo_b)
