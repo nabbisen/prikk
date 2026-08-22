@@ -121,6 +121,12 @@ fn end_to_end_sync_via_the_cli_lands_the_delta_and_is_verified_by_reading_it_bac
         build_stdout.contains("delta patches: 1") && build_stdout.contains("claims: 1"),
         "A must report exactly one delta patch and one claim: {build_stdout}"
     );
+    // RFC 116 stage 7 handoff, Part B3: the confidentiality notice appears whenever an artifact is
+    // actually written.
+    assert!(
+        build_stdout.contains("does not encrypt it"),
+        "sync build must print the confidentiality notice when it writes an artifact: {build_stdout}"
+    );
 
     // Step 4: `sync accept` in B -> prints a claim id, the load-bearing output this step exists
     // for (handoff §3).
@@ -281,6 +287,13 @@ fn end_to_end_sync_via_the_cli_lands_the_delta_and_is_verified_by_reading_it_bac
     assert!(
         !already_in_sync_output.exists(),
         "an already-in-sync build must write no output file: {build_again_stdout}"
+    );
+    // RFC 116 stage 7 handoff, Part B3: the confidentiality notice is absent on the AlreadyInSync
+    // path, where no file is created -- the notice belongs to the write, not the subcommand.
+    assert!(
+        !build_again_stdout.contains("does not encrypt it"),
+        "an already-in-sync build must not print the confidentiality notice, since it writes \
+         nothing: {build_again_stdout}"
     );
 
     // RFC 116 stage 6 handoff §1: badge criterion 1's load-bearing clause is "both verify it

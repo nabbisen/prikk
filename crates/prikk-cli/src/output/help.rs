@@ -102,6 +102,10 @@ pub(crate) fn print_help(version: &str) {
          the gap"
     );
     println!(
+        "  note: a built sync artifact contains repository content in the clear -- prikk does \
+         not encrypt it; move it only over a channel you trust"
+    );
+    println!(
         "  prikk sync accept <file> [--claims-out <file>]  Accept a PEXCH001 artifact (prints \
          claim ids; optionally writes them)"
     );
