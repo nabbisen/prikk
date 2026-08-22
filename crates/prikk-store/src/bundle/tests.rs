@@ -17,7 +17,7 @@ use crate::bundle::{
     BundleImportOptions, DEFAULT_BUNDLE_MAX_OBJECT_COUNT, decode_bundle, encode_bundle,
     encode_bundle_v1_for_test, export_bundle, import_bundle,
 };
-use crate::layout::LockableContainer;
+use crate::layout::{ContainerSlot, LockableContainer};
 use crate::lock::{ActiveLock, acquire_container_locks};
 use crate::received::read_received_pointer;
 use crate::test_support::{
@@ -860,6 +860,369 @@ fn a_pbndl001_bundle_imports_and_its_patch_reads_unverifiable() -> prikk_error::
 
     let _ = std::fs::remove_dir_all(source_root);
     let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+fn author_key_container_bytes(layout: &RepositoryLayout) -> prikk_error::Result<Vec<u8>> {
+    let relative = layout.repository_relative(&layout.author_key_container_path())?;
+    Ok(
+        crate::fsutil::read_file_if_exists(layout.repository_mutation_root(), &relative)?
+            .unwrap_or_default(),
+    )
+}
+
+/// Byte-for-byte snapshot of the received-ref index's full on-disk state: both container slots plus
+/// the generation log that decides which slot is live (RFC 102 Stage 6 Step 1's compaction shape).
+/// An ordinary import only ever appends to the live slot, but comparing all three files, not just
+/// one, is what makes "unchanged" a real claim rather than one that only holds for today's write
+/// pattern.
+fn received_index_bytes(
+    layout: &RepositoryLayout,
+) -> prikk_error::Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
+    let read = |path: std::path::PathBuf| -> prikk_error::Result<Vec<u8>> {
+        let relative = layout.repository_relative(&path)?;
+        Ok(
+            crate::fsutil::read_file_if_exists(layout.repository_mutation_root(), &relative)?
+                .unwrap_or_default(),
+        )
+    };
+    Ok((
+        read(layout.received_index_slot_path(ContainerSlot::A))?,
+        read(layout.received_index_slot_path(ContainerSlot::B))?,
+        read(layout.received_index_generation_log_path())?,
+    ))
+}
+
+// DC-78 `import-closure-validation-handoff-v1.md` §5: `import_bundle` validates the bundle's own
+// closure -- ref target, patch-referenced blobs, block-named patches, block-named parents -- before
+// any write, matching `accept_exchange_artifact`'s own precedent. Each row below has its own test;
+// the corresponding negative control (removing the one check that row proves) was run by hand in an
+// isolated, discarded worktree per this project's own standing review discipline, not encoded here.
+
+/// §5 row 1: a bundle whose exported ref's target does not resolve -- carried by the bundle nor
+/// already local -- is refused. Built exactly as report item 3 asks: a genuine tag-ref bundle, minus
+/// the Tag envelope the DC-78 tag-export fix (`d605c10`) added -- the literal shape a pre-fix
+/// `export_bundle` build used to emit for a tag ref. Confirms a pre-DC-78-shaped tag bundle can
+/// actually be constructed in a test, not merely asserted to exist.
+#[test]
+fn row1_a_bundle_whose_ref_target_is_absent_is_refused() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc78-closure-row1-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    let tip_block_id = seal_two_block_history(&source)?;
+    let maintainer =
+        Ed25519MaintainerSigner::from_seed("dc78-closure-row1-maintainer", &[0xc1; 32])?;
+    let mut object_store = FileObjectStore::new(source.clone());
+    publish_tag(&source, &mut object_store, "tags/v1", tip_block_id, &maintainer)?;
+
+    let (_, bytes) = export_bundle(&source, "tags/v1")?;
+    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    assert!(
+        objects
+            .iter()
+            .any(|envelope| envelope.object_type == ObjectType::Tag),
+        "fixture sanity: a genuine tag bundle must carry the Tag envelope"
+    );
+    let pre_fix_shaped_objects: Vec<ObjectEnvelope> = objects
+        .into_iter()
+        .filter(|envelope| envelope.object_type != ObjectType::Tag)
+        .collect();
+    let pre_fix_shaped_bytes = encode_bundle(&ref_name, &pre_fix_shaped_objects, &author_keys)?;
+
+    let target_root = unique_temp_dir("dc78-closure-row1-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let result = import_bundle(
+        &target,
+        &pre_fix_shaped_bytes,
+        &BundleImportOptions::default_limits(),
+    );
+    let err = result
+        .expect_err("a bundle whose RefState targets a Tag object it never carried must be refused");
+    assert!(
+        err.to_string().contains("targets missing tag"),
+        "unexpected error: {err}"
+    );
+    assert!(read_received_pointer(&target, "remotes/tags/v1")?.is_none());
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// §5 row 2: a bundle missing a blob a carried patch's operations reference is refused.
+#[test]
+fn row2_a_bundle_missing_a_referenced_blob_is_refused() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc78-closure-row2-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    seal_two_block_history(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    assert!(
+        objects
+            .iter()
+            .any(|envelope| envelope.object_type == ObjectType::Blob),
+        "fixture sanity"
+    );
+    let broken_objects: Vec<ObjectEnvelope> = objects
+        .into_iter()
+        .filter(|envelope| envelope.object_type != ObjectType::Blob)
+        .collect();
+    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys)?;
+
+    let target_root = unique_temp_dir("dc78-closure-row2-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let result = import_bundle(&target, &broken_bytes, &BundleImportOptions::default_limits());
+    let err = result.expect_err("a bundle missing a patch-referenced blob must be refused");
+    assert!(
+        err.to_string().contains("references blob"),
+        "unexpected error: {err}"
+    );
+    assert!(read_received_pointer(&target, "remotes/heads/main")?.is_none());
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// §5 row 3: a bundle missing a block's own named patch is refused.
+#[test]
+fn row3_a_bundle_missing_a_blocks_patch_is_refused() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc78-closure-row3-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    seal_two_block_history(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    assert!(
+        objects
+            .iter()
+            .any(|envelope| envelope.object_type == ObjectType::Patch),
+        "fixture sanity"
+    );
+    let broken_objects: Vec<ObjectEnvelope> = objects
+        .into_iter()
+        .filter(|envelope| envelope.object_type != ObjectType::Patch)
+        .collect();
+    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys)?;
+
+    let target_root = unique_temp_dir("dc78-closure-row3-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let result = import_bundle(&target, &broken_bytes, &BundleImportOptions::default_limits());
+    let err = result.expect_err("a bundle missing a block's own named patch must be refused");
+    assert!(err.to_string().contains("names patch"), "unexpected error: {err}");
+    assert!(read_received_pointer(&target, "remotes/heads/main")?.is_none());
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// §5 row 4: a bundle missing a block's own named parent is refused.
+#[test]
+fn row4_a_bundle_missing_a_blocks_parent_is_refused() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc78-closure-row4-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    let child_block_id = seal_two_block_history(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let is_root_block = |envelope: &ObjectEnvelope| {
+        envelope.object_type == ObjectType::Block && envelope.object_id() != child_block_id
+    };
+    assert!(
+        objects.iter().any(is_root_block),
+        "fixture sanity: the root block must be present before removal"
+    );
+    let broken_objects: Vec<ObjectEnvelope> = objects
+        .into_iter()
+        .filter(|envelope| !is_root_block(envelope))
+        .collect();
+    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys)?;
+
+    let target_root = unique_temp_dir("dc78-closure-row4-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let result = import_bundle(&target, &broken_bytes, &BundleImportOptions::default_limits());
+    let err = result.expect_err("a bundle missing a block's own named parent must be refused");
+    assert!(
+        err.to_string().contains("names parent"),
+        "unexpected error: {err}"
+    );
+    assert!(read_received_pointer(&target, "remotes/heads/main")?.is_none());
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// §5 row 5: objects already held locally satisfy "present" -- the ordinary incremental case, not an
+/// edge case (handoff §2/§5's own warning: this is the row most likely to be got wrong). Built by
+/// hand-truncating a genuine bundle down to only its RefState and tip Block, after pre-seeding the
+/// receiver with the Root block, Patch, and Blob directly -- simulating a receiver that already
+/// holds part of this history from an earlier sync.
+#[test]
+fn row5_objects_already_held_locally_satisfy_present() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc78-closure-row5-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    let child_block_id = seal_two_block_history(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+
+    let target_root = unique_temp_dir("dc78-closure-row5-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let mut target_objects = FileObjectStore::new(target.clone());
+    let mut carried_objects: Vec<ObjectEnvelope> = Vec::new();
+    for envelope in objects {
+        let already_local = match envelope.object_type {
+            ObjectType::Block => envelope.object_id() != child_block_id,
+            ObjectType::Patch | ObjectType::Blob => true,
+            _ => false,
+        };
+        if already_local {
+            target_objects.write_object(&envelope)?;
+        } else {
+            carried_objects.push(envelope);
+        }
+    }
+    assert_eq!(
+        carried_objects.len(),
+        2,
+        "fixture sanity: only the RefState and tip Block should remain in the partial bundle"
+    );
+    let partial_bytes = encode_bundle(&ref_name, &carried_objects, &author_keys)?;
+
+    let report = import_bundle(&target, &partial_bytes, &BundleImportOptions::default_limits())?;
+    assert_eq!(report.object_count, 2);
+    assert_eq!(
+        report.written_object_count, 2,
+        "the pre-seeded objects must not be double-counted as newly written"
+    );
+    assert!(read_received_pointer(&target, "remotes/heads/main")?.is_some());
+    assert!(
+        target_objects
+            .read_typed(child_block_id, ObjectType::Block)?
+            .is_some()
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// §5 row 6: a refused import writes no received pointer and records no key material. Compared
+/// byte-for-byte against both the received-ref index (all three on-disk files) and the author-key
+/// container, each pre-seeded with a genuine, unrelated entry first -- an empty-to-empty comparison
+/// would only prove nothing was ever written to an empty container, not that a refusal leaves
+/// existing state untouched (the Stage 3 review's own row 1 model, mirrored here for
+/// `import_bundle`'s second receiving path). The pre-seed is a genuine successful import for the
+/// *same* ref name, so this also proves a hostile re-import cannot clobber a good existing pointer.
+#[test]
+fn row6_a_refused_import_writes_no_pointer_and_records_no_key_material() -> prikk_error::Result<()>
+{
+    let good_source_root = unique_temp_dir("dc78-closure-row6-good-source");
+    let good_source = RepositoryLayout::init(good_source_root.clone())?;
+    seal_two_block_history(&good_source)?;
+    let (_, good_bytes) = export_bundle(&good_source, "heads/main")?;
+
+    let target_root = unique_temp_dir("dc78-closure-row6-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let good_report = import_bundle(&target, &good_bytes, &BundleImportOptions::default_limits())?;
+
+    let unrelated_signer = transport_test_signer(0xc6)?;
+    let unrelated_lock = ActiveLock::acquire(&target)?;
+    record_author_key_material(
+        &target,
+        unrelated_signer.key_id(),
+        unrelated_signer.public_key_bytes(),
+        &unrelated_lock,
+    )?;
+    drop(unrelated_lock);
+
+    let received_before = received_index_bytes(&target)?;
+    let author_keys_before = author_key_container_bytes(&target)?;
+    assert!(
+        !received_before.0.is_empty() || !received_before.1.is_empty(),
+        "fixture sanity"
+    );
+    assert!(!author_keys_before.is_empty(), "fixture sanity");
+
+    // A different, hostile bundle for the SAME ref name -- row 3's shape (missing a block's own
+    // named patch) -- carrying its own transportable author-key material, so "records no key
+    // material" is a real assertion, not a vacuous one. Row 2's shape (a missing blob) will not do
+    // here: `seal_two_block_history_with_author` and the good pre-seed above both build their Blob
+    // from the same fixed fixture bytes, so it is content-addressed to the same id and the target
+    // already holds it from the good import -- "already present locally" would correctly let it
+    // through, proving the wrong thing for this test. The Patch and child Block differ between the
+    // two fixtures (distinct paths/node ids), so removing the Patch is genuinely absent everywhere.
+    let attack_signer = transport_test_signer(0xc7)?;
+    let attack_source_root = unique_temp_dir("dc78-closure-row6-attack-source");
+    let attack_source = RepositoryLayout::init(attack_source_root.clone())?;
+    seal_two_block_history_with_author(&attack_source, &attack_signer, true)?;
+    let (_, attack_bytes) = export_bundle(&attack_source, "heads/main")?;
+    let (ref_name, objects, author_keys) =
+        decode_bundle(&attack_bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    assert_eq!(
+        author_keys.len(),
+        1,
+        "fixture sanity: the attack bundle must carry material"
+    );
+    let broken_objects: Vec<ObjectEnvelope> = objects
+        .into_iter()
+        .filter(|envelope| envelope.object_type != ObjectType::Patch)
+        .collect();
+    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys)?;
+
+    let result = import_bundle(&target, &broken_bytes, &BundleImportOptions::default_limits());
+    assert!(result.is_err(), "the hostile re-import must be refused");
+
+    let received_after = received_index_bytes(&target)?;
+    let author_keys_after = author_key_container_bytes(&target)?;
+    assert_eq!(
+        received_before, received_after,
+        "byte-for-byte: the received-ref index must be untouched by a refused import"
+    );
+    assert_eq!(
+        author_keys_before, author_keys_after,
+        "byte-for-byte: the author-key container must be untouched by a refused import"
+    );
+
+    let pointer = read_received_pointer(&target, "remotes/heads/main")?;
+    assert_eq!(
+        pointer.map(|pointer| pointer.ref_state_id),
+        Some(good_report.ref_state_id),
+        "the genuine earlier import's pointer must survive a refused re-import unchanged"
+    );
+    assert!(
+        lookup_author_key_entries(&target, attack_signer.key_id())?.is_empty(),
+        "the attack bundle's own key material must not be recorded"
+    );
+
+    let _ = std::fs::remove_dir_all(good_source_root);
+    let _ = std::fs::remove_dir_all(attack_source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// §5 row 7 (regression guard): a well-formed bundle still imports, `PBNDL002` and `PBNDL001` alike.
+#[test]
+fn row7_a_well_formed_bundle_still_imports_both_formats() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc78-closure-row7-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    seal_two_block_history(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, _author_keys) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let v1_bytes = encode_bundle_v1_for_test(&ref_name, &objects)?;
+
+    let v2_target_root = unique_temp_dir("dc78-closure-row7-v2-target");
+    let v2_target = RepositoryLayout::init(v2_target_root.clone())?;
+    import_bundle(&v2_target, &bytes, &BundleImportOptions::default_limits())?;
+    assert!(read_received_pointer(&v2_target, "remotes/heads/main")?.is_some());
+
+    let v1_target_root = unique_temp_dir("dc78-closure-row7-v1-target");
+    let v1_target = RepositoryLayout::init(v1_target_root.clone())?;
+    import_bundle(&v1_target, &v1_bytes, &BundleImportOptions::default_limits())?;
+    assert!(read_received_pointer(&v1_target, "remotes/heads/main")?.is_some());
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(v2_target_root);
+    let _ = std::fs::remove_dir_all(v1_target_root);
     Ok(())
 }
 
