@@ -137,3 +137,70 @@ is computable from the block the old tag named, so the information is not lost, 
 
 **Report before implementing each**, and RFC 115 §5.1's discipline — threat model, adversarial fixtures,
 a two-repository harness, a negative control per refusal — applies to each stage.
+
+## 9. T7 — the tag carries its patch count, so resolution can prune before hashing
+
+**Added 2026-08-22, on the owner's ruling ("Take it now"), after stage 2 measured what T2 actually
+costs.** Finding recorded in `.git-exclude/reviewed/RFC-117-stage-2-digest-resolution-review-v1.md` §3.
+
+### 9.1 The measurement, not the estimate
+
+`resolve_patch_set_digest` is **O(N²)**, reproduced independently by the architect: **64.6 ms at 500
+blocks, 902 ms at 2000** — 14× for 4× the blocks. Extrapolated, ~22 s at 10,000 blocks and **~37
+minutes at 100,000**, to resolve a single tag.
+
+**The traversal is not the problem and was fixed correctly in stage 2.** The cost is irreducible under
+the shape T1 left: **every candidate's closure must be hashed in full**, because a `PatchSetDigest`
+carries no information about the closure it summarizes, so nothing can be skipped.
+
+### 9.2 The ruling
+
+**`TagPayload` gains field 7, `patch_count: u64`** — the number of distinct patch ids in the closure
+the digest covers.
+
+Resolution then **filters candidates by closure size before hashing any of them**. The size is free:
+stage 2's pass already builds each closure set, and `.len()` costs nothing. **In a linear history the
+closure sizes are 1, 2, 3, … N — all distinct — so exactly one candidate is ever hashed.** O(N²)
+collapses to O(N log N). A branchy history prunes less completely and still enormously.
+
+### 9.3 This is not new information — it is information the digest hashes away
+
+`patch_set_digest_preimage` is `DOMAIN ‖ count (u64 BE) ‖ sorted ids`. **The count is already part of
+what is hashed.** Field 7 does not introduce a new fact about the patch set; it exposes a fact the
+digest already commits to, so it can be compared in one integer comparison instead of a full hash.
+
+That also settles the obvious worry: **a tag whose count disagrees with its digest is self-inconsistent
+and will simply fail to resolve** — the count narrows, the digest decides.
+
+### 9.4 The count is a hint that prunes, never an authority
+
+**A wrong `patch_count` can never produce a wrong resolution.** It can only cause the right candidate to
+be skipped (→ `NotHeld`) or extra candidates to be hashed (→ slower). **The digest still has to match.**
+
+This is D6 §11.6's framing again, one object over: the cheap field is *tried*, the expensive one
+*decides*. State it in the module doc, because "we filter on an attacker-supplied integer" reads as a
+weakness until the reader sees that the integer cannot admit anything.
+
+### 9.5 The cost, stated plainly
+
+**`rfc114_vector_11` moves a second time**, and `TagPayload` is touched twice in three increments. Both
+are affordable only because of the standing owner ruling that prikk has no production users and breaking
+changes are accepted. **`empty_tag|5|1` must still not move.**
+
+**Why now rather than later:** stage 3 is the last increment before tags are written in earnest. This is
+the same sequencing that put N3 ahead of RFC 116's sender side — a field added before the first real
+producer is cheap; after it, it is a second contract forever.
+
+### 9.6 The pattern, named because it is now three for three
+
+D6 (block order), N3 (block parents), T7 (patch count): **each object was specified against the
+narrowest use that was in front of us, and each widening of use has cost exactly one more field.** Every
+one was found by designing the *next* stage, never by reviewing the last. **When specifying an object,
+ask what the stage after next will need of it** — that question has been worth a field three times.
+
+### 9.7 Staging, amended
+
+Insert before the old stage 3:
+
+- **2a. `TagPayload` field 7 + resolution prunes by size + `rfc114_vector_11` regenerated again.**
+- **3. The artifact section and the receive path** (T3, T4), unchanged, now last.
