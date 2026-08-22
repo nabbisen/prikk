@@ -297,11 +297,13 @@ fn end_to_end_sync_via_the_cli_lands_the_delta_and_is_verified_by_reading_it_bac
 
 /// RFC 116 stage 5 handoff §4 row 7 / §6 item 3, the case the whole sync arc had never exercised:
 /// every prior end-to-end sync test was single-block. A sends **two** sealed blocks where the
-/// second depends on the first; the artifact therefore carries two claims, accepted and sealed as
-/// a batch via `sync seal <ref> --claims <file>` -- the order comes from
-/// `order_claims_for_sealing`, not from the artifact's own claim order (which the handoff itself
-/// confirmed is `ancestors_inclusive`'s `BTreeMap` order, sorted by block id, not lineage). The
-/// receiver's ref tip must reach both patches afterward.
+/// second genuinely depends on the first -- the same path, edited a second time, so applying the
+/// edit before the create would fail outright, not merely land in an unintended order -- and the
+/// artifact therefore carries two claims, accepted and sealed as a batch via
+/// `sync seal <ref> --claims <file>`. The order comes from `order_claims_for_sealing`, not from
+/// the artifact's own claim order (which the handoff itself confirmed is
+/// `ancestors_inclusive`'s `BTreeMap` order, sorted by block id, not lineage). The receiver's ref
+/// tip must reach both patches afterward.
 #[test]
 fn row7_multi_block_sync_completes_through_the_cli_alone() {
     let repo_a = support::unique_repo("rfc116-order-row7-a");
@@ -309,15 +311,15 @@ fn row7_multi_block_sync_completes_through_the_cli_alone() {
     support::generation(
         &repo_a,
         "heads/main",
-        "first.txt",
+        "shared.txt",
         b"first block\n",
         "first",
     );
     support::generation(
         &repo_a,
         "heads/main",
-        "second.txt",
-        b"second block\n",
+        "shared.txt",
+        b"second block, edited\n",
         "second",
     );
 
