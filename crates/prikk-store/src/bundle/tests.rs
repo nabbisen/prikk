@@ -21,8 +21,8 @@ use crate::layout::{ContainerSlot, LockableContainer};
 use crate::lock::{ActiveLock, acquire_container_locks};
 use crate::received::read_received_pointer;
 use crate::test_support::{
-    signed_block, signed_patch_blob_envelope, signed_patch_envelope, signed_ref_state_envelope,
-    signed_ref_update_envelope, unique_temp_dir,
+    rollback_patch_blob_envelope, signed_block, signed_patch_blob_envelope, signed_patch_envelope,
+    signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
 };
 use crate::{
     Ed25519AuthorSigner, Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectReader,
@@ -60,6 +60,48 @@ fn seal_two_block_history(
         ref_update,
     })?;
     Ok(child_block_id)
+}
+
+/// `seal_two_block_history`'s own shape, plus a `snapshot_blob_ref` on the Root block -- a distinct
+/// blob (`rollback_patch_blob_envelope`'s fixed "rollback fixture\n" content, not the Patch's own
+/// "patch fixture\n" one) so the two blobs never collide by content-address. Returns the tip Block id
+/// and the snapshot Blob's own id (review condition two,
+/// `DC-78-import-closure-validation-review-v1.md` §3: a Block's own `snapshot_blob_ref` is a blob
+/// reference too, and needed its own fixture -- `seal_two_block_history`'s blocks never set it).
+fn seal_two_block_history_with_snapshot_blob(
+    layout: &RepositoryLayout,
+) -> prikk_error::Result<(ObjectId, ObjectId)> {
+    let mut object_store = FileObjectStore::new(layout.clone());
+    object_store.write_object(&signed_patch_blob_envelope())?;
+    let patch = signed_patch_envelope();
+    let patch_id = object_store.write_object(&patch)?;
+
+    let snapshot_blob = rollback_patch_blob_envelope();
+    let snapshot_blob_id = object_store.write_object(&snapshot_blob)?;
+
+    let root_block = signed_block(
+        BlockKind::Root,
+        Vec::new(),
+        Vec::new(),
+        Some(snapshot_blob_id),
+    );
+    let root_block_id = object_store.write_object(&root_block)?;
+
+    let child_block = signed_block(BlockKind::Normal, vec![root_block_id], vec![patch_id], None);
+    let child_block_id = object_store.write_object(&child_block)?;
+
+    let ref_store = RefStore::new(layout.clone());
+    let ref_state = signed_ref_state_envelope("heads/main", None, child_block_id, 1);
+    let ref_state_id = ref_state.object_id();
+    let ref_update =
+        signed_ref_update_envelope("heads/main", None, ref_state_id, child_block_id, 1);
+    ref_store.publish(&RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_state,
+        ref_update,
+    })?;
+    Ok((child_block_id, snapshot_blob_id))
 }
 
 /// DC-53 Stage 2: a fixed-seed AUTHOR signer, distinct across callers via `discriminant` so tests
@@ -1003,6 +1045,69 @@ fn row2_a_bundle_missing_a_referenced_blob_is_refused() -> prikk_error::Result<(
     Ok(())
 }
 
+/// Review condition two (`DC-78-import-closure-validation-review-v1.md` §3): a Block's own
+/// `snapshot_blob_ref` is a blob reference too, on the same terms as a Patch's own operations
+/// (row 2's own property, restated for the other blob-naming site). A well-formed bundle carrying
+/// the snapshot blob still imports and the blob lands; a bundle missing it is refused.
+#[test]
+fn row2b_a_bundle_missing_a_blocks_snapshot_blob_is_refused() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc78-closure-row2b-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    let (_, snapshot_blob_id) = seal_two_block_history_with_snapshot_blob(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    assert!(
+        objects
+            .iter()
+            .any(|envelope| envelope.object_id() == snapshot_blob_id),
+        "fixture sanity: the exported bundle must carry the block's own snapshot blob"
+    );
+
+    // Positive half: the well-formed bundle, snapshot blob included, still imports and the blob
+    // actually lands.
+    let good_target_root = unique_temp_dir("dc78-closure-row2b-good-target");
+    let good_target = RepositoryLayout::init(good_target_root.clone())?;
+    import_bundle(&good_target, &bytes, &BundleImportOptions::default_limits())?;
+    let good_target_objects = FileObjectStore::new(good_target.clone());
+    assert!(
+        good_target_objects
+            .read_typed(snapshot_blob_id, ObjectType::Blob)?
+            .is_some(),
+        "the snapshot blob must actually land in the receiving repository's store"
+    );
+
+    // Negative half: the same bundle, minus only the snapshot blob, is refused.
+    let broken_objects: Vec<ObjectEnvelope> = objects
+        .into_iter()
+        .filter(|envelope| envelope.object_id() != snapshot_blob_id)
+        .collect();
+    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys)?;
+
+    let target_root = unique_temp_dir("dc78-closure-row2b-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let result = import_bundle(
+        &target,
+        &broken_bytes,
+        &BundleImportOptions::default_limits(),
+    );
+    let err = match result {
+        Ok(report) => {
+            panic!("a bundle missing a block's own snapshot blob must be refused: {report:?}")
+        }
+        Err(err) => err,
+    };
+    assert!(
+        err.to_string().contains("names snapshot blob"),
+        "unexpected error: {err}"
+    );
+    assert!(read_received_pointer(&target, "remotes/heads/main")?.is_none());
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(good_target_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
 /// §5 row 3: a bundle missing a block's own named patch is refused.
 #[test]
 fn row3_a_bundle_missing_a_blocks_patch_is_refused() -> prikk_error::Result<()> {
@@ -1093,18 +1198,32 @@ fn row4_a_bundle_missing_a_blocks_parent_is_refused() -> prikk_error::Result<()>
 }
 
 /// §5 row 5: objects already held locally satisfy "present" -- the ordinary incremental case, not an
-/// edge case (handoff §2/§5's own warning: this is the row most likely to be got wrong). Built by
-/// hand-truncating a genuine bundle down to only its RefState and tip Block, after pre-seeding the
-/// receiver with the Root block, Patch, and Blob directly -- simulating a receiver that already
-/// holds part of this history from an earlier sync.
+/// edge case (handoff §2/§5's own warning: this is the row most likely to be got wrong). Two
+/// independent partial-bundle scenarios, one per surviving call site (review condition one,
+/// `DC-78-import-closure-validation-review-v1.md` §2: the first version of this test only pinned the
+/// patch and parent sites, not the blob site -- the blob happened to always ride along inside the
+/// bundle whenever the Patch that references it did, so the blob check's own local-fallback half was
+/// never actually exercised).
+///
+/// Scenario A hand-truncates a genuine bundle down to only its RefState and tip Block, after
+/// pre-seeding the receiver with the Root block, Patch, and Blob directly -- pins the block's own
+/// patch-presence and parent-presence checks (item 3, item 4).
+///
+/// Scenario B carries everything *except* the Blob -- RefState, both Blocks, and the Patch that
+/// references it -- after pre-seeding only the Blob directly. This is what actually exercises the
+/// blob-presence check's local-fallback half (item 2): that check only ever scans blobs referenced by
+/// a Patch's operations, and it only scans a Patch that is itself decoded from the bundle's own
+/// bytes -- so the blob site can only be pinned by a fixture where the Patch travels with the bundle
+/// but its own Blob does not.
 #[test]
 fn row5_objects_already_held_locally_satisfy_present() -> prikk_error::Result<()> {
     let source_root = unique_temp_dir("dc78-closure-row5-source");
     let source = RepositoryLayout::init(source_root.clone())?;
     let child_block_id = seal_two_block_history(&source)?;
     let (_, bytes) = export_bundle(&source, "heads/main")?;
-    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
 
+    // Scenario A: item 3 (block's own patch) and item 4 (block's own parent).
+    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     let target_root = unique_temp_dir("dc78-closure-row5-target");
     let target = RepositoryLayout::init(target_root.clone())?;
     let mut target_objects = FileObjectStore::new(target.clone());
@@ -1145,8 +1264,49 @@ fn row5_objects_already_held_locally_satisfy_present() -> prikk_error::Result<()
             .is_some()
     );
 
+    // Scenario B: item 2 (blob referenced by a carried patch's own operations).
+    let (ref_name_b, objects_b, author_keys_b) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let target_b_root = unique_temp_dir("dc78-closure-row5-target-b");
+    let target_b = RepositoryLayout::init(target_b_root.clone())?;
+    let mut target_b_objects = FileObjectStore::new(target_b.clone());
+    let mut carried_objects_b: Vec<ObjectEnvelope> = Vec::new();
+    for envelope in objects_b {
+        if envelope.object_type == ObjectType::Blob {
+            target_b_objects.write_object(&envelope)?;
+        } else {
+            carried_objects_b.push(envelope);
+        }
+    }
+    assert_eq!(
+        carried_objects_b.len(),
+        4,
+        "fixture sanity: everything except the Blob should remain in this partial bundle"
+    );
+    assert!(
+        carried_objects_b
+            .iter()
+            .any(|envelope| envelope.object_type == ObjectType::Patch),
+        "fixture sanity: the Patch that references the omitted Blob must itself be carried, or \
+         the blob check's own loop never runs"
+    );
+    let partial_bytes_b = encode_bundle(&ref_name_b, &carried_objects_b, &author_keys_b)?;
+
+    let report_b = import_bundle(
+        &target_b,
+        &partial_bytes_b,
+        &BundleImportOptions::default_limits(),
+    )?;
+    assert_eq!(report_b.object_count, 4);
+    assert_eq!(
+        report_b.written_object_count, 4,
+        "the pre-seeded Blob must not be double-counted as newly written"
+    );
+    assert!(read_received_pointer(&target_b, "remotes/heads/main")?.is_some());
+
     let _ = std::fs::remove_dir_all(source_root);
     let _ = std::fs::remove_dir_all(target_root);
+    let _ = std::fs::remove_dir_all(target_b_root);
     Ok(())
 }
 

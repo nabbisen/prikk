@@ -56,9 +56,10 @@
 //! project already has -- read what the past wrote, write only the present.
 //!
 //! **`import_bundle` validates closure completeness before any write** (DC-78
-//! `import-closure-validation-handoff-v1.md`): the exported ref's target must resolve, and every blob,
-//! patch, and block parent a carried object names must be present -- carried by this bundle, or
-//! already in this repository. `accept_exchange_artifact` (`patch_exchange/accept.rs`) already refused
+//! `import-closure-validation-handoff-v1.md`): the exported ref's target must resolve, and every blob
+//! (whether a Patch's own operations or a Block's own `snapshot_blob_ref` names it), patch, and block
+//! parent a carried object names must be present -- carried by this bundle, or already in this
+//! repository. `accept_exchange_artifact` (`patch_exchange/accept.rs`) already refused
 //! the same class of defect at receipt; `import_bundle` did not, so a bundle whose target object it
 //! never shipped used to import successfully and land a dangling received pointer, visible only at the
 //! next `verify`, long after the import that caused it. **This is an intentional behaviour change: a
@@ -499,6 +500,22 @@ pub fn import_bundle(
                     "block {block_id} names parent {parent_block_id}, which is neither carried \
                      by this bundle nor already present in this repository -- refusing the whole \
                      import, no partial write"
+                )));
+            }
+        }
+        // Review condition (`DC-78-import-closure-validation-review-v1.md` §3): a Block's own
+        // `snapshot_blob_ref` is a blob reference too, same rule as a Patch's operation-level ones --
+        // `export_bundle` already puts it in the same `blob_ids` set as those, so every legitimate
+        // export already satisfies this; the check exists for the untrusted, hand-crafted case, which
+        // is exactly the case this whole increment is for.
+        if let Some(snapshot_blob_id) = block_payload.snapshot_blob_ref {
+            if !bundle_objects_by_id.contains_key(&snapshot_blob_id)
+                && !read_snapshot.contains_object(ObjectType::Blob, snapshot_blob_id)
+            {
+                return Err(PrikkError::Integrity(format!(
+                    "block {block_id} names snapshot blob {snapshot_blob_id}, which is neither \
+                     carried by this bundle nor already present in this repository -- refusing \
+                     the whole import, no partial write"
                 )));
             }
         }
