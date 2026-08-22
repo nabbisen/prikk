@@ -17,7 +17,7 @@ use prikk_object::{
 };
 use prikk_store::{
     Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectReader, RefPublication,
-    RefStore, RepositoryLayout, maintainer_signature,
+    RefStore, RepositoryLayout, compute_patch_set_digest_from_block, maintainer_signature,
 };
 
 fn prikk(repo: &Path) -> Command {
@@ -294,6 +294,74 @@ fn tag_create_resolves_two_hops_ref_to_tag_object_to_block() {
 
     let out = prikk(&repo).arg("verify").output().unwrap();
     ok(&out, "verify after tag create (two-hop shape)");
+
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+/// RFC 117 stage 1 review condition (`RFC-117-stage-1-tag-payload-digest-review-v1.md` §2): rows 2
+/// and 3 in `patch_set_digest/tests.rs` pinned a **test helper** that re-implements what `prikk tag`
+/// does, never the production command itself -- so a wrong digest in `tag.rs`'s own wiring (from the
+/// block id, from a constant, from anything else 32 bytes long) would ship undetected. This runs the
+/// real `prikk tag create` and checks its own output against an independent recomputation.
+#[test]
+fn tag_create_computes_the_real_patch_set_digest_not_a_parallel_implementation() {
+    let repo = seeded_repo("real-patch-set-digest");
+    let layout = RepositoryLayout::open(&repo).unwrap();
+    let object_store = FileObjectStore::new(layout.clone());
+    let ref_store = RefStore::new(layout.clone());
+
+    let main_ref_state_id = ref_store
+        .read_current_ref_state_id("heads/main")
+        .unwrap()
+        .unwrap();
+    let main_envelope = object_store
+        .read_typed(main_ref_state_id, ObjectType::RefState)
+        .unwrap()
+        .unwrap();
+    let main_payload = RefStatePayload::decode_canonical(
+        &main_envelope.canonical_payload,
+        main_envelope.schema_version,
+    )
+    .unwrap();
+    let block_id = main_payload.target_object_id;
+
+    ok(
+        &tag_create(&repo, &["tags/v1", "--target", "heads/main"]),
+        "tag create tags/v1 --target heads/main",
+    );
+
+    let tag_ref_state_id = ref_store
+        .read_current_ref_state_id("tags/v1")
+        .unwrap()
+        .unwrap();
+    let tag_ref_state_envelope = object_store
+        .read_typed(tag_ref_state_id, ObjectType::RefState)
+        .unwrap()
+        .unwrap();
+    let tag_ref_state_payload = RefStatePayload::decode_canonical(
+        &tag_ref_state_envelope.canonical_payload,
+        tag_ref_state_envelope.schema_version,
+    )
+    .unwrap();
+    let tag_object_envelope = object_store
+        .read_typed(tag_ref_state_payload.target_object_id, ObjectType::Tag)
+        .unwrap()
+        .unwrap();
+    let tag_payload = TagPayload::decode_canonical(&tag_object_envelope.canonical_payload).unwrap();
+    assert_eq!(tag_payload.target_block_id, block_id);
+
+    // The independent recomputation: same function `tag.rs` itself calls, but invoked here by the
+    // test over the block `prikk tag create` actually named -- not copied logic, the same production
+    // function, called a second time from outside the command under test.
+    let independently_recomputed = compute_patch_set_digest_from_block(&object_store, block_id)
+        .expect("computing the digest over a real sealed block must succeed");
+    assert_eq!(
+        tag_payload.patch_set_digest, independently_recomputed,
+        "prikk tag create's own persisted patch_set_digest must equal an independent \
+         recomputation over the block it named -- a wrong value here means the command users \
+         actually run computes the tag's global identity differently from what the digest \
+         algorithm itself would produce"
+    );
 
     let _ = std::fs::remove_dir_all(&repo);
 }
