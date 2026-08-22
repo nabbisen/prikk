@@ -16,7 +16,7 @@ mod tests;
 pub use attestation::{AttestationPayload, AttestationStatus, PluginResultEntry};
 pub use blob::{BlobKind, BlobPayload};
 pub use block::{BlockKind, BlockPayload};
-pub use common::{Intent, MerkleRoot, OperationCondition, OperationConditionEntry};
+pub use common::{Intent, MerkleRoot, OperationCondition, OperationConditionEntry, PatchSetDigest};
 pub use node::{NODE_ID_BYTES, NodeId, NodeKind};
 pub use patch::{
     ChangePerm, CreateFile, CreateSymlink, DeleteNode, DeleteNodePreimage, EditText, Operation,

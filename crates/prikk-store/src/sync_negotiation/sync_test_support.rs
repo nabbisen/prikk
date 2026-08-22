@@ -93,6 +93,7 @@ pub(super) fn publish_tag(
         message: None,
         created_at: 0,
         author_key_id: "maintainer-key".to_string(),
+        patch_set_digest: crate::compute_patch_set_digest_from_block(&store, target_block_id)?,
     };
     let mut tag_envelope =
         ObjectEnvelope::unsigned(ObjectType::Tag, 1, tag_payload.to_canonical_bytes()?);

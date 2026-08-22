@@ -1,8 +1,21 @@
 //! Tag payload type.
+//!
+//! **RFC 117 T1 (2026-08-22, owner ruling -- "No project has been created in production in the
+//! world yet. Breaking change is accepted."): `patch_set_digest` is amended in at `schema_version`
+//! 1, in place, required.** A tag is therefore a local pointer plus a global identity:
+//! `target_block_id` names a block this repository can resolve locally; `patch_set_digest` is the
+//! digest of that block's own patch closure (`compute_patch_set_digest_from_block`,
+//! `prikk-store/src/patch_set_digest.rs`) and is what travels between repositories -- **two
+//! repositories holding the same patches produce the same `patch_set_digest`, by construction**,
+//! which is the property a tag's portability depends on. There is no schema 2: every Tag object
+//! written before this change stops decoding (`rfc114_vector_11` moved to record this deliberately;
+//! `empty_tag` did not, since it is generated from a literal empty payload independent of this
+//! struct).
 
 use prikk_error::{PrikkError, Result};
 
 use crate::canonical::WireType;
+use crate::payload::common::PatchSetDigest;
 use crate::{CanonicalEncode, CanonicalWriter, ObjectId};
 
 /// Immutable tag payload.
@@ -10,7 +23,7 @@ use crate::{CanonicalEncode, CanonicalWriter, ObjectId};
 pub struct TagPayload {
     /// Tag name.
     pub name: String,
-    /// Target block ID.
+    /// Target block ID -- the local pointer half of the tag's identity.
     pub target_block_id: ObjectId,
     /// Tag message (optional per FDD-03 §9.8).
     pub message: Option<String>,
@@ -21,6 +34,10 @@ pub struct TagPayload {
     pub created_at: u64,
     /// Author key ID.
     pub author_key_id: String,
+    /// The digest of `target_block_id`'s own patch closure (RFC 117 T1) -- the global-identity half
+    /// of the tag, portable across repositories that hold the same patches. Required: a tag without
+    /// one would be the old tag with extra steps.
+    pub patch_set_digest: PatchSetDigest,
 }
 
 impl CanonicalEncode for TagPayload {
@@ -32,6 +49,7 @@ impl CanonicalEncode for TagPayload {
         }
         writer.field_u64(4, self.created_at)?;
         writer.field_string(5, &self.author_key_id)?;
+        writer.field_bytes(6, &self.patch_set_digest.0)?;
         Ok(())
     }
 }
@@ -45,6 +63,7 @@ impl TagPayload {
         let mut message = None;
         let mut created_at = None;
         let mut author_key_id = None;
+        let mut patch_set_digest = None;
         while let Some(field) = cursor.next_field()? {
             match field.tag {
                 1 => name = Some(field.read_string()?),
@@ -52,6 +71,7 @@ impl TagPayload {
                 3 => message = Some(field.read_string()?),
                 4 => created_at = Some(field.read_u64()?),
                 5 => author_key_id = Some(field.read_string()?),
+                6 => patch_set_digest = Some(PatchSetDigest(field.read_array::<32>()?)),
                 other => {
                     return Err(PrikkError::MalformedData(format!(
                         "unknown Tag field tag: {other}"
@@ -69,6 +89,9 @@ impl TagPayload {
                 .ok_or_else(|| PrikkError::MalformedData("Tag missing created_at".to_string()))?,
             author_key_id: author_key_id.ok_or_else(|| {
                 PrikkError::MalformedData("Tag missing author_key_id".to_string())
+            })?,
+            patch_set_digest: patch_set_digest.ok_or_else(|| {
+                PrikkError::MalformedData("Tag missing patch_set_digest".to_string())
             })?,
         })
     }
