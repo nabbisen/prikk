@@ -1,8 +1,20 @@
 # RFC 117 — Tags across repositories: what a tag names when blocks diverge
 
-**Status.** **PROPOSED, 2026-08-22.** An investigation with a recommendation; **not a design, and
-implementation must not start from it.** Written on the owner's direction after criterion 1 closed
-(`199a1e4`), which recorded "branches only — tag sync is its own unanswered question" as a stated limit.
+**Status.** **ACCEPTED by the project owner 2026-08-22.** An investigation with a recommendation;
+**not a design, and implementation must not start from this record.** Written on the owner's direction
+after criterion 1 closed (`199a1e4`), which recorded "branches only — tag sync is its own unanswered
+question" as a stated limit.
+
+**Acceptance is read as adopting both of §7's answers**, and the reading is stated here so it can be
+corrected before anything irreversible is built:
+
+1. **§6's recommendation (a) is the direction** — `TagPayload` schema 2 carrying `patch_set_digest`,
+   **accepting a permanent second schema contract**, rather than (c)'s unsigned manifest.
+2. **This outranks remote-tracking** — a broken meaning is worse than an expensive operation.
+
+**The cost being accepted, stated plainly because it cannot be undone:** `TagPayload`'s window is closed
+(§4). Schema 2 must stay decodable forever alongside schema 1, with its own Gate A vector. This is
+**not** the free amendment D6 and N3 twice exploited.
 
 **Independence:** author-reviewed, the standing ceiling. Every claim cites the code or record it came from.
 
