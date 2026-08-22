@@ -28,6 +28,13 @@
 //! misleading diagnostic of exactly the class RFC 115 Stage 4's divergence-vs-corruption ruling
 //! exists to prevent. A wrong explanation is worse than a vague one: it sends the reader somewhere
 //! false.
+//!
+//! **[`order_claims_for_sealing`] (RFC 116 stage 5) is `parent_block_ids`'s actual purpose.** N3
+//! added the field so a batch of claims spanning more than one block could be sealed in the right
+//! order, derived from **signed** data rather than an artifact's own unsigned sequence or an
+//! incidental id order. This is the first code that sorts by it.
+
+use std::collections::{BTreeMap, VecDeque};
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
@@ -208,6 +215,119 @@ pub(crate) fn maintainer_trust_policy_or_empty(
         Some(_) => load_maintainer_trust_policy(layout),
         None => Ok(MaintainerTrustPolicy { keys: Vec::new() }),
     }
+}
+
+/// Order a batch of recognition claims for sealing (RFC 116 stage 5, N3's field finally used):
+/// **a claim's block is sealed after every claim in the same batch whose block is one of its
+/// parents.** Kahn's algorithm over a graph built from each claim's own `block_id`/
+/// `parent_block_ids` -- the same shape `merge_evidence.rs`'s own `topological_order` already
+/// uses for a different node type, restated here because that function is `pub(crate)` to a
+/// different graph (Block ids already held locally) and this one's nodes are claim ids decoded
+/// from a batch that may include blocks this repository does not hold at all.
+///
+/// **Only intra-batch edges matter (§1.1).** A claim's `parent_block_ids` may name a block that is
+/// not any claim in this batch's own `block_id` -- an already-sealed ancestor, or simply absent.
+/// Such a parent is ignored for ordering, never refused on: refusing would break the ordinary
+/// incremental case, where the true parent was sealed by a previous sync and is not part of this
+/// batch at all.
+///
+/// **Deterministic (§1.1): ties are broken by the claim id itself**, the same node identity this
+/// function returns an order over -- independent chains within one batch can interleave in more
+/// than one valid order, and without a fixed tie-break two runs over the identical batch could
+/// disagree, which would be untestable and would make two receivers diverge for no reason.
+///
+/// **A cycle is a refusal, and a security property, not a tidiness one (§1.1).** Blocks are
+/// content-addressed and genuinely form a DAG, so an honest batch cannot contain one -- but a claim
+/// is an assertion, not a fact, and a hostile sender can assert a cycle a receiver holding neither
+/// block has no way to disprove on its own. The sort terminates (it is bounded by the batch size)
+/// and refuses, naming every claim still unordered when the queue empties -- never loops, never
+/// silently drops an edge to force progress.
+pub fn order_claims_for_sealing(
+    object_store: &impl ObjectReader,
+    claim_ids: &[ObjectId],
+) -> Result<Vec<ObjectId>> {
+    let mut claims: BTreeMap<ObjectId, RecognitionClaimPayload> = BTreeMap::new();
+    for &claim_id in claim_ids {
+        let envelope = object_store
+            .read_typed(claim_id, ObjectType::RecognitionClaim)?
+            .ok_or_else(|| {
+                PrikkError::Integrity(format!("recognition claim {claim_id} does not exist"))
+            })?;
+        let payload = RecognitionClaimPayload::decode_canonical(&envelope.canonical_payload)?;
+        claims.insert(claim_id, payload);
+    }
+
+    // Each batch block maps to exactly one claim -- two distinct claim objects naming the same
+    // block_id would have to disagree on patch_ids or parent_block_ids to be distinct objects at
+    // all (block_id alone does not determine a claim's identity), which makes at least one of them
+    // a lie about that same block. Refuse rather than guess which one to believe for ordering.
+    let mut block_to_claim: BTreeMap<ObjectId, ObjectId> = BTreeMap::new();
+    for (&claim_id, payload) in &claims {
+        if let Some(&existing) = block_to_claim.get(&payload.block_id) {
+            return Err(PrikkError::Integrity(format!(
+                "claims {existing} and {claim_id} both name block {} -- refusing to order an \
+                 ambiguous batch",
+                payload.block_id
+            )));
+        }
+        block_to_claim.insert(payload.block_id, claim_id);
+    }
+
+    let mut remaining_parents: BTreeMap<ObjectId, usize> = BTreeMap::new();
+    let mut children: BTreeMap<ObjectId, Vec<ObjectId>> = BTreeMap::new();
+    for (&claim_id, payload) in &claims {
+        let count = payload
+            .parent_block_ids
+            .iter()
+            .filter(|parent_block_id| block_to_claim.contains_key(*parent_block_id))
+            .count();
+        remaining_parents.insert(claim_id, count);
+        for parent_block_id in &payload.parent_block_ids {
+            if let Some(&parent_claim_id) = block_to_claim.get(parent_block_id) {
+                children.entry(parent_claim_id).or_default().push(claim_id);
+            }
+        }
+    }
+
+    // `remaining_parents`/`children` were both built by iterating `claims`, a `BTreeMap`, so every
+    // per-parent `children` entry already accumulates in ascending claim-id order -- the initial
+    // `ready` set below is sorted the same way `merge_evidence.rs`'s own precedent is, defensively,
+    // even though a `BTreeMap` iterator already yields it in that order.
+    let mut ready: Vec<ObjectId> = remaining_parents
+        .iter()
+        .filter(|(_, count)| **count == 0)
+        .map(|(id, _)| *id)
+        .collect();
+    ready.sort_unstable();
+    let mut queue: VecDeque<ObjectId> = ready.into();
+    let mut order = Vec::with_capacity(claims.len());
+    while let Some(claim_id) = queue.pop_front() {
+        order.push(claim_id);
+        for &child in children.get(&claim_id).into_iter().flatten() {
+            let entry = remaining_parents.get_mut(&child).ok_or_else(|| {
+                PrikkError::Integrity(
+                    "claim ordering lost a tracked child -- internal inconsistency".to_string(),
+                )
+            })?;
+            *entry -= 1;
+            if *entry == 0 {
+                queue.push_back(child);
+            }
+        }
+    }
+
+    if order.len() != claims.len() {
+        let stuck: Vec<String> = remaining_parents
+            .keys()
+            .filter(|id| !order.contains(id))
+            .map(ObjectId::to_string)
+            .collect();
+        return Err(PrikkError::Integrity(format!(
+            "recognition claims for sealing contain a cycle -- refusing to order: {}",
+            stuck.join(", ")
+        )));
+    }
+    Ok(order)
 }
 
 #[cfg(test)]

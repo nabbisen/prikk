@@ -159,7 +159,9 @@ pub use path::{RepoPath, validate_no_path_collisions, validate_repo_path};
 pub use received::{
     ReceivedPointer, list_received_pointers, read_received_pointer, validate_received_ref,
 };
-pub use recognition_claim::{RecognitionClaimConsistency, check_recognition_claim_consistency};
+pub use recognition_claim::{
+    RecognitionClaimConsistency, check_recognition_claim_consistency, order_claims_for_sealing,
+};
 pub use refs::{
     RefFileOutcome, RefFileStatus, RefItemOutcome, RefItemStatus, RefLogRecord, RefLogReplay,
     RefPointerSummary, RefPublication, RefPublicationIssue, RefRecoveryCandidate, RefStore,

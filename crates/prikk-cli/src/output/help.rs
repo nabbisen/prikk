@@ -102,11 +102,16 @@ pub(crate) fn print_help(version: &str) {
          the gap"
     );
     println!(
-        "  prikk sync accept <file>                  Accept a PEXCH001 artifact (prints claim ids)"
+        "  prikk sync accept <file> [--claims-out <file>]  Accept a PEXCH001 artifact (prints \
+         claim ids; optionally writes them)"
     );
     println!("  prikk sync pending                        List accepted-but-unsealed patches");
     println!(
-        "  prikk sync seal <ref> --claim <id>        Seal an accepted claim's patches into a block"
+        "  prikk sync seal <ref> --claim <id>        Seal one accepted claim's patches into a block"
+    );
+    println!(
+        "  prikk sync seal <ref> --claims <file>     Seal a batch of claims, ordered by parent \
+         block first"
     );
     println!("  prikk --version                           Print version");
 }

@@ -294,3 +294,327 @@ fn end_to_end_sync_via_the_cli_lands_the_delta_and_is_verified_by_reading_it_bac
         let _ = std::fs::remove_file(file);
     }
 }
+
+/// RFC 116 stage 5 handoff §4 row 7 / §6 item 3, the case the whole sync arc had never exercised:
+/// every prior end-to-end sync test was single-block. A sends **two** sealed blocks where the
+/// second depends on the first; the artifact therefore carries two claims, accepted and sealed as
+/// a batch via `sync seal <ref> --claims <file>` -- the order comes from
+/// `order_claims_for_sealing`, not from the artifact's own claim order (which the handoff itself
+/// confirmed is `ancestors_inclusive`'s `BTreeMap` order, sorted by block id, not lineage). The
+/// receiver's ref tip must reach both patches afterward.
+#[test]
+fn row7_multi_block_sync_completes_through_the_cli_alone() {
+    let repo_a = support::unique_repo("rfc116-order-row7-a");
+    support::init(&repo_a);
+    support::generation(
+        &repo_a,
+        "heads/main",
+        "first.txt",
+        b"first block\n",
+        "first",
+    );
+    support::generation(
+        &repo_a,
+        "heads/main",
+        "second.txt",
+        b"second block\n",
+        "second",
+    );
+
+    let repo_b = support::unique_repo("rfc116-order-row7-b");
+    support::init(&repo_b);
+
+    let have_file = sync_file("row7-have");
+    support::ok(
+        &support::prikk(&repo_b)
+            .args([
+                "sync",
+                "have",
+                "heads/main",
+                "--output",
+                have_file.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap(),
+        "sync have",
+    );
+
+    let artifact_file = sync_file("row7-artifact");
+    let build = support::prikk(&repo_a)
+        .env("PRIKK_MAINTAINER_KEY_ID", support::MAINTAINER_KEY_ID)
+        .env(
+            "PRIKK_MAINTAINER_SEED",
+            support::hex(&support::MAINTAINER_SEED),
+        )
+        .args([
+            "sync",
+            "build",
+            "heads/main",
+            "--have",
+            have_file.to_str().unwrap(),
+            "--output",
+            artifact_file.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    support::ok(&build, "sync build");
+    let build_stdout = String::from_utf8_lossy(&build.stdout);
+    assert!(
+        build_stdout.contains("delta patches: 2") && build_stdout.contains("claims: 2"),
+        "the two-block delta must carry exactly two patches and two claims: {build_stdout}"
+    );
+
+    let claims_file = sync_file("row7-claims");
+    let accept = support::prikk(&repo_b)
+        .args([
+            "sync",
+            "accept",
+            artifact_file.to_str().unwrap(),
+            "--claims-out",
+            claims_file.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    support::ok(&accept, "sync accept");
+    assert!(
+        String::from_utf8_lossy(&accept.stdout).contains("claims: 2"),
+        "B must accept exactly two claims"
+    );
+    let claim_ids_written = std::fs::read_to_string(&claims_file).unwrap();
+    assert_eq!(
+        claim_ids_written
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .count(),
+        2,
+        "the claims file must carry exactly two claim ids: {claim_ids_written:?}"
+    );
+
+    support::trust_maintainer(&repo_b);
+    let seal = support::prikk(&repo_b)
+        .env("PRIKK_MAINTAINER_KEY_ID", support::MAINTAINER_KEY_ID)
+        .env(
+            "PRIKK_MAINTAINER_SEED",
+            support::hex(&support::MAINTAINER_SEED),
+        )
+        .args([
+            "sync",
+            "seal",
+            "heads/main",
+            "--claims",
+            claims_file.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    support::ok(&seal, "sync seal --claims");
+    let seal_stdout = String::from_utf8_lossy(&seal.stdout);
+    assert_eq!(
+        seal_stdout.matches("sealed 1 patch(es)").count(),
+        2,
+        "both claims must be sealed, one patch each: {seal_stdout}"
+    );
+
+    // The assertion that matters: read B's own ref tip back and confirm both patches are
+    // reachable from it.
+    let have_after_file = sync_file("row7-have-after");
+    support::ok(
+        &support::prikk(&repo_b)
+            .args([
+                "sync",
+                "have",
+                "heads/main",
+                "--output",
+                have_after_file.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap(),
+        "sync have after seal",
+    );
+    let have_after_bytes = std::fs::read(&have_after_file).unwrap();
+    let have_after_list = decode_have_list(
+        &have_after_bytes,
+        DEFAULT_HAVE_LIST_MAX_TOTAL_BYTES,
+        DEFAULT_HAVE_LIST_MAX_PATCH_COUNT,
+    )
+    .unwrap();
+    assert_eq!(
+        have_after_list.patch_ids.len(),
+        2,
+        "B's own heads/main must reach both of A's patches after the batch seal"
+    );
+
+    let pending_after = support::prikk(&repo_b)
+        .args(["sync", "pending"])
+        .output()
+        .unwrap();
+    support::ok(&pending_after, "sync pending after batch seal");
+    assert!(
+        String::from_utf8_lossy(&pending_after.stdout)
+            .contains("pending (accepted, unsealed) patches: 0"),
+        "no patch should remain pending after the batch seal"
+    );
+
+    let _ = std::fs::remove_dir_all(repo_a);
+    let _ = std::fs::remove_dir_all(repo_b);
+    for file in [have_file, artifact_file, claims_file, have_after_file] {
+        let _ = std::fs::remove_file(file);
+    }
+}
+
+/// RFC 116 stage 5 handoff §4 row 6: a mid-batch failure stops, reports, and leaves the earlier
+/// seal intact -- no rollback. Two independent (sibling, not parent/child) single-patch blocks
+/// both create the same path with different content; whichever claim's order-tie-break puts it
+/// first seals cleanly, and the second hits Stage 4's own divergence refusal when it tries to
+/// create the same path again. `sync seal --claims` must report the failure, exit non-zero, and
+/// leave the first seal in place -- not roll it back.
+#[test]
+fn row6_a_mid_batch_seal_failure_stops_reports_and_leaves_the_earlier_seal_intact() {
+    let repo_a1 = support::unique_repo("rfc116-order-row6-a1");
+    support::init(&repo_a1);
+    support::generation(&repo_a1, "heads/main", "collide.txt", b"from a1\n", "a1");
+
+    let repo_a2 = support::unique_repo("rfc116-order-row6-a2");
+    support::init(&repo_a2);
+    support::generation(&repo_a2, "heads/main", "collide.txt", b"from a2\n", "a2");
+
+    let repo_b = support::unique_repo("rfc116-order-row6-b");
+    support::init(&repo_b);
+
+    let claims_file = sync_file("row6-claims");
+    let mut combined_claim_ids = String::new();
+
+    for (tag, sender) in [("a1", &repo_a1), ("a2", &repo_a2)] {
+        let have_file = sync_file(&format!("row6-have-{tag}"));
+        support::ok(
+            &support::prikk(&repo_b)
+                .args([
+                    "sync",
+                    "have",
+                    "heads/main",
+                    "--output",
+                    have_file.to_str().unwrap(),
+                ])
+                .output()
+                .unwrap(),
+            "sync have",
+        );
+        let artifact_file = sync_file(&format!("row6-artifact-{tag}"));
+        support::ok(
+            &support::prikk(sender)
+                .env("PRIKK_MAINTAINER_KEY_ID", support::MAINTAINER_KEY_ID)
+                .env(
+                    "PRIKK_MAINTAINER_SEED",
+                    support::hex(&support::MAINTAINER_SEED),
+                )
+                .args([
+                    "sync",
+                    "build",
+                    "heads/main",
+                    "--have",
+                    have_file.to_str().unwrap(),
+                    "--output",
+                    artifact_file.to_str().unwrap(),
+                ])
+                .output()
+                .unwrap(),
+            "sync build",
+        );
+        let claims_out = sync_file(&format!("row6-claims-out-{tag}"));
+        support::ok(
+            &support::prikk(&repo_b)
+                .args([
+                    "sync",
+                    "accept",
+                    artifact_file.to_str().unwrap(),
+                    "--claims-out",
+                    claims_out.to_str().unwrap(),
+                ])
+                .output()
+                .unwrap(),
+            "sync accept",
+        );
+        combined_claim_ids.push_str(&std::fs::read_to_string(&claims_out).unwrap());
+        let _ = std::fs::remove_file(have_file);
+        let _ = std::fs::remove_file(artifact_file);
+        let _ = std::fs::remove_file(claims_out);
+    }
+    std::fs::write(&claims_file, &combined_claim_ids).unwrap();
+
+    support::trust_maintainer(&repo_b);
+    let seal = support::prikk(&repo_b)
+        .env("PRIKK_MAINTAINER_KEY_ID", support::MAINTAINER_KEY_ID)
+        .env(
+            "PRIKK_MAINTAINER_SEED",
+            support::hex(&support::MAINTAINER_SEED),
+        )
+        .args([
+            "sync",
+            "seal",
+            "heads/main",
+            "--claims",
+            claims_file.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        !seal.status.success(),
+        "a mid-batch seal failure must exit non-zero"
+    );
+    let seal_stdout = String::from_utf8_lossy(&seal.stdout);
+    assert!(
+        seal_stdout.contains("sealed 1 patch(es)"),
+        "the first claim must still be reported as sealed: {seal_stdout}"
+    );
+    assert!(
+        seal_stdout.contains("FAILED"),
+        "the second claim's failure must be reported, not silently swallowed: {seal_stdout}"
+    );
+
+    // The assertion that matters: exactly one patch landed, not zero and not two -- the first
+    // seal was left in place, not rolled back, and the second was never applied.
+    let have_after_file = sync_file("row6-have-after");
+    support::ok(
+        &support::prikk(&repo_b)
+            .args([
+                "sync",
+                "have",
+                "heads/main",
+                "--output",
+                have_after_file.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap(),
+        "sync have after partial batch seal",
+    );
+    let have_after_bytes = std::fs::read(&have_after_file).unwrap();
+    let have_after_list = decode_have_list(
+        &have_after_bytes,
+        DEFAULT_HAVE_LIST_MAX_TOTAL_BYTES,
+        DEFAULT_HAVE_LIST_MAX_PATCH_COUNT,
+    )
+    .unwrap();
+    assert_eq!(
+        have_after_list.patch_ids.len(),
+        1,
+        "exactly one patch must have landed -- the earlier seal intact, not rolled back, and the \
+         failed one never applied"
+    );
+
+    let pending_after = support::prikk(&repo_b)
+        .args(["sync", "pending"])
+        .output()
+        .unwrap();
+    support::ok(&pending_after, "sync pending after partial batch seal");
+    assert!(
+        String::from_utf8_lossy(&pending_after.stdout)
+            .contains("pending (accepted, unsealed) patches: 1"),
+        "the failed claim's patch must remain accepted-but-unsealed"
+    );
+
+    let _ = std::fs::remove_dir_all(repo_a1);
+    let _ = std::fs::remove_dir_all(repo_a2);
+    let _ = std::fs::remove_dir_all(repo_b);
+    for file in [claims_file, have_after_file] {
+        let _ = std::fs::remove_file(file);
+    }
+}
