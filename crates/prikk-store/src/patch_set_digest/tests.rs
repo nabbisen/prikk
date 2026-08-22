@@ -9,8 +9,8 @@ use prikk_object::{
 };
 
 use super::{
-    compute_patch_set_digest, compute_patch_set_digest_for_ref,
-    compute_patch_set_digest_from_block, patch_set_digest_preimage,
+    PatchSetResolution, compute_patch_set_digest, compute_patch_set_digest_for_ref,
+    compute_patch_set_digest_from_block, patch_set_digest_preimage, resolve_patch_set_digest,
 };
 use crate::test_support::{maintainer_signature, signed_block, unique_temp_dir};
 use crate::{
@@ -397,5 +397,295 @@ fn two_independent_repositories_holding_the_same_patches_produce_equal_tag_diges
 
     let _ = std::fs::remove_dir_all(root_a);
     let _ = std::fs::remove_dir_all(root_b);
+    Ok(())
+}
+
+// RFC 117 T2 `stage-2-digest-resolution-handoff-v1.md` §5 tests: resolving a patch-set digest to a
+// local block.
+
+fn publish_branch(
+    ref_store: &RefStore,
+    ref_name: &str,
+    target_block_id: ObjectId,
+    update_seq: u64,
+) -> prikk_error::Result<()> {
+    let ref_state =
+        crate::test_support::signed_ref_state_envelope(ref_name, None, target_block_id, update_seq);
+    let ref_state_id = ref_state.object_id();
+    let ref_update = crate::test_support::signed_ref_update_envelope(
+        ref_name,
+        None,
+        ref_state_id,
+        target_block_id,
+        update_seq,
+    );
+    ref_store.publish(&RefPublication {
+        ref_name: ref_name.to_string(),
+        expected_previous_ref_state_id: None,
+        ref_state,
+        ref_update,
+    })?;
+    Ok(())
+}
+
+/// Publish `ref_name` (a `tags/*` ref) at a real, stored v2 Tag object naming `target_block_id` --
+/// `build_and_store_tag`'s own Tag object, plus the two-hop ref publication
+/// `tag_ref_and_heads_ref_at_the_same_block_produce_the_same_digest` above does inline, extracted
+/// here since row 4 needs it standalone (no `heads/*` ref at all).
+fn publish_tag(
+    store: &mut FileObjectStore,
+    ref_store: &RefStore,
+    ref_name: &str,
+    target_block_id: ObjectId,
+    update_seq: u64,
+) -> prikk_error::Result<ObjectId> {
+    let (_, tag_id) = build_and_store_tag(store, ref_name, target_block_id)?;
+    let tag_state = signed_tag_ref_state_envelope(ref_name, tag_id, update_seq)?;
+    let tag_state_id = tag_state.object_id();
+    let tag_update = signed_ref_update_envelope_for(ref_name, tag_state_id, tag_id, update_seq)?;
+    ref_store.publish(&RefPublication {
+        ref_name: ref_name.to_string(),
+        expected_previous_ref_state_id: None,
+        ref_state: tag_state,
+        ref_update: tag_update,
+    })?;
+    Ok(tag_id)
+}
+
+/// §5 row 1: an unknown digest resolves `NotHeld`, not an error -- the ordinary "you have not
+/// synced that far yet" case.
+#[test]
+fn row1_an_unknown_digest_resolves_not_held() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc117-resolve-row1");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+    let genesis = write_block(&mut store, BlockKind::Root, Vec::new(), Vec::new())?;
+    let tip = write_block(
+        &mut store,
+        BlockKind::Normal,
+        vec![genesis],
+        vec![ObjectId::from_bytes([0xa1; 32])],
+    )?;
+    let ref_store = RefStore::new(layout.clone());
+    publish_branch(&ref_store, "heads/main", tip, 1)?;
+
+    let unknown = compute_patch_set_digest(&[ObjectId::from_bytes([0xff; 32])])?;
+    assert_eq!(
+        resolve_patch_set_digest(&layout, unknown)?,
+        PatchSetResolution::NotHeld
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// §5 row 2: a known digest resolves to the correct block -- not merely "the first candidate
+/// enumerated." Three independent single-block refs, `heads/aaa` < `heads/bbb` < `heads/ccc`
+/// alphabetically, each a genesis block with its own distinct single patch; resolves `heads/ccc`'s
+/// own digest. **Fixture sanity, asserted, not assumed** (handoff §7 item 3): `heads/ccc`'s own
+/// block id is checked to be neither the alphabetically-first ref's block nor the numerically
+/// smallest candidate `ObjectId` -- either would let a "return whatever comes first" bug pass by
+/// accident, the same trap RFC 116 N3's own `parent_block_ids` control and RFC 116 stage 5's row 2
+/// fell into before being caught.
+#[test]
+fn row2_a_known_digest_resolves_to_the_correct_block_not_whatever_is_first()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc117-resolve-row2");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+    let ref_store = RefStore::new(layout.clone());
+
+    let block_aaa = write_block(
+        &mut store,
+        BlockKind::Root,
+        Vec::new(),
+        vec![ObjectId::from_bytes([0xb1; 32])],
+    )?;
+    let block_bbb = write_block(
+        &mut store,
+        BlockKind::Root,
+        Vec::new(),
+        vec![ObjectId::from_bytes([0xb2; 32])],
+    )?;
+    let block_ccc = write_block(
+        &mut store,
+        BlockKind::Root,
+        Vec::new(),
+        vec![ObjectId::from_bytes([0xb3; 32])],
+    )?;
+    publish_branch(&ref_store, "heads/aaa", block_aaa, 1)?;
+    publish_branch(&ref_store, "heads/bbb", block_bbb, 1)?;
+    publish_branch(&ref_store, "heads/ccc", block_ccc, 1)?;
+
+    // Fixture sanity: the target is neither the first ref alphabetically nor the smallest id.
+    let smallest = [block_aaa, block_bbb, block_ccc]
+        .into_iter()
+        .min()
+        .unwrap_or(block_ccc);
+    assert_ne!(
+        block_ccc, smallest,
+        "fixture sanity: the target block id must not be the smallest candidate id, or a \
+         first-in-sorted-order bug would resolve correctly by accident"
+    );
+
+    let target = compute_patch_set_digest_from_block(&store, block_ccc)?;
+    assert_eq!(
+        resolve_patch_set_digest(&layout, target)?,
+        PatchSetResolution::Resolved(block_ccc)
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// §5 row 3: two blocks with an identical patch set, sealed in a different order, refuse resolution
+/// -- naming both. Built directly, not through `seal`; block ids asserted to genuinely differ up
+/// front (handoff §5's own warning: if they collide, the fixture proves nothing).
+#[test]
+fn row3_two_blocks_with_one_patch_set_refuse_naming_both() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc117-resolve-row3");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+    let ref_store = RefStore::new(layout.clone());
+
+    let p1 = ObjectId::from_bytes([0xc1; 32]);
+    let p2 = ObjectId::from_bytes([0xc2; 32]);
+    let block_forward = write_block(&mut store, BlockKind::Root, Vec::new(), vec![p1, p2])?;
+    let block_reversed = write_block(&mut store, BlockKind::Root, Vec::new(), vec![p2, p1])?;
+    assert_ne!(
+        block_forward, block_reversed,
+        "fixture sanity: patch order must actually change the block id, or this fixture tests \
+         nothing"
+    );
+    publish_branch(&ref_store, "heads/forward", block_forward, 1)?;
+    publish_branch(&ref_store, "heads/reversed", block_reversed, 1)?;
+
+    let digest_forward = compute_patch_set_digest_from_block(&store, block_forward)?;
+    let digest_reversed = compute_patch_set_digest_from_block(&store, block_reversed)?;
+    assert_eq!(
+        digest_forward, digest_reversed,
+        "fixture sanity: the same patch set in a different order must still be the same digest"
+    );
+
+    let error = match resolve_patch_set_digest(&layout, digest_forward) {
+        Ok(resolution) => {
+            panic!("two blocks with one patch set must refuse resolution, got {resolution:?}")
+        }
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains(&block_forward.to_string()) && error.contains(&block_reversed.to_string()),
+        "the refusal must name both candidate block ids: {error}"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// §5 row 4: a block reachable only from a `tags/*` ref (no `heads/*` ref at all) is a candidate.
+#[test]
+fn row4_a_block_reachable_only_from_a_tag_ref_is_a_candidate() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc117-resolve-row4");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+    let ref_store = RefStore::new(layout.clone());
+
+    let tip = write_block(
+        &mut store,
+        BlockKind::Root,
+        Vec::new(),
+        vec![ObjectId::from_bytes([0xd1; 32])],
+    )?;
+    publish_tag(&mut store, &ref_store, "tags/v1", tip, 1)?;
+
+    let target = compute_patch_set_digest_from_block(&store, tip)?;
+    assert_eq!(
+        resolve_patch_set_digest(&layout, target)?,
+        PatchSetResolution::Resolved(tip),
+        "a block reachable only from a tags/* ref must still be a resolution candidate"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// §5 row 5: a block reachable only from `remotes/*` is not a candidate -- planted directly via
+/// `received::write_received_pointer` (not a full bundle import, which this increment does not
+/// need), never published through `RefStore` at all.
+#[test]
+fn row5_a_block_reachable_only_from_remotes_is_not_a_candidate() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc117-resolve-row5");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+
+    let tip = write_block(
+        &mut store,
+        BlockKind::Root,
+        Vec::new(),
+        vec![ObjectId::from_bytes([0xe1; 32])],
+    )?;
+    let received_state = crate::test_support::signed_ref_state_envelope("heads/x", None, tip, 1);
+    let received_state_id = store.write_object(&received_state)?;
+    crate::received::write_received_pointer(&layout, "remotes/heads/x", received_state_id)?;
+
+    let target = compute_patch_set_digest_from_block(&store, tip)?;
+    assert_eq!(
+        resolve_patch_set_digest(&layout, target)?,
+        PatchSetResolution::NotHeld,
+        "a block reachable only from remotes/* must not be a resolution candidate"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+fn synthetic_patch_id(index: u64) -> ObjectId {
+    let mut bytes = [0_u8; 32];
+    bytes[24..32].copy_from_slice(&index.to_be_bytes());
+    ObjectId::from_bytes(bytes)
+}
+
+/// §5 row 6 / §3: resolution is a single pass over the reachable block DAG, not a per-candidate
+/// re-walk. Builds a 500-block linear history (each block its own single distinct patch, so the
+/// candidate closures genuinely grow with depth) and resolves the tip's own digest, reporting the
+/// real wall-clock time -- not a cost gate (the handoff explicitly does not ask for one yet), a
+/// generous ceiling only, so a genuine complexity regression fails loudly rather than merely
+/// running slow in CI unnoticed.
+#[test]
+fn row6_resolution_over_a_few_hundred_blocks_is_a_single_pass() -> prikk_error::Result<()> {
+    const BLOCK_COUNT: u64 = 500;
+
+    let root = unique_temp_dir("rfc117-resolve-row6-scale");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+    let ref_store = RefStore::new(layout.clone());
+
+    let mut parent = write_block(&mut store, BlockKind::Root, Vec::new(), Vec::new())?;
+    let mut tip = parent;
+    for index in 0..BLOCK_COUNT {
+        tip = write_block(
+            &mut store,
+            BlockKind::Normal,
+            vec![parent],
+            vec![synthetic_patch_id(index)],
+        )?;
+        parent = tip;
+    }
+    publish_branch(&ref_store, "heads/main", tip, 1)?;
+
+    let target = compute_patch_set_digest_from_block(&store, tip)?;
+
+    let start = std::time::Instant::now();
+    let resolution = resolve_patch_set_digest(&layout, target)?;
+    let elapsed = start.elapsed();
+
+    assert_eq!(resolution, PatchSetResolution::Resolved(tip));
+    println!("resolve_patch_set_digest over a {BLOCK_COUNT}-block linear history: {elapsed:?}");
+    assert!(
+        elapsed.as_secs() < 5,
+        "resolution over {BLOCK_COUNT} blocks took {elapsed:?}, unexpectedly slow for a single pass"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
