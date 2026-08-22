@@ -144,6 +144,14 @@ fn run_build(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
                 report.export_report.blob_count, report.export_report.author_key_count
             );
             println!("wrote {}", parsed.output.display());
+            // RFC 116 stage 7 handoff, Part B: prikk guarantees integrity and authenticity, never
+            // secrecy -- this file now exists on disk with repository content in the clear. Once,
+            // on the command that creates the exposure; no prompt and no flag to silence it, both
+            // of which would defeat the point.
+            println!(
+                "note: this artifact contains repository content in the clear -- prikk does not \
+                 encrypt it; move it only over a channel you trust"
+            );
         }
     }
     Ok(())
