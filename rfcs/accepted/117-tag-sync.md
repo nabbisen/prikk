@@ -12,9 +12,31 @@ corrected before anything irreversible is built:
    **accepting a permanent second schema contract**, rather than (c)'s unsigned manifest.
 2. **This outranks remote-tracking** — a broken meaning is worse than an expensive operation.
 
-**The cost being accepted, stated plainly because it cannot be undone:** `TagPayload`'s window is closed
-(§4). Schema 2 must stay decodable forever alongside schema 1, with its own Gate A vector. This is
-**not** the free amendment D6 and N3 twice exploited.
+**SUPERSEDED SAME DAY by a further owner ruling — read this before §4 or §5.**
+
+> **"No project has been created in production in the world yet. Breaking change is accepted."**
+> — owner, 2026-08-22
+
+**So there is no schema 2. `TagPayload` is amended in place, at `schema_version` 1, and v1 tags
+break.** This is the same reasoning the owner already applied to repository formats 1-5 and to the
+recognition claim's two amendments: prikk has never been in production, so there is no user data to
+preserve.
+
+**What that costs, stated precisely because it is irreversible and because the project's own tooling
+treats it as a stop-work signal:**
+
+- **`rfc114_vector_11_tag_schema_1_identity_and_signature` must be deliberately regenerated.** It
+  hardcodes a populated `TagPayload`'s canonical bytes, its object id (`22afa858…`) and its signature
+  preimage; a required new field changes all three. **Under normal rules a moved identity vector is a
+  stop-work finding** (`snapshot.rs`'s own header). Here it is authorized — and must be recorded as
+  authorized, with this ruling cited beside the new values, so no future reader mistakes it for
+  silent identity drift.
+- **`empty_tag|5|1` does NOT move** — it is generated from literal `b""`, independent of the struct.
+- **Every existing v1 Tag object becomes undecodable**, including any written by `0.22.1`, and any
+  bundle carrying one becomes unimportable. Accepted under the ruling above.
+
+**What is gained:** one contract instead of two, forever. §4 below is retained as the record of what
+the constraint *was* before the ruling lifted it.
 
 **Independence:** author-reviewed, the standing ceiling. Every claim cites the code or record it came from.
 

@@ -3,8 +3,18 @@
 **RFC:** `rfcs/accepted/117-tag-sync.md` (ACCEPTED 2026-08-22, adopting recommendation (a)).
 **Independence:** author-reviewed, the standing ceiling.
 
-**The constraint governing every decision below:** `TagPayload`'s schema window is **closed** — `0.22.1`
-ships `prikk tag` and writes schema 1. Schema 2 is a permanent second contract. **Get it right once.**
+**AMENDED 2026-08-22, same day, by an owner ruling that lifts the constraint this design was written
+under:** *"No project has been created in production in the world yet. Breaking change is accepted."*
+
+**So: no schema 2. `TagPayload` is amended in place at `schema_version` 1, and v1 tags break.** One
+contract instead of two, forever. **Get it right once — there is no second version to correct it in,
+and this is the last moment the ruling makes a break free.**
+
+**The one thing that is not free, and must be done knowingly:**
+`rfc114_vector_11_tag_schema_1_identity_and_signature` hardcodes a populated `TagPayload`'s canonical
+bytes, object id and signature preimage, and **all three move.** Normally a moved identity vector is a
+stop-work finding; here it is authorized. **Regenerate deliberately and record the ruling beside the new
+values.** `empty_tag|5|1` does **not** move — it is generated from literal `b""`.
 
 ---
 
@@ -13,7 +23,7 @@ ships `prikk tag` and writes schema 1. Schema 2 is a permanent second contract. 
 ```
 TagPayload v2 {
     name, target_block_id, message, created_at, author_key_id,   // fields 1-5, unchanged
-    patch_set_digest: PatchSetDigest,                            // field 6, NEW, required in v2
+    patch_set_digest: PatchSetDigest,                            // field 6, NEW, required
 }
 ```
 
@@ -26,8 +36,9 @@ locally resolvable and because v1 compatibility depends on the field's meaning n
 `patch_set_digest` is what travels. **A tag is therefore a local pointer plus a global identity**, and
 the design should say so in exactly those words wherever it is documented.
 
-**Required in v2, absent in v1.** Not `Option`: a v2 tag without a digest would be a v1 tag with extra
-steps, and optionality here buys nothing but a second failure mode.
+**Required, not `Option`.** A tag without a digest would be the old tag with extra steps, and
+optionality here buys nothing but a second failure mode. The ruling that permits breaking v1 is what
+makes "required" affordable — take it.
 
 ## 2. T2 — resolution, and the ambiguity that must be refused
 
@@ -80,18 +91,23 @@ against local blocks (§2) and creates a **local** v2 tag naming the local block
 **The sender's tag and the receiver's tag are different objects with the same global identity** — which
 is the same relationship their blocks already have.
 
-## 5. T5 — v1 tags stay valid forever
+## 5. T5 — v1 tags break, and that is the ruling
 
-`validate_format2_schema` accepts `Tag => &[1, 2]`. **v1 tags remain readable, verifiable and usable
-locally forever** — RFC 114's promise, and the reason schema 2 rather than a rewrite.
+`validate_format2_schema` keeps `Tag => &[1]`. **There is no second accepted schema**, so
+`TagPayload`'s decoder gains a required field and **every Tag object written before this change stops
+decoding.**
 
-**A v1 tag cannot travel**, and that is correct rather than a limitation to work around: it carries no
-global identity, and inventing one for it at send time would be the sending repository asserting
-something the tag's own signer never signed.
+**In scope of the break, stated so nobody discovers it:**
 
-**Local upgrade is available and optional**: the digest is computable from the block a v1 tag already
-names, so a repository may re-issue a v1 tag as v2 under its own key. **That is a new signed assertion,
-not a migration of the old one** — the v1 object is unchanged and keeps its own id.
+- Tags written by `0.22.1` or any dev build become unreadable; `verify` will report them.
+- **Any bundle carrying a v1 tag becomes unimportable** — DC-78's tag-bundle path included.
+- Test fixtures constructing `TagPayload` all need the new field.
+
+**There is no migration and none should be written.** The owner's ruling is that no production data
+exists; writing a migration for data that does not exist would be inventing an obligation RFC 114 does
+not impose and then carrying it forever. **A repository holding v1 tags re-creates them** — the digest
+is computable from the block the old tag named, so the information is not lost, but the new tag is a
+**new signed assertion under the re-creator's own key**, not a rewrite of the old object.
 
 ## 6. T6 — security properties, as refusals
 
@@ -113,8 +129,9 @@ not a migration of the old one** — the v1 object is unchanged and keeps its ow
 
 ## 8. Staging
 
-1. **`TagPayload` schema 2 + Gate A vector + `validate_format2_schema` acceptance of `[1, 2]`** — the
-   frozen surface, alone, so it gets its own review. **The existing `empty_tag|5|1` row must not move.**
+1. **`TagPayload` field 6 at schema 1 + the deliberately regenerated `rfc114_vector_11`** — the frozen
+   surface, alone, so it gets its own review. **`empty_tag|5|1` must not move; vector 11 must, and the
+   report must show both.** `validate_format2_schema` stays `Tag => &[1]`.
 2. **Local resolution** (§2), including the ambiguity refusal.
 3. **The artifact section and the receive path** (§3), plus the explicit local tag creation (§4).
 
