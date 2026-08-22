@@ -912,7 +912,13 @@ fn row1_a_bundle_whose_ref_target_is_absent_is_refused() -> prikk_error::Result<
     let maintainer =
         Ed25519MaintainerSigner::from_seed("dc78-closure-row1-maintainer", &[0xc1; 32])?;
     let mut object_store = FileObjectStore::new(source.clone());
-    publish_tag(&source, &mut object_store, "tags/v1", tip_block_id, &maintainer)?;
+    publish_tag(
+        &source,
+        &mut object_store,
+        "tags/v1",
+        tip_block_id,
+        &maintainer,
+    )?;
 
     let (_, bytes) = export_bundle(&source, "tags/v1")?;
     let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
@@ -935,8 +941,13 @@ fn row1_a_bundle_whose_ref_target_is_absent_is_refused() -> prikk_error::Result<
         &pre_fix_shaped_bytes,
         &BundleImportOptions::default_limits(),
     );
-    let err = result
-        .expect_err("a bundle whose RefState targets a Tag object it never carried must be refused");
+    let err = match result {
+        Ok(report) => panic!(
+            "a bundle whose RefState targets a Tag object it never carried must be refused: \
+             {report:?}"
+        ),
+        Err(err) => err,
+    };
     assert!(
         err.to_string().contains("targets missing tag"),
         "unexpected error: {err}"
@@ -970,8 +981,17 @@ fn row2_a_bundle_missing_a_referenced_blob_is_refused() -> prikk_error::Result<(
 
     let target_root = unique_temp_dir("dc78-closure-row2-target");
     let target = RepositoryLayout::init(target_root.clone())?;
-    let result = import_bundle(&target, &broken_bytes, &BundleImportOptions::default_limits());
-    let err = result.expect_err("a bundle missing a patch-referenced blob must be refused");
+    let result = import_bundle(
+        &target,
+        &broken_bytes,
+        &BundleImportOptions::default_limits(),
+    );
+    let err = match result {
+        Ok(report) => {
+            panic!("a bundle missing a patch-referenced blob must be refused: {report:?}")
+        }
+        Err(err) => err,
+    };
     assert!(
         err.to_string().contains("references blob"),
         "unexpected error: {err}"
@@ -1005,9 +1025,21 @@ fn row3_a_bundle_missing_a_blocks_patch_is_refused() -> prikk_error::Result<()> 
 
     let target_root = unique_temp_dir("dc78-closure-row3-target");
     let target = RepositoryLayout::init(target_root.clone())?;
-    let result = import_bundle(&target, &broken_bytes, &BundleImportOptions::default_limits());
-    let err = result.expect_err("a bundle missing a block's own named patch must be refused");
-    assert!(err.to_string().contains("names patch"), "unexpected error: {err}");
+    let result = import_bundle(
+        &target,
+        &broken_bytes,
+        &BundleImportOptions::default_limits(),
+    );
+    let err = match result {
+        Ok(report) => {
+            panic!("a bundle missing a block's own named patch must be refused: {report:?}")
+        }
+        Err(err) => err,
+    };
+    assert!(
+        err.to_string().contains("names patch"),
+        "unexpected error: {err}"
+    );
     assert!(read_received_pointer(&target, "remotes/heads/main")?.is_none());
 
     let _ = std::fs::remove_dir_all(source_root);
@@ -1038,8 +1070,17 @@ fn row4_a_bundle_missing_a_blocks_parent_is_refused() -> prikk_error::Result<()>
 
     let target_root = unique_temp_dir("dc78-closure-row4-target");
     let target = RepositoryLayout::init(target_root.clone())?;
-    let result = import_bundle(&target, &broken_bytes, &BundleImportOptions::default_limits());
-    let err = result.expect_err("a bundle missing a block's own named parent must be refused");
+    let result = import_bundle(
+        &target,
+        &broken_bytes,
+        &BundleImportOptions::default_limits(),
+    );
+    let err = match result {
+        Ok(report) => {
+            panic!("a bundle missing a block's own named parent must be refused: {report:?}")
+        }
+        Err(err) => err,
+    };
     assert!(
         err.to_string().contains("names parent"),
         "unexpected error: {err}"
@@ -1087,7 +1128,11 @@ fn row5_objects_already_held_locally_satisfy_present() -> prikk_error::Result<()
     );
     let partial_bytes = encode_bundle(&ref_name, &carried_objects, &author_keys)?;
 
-    let report = import_bundle(&target, &partial_bytes, &BundleImportOptions::default_limits())?;
+    let report = import_bundle(
+        &target,
+        &partial_bytes,
+        &BundleImportOptions::default_limits(),
+    )?;
     assert_eq!(report.object_count, 2);
     assert_eq!(
         report.written_object_count, 2,
@@ -1168,7 +1213,11 @@ fn row6_a_refused_import_writes_no_pointer_and_records_no_key_material() -> prik
         .collect();
     let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys)?;
 
-    let result = import_bundle(&target, &broken_bytes, &BundleImportOptions::default_limits());
+    let result = import_bundle(
+        &target,
+        &broken_bytes,
+        &BundleImportOptions::default_limits(),
+    );
     assert!(result.is_err(), "the hostile re-import must be refused");
 
     let received_after = received_index_bytes(&target)?;
@@ -1206,8 +1255,7 @@ fn row7_a_well_formed_bundle_still_imports_both_formats() -> prikk_error::Result
     let source = RepositoryLayout::init(source_root.clone())?;
     seal_two_block_history(&source)?;
     let (_, bytes) = export_bundle(&source, "heads/main")?;
-    let (ref_name, objects, _author_keys) =
-        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let (ref_name, objects, _author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     let v1_bytes = encode_bundle_v1_for_test(&ref_name, &objects)?;
 
     let v2_target_root = unique_temp_dir("dc78-closure-row7-v2-target");
@@ -1217,7 +1265,11 @@ fn row7_a_well_formed_bundle_still_imports_both_formats() -> prikk_error::Result
 
     let v1_target_root = unique_temp_dir("dc78-closure-row7-v1-target");
     let v1_target = RepositoryLayout::init(v1_target_root.clone())?;
-    import_bundle(&v1_target, &v1_bytes, &BundleImportOptions::default_limits())?;
+    import_bundle(
+        &v1_target,
+        &v1_bytes,
+        &BundleImportOptions::default_limits(),
+    )?;
     assert!(read_received_pointer(&v1_target, "remotes/heads/main")?.is_some());
 
     let _ = std::fs::remove_dir_all(source_root);
