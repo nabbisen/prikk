@@ -17,7 +17,8 @@ use prikk_object::{
 };
 use prikk_store::{
     Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectReader, RefPublication,
-    RefStore, RepositoryLayout, compute_patch_set_digest_from_block, maintainer_signature,
+    RefStore, RepositoryLayout, compute_patch_set_digest_and_count_from_block,
+    maintainer_signature,
 };
 
 fn prikk(repo: &Path) -> Command {
@@ -352,15 +353,23 @@ fn tag_create_computes_the_real_patch_set_digest_not_a_parallel_implementation()
 
     // The independent recomputation: same function `tag.rs` itself calls, but invoked here by the
     // test over the block `prikk tag create` actually named -- not copied logic, the same production
-    // function, called a second time from outside the command under test.
-    let independently_recomputed = compute_patch_set_digest_from_block(&object_store, block_id)
-        .expect("computing the digest over a real sealed block must succeed");
+    // function, called a second time from outside the command under test. RFC 117 T7: covers
+    // `patch_count` too, the same way and for the same reason -- a wrong count here would mean
+    // `prikk tag create`'s own wiring, not just the underlying algorithm, computes it differently.
+    let (independently_recomputed_digest, independently_recomputed_count) =
+        compute_patch_set_digest_and_count_from_block(&object_store, block_id)
+            .expect("computing the digest and count over a real sealed block must succeed");
     assert_eq!(
-        tag_payload.patch_set_digest, independently_recomputed,
+        tag_payload.patch_set_digest, independently_recomputed_digest,
         "prikk tag create's own persisted patch_set_digest must equal an independent \
          recomputation over the block it named -- a wrong value here means the command users \
          actually run computes the tag's global identity differently from what the digest \
          algorithm itself would produce"
+    );
+    assert_eq!(
+        tag_payload.patch_count, independently_recomputed_count,
+        "prikk tag create's own persisted patch_count must equal an independent recomputation \
+         over the block it named"
     );
 
     let _ = std::fs::remove_dir_all(&repo);

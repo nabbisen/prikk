@@ -103,6 +103,19 @@ pub fn compute_patch_set_digest_from_block(
     compute_patch_set_digest(&patch_ids_reachable_from_block(object_store, tip_block_id)?)
 }
 
+/// RFC 117 T7: the digest and the count together, over one traversal -- `patch_count` is not new
+/// information (`patch_set_digest_preimage` already hashes it), so a caller populating both of a
+/// `TagPayload`'s field 6/7 should never pay for `patch_ids_reachable_from_block`'s own
+/// `ancestors_inclusive` walk twice.
+pub fn compute_patch_set_digest_and_count_from_block(
+    object_store: &impl ObjectReader,
+    tip_block_id: ObjectId,
+) -> Result<(PatchSetDigest, u64)> {
+    let patch_ids = patch_ids_reachable_from_block(object_store, tip_block_id)?;
+    let count = crate::fsutil::len_to_u64(patch_ids.len())?;
+    Ok((compute_patch_set_digest(&patch_ids)?, count))
+}
+
 /// Resolve `ref_name` to its target Block, per this module's own doc: `heads/*` directly, `tags/*`
 /// through the Tag object's own `target_block_id`. `remotes/*` is refused explicitly before any
 /// `RefStore` lookup is attempted, so the refusal names the real reason (ruling §2.3) rather than a
@@ -187,15 +200,24 @@ pub enum PatchSetResolution {
 /// block with more than one parent) -- and dropped entirely once every consumer has taken it. Peak
 /// memory therefore tracks the DAG's width, not its length.
 ///
-/// **What this does *not* make linear:** every candidate's closure is still *hashed* in full
-/// (`compute_patch_set_digest`) to compare against the caller's opaque target -- there is no way to
-/// skip a candidate without computing its real digest, since `PatchSetDigest` reveals nothing about
-/// the closure it was computed over. For one long linear branch the closure size itself grows with
-/// depth, so total hashing work is O(total patches²) in that shape -- a real, measured cost (RFC 117
-/// stage 2 report), not a re-walk artifact, and not what this increment's traversal fix addresses.
-/// What the fix removes is the *redundant ancestry walk* the naive per-candidate approach paid on
-/// top of that -- the closure *sets* themselves are now built in one pass, via the move/clone
-/// scheme above, not rebuilt from scratch per candidate.
+/// **RFC 117 T7: `patch_count` prunes before hashing, and is never trusted alone.** Stage 2 measured
+/// this function at O(N²) for one long linear branch: every candidate's closure had to be *hashed in
+/// full* to compare against the caller's opaque target, because `PatchSetDigest` alone reveals
+/// nothing about the closure it summarizes -- no candidate could be skipped. `patch_count` is not new
+/// information (`patch_set_digest_preimage` already hashes `DOMAIN ‖ count ‖ sorted ids`); it exposes
+/// a fact the digest already commits to, cheaply enough to compare before hashing rather than after.
+/// The comparison is inserted **into** the existing single pass below (`closure.len()` against the
+/// caller's `patch_count`, immediately before the existing `compute_patch_set_digest` call) -- no
+/// second traversal, no materializing every closure up front, and the move/clone-on-fan-out scheme
+/// is untouched. In a linear history closure sizes are 1, 2, 3, … N, all distinct, so exactly one
+/// candidate is ever hashed; O(N²) collapses to O(N log N) (RFC 117 stage 2a report has the
+/// remeasured numbers). A branchy history prunes less completely but still enormously.
+///
+/// **The count is a hint that prunes, never an authority (design §9.4): a wrong `patch_count` can
+/// only cause the right candidate to be skipped (→ `NotHeld`) or extra candidates to be hashed (→
+/// slower) -- it can never produce a wrong resolution, because the digest still has to match.** The
+/// same tried-not-trusted shape D6 §11.6 already established for a different object, one field over.
+/// A tag whose count disagrees with its own digest is simply self-inconsistent and never resolves.
 ///
 /// **Two or more matching blocks refuse, naming every one** -- never picked, never the ref tip,
 /// never the newest. Ambiguity is reachable in production, not only in fixtures: since RFC 115
@@ -206,6 +228,7 @@ pub enum PatchSetResolution {
 pub fn resolve_patch_set_digest(
     layout: &RepositoryLayout,
     digest: PatchSetDigest,
+    patch_count: u64,
 ) -> Result<PatchSetResolution> {
     let object_store = ObjectReadSnapshot::open(layout)?;
     let ref_store = RefStore::new(layout.clone());
@@ -273,9 +296,15 @@ pub fn resolve_patch_set_digest(
         }
         closure.extend(block.patch_ids.iter().copied());
 
-        let sorted: Vec<ObjectId> = closure.iter().copied().collect();
-        if compute_patch_set_digest(&sorted)? == digest {
-            matches.push(block_id);
+        // RFC 117 T7 §9.2: the size is free -- this pass already built the set -- so try it before
+        // paying for a hash. A mismatch here only ever means "not this candidate," never "not a
+        // match despite matching," since a size match alone never enters `matches`: the digest
+        // comparison below still has to agree too.
+        if crate::fsutil::len_to_u64(closure.len())? == patch_count {
+            let sorted: Vec<ObjectId> = closure.iter().copied().collect();
+            if compute_patch_set_digest(&sorted)? == digest {
+                matches.push(block_id);
+            }
         }
 
         if remaining_children.get(&block_id).copied().unwrap_or(0) > 0 {

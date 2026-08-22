@@ -21,7 +21,7 @@ use prikk_object::{
 };
 use prikk_store::{
     FileObjectStore, MaintainerSigner, ObjectReader, ObjectWriteSession, ObjectWriter,
-    RefPublication, RefStore, compute_patch_set_digest_from_block, maintainer_signature,
+    RefPublication, RefStore, compute_patch_set_digest_and_count_from_block, maintainer_signature,
     validate_local_tag_ref,
 };
 
@@ -105,11 +105,13 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
     }
 
     let target_block_id = resolve_target_block(&ref_store, &object_store, &parsed.target)?;
-    // RFC 117 T1 §3: the tag's global identity is the digest of the target block's own patch
-    // closure, computed at creation -- "two repositories holding the same patches produce the same
-    // value" is the whole reason the field exists.
-    let patch_set_digest = compute_patch_set_digest_from_block(&object_store, target_block_id)
-        .map_err(|err| err.to_string())?;
+    // RFC 117 T1 §3 / T7 §9.2: the tag's global identity is the digest of the target block's own
+    // patch closure, computed at creation -- "two repositories holding the same patches produce the
+    // same value" is the whole reason the field exists. `patch_count` travels alongside it (one
+    // traversal, not two) so a receiver can prune candidates by size before hashing.
+    let (patch_set_digest, patch_count) =
+        compute_patch_set_digest_and_count_from_block(&object_store, target_block_id)
+            .map_err(|err| err.to_string())?;
 
     let signer = crate::maintainer_signer_from_env()?;
     let tag_payload = TagPayload {
@@ -119,6 +121,7 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
         created_at: 0,
         author_key_id: signer.key_id().to_string(),
         patch_set_digest,
+        patch_count,
     };
     let tag_envelope = signed_envelope(
         ObjectType::Tag,

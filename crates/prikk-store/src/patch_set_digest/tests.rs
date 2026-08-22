@@ -9,8 +9,9 @@ use prikk_object::{
 };
 
 use super::{
-    PatchSetResolution, compute_patch_set_digest, compute_patch_set_digest_for_ref,
-    compute_patch_set_digest_from_block, patch_set_digest_preimage, resolve_patch_set_digest,
+    PatchSetResolution, compute_patch_set_digest, compute_patch_set_digest_and_count_from_block,
+    compute_patch_set_digest_for_ref, compute_patch_set_digest_from_block,
+    patch_set_digest_preimage, resolve_patch_set_digest,
 };
 use crate::test_support::{maintainer_signature, signed_block, unique_temp_dir};
 use crate::{
@@ -237,13 +238,15 @@ fn tag_ref_and_heads_ref_at_the_same_block_produce_the_same_digest() -> prikk_er
         ref_update: heads_update,
     })?;
 
+    let (digest, count) = compute_patch_set_digest_and_count_from_block(&store, tip)?;
     let tag_payload = TagPayload {
         name: "v1".to_string(),
         target_block_id: tip,
         message: None,
         created_at: 0,
         author_key_id: "maintainer-key".to_string(),
-        patch_set_digest: compute_patch_set_digest_from_block(&store, tip)?,
+        patch_set_digest: digest,
+        patch_count: count,
     };
     let mut tag_envelope =
         ObjectEnvelope::unsigned(ObjectType::Tag, 1, tag_payload.to_canonical_bytes()?);
@@ -308,13 +311,15 @@ fn build_and_store_tag(
     name: &str,
     target_block_id: ObjectId,
 ) -> prikk_error::Result<(TagPayload, ObjectId)> {
+    let (digest, count) = compute_patch_set_digest_and_count_from_block(store, target_block_id)?;
     let tag_payload = TagPayload {
         name: name.to_string(),
         target_block_id,
         message: None,
         created_at: 0,
         author_key_id: "maintainer-key".to_string(),
-        patch_set_digest: compute_patch_set_digest_from_block(store, target_block_id)?,
+        patch_set_digest: digest,
+        patch_count: count,
     };
     let mut tag_envelope =
         ObjectEnvelope::unsigned(ObjectType::Tag, 1, tag_payload.to_canonical_bytes()?);
@@ -470,8 +475,10 @@ fn row1_an_unknown_digest_resolves_not_held() -> prikk_error::Result<()> {
     publish_branch(&ref_store, "heads/main", tip, 1)?;
 
     let unknown = compute_patch_set_digest(&[ObjectId::from_bytes([0xff; 32])])?;
+    // Count matches the real tip's own count (1) on purpose -- proves a matching count alone is not
+    // enough; the digest still has to agree too (T7 §9.4).
     assert_eq!(
-        resolve_patch_set_digest(&layout, unknown)?,
+        resolve_patch_set_digest(&layout, unknown, 1)?,
         PatchSetResolution::NotHeld
     );
 
@@ -528,9 +535,9 @@ fn row2_a_known_digest_resolves_to_the_correct_block_not_whatever_is_first()
          first-in-sorted-order bug would resolve correctly by accident"
     );
 
-    let target = compute_patch_set_digest_from_block(&store, block_ccc)?;
+    let (target, target_count) = compute_patch_set_digest_and_count_from_block(&store, block_ccc)?;
     assert_eq!(
-        resolve_patch_set_digest(&layout, target)?,
+        resolve_patch_set_digest(&layout, target, target_count)?,
         PatchSetResolution::Resolved(block_ccc)
     );
 
@@ -567,7 +574,7 @@ fn row3_two_blocks_with_one_patch_set_refuse_naming_both() -> prikk_error::Resul
         "fixture sanity: the same patch set in a different order must still be the same digest"
     );
 
-    let error = match resolve_patch_set_digest(&layout, digest_forward) {
+    let error = match resolve_patch_set_digest(&layout, digest_forward, 2) {
         Ok(resolution) => {
             panic!("two blocks with one patch set must refuse resolution, got {resolution:?}")
         }
@@ -598,9 +605,9 @@ fn row4_a_block_reachable_only_from_a_tag_ref_is_a_candidate() -> prikk_error::R
     )?;
     publish_tag(&mut store, &ref_store, "tags/v1", tip, 1)?;
 
-    let target = compute_patch_set_digest_from_block(&store, tip)?;
+    let (target, target_count) = compute_patch_set_digest_and_count_from_block(&store, tip)?;
     assert_eq!(
-        resolve_patch_set_digest(&layout, target)?,
+        resolve_patch_set_digest(&layout, target, target_count)?,
         PatchSetResolution::Resolved(tip),
         "a block reachable only from a tags/* ref must still be a resolution candidate"
     );
@@ -628,9 +635,9 @@ fn row5_a_block_reachable_only_from_remotes_is_not_a_candidate() -> prikk_error:
     let received_state_id = store.write_object(&received_state)?;
     crate::received::write_received_pointer(&layout, "remotes/heads/x", received_state_id)?;
 
-    let target = compute_patch_set_digest_from_block(&store, tip)?;
+    let (target, target_count) = compute_patch_set_digest_and_count_from_block(&store, tip)?;
     assert_eq!(
-        resolve_patch_set_digest(&layout, target)?,
+        resolve_patch_set_digest(&layout, target, target_count)?,
         PatchSetResolution::NotHeld,
         "a block reachable only from remotes/* must not be a resolution candidate"
     );
@@ -645,24 +652,23 @@ fn synthetic_patch_id(index: u64) -> ObjectId {
     ObjectId::from_bytes(bytes)
 }
 
-/// §5 row 6 / §3: resolution is a single pass over the reachable block DAG, not a per-candidate
-/// re-walk. Builds a 500-block linear history (each block its own single distinct patch, so the
-/// candidate closures genuinely grow with depth) and resolves the tip's own digest, reporting the
-/// real wall-clock time -- not a cost gate (the handoff explicitly does not ask for one yet), a
-/// generous ceiling only, so a genuine complexity regression fails loudly rather than merely
-/// running slow in CI unnoticed.
-#[test]
-fn row6_resolution_over_a_few_hundred_blocks_is_a_single_pass() -> prikk_error::Result<()> {
-    const BLOCK_COUNT: u64 = 500;
-
-    let root = unique_temp_dir("rfc117-resolve-row6-scale");
+/// Build a `block_count`-block linear history (each block its own single distinct patch, so
+/// candidate closures genuinely grow with depth -- the worst case for the pre-T7 hashing cost) and
+/// time resolving the tip's own digest+count. Shared by row 6 (at the committed size) and the T7
+/// remeasurement (`stage-2a-tag-patch-count-report-v1.md` §2), which re-runs this exact shape at 500
+/// and 2000 blocks to compare against stage 2's own pre-pruning numbers at the same two sizes.
+fn build_and_time_linear_resolution(
+    name_tag: &str,
+    block_count: u64,
+) -> prikk_error::Result<std::time::Duration> {
+    let root = unique_temp_dir(name_tag);
     let layout = RepositoryLayout::init(root.clone())?;
     let mut store = FileObjectStore::new(layout.clone());
     let ref_store = RefStore::new(layout.clone());
 
     let mut parent = write_block(&mut store, BlockKind::Root, Vec::new(), Vec::new())?;
     let mut tip = parent;
-    for index in 0..BLOCK_COUNT {
+    for index in 0..block_count {
         tip = write_block(
             &mut store,
             BlockKind::Normal,
@@ -673,17 +679,78 @@ fn row6_resolution_over_a_few_hundred_blocks_is_a_single_pass() -> prikk_error::
     }
     publish_branch(&ref_store, "heads/main", tip, 1)?;
 
-    let target = compute_patch_set_digest_from_block(&store, tip)?;
+    let (target, target_count) = compute_patch_set_digest_and_count_from_block(&store, tip)?;
 
     let start = std::time::Instant::now();
-    let resolution = resolve_patch_set_digest(&layout, target)?;
+    let resolution = resolve_patch_set_digest(&layout, target, target_count)?;
     let elapsed = start.elapsed();
 
     assert_eq!(resolution, PatchSetResolution::Resolved(tip));
-    println!("resolve_patch_set_digest over a {BLOCK_COUNT}-block linear history: {elapsed:?}");
+    let _ = std::fs::remove_dir_all(root);
+    Ok(elapsed)
+}
+
+/// §5 row 6 / §3, remeasured for T7: resolution is a single pass over the reachable block DAG, and
+/// now prunes candidates by size before hashing (T7 §9.2). A generous ceiling only, not a cost gate
+/// (the handoff explicitly does not ask for one yet), so a genuine complexity regression fails
+/// loudly rather than merely running slow in CI unnoticed.
+#[test]
+fn row6_resolution_over_a_few_hundred_blocks_is_a_single_pass() -> prikk_error::Result<()> {
+    const BLOCK_COUNT: u64 = 500;
+
+    let elapsed = build_and_time_linear_resolution("rfc117-resolve-row6-scale", BLOCK_COUNT)?;
+
+    println!(
+        "resolve_patch_set_digest (with T7 size pruning) over a {BLOCK_COUNT}-block linear \
+         history: {elapsed:?}"
+    );
     assert!(
         elapsed.as_secs() < 5,
         "resolution over {BLOCK_COUNT} blocks took {elapsed:?}, unexpectedly slow for a single pass"
+    );
+
+    Ok(())
+}
+
+/// RFC 117 T7 `stage-2a-tag-patch-count-handoff-v1.md` §3/§7 item 3, required, not optional: a
+/// `patch_count` that disagrees with its own digest never resolves to a block, in **both**
+/// directions -- too small and too large. This is the property that makes pruning-by-size safe: the
+/// count can only narrow the candidate set, never admit a wrong one, because the digest still has
+/// to match regardless of what the count claims.
+#[test]
+fn a_wrong_patch_count_never_resolves_too_small_or_too_large() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc117-t7-wrong-count");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout.clone());
+    let ref_store = RefStore::new(layout.clone());
+
+    let p1 = ObjectId::from_bytes([0xf1; 32]);
+    let p2 = ObjectId::from_bytes([0xf2; 32]);
+    let genesis = write_block(&mut store, BlockKind::Root, Vec::new(), Vec::new())?;
+    let tip = write_block(&mut store, BlockKind::Normal, vec![genesis], vec![p1, p2])?;
+    publish_branch(&ref_store, "heads/main", tip, 1)?;
+
+    let (digest, real_count) = compute_patch_set_digest_and_count_from_block(&store, tip)?;
+    assert_eq!(
+        real_count, 2,
+        "fixture sanity: the tip must genuinely hold two patches"
+    );
+
+    assert_eq!(
+        resolve_patch_set_digest(&layout, digest, real_count - 1)?,
+        PatchSetResolution::NotHeld,
+        "a count that is too small must not resolve, even though the digest genuinely matches"
+    );
+    assert_eq!(
+        resolve_patch_set_digest(&layout, digest, real_count + 1)?,
+        PatchSetResolution::NotHeld,
+        "a count that is too large must not resolve, even though the digest genuinely matches"
+    );
+    // Fixture sanity: the correct count really does resolve -- proves the two refusals above are
+    // about the count being wrong, not about the fixture being unresolvable at all.
+    assert_eq!(
+        resolve_patch_set_digest(&layout, digest, real_count)?,
+        PatchSetResolution::Resolved(tip)
     );
 
     let _ = std::fs::remove_dir_all(root);

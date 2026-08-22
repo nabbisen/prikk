@@ -11,6 +11,16 @@
 //! written before this change stops decoding (`rfc114_vector_11` moved to record this deliberately;
 //! `empty_tag` did not, since it is generated from a literal empty payload independent of this
 //! struct).
+//!
+//! **RFC 117 T7 (2026-08-22, owner ruling "Take it now", after stage 2 measured resolution at
+//! O(N²)): `patch_count` is field 7, also required.** The number of distinct patch ids in the
+//! closure `patch_set_digest` covers -- not new information, since `patch_set_digest_preimage`
+//! already hashes `DOMAIN ‖ count ‖ sorted ids`; field 7 exposes a fact the digest already commits
+//! to, as a cheap integer `resolve_patch_set_digest` (`prikk-store`) can compare before hashing a
+//! candidate, instead of after. **The count is a hint that prunes, never an authority (design §9.4):
+//! a wrong `patch_count` can only cause the right candidate to be skipped or extra candidates to be
+//! hashed -- it can never produce a wrong resolution, because the digest still has to match.** The
+//! same tried-not-trusted shape D6 §11.6 already established for a different object.
 
 use prikk_error::{PrikkError, Result};
 
@@ -38,6 +48,10 @@ pub struct TagPayload {
     /// of the tag, portable across repositories that hold the same patches. Required: a tag without
     /// one would be the old tag with extra steps.
     pub patch_set_digest: PatchSetDigest,
+    /// The number of distinct patch ids in the closure `patch_set_digest` covers (RFC 117 T7) --
+    /// already part of what the digest hashes, exposed here so resolution can prune by size before
+    /// hashing a candidate. A hint that narrows, never an authority: the digest still decides.
+    pub patch_count: u64,
 }
 
 impl CanonicalEncode for TagPayload {
@@ -50,6 +64,7 @@ impl CanonicalEncode for TagPayload {
         writer.field_u64(4, self.created_at)?;
         writer.field_string(5, &self.author_key_id)?;
         writer.field_bytes(6, &self.patch_set_digest.0)?;
+        writer.field_u64(7, self.patch_count)?;
         Ok(())
     }
 }
@@ -64,6 +79,7 @@ impl TagPayload {
         let mut created_at = None;
         let mut author_key_id = None;
         let mut patch_set_digest = None;
+        let mut patch_count = None;
         while let Some(field) = cursor.next_field()? {
             match field.tag {
                 1 => name = Some(field.read_string()?),
@@ -72,6 +88,7 @@ impl TagPayload {
                 4 => created_at = Some(field.read_u64()?),
                 5 => author_key_id = Some(field.read_string()?),
                 6 => patch_set_digest = Some(PatchSetDigest(field.read_array::<32>()?)),
+                7 => patch_count = Some(field.read_u64()?),
                 other => {
                     return Err(PrikkError::MalformedData(format!(
                         "unknown Tag field tag: {other}"
@@ -93,6 +110,8 @@ impl TagPayload {
             patch_set_digest: patch_set_digest.ok_or_else(|| {
                 PrikkError::MalformedData("Tag missing patch_set_digest".to_string())
             })?,
+            patch_count: patch_count
+                .ok_or_else(|| PrikkError::MalformedData("Tag missing patch_count".to_string()))?,
         })
     }
 }
