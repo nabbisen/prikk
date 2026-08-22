@@ -283,6 +283,12 @@ fn end_to_end_sync_via_the_cli_lands_the_delta_and_is_verified_by_reading_it_bac
         "an already-in-sync build must write no output file: {build_again_stdout}"
     );
 
+    // RFC 116 stage 6 handoff §1: badge criterion 1's load-bearing clause is "both verify it
+    // afterward" -- asserted nowhere until now. The sender is not a formality: it produced the
+    // artifacts and its own state must still be sound afterwards, so both sides are checked.
+    support::ok(&support::verify(&repo_a), "verify (A, sender)");
+    support::ok(&support::verify(&repo_b), "verify (B, receiver)");
+
     let _ = std::fs::remove_dir_all(repo_a);
     let _ = std::fs::remove_dir_all(repo_b);
     for file in [
@@ -480,6 +486,11 @@ fn row7_multi_block_sync_completes_through_the_cli_alone() {
             .contains("pending (accepted, unsealed) patches: 0"),
         "no patch should remain pending after the batch seal"
     );
+
+    // RFC 116 stage 6 handoff §1: both sides must verify after a multi-block sync too, not only
+    // the single-block case above.
+    support::ok(&support::verify(&repo_a), "verify (A, sender)");
+    support::ok(&support::verify(&repo_b), "verify (B, receiver)");
 
     let _ = std::fs::remove_dir_all(repo_a);
     let _ = std::fs::remove_dir_all(repo_b);
