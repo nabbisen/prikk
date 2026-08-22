@@ -54,13 +54,27 @@
 //! section: not a special case, since DC-53 already defines "no recorded material" as `Unverifiable`
 //! (vector 7). Read compatibility only, the same asymmetry every repository-format transition in this
 //! project already has -- read what the past wrote, write only the present.
+//!
+//! **`import_bundle` validates closure completeness before any write** (DC-78
+//! `import-closure-validation-handoff-v1.md`): the exported ref's target must resolve, and every blob
+//! (whether a Patch's own operations or a Block's own `snapshot_blob_ref` names it), patch, and block
+//! parent a carried object names must be present -- carried by this bundle, or already in this
+//! repository. `accept_exchange_artifact` (`patch_exchange/accept.rs`) already refused
+//! the same class of defect at receipt; `import_bundle` did not, so a bundle whose target object it
+//! never shipped used to import successfully and land a dangling received pointer, visible only at the
+//! next `verify`, long after the import that caused it. **This is an intentional behaviour change: a
+//! bundle that previously imported may now be refused.** That is the point, not a regression -- a tag
+//! bundle produced before the DC-78 tag-export fix (`d605c10`), which carries the RefState but not the
+//! Tag object, is the concrete case: it now fails at import, naming the bundle at the moment it is
+//! offered, instead of importing and failing a later `verify` with no indication of which import caused
+//! it.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    ObjectEnvelope, ObjectId, ObjectType, RefKind, RefStatePayload, Signature, SignerRole,
-    TagPayload,
+    BlockPayload, ObjectEnvelope, ObjectId, ObjectType, RefKind, RefStatePayload, Signature,
+    SignerRole, TagPayload,
 };
 
 use crate::author_key_index::{
@@ -73,7 +87,10 @@ use crate::fsutil::len_to_u64;
 use crate::layout::{LockableContainer, RepositoryLayout};
 use crate::lock::{ActiveLock, acquire_container_locks};
 use crate::object_store::{ObjectReadSnapshot, ObjectReader, ObjectWriteSession, ObjectWriter};
-use crate::refs::RefStore;
+use crate::patch_replay::decode::{
+    DecodedDeletePreimage, DecodedOperationKind, decode_patch_operations,
+};
+use crate::refs::{RefStore, ensure_ref_target_valid};
 
 /// DC-53 Stage 2, D6: the format bump that made room for the author-key section. Always emitted on
 /// export; `PBNDL001` is still accepted on import (see `RETIRED_BUNDLE_MAGIC_V1`), so this is a
@@ -400,6 +417,110 @@ pub fn import_bundle(
         }
     }
 
+    // DC-78 closure-validation handoff §2/§3: everything below is read-only and must run, and pass,
+    // before the first object write below -- a refused bundle must leave no pointer at all, and the
+    // pointer is written last, so validating up front is what makes that true. §2's own definition of
+    // "present": carried by this bundle, or already in this repository -- an incremental import onto
+    // a repository that already holds part of the history must not be refused for objects it already
+    // has (D7's rule again). `accept_exchange_artifact` (`patch_exchange/accept.rs`) already gets this
+    // right for the patch-exchange path; this makes `import_bundle` match it rather than "align" it
+    // to something new (§6's own instruction).
+    let read_snapshot = ObjectReadSnapshot::open(layout)?;
+    let bundle_objects_by_id: BTreeMap<ObjectId, ObjectEnvelope> = objects
+        .iter()
+        .map(|envelope| (envelope.object_id(), envelope.clone()))
+        .collect();
+
+    // Item 1: the exported ref's target resolves. Reuses `ensure_ref_target_valid`
+    // (`refs/verify/scan.rs`) unchanged -- it is already kind-aware (one hop for a Branch, two for a
+    // Tag) and already `pub(crate)` at `crate::refs`, so no visibility widening was needed to reach it
+    // from here.
+    let ref_state_payload = RefStatePayload::decode_canonical(
+        &ref_state_envelope.canonical_payload,
+        ref_state_envelope.schema_version,
+    )?;
+    let combined_reader = BundleAndLocalReader {
+        bundle_objects: &bundle_objects_by_id,
+        local: &read_snapshot,
+    };
+    ensure_ref_target_valid(
+        &combined_reader,
+        ref_state_payload.kind,
+        ref_state_payload.target_object_id,
+        ref_state_id,
+    )?;
+
+    // Items 2 and 3: every blob a carried patch's operations reference, and every patch a carried
+    // block names, must be present. Mirrors `accept_exchange_artifact`'s Phase B item 6 exactly,
+    // including the "or already present locally" half.
+    for envelope in &objects {
+        if envelope.object_type != ObjectType::Patch {
+            continue;
+        }
+        for operation in decode_patch_operations(&envelope.canonical_payload)? {
+            for blob_id in bundle_referenced_blob_ids(&operation.kind) {
+                if !bundle_objects_by_id.contains_key(&blob_id)
+                    && !read_snapshot.contains_object(ObjectType::Blob, blob_id)
+                {
+                    return Err(PrikkError::Integrity(format!(
+                        "patch {} references blob {blob_id}, which is neither carried by this \
+                         bundle nor already present in this repository -- refusing the whole \
+                         import, no partial write",
+                        envelope.object_id()
+                    )));
+                }
+            }
+        }
+    }
+    for envelope in &objects {
+        if envelope.object_type != ObjectType::Block {
+            continue;
+        }
+        let block_id = envelope.object_id();
+        let block_payload = BlockPayload::decode_canonical(&envelope.canonical_payload)?;
+        for patch_id in &block_payload.patch_ids {
+            if !bundle_objects_by_id.contains_key(patch_id)
+                && !read_snapshot.contains_object(ObjectType::Patch, *patch_id)
+            {
+                return Err(PrikkError::Integrity(format!(
+                    "block {block_id} names patch {patch_id}, which is neither carried by this \
+                     bundle nor already present in this repository -- refusing the whole import, \
+                     no partial write"
+                )));
+            }
+        }
+        // Item 4: every parent a carried block names must be present too. `export_bundle` walks the
+        // full ancestor closure, so this holds for anything the current exporter produces -- checking
+        // it is set membership and costs nothing (handoff §2 item 4).
+        for parent_block_id in &block_payload.parent_block_ids {
+            if !bundle_objects_by_id.contains_key(parent_block_id)
+                && !read_snapshot.contains_object(ObjectType::Block, *parent_block_id)
+            {
+                return Err(PrikkError::Integrity(format!(
+                    "block {block_id} names parent {parent_block_id}, which is neither carried \
+                     by this bundle nor already present in this repository -- refusing the whole \
+                     import, no partial write"
+                )));
+            }
+        }
+        // Review condition (`DC-78-import-closure-validation-review-v1.md` §3): a Block's own
+        // `snapshot_blob_ref` is a blob reference too, same rule as a Patch's operation-level ones --
+        // `export_bundle` already puts it in the same `blob_ids` set as those, so every legitimate
+        // export already satisfies this; the check exists for the untrusted, hand-crafted case, which
+        // is exactly the case this whole increment is for.
+        if let Some(snapshot_blob_id) = block_payload.snapshot_blob_ref {
+            if !bundle_objects_by_id.contains_key(&snapshot_blob_id)
+                && !read_snapshot.contains_object(ObjectType::Blob, snapshot_blob_id)
+            {
+                return Err(PrikkError::Integrity(format!(
+                    "block {block_id} names snapshot blob {snapshot_blob_id}, which is neither \
+                     carried by this bundle nor already present in this repository -- refusing \
+                     the whole import, no partial write"
+                )));
+            }
+        }
+    }
+
     // RFC 111 §6.1 Stage 2: `import_bundle`'s ref-equivalent write is `received::write_received_-
     // pointer`, a wholly separate mechanism (received-ref index, not the pointer-index/ref-log
     // `RefStore::publish` touches) with no `FileObjectStore` construction of its own -- confirmed by
@@ -477,6 +598,46 @@ fn read_required(
     object_store
         .read_typed(id, object_type)?
         .ok_or_else(|| PrikkError::Integrity(format!("missing {object_type} object: {id}")))
+}
+
+/// `import_bundle`'s own view of §2's "present" definition: carried by this bundle, or already in
+/// this repository. Checked before any bundle object is written, so a bundle-carried object is not
+/// yet reachable through `local` even once import succeeds -- `bundle_objects` is what makes it
+/// visible during validation.
+struct BundleAndLocalReader<'a> {
+    bundle_objects: &'a BTreeMap<ObjectId, ObjectEnvelope>,
+    local: &'a ObjectReadSnapshot,
+}
+
+impl ObjectReader for BundleAndLocalReader<'_> {
+    fn read_object(&self, id: ObjectId) -> Result<Option<ObjectEnvelope>> {
+        if let Some(envelope) = self.bundle_objects.get(&id) {
+            return Ok(Some(envelope.clone()));
+        }
+        self.local.read_object(id)
+    }
+}
+
+/// Every blob id one decoded patch operation references -- restated from
+/// `patch_exchange/accept.rs`'s own `referenced_blob_ids` (the same three kinds `export_bundle`'s
+/// closure walk above also scans for), for `import_bundle`'s own closure-completeness check. Kept as
+/// a separate, per-module copy rather than a cross-module `pub(crate)` call: `accept.rs`'s own doc
+/// comment already restates this same match once for `artifact.rs`'s benefit, so a third small copy
+/// here follows the precedent this file already has, not a new one.
+fn bundle_referenced_blob_ids(kind: &DecodedOperationKind) -> Vec<ObjectId> {
+    match kind {
+        DecodedOperationKind::CreateFile { blob_id, .. } => vec![*blob_id],
+        DecodedOperationKind::ReplaceBinary {
+            old_blob_id,
+            new_blob_id,
+            ..
+        } => vec![*old_blob_id, *new_blob_id],
+        DecodedOperationKind::DeleteNode {
+            preimage: DecodedDeletePreimage::File { old_blob_id, .. },
+            ..
+        } => vec![*old_blob_id],
+        _ => Vec::new(),
+    }
 }
 
 /// Resolve `ref_state_payload.target_object_id` to the Block it ultimately names -- one hop for a
