@@ -7,9 +7,9 @@ use super::{
     AttestationPayload, AttestationStatus, BlobKind, BlobPayload, BlockKind, BlockPayload,
     EditText, MerkleRoot, Operation, OperationKind, PatchPayload, PatchPurpose, PluginResultEntry,
     RECOGNITION_CLAIM_MAX_PATCH_IDS, REF_STATE_CLOSED_SCHEMA, RecognitionClaimPayload, RefKind,
-    RefStatePayload, RefUpdatePayload, text_span_hash, validate_text_anchor_id,
+    RefStatePayload, RefUpdatePayload, TagPayload, text_span_hash, validate_text_anchor_id,
 };
-use crate::{CanonicalEncode, ObjectId, ObjectType, WireType};
+use crate::{CanonicalEncode, CanonicalWriter, ObjectId, ObjectType, WireType};
 
 #[test]
 fn text_anchor_ids_are_validated() {
@@ -690,4 +690,34 @@ fn patch_purpose_explicit_normal_is_rejected() {
     bytes.extend_from_slice(&2_u64.to_be_bytes());
     bytes.extend_from_slice(&PatchPurpose::Normal.code().to_be_bytes());
     assert!(PatchPurpose::decode_from_patch_payload(&bytes).is_err());
+}
+
+/// RFC 117 T1 `stage-1-tag-payload-digest-handoff-v1.md` §6 row 1: field 6 (`patch_set_digest`) is
+/// required -- a payload encoding only fields 1-5 (the pre-RFC-117 shape) must fail to decode, not
+/// default. Built with `CanonicalWriter` directly rather than via `TagPayload::encode_canonical`,
+/// which cannot itself produce a payload missing the field it always writes.
+#[allow(clippy::expect_used)]
+#[test]
+fn tag_payload_requires_patch_set_digest_field() {
+    let mut writer = CanonicalWriter::new();
+    writer.field_string(1, "v1").expect("field 1 encodes");
+    writer
+        .field_object_id(2, &ObjectId::from_bytes([0x01; 32]))
+        .expect("field 2 encodes");
+    writer.field_u64(4, 0).expect("field 4 encodes");
+    writer
+        .field_string(5, "maintainer-key")
+        .expect("field 5 encodes");
+    let bytes = writer.finish();
+
+    let message = match TagPayload::decode_canonical(&bytes) {
+        Ok(_) => panic!(
+            "a Tag payload without field 6 (patch_set_digest) must fail to decode, not default"
+        ),
+        Err(err) => err.to_string(),
+    };
+    assert!(
+        message.contains("patch_set_digest"),
+        "the refusal must name the missing field: {message}"
+    );
 }

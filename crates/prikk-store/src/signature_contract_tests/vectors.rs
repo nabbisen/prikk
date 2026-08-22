@@ -641,6 +641,14 @@ fn rfc114_vector_10_ref_update_schema_1_identity_and_signature() -> prikk_error:
 }
 
 /// Vector 11: `(Tag, 1)`, MAINTAINER-signed.
+///
+/// RFC 117 T1 (2026-08-22, owner ruling -- "No project has been created in production in the world
+/// yet. Breaking change is accepted."): `TagPayload` gained a required field 6, `patch_set_digest`,
+/// amended in place at `schema_version` 1 (no schema 2). This moved every one of this vector's
+/// three frozen values -- canonical bytes, object id, and signature preimage -- deliberately,
+/// authorized by that ruling. `patch_set_digest` here is a fixed, arbitrary 32-byte value (this
+/// vector's `target_block_id` names no real block for a real digest to be computed over); only its
+/// presence and fixedness matter for freezing identity, not its relationship to any block.
 fn rfc114_tag_payload() -> prikk_object::TagPayload {
     prikk_object::TagPayload {
         name: "rfc114-vector".to_string(),
@@ -648,32 +656,40 @@ fn rfc114_tag_payload() -> prikk_object::TagPayload {
         message: None,
         created_at: 0,
         author_key_id: "rfc114-vector-key".to_string(),
+        patch_set_digest: prikk_object::PatchSetDigest([0x7b; 32]),
     }
 }
 
+// RFC 117 T1 (2026-08-22, owner ruling): moved, deliberately, alongside the canonical bytes, object
+// id, and preimage above -- see `rfc114_vector_11_tag_schema_1_identity_and_signature`'s own comment.
 const RFC114_TAG_SIGNATURE: [u8; 64] = [
-    0x30, 0x3e, 0x3c, 0x5f, 0x8c, 0x76, 0x79, 0x1b, 0x75, 0xda, 0xf3, 0xa5, 0x11, 0xbc, 0x7f, 0x67,
-    0xec, 0x63, 0x2b, 0x35, 0x9b, 0xa2, 0x66, 0xcf, 0x88, 0x26, 0x02, 0xca, 0x4c, 0x08, 0x07, 0x42,
-    0x8a, 0x4a, 0x95, 0xcd, 0x21, 0xa8, 0x3d, 0xfe, 0x46, 0x6c, 0x63, 0x1b, 0xae, 0xcb, 0x2b, 0xf8,
-    0xe1, 0x35, 0xac, 0x8f, 0xb0, 0xe2, 0xb2, 0x49, 0x4f, 0xe4, 0xf8, 0xcc, 0x5f, 0x84, 0xc3, 0x06,
+    0xcf, 0x38, 0xbd, 0xd9, 0x69, 0x7a, 0x94, 0x07, 0xac, 0x95, 0x08, 0xf4, 0xc0, 0x2f, 0x5e, 0x45,
+    0x39, 0x4e, 0xb2, 0xc5, 0xdf, 0x97, 0x41, 0xfb, 0xb7, 0x61, 0xa8, 0xda, 0xce, 0xfe, 0xbb, 0x74,
+    0x88, 0x3d, 0x0a, 0x88, 0x93, 0xc3, 0xd1, 0xa5, 0xb8, 0xa6, 0xac, 0xb5, 0x88, 0x5b, 0xab, 0x4f,
+    0xa9, 0x70, 0x48, 0x20, 0xa1, 0x0b, 0xb3, 0xe8, 0xc5, 0xca, 0x35, 0x3e, 0x5a, 0x76, 0x7e, 0x03,
 ];
 
 #[test]
 fn rfc114_vector_11_tag_schema_1_identity_and_signature() -> prikk_error::Result<()> {
+    // RFC 117 T1 (2026-08-22, owner ruling -- "No project has been created in production in the
+    // world yet. Breaking change is accepted."): all three values below moved, deliberately, when
+    // `TagPayload` gained a required field 6 (`patch_set_digest`) at `schema_version` 1. Computed
+    // once via a throwaway probe test and hardcoded here, the same discipline every other vector in
+    // this file follows.
     let canonical = rfc114_tag_payload().to_canonical_bytes()?;
     assert_eq!(
         prikk_hash::to_hex(&canonical),
-        "000110000000000000000d7266633131342d766563746f72000212000000000000002078787878787878787878787878787878787878787878787878787878787878780004040000000000000008000000000000000000051000000000000000117266633131342d766563746f722d6b6579"
+        "000110000000000000000d7266633131342d766563746f72000212000000000000002078787878787878787878787878787878787878787878787878787878787878780004040000000000000008000000000000000000051000000000000000117266633131342d766563746f722d6b657900061100000000000000207b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b7b"
     );
     let id = ObjectId::from_canonical_payload(ObjectType::Tag, 1, &canonical);
     assert_eq!(
         id.to_string(),
-        "22afa8584a1cd57ecbbc1b90ea7d9db080dae0e59307f21081267234d5e592ab"
+        "2513d88101b0430b2d9f6e376adf60627874c46962de2d25a38f22ef7f2eb86d"
     );
     let preimage = rfc114_maintainer_preimage(ObjectType::Tag, id)?;
     assert_eq!(
         prikk_hash::to_hex(&preimage),
-        "7072696b6b2e7369672e76310001000522afa8584a1cd57ecbbc1b90ea7d9db080dae0e59307f21081267234d5e592ab000200187266633131342d766563746f722d6d61696e7461696e6572"
+        "7072696b6b2e7369672e7631000100052513d88101b0430b2d9f6e376adf60627874c46962de2d25a38f22ef7f2eb86d000200187266633131342d766563746f722d6d61696e7461696e6572"
     );
     assert_eq!(
         Ed25519KeyPair::from_seed(&RFC114_MAINTAINER_SEED).sign(&preimage),

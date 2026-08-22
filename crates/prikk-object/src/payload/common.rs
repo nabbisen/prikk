@@ -8,6 +8,16 @@ use crate::{CanonicalEncode, CanonicalWriter};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MerkleRoot(pub [u8; 32]);
 
+/// A 32-byte digest over a canonicalized set of patch ids (RFC 115 Stage 1 design D4). Not
+/// persisted as its own object -- a pure comparison value, `MerkleRoot`'s own shape. Lives here
+/// rather than in `prikk-store` (where every value that *computes* one still does,
+/// `compute_patch_set_digest` and friends) because `TagPayload` (RFC 117 T1) carries one, and
+/// `prikk-object` cannot depend on `prikk-store` -- the same crate-boundary reason
+/// `state_root.rs`'s `compute_state_root` stays in `prikk-store` while `MerkleRoot` itself lives
+/// here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PatchSetDigest(pub [u8; 32]);
+
 /// Advisory patch intent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u16)]

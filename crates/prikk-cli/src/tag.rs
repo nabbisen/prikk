@@ -21,7 +21,8 @@ use prikk_object::{
 };
 use prikk_store::{
     FileObjectStore, MaintainerSigner, ObjectReader, ObjectWriteSession, ObjectWriter,
-    RefPublication, RefStore, maintainer_signature, validate_local_tag_ref,
+    RefPublication, RefStore, compute_patch_set_digest_from_block, maintainer_signature,
+    validate_local_tag_ref,
 };
 
 /// Dispatch `prikk tag [list|create]`.
@@ -104,6 +105,11 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
     }
 
     let target_block_id = resolve_target_block(&ref_store, &object_store, &parsed.target)?;
+    // RFC 117 T1 §3: the tag's global identity is the digest of the target block's own patch
+    // closure, computed at creation -- "two repositories holding the same patches produce the same
+    // value" is the whole reason the field exists.
+    let patch_set_digest = compute_patch_set_digest_from_block(&object_store, target_block_id)
+        .map_err(|err| err.to_string())?;
 
     let signer = crate::maintainer_signer_from_env()?;
     let tag_payload = TagPayload {
@@ -112,6 +118,7 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
         message: parsed.message,
         created_at: 0,
         author_key_id: signer.key_id().to_string(),
+        patch_set_digest,
     };
     let tag_envelope = signed_envelope(
         ObjectType::Tag,

@@ -13,7 +13,9 @@ use super::{
     compute_patch_set_digest_from_block, patch_set_digest_preimage,
 };
 use crate::test_support::{maintainer_signature, signed_block, unique_temp_dir};
-use crate::{FileObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout};
+use crate::{
+    FileObjectStore, ObjectReader, ObjectWriter, RefPublication, RefStore, RepositoryLayout,
+};
 
 // RFC 115 Stage 1, `stage-1-patch-set-digest-handoff-v1.md` §3: committed literal vectors, computed
 // once via a throwaway probe test and hardcoded here -- a vector derived at test time from the code
@@ -241,6 +243,7 @@ fn tag_ref_and_heads_ref_at_the_same_block_produce_the_same_digest() -> prikk_er
         message: None,
         created_at: 0,
         author_key_id: "maintainer-key".to_string(),
+        patch_set_digest: compute_patch_set_digest_from_block(&store, tip)?,
     };
     let mut tag_envelope =
         ObjectEnvelope::unsigned(ObjectType::Tag, 1, tag_payload.to_canonical_bytes()?);
@@ -291,4 +294,108 @@ fn remotes_ref_is_refused_explicitly_not_resolved() {
         );
     }
     let _ = std::fs::remove_dir_all(root);
+}
+
+// RFC 117 T1 `stage-1-tag-payload-digest-handoff-v1.md` §6 tests, beyond the frozen-vector move
+// already covered by
+// `signature_contract_tests::vectors::rfc114_vector_11_tag_schema_1_identity_and_signature`.
+
+/// Build, sign and store a v2 Tag at `target_block_id`, its `patch_set_digest` computed the same
+/// way `prikk tag create` does -- `compute_patch_set_digest_from_block`, never anything block-local
+/// like `target_block_id` itself (row 3's own point: two different blocks must still agree here).
+fn build_and_store_tag(
+    store: &mut FileObjectStore,
+    name: &str,
+    target_block_id: ObjectId,
+) -> prikk_error::Result<(TagPayload, ObjectId)> {
+    let tag_payload = TagPayload {
+        name: name.to_string(),
+        target_block_id,
+        message: None,
+        created_at: 0,
+        author_key_id: "maintainer-key".to_string(),
+        patch_set_digest: compute_patch_set_digest_from_block(store, target_block_id)?,
+    };
+    let mut tag_envelope =
+        ObjectEnvelope::unsigned(ObjectType::Tag, 1, tag_payload.to_canonical_bytes()?);
+    tag_envelope.add_signature(maintainer_signature())?;
+    let tag_id = store.write_object(&tag_envelope)?;
+    Ok((tag_payload, tag_id))
+}
+
+/// §6 row 2: a tag's own `patch_set_digest` equals an independent recomputation over its target
+/// block. Writes a real Tag object (production shape: field 6 populated the same way `prikk tag
+/// create` populates it), reads it back through the object store, and recomputes the digest
+/// separately over the same block -- proving the persisted value round-trips and really is that
+/// computation, not merely present.
+#[test]
+fn a_tags_digest_equals_its_blocks_patch_closure_digest() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("rfc117-digest-tag-equals-block");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let mut store = FileObjectStore::new(layout);
+    let p1 = ObjectId::from_bytes([0x51; 32]);
+    let genesis = write_block(&mut store, BlockKind::Root, Vec::new(), Vec::new())?;
+    let tip = write_block(&mut store, BlockKind::Normal, vec![genesis], vec![p1])?;
+
+    let (_, tag_id) = build_and_store_tag(&mut store, "v1", tip)?;
+    let stored_envelope = store
+        .read_typed(tag_id, ObjectType::Tag)?
+        .ok_or_else(|| prikk_error::PrikkError::Integrity("missing Tag object".to_string()))?;
+    let decoded = TagPayload::decode_canonical(&stored_envelope.canonical_payload)?;
+
+    let independently_recomputed = compute_patch_set_digest_from_block(&store, tip)?;
+    assert_eq!(
+        decoded.patch_set_digest, independently_recomputed,
+        "a tag's own digest must equal an independent recomputation over its target block"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// §6 row 3 -- the property RFC 117 exists for: two independently-constructed repositories holding
+/// the same patches produce tags with the same `patch_set_digest`, even with different block
+/// structure on each side (`same_patches_different_block_structure_produce_equal_digests` above
+/// already proves this for the underlying digest; this proves the *tag* now carries it correctly).
+#[test]
+fn two_independent_repositories_holding_the_same_patches_produce_equal_tag_digests()
+-> prikk_error::Result<()> {
+    let p1 = ObjectId::from_bytes([0x91; 32]);
+    let p2 = ObjectId::from_bytes([0x92; 32]);
+
+    // Repo A: both patches sealed into one block.
+    let root_a = unique_temp_dir("rfc117-tag-digest-cross-repo-a");
+    let layout_a = RepositoryLayout::init(root_a.clone())?;
+    let mut store_a = FileObjectStore::new(layout_a);
+    let genesis_a = write_block(&mut store_a, BlockKind::Root, Vec::new(), Vec::new())?;
+    let tip_a = write_block(
+        &mut store_a,
+        BlockKind::Normal,
+        vec![genesis_a],
+        vec![p1, p2],
+    )?;
+    let (tag_a, _) = build_and_store_tag(&mut store_a, "v1", tip_a)?;
+
+    // Repo B: the same two patches, split across two blocks -- different topology, same patch set.
+    let root_b = unique_temp_dir("rfc117-tag-digest-cross-repo-b");
+    let layout_b = RepositoryLayout::init(root_b.clone())?;
+    let mut store_b = FileObjectStore::new(layout_b);
+    let genesis_b = write_block(&mut store_b, BlockKind::Root, Vec::new(), Vec::new())?;
+    let middle_b = write_block(&mut store_b, BlockKind::Normal, vec![genesis_b], vec![p1])?;
+    let tip_b = write_block(&mut store_b, BlockKind::Normal, vec![middle_b], vec![p2])?;
+    let (tag_b, _) = build_and_store_tag(&mut store_b, "v1", tip_b)?;
+
+    assert_ne!(
+        tag_a.target_block_id, tag_b.target_block_id,
+        "fixture sanity: the two repositories' tip blocks must genuinely differ in structure"
+    );
+    assert_eq!(
+        tag_a.patch_set_digest, tag_b.patch_set_digest,
+        "two independently-constructed repositories holding the same patches must produce tags \
+         with the same patch_set_digest, even with different block structure"
+    );
+
+    let _ = std::fs::remove_dir_all(root_a);
+    let _ = std::fs::remove_dir_all(root_b);
+    Ok(())
 }

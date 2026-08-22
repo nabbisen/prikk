@@ -4,6 +4,12 @@
 //! comparison value, not a storable object -- a dedicated newtype, never an `ObjectId`, and no
 //! `(object_type, schema_version)` pair.
 //!
+//! **RFC 117 T1: `PatchSetDigest` itself now lives in `prikk-object`**, re-exported here unchanged
+//! (see this module's own `pub use` below) -- `TagPayload` carries one as its field 6, and
+//! `prikk-object` cannot depend on `prikk-store`. Every function that *computes* a digest stays
+//! here, the same split `MerkleRoot` (`prikk-object`) and `compute_state_root` (`prikk-store`)
+//! already have.
+//!
 //! **Ref-kind support, per `RFC-115-stage-1-reachable-set-ruling-v1.md`:**
 //! - `heads/*` (`RefKind::Branch`): `target_object_id` names the Block directly.
 //! - `tags/*` (`RefKind::Tag`): `target_object_id` names a Tag object one hop away from the Block
@@ -32,12 +38,14 @@ use crate::merge_evidence::ancestors_inclusive;
 use crate::object_store::{ObjectReadSnapshot, ObjectReader};
 use crate::refs::RefStore;
 
-const PATCH_SET_DIGEST_DOMAIN: &[u8] = b"PRIKK-PATCH-SET-DIGEST-v1";
+/// RFC 117 T1: the newtype itself now lives in `prikk-object` (`TagPayload` carries one, and
+/// `prikk-object` cannot depend on this crate) -- re-exported here so every existing
+/// `crate::patch_set_digest::PatchSetDigest` / `prikk_store::PatchSetDigest` path keeps resolving
+/// to the same type, unchanged. Every function below that *computes* one stays here, matching
+/// `MerkleRoot`/`compute_state_root`'s own split.
+pub use prikk_object::PatchSetDigest;
 
-/// A canonical digest over a set of patch ids. Not an `ObjectId` and not persisted as its own
-/// object -- a pure comparison value, following `MerkleRoot`'s shape.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PatchSetDigest(pub [u8; 32]);
+const PATCH_SET_DIGEST_DOMAIN: &[u8] = b"PRIKK-PATCH-SET-DIGEST-v1";
 
 /// Construct the exact preimage over an already-sorted, deduplicated, strictly-ascending slice of
 /// patch ids. **Identity-bearing** (documented in `release-compatibility.md`'s frozen list): two
