@@ -115,8 +115,10 @@ byte-identical object ids.
 
 That is deliberate. DC-37 requires anchored opens that refuse symlink traversal, atomic replacement, and
 explicit file and directory durability; those guarantees were implemented against Linux primitives
-first (`LinuxDurability`) and macOS second (`MacosDurability`, DC-81), and have not yet been
-re-established on any other platform. See [Platform Support](./platform-support.md).
+first (`LinuxDurability`), macOS second (`MacosDurability`, DC-81), and Windows third
+(`WindowsDurability`, DC-87 Stage 2) — with no reviewed equivalent on any other platform. See
+[Platform Support](./platform-support.md) for the per-platform residual gaps, including Windows'
+weaker anchoring guarantee in one stated way.
 
 ## Where the unsafe-code boundary sits
 
@@ -155,8 +157,11 @@ Two limits are worth stating plainly, because they define what verification mean
 - Verification confirms **structural and cryptographic** validity. It does not re-derive that a change
   was semantically the *right* change — that rests on the maintainer's signature, uniformly, for merges
   exactly as for ordinary commits.
-- Repository-wide **author** trust verification is not yet implemented, so a patch's author signature is
-  carried and preserved but not checked repository-wide by `verify`.
+- `verify` enforces repository-wide **author** verification (DC-53): every reachable Patch's AUTHOR
+  signature is cryptographically checked against recorded key material. This remains
+  trust-on-first-use continuity, not first-contact authenticity — there is no independent
+  repository-wide AUTHOR *trust policy* (allowlist or revocation) the way MAINTAINER keys have one; see
+  [trust and threat model](./trust-threat-model.md).
 
 ## Known architectural costs
 

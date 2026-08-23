@@ -97,9 +97,12 @@ outcome is `Conflict`.
 
 ## Deferred
 
-- `prikk merge`, merge execution, and conflict resolution;
+**`prikk merge` (DC-74) executes confluent merges** — see the [merge guide](merge.md); this command
+stays read-only regardless. Still deferred:
+
+- conflict resolution;
 - automatic merge-base discovery;
-- branch merge semantics, branch publication, merge commits, and multi-parent blocks;
+- branch merge semantics beyond a two-sided confluent merge;
 - display-path filtering and scoped/path-limited merge analysis;
 - persisted proof/witness/merge-evidence objects;
 - JSON or other machine-readable output;

@@ -29,7 +29,9 @@ For format stability, migration limits, and release identity, see
   guarantees are held, weaker, or documented no-ops there. Read-only commands are CI-gated on macOS
   and Windows too — see [platform support](./platform-support.md).
 - Stable repository-format migration, garbage collection, quarantine enforcement, cache rebuilding,
-  hosted forge trust, remotes/sync, and production merge execution remain deferred.
+  hosted forge trust, and remote-tracking remain deferred. `prikk sync` (RFC 116, RFC 117) and
+  `prikk merge` (DC-74) have since shipped — see the [sync](../guide/sync.md) and
+  [merge](../guide/merge.md) guides.
 
 ## Initialized Layout
 
@@ -316,10 +318,11 @@ documented writable path is a newly initialized format-2 repository followed by 
 re-authoring, which creates new NodeIds, objects, signatures, and history. Copying `.prikk/` data or
 editing `FORMAT` is not migration. This explicit transition does not promise general format stability.
 
-Still deferred: garbage collection, cache rebuild semantics, quarantine enforcement, stable
-repository-format migration, backup/restore workflows, remote trust, hosted forge semantics, complete
-branch management, tags/remotes, sync, production merge execution, and full cross-platform filesystem
-validation.
+**`prikk sync` (RFC 116, RFC 117) and `prikk merge` (DC-74) have since shipped** — see the
+[sync](../guide/sync.md) and [merge](../guide/merge.md) guides. Still deferred: garbage collection,
+cache rebuild semantics, quarantine enforcement, stable repository-format migration, backup/restore
+workflows, remote trust, hosted forge semantics, complete branch management, remote-tracking, and
+full cross-platform filesystem validation.
 
 ## Claim-to-Source Anchors
 

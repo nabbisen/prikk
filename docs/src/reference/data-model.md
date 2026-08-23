@@ -16,8 +16,10 @@ status records listed in the anchor table at the foot of the page.
   [platform support](./platform-support.md) for the exact gap and which of the nine durability
   guarantees are held, weaker, or documented no-ops there. Read-only commands are CI-gated on macOS
   and Windows too — see [platform support](./platform-support.md).
-- Stable repository-format migration, complete branch management, tags/remotes, sync, hosted forge
-  trust, plugin execution, and production merge execution remain deferred.
+- Stable repository-format migration, complete branch management, remote-tracking, hosted forge
+  trust, and plugin execution remain deferred. `prikk sync` (RFC 116) and tag travel/adoption (RFC
+  117) and `prikk merge` (DC-74) have since shipped — see the [sync](../guide/sync.md) and
+  [merge](../guide/merge.md) guides.
 
 Trust, signature, and threat-boundary caveats live in the
 [trust and threat model](./trust-threat-model.md). The local persistence and crash-recovery boundary
@@ -123,10 +125,11 @@ The diagnostic catalog lives in the
 
 ## Deferred
 
-Still deferred: stable repository-format migration, complete branch management, tags/remotes, sync,
-hosted forge trust, audit/plugin execution, production merge execution, persisted proof or witness
-objects, general rollback authorization, multi-maintainer publication policy, and full cross-platform
-filesystem validation.
+**`prikk sync` (RFC 116, RFC 117) and `prikk merge` (DC-74) have since shipped** — see the
+[sync](../guide/sync.md) and [merge](../guide/merge.md) guides. Still deferred: stable
+repository-format migration, complete branch management, remote-tracking, hosted forge trust,
+audit/plugin execution, persisted proof or witness objects, general rollback authorization,
+multi-maintainer publication policy, and full cross-platform filesystem validation.
 
 ## Claim-to-Source Anchors
 

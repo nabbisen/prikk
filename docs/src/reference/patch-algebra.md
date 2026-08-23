@@ -15,11 +15,11 @@ For command syntax and examples, see the [merge evidence](../guide/merge-evidenc
   target inputs. They do not infer merge bases or branch merge intent.
 - Current confluence results apply only to the supported operation subset and the selected explicit
   candidate sequences.
-- `Confluent` and `ConfluentSubset` do not mean Prikk can create a merge commit.
-- Merge execution, branch publication, multi-parent merge Blocks, active-WAL merge drafts, worktree
-  conflict materialization, conflict-resolution UI, persisted proof/witness/plan objects, JSON output,
-  same-node text operational transforms, path-scoped analysis, and public stable Rust APIs remain
-  deferred.
+- `Confluent` and `ConfluentSubset` alone do not create a merge commit — `prikk merge` (DC-74) is the
+  separate, explicit command that executes a confluent merge; see the [merge guide](../guide/merge.md).
+- Active-WAL merge drafts, worktree conflict materialization, conflict-resolution UI, persisted
+  proof/witness/plan objects, JSON output, same-node text operational transforms, path-scoped
+  analysis, and public stable Rust APIs remain deferred.
 
 ## Patch Operations and Ordering
 
@@ -157,12 +157,12 @@ operation payloads. Displayed paths are repository-relative when available and s
 
 ## Deferred Work
 
-Still deferred: `prikk merge`, merge execution, automatic merge-base discovery, branch merge
-semantics, branch publication, merge commits, multi-parent Blocks, active-WAL merge drafts, worktree
-conflict materialization, conflict-resolution UI, persisted proof/witness/merge-evidence/merge-plan
-objects, same-node text operational transforms, path-scoped analysis, display-path filtering, JSON
-output, patch-algebra crate extraction, and public stable Rust APIs for replay, patch algebra, merge
-evidence, or merge planning internals.
+**`prikk merge` (DC-74) executes confluent merges** — see the [merge guide](../guide/merge.md). Still
+deferred: automatic merge-base discovery, branch merge semantics beyond a two-sided confluent merge,
+conflict resolution, active-WAL merge drafts, worktree conflict materialization, conflict-resolution
+UI, persisted proof/witness/merge-evidence/merge-plan objects, same-node text operational transforms,
+path-scoped analysis, display-path filtering, JSON output, patch-algebra crate extraction, and public
+stable Rust APIs for replay, patch algebra, merge evidence, or merge planning internals.
 
 ## Claim-to-Source Anchors
 
