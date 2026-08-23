@@ -32,7 +32,7 @@ fn maps_confluent_evidence_to_confluent_subset() -> Result<()> {
     assert_eq!(plan.status, "ConfluentSubset");
     assert_eq!(
         plan.action,
-        "review only; merge execution is not implemented"
+        "review the evidence, then run 'prikk merge' to execute"
     );
     assert_eq!(plan.evidence.outcome, "Confluent");
     assert_eq!(plan.evidence.reason, Some("proven_confluent"));
@@ -105,7 +105,7 @@ fn status_mapping_covers_all_evidence_outcomes() {
         (
             "Confluent",
             "ConfluentSubset",
-            "review only; merge execution is not implemented",
+            "review the evidence, then run 'prikk merge' to execute",
         ),
         (
             "Conflict",

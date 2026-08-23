@@ -48,7 +48,7 @@ fn plan_status_from_name(outcome: &str) -> &'static str {
 
 fn action_for_plan_status(status: &str) -> &'static str {
     match status {
-        "ConfluentSubset" => "review only; merge execution is not implemented",
+        "ConfluentSubset" => "review the evidence, then run 'prikk merge' to execute",
         "BlockedConflict" => "inspect evidence; conflict resolution is not implemented",
         "BlockedOrderedDependency" => {
             "inspect ordering evidence; execution ordering policy is not implemented"
@@ -58,6 +58,6 @@ fn action_for_plan_status(status: &str) -> &'static str {
         "BlockedNotConfluent" => "inspect replay/final-state mismatch evidence",
         "BlockedEvidenceFailure" => "repair or verify repository evidence before planning",
         "BlockedInvalidCandidate" => "select valid sealed candidates before planning",
-        _ => "inspect evidence; merge execution is not implemented",
+        _ => "unrecognized plan status; inspect evidence",
     }
 }

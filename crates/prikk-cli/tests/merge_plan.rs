@@ -42,7 +42,7 @@ fn merge_plan_ref_targets_are_confluent_subset_and_read_only() -> TestResult {
         "stdout: {stdout}"
     );
     assert!(
-        stdout.contains("action: review only; merge execution is not implemented"),
+        stdout.contains("action: review the evidence, then run 'prikk merge' to execute"),
         "stdout: {stdout}"
     );
     assert!(

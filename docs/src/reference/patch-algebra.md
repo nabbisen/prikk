@@ -135,7 +135,7 @@ status:
 
 | Evidence outcome | Plan status | Action |
 |---|---|---|
-| `Confluent` | `ConfluentSubset` | Review only; merge execution is not implemented. |
+| `Confluent` | `ConfluentSubset` | Review the evidence, then run `prikk merge` (DC-74) to execute. |
 | `Conflict` | `BlockedConflict` | Inspect evidence; conflict resolution is not implemented. |
 | `OrderedDependency` | `BlockedOrderedDependency` | Inspect ordering evidence; execution ordering policy is not implemented. |
 | `Unsupported` | `BlockedUnsupported` | Inspect unsupported operation evidence. |
