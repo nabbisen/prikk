@@ -1,5 +1,113 @@
 # Changelog
 
+## 0.23.0 — <cut date, set by the owner at tag time>
+
+**History moves between repositories.** `prikk sync` negotiates what one repository has that another
+doesn't, moves it as an artifact file over whatever channel the operator already has, and the receiver
+verifies every byte on arrival. Tags travel in that artifact and are adopted under the receiver's own
+key. Anyone who upgrades also gets two things that were silently missing before: `verify` now checks
+every AUTHOR signature in the whole repository, not just the ones it happened to look at, and `verify`'s
+cost stopped growing faster than the repository does.
+
+**Read the breaking change below before you tag anything on 0.22.1 and then upgrade.**
+
+### Added
+
+- **`prikk sync`** — the full negotiation loop: `summary` → `compare` → `have` → `build` → `accept` →
+  `pending` → `seal`, over `PSYNCSU1`/`PSYNCHV1` negotiation artifacts and the `PEXCH002` exchange
+  artifact. Nine subcommands in total, including `tags` and `adopt-tag <name>` (below). **Prikk does not
+  move the bytes itself** — the artifact is a plain file; the operator's own channel carries it, and
+  confidentiality is that channel's property, not prikk's.
+- **Tags travel and are adopted under the receiver's own key** — `sync tags` lists what a repository has
+  received; `sync adopt-tag <name>` creates a local, receiver-signed tag from one. A tag names a **patch
+  set**, not a block, because blocks diverge by design even when two repositories hold the same history.
+- **`verify` checks every reachable Patch's AUTHOR signature, repository-wide** — including history
+  received from another party, which previously read `Unverifiable` forever. This is
+  **trust-on-first-use**: it proves the same author signed as last time, not who that author is on first
+  contact — see the [trust and threat model](./docs/src/reference/trust-threat-model.md).
+- **The repository-format contract is explicit and gated.** What is frozen forever (the object-id
+  preimage, each shipped `(object_type, schema_version)` pair's canonical encoding, the signature
+  preimage, the algorithm identifiers) versus what may still change behind a documented, tested migration
+  path is now a real contract, held by CI rather than by intention — a `CURRENT_FORMAT_VERSION` bump
+  cannot pass without migration coverage.
+
+### Changed
+
+- **`verify` is linear in history length**, not superlinear — 27.04 ms at 160 blocks, ×1.97 per doubling,
+  down from ×3.51 before this release. Held by a gate that fails if the cost regresses, not by a
+  one-time measurement.
+- **Bundle import accepts both `PBNDL001` and `PBNDL002`** on import, restoring a format-migration path
+  an interim change had briefly severed.
+
+### Fixed
+
+- **Bundle export previously failed on a tag ref**, with a misleading message. It now resolves the ref's
+  second hop correctly and exports the `Tag` object itself.
+- **Bundle import validates the whole transported author-key set atomically**, before recording any of
+  it — closes a partial-write hazard where a hostile or malformed import could leave some keys recorded
+  and others not.
+- **`import_bundle` and `accept_exchange_artifact` both validate closure completeness before any
+  write** — an import naming an object it never actually ships (a missing blob, a missing block parent)
+  is now refused outright, instead of being accepted with a dangling reference invisible to `verify`.
+- **`merge-plan`'s `ConfluentSubset` action text no longer says merge execution is unimplemented** —
+  DC-74 shipped it in 0.19.0; the message had never caught up.
+
+### Breaking change
+
+**A `Tag` written by 0.22.1 will not decode under 0.23.0, and the reverse is also true.** `TagPayload`
+gained two fields — `patch_set_digest` and `patch_count` (RFC 117) — added **in place at
+`schema_version` 1**, not as a new schema version. `0.23.0` reading a `0.22.1` tag fails with
+`Tag missing patch_set_digest`; `0.22.1` reading a `0.23.0` tag fails with `unknown Tag field tag: 6`.
+
+**This surfaces in `prikk verify`, not only `prikk tag list`.** A repository written by 0.22.1 that
+contains any tag will not verify under 0.23.0, and the error reads as malformed data rather than a
+version mismatch, because that is what the decoder's own refusal says.
+
+Prikk has not yet been used to hold production history. On that basis the owner ruled `Tag`'s schema
+window closed rather than adding a second live schema, the same way `RefState` carries two (open and
+DC-61-closed).
+
+**A repository written by 0.22.1 that already holds a tag cannot be repaired under 0.23.0.** There is no
+`prikk tag delete`, and `prikk tag create` refuses outright when a tag ref of that name already exists —
+so the old, now-unverifiable tag cannot be removed to make way for a new one in the same repository.
+**If you have a repository from 0.22.1 with a tag in it and intend to keep using it, keep using 0.22.1
+for that repository, or start a fresh repository under 0.23.0.** There is no in-place remediation today.
+
+### Known limitation
+
+- **No prikk release passes the DC-35 signer audit** — `release-signers.toml` is empty and fail-closed.
+  Unchanged by this release.
+- **"Two machines" is exercised as two repositories**, not two hosts — file-based and channel-agnostic,
+  but no cross-host test exists yet.
+- **Negotiation is branch-scoped.** `remotes/*` is excluded structurally; a tag's deletion and movement
+  do not travel — only its creation and adoption do.
+- **No discovery, remote identity, or remote-tracking semantics.**
+- **Tag adoption resolves by scanning local blocks**, measured superlinear — 12.6 ms over 500 blocks,
+  86 ms over 2000.
+- **`seal`'s cost is unchanged: O(N) reads per call**, so building N commits remains O(N²) in total
+  reads. `verify` is linear now; `seal` is a different command and this release does not touch it.
+
+### Why
+
+Four of the six status-claim criteria (`MILESTONES.md`) were met since 0.22.1 and none had shipped:
+sync exists (criterion 1), the format-stability question is answered (criterion 2), `verify` is not
+superlinear (criterion 3), and `verify` checks author signatures repository-wide (criterion 5). This is
+the release that makes those real for anyone who installs it, not only for anyone reading `main`.
+
+### Verified rather than assumed
+
+- **Twenty-one distinct security refusals were recorded across RFC 115 and RFC 116's own stage reviews,
+  each with an observed-failing negative control** — trust never expands on receipt (no artifact can
+  cause a maintainer key to be adopted), every byte is verified on arrival, and the receiver seals only
+  under its own key.
+- **`crates/prikk-cli/tests/rfc116_sync_cli.rs` drives the whole sync loop through the binary alone**,
+  asserting by reading the receiver's own ref tip back rather than trusting an in-process return value,
+  and additionally runs `prikk verify` on both repositories after every sync and asserts both pass — the
+  load-bearing claim, with its own negative control (planting a defect in material the sync itself
+  created makes the assertion fail).
+- **A dedicated gate fails if `verify`'s cost ever regresses to superlinear again**, rather than relying
+  on a one-time measurement staying true.
+
 ## 0.22.1 — 2026-08-17
 
 **Downloadable binaries for macOS and Windows, and a release page that tells you what changed.** No

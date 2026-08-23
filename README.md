@@ -42,7 +42,7 @@ Prikk is designed to be:
 
 ## Current Status
 
-Latest released implementation: **0.22.1**. Windows became a mutating platform in 0.21.0: Prikk now authors, commits, and checks out on Linux, macOS, and Windows, and CI requires a repository authored on Linux, mutated on Windows, and verified back on Linux to produce byte-identical object ids — so the claim that anyone can verify anyone's history is tested across platforms rather than assumed.
+Latest released implementation: **0.23.0**. Windows became a mutating platform in 0.21.0: Prikk now authors, commits, and checks out on Linux, macOS, and Windows, and CI requires a repository authored on Linux, mutated on Windows, and verified back on Linux to produce byte-identical object ids — so the claim that anyone can verify anyone's history is tested across platforms rather than assumed.
 
 Next increment candidates are tracked in `ROADMAP.md`.
 
@@ -58,18 +58,13 @@ materialization for the supported subset, display merge evidence and merge plans
 candidates, and **execute a merge** when the two sides are proven confluent — refusing cleanly, with no
 object, WAL, or ref write, when they are not.
 
-Known limits worth stating up front, **in the released 0.22.1**: there is no networking or sync, so
-history cannot be exchanged between machines; merge-base discovery is manual; conflicts are detected
-and refused but never resolved; `verify` cost grows steeply with history length; and `verify` does not
-yet check author signatures repository-wide.
-
-**Merged on `main` but not in any published binary yet** — if you installed a release, you do not have
-these: sync exists between repositories, though **prikk does not move the bytes itself** (confidentiality
-is the user's channel's property, not prikk's), negotiation is branch-scoped (tags travel and are adopted
-separately, under the receiver's own key), and there is no discovery or remote-tracking; `verify` cost is
-linear in history length; and `verify` checks author signatures repository-wide, but only as
-trust-on-first-use continuity — it proves the same author signed as last time, not who that author is on
-first contact. Merge-base discovery and conflict resolution remain open on `main` too.
+Known limits worth stating up front: merge-base discovery is manual; conflicts are detected and refused
+but never resolved; sync exists between repositories, but **prikk does not move the bytes itself** —
+confidentiality is the user's channel's property, not prikk's — negotiation is branch-scoped (tags
+travel and are adopted separately, under the receiver's own key), and there is no discovery or
+remote-tracking; `verify` cost is linear in history length; and `verify` checks author signatures
+repository-wide, but only as trust-on-first-use continuity — it proves the same author signed as last
+time, not who that author is on first contact.
 
 **Mutation runs on Linux, macOS, and Windows** as of 0.21.0. Windows has narrower guarantees in two
 named places — see the [platform support
@@ -238,7 +233,6 @@ prikk tag [list]
 prikk tag create tags/<name> --target <ref|block> [-m <message>]
 prikk bundle export --ref REF --output <file>
 prikk bundle import --input <file>
-# sync: on `main` only, not in the released 0.22.1
 prikk sync summary --output <file>
 prikk sync compare --summary <file>
 prikk sync have <ref> --output <file>
