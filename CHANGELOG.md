@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.23.0 — <cut date, set by the owner at tag time>
+## 0.23.0 — 2026-08-23
 
 **History moves between repositories.** `prikk sync` negotiates what one repository has that another
 doesn't, moves it as an artifact file over whatever channel the operator already has, and the receiver
