@@ -40,12 +40,10 @@ object id.
 New envelope serialization and repository writes require a strict signature sequence. Ed25519
 signatures must be 64 bytes, duplicate signature tuples are rejected, and signatures are ordered by
 key-id bytes, signer-role code, algorithm code, then signature bytes. Advisory signature timestamps
-do not affect that order. Format-1 verification preserves older structurally readable bytes and
-reports malformed shape, duplicate, or non-canonical ordering as warnings instead of rewriting them.
+do not affect that order.
 
 The current object model includes persistent Patch, Block, RefState, Blob, Tag, and RecognitionClaim
-object directories. **Tag objects are produced by public command surfaces** — `prikk tag create` and
-`sync adopt-tag` both create them (RFC 117) — this page's claim otherwise is stale and corrected here.
+object directories. **Tag objects are produced by `prikk tag create` and `sync adopt-tag` (RFC 117).**
 **Attestation remains genuinely unconstructed**: the object type and directory are defined, but no
 production code path builds one. RefUpdate is an object-envelope type stored inline in ref logs rather
 than as a persistent object-store directory. BlockSummaryCache and RecoveryNote are explicitly not
