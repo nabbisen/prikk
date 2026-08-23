@@ -133,7 +133,20 @@ production removal path exists, which is why a `0.22.1` tag cannot be cleared).
 ruling establishes; **§5.2 or §5.3 tempts you to describe a project/repository lifecycle richer than what
 exists**; or you find a *fifth* undocumented shipped concept large enough to need its own increment.
 
-**One open question I am NOT asking you to answer**, recorded so it is not lost: the owner asked about a
-**"workspace"** concept. **There is no such concept in prikk** — zero mentions in either file, and none
-in the code; prikk has a **worktree**. Whether a workspace is wanted as a future concept is the owner's
-question to settle, not something to document into existence.
+**One open item I am NOT asking you to answer** — and a correction to v1 of this handoff.
+
+**v1 of this section said "there is no such concept in prikk". That was wrong**, and the owner caught it.
+**`rfcs/proposed/108-workspace-concurrent-sessions.md` exists** — *"Workspace: concurrent sessions in one
+physical project"*, **authored by the project owner** on 2026-08-18, and ranked in `EXECUTION-ORDER.md`.
+My claim came from grepping the two reference files and the shipped code, and I then stated it about
+**prikk as a whole**. The scope of the grep was not the scope of the claim.
+
+**What is true:** a Workspace is a **proposed, owner-authored capability with no design and no code** —
+its own Status line says *"No design exists and implementation must not start from this record."* It is
+explicitly **not** another checkout and **not** filesystem virtualization: *"one project, many
+Workspaces."*
+
+**For this increment that changes nothing: do not document Workspace in the reference.** A reference
+describes what shipped. **But do not write anything that forecloses it either** — in particular, do not
+describe `worktree` as prikk's model of parallel work, because RFC 108 §2 is explicit that a Workspace is
+a different concept from a checkout.
