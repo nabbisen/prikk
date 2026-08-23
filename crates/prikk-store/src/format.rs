@@ -17,8 +17,10 @@ pub(crate) fn validate_object_envelope(
 
 /// Format-2 schema admission per object type. Every type but `RefState` accepts exactly one
 /// schema; `RefState` accepts schema 1 (open, the pre-DC-61 shape) or `REF_STATE_CLOSED_SCHEMA`
-/// (closed, DC-61) — the only type in this repository with more than one live schema, because
-/// closure is the only field ever added to an existing payload after its type shipped.
+/// (closed, DC-61) — the only type in this repository with more than one live *schema number*.
+/// `Tag` gained two fields in place at schema 1 after it shipped (`patch_set_digest`, RFC 117
+/// stage 1; `patch_count`, T7) rather than minting a new schema — the owner ruled `Tag`'s schema
+/// window closed (2026-08-23), so `RefState` remains the only type admitting more than one schema.
 pub(crate) fn validate_format2_schema(envelope: &ObjectEnvelope) -> Result<()> {
     let accepted: &[u32] = match envelope.object_type {
         ObjectType::Block => &[2],

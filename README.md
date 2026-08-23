@@ -246,6 +246,8 @@ prikk sync build <ref> --have <file> --output <file>
 prikk sync accept <file> [--claims-out <file>]
 prikk sync pending
 prikk sync seal <ref> --claim <id>
+prikk sync tags
+prikk sync adopt-tag <name>
 prikk worktree-status [path] [--ref REF]
 prikk verify [path]
 prikk doctor [path]

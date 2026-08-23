@@ -104,7 +104,7 @@ pub(crate) fn print_help(version: &str) {
     );
     println!("  prikk sync have <ref> --output <file>     Write a PSYNCHV1 have-list for one ref");
     println!(
-        "  prikk sync build <ref> --have <file> --output <file>  Build a PEXCH001 artifact closing \
+        "  prikk sync build <ref> --have <file> --output <file>  Build a PEXCH002 artifact closing \
          the gap"
     );
     println!(
@@ -112,7 +112,7 @@ pub(crate) fn print_help(version: &str) {
          not encrypt it; move it only over a channel you trust"
     );
     println!(
-        "  prikk sync accept <file> [--claims-out <file>]  Accept a PEXCH001 artifact (prints \
+        "  prikk sync accept <file> [--claims-out <file>]  Accept a PEXCH002 artifact (prints \
          claim ids; optionally writes them)"
     );
     println!("  prikk sync pending                        List accepted-but-unsealed patches");
@@ -122,6 +122,11 @@ pub(crate) fn print_help(version: &str) {
     println!(
         "  prikk sync seal <ref> --claims <file>     Seal a batch of claims, ordered by parent \
          block first"
+    );
+    println!("  prikk sync tags                           List received tags and their resolution");
+    println!(
+        "  prikk sync adopt-tag <name>               Create a local, receiver-signed tag from a \
+         received tag"
     );
     println!("  prikk --version                           Print version");
 }

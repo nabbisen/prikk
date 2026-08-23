@@ -348,10 +348,7 @@ fn run_status() -> std::result::Result<(), String> {
             );
         }
     }
-    println!(
-        "status: multi-operation text diff minimization, plugins, and sync not \
-         yet implemented"
-    );
+    println!("status: multi-operation text diff minimization and plugins not yet implemented");
     Ok(())
 }
 

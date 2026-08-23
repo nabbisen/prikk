@@ -398,9 +398,21 @@ M5 bundles "Sync and Quarantine." **They are separable, and sync alone is at lea
 questions** — bundling them under one label would repeat the "increment 4.4" error, where one marker
 covered two unrelated blockers and produced a wrong roadmap framing:
 
-- **Sync — now criterion 1 of the status-claim criteria** (`MILESTONES.md`). Recorded 2026-08-09: nothing in the tree exchanges history between repositories, so a *distributed* VCS cannot currently distribute. **This is the largest single gap between prikk and dropping the "early implementation" badge**, and it is unowned with no increment behind it. Cross-platform mutation lets more people use prikk alone; only sync lets two people work together across machines.
+- **Sync — criterion 1 of the status-claim criteria** (`MILESTONES.md`). **MET 2026-08-22 (`c9c8576`).**
+  Recorded 2026-08-09: nothing in the tree exchanged history between repositories, so a *distributed*
+  VCS could not distribute — at the time, correctly **the largest single gap between prikk and dropping
+  the "early implementation" badge**. **Delivered across RFC 115/116/117**, ten increments: `prikk sync`
+  negotiates via artifacts (`summary`/`compare`/`have`/`build`/`accept`/`pending`/`seal`), patch-level
+  history moves in the `PEXCH002` exchange artifact, and tags travel and are adopted under the
+  receiver's own key (`sync tags`/`adopt-tag`). Criterion 1's row carries the stated limits — prikk does
+  not move the bytes itself, "two machines" is exercised as two repositories with no cross-host test,
+  and there is no discovery or remote-tracking — read it before citing this row further.
 - **Multi-parent block lineage** — deferred out of DC-74 on 2026-08-08, **not rejected**. `BlockPayload.parent_block_ids` is already `Vec<ObjectId>`, sorted and unique, with a source comment anticipating *"a later design adds semantic parent roles"* — so this is a replay question, never a format change. `patch_replay.rs:206` fails closed on multi-parent lineage, and lifting that reopens what a baseline is for DC-64's cache, what `rollback_preview` walks, and what a horizon means. **The open question is whether it buys anything**: under DC-74's adoption model the patch DAG already records a merge structurally, so block parentage may be bookkeeping that duplicates it. Product **M3** is named "Block DAG and Checkout", which may encode a Git-inherited assumption worth re-examining rather than inheriting.
-- **Transport** — what moves objects between repositories, and whether prikk owns that at all.
+- **Transport — settled by RFC 116's accepted ruling, not open.** `prikk-store` stays bytes-in/bytes-out
+  and prikk stays off the network; sync-over-any-channel satisfies criterion 1, so moving a `sync`/
+  `bundle` artifact between repositories is the operator's own channel, by design, not a gap awaiting a
+  future increment. What remains genuinely unautomated — the operator still copies the file themselves —
+  is a consequence of that ruling, not an open question about who owns it.
 - **Peer trust** — what a remote is permitted to assert. All trust is local today
   (`trust maintainer add`); a peer claiming a ref advanced is a new authority question.
 - **Quarantine policy** — what happens to objects that arrive untrusted. `.prikk/quarantine` already
