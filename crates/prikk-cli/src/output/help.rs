@@ -32,6 +32,12 @@ pub(crate) fn print_help(version: &str) {
         "  prikk tag create <name> --target <ref|block> [-m <message>]  Publish a tag at a block"
     );
     println!(
+        "  prikk bundle export --ref REF --output <file>  Write a self-contained history bundle"
+    );
+    println!(
+        "  prikk bundle import --input <file>        Import a bundle as an untrusted received pointer"
+    );
+    println!(
         "  prikk log [path] [--limit N] [--ref REF]  Show sealed ref history including rollback blocks"
     );
     println!("  prikk checkout --plan-only [path] [--ref REF]      Show a safe checkout plan");

@@ -3,12 +3,14 @@
 //! Prikk command-line entry point.
 //!
 //! The CLI exposes minimal repository layout commands, active WAL status, node-addressed worktree
-//! commit authoring, explicit non-default branch genesis, deterministic arbitrary-span text edit generation,
+//! commit authoring, explicit non-default branch genesis, tag publication, bundle export/import,
+//! sync negotiation and tag adoption, deterministic arbitrary-span text edit generation,
 //! read-only inverse planning, rollback preview, rollback draft append/verification, sealed rollback classification,
 //! supported patch replay planning/materialization, explicit patch deletion planning, a local
 //! no-audit seal scaffold, read-only history inspection, checkout planning, conservative snapshot
-//! materialization, read-only worktree status, minimal publication trust setup, repository
-//! verification, and doctor diagnostics.
+//! materialization, read-only worktree status, minimal publication trust setup, read-only merge
+//! evidence and merge plan review, confluent merge execution, repository verification, doctor
+//! diagnostics, and stale lock/index maintenance.
 //! Multi-operation text diff minimization, full patch algebra, and audit plugins remain later increments.
 
 use std::path::PathBuf;
