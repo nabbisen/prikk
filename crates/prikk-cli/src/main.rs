@@ -9,7 +9,7 @@
 //! no-audit seal scaffold, read-only history inspection, checkout planning, conservative snapshot
 //! materialization, read-only worktree status, minimal publication trust setup, repository
 //! verification, and doctor diagnostics.
-//! Multi-operation text diff minimization, full patch algebra, audit plugins, and sync remain later increments.
+//! Multi-operation text diff minimization, full patch algebra, and audit plugins remain later increments.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -150,8 +150,8 @@ fn run_commit(args: Vec<String>) -> std::result::Result<(), String> {
         println!("  {} {}", change.operation.as_str(), change.path);
     }
     println!(
-        "note: multi-operation text diff minimization, patch algebra, rename detection, audit \
-         plugins, and sync remain later increments"
+        "note: multi-operation text diff minimization, patch algebra, rename detection, and audit \
+         plugins remain later increments"
     );
     Ok(())
 }
@@ -164,7 +164,7 @@ fn run_seal(args: Vec<String>) -> std::result::Result<(), String> {
     println!("patches: {}", result.patch_count);
     println!("block id: {}", result.block_id);
     println!("{} RefState: {}", result.ref_name, result.ref_state_id);
-    println!("note: audit plugins and patch-based worktree materialization remain later PRs");
+    println!("note: audit plugins remain later PRs");
     Ok(())
 }
 

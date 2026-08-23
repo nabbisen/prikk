@@ -92,7 +92,7 @@ pub(crate) fn print_patch_replay_plan(layout: &RepositoryLayout, plan: &PatchRep
         println!("  file: {path}");
     }
     println!(
-        "note: this replays CreateFile/DeleteNode/EditText; ReplaceBinary, renames, \
+        "note: this replays CreateFile/DeleteNode/EditText/ReplaceBinary/ChangePerm; renames, \
          conflicts, and full patch algebra remain later increments"
     );
 }
