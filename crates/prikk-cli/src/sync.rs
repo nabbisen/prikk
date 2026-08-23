@@ -11,7 +11,9 @@
 //!
 //! The full loop, across two repositories A (has new content) and B (wants it):
 //! `A: sync summary` → `B: sync compare` → `B: sync have` → `A: sync build` → `B: sync accept` →
-//! `B: sync pending` (optional, observational) → `B: sync seal`.
+//! `B: sync pending` (optional, observational) → `B: sync seal`. RFC 117 stage 3 adds a tag-adoption
+//! side loop after `accept`, independent of sealing: `B: sync tags` (observational) →
+//! `B: sync adopt-tag <name>` (explicit, receiver-signed).
 //!
 //! **Claim ids move by file, like every other step (RFC 116 stage 5 §2).** `sync accept` can
 //! write them to `--claims-out <file>`; `sync seal <ref> --claims <file>` reads them back,
@@ -20,6 +22,12 @@
 //! from id order), and seals each in turn, stopping at the first failure and reporting exactly how
 //! far it got (§3: no rollback -- each seal is an independent, legitimate act under the receiver's
 //! own key). `sync seal <ref> --claim <id>` still exists for the single-claim case.
+//!
+//! **Received tags move by no file at all (RFC 117 stage 3 §4).** Unlike claims, "which tags has
+//! this repository received" needs no channel of its own: [`prikk_store::received_tag_ids`] derives
+//! it fresh from the local object store every time (module doc there), so `sync tags`/
+//! `sync adopt-tag <name>` take no `--tags-out`/`--tags <file>` pair -- there is nothing to hand
+//! back and forth between two invocations on the *same* repository.
 
 use std::path::PathBuf;
 
@@ -27,15 +35,16 @@ use prikk_object::ObjectId;
 use prikk_store::{
     AcceptOptions, ClaimSignatureVerification, DEFAULT_EXCHANGE_ARTIFACT_MAX_OBJECT_COUNT,
     DEFAULT_EXCHANGE_ARTIFACT_MAX_TOTAL_BYTES, DEFAULT_SYNC_SUMMARY_MAX_REF_COUNT,
-    DEFAULT_SYNC_SUMMARY_MAX_TOTAL_BYTES, ObjectReadSnapshot, SealFromAcceptedOutcome,
-    SyncArtifactOutcome, accept_exchange_artifact, accepted_but_unsealed_patch_ids,
-    build_have_list, build_sync_artifact, build_sync_summary, compare_sync_summary,
-    decode_sync_summary, order_claims_for_sealing, seal_from_accepted_claim,
+    DEFAULT_SYNC_SUMMARY_MAX_TOTAL_BYTES, ObjectReadSnapshot, ReceivedTagResolution,
+    SealFromAcceptedOutcome, SyncArtifactOutcome, TagSignatureVerification,
+    accept_exchange_artifact, accepted_but_unsealed_patch_ids, adopt_tag, build_have_list,
+    build_sync_artifact, build_sync_summary, compare_sync_summary, decode_sync_summary,
+    list_received_tags, order_claims_for_sealing, seal_from_accepted_claim,
 };
 
 use crate::maintainer_signer_from_env;
 
-/// Dispatch `prikk sync [summary|compare|have|build|accept|pending|seal]`.
+/// Dispatch `prikk sync [summary|compare|have|build|accept|pending|seal|tags|adopt-tag]`.
 pub fn run_sync(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
     let mut iter = args.into_iter();
     match iter.next().as_deref() {
@@ -46,12 +55,15 @@ pub fn run_sync(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Str
         Some("accept") => run_accept(root, iter.collect()),
         Some("pending") => run_pending(root, iter.collect()),
         Some("seal") => run_seal(root, iter.collect()),
+        Some("tags") => run_tags(root, iter.collect()),
+        Some("adopt-tag") => run_adopt_tag(root, iter.collect()),
         Some(other) => Err(format!(
             "unknown sync subcommand: {other} (expected summary, compare, have, build, accept, \
-             pending, or seal)"
+             pending, seal, tags, or adopt-tag)"
         )),
         None => Err(
-            "sync requires a subcommand: summary, compare, have, build, accept, pending, or seal"
+            "sync requires a subcommand: summary, compare, have, build, accept, pending, seal, \
+             tags, or adopt-tag"
                 .to_string(),
         ),
     }
@@ -139,6 +151,7 @@ fn run_build(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
             println!("built sync artifact for {}", report.ref_name);
             println!("delta patches: {}", report.delta_patch_count);
             println!("claims: {}", report.claim_count);
+            println!("tags: {}", report.tag_count);
             println!(
                 "blobs: {} | author key material: {}",
                 report.export_report.blob_count, report.export_report.author_key_count
@@ -173,6 +186,7 @@ fn run_accept(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
     println!("patches: {}", report.patch_count);
     println!("blobs: {}", report.blob_count);
     println!("claims: {}", report.claim_count);
+    println!("tags: {}", report.tag_count);
     println!("new objects: {}", report.written_object_count);
     println!(
         "author key material: {} recorded (continuity only, not a trust decision)",
@@ -191,6 +205,19 @@ fn run_accept(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
                     "  claim {claim_id}: Unverifiable ({key_id} not adopted here -- its order is \
                      unattributed)"
                 );
+            }
+        }
+    }
+    // RFC 117 stage 3 §3: a received tag's signature outcome is reported, never gating -- the same
+    // treatment claims get above. Adoption (`sync adopt-tag`) is a wholly separate, later act; this
+    // print is purely observational, the same role the claim print has before `sync seal`.
+    for (tag_id, outcome) in &report.tag_signature_outcomes {
+        match outcome {
+            TagSignatureVerification::Sound { key_id } => {
+                println!("  tag {tag_id}: Sound ({key_id})");
+            }
+            TagSignatureVerification::Unverifiable { key_id } => {
+                println!("  tag {tag_id}: Unverifiable ({key_id} not adopted here)");
             }
         }
     }
@@ -221,6 +248,68 @@ fn run_pending(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Stri
     for patch_id in &patch_ids {
         println!("  {patch_id}");
     }
+    Ok(())
+}
+
+/// `prikk sync tags` -- list received tags with their name, live signature outcome, and current
+/// resolution state (RFC 117 stage 3 §4). Purely observational; takes no input file (module doc).
+fn run_tags(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+    require_no_args(args, "sync tags")?;
+    let layout = crate::open_repository(root)?;
+    let summaries = list_received_tags(&layout).map_err(|err| err.to_string())?;
+    if summaries.is_empty() {
+        println!("no received tags");
+        return Ok(());
+    }
+    println!("received tags: {}", summaries.len());
+    for summary in &summaries {
+        println!("{} ({})", summary.name, summary.tag_id);
+        match &summary.signature_outcome {
+            TagSignatureVerification::Sound { key_id } => {
+                println!("  signature: Sound ({key_id})");
+            }
+            TagSignatureVerification::Unverifiable { key_id } => {
+                println!("  signature: Unverifiable ({key_id} not adopted here)");
+            }
+        }
+        match &summary.resolution {
+            ReceivedTagResolution::Resolved(block_id) => {
+                println!("  resolution: Resolved {block_id}");
+            }
+            ReceivedTagResolution::NotHeld => {
+                println!(
+                    "  resolution: NotHeld (not enough of this repository's history has been \
+                     synced yet)"
+                );
+            }
+            ReceivedTagResolution::Ambiguous { detail } => {
+                println!("  resolution: Ambiguous -- {detail}");
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `prikk sync adopt-tag <name>` -- resolve the one received tag named `<name>` to a local block and
+/// create a **local**, receiver-signed tag naming it (RFC 117 T4; `tag_travel::adopt_tag`). Refuses
+/// on `NotHeld`, on ambiguity (either T2's patch-set ambiguity or two received tags sharing a name),
+/// or if a local tag by that name already exists.
+fn run_adopt_tag(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+    let mut iter = args.into_iter();
+    let Some(name) = iter.next() else {
+        return Err("sync adopt-tag requires <name>".to_string());
+    };
+    if name.starts_with("--") {
+        return Err("sync adopt-tag requires <name> before any flags".to_string());
+    }
+    require_no_args(iter.collect(), "sync adopt-tag")?;
+
+    let layout = crate::open_repository(root)?;
+    let signer = maintainer_signer_from_env()?;
+    let created = adopt_tag(&layout, &name, &signer).map_err(|err| err.to_string())?;
+    println!("adopted tag {name}");
+    println!("tag object: {}", created.tag_object_id);
+    println!("RefState: {}", created.ref_state_id);
     Ok(())
 }
 

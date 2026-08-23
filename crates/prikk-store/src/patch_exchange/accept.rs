@@ -23,9 +23,11 @@ use crate::patch_set_digest::compute_patch_set_digest;
 use crate::recognition_claim::{
     check_recognition_claim_consistency, maintainer_trust_policy_or_empty, verify_claim_signature,
 };
+use crate::tag_travel::verify_tag_signature;
 use crate::verify::AuthorSignatureVerification;
 
 pub use crate::recognition_claim::ClaimSignatureVerification;
+pub use crate::tag_travel::TagSignatureVerification;
 
 use super::artifact::{
     DEFAULT_EXCHANGE_ARTIFACT_MAX_OBJECT_COUNT, DEFAULT_EXCHANGE_ARTIFACT_MAX_TOTAL_BYTES,
@@ -78,7 +80,9 @@ pub struct AcceptReport {
     pub blob_count: usize,
     /// Recognition claims the artifact carried.
     pub claim_count: usize,
-    /// Patch, blob, and claim objects that did not already exist in this repository's object store
+    /// Tag objects the artifact carried (RFC 117 stage 3 §2/§3).
+    pub tag_count: usize,
+    /// Patch, blob, claim, and tag objects that did not already exist in this repository's object store
     /// before this accept -- content-addressed, so a replayed accept (§4.3) reports zero here.
     pub written_object_count: usize,
     /// AUTHOR key entries the artifact carried and this accept recorded locally. Zero on a replayed
@@ -91,12 +95,18 @@ pub struct AcceptReport {
     pub author_signature_outcomes: Vec<(ObjectId, AuthorSignatureVerification)>,
     /// One outcome per carried claim's own MAINTAINER signature.
     pub claim_signature_outcomes: Vec<(ObjectId, ClaimSignatureVerification)>,
+    /// One outcome per carried tag's own MAINTAINER signature (RFC 117 stage 3 §3) -- reported,
+    /// never gating, the same treatment `claim_signature_outcomes` gets.
+    pub tag_signature_outcomes: Vec<(ObjectId, TagSignatureVerification)>,
 }
 
-/// Accept a `PEXCH001` exchange artifact (handoff §4). Writes patches, blobs, and recognition claims
-/// -- and records AUTHOR key material -- **only** once every fallible check has already passed.
-/// Never touches a ref, a Block, or the received namespace: this is patch-level exchange (§0's "the
-/// unit is the patch"), and Stage 3 does not extend the accept path into sealing (§1's scope cut).
+/// Accept a `PEXCH002` exchange artifact (handoff §4). Writes patches, blobs, recognition claims,
+/// and Tag objects (RFC 117 stage 3 §3) -- and records AUTHOR key material -- **only** once every
+/// fallible check has already passed. Never touches a ref, a Block, or the received namespace: this
+/// is patch-level exchange (§0's "the unit is the patch"), and Stage 3 does not extend the accept
+/// path into sealing (§1's scope cut) or into tag adoption (RFC 117 T4 -- a received Tag is stored
+/// and reportable, never adopted; see `tag_travel::adopt_tag` for the separate, explicit act that
+/// does adopt one).
 pub fn accept_exchange_artifact(
     layout: &RepositoryLayout,
     bytes: &[u8],
@@ -251,6 +261,18 @@ pub fn accept_exchange_artifact(
         }
     }
 
+    // RFC 117 stage 3 §3: every carried tag's own MAINTAINER signature, reported and never gating --
+    // the same treatment claims get (Phase C items 8-9, immediately above). No consistency check
+    // against a held block: a Tag's own identity is its `patch_set_digest`/`patch_count`, which say
+    // nothing about which local block (if any) currently matches -- that is `resolve_patch_set_digest`
+    // and `sync tags`'s job, not accept's (T2/T4 keep resolution and adoption out of this path).
+    let mut tag_signature_outcomes = Vec::with_capacity(decoded.tags.len());
+    for envelope in &decoded.tags {
+        let tag_id = envelope.object_id();
+        let outcome = verify_tag_signature(envelope, &trust_policy)?;
+        tag_signature_outcomes.push((tag_id, outcome));
+    }
+
     // Phase D item 10 (patches and blobs only -- see the claim-write note below): write the patch
     // and blob objects. Content-addressed and idempotent -- a replayed accept (§4.3) writes nothing
     // new here.
@@ -287,15 +309,16 @@ pub fn accept_exchange_artifact(
         }
     }
 
-    // Claims are written last, only after item 11 has fully succeeded. Design §8.1 names claims
-    // separately from ordinary objects -- "no key material, and no claim, may be recorded from an
-    // exchange that failed" -- unlike patches and blobs, which §8.1 explicitly allows to survive a
-    // failed exchange (content-addressed and harmless). Writing claims earlier, alongside patches
-    // and blobs, would leave a claim behind if the author-key record step above failed after an
-    // earlier claim write -- caught in review (`RFC-115-stage-3-exchange-artifact-review-v1.md`
-    // §2) as reachable, if narrow: a concurrent writer between Phase B's read-only conflict check
-    // and this lock, or an I/O error during `record_author_key_material`.
-    for envelope in &decoded.claims {
+    // Claims and tags are written last, only after item 11 has fully succeeded. Design §8.1 names
+    // claims separately from ordinary objects -- "no key material, and no claim, may be recorded
+    // from an exchange that failed" -- unlike patches and blobs, which §8.1 explicitly allows to
+    // survive a failed exchange (content-addressed and harmless). Writing them earlier, alongside
+    // patches and blobs, would leave one behind if the author-key record step above failed after an
+    // earlier write -- caught in review (`RFC-115-stage-3-exchange-artifact-review-v1.md` §2) as
+    // reachable, if narrow: a concurrent writer between Phase B's read-only conflict check and this
+    // lock, or an I/O error during `record_author_key_material`. RFC 117 stage 3 §5 row 6 puts a Tag
+    // object on the same terms explicitly: **a refused exchange records no tag.**
+    for envelope in decoded.claims.iter().chain(decoded.tags.iter()) {
         let id = envelope.object_id();
         if !object_store.contains_object(envelope.object_type, id)? {
             written_object_count = written_object_count.checked_add(1).ok_or_else(|| {
@@ -309,10 +332,12 @@ pub fn accept_exchange_artifact(
         patch_count: decoded.patches.len(),
         blob_count: decoded.blobs.len(),
         claim_count: decoded.claims.len(),
+        tag_count: decoded.tags.len(),
         written_object_count,
         recorded_author_key_count,
         author_signature_outcomes,
         claim_signature_outcomes,
+        tag_signature_outcomes,
     })
 }
 

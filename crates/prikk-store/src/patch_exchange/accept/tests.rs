@@ -16,9 +16,11 @@ use crate::maintainer_signing::MaintainerSigner as _;
 use crate::patch_exchange::exchange_test_support::public_key_hex;
 use crate::patch_exchange::exchange_test_support::{
     author_signer, maintainer_signer, reencode_artifact, signed_author_patch_envelope,
-    signed_blob_envelope, signed_claim_envelope,
+    signed_blob_envelope, signed_claim_envelope, signed_tag_envelope,
 };
 use crate::patch_exchange::export_exchange_artifact;
+use crate::patch_set_digest::compute_patch_set_digest_and_count_from_block;
+use crate::tag_travel::TagSignatureVerification;
 use crate::test_support::{signed_block, unique_temp_dir};
 use crate::verify::AuthorSignatureVerification;
 use crate::{FileObjectStore, ObjectWriter, RepositoryLayout};
@@ -51,7 +53,7 @@ fn build_single_patch_artifact(
             &active_lock,
         )?;
     }
-    let (_, bytes) = export_exchange_artifact(&sender, &[patch_id], &[])?;
+    let (_, bytes) = export_exchange_artifact(&sender, &[patch_id], &[], &[])?;
     let _ = std::fs::remove_dir_all(sender.root());
     Ok((bytes, patch_id))
 }
@@ -120,7 +122,7 @@ fn row1_a_refused_exchange_records_no_key_material_and_no_claim() -> Result<()> 
     let claim = claim?;
     let claim_id = objects.write_object(&claim)?;
 
-    let (_, bytes) = export_exchange_artifact(&sender, &[patch_id], &[claim_id])?;
+    let (_, bytes) = export_exchange_artifact(&sender, &[patch_id], &[claim_id], &[])?;
     let _ = std::fs::remove_dir_all(sender.root());
 
     // The receiver is not empty: it already carries unrelated author-key material of its own
@@ -206,7 +208,7 @@ fn phase_d_lock_contention_after_verification_leaves_no_claim_behind() -> Result
         vec![patch_id],
     )?;
     let claim_id = objects.write_object(&claim)?;
-    let (_, bytes) = export_exchange_artifact(&sender, &[patch_id], &[claim_id])?;
+    let (_, bytes) = export_exchange_artifact(&sender, &[patch_id], &[claim_id], &[])?;
     let _ = std::fs::remove_dir_all(sender.root());
 
     let receiver = fresh_repo("pexch-accept-phased-receiver")?;
@@ -259,7 +261,7 @@ fn row2_row3_an_unadopted_claim_signer_accepts_but_confers_no_trust() -> Result<
             vec![patch_id],
         )?;
         let claim_id = objects.write_object(&claim)?;
-        let (_, bytes) = export_exchange_artifact(&sender, &[patch_id], &[claim_id])?;
+        let (_, bytes) = export_exchange_artifact(&sender, &[patch_id], &[claim_id], &[])?;
         let _ = std::fs::remove_dir_all(sender.root());
         (bytes, patch_id)
     };
@@ -302,7 +304,7 @@ fn row2_row3_an_unadopted_claim_signer_accepts_but_confers_no_trust() -> Result<
 fn row4_a_missing_referenced_blob_refuses_the_whole_exchange() -> Result<()> {
     let signer = author_signer(0x40)?;
     let (bytes, patch_id) = build_single_patch_artifact("pexch-accept-row4-sender", &signer, true)?;
-    let mutated = reencode_artifact(&bytes, None, Some(Vec::new()), None)?;
+    let mutated = reencode_artifact(&bytes, None, Some(Vec::new()), None, None)?;
 
     let receiver = fresh_repo("pexch-accept-row4-receiver")?;
     let result = accept_exchange_artifact(&receiver, &mutated, &AcceptOptions::default_limits());
@@ -371,7 +373,7 @@ fn row6_a_patch_signature_that_fails_against_transported_material_refuses() -> R
         &active_lock,
     )?;
     drop(active_lock);
-    let (_, bytes) = export_exchange_artifact(&sender, &[patch_id], &[])?;
+    let (_, bytes) = export_exchange_artifact(&sender, &[patch_id], &[], &[])?;
     let _ = std::fs::remove_dir_all(sender.root());
 
     let receiver = fresh_repo("pexch-accept-row6a-receiver")?;
@@ -471,12 +473,12 @@ fn row8_a_digest_mismatch_refuses_before_signature_work() -> Result<()> {
         &active_lock,
     )?;
     drop(active_lock);
-    let (_, bytes) = export_exchange_artifact(&sender, &[patch_a_id, patch_b_id], &[])?;
+    let (_, bytes) = export_exchange_artifact(&sender, &[patch_a_id, patch_b_id], &[], &[])?;
     let _ = std::fs::remove_dir_all(sender.root());
 
     let decoded = crate::patch_exchange::artifact::decode_exchange_artifact(&bytes, 10_000_000)?;
     let truncated_patches = vec![decoded.patches[0].clone()];
-    let mutated = reencode_artifact(&bytes, Some(truncated_patches), None, None)?;
+    let mutated = reencode_artifact(&bytes, Some(truncated_patches), None, None, None)?;
 
     let receiver = fresh_repo("pexch-accept-row8-receiver")?;
     let error = accept_exchange_artifact(&receiver, &mutated, &AcceptOptions::default_limits())
@@ -512,7 +514,7 @@ fn row9_a_claim_contradicting_a_held_block_refuses_the_exchange() -> Result<()> 
     let mut sender_objects = FileObjectStore::new(sender.clone());
     let claim = signed_claim_envelope(&claim_signer, block_id, vec![claimed_patch_id])?;
     let claim_id = sender_objects.write_object(&claim)?;
-    let (_, bytes) = export_exchange_artifact(&sender, &[], &[claim_id])?;
+    let (_, bytes) = export_exchange_artifact(&sender, &[], &[claim_id], &[])?;
     let _ = std::fs::remove_dir_all(sender.root());
 
     let error =
@@ -542,7 +544,7 @@ fn a_claim_consistent_with_a_held_block_accepts() -> Result<()> {
     let mut sender_objects = FileObjectStore::new(sender.clone());
     let claim = signed_claim_envelope(&claim_signer, block_id, vec![held_patch_id])?;
     let claim_id = sender_objects.write_object(&claim)?;
-    let (_, bytes) = export_exchange_artifact(&sender, &[], &[claim_id])?;
+    let (_, bytes) = export_exchange_artifact(&sender, &[], &[claim_id], &[])?;
     let _ = std::fs::remove_dir_all(sender.root());
 
     let report = accept_exchange_artifact(&receiver, &bytes, &AcceptOptions::default_limits())?;
@@ -575,7 +577,7 @@ fn a_claim_naming_an_adopted_key_reads_sound() -> Result<()> {
         vec![ObjectId::from_bytes([0xC2; 32])],
     )?;
     let claim_id = sender_objects.write_object(&claim)?;
-    let (_, bytes) = export_exchange_artifact(&sender, &[], &[claim_id])?;
+    let (_, bytes) = export_exchange_artifact(&sender, &[], &[claim_id], &[])?;
     let _ = std::fs::remove_dir_all(sender.root());
 
     let report = accept_exchange_artifact(&receiver, &bytes, &AcceptOptions::default_limits())?;
@@ -635,13 +637,88 @@ fn a_non_empty_parent_patch_ids_refuses() -> Result<()> {
         &active_lock,
     )?;
     drop(active_lock);
-    let (_, bytes) = export_exchange_artifact(&sender, &[patch_id], &[])?;
+    let (_, bytes) = export_exchange_artifact(&sender, &[patch_id], &[], &[])?;
     let _ = std::fs::remove_dir_all(sender.root());
 
     let receiver = fresh_repo("pexch-accept-parent-ids-receiver")?;
     let error =
         accept_exchange_artifact(&receiver, &bytes, &AcceptOptions::default_limits()).unwrap_err();
     assert!(error.to_string().contains("parent_patch_ids"));
+    let _ = std::fs::remove_dir_all(receiver.root());
+    Ok(())
+}
+
+/// RFC 117 stage 3 §3: a healthy artifact carrying a Tag object is accepted, the tag is written, and
+/// its `Sound` signature outcome is reported -- the same treatment a recognition claim already gets.
+#[test]
+fn a_healthy_artifact_with_a_sound_tag_is_accepted_and_writes_it() -> Result<()> {
+    let sender = fresh_repo("pexch-accept-tag-sound-sender")?;
+    let mut sender_objects = FileObjectStore::new(sender.clone());
+    let block = sender_objects.write_object(&signed_block(
+        BlockKind::Root,
+        Vec::new(),
+        vec![ObjectId::from_bytes([0x41; 32])],
+        None,
+    ))?;
+    let (digest, count) = compute_patch_set_digest_and_count_from_block(&sender_objects, block)?;
+    let tag_signer = maintainer_signer(0x42)?;
+    let tag = signed_tag_envelope(&tag_signer, "tags/accept-sound", block, digest, count)?;
+    let tag_id = sender_objects.write_object(&tag)?;
+    let (_, bytes) = export_exchange_artifact(&sender, &[], &[], &[tag_id])?;
+    let _ = std::fs::remove_dir_all(sender.root());
+
+    let receiver = fresh_repo("pexch-accept-tag-sound-receiver")?;
+    add_trusted_maintainer(&receiver, tag_signer.key_id(), &public_key_hex(&tag_signer))?;
+    let report = accept_exchange_artifact(&receiver, &bytes, &AcceptOptions::default_limits())?;
+    assert_eq!(report.tag_count, 1);
+    assert_eq!(
+        report.tag_signature_outcomes,
+        vec![(
+            tag_id,
+            TagSignatureVerification::Sound {
+                key_id: tag_signer.key_id().to_string()
+            }
+        )]
+    );
+    let snapshot = ObjectReadSnapshot::open(&receiver)?;
+    assert!(snapshot.contains_object(ObjectType::Tag, tag_id));
+
+    let _ = std::fs::remove_dir_all(receiver.root());
+    Ok(())
+}
+
+/// A declared tag count over the configured limit refuses before any tag is decoded -- the fifth
+/// application of DC-86's rule this format now makes (module doc).
+#[test]
+fn decode_rejects_a_declared_tag_count_over_the_configured_limit() -> Result<()> {
+    let sender = fresh_repo("pexch-accept-tag-limit-sender")?;
+    let mut sender_objects = FileObjectStore::new(sender.clone());
+    let block = sender_objects.write_object(&signed_block(
+        BlockKind::Root,
+        Vec::new(),
+        vec![ObjectId::from_bytes([0x43; 32])],
+        None,
+    ))?;
+    let (digest, count) = compute_patch_set_digest_and_count_from_block(&sender_objects, block)?;
+    let tag_signer = maintainer_signer(0x44)?;
+    let tag = signed_tag_envelope(&tag_signer, "tags/accept-limit", block, digest, count)?;
+    let tag_id = sender_objects.write_object(&tag)?;
+    let (_, bytes) = export_exchange_artifact(&sender, &[], &[], &[tag_id])?;
+    let _ = std::fs::remove_dir_all(sender.root());
+
+    let receiver = fresh_repo("pexch-accept-tag-limit-receiver")?;
+    let error = accept_exchange_artifact(
+        &receiver,
+        &bytes,
+        &AcceptOptions::default_limits().with_max_object_count(0),
+    )
+    .unwrap_err();
+    let message = error.to_string();
+    assert!(
+        message.contains("tags") && message.contains('0'),
+        "expected a declared-count-over-limit refusal naming the section and the limit, got: \
+         {message}"
+    );
     let _ = std::fs::remove_dir_all(receiver.root());
     Ok(())
 }

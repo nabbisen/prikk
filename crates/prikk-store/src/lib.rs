@@ -68,6 +68,7 @@ mod signature_diagnostics;
 mod snapshot;
 mod state_root;
 mod sync_negotiation;
+mod tag_travel;
 mod text_span;
 mod trust;
 mod trust_index;
@@ -193,6 +194,10 @@ pub use sync_negotiation::{
     SyncArtifactBuildReport, SyncArtifactOutcome, SyncRefComparison, SyncRefComparisonState,
     SyncSummaryRefEntry, build_have_list, build_sync_artifact, build_sync_summary,
     compare_sync_summary, compute_sync_delta, decode_have_list, decode_sync_summary,
+};
+pub use tag_travel::{
+    LocalTagCreation, ReceivedTagResolution, ReceivedTagSummary, TagSignatureVerification,
+    adopt_tag, create_local_tag, list_received_tags, received_tag_ids,
 };
 pub use trust::{
     AdoptedMaintainerKey, MaintainerTrustPolicy, PublicationTrustIssue, add_trusted_maintainer,
