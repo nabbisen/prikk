@@ -1,9 +1,8 @@
 # Path and Worktree Safety
 
 This page is the authoritative current-state reference for Prikk's repository path validation and
-worktree write-safety boundaries. It describes the current implementation through 0.17.6 and is
-grounded in the code, released RFCs, and implementation status records listed in the anchor table at
-the foot of the page.
+worktree write-safety boundaries. It describes the current implementation and is grounded in the code,
+released RFCs, and implementation status records listed in the anchor table at the foot of the page.
 
 For physical repository layout and `.prikk/` authority boundaries, see
 [repository layout and authority](./repository-layout.md). For trust and threat boundaries, see the

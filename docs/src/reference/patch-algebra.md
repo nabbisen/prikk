@@ -1,8 +1,8 @@
 # Patch Algebra and Merge Evidence
 
 This page is the authoritative current-state reference for Prikk's patch algebra and merge-evidence
-concepts. It describes the current implementation through 0.17.1 and is grounded in the code,
-released RFCs, and implementation status records listed in the anchor table at the foot of the page.
+concepts. It describes the current implementation and is grounded in the code, released RFCs, and
+implementation status records listed in the anchor table at the foot of the page.
 
 For command syntax and examples, see the [merge evidence](../guide/merge-evidence.md) and
 [merge plan](../guide/merge-plan.md) guides.

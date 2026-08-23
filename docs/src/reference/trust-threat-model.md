@@ -1,10 +1,8 @@
 # Trust and Threat Model
 
 This page is the authoritative current-state reference for Prikk's trust and threat model. It
-describes the implementation on `main` as of 2026-08-18 (released through 0.22.1) and is grounded in
-the code, released RFCs, and implementation status records listed in the anchor table at the foot of the
-page. **Refreshed 2026-08-18 after DC-53 completed**; before that refresh this page still described 0.16.0
-and stated several AUTHOR claims that DC-53 had falsified.
+describes the current implementation and is grounded in the code, released RFCs, and implementation
+status records listed in the anchor table at the foot of the page.
 
 ## Core Caveats
 
