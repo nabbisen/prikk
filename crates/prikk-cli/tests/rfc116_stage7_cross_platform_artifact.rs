@@ -18,8 +18,12 @@
 //! -- the same keys every other test in this crate uses), then drives `sync have` (in a scratch
 //! empty receiver) and `sync build` through the real CLI exactly the way an operator would, and
 //! copies the resulting artifact bytes to
-//! `tests/fixtures/rfc116_stage7_cross_platform_artifact.pexch001`. **Treat it like
+//! `tests/fixtures/rfc116_stage7_cross_platform_artifact.pexch002`. **Treat it like
 //! `dc55_pre_swap_repo`: it is evidence, not a convenience** -- do not regenerate it casually.
+//! **The extension names the format the fixture actually carries** (RFC 117 stage 3 review v1 §4):
+//! when the artifact format legitimately changes and this fixture is regenerated for it, rename the
+//! file too -- a fixture whose extension names the wrong format costs a reader an hour precisely
+//! when they are already confused about why decoding failed.
 //! Because the fixed maintainer key travels this way (not through the artifact itself -- see below),
 //! any repository in this test suite can trust it and seal what the fixture carries.
 //!
@@ -43,7 +47,7 @@ fn fixture_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
-        .join("rfc116_stage7_cross_platform_artifact.pexch001")
+        .join("rfc116_stage7_cross_platform_artifact.pexch002")
 }
 
 fn scratch_file(tag: &str) -> PathBuf {
