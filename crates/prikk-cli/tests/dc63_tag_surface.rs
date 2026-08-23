@@ -444,6 +444,27 @@ fn tag_create_fails_closed_on_existing_name() {
 }
 
 #[test]
+fn tag_create_fails_closed_on_untrusted_signer() {
+    let repo = seeded_repo("create-untrusted-signer");
+    let out = prikk(&repo)
+        .env("PRIKK_MAINTAINER_KEY_ID", "untrusted-maintainer")
+        .env(
+            "PRIKK_MAINTAINER_SEED",
+            "222233334444555566667777888899990000aaaabbbbccccddddeeeeffff1111",
+        )
+        .args(["tag", "create", "tags/v1", "--target", "heads/main"])
+        .output()
+        .unwrap();
+    fail(&out, "tag create with an untrusted maintainer signer");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("not trusted by policy"),
+        "unexpected stderr: {stderr}"
+    );
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+#[test]
 fn tag_create_fails_closed_on_unresolvable_target() {
     let repo = seeded_repo("create-bad-target");
     let out = tag_create(&repo, &["tags/v1", "--target", "heads/does-not-exist"]);

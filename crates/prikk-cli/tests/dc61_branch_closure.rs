@@ -298,6 +298,31 @@ fn branch_close_fails_closed_on_missing_branch() {
 }
 
 #[test]
+fn branch_close_fails_closed_on_untrusted_signer() {
+    let (repo, _layout) = seeded_repo("close-untrusted-signer");
+    ok(
+        &branch_create(&repo, &["heads/topic", "--from", "heads/main"]),
+        "branch create heads/topic",
+    );
+    let out = prikk(&repo)
+        .env("PRIKK_MAINTAINER_KEY_ID", "untrusted-maintainer")
+        .env(
+            "PRIKK_MAINTAINER_SEED",
+            "222233334444555566667777888899990000aaaabbbbccccddddeeeeffff1111",
+        )
+        .args(["branch", "close", "heads/topic"])
+        .output()
+        .unwrap();
+    fail(&out, "branch close with an untrusted maintainer signer");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("not trusted by policy"),
+        "unexpected stderr: {stderr}"
+    );
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+#[test]
 fn branch_close_fails_closed_on_already_closed_branch() {
     let (repo, _layout) = seeded_repo("close-already-closed");
     ok(

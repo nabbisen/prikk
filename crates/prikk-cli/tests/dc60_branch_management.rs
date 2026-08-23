@@ -203,6 +203,27 @@ fn branch_create_fails_closed_on_existing_name() {
 }
 
 #[test]
+fn branch_create_fails_closed_on_untrusted_signer() {
+    let (repo, _layout) = seeded_repo("create-untrusted-signer");
+    let out = prikk(&repo)
+        .env("PRIKK_MAINTAINER_KEY_ID", "untrusted-maintainer")
+        .env(
+            "PRIKK_MAINTAINER_SEED",
+            "222233334444555566667777888899990000aaaabbbbccccddddeeeeffff1111",
+        )
+        .args(["branch", "create", "heads/topic", "--from", "heads/main"])
+        .output()
+        .unwrap();
+    fail(&out, "branch create with an untrusted maintainer signer");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("not trusted by policy"),
+        "unexpected stderr: {stderr}"
+    );
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
+#[test]
 fn branch_create_fails_closed_on_unresolvable_from() {
     let (repo, _layout) = seeded_repo("create-bad-from");
     let out = branch_create(&repo, &["heads/topic", "--from", "heads/does-not-exist"]);
