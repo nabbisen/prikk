@@ -8,8 +8,8 @@ see [System Architecture](./architecture.md).
 
 ## The object taxonomy
 
-Ten object types. The type code is part of object identity, so an object of one type can never collide
-with another type's id.
+Eleven object types. The type code is part of object identity, so an object of one type can never
+collide with another type's id.
 
 | Code | Type | Role | Stored in |
 |---|---|---|---|
@@ -23,6 +23,7 @@ with another type's id.
 | `0x08` | **BlockSummaryCache** | Rebuildable derived summary — **never a root of trust** | `cache/` |
 | `0x09` | **RecoveryNote** | A signed doctor-repair note; never a `RefUpdate` substitute | `refs/recovery/` |
 | `0x0A` | **ProjectGenesis** | Project identity anchor; its id *is* the `project_id` | `objects/` |
+| `0x0B` | **RecognitionClaim** | A signed claim: named patches were sealed into a named block, under the signer's key | `objects/` |
 
 ## How they relate
 
@@ -34,8 +35,9 @@ graph TD
     BLK["<b>Block</b><br/>kind, state_merkle_root"]
     PATCH["<b>Patch</b><br/>operations, purpose"]
     BLOB["<b>Blob</b><br/>content"]
-    TAG["<b>Tag</b>"]
+    TAG["<b>Tag</b><br/>patch_set_digest, patch_count"]
     ATT["<b>Attestation</b>"]
+    RCLAIM["<b>RecognitionClaim</b><br/>patch_ids, parent_block_ids"]
 
     REF -->|"names current"| RS
     RS -->|"previous_ref_state_id"| RS
@@ -44,17 +46,29 @@ graph TD
     BLK -->|"parent_block_ids"| BLK
     BLK -->|"patch_ids"| PATCH
     PATCH -->|"operations reference"| BLOB
-    TAG -->|"points into"| BLK
+    TAG -->|"target_block_id"| BLK
+    TAG -.->|"patch_set_digest resolves to"| PATCH
     ATT -->|"target_block_id"| BLK
+    RCLAIM -->|"block_id"| BLK
+    RCLAIM -.->|"patch_ids (block's own order, verbatim)"| PATCH
 ```
 
-Two edges deserve comment:
+Three edges deserve comment:
 
 - **`RefState → RefState`** is a backward chain via `previous_ref_state_id`, with a monotonic
   `update_seq`. Publication is compare-and-swap against the expected previous state.
 - **`Patch → Patch`** exists in the format as `parent_patch_ids` but is **inert**: every construction
   site sets it empty, including the authoring path, and nothing reads it. **There is no patch DAG.**
-  Merge provenance is carried by block parentage instead.
+  Merge provenance is carried by block parentage instead. RFC 115's `accept_exchange_artifact` goes
+  further than merely not populating it: an incoming Patch carrying a non-empty `parent_patch_ids` is
+  **refused outright** (`patch_exchange/accept.rs`), not merely ignored.
+- **`Tag → Patch` is a digest, not a pointer, and resolving it is a search.** A tag's `target_block_id`
+  is the local pointer half of its identity; `patch_set_digest` (RFC 117 T1) is the *portable* half —
+  the digest of `target_block_id`'s own patch closure, the same value two repositories holding the same
+  patches produce independently. A receiver with no local block matching `target_block_id` resolves the
+  tag by **searching local blocks for one whose own patch closure produces the same digest**, pruned by
+  the accompanying `patch_count` (T7) before any hashing — never by looking the digest up in an index.
+  See [Recognition claims and sync relations](#recognition-claims-and-sync-relations) below.
 
 ## Block lineage
 
@@ -107,6 +121,52 @@ merge without transformation, keeping its bytes and its author's signature intac
 A patch's `purpose` is either `Normal` or `RollbackDraft`; the latter survives WAL-to-object persistence
 so a rollback draft stays classifiable.
 
+## Recognition claims and sync relations
+
+RFC 115/116/117 shipped a new object type, a namespace, and a resolution relation that don't fit
+anywhere above. None of the three objects here are Blocks — they are how one repository tells another
+what it holds, or records what it received.
+
+**Claim → Block.** A `RecognitionClaim` is a signed assertion that specific patches were sealed into a
+specific block, under the signer's key — nothing more. It is **never existence-checked against the
+block or patches it names** at decode time: that is the entire reason it is a claim object and not a
+Block, and it is what lets a claim be verified with none of its referenced objects present. Two fields
+carry a *block's own* data verbatim, not independently chosen:
+
+- **`patch_ids`** — the block's own `patch_ids`, in the block's own order (design-v1.md §11, D6).
+  `Block.patch_ids` has no sorted-or-unique invariant; it is a free sequence consumed in order, and the
+  claim mirrors it exactly. Order is load-bearing here — the receiver applies patches in this sequence —
+  so sequence equality, not set equality, is what a consistency check against a held block must test.
+- **`parent_block_ids`** — the block's own `parent_block_ids`, verbatim (RFC 116 design-v1.md §3, N3).
+  This is what lets a batch of claims spanning a multi-block delta be sorted into sealing order without
+  the receiver needing to have any of the blocks yet.
+
+A claim that contradicts a block the receiver *does* hold is a detected lie, refused loudly by a
+separate consistency check — the claim payload itself has no object-store access and cannot perform
+that check.
+
+**Tag → patch set digest → the patches that resolve it.** See the taxonomy diagram's comment above:
+`patch_set_digest` is the identity that survives a tag moving between repositories, because two
+repositories holding the same patches produce the same digest independently, while `target_block_id`
+does not survive — blocks diverge by design even between repositories with identical history. A
+receiver resolving a travelled tag has no direct pointer to follow; it **searches** its own local blocks
+for one whose own patch closure hashes to the declared digest, using `patch_count` to prune candidates
+by size before ever hashing one. This is a plausibility-tried relation, not a lookup — the search can
+find `NotHeld` (not enough history synced yet) or `Ambiguous` (two local candidates match), and either
+outcome refuses adoption rather than guessing.
+
+**Received objects → `remotes/` → local refs, and import never advances a local ref.** Imported history
+(via `bundle import` or `sync accept`) is recorded under a **received pointer**, always named
+`remotes/<origin ref name>` — a distinct namespace from `refs/by-id/`'s ordinary pointers, because a
+received `RefState`'s embedded `ref_name` still names the *origin's own* ref (rewriting it would
+invalidate the object's content-addressed identity and signature). Turning received history into local
+history is an ordinary `merge`, using machinery that already exists — receiving is never itself a "pull"
+that advances anything. The received-pointer index is its own small append-only container, **never read
+by `verify_repository`**: every object a received pointer leads to (RefState, Block, Patch, Blob,
+Attestation) is an ordinary object-store entry, checked exactly like any other by the existing
+type-based object scan, so there is no new verification path — only a new way to *discover* a receiver's
+own object graph by name.
+
 ## Lifecycle: content, from worktree to sealed history
 
 ```mermaid
@@ -157,12 +217,92 @@ Note that neither `seal` nor `merge` inspects `closed`, so advancing a closed br
 This is consistent with closure being advisory rather than a lock, but it is unreported by those
 commands.
 
+## Lifecycle: a repository
+
+Before `init`, there is nothing: no `.prikk/` directory, no lifecycle to describe. `init` creates the
+full layout in one pass and writes `FORMAT` **last** — every other required file or empty container is
+created first, all through idempotent, retryable primitives. An interrupted `init` therefore leaves
+`FORMAT` absent, which is itself the detectable, safe state: a re-run of `init` skips straight past the
+already-initialized guard (which only fires once `FORMAT` exists) and completes whichever names are
+still missing. This is tolerated only because an interrupted `init` has nothing to lose — no user
+history exists yet.
+
+Every other command opens an existing repository through `RepositoryLayout::open`, which reads `FORMAT`
+and refuses outright — no migration offered — if it names anything but the current format (format 6,
+per RFC 114's ruling that formats 1-5 are out of scope). There is no format-migration verb; a repository
+is either format 6 or it is refused by every command, including `init` itself against an
+already-initialized non-format-6 directory (its own, terser refusal).
+
+There is no decommission or deletion lifecycle for a repository as a whole — closure exists only at the
+branch-ref level (see [Lifecycle: a ref](#lifecycle-a-ref) above), with no repository-level equivalent.
+
+`doctor` and `unlock` are not lifecycle stages; they operate on whatever state a repository is already
+in, regardless of how it got there. `doctor`'s only supported repair is truncating an incomplete
+trailing active-WAL record (`--repair-wal-tail`); `--repair-main-ref` is a recognized input that
+performs no repair and is always refused — see the
+[integrity and recovery diagnostics](./integrity-recovery.md) reference. `unlock` reports, and on
+request clears, stale lock files. Neither `doctor` nor `unlock` advances a repository through a stage
+the way `init`/`commit`/`seal`/`publish` do.
+
+## Lifecycle: compaction
+
+Everything above is append-only: nothing is ever removed from a container, only new records added and
+superseded. Three containers accumulate dead records this way — the ref-pointer index, the received
+(imported-ref) index, and the trust-key/policy container — and `prikk compact` is the only operation
+that reclaims any of it.
+
+**What it rewrites.** Each of the three targets is compacted independently
+(`compact_ref_pointer_index`, `compact_received_index`, `compact_trust_policy`; `--all` runs all three).
+Compaction reads a container's currently-live slot, corruption-checked in full, reduces it to the same
+"keep only the last record per key" rule its own reader already applies at read time, writes that
+reduction to the container's currently-*retired* slot, and only then durably switches the generation log
+to name the new slot live. The old slot's bytes are never touched until the switch to the new one is
+already durable.
+
+**What it preserves.** The reduction persists exactly what a reader would compute anyway — `verify`'s
+output is unchanged by construction, not merely by inspection, because compaction writes the same
+per-key "last entry wins" result its own read path already resolves at query time. `--plan-only` computes
+and reports the same before/after record counts without writing anything, so an operator can preview the
+effect before committing to it. There is no confirmation prompt, unlike `unlock`: the container lock
+already excludes concurrent writers, the corruption check already covers every record, and the reduction
+already persists exactly what every reader independently resolves — there is no unresolved fact left for
+a prompt to gate on.
+
+**What guarantees hold across it.** Compaction refuses outright on *any* known-corrupt record, not only
+the latest one — stricter than an ordinary read, because compaction is destructive to the retired slot in
+a way a read never is: a naive compactor that silently dropped a corrupt record while abandoning the old
+slot would turn corruption into permanent deletion, through the very mechanism built to survive it. The
+container's lock is held for the whole operation (resolve, read, reduce, and — for a real run —
+truncate/write/switch), excluding every other writer of that container for its duration: `publish`,
+trust changes, and bundle/sync import cannot observe a torn state, because they cannot run at all while
+compaction holds the lock.
+
+**What it never touches.** The ref log (`refs/containers/`, DC-38/DC-69's audit trail) and the
+`RecoveryNote` container are never compaction targets — there is no function for either. Compaction never
+touches sealed objects (`objects/`) at all; only the three pointer/policy containers above ever
+accumulate reclaimable dead records.
+
 ## What the model does not currently record
 
 Stated here so it is not inferred from silence:
 
-- **No patch DAG.** `parent_patch_ids` is inert.
+- **No patch DAG.** `parent_patch_ids` is inert — every construction site sets it empty, and an
+  incoming Patch carrying a non-empty one is refused outright on import.
 - **A ref's `required_attestation_ids` are cleared by every ordinary seal**, while branch closure
   preserves them.
 - **`RenamePath` and `CreateSymlink`** decode and validate but cannot be authored.
 - **Merge-base discovery is manual** — `--baseline-block` is always explicit.
+- **`ProjectGenesis` is a reserved type code with no payload module.** It names itself
+  `"project-genesis"` and has a test vector, but `validate_format2_schema` refuses it outright in a
+  format-2 identity position — there is no project-genesis lifecycle, and none is implied by the code
+  existing to reject it.
+- **`Attestation` is defined but never constructed.** No production code path builds one; the object
+  type and directory exist, and nothing populates them.
+- **A tag's deletion and movement do not travel.** `sync`/`bundle` move a tag's *creation* and its
+  adoption; a tag deleted or repointed locally has no mechanism to propagate that change to a
+  repository that already received it.
+- **There is no ref deletion at all**, of any kind, anywhere in `prikk-store` — the only
+  `remove_ref_pointer_entry`-shaped function is test-only support, never reachable from a command. A
+  branch can be *closed* (above); nothing can be *removed*. This is also why a tag written by an older
+  schema cannot be cleared to make room for a new one under a later schema — there is no supported way
+  to remove the ref standing in the way.

@@ -1,8 +1,10 @@
 # Data Model
 
-This page is the authoritative current-state reference for Prikk's data model. It describes the
-released implementation through 0.16.0 and is grounded in the code, released RFCs, and implementation
-status records listed in the anchor table at the foot of the page.
+This page is the authoritative current-state reference for Prikk's data model. It describes what has
+shipped on `main` — not necessarily the latest tagged release, see [`README.md`'s Current
+Status](https://github.com/nabbisen/prikk/blob/main/README.md#current-status) for that boundary — and
+is grounded in the code, released RFCs, and implementation status records listed in the anchor table at
+the foot of the page.
 
 ## Core Caveats
 
@@ -41,11 +43,13 @@ key-id bytes, signer-role code, algorithm code, then signature bytes. Advisory s
 do not affect that order. Format-1 verification preserves older structurally readable bytes and
 reports malformed shape, duplicate, or non-canonical ordering as warnings instead of rewriting them.
 
-The current object model includes persistent Patch, Block, RefState, and Blob object directories. Tag
-and Attestation object types and directories are defined, but current public command surfaces do not
-produce Tag or Attestation objects. RefUpdate is an object-envelope type stored inline in ref logs
-rather than as a persistent object-store directory. BlockSummaryCache and RecoveryNote are explicitly
-not roots of trust.
+The current object model includes persistent Patch, Block, RefState, Blob, Tag, and RecognitionClaim
+object directories. **Tag objects are produced by public command surfaces** — `prikk tag create` and
+`sync adopt-tag` both create them (RFC 117) — this page's claim otherwise is stale and corrected here.
+**Attestation remains genuinely unconstructed**: the object type and directory are defined, but no
+production code path builds one. RefUpdate is an object-envelope type stored inline in ref logs rather
+than as a persistent object-store directory. BlockSummaryCache and RecoveryNote are explicitly not
+roots of trust.
 
 ## Patch and Operation Model
 
@@ -76,6 +80,46 @@ Verification replays every Block from empty state or its one parent and rejects 
 missing evidence, invalid path/mode/kind/content state, or mixed Block schema lineage. Snapshots and
 caches may be used only as checked auxiliary data; they cannot override replay.
 
+## Tags
+
+A Tag is a named, signed pointer into history, created by `prikk tag create` or `sync adopt-tag`
+(RFC 117). Its payload carries a **local pointer half** and a **portable identity half**, and the
+distinction is the point of the object:
+
+- `target_block_id` — the local pointer: a Block this repository can resolve directly.
+- `patch_set_digest` — the digest of `target_block_id`'s own patch closure
+  (`compute_patch_set_digest_from_block`), computed at creation time. Two repositories holding the same
+  patches produce the same `patch_set_digest` independently, by construction — this is the value a tag's
+  portability across repositories depends on, since `target_block_id` itself does not survive a move:
+  blocks diverge between repositories by design even when the underlying history is identical.
+- `patch_count` — the number of distinct patch ids in the closure `patch_set_digest` covers. Not new
+  information (the digest's own preimage already hashes `DOMAIN ‖ count ‖ sorted ids`), exposed as a
+  separate field so a resolver can prune a candidate by size before hashing it. **A hint that narrows,
+  never an authority** — a wrong `patch_count` can only cause a right candidate to be skipped or extra
+  candidates hashed; it can never produce a wrong resolution, because the digest still has to match.
+
+`TagPayload` also carries `name`, an optional `message`, the same no-clock `created_at` sentinel every
+other current-write payload uses, and `author_key_id`. All seven fields are admitted at `schema_version`
+1 — the owner ruled (2026-08-23) that `Tag`'s schema window stays closed rather than minting a schema 2
+for `patch_set_digest`/`patch_count`, on the standing premise that no production repository holds a tag
+yet. **This is a two-way, permanent incompatibility**: a `Tag` written before `patch_set_digest`/
+`patch_count` existed will not decode against the current 7-field reader, and the reverse is also true —
+see the [`0.23.0` CHANGELOG entry](https://github.com/nabbisen/prikk/blob/main/CHANGELOG.md) for the
+full consequence, since it reaches `prikk verify`, not only `prikk tag list`.
+
+## Recognition Claims
+
+A RecognitionClaim is a signed assertion, under the signer's key, that specific patches were sealed
+into a specific block — nothing more. It exists so a sender can tell a receiver what a block contains
+**before** the receiver holds that block: the claim is deliberately never existence-checked against the
+objects it names, unlike every other reference in this data model. Its payload is minimal by design
+(RFC 115 Stage 2 D3): `block_id`, `patch_ids` (the block's own order, verbatim — not sorted, not
+deduplicated, non-empty), and `parent_block_ids` (the block's own parents, verbatim — not sorted, not
+deduplicated, may be empty). It carries no signer `key_id` (the signature preimage already binds it), no
+timestamp, and no project/genesis binding — each omission is deliberate, not an oversight. See
+[Recognition claims and sync relations](./data-model-lifecycle.md#recognition-claims-and-sync-relations)
+for how it relates to Block and Patch.
+
 ## Refs and Publication
 
 RefState is the content-addressed state for a branch or tag ref. A ref pointer entry, in a shared
@@ -90,6 +134,50 @@ Publication is guarded by ref-specific locking and compare-and-swap checks. The
 Seal persists WAL Patch envelopes, creates a signed Block and RefState, durably appends the
 authoritative ref pointer as the publication commit point, appends exactly one signed RefUpdate log
 entry, confirms pointer/log agreement, then drains the active WAL and active ref metadata.
+
+## Received Namespace
+
+Imported history (`bundle import`, `sync accept`) lands under a **received pointer**, always named
+`remotes/<origin ref name>` — a distinct index from `refs/by-id/`'s ordinary ref-pointer container, kept
+in its own small append-only format. A received `RefState` keeps its *origin's own* embedded `ref_name`
+(rewriting it would invalidate the object's content-addressed identity and signature), so a pointer
+declared as `remotes/heads/main` could never agree with a payload that still says `heads/main` under the
+ordinary pointer container's own consistency check — storing received refs separately sidesteps that
+conflict rather than special-casing the check to allow it.
+
+**Import never advances a local ref.** A received pointer is discoverable by name and nothing more;
+turning received history into local history is an ordinary `merge`, using machinery that already
+exists. The received-pointer index is **never read by `verify_repository`** — every object a received
+pointer leads to (RefState, Block, Patch, Blob, Attestation) is an ordinary object-store entry, checked
+exactly like any other by the existing type-based object scan, so accepting received history adds no
+new verification path, only a new way to discover a receiver's own object graph by name.
+
+## Sync and Exchange Artifacts
+
+Three wire formats move information between repositories. None is a persistent object type or a root
+of trust — each is **representational, not frozen** (RFC 114 §3): every object it carries has identity
+already frozen elsewhere, and the artifact itself carries none of its own.
+
+- **`PSYNCSU1`** (sync summary) — one message per repository: every local `heads/*` ref, each with its
+  own patch-set digest and patch count. Answers "are we the same?" without moving a single patch id.
+  Branches only; `remotes/*` and `tags/*` are excluded deliberately, not by oversight.
+- **`PSYNCHV1`** (have-list) — one ref, its declared patch-set digest, and the full patch-id list the
+  digest is over. Sent receiver → sender so the sender can compute the delta. The digest is always
+  recomputed over the decoded list and checked, never trusted from the wire.
+- **`PEXCH002`** (exchange artifact) — the patch-level payload itself, built by `sync build` and
+  consumed by `sync accept`. Six sections in order: the declared patch-set digest; the ordered Patch
+  list in the sender's own application order; every Blob any carried patch references; author key
+  material (continuity only, never a trust decision); recognition claims (may be empty); and Tag
+  objects (may be empty — every tag whose `target_block_id` lies within the synced ref's ancestry). A
+  carried Tag is reported on accept, **never adopted** — adoption is `sync adopt-tag`, a separate,
+  explicit, receiver-signed act. `PEXCH002` superseded `PEXCH001` (RFC 117 stage 3, adding the Tag
+  section) as a **format revision, not a migration**: a `PEXCH001` byte stream is refused outright on
+  read, since the artifact is transient in-flight data that never becomes repository history, so there
+  is nothing to preserve across the bump.
+
+Every declared count in `PEXCH002` (patches, blobs, author keys, claims, tags) is checked against a
+caller-supplied ceiling at the moment it is read, before that section's loop runs — not after decoding
+everything and counting.
 
 ## Active WAL and Recovery Boundary
 
@@ -141,9 +229,14 @@ multi-maintainer publication policy, and full cross-platform filesystem validati
 | Patch payloads require non-empty contiguous operations and carry identity-bearing purpose. | [`patch.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/patch.rs), [DC-10](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-10-ROLLBACK-DRAFT-SIGNING.md) |
 | Worktree authoring derives baselines from authoritative replay or valid genesis. | [`node_authoring.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/worktree_patch/node_authoring.rs), [DC-13](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-13-NONDEFAULT-REF-GENESIS.md), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
 | Blocks contain parent ids, kind, Patch ids, state root, and optional snapshot Blob ref. | [`block.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/block.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs) |
+| Tag carries `target_block_id` (local) and `patch_set_digest`/`patch_count` (portable), both fields amended in place at schema 1, no schema 2. | [`payload/tag.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/tag.rs), [`tag.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/tag.rs), [RFC 117](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/117-tag-sync.md) |
+| RecognitionClaim carries a block's own `patch_ids`/`parent_block_ids` verbatim and is never existence-checked against them at decode time. | [`payload/recognition_claim.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/recognition_claim.rs), [RFC 115](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/115-sync-investigation.md) Stage 2 (D3), [RFC 116](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/116-sync-negotiation-and-transport.md) (N3) |
 | RefState is content-addressed state and ref pointers are mutable entries in a shared container. | [`refs.rs` payload](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/refs.rs), [`refs/pointer_index.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer_index.rs), [DC-11](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-11-MAINTAINER-TRUST-STORE.md) |
 | RefUpdate is append-only publication evidence stored inline in a shared ref-log container; schema-1 writes use zero as a no-clock sentinel. | [`refs.rs` payload](https://github.com/nabbisen/prikk/blob/main/crates/prikk-object/src/payload/refs.rs), [`refs/container.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/container.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-39](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md) |
+| Received refs are stored under `remotes/<name>` in their own index, never read by `verify_repository`; import never advances a local ref. | [`received.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/received.rs), [`received_index.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/received_index.rs), [DC-78](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-78-HISTORY-EXCHANGE.md) §D4 |
+| `PSYNCSU1`/`PSYNCHV1` negotiate; `PEXCH002` (formerly `PEXCH001`) carries patches, blobs, author keys, claims, and tags — representational, not frozen. | [`sync_negotiation/summary.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/sync_negotiation/summary.rs), [`sync_negotiation/have_list.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/sync_negotiation/have_list.rs), [`patch_exchange/artifact.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/patch_exchange/artifact.rs), [RFC 116](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/116-sync-negotiation-and-transport.md), [RFC 117](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/117-tag-sync.md) stage 3 |
 | Active WAL records exact signed Patch envelopes and detects trailing partial bytes. | [`wal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/wal.rs), [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [DC-15](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md) |
+| `prikk compact` reclaims dead records from the ref-pointer, received, and trust-key containers only; never the ref log or sealed objects. | [`compact.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/compact.rs), [RFC 102](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/102-container-based-durability.md) Stage 6 Step 2 |
 | Verification is read-only and bounded to structural, WAL, ref, rollback, and publication-trust checks. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
 | `prikk-replay` is internally scoped and not a stable external API. | [DC-19](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-19-REPLAY-LIFECYCLE-CRATE-BOUNDARY.md), [DC-20](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-20-REPLAY-BOUNDARY-STABILIZATION.md), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
 | Durability and platform claims remain limited by current test evidence. | [DC-24 baseline recap](https://github.com/nabbisen/prikk/blob/main/rfcs/handoffs/DC-24-data-model-trust-threat-docs/baseline-recap.md), [DC-24](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md) |
