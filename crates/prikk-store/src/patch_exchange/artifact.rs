@@ -1,22 +1,34 @@
-//! RFC 115 Stage 3 handoff §3: the `PEXCH001` artifact format.
+//! RFC 115 Stage 3 handoff §3: the `PEXCH002` artifact format.
 //!
 //! **Representational, not frozen** (RFC 114 §3, restated from the parent module doc): this format
-//! carries objects whose identity is already frozen and carries none of its own. `PEXCH001` is
-//! emitted on export and accepted on import; there is no retired version yet.
+//! carries objects whose identity is already frozen and carries none of its own. `PEXCH002` is
+//! emitted on export and accepted on import.
 //!
-//! **Five sections, in order** (handoff §3): (1) the declared patch-set digest, 32 fixed bytes, no
-//! length prefix; (2) the ordered Patch list, in the sender's own application order (D1) -- order is
-//! artifact metadata, never part of any object's identity; (3) blobs -- every blob any carried patch
-//! references; (4) author key material, the same `key_id -> public_key` shape `bundle.rs`'s own
-//! author-key section carries; (5) recognition claims, may be empty. Modelled directly on
+//! **RFC 117 stage 3 §2: `PEXCH001` -> `PEXCH002`, a format revision, and `PEXCH001` is refused, not
+//! migrated.** The artifact is transient, in-flight data -- it exists only between one `sync build`
+//! and the matching `sync accept`, never stored as repository history -- so under the standing "no
+//! production data exists yet" ruling (RFC 117 T5) there is nothing in flight worth preserving across
+//! the bump. A `PEXCH001` byte stream simply fails the magic check below and is refused outright, the
+//! same as any other malformed input; there is no reader for the old magic and none is added.
+//!
+//! **Six sections, in order** (handoff §3, extended by stage 3 §2): (1) the declared patch-set
+//! digest, 32 fixed bytes, no length prefix; (2) the ordered Patch list, in the sender's own
+//! application order (D1) -- order is artifact metadata, never part of any object's identity; (3)
+//! blobs -- every blob any carried patch references; (4) author key material, the same
+//! `key_id -> public_key` shape `bundle.rs`'s own author-key section carries; (5) recognition claims,
+//! may be empty; (6) **Tag objects (new), may be empty** -- every tag whose `target_block_id` lies
+//! within the ancestry of the ref being synced (`sender.rs` decides which; this module only carries
+//! what it is given, the same separation it already keeps for claims). A carried Tag object is
+//! reported on accept, never adopted (RFC 117 T4) -- adoption is a separate, explicit, receiver-signed
+//! act (`tag_travel.rs`), not something this format or the accept path performs. Modelled directly on
 //! `bundle.rs`'s `encode_bundle`/`decode_bundle` -- the handoff's own instruction was to read that
 //! module in full before designing this one, and to inherit its shape rather than re-earn its two
 //! past security defects (declared-count bounds checked before the loop that trusts them; an
 //! internal author-key conflict refused before anything is recorded).
 //!
-//! Every declared count (patches, blobs, author keys, claims) is checked against the caller's
+//! Every declared count (patches, blobs, author keys, claims, tags) is checked against the caller's
 //! `max_object_count` ceiling at the moment it is read, before the section's loop runs -- DC-86's
-//! rule, applied four times over rather than once, the same way `decode_bundle` applies it to both
+//! rule, applied five times over rather than once, the same way `decode_bundle` applies it to both
 //! its own declared counts with one shared ceiling.
 
 use std::collections::BTreeSet;
@@ -35,10 +47,12 @@ use crate::patch_replay::decode::{
 };
 use crate::patch_set_digest::{PatchSetDigest, compute_patch_set_digest};
 
-/// `PEXCH001`: patch-exchange artifact, format version 1. See the module doc.
-const EXCHANGE_ARTIFACT_MAGIC: &[u8; 8] = b"PEXCH001";
+/// `PEXCH002`: patch-exchange artifact, format version 2 (RFC 117 stage 3: adds the Tag section).
+/// See the module doc. `PEXCH001` is refused, not read -- there is no dual-reader here.
+const EXCHANGE_ARTIFACT_MAGIC: &[u8; 8] = b"PEXCH002";
 
-/// DC-86 default hard block on each of the artifact's four declared counts, checked as early as the
+/// DC-86 default hard block on each of the artifact's declared counts (five as of stage 3's Tag
+/// section), checked as early as the
 /// format allows -- mirroring `DEFAULT_BUNDLE_MAX_OBJECT_COUNT`'s reasoning exactly, restated here
 /// because this is a distinct format with its own ceiling, not a reuse of the bundle-specific one.
 pub const DEFAULT_EXCHANGE_ARTIFACT_MAX_OBJECT_COUNT: usize = 100_000;
@@ -60,6 +74,8 @@ pub struct ExchangeExportReport {
     pub author_key_count: usize,
     /// Recognition claims carried.
     pub claim_count: usize,
+    /// Tag objects carried (RFC 117 stage 3 §2).
+    pub tag_count: usize,
 }
 
 /// The artifact's decoded sections, before any of the accept path's own checks run. Purely
@@ -72,19 +88,24 @@ pub(super) struct DecodedExchangeArtifact {
     pub(super) blobs: Vec<ObjectEnvelope>,
     pub(super) author_keys: Vec<AuthorKeyEntry>,
     pub(super) claims: Vec<ObjectEnvelope>,
+    pub(super) tags: Vec<ObjectEnvelope>,
 }
 
-/// Export a `PEXCH001` artifact carrying exactly `patch_ids`, in the given order (the sender's
+/// Export a `PEXCH002` artifact carrying exactly `patch_ids`, in the given order (the sender's
 /// application order, D1 -- this function does not reorder them), plus every blob those patches'
 /// operations reference, plus local AUTHOR key material for their signers, plus the
-/// already-persisted `RecognitionClaim` objects named by `claim_ids`. `patch_ids` must not contain a
-/// duplicate; the caller decides the exact identity and order of what it sends, and a repeated id
-/// would make the declared count and the ordered list disagree about how many patches this artifact
-/// actually carries.
+/// already-persisted `RecognitionClaim` objects named by `claim_ids`, plus the already-persisted
+/// `Tag` objects named by `tag_ids` (RFC 117 stage 3 §2). `patch_ids` must not contain a duplicate;
+/// the caller decides the exact identity and order of what it sends, and a repeated id would make
+/// the declared count and the ordered list disagree about how many patches this artifact actually
+/// carries. **Which tags belong in `tag_ids` is the caller's decision** (`sender.rs`'s own ancestry
+/// filter) -- this function carries whatever it is given, the same separation it already keeps for
+/// `claim_ids`.
 pub fn export_exchange_artifact(
     layout: &RepositoryLayout,
     patch_ids: &[ObjectId],
     claim_ids: &[ObjectId],
+    tag_ids: &[ObjectId],
 ) -> Result<(ExchangeExportReport, Vec<u8>)> {
     let mut seen_patch_ids: BTreeSet<ObjectId> = BTreeSet::new();
     for patch_id in patch_ids {
@@ -179,11 +200,17 @@ pub fn export_exchange_artifact(
         )?);
     }
 
+    let mut tag_envelopes: Vec<ObjectEnvelope> = Vec::with_capacity(tag_ids.len());
+    for tag_id in tag_ids {
+        tag_envelopes.push(read_required(&object_store, *tag_id, ObjectType::Tag)?);
+    }
+
     let report = ExchangeExportReport {
         patch_count: patch_envelopes.len(),
         blob_count: blob_envelopes.len(),
         author_key_count: author_keys.len(),
         claim_count: claim_envelopes.len(),
+        tag_count: tag_envelopes.len(),
     };
     let bytes = encode_exchange_artifact(
         patch_ids,
@@ -191,6 +218,7 @@ pub fn export_exchange_artifact(
         &blob_envelopes,
         &author_keys,
         &claim_envelopes,
+        &tag_envelopes,
     )?;
     Ok((report, bytes))
 }
@@ -211,6 +239,7 @@ fn encode_exchange_artifact(
     blob_envelopes: &[ObjectEnvelope],
     author_keys: &[AuthorKeyEntry],
     claim_envelopes: &[ObjectEnvelope],
+    tag_envelopes: &[ObjectEnvelope],
 ) -> Result<Vec<u8>> {
     let mut sorted_patch_ids: Vec<ObjectId> = patch_ids.to_vec();
     sorted_patch_ids.sort_unstable();
@@ -240,10 +269,14 @@ fn encode_exchange_artifact(
     for envelope in claim_envelopes {
         push_bytes_u64(&mut out, &encode_envelope_file(envelope)?)?;
     }
+    push_u64(&mut out, len_to_u64(tag_envelopes.len())?);
+    for envelope in tag_envelopes {
+        push_bytes_u64(&mut out, &encode_envelope_file(envelope)?)?;
+    }
     Ok(out)
 }
 
-/// Decode a `PEXCH001` artifact structurally. Bounds every declared count against
+/// Decode a `PEXCH002` artifact structurally. Bounds every declared count against
 /// `max_object_count` at the point it is read, before the section it governs is looped over
 /// (handoff §4.2 Phase A item 2: "a declared count over the limit must not cost more than reading
 /// one integer to reject"). Performs no cross-section checks at all -- no digest recomputation, no
@@ -287,6 +320,7 @@ pub(super) fn decode_exchange_artifact(
     }
 
     let claims = decode_envelope_section(&mut cursor, max_object_count, "recognition claims")?;
+    let tags = decode_envelope_section(&mut cursor, max_object_count, "tags")?;
 
     if !cursor.is_finished() {
         return Err(PrikkError::MalformedData(
@@ -300,6 +334,7 @@ pub(super) fn decode_exchange_artifact(
         blobs,
         author_keys,
         claims,
+        tags,
     })
 }
 

@@ -6,7 +6,8 @@
 //! in this project already has (read what the past wrote, write only the present). That licence is
 //! not permission to be careless: every byte still has a stated reason.
 //!
-//! **`PEXCH001` is emitted on export and accepted on import. There is no retired version yet.**
+//! **`PEXCH002` is emitted on export and accepted on import** (RFC 117 stage 3 bumped `PEXCH001` ->
+//! `PEXCH002` to add a Tag section; `PEXCH001` is refused, not read -- see `artifact.rs`'s own doc).
 //!
 //! **Scope, stated plainly (handoff §1): this stage does not deliver a seal-from-accepted path.**
 //! `seal` builds a block from the active WAL; an accepted patch is a written object that was never

@@ -15,14 +15,10 @@
 
 use std::path::PathBuf;
 
-use prikk_object::{
-    CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, RefKind, RefStatePayload,
-    RefUpdatePayload, TagPayload,
-};
+use prikk_object::{ObjectId, ObjectType, RefKind, RefStatePayload, TagPayload};
 use prikk_store::{
-    FileObjectStore, MaintainerSigner, ObjectReader, ObjectWriteSession, ObjectWriter,
-    RefPublication, RefStore, compute_patch_set_digest_and_count_from_block, maintainer_signature,
-    validate_local_tag_ref,
+    FileObjectStore, ObjectReader, ObjectWriteSession, RefStore,
+    compute_patch_set_digest_and_count_from_block, create_local_tag, validate_local_tag_ref,
 };
 
 /// Dispatch `prikk tag [list|create]`.
@@ -89,20 +85,8 @@ fn run_list(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String>
 fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
     let parsed = parse_create_args(args)?;
     let layout = crate::open_repository(root)?;
-    layout
-        .require_current_format()
-        .map_err(|err| err.to_string())?;
-    let canonical = validate_local_tag_ref(&parsed.name).map_err(|err| err.to_string())?;
     let ref_store = RefStore::new(layout.clone());
     let mut object_store = ObjectWriteSession::open(&layout).map_err(|err| err.to_string())?;
-
-    if ref_store
-        .read_current_ref_state_id(&canonical)
-        .map_err(|err| err.to_string())?
-        .is_some()
-    {
-        return Err(format!("tag {canonical} already exists"));
-    }
 
     let target_block_id = resolve_target_block(&ref_store, &object_store, &parsed.target)?;
     // RFC 117 T1 §3 / T7 §9.2: the tag's global identity is the digest of the target block's own
@@ -114,76 +98,25 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
             .map_err(|err| err.to_string())?;
 
     let signer = crate::maintainer_signer_from_env()?;
-    let tag_payload = TagPayload {
-        name: canonical.clone(),
+    // RFC 117 stage 3 §4: the ordinary tag-creation path, shared with `sync adopt-tag`
+    // (`tag_travel::adopt_tag`) rather than each carrying its own copy of the write+publish shape.
+    let created = create_local_tag(
+        &layout,
+        &mut object_store,
+        &parsed.name,
         target_block_id,
-        message: parsed.message,
-        created_at: 0,
-        author_key_id: signer.key_id().to_string(),
+        parsed.message,
         patch_set_digest,
         patch_count,
-    };
-    let tag_envelope = signed_envelope(
-        ObjectType::Tag,
-        1,
-        tag_payload
-            .to_canonical_bytes()
-            .map_err(|err| err.to_string())?,
         &signer,
-    )?;
-    let tag_object_id = object_store
-        .write_object(&tag_envelope)
-        .map_err(|err| err.to_string())?;
-
-    let ref_state_payload = RefStatePayload {
-        ref_name: canonical.clone(),
-        kind: RefKind::Tag,
-        target_object_id: tag_object_id,
-        update_seq: 1,
-        previous_ref_state_id: None,
-        required_attestation_ids: Vec::new(),
-        closed: false,
-    };
-    let ref_state_envelope = signed_envelope(
-        ObjectType::RefState,
-        1,
-        ref_state_payload
-            .to_canonical_bytes()
-            .map_err(|err| err.to_string())?,
-        &signer,
-    )?;
-    let ref_state_id = ref_state_envelope.object_id();
-    let ref_update_payload = RefUpdatePayload {
-        ref_name: canonical.clone(),
-        old_ref_state_id: None,
-        new_ref_state_id: ref_state_id,
-        new_target_object_id: tag_object_id,
-        update_seq: 1,
-        created_at: 0,
-        author_key_id: signer.key_id().to_string(),
-    };
-    let ref_update_envelope = signed_envelope(
-        ObjectType::RefUpdate,
-        1,
-        ref_update_payload
-            .to_canonical_bytes()
-            .map_err(|err| err.to_string())?,
-        &signer,
-    )?;
-    let publication = RefPublication {
-        ref_name: canonical.clone(),
-        expected_previous_ref_state_id: None,
-        ref_state: ref_state_envelope,
-        ref_update: ref_update_envelope,
-    };
-    let published_ref_state_id = ref_store
-        .publish_with_object_store(&mut object_store, &publication)
-        .map_err(|err| err.to_string())?;
+    )
+    .map_err(|err| err.to_string())?;
+    let canonical = validate_local_tag_ref(&parsed.name).map_err(|err| err.to_string())?;
 
     println!("created tag {canonical}");
-    println!("tag object: {tag_object_id}");
+    println!("tag object: {}", created.tag_object_id);
     println!("target block: {target_block_id}");
-    println!("RefState: {published_ref_state_id}");
+    println!("RefState: {}", created.ref_state_id);
     Ok(())
 }
 
@@ -233,22 +166,6 @@ fn resolve_target_block(
         ));
     }
     Ok(target_payload.target_object_id)
-}
-
-fn signed_envelope(
-    object_type: ObjectType,
-    schema_version: u32,
-    canonical_payload: Vec<u8>,
-    signer: &impl MaintainerSigner,
-) -> std::result::Result<ObjectEnvelope, String> {
-    let mut envelope = ObjectEnvelope::unsigned(object_type, schema_version, canonical_payload);
-    let object_id = envelope.object_id();
-    envelope
-        .add_signature(
-            maintainer_signature(signer, object_type, object_id).map_err(|err| err.to_string())?,
-        )
-        .map_err(|err| err.to_string())?;
-    Ok(envelope)
 }
 
 struct CreateArgs {

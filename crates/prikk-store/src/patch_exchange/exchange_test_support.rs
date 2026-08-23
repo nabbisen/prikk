@@ -6,7 +6,8 @@
 use prikk_error::Result;
 use prikk_object::{
     BlobKind, BlobPayload, CanonicalEncode, CreateFile, NodeId, ObjectEnvelope, ObjectId,
-    ObjectType, Operation, OperationKind, PatchPayload, PatchPurpose, RecognitionClaimPayload,
+    ObjectType, Operation, OperationKind, PatchPayload, PatchPurpose, PatchSetDigest,
+    RecognitionClaimPayload, TagPayload,
 };
 
 use crate::author_signing::author_signature;
@@ -102,7 +103,32 @@ pub(super) fn signed_claim_envelope(
     Ok(envelope)
 }
 
-/// Re-encode a `PEXCH001` artifact's bytes, replacing whichever sections are `Some(..)` and
+/// A MAINTAINER-signed `Tag` envelope naming `target_block_id`/`patch_set_digest`/`patch_count`
+/// (RFC 117 stage 3). `name` is passed through verbatim, untrusted -- callers exercising the
+/// "attacker-controlled name" properties pass whatever they need to.
+pub(super) fn signed_tag_envelope(
+    signer: &Ed25519MaintainerSigner,
+    name: &str,
+    target_block_id: ObjectId,
+    patch_set_digest: PatchSetDigest,
+    patch_count: u64,
+) -> Result<ObjectEnvelope> {
+    let payload = TagPayload {
+        name: name.to_string(),
+        target_block_id,
+        message: None,
+        created_at: 0,
+        author_key_id: signer.key_id().to_string(),
+        patch_set_digest,
+        patch_count,
+    };
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Tag, 1, payload.to_canonical_bytes()?);
+    let id = envelope.object_id();
+    envelope.add_signature(maintainer_signature(signer, ObjectType::Tag, id)?)?;
+    Ok(envelope)
+}
+
+/// Re-encode a `PEXCH002` artifact's bytes, replacing whichever sections are `Some(..)` and
 /// preserving the rest **including the original declared digest untouched** -- for §7's negative
 /// controls, which need to construct an artifact whose byte-level shape a real export could never
 /// produce (a missing referenced blob, a truncated patch list under an unchanged declared digest)
@@ -113,6 +139,7 @@ pub(super) fn reencode_artifact(
     patches: Option<Vec<ObjectEnvelope>>,
     blobs: Option<Vec<ObjectEnvelope>>,
     claims: Option<Vec<ObjectEnvelope>>,
+    tags: Option<Vec<ObjectEnvelope>>,
 ) -> Result<Vec<u8>> {
     use crate::file_codec::{encode_envelope_file, push_bytes_u64, push_u64};
 
@@ -120,9 +147,10 @@ pub(super) fn reencode_artifact(
     let patches = patches.unwrap_or(decoded.patches);
     let blobs = blobs.unwrap_or(decoded.blobs);
     let claims = claims.unwrap_or(decoded.claims);
+    let tags = tags.unwrap_or(decoded.tags);
 
     let mut out = Vec::new();
-    out.extend_from_slice(b"PEXCH001");
+    out.extend_from_slice(b"PEXCH002");
     out.extend_from_slice(&decoded.declared_digest.0);
     push_u64(&mut out, patches.len() as u64);
     for envelope in &patches {
@@ -139,6 +167,10 @@ pub(super) fn reencode_artifact(
     }
     push_u64(&mut out, claims.len() as u64);
     for envelope in &claims {
+        push_bytes_u64(&mut out, &encode_envelope_file(envelope)?)?;
+    }
+    push_u64(&mut out, tags.len() as u64);
+    for envelope in &tags {
         push_bytes_u64(&mut out, &encode_envelope_file(envelope)?)?;
     }
     Ok(out)

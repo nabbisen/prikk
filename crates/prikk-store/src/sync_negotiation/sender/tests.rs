@@ -11,10 +11,12 @@ use super::sender_test_support::{
     write_blob,
 };
 use super::{SyncArtifactOutcome, build_sync_artifact};
+use crate::patch_set_digest::compute_patch_set_digest_and_count_from_block;
 use crate::sync_negotiation::{
     DEFAULT_HAVE_LIST_MAX_PATCH_COUNT, DEFAULT_HAVE_LIST_MAX_TOTAL_BYTES, build_have_list,
     decode_have_list,
 };
+use crate::tag_travel::create_local_tag;
 use crate::{AcceptOptions, FileObjectStore, accept_exchange_artifact, seal_from_accepted_claim};
 
 const TARGET_REF: &str = "heads/main";
@@ -110,6 +112,71 @@ fn an_already_synced_ref_reports_already_in_sync() -> Result<()> {
     let have_list_bytes = build_have_list(&receiver, TARGET_REF)?;
     let outcome = build_sync_artifact(&sender, TARGET_REF, &have_list_bytes, &sender_signer)?;
     assert!(matches!(outcome, SyncArtifactOutcome::AlreadyInSync { .. }));
+    cleanup(&sender);
+    cleanup(&receiver);
+    Ok(())
+}
+
+/// RFC 117 stage 3 §2: a tag created after two repositories are already fully in sync on a ref's
+/// patches must still travel -- the ordinary case once `prikk tag create` is usually run well after
+/// the content it names has already propagated. Before stage 3, tag inclusion was gated on a
+/// non-empty patch delta, so this exact case would have reported `AlreadyInSync` and never carried
+/// the tag at all.
+#[test]
+fn a_tag_on_an_already_synced_ref_still_travels_even_with_an_empty_delta() -> Result<()> {
+    let sender = repo("sender-stage3-tag-travel-sender")?;
+    let sender_signer = maintainer_signer(0x19)?;
+    adopt(&sender, &sender_signer)?;
+    let author = author_signer(0x1a)?;
+    let mut sender_objects = FileObjectStore::new(sender.clone());
+    let blob = write_blob(&mut sender_objects, b"stage3 tag travel\n")?;
+    let patch = create_file_patch(&author, "tag-travel.txt", 0x1b, blob)?;
+    let tip = seal_patches_onto(
+        &sender,
+        TARGET_REF,
+        std::slice::from_ref(&patch),
+        &sender_signer,
+    )?;
+
+    let receiver = repo("sender-stage3-tag-travel-receiver")?;
+    let receiver_signer = maintainer_signer(0x1c)?;
+    adopt(&receiver, &receiver_signer)?;
+    let mut receiver_objects = FileObjectStore::new(receiver.clone());
+    let receiver_blob = write_blob(&mut receiver_objects, b"stage3 tag travel\n")?;
+    let receiver_patch = create_file_patch(&author, "tag-travel.txt", 0x1b, receiver_blob)?;
+    seal_patches_onto(&receiver, TARGET_REF, &[receiver_patch], &receiver_signer)?;
+
+    // A tag created on the sender only after both sides are already fully in sync on the patches.
+    let (digest, count) = compute_patch_set_digest_and_count_from_block(&sender_objects, tip)?;
+    let mut write_session = crate::object_store::ObjectWriteSession::open(&sender)?;
+    create_local_tag(
+        &sender,
+        &mut write_session,
+        "tags/v1",
+        tip,
+        None,
+        digest,
+        count,
+        &sender_signer,
+    )?;
+    drop(write_session);
+
+    let have_list_bytes = build_have_list(&receiver, TARGET_REF)?;
+    let outcome = build_sync_artifact(&sender, TARGET_REF, &have_list_bytes, &sender_signer)?;
+    match outcome {
+        SyncArtifactOutcome::Artifact { report, .. } => {
+            assert_eq!(
+                report.delta_patch_count, 0,
+                "the patch delta itself must still be empty -- only the tag is new"
+            );
+            assert_eq!(report.tag_count, 1);
+            assert_eq!(report.export_report.tag_count, 1);
+        }
+        other => panic!(
+            "expected an Artifact carrying just the tag, got {other:?} -- tag-travel must not be \
+             gated on a non-empty patch delta"
+        ),
+    }
     cleanup(&sender);
     cleanup(&receiver);
     Ok(())

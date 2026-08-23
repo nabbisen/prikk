@@ -40,17 +40,18 @@
 //! Stage 4's own no-op precedent, adopts no signer trust check either: nothing is signed, so
 //! nothing needs to be.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, RecognitionClaimPayload,
+    CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, RecognitionClaimPayload, RefKind,
+    RefStatePayload, TagPayload,
 };
 
 use crate::layout::RepositoryLayout;
 use crate::maintainer_signing::{MaintainerSigner, maintainer_signature};
 use crate::merge_evidence::ancestors_inclusive;
-use crate::object_store::{ObjectReadSnapshot, ObjectWriteSession, ObjectWriter};
+use crate::object_store::{ObjectReadSnapshot, ObjectReader, ObjectWriteSession, ObjectWriter};
 use crate::patch_exchange::{ExchangeExportReport, export_exchange_artifact};
 use crate::refs::{RefStore, validate_local_branch_ref};
 use crate::trust::verify_signer_trusted;
@@ -69,7 +70,11 @@ pub struct SyncArtifactBuildReport {
     pub delta_patch_count: usize,
     /// Claims built, one per block that contains any delta patch (§2/§3).
     pub claim_count: usize,
-    /// The underlying `export_exchange_artifact` report -- patch/blob/author-key/claim counts as
+    /// Tags carried (RFC 117 stage 3 §2) -- every local tag whose target block lies within the
+    /// synced ref's ancestry, regardless of whether the delta itself is empty (see this function's
+    /// own doc for why tag-travel is not gated on a non-empty patch delta).
+    pub tag_count: usize,
+    /// The underlying `export_exchange_artifact` report -- patch/blob/author-key/claim/tag counts as
     /// that function already reports them.
     pub export_report: ExchangeExportReport,
 }
@@ -92,8 +97,17 @@ pub enum SyncArtifactOutcome {
     },
 }
 
-/// Build the `PEXCH001` exchange artifact that closes `ref_name`'s gap, from a have-list received
+/// Build the `PEXCH002` exchange artifact that closes `ref_name`'s gap, from a have-list received
 /// from the other side. See the module doc for why claims are never trimmed to the delta.
+///
+/// **RFC 117 stage 3 §2: tag-travel is not gated on a non-empty patch delta.** A tag can be created
+/// after two repositories are otherwise already fully in sync on a ref's patches -- the ordinary case
+/// once stage 3 lands, since `prikk tag create` is usually run well after the content it names has
+/// already propagated. Gating tag inclusion on `delta_patch_ids` being non-empty (the shape this
+/// function had before stage 3) would mean that ordinary case never travels the tag at all, only ever
+/// a delta rebuilt for some unrelated later reason. So the ref tip's ancestry is now always resolved
+/// and the qualifying-tags set is always computed; [`SyncArtifactOutcome::AlreadyInSync`] fires only
+/// when **both** the patch delta and the qualifying-tag set are empty.
 pub fn build_sync_artifact(
     layout: &RepositoryLayout,
     ref_name: &str,
@@ -120,8 +134,61 @@ pub fn build_sync_artifact(
     // receiver-absent ref (empty list) makes the delta the full reachable set.
     let delta_patch_ids = compute_sync_delta(layout, &have_list)?;
 
-    // §4: an empty delta means already in sync -- report it, build nothing, sign nothing.
-    if delta_patch_ids.is_empty() {
+    // §2: resolve the ref tip's ancestry -- unconditionally now (RFC 117 stage 3's own doc comment
+    // above explains why tag-travel cannot be gated on a non-empty delta). The same walk
+    // `patch_ids_reachable_from_block` and bundle export already use. No second traversal, no
+    // patch->block index.
+    let read_snapshot = ObjectReadSnapshot::open(layout)?;
+    let ref_store = RefStore::new(layout.clone());
+    let tip_block_id = resolve_branch_ref_tip(&read_snapshot, &ref_store, &canonical_ref)?;
+    if !delta_patch_ids.is_empty() && tip_block_id.is_none() {
+        return Err(PrikkError::Integrity(format!(
+            "ref {canonical_ref} has a non-empty delta but no local tip -- inconsistent state"
+        )));
+    }
+    let ancestors = match tip_block_id {
+        Some(id) => ancestors_inclusive(&read_snapshot, id)?,
+        None => BTreeMap::new(),
+    };
+
+    // RFC 117 stage 3 §2: every local tag whose target block lies within that ancestry travels,
+    // regardless of whether the receiver already holds it -- sending a tag it already has is
+    // harmless (objects are content-addressed and accept is idempotent), so there is no attempt to
+    // compute a tag-level delta the way there is for patches.
+    let mut tag_ids: Vec<ObjectId> = Vec::new();
+    for pointer in ref_store.list_ref_pointers()? {
+        if !pointer.ref_name.starts_with("tags/") {
+            continue;
+        }
+        let ref_state_envelope = read_snapshot
+            .read_typed(pointer.ref_state_id, ObjectType::RefState)?
+            .ok_or_else(|| {
+                PrikkError::Integrity(format!(
+                    "tag ref {} names missing RefState {}",
+                    pointer.ref_name, pointer.ref_state_id
+                ))
+            })?;
+        let ref_state_payload = RefStatePayload::decode_canonical(
+            &ref_state_envelope.canonical_payload,
+            ref_state_envelope.schema_version,
+        )?;
+        if ref_state_payload.kind != RefKind::Tag {
+            continue;
+        }
+        let tag_id = ref_state_payload.target_object_id;
+        let tag_envelope = read_snapshot
+            .read_typed(tag_id, ObjectType::Tag)?
+            .ok_or_else(|| PrikkError::Integrity(format!("missing Tag object: {tag_id}")))?;
+        let tag_payload = TagPayload::decode_canonical(&tag_envelope.canonical_payload)?;
+        if ancestors.contains_key(&tag_payload.target_block_id) {
+            tag_ids.push(tag_id);
+        }
+    }
+    tag_ids.sort_unstable();
+
+    // §4: an empty delta and no travel-worthy tag means already in sync -- report it, build
+    // nothing, sign nothing.
+    if delta_patch_ids.is_empty() && tag_ids.is_empty() {
         return Ok(SyncArtifactOutcome::AlreadyInSync {
             ref_name: have_list.ref_name,
         });
@@ -133,18 +200,6 @@ pub fn build_sync_artifact(
     // established.
     verify_signer_trusted(layout, signer)?;
 
-    // §2: find the blocks that contain the delta's patches by walking the ref tip's own ancestry
-    // -- the same walk `patch_ids_reachable_from_block` and bundle export already use. No second
-    // traversal, no patch->block index.
-    let read_snapshot = ObjectReadSnapshot::open(layout)?;
-    let ref_store = RefStore::new(layout.clone());
-    let tip_block_id = resolve_branch_ref_tip(&read_snapshot, &ref_store, &canonical_ref)?
-        .ok_or_else(|| {
-            PrikkError::Integrity(format!(
-                "ref {canonical_ref} has a non-empty delta but no local tip -- inconsistent state"
-            ))
-        })?;
-    let ancestors = ancestors_inclusive(&read_snapshot, tip_block_id)?;
     let delta_set: BTreeSet<ObjectId> = delta_patch_ids.iter().copied().collect();
     let mut qualifying_block_ids: Vec<ObjectId> = ancestors
         .iter()
@@ -183,14 +238,16 @@ pub fn build_sync_artifact(
         claim_ids.push(written_id);
     }
 
-    // §1 step 5: existing signature, unchanged.
-    let (export_report, bytes) = export_exchange_artifact(layout, &delta_patch_ids, &claim_ids)?;
+    // §1 step 5: now also carries `tag_ids` (RFC 117 stage 3 §2).
+    let (export_report, bytes) =
+        export_exchange_artifact(layout, &delta_patch_ids, &claim_ids, &tag_ids)?;
 
     Ok(SyncArtifactOutcome::Artifact {
         report: SyncArtifactBuildReport {
             ref_name: have_list.ref_name,
             delta_patch_count: delta_patch_ids.len(),
             claim_count: claim_ids.len(),
+            tag_count: tag_ids.len(),
             export_report,
         },
         bytes,
