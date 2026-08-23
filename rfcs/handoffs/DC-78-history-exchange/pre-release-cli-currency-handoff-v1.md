@@ -11,7 +11,7 @@ new user actually looks. **These are much cheaper to fix before a tag than after
 
 ---
 
-## 1. Four targets, already located
+## 1. Five targets, already located
 
 Each was verified against the source. **They are a starting point, not the scope** — see §2.
 
@@ -65,7 +65,22 @@ up work**, so it is currently recruiting people to build something that exists.
 stays off the network and `prikk-store` is bytes-in/bytes-out. **Adjudicate it; correct it only if the
 ruling settles it outright**, and report rather than guess if it does not.
 
-## 2. Method: fix these four, then check each one's siblings
+### 1.5 `crates/prikk-store/src/format.rs:18-21` — a false comment (added 2026-08-23, now unblocked)
+
+The doc comment on `validate_format2_schema` reads:
+
+> *"`RefState` ... the only type in this repository with more than one live schema, because **closure is
+> the only field ever added to an existing payload after its type shipped**."*
+
+**That is false.** `TagPayload` gained two fields — `patch_set_digest` (RFC 117 stage 1) and
+`patch_count` (T7) — **after `Tag` shipped**, added **in place at `schema_version` 1**.
+
+**This was listed as blocked in v1 of this handoff. It is not: the owner ruled on 2026-08-23 that `Tag`
+stays at schema 1.** So the comment's correct wording is settled — record what was actually done, in
+place, and stop claiming closure is the only such case. `RefState` remains the only type admitting two
+schemas; that half is still true. **Do not rewrite the function, only its comment.**
+
+## 2. Method: fix these five, then check each one's siblings
 
 This is **not** a sweep with a grep-defined scope — the four are already found. **But each belongs to a
 class, and a class rarely has one member.** Before reporting, check for siblings:
@@ -92,18 +107,17 @@ two surfaces agree. Keep the section's existing bare-command format, and keep th
 
 ## 4. Out of scope — do not touch
 
-- **`crates/prikk-store/src/format.rs:18-21`.** Its comment (*"closure is the only field ever added to
-  an existing payload after its type shipped"*) **is false** — `TagPayload` gained two fields after `Tag`
-  shipped. **Its correct wording depends on a pending owner ruling** on whether `Tag` mints schema 2.
-  **Leave it. It is mine, and it is blocked.**
-- **Anything about `TagPayload`, `Tag` schema versions, or the RFC 114 identity vectors.** Same ruling.
+- **Anything about `TagPayload`, `Tag` schema versions, or the RFC 114 identity vectors.** The owner has
+  ruled: **`Tag` stays at `schema_version` 1**, prikk has not been used in production, and
+  previous-version compatibility is not a concern. **Settled — do not reopen it, and do not propose a
+  schema 2.**
 - **`CHANGELOG.md`.** The release entry is its own increment and must come last.
 - **`MILESTONES.md`.** Mine.
 - **The two `println!`s in `prikk-store`** — long-standing, never adjudicated, not release-blocking.
 
 ## 5. What to report
 
-1. **Each of the four**: what it said, what it says now, and the authority.
+1. **Each of the five**: what it said, what it says now, and the authority.
 2. **Each sibling check** from §2 — including the ones that found nothing.
 3. **§1.1 specifically**: your verdict on *"multi-operation text diff minimization"* and *"plugins"*,
    with how you determined it. **If either is still unimplemented, say so and keep it.**
