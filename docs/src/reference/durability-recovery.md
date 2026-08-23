@@ -143,12 +143,6 @@ trailing incomplete suffix before the append; a torn tail belonging to one ref n
 ref's own filtered record sequence, so it cannot block a different ref's own publish or repair. Fully
 framed checksum-invalid or malformed records are never truncation-safe.
 
-For released format-1 repositories, one exact already-signed log-ahead transition may be completed by
-signer-backed seal without another append when retained active state proves the transition. Other
-ahead-log states fail closed. A missing format-1 pointer with log history is diagnosed but is not
-reconstructed by doctor in 0.18.0; preserve the repository and restore from backup or retain it for
-later migration/recovery tooling.
-
 Pointer/log agreement with the matching active WAL and metadata still retained is incomplete cleanup,
 not a healthy repository state. Verification returns non-zero and unrelated mutation remains blocked
 until signer-backed seal revalidates the transition, appends nothing, and removes active state.
@@ -195,7 +189,7 @@ stable repository-format migration, and production-readiness claims.
 | Seal verifies the configured MAINTAINER signer against repository-local trust before publication. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [DC-11](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-11-MAINTAINER-TRUST-STORE.md) |
 | Ref publication uses ref-specific locking, compare-and-swap checks, signed RefState/RefUpdate envelopes, pointer-first commit, and an idempotent exact log append. | [`refs/publication.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/publication.rs), [`refs/pointer_index.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer_index.rs), [`refs/container.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/container.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
 | Immutable object publication never replaces an existing final name; existing or concurrent winners require valid identity/type and exact persisted-byte equality, while recognized crash-left temps remain warning-only debris. | [`object_store.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/object_store.rs), [`immutable.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/fsutil/anchored/immutable.rs), [DC-36](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-36-EXISTING-OBJECT-PUBLICATION-INTEGRITY.md) |
-| Doctor refuses format-1 missing-pointer reconstruction; exact interrupted ref publication completion requires retained active evidence and a trusted signer. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
+| Doctor's `--repair-main-ref` input is recognized but always refused and performs no repair; exact interrupted ref publication completion requires retained active evidence and a trusted signer. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
 | Doctor began as read-only diagnostics, and current mutating repairs remain opt-in and narrow. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [PR-011](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-011-DOCTOR-HANDOFF.md), [PR-012](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-012-DOCTOR-REPAIR-HANDOFF.md), [PR-013](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-013-REF-RECOVERY-HANDOFF.md) |
 | Ref pointers are mutable, not roots of trust. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`refs/pointer_index.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer_index.rs), [data model](./data-model.md) |
 | Durability/platform claims remain limited by current test evidence and gates exercised on Linux, macOS, and Windows. | [DC-24 baseline recap](https://github.com/nabbisen/prikk/blob/main/rfcs/handoffs/DC-24-data-model-trust-threat-docs/baseline-recap.md), [DC-24](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-24-DATA-MODEL-TRUST-THREAT-DOCS.md), [DC-28](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-28-DURABILITY-CRASH-RECOVERY-REFERENCE.md) |
@@ -203,6 +197,5 @@ stable repository-format migration, and production-readiness claims.
 ## Provenance
 
 This reference follows the DC-26 documentation-home model: current-state references live in the
-published mdBook, not under `rfcs/fdds/`. Its required-sync and ref-publication sections are updated
-with the DC-37 and DC-38 implementations and remain subject to the combined 0.18.0 implementation and
-release reviews.
+published mdBook, not under `rfcs/fdds/`. Its required-sync and ref-publication sections were last
+updated for the DC-37 and DC-38 implementations, reviewed as part of the combined 0.18.0 release.

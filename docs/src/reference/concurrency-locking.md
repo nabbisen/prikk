@@ -152,9 +152,8 @@ check above), since a torn tail belonging to one ref never enters any other ref'
 subsequence and so cannot block a different ref's publish.
 
 Doctor diagnoses interrupted publication but does not sign, append, promote, or reconstruct a
-missing pointer. The former format-1 missing-pointer repair is refused in 0.18.0. The sole bounded
-legacy mutation is signer-backed seal completion of one exact format-1 log-ahead transition with
-matching retained active state.
+missing pointer. `--repair-main-ref` is a recognized input for this and performs no repair — it is
+always refused, regardless of repository state.
 
 ## Container Locking and Compaction
 
@@ -273,7 +272,7 @@ every lock it clears.
 | Ref publication uses a per-ref lock, expected-current checks, signed RefState persistence, a durable pointer-index append as the commit point, then exactly one signed RefUpdate append to the shared log container. | [`refs/publication.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/publication.rs), [`refs/pointer_index.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/pointer_index.rs), [`refs/container.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/container.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
 | Ref CAS mismatch returns `LockConflict` and is distinct from an existing lock-file conflict. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`lock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/lock.rs) |
 | Unborn ref publication is allowed only when the pointer is absent and the ref log is empty with no trailing partial bytes. | [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-13](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-13-NONDEFAULT-REF-GENESIS.md) |
-| Doctor refuses format-1 missing-pointer reconstruction; exact interrupted publication completion requires signer-backed seal under the active and ref locks. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
+| Doctor's `--repair-main-ref` input is recognized but always refused and performs no repair; exact interrupted publication completion requires signer-backed seal under the active and ref locks. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
 | Doctor repairs are opt-in and do not clear unsafe active sessions or define stale-lock cleanup. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [integrity and recovery diagnostics](./integrity-recovery.md), [DC-29](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-29-VERIFY-DOCTOR-INTEGRITY-RECOVERY-REFERENCE.md) |
 | Four container locks (ref-pointer index, ref log, received-ref index, trust policy) are acquired by writers and `prikk compact` alike, sorted into one fixed order by a single acquisition helper before any lock is taken. | [`lock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/lock.rs), [`compact.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/compact.rs) |
 | `prikk unlock` lists every held lock with an advisory (not authoritative) liveness check of its recorded process id, and clears one named lock only after explicit confirmation or `--yes`. | [`unlock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/unlock.rs), [`prikk-cli/src/unlock.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/unlock.rs) |

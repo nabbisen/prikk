@@ -34,8 +34,6 @@ verification covers:
 - Block payload decoding and references to parent Blocks, Patch objects, and optional snapshot Blobs;
 - joint ref pointer, RefState-chain, and ref-log-chain consistency;
 - signed RefUpdate log record decoding;
-- warning-level format-1 signature-envelope diagnosis for malformed Ed25519 shape, duplicate tuples,
-  and non-canonical order;
 - active WAL replay, including trailing partial WAL byte reporting;
 - whether active WAL Patch records already exist as persisted Patch objects;
 - active WAL ref metadata health;
@@ -48,10 +46,9 @@ all use the same retained repository-root authority. Publication trust consumes 
 RefState, and RefUpdate envelopes returned by those anchored structural scans; it does not reopen
 publication paths in a separate trust phase.
 
-Publication trust, format-1 signature-envelope warnings, and recognized ref-publication state issues
-are collected separately from hard structural verification errors. This lets the command preserve and
-diagnose legacy bytes while still returning command failure when trust is invalid or a blocking
-interrupted-publication state exists.
+Publication trust and recognized ref-publication state issues are collected separately from hard
+structural verification errors. This lets the command return command failure when trust is invalid or
+a blocking interrupted-publication state exists.
 
 ## What Verify Does Not Prove
 
@@ -76,22 +73,17 @@ platform.
 The current CLI prints counters for checked objects, Blocks, rollback Blocks, sealed rollback Patches,
 WAL records, persisted WAL Patches, refs, ref-log records, rollback draft WAL records, publication
 trust records, publication trust issues, ref-publication issues, and trailing partial WAL bytes. It
-also prints signature-envelope warnings and the active WAL metadata state.
-
-Signature-envelope warnings use at most one issue per code per envelope, in malformed, duplicate,
-then non-canonical-order sequence. Object findings are ordered by numeric object type and raw ObjectId
-bytes, followed by active WAL sequence, then unsigned UTF-8 ref-name bytes and ref-log sequence. These
-warnings do not independently make `verify` fail and never authorize normalization or mutation of the
-legacy envelope.
+also prints the active WAL metadata state. Object findings are ordered by numeric object type and raw
+ObjectId bytes, followed by active WAL sequence, then unsigned UTF-8 ref-name bytes and ref-log
+sequence.
 
 The command exits with failure when:
 
 - structural verification returns an error before a report can be produced;
 - the report has a non-empty active WAL with missing or malformed active ref metadata; or
 - the report has publication-trust issues; or
-- the report has a blocking ref-publication issue such as a one-transition pointer lead, a bounded
-  format-1 log lead, matching active state retained after completed publication, a missing format-1
-  pointer with log history, or an unproved pointer/log divergence.
+- the report has a blocking ref-publication issue such as a one-transition pointer lead, matching
+  active state retained after completed publication, or an unproved pointer/log divergence.
 
 Trailing partial WAL bytes are printed as a warning in the report. The recovery mechanics and safe
 truncation boundary are covered by the [durability and crash recovery](./durability-recovery.md)
@@ -141,19 +133,16 @@ Current doctor severities are `info`, `warning`, and `error`.
 
 Publication-trust issues can also appear in doctor output as error-severity diagnostics using the
 trust issue code and message from publication-trust verification. Ref-publication diagnostics use
-their verification codes: pointer lead, legacy log lead, retained active cleanup, missing pointer,
-and unproved divergence are errors; candidate debris and non-canonical legacy timestamps are warnings.
-Signature-envelope diagnostics appear as warnings using
-`PRIKK-VERIFY-SIGNATURE-MALFORMED`, `PRIKK-VERIFY-SIGNATURE-DUPLICATE`, and
-`PRIKK-VERIFY-SIGNATURE-NONCANONICAL-ORDER`. Doctor does not rewrite those envelopes.
+their verification codes: pointer lead, retained active cleanup, and unproved divergence are errors;
+candidate debris is a warning.
 
 `MissingForEmptyWal` and `ValidForNonEmptyWal` are healthy metadata states and do not produce doctor
 issues by themselves.
 
 ## Doctor Repair Boundary
 
-Doctor's supported repair switch is `--repair-wal-tail`. The former `--repair-main-ref` input is
-retained only to return an explicit format-1 compatibility refusal in 0.18.0; it performs no repair.
+Doctor's supported repair switch is `--repair-wal-tail`. `--repair-main-ref` is a recognized input that
+performs no repair and is always refused.
 
 Repair refuses to run when repository health has error-severity issues. The detailed recovery
 mechanics and safety preconditions for those repairs live in the
@@ -190,20 +179,21 @@ readiness. (MAINTAINER key revocation is no longer deferred — `prikk trust mai
 
 | Claim | Source anchors |
 |---|---|
-| Repository verification reports counters for objects, WAL records, Blocks, refs, ref logs, rollback material, publication trust, signature-envelope warnings, ref-publication issues, trailing partial WAL bytes, and active WAL metadata state. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`signature_diagnostics.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/signature_diagnostics.rs), [`verification.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/output/verification.rs), [DC-39](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md) |
+| Repository verification reports counters for objects, WAL records, Blocks, refs, ref logs, rollback material, publication trust, ref-publication issues, trailing partial WAL bytes, and active WAL metadata state. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`verification.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/output/verification.rs) |
 | Verification checks object placement, envelope decoding, object identity, Block references, ref pointer/log consistency, WAL replay, rollback classification, and publication trust. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`refs.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs.rs), [data model](./data-model.md) |
 | Publication trust checks Block, RefState, and RefUpdate envelopes against repository-local maintainer trust and reports issues separately. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [DC-11](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-11-MAINTAINER-TRUST-STORE.md), [trust and threat model](./trust-threat-model.md) |
 | `verify` command failure occurs for active-WAL metadata integrity issues, publication-trust issues, or blocking ref-publication issues after printing the report. | [`main.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/main.rs), [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md) |
 | Active WAL metadata has six states, with two healthy states, two empty-WAL warning states, and two non-empty-WAL integrity states. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [DC-15](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-15-ACTIVE-SESSION-INTEGRITY-HARDENING.md) |
 | Doctor is a diagnostic layer over verification with issue severities, issue codes, messages, recommendations, and an issue summary. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [`output.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/output.rs), [PR-011](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-011-DOCTOR-HANDOFF.md) |
 | Doctor surfaces publication-trust and ref-publication issue codes in addition to doctor-owned diagnostics. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [`refs/verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/refs/verify.rs) |
-| Doctor mutation is opt-in and limited to active-WAL tail truncation; format-1 missing-pointer repair is explicitly refused. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [`args.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/args.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md), [durability and crash recovery](./durability-recovery.md) |
+| Doctor mutation is opt-in and limited to active-WAL tail truncation; `--repair-main-ref` is recognized but performs no repair and is always refused. | [`doctor.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/doctor.rs), [`args.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/args.rs), [DC-38](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-38-REF-PUBLICATION-CRASH-RECOVERY.md), [durability and crash recovery](./durability-recovery.md) |
 | Repository verification classifies rollback draft WAL records and sealed rollback material, while `rollback-draft-verify` performs a stronger selected-ref check. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`rollback_verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/rollback_verify.rs), [PR-029](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-029-ROLLBACK-DRAFT-VERIFY-HANDOFF.md), [PR-030](https://github.com/nabbisen/prikk/blob/main/rfcs/done/PR-030-SEALED-ROLLBACK-HISTORY-HANDOFF.md), [rollback draft verification guide](../guide/rollback/rollback-draft-verify.md) |
 | Verify/doctor output is current CLI vocabulary, not a stable machine-readable schema. | [`output.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/output.rs), [DC-29](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-29-VERIFY-DOCTOR-INTEGRITY-RECOVERY-REFERENCE.md) |
 
 ## Provenance
 
-This reference consolidates current behavior through the DC-39 implementation candidate. It follows
-the DC-26 documentation-home model: current-state references live in the published mdBook, not under
-`rfcs/fdds/`. DC-38 documents pointer-first publication diagnostics and the narrower doctor boundary;
-DC-39 adds strict new-envelope admission and byte-preserving format-1 signature diagnostics.
+This reference consolidates behavior through RFC 103, which retired format-1 support entirely (see
+[Doctor Repair Boundary](#doctor-repair-boundary) above). It follows the DC-26 documentation-home
+model: current-state references live in the published mdBook, not under `rfcs/fdds/`. DC-38 documents
+pointer-first publication diagnostics and the narrower doctor boundary; DC-39 added strict
+new-envelope admission and, before RFC 103, format-1 signature diagnostics.
