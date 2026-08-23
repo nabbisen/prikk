@@ -1,8 +1,8 @@
 //! Repository doctor diagnostics and narrowly-scoped repair helpers.
 //!
 //! Doctor repairs are deliberately conservative. Mutating repair is opt-in and limited to
-//! incomplete active-WAL tail truncation. The former format-1 missing-pointer switch remains a
-//! compatibility input but is explicitly refused.
+//! incomplete active-WAL tail truncation. `--repair-main-ref` remains a recognized input but has no
+//! implemented repair and is always refused.
 
 use prikk_error::{PrikkError, Result};
 
@@ -134,7 +134,7 @@ pub struct DoctorRepairOptions {
     /// Truncate incomplete trailing bytes from the active WAL after verification confirms that the
     /// prefix is valid.
     pub truncate_wal_tail: bool,
-    /// Request the refused format-1 `heads/main` reconstruction compatibility path.
+    /// Request `heads/main` ref reconstruction. Always refused -- no repair is implemented.
     pub reconstruct_main_ref: bool,
 }
 
@@ -157,7 +157,8 @@ impl DoctorRepairOptions {
         }
     }
 
-    /// Return options that request the refused format-1 missing-pointer compatibility path.
+    /// Return options that request `heads/main` ref reconstruction. Always refused -- no repair is
+    /// implemented.
     #[must_use]
     pub const fn reconstruct_main_ref() -> Self {
         Self {
@@ -396,7 +397,8 @@ pub fn repair_repository(
     layout.require_current_format()?;
     if options.reconstruct_main_ref {
         return Err(PrikkError::Integrity(
-            "format-1 missing-pointer doctor repair is unsupported in 0.18.0; preserve the repository for signer-backed retry or later recovery tooling"
+            "--repair-main-ref has no implemented repair; doctor cannot reconstruct a missing \
+             heads/main ref"
                 .to_string(),
         ));
     }

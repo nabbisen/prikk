@@ -357,7 +357,11 @@ fn doctor_missing_pointer_repair_is_refused() -> prikk_error::Result<()> {
                 "doctor missing-pointer repair unexpectedly succeeded".to_string(),
             )
         })?;
-    assert!(error.to_string().contains("unsupported in 0.18.0"));
+    assert!(
+        error
+            .to_string()
+            .contains("--repair-main-ref has no implemented repair")
+    );
     assert_eq!(
         RefStore::new(layout.clone()).read_current_ref_state_id("heads/main")?,
         None
