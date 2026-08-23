@@ -12,7 +12,10 @@ status records listed in the anchor table at the foot of the page.
 - Maintainer trust is repository-local with the current minimal `required = 1` policy.
 - `verify` is not a global trust proof.
 - MAINTAINER key revocation exists (`prikk trust maintainer remove`); there is no key rotation, hardware
-  signing, remote trust, sync trust, or stable migration policy yet, and no AUTHOR-identity revocation.
+  signing, remote trust, a distinct peer/sync trust framework, or stable migration policy yet, and no
+  AUTHOR-identity revocation. Sync and tag adoption make no new trust decision of their own — every
+  trust check either resolves against locally-held history or the receiver's own already-adopted keys;
+  see [Trust Roots and Roles](#trust-roots-and-roles) below for the tag-adoption specifics.
   For AUTHOR keys specifically (DC-53 Stage 2): one `key_id` is permanently bound to the first public
   key ever recorded for it in a given repository; attempting to sign under the same `key_id` with a
   different key — whether from a genuine rotation attempt or an impersonation attempt — is refused
@@ -73,6 +76,33 @@ adds continuity of authorship on top of it, and does not replace it.
 MAINTAINER signatures identify publication objects. Seal uses real role-bound Ed25519 MAINTAINER
 signatures for Block, RefState, and RefUpdate envelopes and verifies the signer against the local
 maintainer trust policy before publishing.
+
+**Tag adoption is the receiver's own signed act (RFC 117 T4), never conjured from someone else's
+assertion.** `sync build`/`accept` can move a Tag object into the received namespace, but arrival is
+not adoption: **trust does not expand on receipt.** A received tag's own MAINTAINER signature is
+checked and its outcome (`Sound` against an adopted key, or `Unverifiable` against one this repository
+has not adopted) is reported by `sync tags` — but that outcome never gates anything. An `Unverifiable`
+tag is stored and reported exactly like a `Sound` one. Nothing advances until an operator explicitly
+runs `sync adopt-tag <name>`.
+
+`sync adopt-tag` creates a **new, local** `Tag` object, signed under the receiver's own maintainer key —
+not a copy of the sender's. The sender's tag and the receiver's tag are different objects sharing the
+same global identity: a locally re-signed tag carries a different `author_key_id`, and therefore a
+different signature and a different object id, even though both name the identical patch set (a tag
+names a patch set, not a block, which is why a received tag's target has to be *resolved* against the
+receiver's own local blocks rather than pointed to directly — blocks diverge across repositories, patch
+sets do not). Adoption requires the receiver's own signer to be locally trusted — the same
+trust-on-first-use maintainer policy described above, checked the same way `seal` checks it. **Adoption
+does not verify who the sender is.** It does not check the received tag's own signature outcome at
+all: whether the sender's tag was `Sound` or `Unverifiable` has no bearing on whether adoption succeeds,
+because adoption asserts what the *receiver* now holds and signs under its own key, not anything about
+who sent it.
+
+**Adoption refuses rather than guesses.** It refuses if no received tag carries the requested name, if
+more than one received tag claims that name, if the named patch set is not held locally yet (not enough
+of this repository's history has been synced), or if the patch set resolves to more than one local
+block. Each refusal is a person's decision not to act on an unresolved question — not a cryptographic
+guarantee that the correct answer was found.
 
 ## Key Input and Local Trust Store
 
@@ -148,6 +178,9 @@ and stable repository-format migration.
 | AUTHOR signing is real Ed25519 on Patch envelopes, not a placeholder. | [`author_signing.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/author_signing.rs), [`node_authoring.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/worktree_patch/node_authoring.rs), [DC-10](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-10-ROLLBACK-DRAFT-SIGNING.md) |
 | AUTHOR *private* key material comes from environment variables and is never persisted by Prikk. **The public half is persisted** in the repository-local author-key container, recorded at authoring time (DC-53), because an Ed25519 signature cannot be verified without it. | [`main.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/main.rs), [`author_signing.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/author_signing.rs), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
 | MAINTAINER publication signing is real Ed25519 and role-bound. | [`maintainer_signing.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/maintainer_signing.rs), [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [DC-11](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-11-MAINTAINER-TRUST-STORE.md) |
+| A received tag's MAINTAINER signature outcome is checked and reported but never gates; nothing advances until `sync adopt-tag` runs. | [`tag_travel.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/tag_travel.rs), RFC 117 T4 |
+| `sync adopt-tag` creates a new, locally-signed `Tag` object distinct from the sender's, gated on the receiver's own locally-trusted signer, not on the sender's signature outcome. | [`tag_travel.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/tag_travel.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), RFC 117 T4 |
+| Tag adoption refuses on a name miss, a name collision among received tags, an unheld patch set, or an ambiguous patch-set resolution — it never picks. | [`tag_travel.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/tag_travel.rs), [`patch_set_digest.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/patch_set_digest.rs) |
 | Maintainer trust is repository-local, held as a set of adopted keys, with `required = 1` meaning any one adopted key's signature suffices. | [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs), [`layout.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-11 FDD-04 handoff](https://github.com/nabbisen/prikk/blob/main/rfcs/handoffs/DC-11-maintainer-trust-store/fdd-04-update.md) |
 | Seal validates the maintainer signer against local trust before publication. | [`seal.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs) |
 | Verify checks publication trust for Block, RefState, and RefUpdate envelopes. | [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs), [`trust.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/trust.rs) |
