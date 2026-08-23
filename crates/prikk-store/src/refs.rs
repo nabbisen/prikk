@@ -42,7 +42,9 @@ pub(crate) use pointer_index::{
 };
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{ObjectEnvelope, ObjectId, ObjectType, RefStatePayload, RefUpdatePayload};
+use prikk_object::{
+    ObjectEnvelope, ObjectId, ObjectType, RefKind, RefStatePayload, RefUpdatePayload, TagPayload,
+};
 
 use crate::layout::RepositoryLayout;
 use crate::lock::ActiveLock;
@@ -82,6 +84,39 @@ pub use verify::{
     RefFileOutcome, RefFileStatus, RefItemOutcome, RefItemStatus, RefPublicationIssue,
 };
 pub(crate) use verify::{ensure_ref_target_valid, verify_refs};
+
+/// The two-hop ref-tip resolution `bundle.rs`, `patch_set_digest.rs`, and `patch_exchange.rs` each
+/// need: `Branch` names a Block directly; `Tag` names a Tag object one hop away, whose own
+/// `target_block_id` is the actual tip. Consolidated here (ref-tip-resolver-consolidation handoff)
+/// after the same "just a two-hop resolve" analysis had been re-derived three times across separate
+/// handoffs. Returns the Tag envelope too, whenever one was read -- every caller already decodes it
+/// to reach `target_block_id`, so returning it costs nothing, and `bundle.rs`'s own accumulator (which
+/// needs the envelope itself) can use it instead of re-reading.
+///
+/// **Not `ensure_ref_target_valid`'s replacement -- see that function's own doc for why they stay
+/// separate.** This resolves; it never validates (a `Branch`'s target block existence is never
+/// checked here, unlike that function's own `ensure_block_exists`), and it carries no `owner` id for
+/// a diagnostic-quality error, because a resolver is never given one to carry.
+///
+/// **Exhaustive match, no wildcard**: a future `RefKind` variant must fail to compile here rather
+/// than silently resolve to nothing and surface as a misleading "missing Block" error the way
+/// `export_bundle`'s own pre-consolidation defect did (`bundle-export-tag-ref-gap-v1.md`).
+pub(crate) fn resolve_ref_tip_block(
+    object_store: &impl ObjectReader,
+    ref_state_payload: &RefStatePayload,
+) -> Result<(ObjectId, Option<ObjectEnvelope>)> {
+    match ref_state_payload.kind {
+        RefKind::Branch => Ok((ref_state_payload.target_object_id, None)),
+        RefKind::Tag => {
+            let tag_id = ref_state_payload.target_object_id;
+            let tag_envelope = object_store
+                .read_typed(tag_id, ObjectType::Tag)?
+                .ok_or_else(|| PrikkError::Integrity(format!("missing Tag object: {tag_id}")))?;
+            let tag_payload = TagPayload::decode_canonical(&tag_envelope.canonical_payload)?;
+            Ok((tag_payload.target_block_id, Some(tag_envelope)))
+        }
+    }
+}
 
 pub(crate) fn ensure_no_incomplete_publication(layout: &RepositoryLayout) -> Result<()> {
     let verification = verify_refs(layout)?;

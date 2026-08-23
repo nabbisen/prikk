@@ -402,6 +402,15 @@ fn verified_ref_state_payload(
 /// target and its pointer's target are the identical value for the identical kind. `RefKind::Branch`
 /// must target a `Block` directly; `RefKind::Tag` must target a `Tag` object whose own
 /// `target_block_id` is a `Block` — the two-hop indirection §6.6 requires.
+///
+/// **Not `refs::resolve_ref_tip_block`, on purpose** (ref-tip-resolver-consolidation handoff): this
+/// function *validates* and returns `()` — for a `Branch` it confirms the target block actually
+/// exists, which a resolver never checks — and its errors carry `owner`, the ref object being
+/// verified, which a resolver never has. That `owner` is load-bearing: *"ref object {owner} targets
+/// missing tag {target_object_id}"* is the exact message the DC-78 tag-gap ruling turned on (a
+/// bundle must ship the Tag object, or `verify` produces this). Folding this into the resolver would
+/// either drop that context or thread a message-customisation parameter through code three other
+/// callers don't need it in.
 pub(crate) fn ensure_ref_target_valid(
     objects: &impl ObjectReader,
     kind: RefKind,

@@ -31,12 +31,12 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use prikk_error::{PrikkError, Result};
 use prikk_hash::sha256;
-use prikk_object::{BlockPayload, ObjectId, ObjectType, RefKind, RefStatePayload, TagPayload};
+use prikk_object::{BlockPayload, ObjectId, ObjectType, RefStatePayload};
 
 use crate::layout::RepositoryLayout;
 use crate::merge_evidence::ancestors_inclusive;
 use crate::object_store::{ObjectReadSnapshot, ObjectReader};
-use crate::refs::RefStore;
+use crate::refs::{RefStore, resolve_ref_tip_block};
 
 /// RFC 117 T1: the newtype itself now lives in `prikk-object` (`TagPayload` carries one, and
 /// `prikk-object` cannot depend on this crate) -- re-exported here so every existing
@@ -117,9 +117,10 @@ pub fn compute_patch_set_digest_and_count_from_block(
 }
 
 /// Resolve `ref_name` to its target Block, per this module's own doc: `heads/*` directly, `tags/*`
-/// through the Tag object's own `target_block_id`. `remotes/*` is refused explicitly before any
-/// `RefStore` lookup is attempted, so the refusal names the real reason (ruling §2.3) rather than a
-/// misleading "ref does not exist".
+/// through the Tag object's own `target_block_id` (the two-hop core itself is
+/// `refs::resolve_ref_tip_block`, shared with `bundle.rs` and `patch_exchange.rs`). `remotes/*` is
+/// refused explicitly before any `RefStore` lookup is attempted, so the refusal names the real
+/// reason (ruling §2.3) rather than a misleading "ref does not exist".
 fn resolve_ref_to_tip_block(
     layout: &RepositoryLayout,
     object_store: &impl ObjectReader,
@@ -145,17 +146,8 @@ fn resolve_ref_to_tip_block(
         &ref_state_envelope.canonical_payload,
         ref_state_envelope.schema_version,
     )?;
-    match ref_state_payload.kind {
-        RefKind::Branch => Ok(ref_state_payload.target_object_id),
-        RefKind::Tag => {
-            let tag_id = ref_state_payload.target_object_id;
-            let tag_envelope = object_store
-                .read_typed(tag_id, ObjectType::Tag)?
-                .ok_or_else(|| PrikkError::Integrity(format!("missing Tag object: {tag_id}")))?;
-            let tag_payload = TagPayload::decode_canonical(&tag_envelope.canonical_payload)?;
-            Ok(tag_payload.target_block_id)
-        }
-    }
+    let (target_block_id, _tag_envelope) = resolve_ref_tip_block(object_store, &ref_state_payload)?;
+    Ok(target_block_id)
 }
 
 /// The ref-rooted entry point, and the one two independent repositories can actually use: neither

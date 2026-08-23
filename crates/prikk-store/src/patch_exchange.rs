@@ -25,7 +25,7 @@ use crate::fsutil::read_file_if_exists;
 use crate::layout::{ContainerSlot, RepositoryLayout, persisted_object_types};
 use crate::object_store::{ObjectReadSnapshot, ObjectReader};
 use crate::patch_set_digest::patch_ids_reachable_from_block;
-use crate::refs::RefStore;
+use crate::refs::{RefStore, resolve_ref_tip_block};
 
 mod accept;
 mod artifact;
@@ -37,32 +37,6 @@ pub use artifact::{
     DEFAULT_EXCHANGE_ARTIFACT_MAX_OBJECT_COUNT, DEFAULT_EXCHANGE_ARTIFACT_MAX_TOTAL_BYTES,
     ExchangeExportReport, export_exchange_artifact,
 };
-
-/// Resolve one ref's tip to the Block it ultimately names -- one hop for a `Branch`, two for a
-/// `Tag` (`TagPayload.target_block_id`). The same small resolution `bundle.rs`'s
-/// `resolve_ref_target_block` and `patch_set_digest.rs`'s `resolve_ref_to_tip_block` already each
-/// have their own copy of, for their own reasons (bundle export also collects the Tag envelope
-/// itself; the digest refuses `remotes/*` outright). Neither shape fits this query, which needs
-/// only the resolved Block id, for every local ref, and this is now the third place this exact
-/// two-hop pattern is needed -- worth a name in a report, not a silent fourth copy, but also not a
-/// cross-module refactor of two already-reviewed call sites this handoff does not otherwise touch.
-fn resolve_ref_tip_block(
-    object_store: &impl ObjectReader,
-    ref_state_payload: &prikk_object::RefStatePayload,
-) -> Result<ObjectId> {
-    match ref_state_payload.kind {
-        prikk_object::RefKind::Branch => Ok(ref_state_payload.target_object_id),
-        prikk_object::RefKind::Tag => {
-            let tag_id = ref_state_payload.target_object_id;
-            let tag_envelope = object_store
-                .read_typed(tag_id, ObjectType::Tag)?
-                .ok_or_else(|| PrikkError::Integrity(format!("missing Tag object: {tag_id}")))?;
-            let tag_payload =
-                prikk_object::TagPayload::decode_canonical(&tag_envelope.canonical_payload)?;
-            Ok(tag_payload.target_block_id)
-        }
-    }
-}
 
 /// D2's derived query (design-v1.md §3, RFC 115 Stage 3 §5): **no new container, no stored pending
 /// state.** "Accepted but unsealed" is computed, every time it's asked:
@@ -105,7 +79,8 @@ pub fn accepted_but_unsealed_patch_ids(layout: &RepositoryLayout) -> Result<Vec<
             &ref_state_envelope.canonical_payload,
             ref_state_envelope.schema_version,
         )?;
-        let tip_block_id = resolve_ref_tip_block(&object_store, &ref_state_payload)?;
+        let (tip_block_id, _tag_envelope) =
+            resolve_ref_tip_block(&object_store, &ref_state_payload)?;
         reachable.extend(patch_ids_reachable_from_block(&object_store, tip_block_id)?);
     }
 
