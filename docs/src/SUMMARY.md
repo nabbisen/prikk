@@ -23,6 +23,7 @@
 - [Merge Evidence](guide/merge-evidence.md)
 - [Merge Plan](guide/merge-plan.md)
 - [Merge](guide/merge.md)
+- [Sync](guide/sync.md)
 
 # Reference
 
