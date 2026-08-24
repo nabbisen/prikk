@@ -338,9 +338,12 @@ fn dc53_vector_6_verification_fails_closed_against_a_conflicting_key_id() -> pri
 /// Pairs `validate_format2_schema` admits that no production code path has ever constructed, per
 /// RFC 114 §2's "has ever been written" criterion (`prikk-rfc114-implementation-plan-v1.md` §1).
 /// Gate A's completeness self-guard (below) checks every admitted pair is either frozen with a
-/// vector or listed here -- so the day something starts writing `Attestation`, that test fails
-/// instead of silently shipping an unfrozen identity-bearing type.
-const RFC114_ADMITTED_BUT_UNWRITTEN: &[ObjectType] = &[ObjectType::Attestation];
+/// vector or listed here -- so the day something starts writing `Attestation` (or any other
+/// admitted pair not yet vectored), that test fails instead of silently shipping an unfrozen
+/// identity-bearing type. Pair-granular, per `(ObjectType, u32)` -- gate-a-pair-granularity
+/// handoff v1: a type-granular list here would let a *second* schema on an already-declared type
+/// slip through unvectored just as silently as `frozen` below did before this fix.
+const RFC114_ADMITTED_BUT_UNWRITTEN: &[(ObjectType, u32)] = &[(ObjectType::Attestation, 1)];
 
 /// Every `ObjectType` this crate has, so the sweep below is exhaustive by construction rather than
 /// a hand-copied guess -- if a variant is ever added to `prikk_object::ObjectType`, it must be
@@ -386,24 +389,35 @@ fn all_object_types_is_exhaustive() {
 /// declared deliberately unwritten in `RFC114_ADMITTED_BUT_UNWRITTEN`. This is the guard that
 /// fails the day something starts writing `Attestation` (or any newly-admitted pair) without a
 /// vector following it in the same change.
+///
+/// **Pair-granular by construction** (gate-a-pair-granularity handoff v1, `8c31a78`'s own review):
+/// both `frozen` and `RFC114_ADMITTED_BUT_UNWRITTEN` are `(ObjectType, u32)` lists and the
+/// assertion below checks membership of the whole pair, not just `object_type` -- so a second
+/// admitted schema on an already-declared type (as `RefState` and `Patch` both now are) is
+/// checked independently of its type's first schema, rather than riding along for free on it.
 #[test]
 fn rfc114_gate_a_every_admitted_pair_is_frozen_or_declared_unwritten() {
-    let frozen = [
-        ObjectType::Block,
-        ObjectType::RefState,
-        ObjectType::Patch,
-        ObjectType::RefUpdate,
-        ObjectType::Tag,
-        ObjectType::Blob,
-        ObjectType::RecognitionClaim,
+    let frozen: &[(ObjectType, u32)] = &[
+        (ObjectType::Block, 2),
+        (ObjectType::RefState, 1),
+        (ObjectType::RefState, prikk_object::REF_STATE_CLOSED_SCHEMA),
+        (ObjectType::Patch, 1),
+        (
+            ObjectType::Patch,
+            prikk_object::PATCH_PARENT_IDS_RETIRED_SCHEMA,
+        ),
+        (ObjectType::RefUpdate, 1),
+        (ObjectType::Tag, 1),
+        (ObjectType::Blob, 1),
+        (ObjectType::RecognitionClaim, 1),
     ];
     for &object_type in ALL_OBJECT_TYPES {
         for schema_version in 0u32..=8 {
             let envelope = ObjectEnvelope::unsigned(object_type, schema_version, Vec::new());
             if crate::format::validate_format2_schema(&envelope).is_ok() {
+                let pair = (object_type, schema_version);
                 assert!(
-                    frozen.contains(&object_type)
-                        || RFC114_ADMITTED_BUT_UNWRITTEN.contains(&object_type),
+                    frozen.contains(&pair) || RFC114_ADMITTED_BUT_UNWRITTEN.contains(&pair),
                     "({object_type:?}, {schema_version}) is admitted by \
                      validate_format2_schema but is neither frozen with an identity vector nor \
                      declared unwritten in RFC114_ADMITTED_BUT_UNWRITTEN -- if production now \
