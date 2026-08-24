@@ -85,6 +85,8 @@ mod dc55_identity_evidence;
 #[cfg(test)]
 mod format_stability_gate;
 #[cfg(test)]
+mod release_compatibility_gate;
+#[cfg(test)]
 mod rfc111_index_decode_cost_gate;
 #[cfg(test)]
 mod rfc111_seal_decode_cost_gate;
