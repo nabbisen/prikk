@@ -1,120 +1,108 @@
 # RFC 119 — Release policy tooling: reset
 
-**Status.** **ACCEPTED by the project owner 2026-08-24**, who ruled that DC-45's assets and approach
-*"do not match our reality, the currency and our perspective"* and that **rewriting design and scripts is
-acceptable.** **§8's prerequisites precede design.**
+**Status.** **ACCEPTED by the project owner 2026-08-24.** The owner's ruling: DC-45's assets *"do not
+match our reality, the currency and our perspective"*, and **the previous architect *"did not understand
+the project perspective — it was just their 'ideal' product, far from the project reality."*** Rewriting
+design and scripts is authorized. **§7's prerequisites precede design.**
 
-**Independence.** Author-reviewed — the standing ceiling. **The architect proposed the reset framing and
-records it; §7 states what that leaves unchecked.**
+**Independence.** Author-reviewed — the standing ceiling. **§6 states what that leaves unchecked.**
 
-**Arises from.** An investigation into DC-45's undischarged decommissioning obligation, which found the
-obligation's premise no longer describes the system.
-
-**Supersedes.** DC-45's three outstanding obligations (§4). **Reframes** DC-93 and DC-94, which are
-downstream of them.
+**Supersedes.** DC-45's outstanding obligations. **Reframes** DC-93 and DC-94.
 
 ---
 
-## 1. The finding: correctness is defined by a retired tool
+## 1. The measurement
 
-**`tools/release-policy/src/oracle/verify.rs:23`:**
+| | Size |
+|---|---|
+| `tools/release-policy` (Rust) | **6,970 lines** |
+| `release/` Python | **2,895 lines** |
+| `release/` JSON artifacts | **1.66 MB** |
+| **`prikk-cli` — the product it gates** | **4,981 lines** |
+| Signers the policy authorizes | **none** — `authorized_primary_fingerprints = []` |
+
+**The release-policy apparatus is larger than the product it governs**, by any measure, and it
+authorizes nobody to release anything.
+
+**That is the finding.** Not a defect in any check, and not a mistake in any single decision.
+
+## 2. What was built, and why it does not fit
+
+**This is a rigorous, well-engineered release-governance system for a mature, multi-party project
+shipping to production users under an official-release regime with a signer authority.**
+
+**prikk is a single-maintainer, pre-1.0 project with no production users, no official release, and an
+empty signer allowlist.** It has never entered the regime the apparatus governs.
+
+**The apparatus is not wrong in itself. It is wrong *here*** — an ideal product's release policy,
+applied to this project's reality. **Nothing in it was built carelessly; it was built for a different
+project.**
+
+**The same pattern is visible elsewhere and the owner has already been trimming it:**
+- **Criterion 4's two-natural-persons signer rule** — ruled *"not wrong and just too early to be
+  applied."*
+- **The three-authority release-lane transition** — superseded 2026-08-24 by a proposal-authorize-execute
+  procedure that matches how releases are actually cut.
+- **The official-release boundary** — machinery for a regime prikk has never been in.
+
+**RFC 119 applies the same judgment to the tooling.**
+
+## 3. One symptom worth keeping, because it shows the shape
+
+`tools/release-policy/src/oracle/verify.rs:23`:
 
 ```rust
 const OBSERVATIONS_PATH: &str = "release/oracle/python-observations-v1.json";
 ```
 
-**The standing gate — `cargo run -p prikk-release-policy --locked -- check`, "all 154 oracle cases
-passed", run before every commit in this project — validates the Rust implementation against recorded
-observations of the Python harness it replaced.**
+**The standing gate validates the Rust implementation against recorded observations of the Python
+harness it replaced** — so its definition of *correct* is *"matches what the Python did."*
 
-**So the Rust tool's definition of *correct* is "matches what the Python did."**
+**This is evidence, not the diagnosis.** It shows the apparatus reasoning about **itself** rather than
+about prikk: a correctness criterion defined by an internal predecessor, with no statement of what the
+policy asserts about a release. **A system sized for its own consistency rather than for its subject.**
 
-That is not a migration artifact awaiting cleanup. **It is the current, load-bearing definition**, and
-it has three consequences:
+**And it explains why DC-93 and DC-94 stalled.** Deleting the Python was never blocked by the files; it
+was blocked by what defines correctness. DC-94's map binds Rust categories to *Python* categories, which
+is why its own prerequisite could not answer *"what is an executed check registry?"*
 
-- **Retiring the Python does not retire its authority.** The frozen observations carry it indefinitely.
-  DC-93's deletion was never blocked by the files; it is blocked by what defines correctness.
-- **It is a transcription at the root** — 28KB of one tool's recorded behaviour, standing in for a
-  statement of what the policy *is*. **RFC 118's principle is violated at the foundation of the very
-  tool that enforces other rules.**
-- **DC-94's map binds Rust check categories to *Python* check categories.** Its own prerequisite asks
-  *"what is an executed check registry?"* — a question that has no good answer while the registry's
-  counterpart is a dead harness.
+## 4. The question the reset must answer
 
-## 2. What DC-45 actually achieved, stated fairly
+**Not "how should the oracle be defined?" but "what does *this* project need a release policy to do?"**
 
-**It worked.** The Rust harness exists, runs in CI, is ~2000 lines, and its checks are real —
-`boundary-check`'s eleven categories, `reference-check`, `release-notes`. **Nothing here says the
-previous work was wasted or careless.**
+Answered at prikk's actual scale: one maintainer, no production users, unofficial releases, a
+five-crate shipped surface, and a release procedure that is now propose → authorize → execute.
 
-**What it did was a faithful migration**, and a faithful migration's correctness criterion is
-necessarily *"the new one matches the old one."* **The defect is that the criterion was never
-retired.** The scaffolding became the foundation.
+**Then build only that.** Whatever survives should be justifiable by what it prevents *for this
+project*, not by what a release policy ought to include.
 
-## 3. Current reality the design must match
+**Expect the answer to be much smaller.** That is the point of the reset, not a risk of it.
 
-- **The Python is not in CI.** No workflow invokes it.
-- **It survives as the oracle** for `differential-check`, which is itself neither in CI nor in the
-  standing gate set.
-- **`release/` holds 18 Python files and 37 JSON artifacts**, including a 278KB manifest.
-- **The release procedure itself changed 2026-08-23**: the owner's scheduling grant superseded the
-  three-authority lane transition. **DC-45's obligations were written for a release regime that no
-  longer operates.**
+## 5. Non-goals
 
-## 4. The three obligations, and what happens to them
+- **Not blame.** §2 — the work was competent and built for a different project.
+- **Not "delete all checks."** Some are load-bearing at any scale: the dependency boundary on a CLI
+  with zero third-party dependencies, the unsafe boundary, packaging contents. **§7.2 decides which,
+  by asking what each prevents here.**
+- **Not a release-procedure change.** The 2026-08-23 grant governs.
+- **Not RFC 118's stages** — a sibling application of the same principle.
 
-DC-45 required `ROADMAP.md`, `MILESTONES.md` and `rfcs/IMPLEMENTATION-STATUS.md` to *"continue to name"*
-three obligations *"until each is accepted"*:
+## 6. What the author-review ceiling leaves unchecked
 
-| Obligation | Disposition |
-|---|---|
-| **Stability rerun** | **Discharged** 2026-08-08 |
-| **Five-file decommissioning** | **Superseded.** Its premise — that removal is imminent and gates a release-candidate increment — is false: the files are the differential oracle, and the RC-increment trigger belongs to a superseded release regime |
-| **Eight-file evidence retention** | **Superseded by the same reasoning**; to be restated by this RFC's design or dropped |
+**The architect measured the apparatus, accepted the owner's framing, and wrote it up.** The
+measurement is a fact; **the inference — that size relative to the product is the right lens — is a
+judgment nobody has tested.**
 
-**Two of the three named documents no longer carry status** — `rfcs/IMPLEMENTATION-STATUS.md` is retired
-and `ROADMAP.md`'s status sections are removed. **The obligation's own mechanism is gone.**
+**The specific risk: some of that apparatus may be genuinely load-bearing and merely look
+disproportionate.** §7.2 exists to test that check by check, rather than by the aggregate number in §1.
 
-**This RFC discharges the reporting obligation by superseding it, not by ignoring it.**
+## 7. Blocking prerequisites
 
-## 5. What the reset must produce
-
-**A statement of what release policy *is*, independent of any implementation.** Today the answer is a
-manifest of cases; **the design must say what the policy asserts about a release**, in terms a reader can
-check against the product, not against a prior tool.
-
-**Then, in RFC 118's terms:**
-
-- **The oracle derives, or is authored as specification.** What it must not be is a transcription of a
-  retired implementation's outputs.
-- **Whatever remains hand-maintained is declared**, with a completeness gate over it — Gate A's shape.
-- **The Python is removed** once nothing defines correctness by reference to it, which is a consequence
-  of the above rather than a separate obligation.
-
-## 6. Non-goals
-
-- **Not a criticism of DC-45's execution** (§2).
-- **Not deleting checks.** `boundary-check`'s eleven categories, `reference-check` and `release-notes`
-  are real and stay. **Their oracle is what is in question, not their existence.**
-- **Not a release-procedure change.** The 2026-08-23 grant governs; this RFC touches tooling only.
-- **Not RFC 118's stages** — this is a sibling application of the same principle, not a dependency.
-
-## 7. What the author-review ceiling leaves unchecked
-
-**The architect found the `python-observations-v1.json` dependency, judged it foundational rather than
-incidental, and proposed a reset on that basis. Nobody has tested that judgment.**
-
-**The specific risk: the observations may encode genuine policy decisions that exist nowhere else.** If
-so, "retire the oracle" would destroy the only record of what the policy is — and the correct answer
-would be to *recover* the policy from them first. **§8.1 exists for exactly that.**
-
-## 8. Blocking prerequisites
-
-1. **What do the 154 cases actually assert?** Read the manifest. **Do they encode policy decisions
-   recorded nowhere else?** If yes, recovering them is the first work, not the last.
-2. **What is `differential-check` for, once the Python is gone?** It compares two implementations; with
-   one, it has no counterpart. **Retire, or repurpose against the specification?**
-3. **What survives of `release/`'s 37 JSON artifacts** — which are policy, which are fixtures, which are
-   the migration's own bookkeeping?
-4. **Does DC-94 still make sense?** Its map binds Rust categories to Python ones. **Reframed, or
-   withdrawn?**
+1. **What do the 154 oracle cases assert, and is any of it recorded nowhere else?** **If they encode
+   real policy decisions, recovering those is the first work, not the last** — retiring the oracle would
+   otherwise destroy the only record of what the policy is.
+2. **Check by check: what does each prevent, for this project, today?** `boundary-check`'s eleven
+   categories, `reference-check`, `release-notes`, `differential-check`. **A check that prevents nothing
+   here is a candidate for removal regardless of how well it is built.**
+3. **What is `differential-check` for with one implementation?** It compares two.
+4. **Does DC-94 survive the reframing, or is it withdrawn?**
