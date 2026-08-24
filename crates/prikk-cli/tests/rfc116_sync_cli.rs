@@ -669,3 +669,174 @@ fn row6_a_mid_batch_seal_failure_stops_reports_and_leaves_the_earlier_seal_intac
         let _ = std::fs::remove_file(file);
     }
 }
+
+const UNTRUSTED_MAINTAINER_SEED: &str =
+    "222233334444555566667777888899990000aaaabbbbccccddddeeeeffff1111";
+
+/// Trust-gate caller-level coverage (`trust-gate-caller-coverage-handoff-v1.md` §2, `prikk sync
+/// build`, `sender.rs:201`). Same opening as the end-to-end test above (A seals a patch, B is
+/// empty), through `sync have` in B -- then `sync build` in A is attempted with an
+/// untrusted-but-well-formed signer instead of the trusted fixed key.
+#[test]
+fn sync_build_fails_closed_on_untrusted_signer() {
+    let repo_a = support::unique_repo("rfc116-sync-build-untrusted");
+    support::init(&repo_a);
+    support::generation(
+        &repo_a,
+        "heads/main",
+        "a.txt",
+        b"rfc116 sync build trust gate\n",
+        "first",
+    );
+
+    let repo_b = support::unique_repo("rfc116-sync-build-untrusted-b");
+    support::init(&repo_b);
+
+    let have_file = sync_file("have");
+    support::ok(
+        &support::prikk(&repo_b)
+            .args([
+                "sync",
+                "have",
+                "heads/main",
+                "--output",
+                have_file.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap(),
+        "sync have",
+    );
+
+    let artifact_file = sync_file("artifact");
+    let out = support::prikk(&repo_a)
+        .env("PRIKK_MAINTAINER_KEY_ID", "untrusted-maintainer")
+        .env("PRIKK_MAINTAINER_SEED", UNTRUSTED_MAINTAINER_SEED)
+        .args([
+            "sync",
+            "build",
+            "heads/main",
+            "--have",
+            have_file.to_str().unwrap(),
+            "--output",
+            artifact_file.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        !out.status.success(),
+        "sync build with an untrusted maintainer signer unexpectedly succeeded\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("not trusted by policy"),
+        "unexpected stderr: {stderr}"
+    );
+
+    let _ = std::fs::remove_dir_all(repo_a);
+    let _ = std::fs::remove_dir_all(repo_b);
+    let _ = std::fs::remove_file(have_file);
+}
+
+/// Trust-gate caller-level coverage (`trust-gate-caller-coverage-handoff-v1.md` §2, `prikk sync
+/// seal`, `seal_from_accepted.rs:160`). Reuses the full accept scenario (A seals, B accepts a real
+/// claim) so `sync seal --claim` has genuine prior state to operate on, then attempts the seal with
+/// an untrusted-but-well-formed signer instead of B's own trusted fixed key.
+#[test]
+fn sync_seal_fails_closed_on_untrusted_signer() {
+    let repo_a = support::unique_repo("rfc116-sync-seal-untrusted-a");
+    support::init(&repo_a);
+    support::generation(
+        &repo_a,
+        "heads/main",
+        "a.txt",
+        b"rfc116 sync seal trust gate\n",
+        "first",
+    );
+
+    let repo_b = support::unique_repo("rfc116-sync-seal-untrusted-b");
+    support::init(&repo_b);
+
+    let have_file = sync_file("have");
+    support::ok(
+        &support::prikk(&repo_b)
+            .args([
+                "sync",
+                "have",
+                "heads/main",
+                "--output",
+                have_file.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap(),
+        "sync have",
+    );
+
+    let artifact_file = sync_file("artifact");
+    support::ok(
+        &support::prikk(&repo_a)
+            .env("PRIKK_MAINTAINER_KEY_ID", support::MAINTAINER_KEY_ID)
+            .env(
+                "PRIKK_MAINTAINER_SEED",
+                support::hex(&support::MAINTAINER_SEED),
+            )
+            .args([
+                "sync",
+                "build",
+                "heads/main",
+                "--have",
+                have_file.to_str().unwrap(),
+                "--output",
+                artifact_file.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap(),
+        "sync build",
+    );
+
+    let accept = support::prikk(&repo_b)
+        .args(["sync", "accept", artifact_file.to_str().unwrap()])
+        .output()
+        .unwrap();
+    support::ok(&accept, "sync accept");
+    let accept_stdout = String::from_utf8_lossy(&accept.stdout);
+    let claim_line = accept_stdout
+        .lines()
+        .find(|line| line.trim_start().starts_with("claim "))
+        .unwrap_or_else(|| panic!("sync accept must print a claim line: {accept_stdout}"));
+    let claim_id = claim_line
+        .trim_start()
+        .strip_prefix("claim ")
+        .and_then(|rest| rest.split(':').next())
+        .unwrap_or_else(|| panic!("could not parse a claim id from: {claim_line}"))
+        .trim()
+        .to_string();
+
+    // A different key is trusted first, so the policy is non-empty and the refusal below is a
+    // policy decision, not a missing-policy accident.
+    support::trust_maintainer(&repo_b);
+    let out = support::prikk(&repo_b)
+        .env("PRIKK_MAINTAINER_KEY_ID", "untrusted-maintainer")
+        .env("PRIKK_MAINTAINER_SEED", UNTRUSTED_MAINTAINER_SEED)
+        .args(["sync", "seal", "heads/main", "--claim", &claim_id])
+        .output()
+        .unwrap();
+    assert!(
+        !out.status.success(),
+        "sync seal with an untrusted maintainer signer unexpectedly succeeded\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("not trusted by policy"),
+        "unexpected stderr: {stderr}"
+    );
+
+    let _ = std::fs::remove_dir_all(repo_a);
+    let _ = std::fs::remove_dir_all(repo_b);
+    for file in [have_file, artifact_file] {
+        let _ = std::fs::remove_file(file);
+    }
+}

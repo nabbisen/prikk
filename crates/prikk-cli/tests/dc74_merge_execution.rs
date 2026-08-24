@@ -412,3 +412,57 @@ fn merged_repository_supports_verify_rollback_preview_and_further_commits() {
         "expected zero cache divergences after committing on a merged branch: {doctor_stdout}"
     );
 }
+
+/// Trust-gate caller-level coverage (`trust-gate-caller-coverage-handoff-v1.md` §2, `prikk merge`,
+/// `merge_execute.rs:118`). Same divergent-branches scenario as
+/// `merge_adopts_patches_byte_identical_and_rebuilds_byte_exact`, but the merge itself is attempted
+/// with an untrusted-but-well-formed signer instead of `merge()`'s own hardcoded trusted one.
+#[test]
+fn merge_fails_closed_on_untrusted_signer() {
+    let repo = unique_repo("dc74-merge-untrusted-signer");
+    init(&repo);
+    std::fs::write(repo.join("a.txt"), b"hello").unwrap();
+    ok(&commit(&repo, "heads/main", "genesis"), "genesis commit");
+    ok(&seal(&repo, "heads/main"), "genesis seal");
+    let baseline = genesis_block_id(&repo);
+    ok(
+        &branch_create(&repo, "heads/topic", "heads/main"),
+        "branch create topic",
+    );
+    std::fs::write(repo.join("topic.txt"), b"from topic").unwrap();
+    ok(
+        &commit(&repo, "heads/topic", "topic change"),
+        "commit on topic",
+    );
+    ok(&seal(&repo, "heads/topic"), "seal topic");
+
+    let out = prikk(&repo)
+        .env("PRIKK_MAINTAINER_KEY_ID", "untrusted-maintainer")
+        .env(
+            "PRIKK_MAINTAINER_SEED",
+            "222233334444555566667777888899990000aaaabbbbccccddddeeeeffff1111",
+        )
+        .args([
+            "merge",
+            "--allow-no-audit",
+            "--baseline-block",
+            &baseline.to_string(),
+            "--into",
+            "heads/main",
+            "--from",
+            "heads/topic",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        !out.status.success(),
+        "merge with an untrusted maintainer signer unexpectedly succeeded\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("not trusted by policy"),
+        "unexpected stderr: {stderr}"
+    );
+}

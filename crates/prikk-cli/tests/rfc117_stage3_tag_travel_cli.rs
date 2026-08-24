@@ -255,6 +255,126 @@ fn end_to_end_tag_travel_and_adoption_via_the_cli() {
     let _ = std::fs::remove_dir_all(&repo_b);
 }
 
+/// Trust-gate caller-level coverage (`trust-gate-caller-coverage-handoff-v1.md` §2, `prikk sync
+/// adopt-tag`, `tag_travel.rs:421`). The full tag-travel-and-seal scenario above, up through B
+/// sealing what it accepted (adoption refuses `NotHeld` before that point, for an unrelated reason)
+/// -- then `sync adopt-tag` in B is attempted with an untrusted-but-well-formed signer instead of
+/// the trusted fixed key.
+#[test]
+fn sync_adopt_tag_fails_closed_on_untrusted_signer() {
+    let repo_a = support::unique_repo("rfc117-stage3-adopt-untrusted-a");
+    support::init(&repo_a);
+    support::generation(
+        &repo_a,
+        "heads/main",
+        "a.txt",
+        b"rfc117 stage 3 adopt-tag trust gate\n",
+        "first",
+    );
+    support::ok(
+        &support::tag_create(&repo_a, "tags/v1", "heads/main"),
+        "tag create tags/v1",
+    );
+
+    let repo_b = support::unique_repo("rfc117-stage3-adopt-untrusted-b");
+    support::init(&repo_b);
+    support::trust_maintainer(&repo_b);
+
+    let have_file = sync_file("adopt-untrusted-have");
+    support::ok(
+        &support::prikk(&repo_b)
+            .args([
+                "sync",
+                "have",
+                "heads/main",
+                "--output",
+                have_file.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap(),
+        "sync have",
+    );
+
+    let artifact_file = sync_file("adopt-untrusted-artifact");
+    support::ok(
+        &support::prikk(&repo_a)
+            .env("PRIKK_MAINTAINER_KEY_ID", support::MAINTAINER_KEY_ID)
+            .env(
+                "PRIKK_MAINTAINER_SEED",
+                support::hex(&support::MAINTAINER_SEED),
+            )
+            .args([
+                "sync",
+                "build",
+                "heads/main",
+                "--have",
+                have_file.to_str().unwrap(),
+                "--output",
+                artifact_file.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap(),
+        "sync build",
+    );
+
+    let accept = support::prikk(&repo_b)
+        .args([
+            "sync",
+            "accept",
+            artifact_file.to_str().unwrap(),
+            "--claims-out",
+            sync_file("adopt-untrusted-claims").to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    support::ok(&accept, "sync accept");
+    let accept_stdout = String::from_utf8_lossy(&accept.stdout);
+    let claims_out =
+        std::fs::read_to_string(sync_file_from_stdout(&accept_stdout, "wrote claim ids to "))
+            .unwrap_or_default();
+    let claim_id = claims_out
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .expect("sync accept must have written at least one claim id")
+        .trim();
+    support::ok(
+        &support::prikk(&repo_b)
+            .env("PRIKK_MAINTAINER_KEY_ID", support::MAINTAINER_KEY_ID)
+            .env(
+                "PRIKK_MAINTAINER_SEED",
+                support::hex(&support::MAINTAINER_SEED),
+            )
+            .args(["sync", "seal", "heads/main", "--claim", claim_id])
+            .output()
+            .unwrap(),
+        "sync seal",
+    );
+
+    let out = support::prikk(&repo_b)
+        .env("PRIKK_MAINTAINER_KEY_ID", "untrusted-maintainer")
+        .env(
+            "PRIKK_MAINTAINER_SEED",
+            "222233334444555566667777888899990000aaaabbbbccccddddeeeeffff1111",
+        )
+        .args(["sync", "adopt-tag", "tags/v1"])
+        .output()
+        .unwrap();
+    assert!(
+        !out.status.success(),
+        "sync adopt-tag with an untrusted maintainer signer unexpectedly succeeded\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("not trusted by policy"),
+        "unexpected stderr: {stderr}"
+    );
+
+    let _ = std::fs::remove_dir_all(&repo_a);
+    let _ = std::fs::remove_dir_all(&repo_b);
+}
+
 fn sync_file_from_stdout(stdout: &str, prefix: &str) -> PathBuf {
     let line = stdout
         .lines()
