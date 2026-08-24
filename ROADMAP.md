@@ -415,8 +415,12 @@ covered two unrelated blockers and produced a wrong roadmap framing:
   is a consequence of that ruling, not an open question about who owns it.
 - **Peer trust** — what a remote is permitted to assert. All trust is local today
   (`trust maintainer add`); a peer claiming a ref advanced is a new authority question.
-- **Quarantine policy** — what happens to objects that arrive untrusted. `.prikk/quarantine` already
-  exists in the layout, so the original design anticipated this.
+- **Quarantine policy** — what happens to objects that arrive untrusted. **Correction, checked against
+  `layout.rs`:** `.prikk/quarantine` no longer exists in a newly initialized repository's layout —
+  `required_directories()`'s dead-surface consolidation stopped creating it (containers replaced loose
+  objects years ago; nothing writes into it). The original design once anticipated a quarantine
+  directory; nothing does today, so this theme has no groundwork to build on and starts from
+  requirements, not a scaffolded location.
 
 **Prerequisite, per the owner's 2026-08-04 direction ("security is strongly prioritized to function;
 secure by default; we should not be in a hurry"): a threat model before any sync code exists.** Sync is
@@ -463,11 +467,18 @@ version-skew surface between client and server that a single binary makes imposs
 **Decide with the sync threat model**, not before — it depends on whether the server is an application or
 a dumb object store with a trust boundary.
 
-### Merge execution — CONFIRMED as the next accepted increment (roadmap item B)
+### Merge execution — shipped in 0.19.0 (DC-74/DC-75); residuals remain
 
-Owner-ruled 2026-08-04: **B then C** — merge execution, then the M4 attestation slice. `merge-evidence` and
-`merge-plan` exist; **nothing applies a merge** (`IMPLEMENTATION-STATUS.md:302`). DC-16's conservative
-subset and its soundness oracle are the foundation; execution is the unbuilt half. RFC not yet written.
+Owner-ruled 2026-08-04: **B then C** — merge execution, then the M4 attestation slice. **DC-74 shipped
+`prikk merge` in 0.19.0** (`CHANGELOG.md`: *"`prikk merge` executes a merge."*), and DC-75 gave it
+structural merge-block lineage the same release — a merge seals as `BlockKind::Merge` naming both
+parents, a mainline pointer, and a baseline confluence proof that `prikk verify` re-derives rather than
+trusts. DC-16's conservative subset and its soundness oracle were the foundation; execution is now built
+on it, not the unbuilt half.
+
+**Real residuals, not closed by 0.19.0**: merge-base discovery is manual (`--baseline-block` is
+explicit; nothing computes it), rename detection does not exist (no `ConflictWitnessKind` variant names
+one), and semantic merge remains out of scope (a stated non-goal since DC-16).
 
 ### Conflict arbitration — recorded, and it is a trust question before it is a UX one
 
@@ -530,22 +541,29 @@ display-only crate. The spans `plan_authored_text_span` produces are identity-be
 display diff computed differently would show the user something other than what gets committed, which is
 the wrong failure to design into a tool whose claim is that the repository is the evidence.
 
-### Cross-platform mutation — open question, not scheduled
+### Cross-platform mutation — shipped in 0.21.0; two narrower Windows guarantees remain
 
-Read-only commands run on macOS and Windows as of DC-71; **mutation is Linux-only**, so prikk cannot be
-*used* off Linux, only inspected — and both roles of the two-role model need mutation.
+**MET, 0.21.0 (2026-08-16) — criterion 6.** Linux, macOS, and Windows all mutate; the suite runs on all
+three in CI, and a repository authored on Linux, mutated on Windows, and verified on Linux produces
+byte-identical object ids. The cost was smaller than "three implementations": the logic is shared, and
+what differed was a handful of primitives (anchored `NOFOLLOW` opens, directory fsync) — macOS was a
+port, Windows a rewrite.
 
-The cost is smaller than "three implementations": the logic is shared, and what differs is a handful of
-primitives (anchored `NOFOLLOW` opens, directory fsync). **macOS is a port; Windows is a rewrite.** The
-question to settle first is whether the durability guarantee stays platform-uniform, which is an owner
-decision, not a technical preference.
+**Windows carries two documented narrower durability guarantees**, named rather than silent — see
+`docs/src/reference/platform-support.md` for the exact gap, including the resolution race Windows
+cannot close by construction (no `openat` equivalent). 0.22.0 closed two others that stood through
+0.21.0 (`prikk unlock` process-liveness reporting, and the 128-bit anchor identifier).
 
-### MSRV policy — to write before packaging is attempted
+### MSRV policy — overdue, not pending: packaging has already happened
 
-`rust-version = "1.85"` is the edition-2024 floor, so it cannot go lower. Nothing declares when it may
-*rise*. Proposed: **MSRV rises only when a dependency or language requirement forces it, never for
-convenience, and a rise is a minor-version event naming the requirement that forced it.** Dependency
-pressure (RustCrypto, `rustix`) will force it before "too old" does.
+Packaging is no longer a future event to write the policy before: crates.io publication and prebuilt
+binaries across four targets (`x86_64`/`aarch64` Linux, `aarch64-apple-darwin`,
+`x86_64-pc-windows-msvc`) both shipped. `rust-version = "1.85"` is the edition-2024 floor, so it cannot
+go lower, and it is declared. What is missing is the rule for when it may *rise*: nothing declares one.
+Proposed: **MSRV rises only when a dependency or language requirement forces it, never for convenience,
+and a rise is a minor-version event naming the requirement that forced it.** Dependency pressure
+(RustCrypto, `rustix`) will force it before "too old" does. Writing the policy itself is a separate
+increment.
 
 ## Corrective Program After 0.17.7
 
