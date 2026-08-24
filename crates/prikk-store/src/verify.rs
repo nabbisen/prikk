@@ -301,7 +301,7 @@ mod ref_publication;
 mod trust;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{BlockPayload, ObjectId, ObjectType, RefStatePayload};
+use prikk_object::{BlockPayload, ObjectId, ObjectType, RefKind, RefStatePayload};
 
 use crate::active::{ActiveRefMetadata, read_active_ref_metadata};
 use crate::block_state::{BlockStateOutcome, BlockStateStatus};
@@ -312,7 +312,7 @@ use crate::lifecycle_cache::incremental::{
 };
 use crate::object_store::{ObjectReadSnapshot, ObjectReader};
 use crate::received::list_received_pointers;
-use crate::refs::{RefItemOutcome, RefItemStatus, ensure_ref_target_valid, verify_refs};
+use crate::refs::{RefItemOutcome, RefItemStatus, RefStore, ensure_ref_target_valid, verify_refs};
 use crate::rollback_verify::{verify_rollback_draft_wal_records, verify_rollback_patch_envelope};
 use crate::signature_diagnostics::{
     SignatureEnvelopeIssue, SignatureEnvelopeSource, classify_signature_envelope,
@@ -377,7 +377,7 @@ pub struct BlockSealVerification {
     pub sealed_by_key_id: String,
 }
 
-/// One of the thirteen top-level scopes `verify_repository`'s pipeline is organized into (DC-95 Stage 2
+/// One of the fourteen top-level scopes `verify_repository`'s pipeline is organized into (DC-95 Stage 2
 /// Level 1: scope containment). Named in pipeline order; the order itself is load-bearing for
 /// `NotEvaluated` naming (`StageStatus::NotEvaluated`'s `blocked_by` is always an earlier stage).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -413,6 +413,14 @@ pub enum VerificationStage {
     /// two-hop check local refs already get, applied to the received namespace, which nothing
     /// scanned before this stage existed.
     ReceivedRefs,
+    /// DC-78 verify-local-tag-publication-trust (v2 amendment): a locally-published Tag's own
+    /// MAINTAINER signature, checked against the repository-local trust policy (shares
+    /// `PublicationTrustVerifier` with `Objects` and `RefUpdateSchemaTrust`). Enumerates local tag
+    /// refs independently via `RefStore::list_ref_pointers` rather than reading `Refs`' own output --
+    /// deliberately not threaded through `verify_refs`, which `ensure_no_incomplete_publication`
+    /// (a pre-mutation guard, not `prikk verify`) also calls. A received, not-yet-adopted tag is
+    /// never reached here: `list_ref_pointers` never enumerates the received namespace.
+    LocalTagTrust,
 }
 
 impl VerificationStage {
@@ -433,6 +441,7 @@ impl VerificationStage {
             Self::LifecycleCache => "lifecycle-cache",
             Self::WalOrdering => "wal-ordering",
             Self::ReceivedRefs => "received-refs",
+            Self::LocalTagTrust => "local-tag-trust",
         }
     }
 }
@@ -1018,6 +1027,20 @@ pub fn verify_repository_with_options(
         )
         .unwrap_or_default();
 
+    // Stage: LocalTagTrust (DC-78 verify-local-tag-publication-trust v2 amendment). No upstream stage
+    // dependency -- same footing as ReceivedRefs above: enumerates local tag refs directly via
+    // `RefStore::list_ref_pointers` instead of reading `Refs`' own output, so `verify_refs` never sees
+    // `trust_verifier` (the escalation this stage exists to resolve found a caller of `verify_refs`,
+    // `ensure_no_incomplete_publication`, that is not `prikk verify` and must not pay for this).
+    // Shares `trust_verifier` with `Objects`/`RefUpdateSchemaTrust`, so an untrusted local Tag surfaces
+    // through the identical `publication_trust_issues` path those two already report through.
+    let local_tag_trust_evaluated = pipeline
+        .run(
+            VerificationStage::LocalTagTrust,
+            verify_local_tag_publication_trust(layout, &object_store, &mut trust_verifier),
+        )
+        .is_some();
+
     // Stage: RefUpdateSchemaTrust. Depends on Refs for the envelope list.
     let ref_update_schema_trust_evaluated = if let Some(rv) = &ref_verification {
         pipeline
@@ -1208,9 +1231,9 @@ pub fn verify_repository_with_options(
         Vec::new()
     };
 
-    let checked_publication_trust_records = (objects_evaluated
-        && ref_update_schema_trust_evaluated)
-        .then_some(trust_verifier.checked_records);
+    let checked_publication_trust_records =
+        (objects_evaluated && ref_update_schema_trust_evaluated && local_tag_trust_evaluated)
+            .then_some(trust_verifier.checked_records);
 
     Ok(RepositoryVerification {
         stage_outcomes: pipeline.outcomes,
@@ -1365,6 +1388,65 @@ fn verify_received_refs(
         });
     }
     Ok(outcomes)
+}
+
+/// DC-78 verify-local-tag-publication-trust (v2 amendment, ruling on
+/// `verify-local-tag-publication-trust-escalation-v1.md`): a locally-published Tag's own MAINTAINER
+/// signature gets the same publication-trust expectation `Block`/`RefState`/`RefUpdate` already carry
+/// -- `053e442` gates both `prikk tag create` and `sync adopt-tag` on this same trust policy, so a
+/// local tag's trust is re-derivable offline, exactly what `verify` exists to do.
+///
+/// Deliberately **not** wired through `verify_refs`: the escalation this amends found `verify_refs` has
+/// a caller `ensure_ref_target_valid`'s own four-caller sweep never named --
+/// `ensure_no_incomplete_publication`, a pre-mutation structural guard reached from eight sites
+/// (`add_trusted_maintainer`, `seal_from_accepted`, `ActiveLock::acquire`, rollback draft, worktree
+/// commit authoring, `doctor`), none of them `prikk verify`. Threading a trust verifier through
+/// `verify_refs` would have put a trust-policy read and an Ed25519 verification per local tag on all
+/// eight. This function enumerates independently instead, exactly like `verify_received_refs` above
+/// sits alongside `Refs` rather than reading its output.
+///
+/// `RefPointerSummary` does not itself carry `RefKind` -- each pointer's `RefState` is read and decoded
+/// here to find out, a second, independent read of the same envelope `ensure_ref_target_valid` already
+/// reads (and discards) inside the ordinary ref scan. The ruling accepted this as the cost of not
+/// contaminating a shared function: "`verify` is an audit, tags are few."
+///
+/// A received (not-yet-adopted) tag is never reached here: `list_ref_pointers` enumerates only the
+/// local pointer index (`refs/by-id`), never the received namespace (`remotes/*`) -- the provenance
+/// principle (a Tag's trust expectation follows *how it arrived*, not its type) holds structurally,
+/// not by a flag threaded through a shared check.
+fn verify_local_tag_publication_trust(
+    layout: &RepositoryLayout,
+    object_store: &impl ObjectReader,
+    trust_verifier: &mut PublicationTrustVerifier<'_>,
+) -> Result<()> {
+    let ref_store = RefStore::new(layout.clone());
+    for summary in ref_store.list_ref_pointers()? {
+        let ref_state_envelope = object_store
+            .read_typed(summary.ref_state_id, ObjectType::RefState)?
+            .ok_or_else(|| {
+                PrikkError::Integrity(format!(
+                    "ref {} names missing RefState {}",
+                    summary.ref_name, summary.ref_state_id
+                ))
+            })?;
+        let ref_state_payload = RefStatePayload::decode_canonical(
+            &ref_state_envelope.canonical_payload,
+            ref_state_envelope.schema_version,
+        )?;
+        if ref_state_payload.kind != RefKind::Tag {
+            continue;
+        }
+        let tag_envelope = object_store
+            .read_typed(ref_state_payload.target_object_id, ObjectType::Tag)?
+            .ok_or_else(|| {
+                PrikkError::Integrity(format!(
+                    "ref {} targets missing tag {}",
+                    summary.ref_name, ref_state_payload.target_object_id
+                ))
+            })?;
+        trust_verifier.verify(&tag_envelope)?;
+    }
+    Ok(())
 }
 
 fn classify_active_wal_metadata(

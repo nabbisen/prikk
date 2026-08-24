@@ -123,6 +123,17 @@ fn end_to_end_tag_travel_and_adoption_via_the_cli() {
         "the fixed maintainer key both repos share must read Sound here: {tag_line}"
     );
 
+    // DC-78 verify-local-tag-publication-trust §4 item 1/3's control: B now holds a *received*,
+    // not-yet-adopted tag -- `LocalTagTrust` must not reach it at all (it enumerates only the local
+    // pointer index, never the received namespace), so `verify` must still pass here. Written before
+    // this repository has sealed or adopted anything, the sharpest point to catch a future blanket
+    // type-based check (the mistake `verify-local-tag-publication-trust-handoff-v1.md` §1 warns
+    // against) the moment it lands.
+    support::ok(
+        &support::verify(&repo_b),
+        "verify with a received, unadopted tag",
+    );
+
     // Row 1's CLI-level counterpart: `prikk tag list` in B must show nothing yet -- accept adopts
     // no tag by itself.
     let tag_list_before = support::prikk(&repo_b)

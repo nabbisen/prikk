@@ -1,5 +1,6 @@
 //! Repository verification tests.
 
+mod local_tag_trust;
 mod received_refs;
 mod ref_cluster;
 mod root_authority;
