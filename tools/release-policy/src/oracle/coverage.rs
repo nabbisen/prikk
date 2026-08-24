@@ -11,9 +11,14 @@ use super::path::repository_file;
 use crate::error::{Error, Result};
 use crate::json;
 
-const SUBJECTS: [&str; 11] = [
-    "authority",
-    "challenge",
+// RFC 119 track A: "authority" and "challenge" were dropped (from 11 subjects to 9) when
+// `signer-authority`/`signer-authority-live`/`signer-challenge` were parked -- those were the only
+// suites that ever populated either subject (confirmed by re-deriving membership against the full
+// 154-case set before parking: `authority` had 11 members, `challenge` had 16, both exclusively
+// from the parked suites; every other subject kept at least one member). A subject with zero
+// members after parking would fail `derive`'s own "manifest-contract:coverage-empty-subject" check
+// below, so this list must track exactly what the surviving cases can populate.
+const SUBJECTS: [&str; 9] = [
     "release-state",
     "schema",
     "governance",

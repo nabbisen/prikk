@@ -11,7 +11,12 @@ use crate::error::{Error, Result};
 use crate::json;
 use crate::schema::SchemaProfile;
 
-const PACKS: [(&str, &str); 3] = [
+// RFC 119 track A: `signer-challenge` was here until parking removed every case that referenced
+// it, orphaning all 32 of its pack entries -- `load`'s own closure check below (every packed entry
+// referenced by exactly one case) would fail with the pack still registered and no case left to
+// reference it. Moved to `release/oracle/parked-packs/signer-challenge-v1.json`, not deleted; see
+// `release/oracle/parked-cases-v1.json`'s `revival_condition` for what would bring it back.
+const PACKS: [(&str, &str); 2] = [
     (
         "release-evidence",
         "release/oracle/packs/release-evidence-v1.json",
@@ -19,10 +24,6 @@ const PACKS: [(&str, &str); 3] = [
     (
         "release-state",
         "release/oracle/packs/release-state-v1.json",
-    ),
-    (
-        "signer-challenge",
-        "release/oracle/packs/signer-challenge-v1.json",
     ),
 ];
 

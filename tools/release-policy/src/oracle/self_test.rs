@@ -18,7 +18,9 @@ const MANIFEST: &str = "release/oracle/oracle-manifest-v1.json";
 
 pub(super) fn run(root: &Path, oracle: &Oracle) -> Result<Vec<String>> {
     let mut errors = Vec::new();
-    if oracle.manifest.cases.len() != 154 {
+    // RFC 119 track A: 154 -> 111 when the 43 post-1.0 signer cases were parked (not deleted; see
+    // release/oracle/parked-cases-v1.json).
+    if oracle.manifest.cases.len() != 111 {
         errors.push("self-test:case-count".to_owned());
     }
     if oracle.inputs.len()

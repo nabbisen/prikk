@@ -57,7 +57,9 @@ fn check_source_tree(root: &Path, errors: &mut Vec<BoundaryError>) {
         "release/publication-command-inventory-v1.json",
         "release/oracle/packs/release-evidence-v1.json",
         "release/oracle/packs/release-state-v1.json",
-        "release/oracle/packs/signer-challenge-v1.json",
+        // RFC 119 track A: parked, not deleted -- moved out of the active pack registry when
+        // every case referencing it was parked (release/oracle/parked-cases-v1.json).
+        "release/oracle/parked-packs/signer-challenge-v1.json",
     ] {
         if !root.join(path).is_file() {
             push(errors, "source-archive-contents", path.to_owned());

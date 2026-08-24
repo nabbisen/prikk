@@ -1,6 +1,6 @@
 {
   "schema_version": "oracle-coverage-v1",
-  "total_cases": 154,
+  "total_cases": 111,
   "suites": [
     {
       "suite_id": "json-parser",
@@ -17,37 +17,9 @@
     {
       "suite_id": "schema-evaluator",
       "case_count": 6
-    },
-    {
-      "suite_id": "signer-authority",
-      "case_count": 10
-    },
-    {
-      "suite_id": "signer-authority-live",
-      "case_count": 1
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_count": 16
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_count": 16
     }
   ],
   "reason_counts": [
-    {
-      "primary_reason": "authority-grammar",
-      "case_count": 8
-    },
-    {
-      "primary_reason": "challenge-grammar-or-binding",
-      "case_count": 11
-    },
-    {
-      "primary_reason": "challenge-time-window",
-      "case_count": 4
-    },
     {
       "primary_reason": "evidence-byte-identity-or-link",
       "case_count": 6
@@ -62,11 +34,11 @@
     },
     {
       "primary_reason": "governance-review-or-hold",
-      "case_count": 6
+      "case_count": 3
     },
     {
       "primary_reason": "governance-transition-or-proof",
-      "case_count": 13
+      "case_count": 5
     },
     {
       "primary_reason": "json-syntax-or-duplicate-name",
@@ -74,7 +46,7 @@
     },
     {
       "primary_reason": "none",
-      "case_count": 41
+      "case_count": 32
     },
     {
       "primary_reason": "release-state",
@@ -90,43 +62,6 @@
     }
   ],
   "subjects": [
-    {
-      "subject": "authority",
-      "case_keys": [
-        "signer-authority-live:release-signers-toml",
-        "signer-authority:boolean-schema-version",
-        "signer-authority:duplicate",
-        "signer-authority:empty-fail-closed",
-        "signer-authority:lowercase",
-        "signer-authority:malformed-toml",
-        "signer-authority:multiple-sorted",
-        "signer-authority:unknown-field",
-        "signer-authority:unsorted",
-        "signer-authority:unsupported-schema",
-        "signer-authority:wrong-length"
-      ]
-    },
-    {
-      "subject": "challenge",
-      "case_keys": [
-        "signer-challenge:authority-revision-binding-mismatch",
-        "signer-challenge:canonical-golden-bytes",
-        "signer-challenge:crlf-bytes",
-        "signer-challenge:duplicate-field",
-        "signer-challenge:expired-challenge",
-        "signer-challenge:expiry-instant-is-exclusive",
-        "signer-challenge:expiry-window-too-long",
-        "signer-challenge:extra-space",
-        "signer-challenge:issue-time-too-far-in-future",
-        "signer-challenge:missing-final-lf",
-        "signer-challenge:missing-verifier-result",
-        "signer-challenge:non-ascii-bytes",
-        "signer-challenge:observed-fingerprint-mismatch",
-        "signer-challenge:reordered-fields",
-        "signer-challenge:wrong-nonce-length",
-        "signer-challenge:wrong-repository"
-      ]
-    },
     {
       "subject": "release-state",
       "case_keys": [
@@ -209,23 +144,7 @@
         "release-evidence:governance-post-lift-classification-mutation",
         "release-evidence:governance-premature-lift",
         "release-evidence:valid-governance-difference-and-proofs",
-        "release-state:development-authority-change-invalid-governance",
-        "signer-governance:addition-verified",
-        "signer-governance:automation-as-approver",
-        "signer-governance:bootstrap-two-signers-verified",
-        "signer-governance:classification-only-not-applicable",
-        "signer-governance:duplicate-introduced-proof",
-        "signer-governance:lowercase-fingerprint",
-        "signer-governance:mismatched-introduced-proof-order",
-        "signer-governance:missing-accountable-role",
-        "signer-governance:missing-introduced-proof",
-        "signer-governance:not-applicable-with-introduced-fingerprint",
-        "signer-governance:removal-label-adds-fingerprint",
-        "signer-governance:removal-only-not-applicable",
-        "signer-governance:replacement-verified",
-        "signer-governance:same-person-both-approvals",
-        "signer-governance:unexpected-introduced-proof",
-        "signer-governance:unsorted-fingerprint-set"
+        "release-state:development-authority-change-invalid-governance"
       ]
     },
     {
@@ -253,23 +172,7 @@
       "subject": "exact-byte",
       "case_keys": [
         "release-evidence:raw-predecessor-digest-mismatch",
-        "release-evidence:snapshot-object-bytes-mismatch",
-        "signer-challenge:authority-revision-binding-mismatch",
-        "signer-challenge:canonical-golden-bytes",
-        "signer-challenge:crlf-bytes",
-        "signer-challenge:duplicate-field",
-        "signer-challenge:expired-challenge",
-        "signer-challenge:expiry-instant-is-exclusive",
-        "signer-challenge:expiry-window-too-long",
-        "signer-challenge:extra-space",
-        "signer-challenge:issue-time-too-far-in-future",
-        "signer-challenge:missing-final-lf",
-        "signer-challenge:missing-verifier-result",
-        "signer-challenge:non-ascii-bytes",
-        "signer-challenge:observed-fingerprint-mismatch",
-        "signer-challenge:reordered-fields",
-        "signer-challenge:wrong-nonce-length",
-        "signer-challenge:wrong-repository"
+        "release-evidence:snapshot-object-bytes-mismatch"
       ]
     },
     {

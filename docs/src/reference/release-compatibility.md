@@ -25,6 +25,14 @@ identity-bearing objects, see the [data model](./data-model.md). For persistence
   release notes rather than relying on the pre-policy exemption above.
 - DC-35 does not provide SBOMs, provenance attestations, mature key custody/rotation/revocation, or
   production-readiness evidence. Those remain later DC-43 work.
+- **The DC-35 signer-authority gate and the official-release boundary this page describes are parked**
+  (RFC 119 track A, 2026-08-25): the 43 signer oracle cases that enforce them do not currently run
+  (parked, not deleted -- `release/oracle/parked-cases-v1.json`). This matches the empty
+  `release-signers.toml` above: prikk has one maintainer publishing under their own key, an empty
+  allowlist, and no release that has ever passed the signer audit, so nothing today depends on this
+  gate running. The mechanism, rules, and workflow below remain the documented design -- not
+  rewritten, not removed -- and revive together with the oracle cases the day prikk enters the
+  official-release regime, which requires DC-35 criterion 4's signer bootstrap.
 
 ## Compatibility Surfaces
 
