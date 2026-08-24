@@ -28,16 +28,28 @@ gate does not itself activate signer bootstrap, a hold, RC preparation, tagging,
 When release preparation is activated, all gates for that target remain binding and release assets must
 be current before publication. Accepted RFCs are not individually treated as release readiness.
 
-### Durable release-lane transition — **official-release regime only**
+### Durable release-lane transition
 
-**Scope, recorded 2026-08-24 after the owner's ruling.** Everything in this subsection governs the
-**official-release regime**, which prikk has **not entered**: criterion 4's signer bootstrap is open by
-the owner's deliberate ruling, `release-signers.toml` authorizes nobody, and
-`release-compatibility.md` states that the empty array **blocks official release**. Every prikk release
-to date is unofficial and says so in its own notes.
+**CORRECTION, 2026-08-24 — the paragraph previously here was wrong and is withdrawn.** It claimed this
+subsection governs only the "official-release regime" prikk has not entered, and that the transition
+below is "a future plan, not current practice." **Both claims are false.**
 
-**It is a future plan, not current practice — and it must not be read as describing how releases are
-cut today.**
+**The three-authority transition was live practice through `0.22.1`.** Git history shows it performed
+for three consecutive releases, each an atomic commit touching exactly the three named authorities:
+`79ff9d6` (0.21.0), `e99fa1a` (0.22.0), `cdeaac7` (0.22.1) — each followed by an explicit parking commit.
+**`0.23.0` is the first release since `0.19.0` cut without it.**
+
+**How the error was made, recorded so it is not repeated:** the architect inferred "future regime" from
+this file's proximity to DC-35 and criterion 4, and from `rfcs/IMPLEMENTATION-STATUS.md` being stale —
+**without checking whether the transition had actually been performed.** `git log -S` over `ROADMAP.md`
+answers it in one command, and was not run until the owner asked whether this was a future plan.
+
+**Consequences, open and not settled here:**
+- **`0.23.0` skipped a live procedure**, not a dormant one.
+- **`rfcs/IMPLEMENTATION-STATUS.md` was retired while being one of three authorities of a live
+  procedure** — a heavier decision than it was presented as.
+- **Whether the owner's 2026-08-23 scheduling grant supersedes this transition is the owner's to rule**,
+  and until they do, **the transition below stands as written**.
 
 #### The procedure actually in force
 
