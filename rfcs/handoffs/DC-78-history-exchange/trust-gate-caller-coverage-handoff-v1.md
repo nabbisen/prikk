@@ -1,6 +1,14 @@
 # Trust gate — caller-level negative coverage for the five untested surfaces
 
-**Base:** to be taken up **after** `verify-local-tag-publication-trust-handoff-v1.md` (`a2d9a3f`) lands.
+**Base:** **do not start this until `verify-local-tag-publication-trust-handoff-v1.md` has been
+implemented, reviewed and pushed** — that is the *increment*, not the commit that issued its handoff.
+
+**Correction, 2026-08-24.** This line previously read *"after ... (`a2d9a3f`) lands"*. **`a2d9a3f` is
+the commit that issued that handoff — doc-only, no source touched.** Citing it as the precondition
+conflated "the handoff exists" with "the work is done", and the dev team caught it by checking whether
+the named base had actually landed before starting. **The precondition is an implemented increment with
+a review in `.git-exclude/reviewed/`, not a SHA in `rfcs/handoffs/`.**
+
 **Under `003-landing-work-on-main.md`.**
 **Origin:** architect sweep, 2026-08-24, answering *"is there any fix required on implementation or
 tests around it?"* — **implementation: no. Tests: this.**
