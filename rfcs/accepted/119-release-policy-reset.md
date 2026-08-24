@@ -66,43 +66,68 @@ policy asserts about a release. **A system sized for its own consistency rather 
 was blocked by what defines correctness. DC-94's map binds Rust categories to *Python* categories, which
 is why its own prerequisite could not answer *"what is an executed check registry?"*
 
-## 4. The question the reset must answer
+## 4. The method: subtract, do not rewrite
 
-**Not "how should the oracle be defined?" but "what does *this* project need a release policy to do?"**
+**Owner's ruling, 2026-08-24, narrowing this RFC:** *"I do NOT want to either replace the whole codebase
+or edit it widely. What I want is to omit what was defined as either policy or rule ... but is actually
+unnecessary."*
 
-Answered at prikk's actual scale: one maintainer, no production users, unofficial releases, a
-five-crate shipped surface, and a release procedure that is now propose → authorize → execute.
+**So this is not a redesign.** The question is not *"what should a release policy be?"* — answering that
+invites building a new one. The question is:
 
-**Then build only that.** Whatever survives should be justifiable by what it prevents *for this
-project*, not by what a release policy ought to include.
+> **Which currently-defined policies and rules are unnecessary for this project, and can therefore be
+> removed?**
 
-**Expect the answer to be much smaller.** That is the point of the reset, not a risk of it.
+**Everything that survives stays as it is.** No restructuring, no rewriting, no "while we are here."
+**The deliverable is a list of removals with reasons, not a new design.**
 
-## 5. Non-goals
+**Bias toward leaving things alone.** A rule that is merely oversized but does prevent something here
+**stays**. Only rules that prevent nothing *for this project* are candidates.
 
-- **Not blame.** §2 — the work was competent and built for a different project.
-- **Not "delete all checks."** Some are load-bearing at any scale: the dependency boundary on a CLI
-  with zero third-party dependencies, the unsafe boundary, packaging contents. **§7.2 decides which,
-  by asking what each prevents here.**
+## 5. Where the defined rules live
+
+Enumeration precedes adjudication. **They are not all in one place**, which is part of why none of this
+has been reviewed as a whole:
+
+- **`boundary-check`'s eleven categories** — `workspace-members`, `default-members`, `tool-metadata`,
+  `lockfile-boundary`, `dependency-boundary`, `dependency-placement`, `unsafe-boundary`, `rfc-naming`,
+  `publication-allowlist`, `package-contents`, `source-archive-contents`.
+- **The 154 oracle cases** and the manifest defining them.
+- **`reference-check`'s** required-live paths and inventory.
+- **`differential-check`**, whose counterpart implementation is being retired.
+- **`release-notes`'** own assertions.
+- **DC-35's signer-authority rules**, including the two-natural-persons requirement the owner already
+  ruled *"too early to be applied."*
+- **The official-release boundary** in `release-compatibility.md`.
+
+**Some are code, some are documents, some are RFC prose.** A rule removed from code but left asserted in
+a document is not removed.
+
+## 6. Non-goals
+
+- **Not blame.** §2 — competent work, built for a different project.
+- **Not "delete all checks."** Some are load-bearing at any scale: the **dependency boundary** on a CLI
+  with zero third-party dependencies, the **unsafe boundary**, **package contents**. **§7.2 decides each
+  on what it prevents *here*.**
+- **Not a rewrite of anything that stays** (§4).
 - **Not a release-procedure change.** The 2026-08-23 grant governs.
 - **Not RFC 118's stages** — a sibling application of the same principle.
 
-## 6. What the author-review ceiling leaves unchecked
+## 7. What the author-review ceiling leaves unchecked
 
-**The architect measured the apparatus, accepted the owner's framing, and wrote it up.** The
-measurement is a fact; **the inference — that size relative to the product is the right lens — is a
-judgment nobody has tested.**
+**The architect measured the apparatus and accepted the owner's framing.** The measurement is fact; **the
+inference that size relative to the product is the right lens is a judgment nobody has tested.**
 
-**The specific risk: some of that apparatus may be genuinely load-bearing and merely look
-disproportionate.** §7.2 exists to test that check by check, rather than by the aggregate number in §1.
+**The specific risk: something may look disproportionate and be load-bearing.** §8.2 tests that rule by
+rule rather than by §1's aggregate.
 
-## 7. Blocking prerequisites
+## 8. Blocking prerequisites
 
 1. **What do the 154 oracle cases assert, and is any of it recorded nowhere else?** **If they encode
-   real policy decisions, recovering those is the first work, not the last** — retiring the oracle would
-   otherwise destroy the only record of what the policy is.
-2. **Check by check: what does each prevent, for this project, today?** `boundary-check`'s eleven
-   categories, `reference-check`, `release-notes`, `differential-check`. **A check that prevents nothing
-   here is a candidate for removal regardless of how well it is built.**
-3. **What is `differential-check` for with one implementation?** It compares two.
+   real policy decisions, recovering those precedes any removal** — retiring the oracle would otherwise
+   destroy the only record of what the policy is.
+2. **Rule by rule (§5): what does each prevent, for this project, today?** The output is a verdict per
+   rule — **KEEP** with what it prevents, or **REMOVE** with why it prevents nothing here.
+3. **For each REMOVE: where else is that rule asserted?** Code, documents, RFC prose. **A partial
+   removal leaves a false claim behind**, which is the defect RFC 118 exists to stop.
 4. **Does DC-94 survive the reframing, or is it withdrawn?**
