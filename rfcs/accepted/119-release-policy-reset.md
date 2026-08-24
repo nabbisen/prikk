@@ -121,13 +121,50 @@ inference that size relative to the product is the right lens is a judgment nobo
 **The specific risk: something may look disproportionate and be load-bearing.** §8.2 tests that rule by
 rule rather than by §1's aggregate.
 
-## 8. Blocking prerequisites
+## 8. Prerequisites — discharged 2026-08-24/25
 
-1. **What do the 154 oracle cases assert, and is any of it recorded nowhere else?** **If they encode
-   real policy decisions, recovering those precedes any removal** — retiring the oracle would otherwise
-   destroy the only record of what the policy is.
-2. **Rule by rule (§5): what does each prevent, for this project, today?** The output is a verdict per
-   rule — **KEEP** with what it prevents, or **REMOVE** with why it prevents nothing here.
-3. **For each REMOVE: where else is that rule asserted?** Code, documents, RFC prose. **A partial
-   removal leaves a false claim behind**, which is the defect RFC 118 exists to stop.
-4. **Does DC-94 survive the reframing, or is it withdrawn?**
+**All four are answered.** Working documents, in order:
+`release-policy-research-v1.md` → `release-policy-derivation-v1.md` (+ stage addendum) →
+`release-policy-test-design-v1.md` → `release-policy-reconciliation-v1.md`. **Owner reviewed and
+accepted the derivation and the reconciliation.**
+
+1. **What do the 154 cases assert?** Eight suites. **Not homogeneous** — `release-evidence` alone holds
+   G4-identity cases, superseded lane-transition cases, governance cases and schema validation. **No
+   policy decision was found recorded only there**, but see §10's FINER track.
+2. **What does each rule prevent here?** Reconciliation §2-§4, verdict per rule.
+3. **`differential-check` with one implementation?** **NEVER** — migration scaffolding.
+4. **Does DC-94 survive?** Its map binds Rust categories to Python categories. **Withdraw or reframe
+   under §10's outcome**; it cannot stand as written once the Python is not the reference.
+
+## 9. The derived policy
+
+**Pre-1.0: G2 and G3 in full, G1 as declaration, G4 as identity.** Post-1.0 strengthens G1 to prevention
+and G4 to authority. **G2 and G3 do not change with stage.**
+
+## 10. Three independent tracks
+
+**Deliberately separate — none blocks another, and they carry different risks.**
+
+**A — Park what is LATER.** 43 signer cases, `publication-allowlist`, DC-35's rules, the official-release
+boundary. **All of it runs today.** Parking is unhooking it from today's gates without deleting the
+thinking. **Clearly decided; lowest risk; removes a cost paid daily.**
+
+**B — Resolve FINER, then remove NEVER.** `release-evidence`'s 73 cases, `dependency-placement`,
+`tool-metadata`/`lockfile-boundary`, `reference-check`. **Every removal decision depends on this**, and
+it is where the architect's confidence is lowest — a suite-level verdict would already have discarded
+~16 cases prikk needs.
+
+**C — Build G1.** The largest gap: nothing compares a candidate's persisted-data contract against the
+released one. `0.23.0`'s break was declared by hand and detected by nothing.
+
+**Sequencing note, recorded against the architect's own bias:** the reconciliation flagged that G1 was
+designed for first and then placed at the centre. **Track C is not automatically first**, and the owner
+should decide the order rather than inherit that emphasis.
+
+## 11. Non-goals restated
+
+**Not blame** (§2). **Not "delete all checks"** — several are load-bearing at any scale.
+**Not a rewrite of anything that stays.** **Not a release-procedure change.**
+
+**And placement is not existence:** `rfc-naming` and `unsafe-boundary` are verdicted *not release
+policy*, which is **not** a proposal to delete them.
