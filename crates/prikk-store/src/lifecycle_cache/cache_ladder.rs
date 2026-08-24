@@ -291,9 +291,13 @@ impl DecodedLifecycleCache {
     /// Operational provenance (4.4-2b.2 step 2): recompute `replay_window_hash` over the
     /// **actually walked** single-parent block chain from `baseline_block_id` back to
     /// `lineage_horizon_id`, never over cache-supplied block ids. The walk is the shared
-    /// [`replay::walk_single_parent_chain`] — the same lineage definition authoritative replay
-    /// uses — so provenance and replay cannot drift. Fails closed on a merge (multi-parent) block,
-    /// a cycle, a genesis that is not the claimed horizon, or a hash mismatch.
+    /// [`replay::walk_single_parent_chain`] function authoritative replay also calls — so a
+    /// non-merge lineage cannot drift between the two. **A `Merge` block in the window is a
+    /// different story**: unlike authoritative replay's `ReaderLineage`, `ResolverLineage` below
+    /// does not reduce a well-formed `Merge` to its mainline parent, so *any* `Merge` block —
+    /// well-formed or not — fails this check, unconditionally (`ParentPolicy::Dc13MergeAware` names
+    /// this as a reserved, unused-in-v1 extension point). Also fails closed on a cycle, a genesis
+    /// that is not the claimed horizon, or a hash mismatch.
     fn verify_window_against_chain(&self, resolver: &impl BlockParentResolver) -> Result<()> {
         let walked = replay::walk_single_parent_chain(
             &ResolverLineage(resolver),

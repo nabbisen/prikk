@@ -207,7 +207,10 @@ pub(crate) fn replay_supported_patch_chain(
 /// Resolve the node-addressed lineage bounds for a ref: the current target block (baseline) and the
 /// lineage genesis (horizon). Worktree authoring (4.4a-2) supplies these to `replay_derived_state`
 /// so the baseline node lifecycle state is reconstructed from authoritative node-addressed history,
-/// never from a snapshot manifest. Fails closed on a multi-parent lineage (v1 single-parent only).
+/// never from a snapshot manifest. For a well-formed `Merge` block (DC-75), `single_parent_chain`
+/// follows its mainline parent only; it fails closed only on a malformed multi-parent block (a
+/// non-`Merge` block with more than one parent, or a `Merge` block with a missing or invalid
+/// mainline) — see `read::mainline_or_sole_parent`.
 pub(crate) fn resolve_node_lineage_bounds(
     layout: &RepositoryLayout,
     ref_name: &str,

@@ -41,7 +41,18 @@ covered two unrelated blockers and produced a wrong roadmap framing:
   receiver's own key (`sync tags`/`adopt-tag`). Criterion 1's row carries the stated limits — prikk does
   not move the bytes itself, "two machines" is exercised as two repositories with no cross-host test,
   and there is no discovery or remote-tracking — read it before citing this row further.
-- **Multi-parent block lineage** — deferred out of DC-74 on 2026-08-08, **not rejected**. `BlockPayload.parent_block_ids` is already `Vec<ObjectId>`, sorted and unique, with a source comment anticipating *"a later design adds semantic parent roles"* — so this is a replay question, never a format change. `patch_replay.rs:206` fails closed on multi-parent lineage, and lifting that reopens what a baseline is for DC-64's cache, what `rollback_preview` walks, and what a horizon means. **The open question is whether it buys anything**: under DC-74's adoption model the patch DAG already records a merge structurally, so block parentage may be bookkeeping that duplicates it. Product **M3** is named "Block DAG and Checkout", which may encode a Git-inherited assumption worth re-examining rather than inheriting.
+- **Multi-parent block lineage — shipped, DC-75, 0.19.0.** `merge_execute.rs:168-171` stores both
+  parents in `BlockPayload.parent_block_ids`; `:176` sets `mainline_parent_id` (`BlockPayload:63`) to
+  designate which one state derivation and replay follow. **The premise this bullet used to give as
+  its open question — "the patch DAG already records a merge structurally" — was refuted by DC-75
+  itself**, which exists precisely because that was false: `parent_patch_ids` (a `PatchPayload` field,
+  distinct from `BlockPayload.parent_block_ids`) is `Vec::new()` at every construction site and read
+  nowhere — there is no patch DAG, which is why block-level parentage had to be added.
+  **`patch_replay.rs`'s own "fails closed on multi-parent" doc comment was also imprecise** — it walks
+  a well-formed `Merge` block fine, via its mainline parent; it refuses only a malformed one. **What
+  remains genuinely open is `parent_patch_ids`' own fate** — whether it is ever populated, repurposed,
+  or removed — which is an owner ruling, not a design theme to adjudicate here. Product **M3**, named
+  "Block DAG and Checkout", is discharged by this shipping, not still describing unbuilt scope.
 - **Transport — settled by RFC 116's accepted ruling, not open.** `prikk-store` stays bytes-in/bytes-out
   and prikk stays off the network; sync-over-any-channel satisfies criterion 1, so moving a `sync`/
   `bundle` artifact between repositories is the operator's own channel, by design, not a gap awaiting a

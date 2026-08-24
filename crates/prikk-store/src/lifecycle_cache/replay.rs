@@ -221,11 +221,21 @@ impl<R: ObjectReader> LineageBlockReader for ReaderLineage<'_, R> {
 }
 
 /// Canonical v1 single-parent lineage walk — the **single source of truth** for the lineage
-/// window. From `baseline`, follow single parents to repository genesis (a block with no
-/// parents), which MUST equal `horizon`. Returns the chain in apply order (genesis/horizon first …
-/// baseline last), each entry paired with the `Block` the walk read for it (so replay does not
-/// re-read). Fails closed on a merge (>1 parent), a cycle, or a genesis that is not the claimed
-/// horizon. Used by both authoritative replay and cache provenance.
+/// window. From `baseline`, follow single parents (as `R::parents_of` reduces them) to repository
+/// genesis (a block with no parents), which MUST equal `horizon`. Returns the chain in apply order
+/// (genesis/horizon first … baseline last), each entry paired with the `Block` the walk read for
+/// it (so replay does not re-read). Fails closed on more than one parent (per `R::parents_of`'s own
+/// reduction), a cycle, or a genesis that is not the claimed horizon.
+///
+/// **Whether a well-formed `Merge` block is walked or refused depends entirely on the caller's own
+/// `R: LineageBlockReader`, not on this function.** `ReaderLineage` (authoritative replay, below)
+/// reduces a well-formed `Merge` to `[mainline]` before this walk ever sees more than one parent —
+/// only a malformed `Merge` (missing/invalid mainline) fails closed here. `ResolverLineage`
+/// (`cache_ladder.rs`, operational-provenance verification) returns every parent verbatim, so
+/// *any* `Merge` block — well-formed or not — fails closed for that caller: lifecycle-cache
+/// provenance does not yet support merge-aware baselines (`ParentPolicy::Dc13MergeAware` is
+/// reserved for this, unused in v1). Read this function's own behaviour from the `R` its caller
+/// supplies, never assume one caller's shape from another's.
 pub(crate) fn walk_single_parent_chain<R: LineageBlockReader>(
     blocks: &R,
     baseline: ObjectId,
