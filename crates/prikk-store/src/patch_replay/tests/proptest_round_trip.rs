@@ -301,7 +301,6 @@ proptest! {
     fn patch_operations_round_trip(operations in operations_strategy()) {
         let payload = PatchPayload {
             operations: operations.clone(),
-            parent_patch_ids: Vec::new(),
             intent: None,
             preconditions: Vec::new(),
             purpose: PatchPurpose::Normal,
@@ -314,7 +313,10 @@ proptest! {
         let Ok(bytes) = payload.to_canonical_bytes() else {
             return Ok(());
         };
-        let decoded = decode_patch_operations(&bytes)
+        // Every construction site now writes `PATCH_PARENT_IDS_RETIRED_SCHEMA` (Patch schema 2
+        // handoff) -- matching that here, not schema 1, since this proves round-trip fidelity for
+        // what the encoder actually produces today.
+        let decoded = decode_patch_operations(&bytes, prikk_object::PATCH_PARENT_IDS_RETIRED_SCHEMA)
             .expect("bytes produced by the encoder must always decode");
         let expected: Vec<DecodedPatchOperation> = operations.iter().map(expected_decoded).collect();
         prop_assert_eq!(decoded, expected);
@@ -324,6 +326,6 @@ proptest! {
     fn decode_patch_operations_never_panics_on_arbitrary_bytes(
         bytes in proptest::collection::vec(any::<u8>(), 0..512)
     ) {
-        let _ = decode_patch_operations(&bytes);
+        let _ = decode_patch_operations(&bytes, 1);
     }
 }

@@ -64,7 +64,6 @@ fn patch_operations_must_be_contiguous() {
                 old_span_text: b"old".to_vec(),
             }),
         }],
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
@@ -638,7 +637,6 @@ fn patch_payload_rejects_empty_operations() {
     use crate::CanonicalEncode;
     let patch = PatchPayload {
         operations: Vec::new(),
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
@@ -667,7 +665,6 @@ fn patch_purpose_absent_decodes_as_normal() {
                 old_span_text: b"old".to_vec(),
             }),
         }],
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,

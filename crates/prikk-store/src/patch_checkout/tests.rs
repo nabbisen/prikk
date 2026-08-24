@@ -236,7 +236,6 @@ fn publish_snapshot_then_patch_block(layout: &RepositoryLayout) -> prikk_error::
                 }),
             },
         ],
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,

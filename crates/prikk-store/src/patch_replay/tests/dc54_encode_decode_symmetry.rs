@@ -78,7 +78,6 @@ fn committed_dc41_reproducer_now_fails_at_encode() {
             preconditions: Vec::new(),
             kind: OperationKind::RenamePath(operation),
         }],
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,

@@ -47,7 +47,6 @@ fn normal_patch_envelope(label: &str) -> Result<ObjectEnvelope> {
                 mode: 0o100_644,
             }),
         }],
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,

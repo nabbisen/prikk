@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc b5b1c54e7bb403b11622f167ed135e31a461d501aeac6de29ed7047e2bcfc3e8 # shrinks to object_type = RefState, schema_version = 2
+cc a0ceced355545235fd5f4133efe5b3e3d8807881c7a8d9aff0d815551ff5a3b0 # shrinks to object_type = Patch, schema_version = 2

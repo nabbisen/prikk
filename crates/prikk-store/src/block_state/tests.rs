@@ -1,7 +1,6 @@
 use prikk_object::{
     BlobKind, BlobPayload, BlockKind, BlockPayload, CanonicalEncode, CreateFile, MerkleRoot,
-    NodeId, ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind, PatchPayload,
-    PatchPurpose,
+    NodeId, ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind,
 };
 
 use super::{
@@ -210,22 +209,114 @@ fn equivalent_state_ignores_patch_identity() -> prikk_error::Result<()> {
     Ok(())
 }
 
+/// `PatchPayload` no longer has a `parent_patch_ids` field (Patch schema 2 handoff: tag 2 retired,
+/// never emitted by `encode_canonical`) -- schema 1 still legally carries it, so this bypasses
+/// `PatchPayload` and writes tag 2 directly with `CanonicalWriter`, exactly where `encode_canonical`
+/// used to emit it, to prove `equivalent_state_ignores_patch_identity`'s claim on the one shape no
+/// production code can author anymore.
 fn patch_with_parents(
     operation: Operation,
     parent_patch_ids: Vec<ObjectId>,
 ) -> prikk_error::Result<ObjectEnvelope> {
-    let payload = PatchPayload {
-        operations: vec![operation],
-        parent_patch_ids,
-        intent: None,
-        preconditions: Vec::new(),
-        purpose: PatchPurpose::Normal,
-    };
+    let mut writer = prikk_object::CanonicalWriter::new();
+    writer.repeated_record_list(1, &[operation])?;
+    writer.repeated_object_id(2, &parent_patch_ids)?;
+    let canonical_payload = writer.finish();
     Ok(ObjectEnvelope::unsigned(
         ObjectType::Patch,
         1,
-        payload.to_canonical_bytes()?,
+        canonical_payload,
     ))
+}
+
+/// Patch-schema-2 handoff (v2 amendment) §5 item 3: `RefState` already proves a repository mixing
+/// two admitted schemas for one `ObjectType` derives state correctly (DC-61,
+/// `REF_STATE_CLOSED_SCHEMA`); this proves the same for `Patch`. One schema-1 patch (built the same
+/// way `patch_with_parents` above does, the shape every patch written before this handoff has) and
+/// one real schema-2 patch (built through the actual, current production `PatchPayload` encoder,
+/// which can no longer emit tag 2 at all) both apply through `derive_next_state_root` -- the exact
+/// function block-sealing and `verify` both call -- to a root matching the two files' combined
+/// effect, proving `apply_candidate_patches`'s `require_schema_one = true` path (`replay.rs`) admits
+/// both schemas via `format::admitted_schemas`, not a stale `!= 1` check.
+#[test]
+fn a_repository_holding_both_patch_schemas_derives_state_correctly() -> prikk_error::Result<()> {
+    let mut store = MemoryObjectStore::new();
+    let blob_payload = BlobPayload::new(BlobKind::Text, b"schema mix\n".to_vec());
+    let blob = ObjectEnvelope::unsigned(ObjectType::Blob, 1, blob_payload.to_canonical_bytes()?);
+    let blob_id = store.write_object(&blob)?;
+
+    let schema1_operation = Operation {
+        op_seq: 1,
+        op_id: None,
+        preconditions: Vec::new(),
+        kind: OperationKind::CreateFile(CreateFile {
+            path: "schema1.txt".to_string(),
+            node_id: NodeId::from_bytes([0x9a; 32]),
+            blob_id,
+            mode: 0o100644,
+        }),
+    };
+    let schema1_patch = patch_with_parents(schema1_operation.clone(), Vec::new())?;
+    let schema1_id = store.write_object(&schema1_patch)?;
+
+    let schema2_operation = Operation {
+        op_seq: 1,
+        op_id: None,
+        preconditions: Vec::new(),
+        kind: OperationKind::CreateFile(CreateFile {
+            path: "schema2.txt".to_string(),
+            node_id: NodeId::from_bytes([0x9b; 32]),
+            blob_id,
+            mode: 0o100644,
+        }),
+    };
+    let schema2_payload = prikk_object::PatchPayload {
+        operations: vec![schema2_operation.clone()],
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: prikk_object::PatchPurpose::Normal,
+    };
+    let schema2_patch = ObjectEnvelope::unsigned(
+        ObjectType::Patch,
+        prikk_object::PATCH_PARENT_IDS_RETIRED_SCHEMA,
+        schema2_payload.to_canonical_bytes()?,
+    );
+    let schema2_id = store.write_object(&schema2_patch)?;
+
+    let mixed_root = derive_next_state_root(&store, None, &[schema1_id, schema2_id])?;
+
+    // Cross-check: a single schema-1 patch carrying *both* operations (bypassing the two-patch,
+    // two-schema split entirely) must derive the identical root -- proving `mixed_root` reflects
+    // both operations' effect, not just one of them silently winning or the other being dropped.
+    let combined_second_operation = Operation {
+        op_seq: 2,
+        ..schema2_operation
+    };
+    let mut writer = prikk_object::CanonicalWriter::new();
+    writer.repeated_record_list(1, &[schema1_operation, combined_second_operation])?;
+    let combined_patch = ObjectEnvelope::unsigned(ObjectType::Patch, 1, writer.finish());
+    let combined_id = store.write_object(&combined_patch)?;
+    let expected_root = derive_next_state_root(&store, None, &[combined_id])?;
+    assert_eq!(
+        mixed_root, expected_root,
+        "a repository holding both a schema-1 and a schema-2 patch must derive the same state as \
+         a single patch carrying both operations"
+    );
+
+    // Negative control: a Patch envelope at a schema `admitted_schemas` does not accept (3 is
+    // outside Patch's `&[1, PATCH_PARENT_IDS_RETIRED_SCHEMA]`) must still be refused when mixed
+    // into the same candidate set -- proving the mixed-schema acceptance above is not because the
+    // admitted-schema check was silently accepting everything.
+    let out_of_range_patch =
+        ObjectEnvelope::unsigned(ObjectType::Patch, 3, schema2_payload.to_canonical_bytes()?);
+    let out_of_range_id = store.write_object(&out_of_range_patch)?;
+    let result = derive_next_state_root(&store, None, &[schema1_id, out_of_range_id]);
+    assert!(
+        result.is_err(),
+        "a Patch at schema 3 (outside Patch's admitted set) must be refused, not silently applied"
+    );
+
+    Ok(())
 }
 
 // --- DC-92: negative controls proving memoization does not weaken what verification catches. ---

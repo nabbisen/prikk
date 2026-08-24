@@ -263,9 +263,10 @@ pub fn export_bundle(
         // ReplaceBinary) independently of any Block's snapshot_blob_ref — a repository-local
         // verify never notices a missing one of these, since it never replays lifecycle state for
         // an export; the receiver's ordinary verify does, so every one of these must travel too.
-        for operation in
-            crate::patch_replay::decode::decode_patch_operations(&envelope.canonical_payload)?
-        {
+        for operation in crate::patch_replay::decode::decode_patch_operations(
+            &envelope.canonical_payload,
+            envelope.schema_version,
+        )? {
             match operation.kind {
                 crate::patch_replay::decode::DecodedOperationKind::CreateFile {
                     blob_id, ..
@@ -456,7 +457,9 @@ pub fn import_bundle(
         if envelope.object_type != ObjectType::Patch {
             continue;
         }
-        for operation in decode_patch_operations(&envelope.canonical_payload)? {
+        for operation in
+            decode_patch_operations(&envelope.canonical_payload, envelope.schema_version)?
+        {
             for blob_id in bundle_referenced_blob_ids(&operation.kind) {
                 if !bundle_objects_by_id.contains_key(&blob_id)
                     && !read_snapshot.contains_object(ObjectType::Blob, blob_id)

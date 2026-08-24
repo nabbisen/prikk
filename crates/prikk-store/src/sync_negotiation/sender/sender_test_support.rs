@@ -73,7 +73,6 @@ pub(super) fn create_file_patch(
                 mode: 0o100_644,
             }),
         }],
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,

@@ -20,8 +20,8 @@ pub use common::{Intent, MerkleRoot, OperationCondition, OperationConditionEntry
 pub use node::{NODE_ID_BYTES, NodeId, NodeKind};
 pub use patch::{
     ChangePerm, CreateFile, CreateSymlink, DeleteNode, DeleteNodePreimage, EditText, Operation,
-    OperationKind, PatchPayload, PatchPurpose, RenamePath, ReplaceBinary, TEXT_SPAN_HASH_BYTES,
-    text_span_hash, validate_text_anchor_id,
+    OperationKind, PATCH_PARENT_IDS_RETIRED_SCHEMA, PatchPayload, PatchPurpose, RenamePath,
+    ReplaceBinary, TEXT_SPAN_HASH_BYTES, text_span_hash, validate_text_anchor_id,
 };
 pub use recognition_claim::{RECOGNITION_CLAIM_MAX_PATCH_IDS, RecognitionClaimPayload};
 pub use refs::{REF_STATE_CLOSED_SCHEMA, RefKind, RefStatePayload, RefUpdatePayload};

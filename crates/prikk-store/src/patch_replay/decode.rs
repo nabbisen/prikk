@@ -8,7 +8,10 @@
 //! canonical TLV cursor/field reading. No behaviour change.
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{NodeId, NodeKind, ObjectId, PatchPurpose, TEXT_SPAN_HASH_BYTES, WireType};
+use prikk_object::{
+    NodeId, NodeKind, ObjectId, PATCH_PARENT_IDS_RETIRED_SCHEMA, PatchPurpose,
+    TEXT_SPAN_HASH_BYTES, WireType,
+};
 
 mod operations;
 mod tlv;
@@ -146,7 +149,15 @@ pub(crate) fn ensure_apply_supported(operation: &DecodedPatchOperation) -> Resul
 /// Decode every FDD-03 §9.3 operation kind from canonical patch payload bytes into
 /// typed [`DecodedPatchOperation`]s. Decoding validates structure/identity only;
 /// applicability is gated separately by [`ensure_apply_supported`] (erratum P1).
-pub(crate) fn decode_patch_operations(bytes: &[u8]) -> Result<Vec<DecodedPatchOperation>> {
+///
+/// `schema_version` comes from the object envelope carrying these bytes, mirroring
+/// `RefStatePayload::decode_canonical`'s own shape (Patch schema 2 handoff): a present tag 2
+/// (`parent_patch_ids`) is legal-but-ignored at schema 1 (every patch already written keeps
+/// decoding unchanged) and refused outright at `PATCH_PARENT_IDS_RETIRED_SCHEMA` and above.
+pub(crate) fn decode_patch_operations(
+    bytes: &[u8],
+    schema_version: u32,
+) -> Result<Vec<DecodedPatchOperation>> {
     PatchPurpose::decode_from_patch_payload(bytes).map_err(|err| {
         PrikkError::MalformedData(format!("invalid PatchPurpose canonical form: {err}"))
     })?;
@@ -164,7 +175,18 @@ pub(crate) fn decode_patch_operations(bytes: &[u8]) -> Result<Vec<DecodedPatchOp
                 let index = operations.len();
                 operations.push(decode_operation(field.value, index)?);
             }
-            2..=4 => {}
+            2 => {
+                if schema_version >= PATCH_PARENT_IDS_RETIRED_SCHEMA {
+                    return Err(PrikkError::MalformedData(format!(
+                        "Patch schema {schema_version} must not carry parent_patch_ids (tag 2); \
+                         retired at schema {PATCH_PARENT_IDS_RETIRED_SCHEMA}"
+                    )));
+                }
+                // Schema 1: legal-but-ignored, unchanged from before this schema existed --
+                // `decode_patch_parent_ids` is the function that actually reads this tag, for the
+                // one caller (`patch_exchange/accept.rs`) that needs its value.
+            }
+            3 | 4 => {}
             5 => {
                 field.require_wire(WireType::EnumU16)?;
                 let _ = field.read_u16()?;
@@ -184,13 +206,22 @@ pub(crate) fn decode_patch_operations(bytes: &[u8]) -> Result<Vec<DecodedPatchOp
     Ok(operations)
 }
 
-/// Decode a Patch's `parent_patch_ids` (tag 2, repeated `object_id`) from its canonical payload
-/// bytes. Every authoring path today writes this field empty (RFC 115 Stage 3 handoff §0/§4.2 item
-/// 6: populating it needs its own RFC), and `decode_patch_operations` above deliberately skips tags
-/// 2..=4 without inspecting them -- structural decode for replay/apply has never needed this field.
-/// The exchange accept path does need it, for exactly one purpose: refuse the whole exchange if a
-/// carried patch ever has a non-empty one, because a patch replay walk that silently ignored a real
-/// ancestry edge here would be the wrong kind of quiet.
+/// Decode a Patch's retired `parent_patch_ids` (tag 2, repeated `object_id`) from its canonical
+/// payload bytes -- legal only on a schema-1 patch, and every schema-1 authoring path has always
+/// written it empty (RFC 115 Stage 3 handoff §0/§4.2 item 6; retired outright at
+/// `PATCH_PARENT_IDS_RETIRED_SCHEMA`, Patch schema 2 handoff). `decode_patch_operations` above
+/// does not extract this field's value; it only refuses tag 2's mere presence at schema 2 and
+/// above. This function's one caller, the exchange accept path, needs the actual value, for exactly
+/// one purpose: refuse the whole exchange if a carried patch ever has a non-empty one, because a
+/// patch replay walk that silently ignored a real ancestry edge here would be the wrong kind of
+/// quiet.
+///
+/// **Deliberately schema-blind, and that is stricter, not weaker.** `patch_exchange/accept.rs`
+/// calls this *before* `decode_patch_operations`, so this check shadows the schema-aware one there
+/// for both schemas: a non-empty tag 2 is refused whether the carrying patch claims schema 1 (where
+/// the field is legal-but-must-be-empty) or schema 2 (where the field is not legal at all). Do not
+/// reorder `accept.rs`, and do not read this function's continued existence as redundant with
+/// `decode_patch_operations`'s own schema-2 refusal -- it is broader, not duplicate.
 pub(crate) fn decode_patch_parent_ids(bytes: &[u8]) -> Result<Vec<ObjectId>> {
     let mut cursor = TlvCursor::new(bytes);
     let mut parent_patch_ids = Vec::new();

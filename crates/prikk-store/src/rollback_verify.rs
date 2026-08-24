@@ -84,7 +84,10 @@ pub fn verify_active_rollback_draft(
             "active rollback draft payload does not match the current inverse plan".to_string(),
         ));
     }
-    let decoded = decode_patch_operations(&record.envelope.canonical_payload)?;
+    let decoded = decode_patch_operations(
+        &record.envelope.canonical_payload,
+        record.envelope.schema_version,
+    )?;
     // Erratum P1: decoding all §9.3 kinds does not prove the draft is replayable. A
     // rollback draft must consist only of apply-supported operations; gate explicitly
     // rather than relying on decode success.
@@ -143,7 +146,7 @@ pub(crate) fn verify_rollback_patch_envelope(
             envelope.object_type
         )));
     }
-    let decoded = decode_patch_operations(&envelope.canonical_payload)?;
+    let decoded = decode_patch_operations(&envelope.canonical_payload, envelope.schema_version)?;
     // Erratum P1: require apply-support, not merely decodability.
     for operation in &decoded {
         ensure_apply_supported(operation)?;

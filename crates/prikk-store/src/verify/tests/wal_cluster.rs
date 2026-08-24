@@ -72,7 +72,6 @@ fn write_wal_records(wal: &Wal, records: &[WalRecord]) -> Result<()> {
 fn rollback_payload_with_operations(operations: Vec<Operation>) -> PatchPayload {
     PatchPayload {
         operations,
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::RollbackDraft,
@@ -363,7 +362,6 @@ fn verify_repository_detects_rollback_draft_legacy_marker_key_id() -> Result<()>
 fn normal_patch_envelope(label: &str) -> Result<ObjectEnvelope> {
     let payload = PatchPayload {
         operations: vec![create_file_operation(1, sample_object_id(label))?],
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,

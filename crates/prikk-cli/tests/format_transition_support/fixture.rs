@@ -168,7 +168,6 @@ pub(crate) fn build_current_format_strict_wal_fixture(
                 mode: 0o100644,
             }),
         )],
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
@@ -237,7 +236,6 @@ fn write_patch(
 ) -> TestResult<ObjectId> {
     let payload = PatchPayload {
         operations,
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose,

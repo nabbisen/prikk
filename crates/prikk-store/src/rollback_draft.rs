@@ -8,7 +8,8 @@
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, PatchPurpose, RefStatePayload,
+    CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, PATCH_PARENT_IDS_RETIRED_SCHEMA,
+    PatchPurpose, RefStatePayload,
 };
 
 use crate::active::prepare_empty_active_ref_for_append;
@@ -118,7 +119,11 @@ pub fn append_rollback_draft(
 
     inverse.inverse_payload.purpose = PatchPurpose::RollbackDraft;
     let canonical_payload = inverse.inverse_payload.to_canonical_bytes()?;
-    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, canonical_payload);
+    let mut envelope = ObjectEnvelope::unsigned(
+        ObjectType::Patch,
+        PATCH_PARENT_IDS_RETIRED_SCHEMA,
+        canonical_payload,
+    );
     let signature = author_signature(signer, envelope.object_id())?;
     envelope.add_signature(signature)?;
     let inverse_patch_id = envelope.object_id();

@@ -64,7 +64,6 @@ pub(super) fn signed_author_patch_envelope(
                 mode: 0o100_644,
             }),
         }],
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,

@@ -357,7 +357,10 @@ fn candidate_sequence(
             let envelope = object_store
                 .read_typed(patch_id, ObjectType::Patch)?
                 .ok_or_else(|| PrikkError::Integrity(format!("missing Patch {patch_id}")))?;
-            operations.extend(decode_patch_operations(&envelope.canonical_payload)?);
+            operations.extend(decode_patch_operations(
+                &envelope.canonical_payload,
+                envelope.schema_version,
+            )?);
         }
     }
     Ok(operations)

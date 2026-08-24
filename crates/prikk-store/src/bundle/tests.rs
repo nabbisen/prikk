@@ -140,7 +140,6 @@ fn seal_two_block_history_with_author(
                 mode: 0o100_644,
             }),
         }],
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,

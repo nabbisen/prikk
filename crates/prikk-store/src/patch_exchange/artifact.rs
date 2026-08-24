@@ -125,7 +125,9 @@ pub fn export_exchange_artifact(
         // operations can reference Blobs independently of any Block's `snapshot_blob_ref`, so the
         // closure has to be derived from the operations themselves, not assumed from ancestry --
         // this artifact carries no Block at all to derive it from in the first place.
-        for operation in decode_patch_operations(&envelope.canonical_payload)? {
+        for operation in
+            decode_patch_operations(&envelope.canonical_payload, envelope.schema_version)?
+        {
             match operation.kind {
                 DecodedOperationKind::CreateFile { blob_id, .. } => {
                     blob_ids.insert(blob_id);

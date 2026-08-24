@@ -10,7 +10,7 @@ use prikk_error::{PrikkError, Result};
 
 use crate::canonical::{is_contiguous_op_seq, is_strictly_sorted};
 use crate::payload::common::{Intent, OperationCondition, OperationConditionEntry};
-use crate::{CanonicalEncode, CanonicalWriter, ObjectId, WireType};
+use crate::{CanonicalEncode, CanonicalWriter, WireType};
 
 mod operations;
 
@@ -48,13 +48,21 @@ pub fn validate_text_anchor_id(value: &str) -> Result<()> {
     Ok(())
 }
 
+/// `Patch` schema at and above which field 2 (`parent_patch_ids`) is retired — the opposite
+/// direction from [`crate::REF_STATE_CLOSED_SCHEMA`], which admits a field starting at its
+/// threshold rather than retiring one. Schema 1 (frozen forever, RFC 114) keeps decoding a
+/// present field 2 without inspecting it, exactly as before this schema existed, so every patch
+/// already written keeps decoding unchanged. Schema 2 refuses field 2's mere presence outright —
+/// see `decode_patch_operations` (`prikk-store`). **Field number 2 is retired, not reused**: no
+/// future schema may repurpose tag 2 for something else, since a schema-1 reader would silently
+/// misinterpret it as the old `parent_patch_ids` shape.
+pub const PATCH_PARENT_IDS_RETIRED_SCHEMA: u32 = 2;
+
 /// Patch payload.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PatchPayload {
     /// Operations in semantic order. `op_seq` must be contiguous from 1.
     pub operations: Vec<Operation>,
-    /// Parent patch IDs. Sorted ascending.
-    pub parent_patch_ids: Vec<ObjectId>,
     /// Advisory intent.
     pub intent: Option<Intent>,
     /// Patch-level preconditions, sorted by key.
@@ -77,11 +85,6 @@ impl PatchPayload {
                 "patch operations must have contiguous op_seq values starting at 1".to_string(),
             ));
         }
-        if !is_strictly_sorted(&self.parent_patch_ids) {
-            return Err(PrikkError::CanonicalEncoding(
-                "parent_patch_ids must be sorted and unique".to_string(),
-            ));
-        }
         if !is_strictly_sorted(&self.preconditions) {
             return Err(PrikkError::CanonicalEncoding(
                 "patch preconditions must be sorted and unique".to_string(),
@@ -95,7 +98,9 @@ impl CanonicalEncode for PatchPayload {
     fn encode_canonical(&self, writer: &mut CanonicalWriter) -> Result<()> {
         self.validate()?;
         writer.repeated_record_list(1, &self.operations)?;
-        writer.repeated_object_id(2, &self.parent_patch_ids)?;
+        // Tag 2 (`parent_patch_ids`) is retired at `PATCH_PARENT_IDS_RETIRED_SCHEMA` and above --
+        // every construction site now writes that schema (or later), so tag 2 is never emitted
+        // here at all. See `PATCH_PARENT_IDS_RETIRED_SCHEMA`'s own doc.
         if let Some(intent) = self.intent {
             writer.field_enum_u16(3, intent.code())?;
         }

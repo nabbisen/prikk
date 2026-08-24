@@ -25,7 +25,6 @@ fn valid_patch_payload_bytes() -> Vec<u8> {
                 mode: 0o100_644,
             }),
         }],
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
@@ -42,7 +41,7 @@ fn decoder_accepts_record_list_item_framing() {
         Some(0x21),
         "expected record_list_item"
     );
-    assert!(decode_patch_operations(&bytes).is_ok());
+    assert!(decode_patch_operations(&bytes, 1).is_ok());
 }
 
 #[test]
@@ -55,13 +54,13 @@ fn decoder_rejects_old_record_framing() {
     if let Some(byte) = bytes.get_mut(2) {
         *byte = 0x20;
     }
-    assert!(decode_patch_operations(&bytes).is_err());
+    assert!(decode_patch_operations(&bytes, 1).is_err());
 }
 
 #[test]
 fn decoder_rejects_empty_payload() {
     // FDD-03 §9.1: a persisted/imported patch with no operations is malformed.
-    assert!(decode_patch_operations(b"").is_err());
+    assert!(decode_patch_operations(b"", 1).is_err());
 }
 
 #[test]
@@ -73,5 +72,5 @@ fn decoder_rejects_payload_without_operations() {
     bytes.push(0x12); // value_type object_id
     bytes.extend_from_slice(&32_u64.to_be_bytes()); // len = 32
     bytes.extend_from_slice(&[0x11_u8; 32]); // 32-byte object id
-    assert!(decode_patch_operations(&bytes).is_err());
+    assert!(decode_patch_operations(&bytes, 1).is_err());
 }

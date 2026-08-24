@@ -596,11 +596,16 @@ fn a_claim_naming_an_adopted_key_reads_sound() -> Result<()> {
 
 /// A carried patch with a non-empty `parent_patch_ids` refuses the whole exchange -- this field is
 /// always empty today; nothing authors a non-empty one, so this test constructs one directly.
+///
+/// `PatchPayload` no longer has a `parent_patch_ids` field at all (Patch schema 2 handoff: tag 2 is
+/// retired, never emitted by `encode_canonical`) -- schema 1 still legally carries it (backward
+/// compatibility with every patch already written), so this fixture bypasses `PatchPayload` and
+/// writes tag 2 directly with `CanonicalWriter`, exactly where `encode_canonical` used to emit it,
+/// to construct the one shape no production code can author anymore.
 #[test]
 fn a_non_empty_parent_patch_ids_refuses() -> Result<()> {
     use prikk_object::{
-        CanonicalEncode, CreateFile, NodeId, ObjectEnvelope, ObjectType, Operation, OperationKind,
-        PatchPayload, PatchPurpose,
+        CanonicalWriter, CreateFile, NodeId, ObjectEnvelope, ObjectType, Operation, OperationKind,
     };
 
     let signer = author_signer(0xB0)?;
@@ -608,24 +613,22 @@ fn a_non_empty_parent_patch_ids_refuses() -> Result<()> {
     let mut objects = FileObjectStore::new(sender.clone());
     let blob = signed_blob_envelope(b"parent-ids fixture\n")?;
     let blob_id = objects.write_object(&blob)?;
-    let payload = PatchPayload {
-        operations: vec![Operation {
-            op_seq: 1,
-            op_id: None,
-            preconditions: Vec::new(),
-            kind: OperationKind::CreateFile(CreateFile {
-                path: "parent-ids.txt".to_string(),
-                node_id: NodeId::from_bytes([0xB1; 32]),
-                blob_id,
-                mode: 0o100_644,
-            }),
-        }],
-        parent_patch_ids: vec![ObjectId::from_bytes([0xB2; 32])],
-        intent: None,
+    let operations = vec![Operation {
+        op_seq: 1,
+        op_id: None,
         preconditions: Vec::new(),
-        purpose: PatchPurpose::Normal,
-    };
-    let mut patch = ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);
+        kind: OperationKind::CreateFile(CreateFile {
+            path: "parent-ids.txt".to_string(),
+            node_id: NodeId::from_bytes([0xB1; 32]),
+            blob_id,
+            mode: 0o100_644,
+        }),
+    }];
+    let mut writer = CanonicalWriter::new();
+    writer.repeated_record_list(1, &operations)?;
+    writer.repeated_object_id(2, &[ObjectId::from_bytes([0xB2; 32])])?;
+    let canonical_payload = writer.finish();
+    let mut patch = ObjectEnvelope::unsigned(ObjectType::Patch, 1, canonical_payload);
     let id = patch.object_id();
     patch.add_signature(crate::author_signing::author_signature(&signer, id)?)?;
     let patch_id = objects.write_object(&patch)?;

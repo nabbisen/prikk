@@ -486,7 +486,7 @@ fn read_patch_operations_from_envelope(
             detail: format!("object is not a Patch ({} found)", envelope.object_type),
         });
     }
-    decode_patch_operations(&envelope.canonical_payload).map_err(|e| {
+    decode_patch_operations(&envelope.canonical_payload, envelope.schema_version).map_err(|e| {
         LifecycleReplayError::MalformedPatchInLineage {
             patch_id,
             detail: e.to_string(),
@@ -569,16 +569,25 @@ fn read_patch_operations(
             detail: format!("object is not a Patch ({} found)", envelope.object_type),
         });
     }
-    if require_schema_one && envelope.schema_version != 1 {
-        return Err(LifecycleReplayError::MalformedPatchInLineage {
-            patch_id,
-            detail: format!(
-                "format-2 Patch requires envelope schema 1, got {}",
-                envelope.schema_version
-            ),
-        });
+    if require_schema_one {
+        // Patch schema 2 handoff v2 amendment §2: read the authoritative admitted-schema table
+        // `format.rs::validate_format2_schema` owns, rather than a second, hand-maintained `!= 1`
+        // check -- state derivation does not itself depend on Patch envelope schema (only the
+        // decoded operations reach it, and a schema-2 Patch decodes to the identical operations a
+        // schema-1 one would), so this exists only to keep an out-of-band envelope from reaching a
+        // decoder that assumes format-2 admission already held.
+        let accepted = crate::format::admitted_schemas(envelope.object_type).unwrap_or(&[]);
+        if !accepted.contains(&envelope.schema_version) {
+            return Err(LifecycleReplayError::MalformedPatchInLineage {
+                patch_id,
+                detail: format!(
+                    "format-2 Patch does not accept envelope schema {} (accepted: {accepted:?})",
+                    envelope.schema_version
+                ),
+            });
+        }
     }
-    decode_patch_operations(&envelope.canonical_payload).map_err(|e| {
+    decode_patch_operations(&envelope.canonical_payload, envelope.schema_version).map_err(|e| {
         LifecycleReplayError::MalformedPatchInLineage {
             patch_id,
             detail: e.to_string(),

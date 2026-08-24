@@ -134,7 +134,6 @@ fn dc53_patch_payload() -> PatchPayload {
                 mode: 0o100_644,
             }),
         }],
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
@@ -326,13 +325,15 @@ fn dc53_vector_6_verification_fails_closed_against_a_conflicting_key_id() -> pri
     Ok(())
 }
 
-// RFC 114 §3 (Gate A): frozen identity vectors for the six `(object_type, schema_version)` pairs
-// that `validate_format2_schema` admits and that production code has actually written, beyond
-// `(Patch, 1)` which vectors 1-3 above already cover. `(Attestation, 1)` is admitted but never
-// constructed in production (see `RFC114_ADMITTED_BUT_UNWRITTEN` below) and so is deliberately not
-// frozen here -- freezing a pair nothing has ever written would pin an arbitrary literal, not a
-// real compatibility obligation. Same literal-value discipline as vectors 1-6: every byte string
-// below is a fixed-seed, hand-verified value, never generated at test time.
+// RFC 114 §3 (Gate A): frozen identity vectors for the `(object_type, schema_version)` pairs that
+// `validate_format2_schema` admits and that production code has actually written, beyond
+// `(Patch, 1)` which vectors 1-3 above already cover (vector 14, below, covers Patch's second
+// admitted pair, `(Patch, PATCH_PARENT_IDS_RETIRED_SCHEMA)`, per the patch-schema-2 handoff).
+// `(Attestation, 1)` is admitted but never constructed in production (see
+// `RFC114_ADMITTED_BUT_UNWRITTEN` below) and so is deliberately not frozen here -- freezing a pair
+// nothing has ever written would pin an arbitrary literal, not a real compatibility obligation.
+// Same literal-value discipline as vectors 1-6: every byte string below is a fixed-seed,
+// hand-verified value, never generated at test time.
 
 /// Pairs `validate_format2_schema` admits that no production code path has ever constructed, per
 /// RFC 114 §2's "has ever been written" criterion (`prikk-rfc114-implementation-plan-v1.md` §1).
@@ -799,6 +800,86 @@ fn rfc115_recognition_claim_signature_fails_against_a_different_maintainer_key()
          different one"
     );
     Ok(())
+}
+
+/// Vector 14: `(Patch, PATCH_PARENT_IDS_RETIRED_SCHEMA)`, the patch-schema-2 handoff (tag 2,
+/// `parent_patch_ids`, retired outright) -- AUTHOR-signed, mirroring vectors 1-3's `(Patch, 1)`
+/// pattern above (`dc53_patch_payload`) rather than the maintainer-signed vectors 7-13, since
+/// Patch objects are author-signed in production, same as schema 1.
+fn rfc114_patch_schema2_payload() -> PatchPayload {
+    PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::CreateFile(CreateFile {
+                path: "rfc114-patch-schema2.txt".to_string(),
+                node_id: NodeId::from_bytes([0x7c; 32]),
+                blob_id: ObjectId::from_bytes([0x7d; 32]),
+                mode: 0o100_644,
+            }),
+        }],
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+    }
+}
+
+const RFC114_PATCH_SCHEMA2_KEY_ID: &str = "rfc114-patch-schema2-author";
+const RFC114_PATCH_SCHEMA2_AUTHOR_SEED: [u8; 32] = [0x7e; 32];
+
+const RFC114_PATCH_SCHEMA2_PUBLIC_KEY: [u8; 32] = [
+    0x51, 0xbf, 0xae, 0x7f, 0xa9, 0x2c, 0x51, 0x55, 0x12, 0xcd, 0x3a, 0xd4, 0x42, 0x76, 0x0e, 0x41,
+    0x61, 0x2e, 0x59, 0xdf, 0xec, 0x39, 0x13, 0xf6, 0x70, 0xb7, 0x21, 0xc0, 0x42, 0x55, 0xb0, 0x68,
+];
+
+const RFC114_PATCH_SCHEMA2_SIGNATURE: [u8; 64] = [
+    0x1b, 0xf8, 0xf2, 0x5d, 0x59, 0xb3, 0xd4, 0x98, 0xcd, 0xd2, 0x58, 0xbd, 0xa1, 0x37, 0x1d, 0xcd,
+    0x40, 0xd4, 0xd6, 0xb4, 0x70, 0xe0, 0xf8, 0xce, 0x53, 0xa0, 0xcd, 0xf9, 0xa5, 0x75, 0xbe, 0x17,
+    0xc5, 0xc8, 0xb3, 0x52, 0x5b, 0x23, 0x09, 0xfa, 0xb8, 0x40, 0x90, 0x1f, 0x14, 0x79, 0xb2, 0x7b,
+    0x5e, 0x76, 0xfe, 0x99, 0xcd, 0xd8, 0xb2, 0xfd, 0x80, 0xf8, 0x92, 0x26, 0x5c, 0x7f, 0xac, 0x0e,
+];
+
+#[test]
+fn rfc114_vector_14_patch_schema_2_identity_and_signature() -> prikk_error::Result<()> {
+    let canonical = rfc114_patch_schema2_payload().to_canonical_bytes()?;
+    assert_eq!(
+        prikk_hash::to_hex(&canonical),
+        "00012100000000000000a2000103000000000000000400000001000a20000000000000008800011300000000000000187266633131342d70617463682d736368656d61322e74787400021100000000000000207c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c00031200000000000000207d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d0004030000000000000004000081a4"
+    );
+    let id = ObjectId::from_canonical_payload(
+        ObjectType::Patch,
+        prikk_object::PATCH_PARENT_IDS_RETIRED_SCHEMA,
+        &canonical,
+    );
+    assert_eq!(
+        id.to_string(),
+        "a454c4eb4bdc3acd8b4518e44031130c4b86e8f05cb0484f39c21d31df251b44"
+    );
+    let preimage = Signature::signed_bytes(
+        SignatureAlgorithm::Ed25519,
+        ObjectType::Patch,
+        id,
+        SignerRole::Author,
+        RFC114_PATCH_SCHEMA2_KEY_ID,
+    )?;
+    assert_eq!(
+        prikk_hash::to_hex(&preimage),
+        "7072696b6b2e7369672e763100010001a454c4eb4bdc3acd8b4518e44031130c4b86e8f05cb0484f39c21d31df251b440001001b7266633131342d70617463682d736368656d61322d617574686f72"
+    );
+    assert_eq!(
+        Ed25519KeyPair::from_seed(&RFC114_PATCH_SCHEMA2_AUTHOR_SEED).public_key_bytes(),
+        RFC114_PATCH_SCHEMA2_PUBLIC_KEY
+    );
+    assert_eq!(
+        Ed25519KeyPair::from_seed(&RFC114_PATCH_SCHEMA2_AUTHOR_SEED).sign(&preimage),
+        RFC114_PATCH_SCHEMA2_SIGNATURE
+    );
+    verify_ed25519(
+        &RFC114_PATCH_SCHEMA2_PUBLIC_KEY,
+        &preimage,
+        &RFC114_PATCH_SCHEMA2_SIGNATURE,
+    )
 }
 
 /// RFC 115 Stage 2 §7 row 2: a signature over a `RecognitionClaim` cannot be presented as a

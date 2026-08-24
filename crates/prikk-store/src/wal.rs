@@ -147,9 +147,13 @@ impl Wal {
             ));
         }
         envelope.validate_strict()?;
-        if envelope.schema_version != 1 {
+        // Patch schema 2 handoff v2 amendment §2: read the authoritative admitted-schema table
+        // `format.rs::validate_format2_schema` owns, rather than a second, hand-maintained `!= 1`
+        // check -- the same reasoning `lifecycle_cache::replay::read_patch_operations` applies.
+        let accepted = crate::format::admitted_schemas(ObjectType::Patch).unwrap_or(&[]);
+        if !accepted.contains(&envelope.schema_version) {
             return Err(PrikkError::Integrity(format!(
-                "format-2 Patch requires envelope schema 1, got {}",
+                "format-2 Patch does not accept envelope schema {} (accepted: {accepted:?})",
                 envelope.schema_version
             )));
         }

@@ -202,7 +202,6 @@ pub(crate) fn patch_operations_populated_payload() -> Vec<u8> {
                 mode: 0o100_644,
             }),
         }],
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: crate::PatchPurpose::Normal,

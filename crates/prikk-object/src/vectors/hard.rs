@@ -232,7 +232,6 @@ fn rollback_draft_patch_purpose_vector_is_stable() {
                 mode: 0o100_644,
             }),
         }],
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: crate::PatchPurpose::RollbackDraft,

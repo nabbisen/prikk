@@ -10,8 +10,8 @@ use std::collections::BTreeMap;
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
     CanonicalEncode, ChangePerm, CreateFile, DeleteNode, DeleteNodePreimage, NodeId, NodeKind,
-    ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind, PatchPayload, PatchPurpose,
-    ReplaceBinary,
+    ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind,
+    PATCH_PARENT_IDS_RETIRED_SCHEMA, PatchPayload, PatchPurpose, ReplaceBinary,
 };
 
 use crate::layout::RepositoryLayout;
@@ -119,7 +119,8 @@ pub fn prepare_patch_inverse_plan(
         }
         for patch_id in block.patch_ids {
             let patch = read_patch(&object_store, patch_id)?;
-            let operations = decode_patch_operations(&patch.canonical_payload)?;
+            let operations =
+                decode_patch_operations(&patch.canonical_payload, patch.schema_version)?;
             for operation in operations {
                 let inverse = derive_inverse_operation(
                     &object_store,
@@ -139,14 +140,17 @@ pub fn prepare_patch_inverse_plan(
     let summaries = summarize_operations(&inverse_operations);
     let inverse_payload = PatchPayload {
         operations: inverse_operations,
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
     };
     let inverse_payload_bytes = inverse_payload.to_canonical_bytes()?;
-    let inverse_patch_id_hint =
-        ObjectEnvelope::unsigned(ObjectType::Patch, 1, inverse_payload_bytes).object_id();
+    let inverse_patch_id_hint = ObjectEnvelope::unsigned(
+        ObjectType::Patch,
+        PATCH_PARENT_IDS_RETIRED_SCHEMA,
+        inverse_payload_bytes,
+    )
+    .object_id();
 
     Ok(PatchInversePlan {
         ref_name: ref_name.to_string(),

@@ -177,7 +177,8 @@ pub(crate) fn replay_supported_patch_chain(
         }
         for patch_id in block.patch_ids {
             let patch = read_patch(&object_store, patch_id)?;
-            let operations = decode_patch_operations(&patch.canonical_payload)?;
+            let operations =
+                decode_patch_operations(&patch.canonical_payload, patch.schema_version)?;
             for operation in operations {
                 apply_decoded_operation(
                     &object_store,

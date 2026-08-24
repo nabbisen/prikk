@@ -163,7 +163,6 @@ fn write_patch(layout: &RepositoryLayout, operations: Vec<Operation>) -> TestRes
     let mut store = FileObjectStore::new(layout.clone());
     let patch = PatchPayload {
         operations,
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,

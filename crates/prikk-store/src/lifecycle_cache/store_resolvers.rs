@@ -39,10 +39,18 @@ impl<'a, R: ObjectReader> StoreBackedResolver<'a, R> {
     }
 
     fn validate_blob_schema(&self, schema_version: u32) -> Result<()> {
-        if self.require_schema_one && schema_version != 1 {
-            return Err(PrikkError::Integrity(format!(
-                "format-2 Blob requires envelope schema 1, got {schema_version}"
-            )));
+        // Patch schema 2 handoff v2 amendment §2: read the same authoritative admitted-schema
+        // table `format.rs::validate_format2_schema` owns, rather than a second, hand-maintained
+        // `!= 1` check. `Blob` is admitted at `&[1]` only (unaffected by the Patch schema this
+        // amendment introduces), so this generalization leaves `Blob`'s own behaviour
+        // byte-identical while making it correct-by-construction against the one real table.
+        if self.require_schema_one {
+            let accepted = crate::format::admitted_schemas(ObjectType::Blob).unwrap_or(&[]);
+            if !accepted.contains(&schema_version) {
+                return Err(PrikkError::Integrity(format!(
+                    "format-2 Blob does not accept envelope schema {schema_version} (accepted: {accepted:?})"
+                )));
+            }
         }
         Ok(())
     }

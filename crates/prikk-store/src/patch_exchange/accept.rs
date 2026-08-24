@@ -174,6 +174,13 @@ pub fn accept_exchange_artifact(
     // be present -- in the artifact or already in this repository. `parent_patch_ids` is always
     // empty today; check it anyway and refuse if it is ever non-empty, because the day it stops
     // being empty this is the code that must not silently ignore it.
+    //
+    // Deliberately schema-blind, and deliberately runs before `decode_patch_operations` below --
+    // Patch schema 2 handoff v2 amendment §3: this shadows `decode_patch_operations`'s own
+    // schema-2-and-above refusal of a present tag 2, for both schemas, since it refuses a non-empty
+    // value at *any* schema, including schema 1 where the field is legal-but-must-be-empty. It is
+    // broader, not redundant -- do not remove it as a "simplification", and do not reorder these two
+    // checks.
     let read_snapshot = ObjectReadSnapshot::open(layout)?;
     let artifact_blob_ids: BTreeSet<ObjectId> = decoded
         .blobs
@@ -190,7 +197,9 @@ pub fn accept_exchange_artifact(
                 envelope.object_id()
             )));
         }
-        for operation in decode_patch_operations(&envelope.canonical_payload)? {
+        for operation in
+            decode_patch_operations(&envelope.canonical_payload, envelope.schema_version)?
+        {
             for blob_id in referenced_blob_ids(&operation.kind) {
                 if !artifact_blob_ids.contains(&blob_id)
                     && !read_snapshot.contains_object(ObjectType::Blob, blob_id)

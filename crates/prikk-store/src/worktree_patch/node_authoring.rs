@@ -22,7 +22,7 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::{
     BlobKind, BlobPayload, CanonicalEncode, ChangePerm, CreateFile, DeleteNode, DeleteNodePreimage,
     EditText, NodeId, NodeKind, ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind,
-    PatchPayload, PatchPurpose, ReplaceBinary,
+    PATCH_PARENT_IDS_RETIRED_SCHEMA, PatchPayload, PatchPurpose, ReplaceBinary,
 };
 
 use crate::active::{prepare_empty_active_ref_for_append, require_active_ref_for_non_empty_wal};
@@ -564,7 +564,6 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     let operation_count = operations.len();
     let patch_payload = PatchPayload {
         operations,
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
@@ -572,7 +571,7 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     patch_payload.validate().map_err(AuthorError::Store)?;
     let mut patch = ObjectEnvelope::unsigned(
         ObjectType::Patch,
-        1,
+        PATCH_PARENT_IDS_RETIRED_SCHEMA,
         patch_payload
             .to_canonical_bytes()
             .map_err(AuthorError::Store)?,

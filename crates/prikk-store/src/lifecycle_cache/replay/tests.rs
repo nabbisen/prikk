@@ -114,7 +114,6 @@ impl MockReader {
             .collect();
         let payload = PatchPayload {
             operations,
-            parent_patch_ids: Vec::new(),
             intent: None,
             preconditions: Vec::new(),
             purpose: prikk_object::PatchPurpose::Normal,

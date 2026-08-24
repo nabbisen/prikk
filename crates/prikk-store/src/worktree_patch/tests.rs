@@ -78,7 +78,6 @@ fn publish_node_baseline(layout: &RepositoryLayout, files: &[(&str, &[u8], BlobK
 
     let patch = PatchPayload {
         operations,
-        parent_patch_ids: Vec::new(),
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
@@ -885,6 +884,7 @@ fn same_session_creates_get_distinct_node_ids_in_canonical_order() {
     let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
     let ops = crate::patch_replay::decode::decode_patch_operations(
         &replay.records[0].envelope.canonical_payload,
+        replay.records[0].envelope.schema_version,
     )
     .unwrap();
     let mut node_ids = Vec::new();
@@ -1042,6 +1042,7 @@ fn authored_edit_text_locates_and_splices_arbitrary_span_through_shared_text_spa
     let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
     let ops = crate::patch_replay::decode::decode_patch_operations(
         &replay.records[0].envelope.canonical_payload,
+        replay.records[0].envelope.schema_version,
     )
     .unwrap();
     let edit = ops
@@ -1115,6 +1116,7 @@ fn authored_edit_text_widens_subcharacter_utf8_span() {
     let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
     let ops = crate::patch_replay::decode::decode_patch_operations(
         &replay.records[0].envelope.canonical_payload,
+        replay.records[0].envelope.schema_version,
     )
     .unwrap();
     let edit = ops
@@ -1138,6 +1140,7 @@ fn created_file_modes(layout: &RepositoryLayout) -> Vec<(String, u32)> {
     let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
     let ops = crate::patch_replay::decode::decode_patch_operations(
         &replay.records[0].envelope.canonical_payload,
+        replay.records[0].envelope.schema_version,
     )
     .unwrap();
     let mut out = Vec::new();
@@ -1240,6 +1243,7 @@ fn mixed_operations_follow_canonical_op_seq_order() {
     let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
     let ops = crate::patch_replay::decode::decode_patch_operations(
         &replay.records[0].envelope.canonical_payload,
+        replay.records[0].envelope.schema_version,
     )
     .unwrap();
     use crate::patch_replay::decode::DecodedOperationKind;
@@ -1267,6 +1271,7 @@ fn change_perm_modes(layout: &RepositoryLayout) -> Vec<(u32, u32)> {
     let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
     let ops = crate::patch_replay::decode::decode_patch_operations(
         &replay.records[0].envelope.canonical_payload,
+        replay.records[0].envelope.schema_version,
     )
     .unwrap();
     let mut out = Vec::new();
@@ -1342,6 +1347,7 @@ fn content_and_mode_change_orders_change_perm_before_edit_text() {
     let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
     let ops = crate::patch_replay::decode::decode_patch_operations(
         &replay.records[0].envelope.canonical_payload,
+        replay.records[0].envelope.schema_version,
     )
     .unwrap();
     use crate::patch_replay::decode::DecodedOperationKind;
@@ -1396,6 +1402,7 @@ fn mixed_operations_with_change_perm_follow_canonical_order() {
     let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
     let ops = crate::patch_replay::decode::decode_patch_operations(
         &replay.records[0].envelope.canonical_payload,
+        replay.records[0].envelope.schema_version,
     )
     .unwrap();
     use crate::patch_replay::decode::DecodedOperationKind;
@@ -1448,6 +1455,7 @@ fn content_and_mode_change_orders_change_perm_before_replace_binary() {
     let replay = Wal::new(layout.default_queue_wal_path()).replay().unwrap();
     let ops = crate::patch_replay::decode::decode_patch_operations(
         &replay.records[0].envelope.canonical_payload,
+        replay.records[0].envelope.schema_version,
     )
     .unwrap();
     use crate::patch_replay::decode::DecodedOperationKind;
