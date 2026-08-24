@@ -384,17 +384,28 @@ fn all_object_types_is_exhaustive() {
 }
 
 /// RFC 114 §3's completeness self-guard: call the *real* `validate_format2_schema` -- not a copy
-/// of its logic -- for every `(object_type, schema_version)` pair across a generous schema-version
-/// sweep, and assert every pair it admits is either frozen with an identity vector above or
-/// declared deliberately unwritten in `RFC114_ADMITTED_BUT_UNWRITTEN`. This is the guard that
-/// fails the day something starts writing `Attestation` (or any newly-admitted pair) without a
-/// vector following it in the same change.
+/// of its logic -- for every `(object_type, schema_version)` pair across a schema-version sweep,
+/// and assert every pair it admits is either frozen with an identity vector above or declared
+/// deliberately unwritten in `RFC114_ADMITTED_BUT_UNWRITTEN`. This is the guard that fails the day
+/// something starts writing `Attestation` (or any newly-admitted pair) without a vector following
+/// it in the same change.
 ///
 /// **Pair-granular by construction** (gate-a-pair-granularity handoff v1, `8c31a78`'s own review):
 /// both `frozen` and `RFC114_ADMITTED_BUT_UNWRITTEN` are `(ObjectType, u32)` lists and the
 /// assertion below checks membership of the whole pair, not just `object_type` -- so a second
 /// admitted schema on an already-declared type (as `RefState` and `Patch` both now are) is
 /// checked independently of its type's first schema, rather than riding along for free on it.
+///
+/// **Sweep bound derived, not hardcoded** (gate-a-sweep-bound handoff v1): the upper bound is
+/// `SWEEP_MARGIN_ABOVE_HIGHEST_ADMITTED` schema versions above whatever `admitted_schemas` reports
+/// as the highest schema any type actually admits today, so the guard's real coverage grows
+/// automatically the day a third schema is admitted on any type, instead of silently stopping at a
+/// number picked for today's schemas. This reads `admitted_schemas` only to size the *probe range*
+/// -- the completeness predicate itself (`frozen`/`RFC114_ADMITTED_BUT_UNWRITTEN` membership) stays
+/// hand-maintained and independent, so this is not the "guard derived from the thing it guards"
+/// trap `f1528b8` already caught once.
+const SWEEP_MARGIN_ABOVE_HIGHEST_ADMITTED: u32 = 4;
+
 #[test]
 fn rfc114_gate_a_every_admitted_pair_is_frozen_or_declared_unwritten() {
     let frozen: &[(ObjectType, u32)] = &[
@@ -411,8 +422,15 @@ fn rfc114_gate_a_every_admitted_pair_is_frozen_or_declared_unwritten() {
         (ObjectType::Blob, 1),
         (ObjectType::RecognitionClaim, 1),
     ];
+    let highest_admitted = ALL_OBJECT_TYPES
+        .iter()
+        .filter_map(|&object_type| crate::format::admitted_schemas(object_type))
+        .flat_map(|schemas| schemas.iter().copied())
+        .max()
+        .unwrap_or(0);
+    let sweep_upper_bound = highest_admitted + SWEEP_MARGIN_ABOVE_HIGHEST_ADMITTED;
     for &object_type in ALL_OBJECT_TYPES {
-        for schema_version in 0u32..=8 {
+        for schema_version in 0..=sweep_upper_bound {
             let envelope = ObjectEnvelope::unsigned(object_type, schema_version, Vec::new());
             if crate::format::validate_format2_schema(&envelope).is_ok() {
                 let pair = (object_type, schema_version);
