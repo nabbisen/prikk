@@ -225,3 +225,6 @@ pub(crate) const COMMANDS: &[Command] = &[
 pub(crate) fn find(name: &str) -> Option<&'static Command> {
     COMMANDS.iter().find(|command| command.name == name)
 }
+
+#[cfg(test)]
+mod tests;
