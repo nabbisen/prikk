@@ -2,7 +2,7 @@
 
 This file schedules the corrective program opened after the independent architecture review of the
 released 0.17.7 tree. `ROADMAP.md` remains the concise project backlog, individual RFCs own design, and
-`rfcs/IMPLEMENTATION-STATUS.md` remains the current implementation snapshot.
+`rfcs/IMPLEMENTATION-STATUS.md` is **retired** — it drifted to a 0.17.7-era snapshot and is no longer maintained; `CHANGELOG.md` carries release history and this file carries criterion state.
 
 **Authority.** This file is the project **schedule**: release posture, release-lane state, attached
 release conditions, and milestone definitions. It is **owner-retained** — major milestones,
@@ -28,7 +28,31 @@ gate does not itself activate signer bootstrap, a hold, RC preparation, tagging,
 When release preparation is activated, all gates for that target remain binding and release assets must
 be current before publication. Accepted RFCs are not individually treated as release readiness.
 
-### Durable release-lane transition
+### Durable release-lane transition — **official-release regime only**
+
+**Scope, recorded 2026-08-24 after the owner's ruling.** Everything in this subsection governs the
+**official-release regime**, which prikk has **not entered**: criterion 4's signer bootstrap is open by
+the owner's deliberate ruling, `release-signers.toml` authorizes nobody, and
+`release-compatibility.md` states that the empty array **blocks official release**. Every prikk release
+to date is unofficial and says so in its own notes.
+
+**It is a future plan, not current practice — and it must not be read as describing how releases are
+cut today.**
+
+#### The procedure actually in force
+
+**Ruled by the owner 2026-08-23 and recorded here 2026-08-24:** release-cut scheduling is the
+architect's role. **The architect proposes a cut with a readiness assessment; the owner reviews and
+authorizes; the architect executes** — dates the `CHANGELOG` entry, runs the gate set, waits for CI
+green, creates the **signed annotated tag**, pushes it, and publishes to crates.io in topological order.
+
+**`0.23.0` was cut this way and did not perform the three-authority transition below.** Recording that
+plainly: the lane fields in `ROADMAP.md` and `rfcs/IMPLEMENTATION-STATUS.md` still read `parked`, and
+the transition was maintained through `0.22.1` (`a34139b`). **The lightweight procedure superseded it in
+practice on 2026-08-23 without being written down, and this subsection is that correction.** The
+heavyweight transition below becomes binding again if and when the official-release regime is entered.
+
+#### The transition itself (for that future regime)
 
 Release activation is an atomic reviewed planning/status commit, not a conversational instruction. That
 commit must update all three durable authorities with the same values:
