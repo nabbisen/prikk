@@ -32,7 +32,7 @@ use crate::maintainer_signing::{MaintainerSigner, maintainer_signature};
 use crate::object_store::{ObjectReadSnapshot, ObjectReader, ObjectWriteSession, ObjectWriter};
 use crate::patch_set_digest::{PatchSetDigest, PatchSetResolution, resolve_patch_set_digest};
 use crate::refs::{RefPublication, RefStore, validate_local_tag_ref};
-use crate::trust::{MaintainerTrustPolicy, verify_signer_trusted};
+use crate::trust::{GatedOperation, MaintainerTrustPolicy, verify_signer_trusted};
 
 /// The outcome of checking one received `Tag` object's own MAINTAINER signature. Shaped identically
 /// to `ClaimSignatureVerification` and for the same reason (design T6 point 3, T3): **never gating**.
@@ -418,7 +418,7 @@ pub fn adopt_tag(
         PatchSetResolution::Resolved(block_id) => block_id,
     };
 
-    verify_signer_trusted(layout, signer)?;
+    verify_signer_trusted(layout, signer, GatedOperation::SyncAdoptTag)?;
 
     let mut write_session = ObjectWriteSession::open(layout)?;
     create_local_tag(

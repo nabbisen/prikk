@@ -19,7 +19,7 @@
 use prikk_crypto::Ed25519KeyPair;
 
 use crate::{
-    RepositoryLayout, acquire_container_locks, add_trusted_maintainer,
+    GatedOperation, RepositoryLayout, acquire_container_locks, add_trusted_maintainer,
     load_maintainer_trust_policy, remove_trusted_maintainer, verify_signer_trusted,
 };
 
@@ -119,10 +119,10 @@ fn adopting_a_second_key_id_keeps_the_first_trusted() {
         }
         // Both remain independently verifiable through the signer-trust path.
         if let Ok(alice) = Ed25519MaintainerSigner::from_seed("alice", &[1_u8; 32]) {
-            assert!(verify_signer_trusted(&layout, &alice).is_ok());
+            assert!(verify_signer_trusted(&layout, &alice, GatedOperation::Seal).is_ok());
         }
         if let Ok(bob) = Ed25519MaintainerSigner::from_seed("bob", &[2_u8; 32]) {
-            assert!(verify_signer_trusted(&layout, &bob).is_ok());
+            assert!(verify_signer_trusted(&layout, &bob, GatedOperation::Seal).is_ok());
         }
     }
     let _ = std::fs::remove_dir_all(root);
@@ -237,7 +237,7 @@ fn signer_trust_binding_rejects_seed_public_key_mismatch() {
             Ok(signer) => signer,
             Err(error) => panic!("test maintainer signer should be constructible: {error}"),
         };
-        assert!(verify_signer_trusted(&layout, &signer).is_err());
+        assert!(verify_signer_trusted(&layout, &signer, GatedOperation::Seal).is_err());
     }
     let _ = std::fs::remove_dir_all(root);
 }
@@ -421,9 +421,9 @@ fn remove_revokes_a_key_without_disturbing_others() -> prikk_error::Result<()> {
     assert_eq!(loaded.keys[0].key_id, "bob");
 
     let alice_signer = Ed25519MaintainerSigner::from_seed("alice", &[1_u8; 32])?;
-    assert!(verify_signer_trusted(&layout, &alice_signer).is_err());
+    assert!(verify_signer_trusted(&layout, &alice_signer, GatedOperation::Seal).is_err());
     let bob_signer = Ed25519MaintainerSigner::from_seed("bob", &[2_u8; 32])?;
-    assert!(verify_signer_trusted(&layout, &bob_signer).is_ok());
+    assert!(verify_signer_trusted(&layout, &bob_signer, GatedOperation::Seal).is_ok());
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

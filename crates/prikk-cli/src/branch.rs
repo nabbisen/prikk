@@ -38,9 +38,9 @@ use prikk_object::{
     RefUpdatePayload,
 };
 use prikk_store::{
-    DEFAULT_CHECKOUT_REF, FileObjectStore, MaintainerSigner, ObjectReader, ObjectWriteSession,
-    RefPublication, RefStore, Wal, maintainer_signature, require_active_ref_for_non_empty_wal,
-    validate_local_branch_ref, verify_signer_trusted,
+    DEFAULT_CHECKOUT_REF, FileObjectStore, GatedOperation, MaintainerSigner, ObjectReader,
+    ObjectWriteSession, RefPublication, RefStore, Wal, maintainer_signature,
+    require_active_ref_for_non_empty_wal, validate_local_branch_ref, verify_signer_trusted,
 };
 
 /// Envelope schema version for a `RefState` carrying no `closed` field (every ordinary
@@ -163,7 +163,8 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
     let signer = crate::maintainer_signer_from_env()?;
     // DC-11/DC-63 §4: publishing a maintainer-signed object is gated on the same terms as `seal`,
     // reused verbatim, before any object or ref write.
-    verify_signer_trusted(&layout, &signer).map_err(|err| err.to_string())?;
+    verify_signer_trusted(&layout, &signer, GatedOperation::BranchCreate)
+        .map_err(|err| err.to_string())?;
     let ref_state_payload = RefStatePayload {
         ref_name: canonical.clone(),
         kind: RefKind::Branch,
@@ -293,7 +294,8 @@ fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
     let signer = crate::maintainer_signer_from_env()?;
     // DC-11/DC-63 §4: publishing a maintainer-signed object is gated on the same terms as `seal`,
     // reused verbatim, before any object or ref write.
-    verify_signer_trusted(&layout, &signer).map_err(|err| err.to_string())?;
+    verify_signer_trusted(&layout, &signer, GatedOperation::BranchClose)
+        .map_err(|err| err.to_string())?;
     let ref_state_payload = RefStatePayload {
         ref_name: canonical.clone(),
         kind: current_payload.kind,

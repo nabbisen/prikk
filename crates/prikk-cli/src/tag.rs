@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 use prikk_object::{ObjectId, ObjectType, RefKind, RefStatePayload, TagPayload};
 use prikk_store::{
-    FileObjectStore, ObjectReader, ObjectWriteSession, RefStore,
+    FileObjectStore, GatedOperation, ObjectReader, ObjectWriteSession, RefStore,
     compute_patch_set_digest_and_count_from_block, create_local_tag, validate_local_tag_ref,
     verify_signer_trusted,
 };
@@ -101,7 +101,8 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
     let signer = crate::maintainer_signer_from_env()?;
     // DC-11/DC-63 §4: tag signing is on the same terms as `seal`, which includes this gate --
     // reused verbatim, before any object or ref write.
-    verify_signer_trusted(&layout, &signer).map_err(|err| err.to_string())?;
+    verify_signer_trusted(&layout, &signer, GatedOperation::TagCreate)
+        .map_err(|err| err.to_string())?;
     // RFC 117 stage 3 §4: the ordinary tag-creation path, shared with `sync adopt-tag`
     // (`tag_travel::adopt_tag`) rather than each carrying its own copy of the write+publish shape.
     let created = create_local_tag(

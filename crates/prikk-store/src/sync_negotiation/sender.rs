@@ -54,7 +54,7 @@ use crate::merge_evidence::ancestors_inclusive;
 use crate::object_store::{ObjectReadSnapshot, ObjectReader, ObjectWriteSession, ObjectWriter};
 use crate::patch_exchange::{ExchangeExportReport, export_exchange_artifact};
 use crate::refs::{RefStore, validate_local_branch_ref};
-use crate::trust::verify_signer_trusted;
+use crate::trust::{GatedOperation, verify_signer_trusted};
 
 use super::have_list::{
     DEFAULT_HAVE_LIST_MAX_PATCH_COUNT, DEFAULT_HAVE_LIST_MAX_TOTAL_BYTES, decode_have_list,
@@ -198,7 +198,7 @@ pub fn build_sync_artifact(
     // no-op return above and before any claim is built -- the no-op path performs no signing act,
     // so it needs no trust check, the same ordering Stage 4's `AlreadySealed` path already
     // established.
-    verify_signer_trusted(layout, signer)?;
+    verify_signer_trusted(layout, signer, GatedOperation::SyncBuild)?;
 
     let delta_set: BTreeSet<ObjectId> = delta_patch_ids.iter().copied().collect();
     let mut qualifying_block_ids: Vec<ObjectId> = ancestors

@@ -92,6 +92,8 @@ mod rfc111_seal_decode_cost_gate;
 mod signature_contract_tests;
 #[cfg(test)]
 mod test_support;
+#[cfg(test)]
+mod trust_gated_operations_binding_gate;
 
 pub use active::{
     ActiveCommitResult, ActiveRefMetadata, ActiveSession, finish_active_publication_cleanup,
@@ -200,9 +202,9 @@ pub use tag_travel::{
     adopt_tag, create_local_tag, list_received_tags, received_tag_ids,
 };
 pub use trust::{
-    AdoptedMaintainerKey, MaintainerTrustPolicy, PublicationTrustIssue, add_trusted_maintainer,
-    load_maintainer_trust_policy, remove_trusted_maintainer, verify_signer_trusted,
-    verify_trusted_publication_envelope,
+    AdoptedMaintainerKey, GatedOperation, MaintainerTrustPolicy, PublicationTrustIssue,
+    add_trusted_maintainer, load_maintainer_trust_policy, remove_trusted_maintainer,
+    verify_signer_trusted, verify_trusted_publication_envelope,
 };
 pub use unlock::{HeldLock, PidLiveness, clear_lock, find_held_lock, list_held_locks};
 pub use verify::{

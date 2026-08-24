@@ -229,10 +229,47 @@ pub fn load_maintainer_trust_policy(layout: &RepositoryLayout) -> Result<Maintai
     Ok(MaintainerTrustPolicy { keys })
 }
 
+/// RFC 118 stage 3: the declared set of operations that gate on [`verify_signer_trusted`] -- one
+/// variant per distinct publishing act, not one per call site (`Seal` covers both `seal.rs` call
+/// sites: the ordinary path and the signer-backed recovery path for an already-matching WAL, since
+/// both publish the same class of object under the same terms, just entering from a different
+/// precondition). This is the single source `trust-threat-model.md`'s gated-operation list derives
+/// from (`trust_gated_operations_binding_gate.rs`) -- adding a variant here without naming it in
+/// that page fails the binding gate, and naming an operation in the page that has no variant here
+/// fails it the other way. **This enum states which operations gate; it does not, and cannot, state
+/// that every operation which *ought* to gate does** -- see the page's own note on that distinction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GatedOperation {
+    /// `prikk seal` (`crates/prikk-cli/src/seal.rs`), both the ordinary and signer-backed-recovery
+    /// paths.
+    Seal,
+    /// `prikk merge` (`crates/prikk-store/src/merge_execute.rs::execute_merge`).
+    Merge,
+    /// `prikk sync build` (`crates/prikk-store/src/sync_negotiation/sender.rs::build_sync_artifact`).
+    SyncBuild,
+    /// `prikk sync seal` (`crates/prikk-store/src/seal_from_accepted.rs::seal_from_accepted_claim`).
+    SyncSeal,
+    /// `prikk sync adopt-tag` (`crates/prikk-store/src/tag_travel.rs::adopt_tag`).
+    SyncAdoptTag,
+    /// `prikk tag create` (`crates/prikk-cli/src/tag.rs`).
+    TagCreate,
+    /// `prikk branch create` (`crates/prikk-cli/src/branch.rs::run_create`).
+    BranchCreate,
+    /// `prikk branch close` (`crates/prikk-cli/src/branch.rs::run_close`).
+    BranchClose,
+}
+
 /// Verify that the signer matches one of the repository-local trust policy's adopted keys.
+///
+/// `operation` is accepted, not read: every call site must name which operation it is performing
+/// (RFC 118 stage 3 §3), which the compiler enforces since the parameter is required, but this
+/// stage does not change any refusal message (out of scope, §5) -- an operation-aware message
+/// (e.g. "tag create refused: signer not trusted") is a real, separate improvement, reported as a
+/// follow-up rather than built here.
 pub fn verify_signer_trusted(
     layout: &RepositoryLayout,
     signer: &impl MaintainerSigner,
+    _operation: GatedOperation,
 ) -> Result<MaintainerTrustPolicy> {
     let policy = load_maintainer_trust_policy(layout)?;
     let Some(matched) = policy.find(signer.key_id()) else {

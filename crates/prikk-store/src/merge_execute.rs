@@ -26,9 +26,9 @@ use crate::merge_evidence::{
 };
 use crate::received::validate_received_ref;
 use crate::{
-    MaintainerSigner, ObjectReader, ObjectWriteSession, ObjectWriter, RefPublication, RefStore,
-    RepositoryLayout, derive_next_state_root, maintainer_signature, validate_local_branch_ref,
-    verify_signer_trusted,
+    GatedOperation, MaintainerSigner, ObjectReader, ObjectWriteSession, ObjectWriter,
+    RefPublication, RefStore, RepositoryLayout, derive_next_state_root, maintainer_signature,
+    validate_local_branch_ref, verify_signer_trusted,
 };
 
 /// Result of a completed merge execution.
@@ -115,7 +115,7 @@ pub fn execute_merge(
     }
 
     // Only proceeding to seal needs a trusted signer.
-    let policy = verify_signer_trusted(layout, signer)?;
+    let policy = verify_signer_trusted(layout, signer, GatedOperation::Merge)?;
 
     let mut object_store = ObjectWriteSession::open(layout)?;
 

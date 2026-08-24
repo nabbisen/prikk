@@ -73,12 +73,25 @@ Transport does not weaken the maintainer signature's own role in DC-78's exchang
 still relies on that signature for the decision to include imported patches at all; AUTHOR verification
 adds continuity of authorship on top of it, and does not replace it.
 
-MAINTAINER signatures identify publication objects. Seal uses real role-bound Ed25519 MAINTAINER
+MAINTAINER signatures identify publication objects. `seal` uses real role-bound Ed25519 MAINTAINER
 signatures for Block, RefState, and RefUpdate envelopes and verifies the signer against the local
 maintainer trust policy before publishing. The same gate — the local operator's own signer checked
-against the local trust policy before any object or ref write — applies to every other operation that
-publishes a MAINTAINER-signed object: `merge`, `sync build`, `sync seal`, `sync adopt-tag`, and, since
-`053e442`, `prikk tag create`, `prikk branch create`, and `prikk branch close`.
+against the local trust policy before any object or ref write — applies to every operation below
+(`prikk tag create`/`prikk branch create`/`prikk branch close` since commit `053e442`):
+
+<!-- rfc118-stage3-gated-operations:start -->
+`seal`, `merge`, `sync build`, `sync seal`, `sync adopt-tag`, `prikk tag create`,
+`prikk branch create`, `prikk branch close`.
+<!-- rfc118-stage3-gated-operations:end -->
+
+This list is derived, not transcribed: it names every `GatedOperation` variant `verify_signer_trusted`
+accepts (`crates/prikk-store/src/trust.rs`), and a test binds it bidirectionally against this page
+(RFC 118 stage 3) so it cannot silently drift. **That binding proves only that this page and the enum
+agree on which operations gate — not that every operation which *ought* to gate does.**
+`prikk tag create` itself published maintainer-signed objects for months before `053e442` added this
+exact check, and no enumeration of gated operations can catch an operation that is absent from it. That
+is a standing, unenumerable risk this list cannot close, and it is recorded as an open item, not implied
+away by the list's own precision.
 
 **Tag adoption is the receiver's own signed act (RFC 117 T4), never conjured from someone else's
 assertion.** `sync build`/`accept` can move a Tag object into the received namespace, but arrival is

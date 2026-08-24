@@ -11,8 +11,8 @@ use prikk_object::{
     RefUpdatePayload,
 };
 use prikk_store::{
-    ActiveLock, ActiveRefMetadata, MaintainerSigner, ObjectWriteSession, ObjectWriter,
-    RefPublication, RefStore, RepositoryLayout, Wal, derive_next_state_root,
+    ActiveLock, ActiveRefMetadata, GatedOperation, MaintainerSigner, ObjectWriteSession,
+    ObjectWriter, RefPublication, RefStore, RepositoryLayout, Wal, derive_next_state_root,
     finish_active_publication_cleanup, read_active_ref_metadata, remove_active_ref_metadata,
     validate_local_branch_ref, verify_signer_trusted,
 };
@@ -126,7 +126,8 @@ fn seal_active_no_audit(
     let wal_patch_ids = collect_wal_patch_ids(&replay.records)?;
     if let Some(current) = current.as_ref() {
         if current_tip_matches_wal_patches(&object_store, current, &wal_patch_ids)? {
-            verify_signer_trusted(&layout, signer).map_err(|err| err.to_string())?;
+            verify_signer_trusted(&layout, signer, GatedOperation::Seal)
+                .map_err(|err| err.to_string())?;
             finish_current_publication(
                 &ref_store,
                 &mut object_store,
@@ -148,7 +149,7 @@ fn seal_active_no_audit(
     layout
         .require_current_format()
         .map_err(|err| err.to_string())?;
-    verify_signer_trusted(&layout, signer).map_err(|err| err.to_string())?;
+    verify_signer_trusted(&layout, signer, GatedOperation::Seal).map_err(|err| err.to_string())?;
     let patch_ids = persist_wal_patches(&mut object_store, &replay.records)?;
     let parent = current.as_ref().map(|state| state.target_block_id);
     let state_merkle_root =
