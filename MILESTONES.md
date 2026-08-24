@@ -44,12 +44,30 @@ this file's proximity to DC-35 and criterion 4, and from `rfcs/IMPLEMENTATION-ST
 **without checking whether the transition had actually been performed.** `git log -S` over `ROADMAP.md`
 answers it in one command, and was not run until the owner asked whether this was a future plan.
 
-**Consequences, open and not settled here:**
-- **`0.23.0` skipped a live procedure**, not a dormant one.
-- **`rfcs/IMPLEMENTATION-STATUS.md` was retired while being one of three authorities of a live
-  procedure** — a heavier decision than it was presented as.
-- **Whether the owner's 2026-08-23 scheduling grant supersedes this transition is the owner's to rule**,
-  and until they do, **the transition below stands as written**.
+**OWNER RULING, 2026-08-24: the 2026-08-23 scheduling grant replaces this transition — "yes for now."**
+
+**The procedure in force** is therefore: the architect proposes a cut with a readiness assessment; the
+owner reviews and authorizes; the architect executes — dates the `CHANGELOG` entry, runs the gate set,
+waits for CI green, creates the **signed annotated tag**, pushes it, and publishes to crates.io in
+topological order.
+
+**"For now" is load-bearing.** The transition below is **superseded, not deleted**, and returns if the
+owner reinstates it — which is why it stays in this file with its lane-state fields intact rather than
+being cut. **`rfcs/IMPLEMENTATION-STATUS.md`'s retirement is consistent with this ruling**: a superseded
+procedure does not need three live authorities, and if the transition returns, this file and
+`ROADMAP.md` are enough to carry it.
+
+**`0.23.0` is conformant under this ruling.** It was cut by the procedure now in force, and the ruling is
+what makes that so — not the earlier, withdrawn "future plan" reading.
+
+**One obligation survives the ruling and is NOT discharged by it.** `DC-45`'s **five-file
+decommissioning** (`:449-453` below) is written as gating a *release-candidate increment* — a construct
+of the superseded transition — but its **substance is independent of the trigger**: five Python oracle
+files (`release/check-policy.py`, `release/observe-policy.py`, and the `release/policy_check/` modules)
+are still in the tree, and `DC-93`, the accepted successor, states that *"acceptance clears the
+investigation, not the deletion."* **The trigger no longer fires; the obligation is still open.** It
+needs its own ruling — discharge by doing the work, the owner-approved event-bound exception the text
+itself permits, or explicit retirement.
 
 #### The procedure actually in force
 
