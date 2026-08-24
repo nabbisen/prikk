@@ -1,4 +1,19 @@
-# Prikk Implementation Status
+# Prikk Implementation Status — **RETIRED 2026-08-24**
+
+> **This file no longer applies. Its jobs moved to three current documents:**
+> - **Release history** → `CHANGELOG.md`.
+> - **Criterion and schedule state** → `MILESTONES.md`.
+> - **Per-increment design state** → `rfcs/accepted/` and `rfcs/done/`.
+>
+> **Kept rather than deleted, because its record of which increments were accepted when is real
+> history**, and its own drift is the evidence for retiring it: this snapshot stopped at DC-63 and
+> version 0.17.7 while roughly twenty further increments and six releases landed without it ever being
+> updated. Owner-authorized 2026-08-24.
+>
+> **The body below is left exactly as it was at retirement — not corrected.** A retired document that
+> has been half-corrected is worse than one plainly marked as a snapshot of its time.
+
+---
 
 Latest released version: 0.17.7 (DC-33 - concurrency and locking reference)
 Current release candidate: none

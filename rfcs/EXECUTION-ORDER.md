@@ -3,9 +3,9 @@
 Single ordered view of all open work, for developers to follow in sequence.
 
 This file does not create authority. `MILESTONES.md` remains the schedule authority, `ROADMAP.md` the
-backlog narrative, `rfcs/IMPLEMENTATION-STATUS.md` the current-state snapshot, and each RFC its own scope
-authority. This file answers only one question the others do not: **what do I pick up next, and what is it
-waiting on?**
+backlog narrative, and each RFC its own scope authority. `rfcs/IMPLEMENTATION-STATUS.md` is retired (see
+its own banner); citations to it below are historical. This file answers only one question the others
+do not: **what do I pick up next, and what is it waiting on?**
 
 **Last reconciled: 2026-08-18.** Since the previous reconciliation the **Windows programme completed and
 shipped** — DC-87 (mutation), DC-96 (anchor identity), DC-97 (durability evidence), DC-98 (crash
