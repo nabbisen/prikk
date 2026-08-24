@@ -138,32 +138,6 @@ ergonomics feature.
 
 Depends on merge execution existing. Not scoped.
 
-### Patch aggregation — an original concept that is NOT in the requirements
-
-**Recorded 2026-08-04 at the owner's prompting. Finding: it appears nowhere in `specs/`.** Grepping the
-requirements, NFRs, external design, and roadmap for *aggregate*, *compose*, *squash* returns nothing. The
-only related material is DC-18's **sequence confluence** — a proof that two candidate sequences compose to
-the same authored result — which is a *property*, not a capability that emits a composed patch.
-
-**So an original design concept never reached the written requirements.** That is worth knowing
-independently of whether it gets built.
-
-**Intended workflow, as described by the owner:** after a branch's development completes, generate a
-**block-unit patch** — one patch representing the whole block's change.
-
-**The tension that must be resolved before designing it.** prikk's thesis is history that cannot lie by
-construction: every change signed by its author, every publication policy-gated. **Aggregation that
-discards the constituent patches destroys exactly that** — the aggregate would carry one signature where
-there were N, and the record of who authored what would be gone.
-
-**A defensible shape exists**: the aggregate is *derived*, the constituents are *retained*, and the
-aggregate is offered as a view or a transfer unit rather than as a replacement for history. `BlockPayload`
-already holds `patch_ids: Vec<ObjectId>`, so a block is already the natural aggregation boundary — which
-may mean much of this is presentation over existing structure rather than a new object.
-
-**Do not design it as squash.** If the answer turns out to require discarding constituents, that is a
-change to what prikk claims to be and belongs to the owner, not to an increment.
-
 ### Structured output for tooling — prerequisite for the M4 slice
 
 `prikk` has **no `--format json`** and no machine-readable output of any kind; every command prints prose
