@@ -157,9 +157,27 @@ it is where the architect's confidence is lowest — a suite-level verdict would
 **C — Build G1.** The largest gap: nothing compares a candidate's persisted-data contract against the
 released one. `0.23.0`'s break was declared by hand and detected by nothing.
 
-**Sequencing note, recorded against the architect's own bias:** the reconciliation flagged that G1 was
-designed for first and then placed at the centre. **Track C is not automatically first**, and the owner
-should decide the order rather than inherit that emphasis.
+**Recommended order: C, then A, then B.**
+
+**C first, because A and B remove *waste* and C prevents *harm*.** Parking and pruning save gate time
+and reduce apparatus size. **G1's absence lets a release silently make users' repositories
+unverifiable — which has already happened once, in `0.23.0`.** Optimising cost ahead of danger is the
+wrong order.
+
+**The one real argument against C-first was tested and dissolves.** It was: building G1 inside an
+apparatus about to be cut risks entrenching it in the wrong home. **But G1's home is not
+`release-policy`.** It is a gate in `prikk-store`, extending `format_stability_gate.rs` — which already
+guards *format version bumps* and states its own principle, *"the watcher does not live inside the thing
+it watches."* **`0.23.0` went through the hole beside it: an in-place payload amendment at the same
+schema version, which no format bump occurs for.** So B's cuts cannot strand C.
+
+**A second** — clearly decided, lowest risk, and it stops a cost paid on every commit.
+**B last** — it is where removals happen and where the architect's confidence is lowest.
+
+**On the architect's disclosed bias:** the reconciliation flagged that G1 was designed for first and then
+placed at the centre. **This recommendation rests on the counter-argument being tested and failing, not
+on that emphasis.** Had `format_stability_gate.rs` lived inside `release-policy`, the order would be
+B, A, C.
 
 ## 11. Non-goals restated
 
