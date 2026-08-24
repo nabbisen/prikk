@@ -19,6 +19,7 @@ use std::process::ExitCode;
 mod args;
 mod branch;
 mod bundle;
+mod commands;
 mod compact;
 mod merge;
 mod output;
@@ -83,30 +84,10 @@ fn run() -> std::result::Result<(), String> {
             println!("prikk {VERSION}");
             Ok(())
         }
-        Some("init") => run_init(args.next()),
-        Some("commit") => run_commit(args.collect()),
-        Some("seal") => run_seal(args.collect()),
-        Some("branch") => run_branch(args.collect()),
-        Some("bundle") => run_bundle(args.collect()),
-        Some("sync") => run_sync(args.collect()),
-        Some("tag") => run_tag(args.collect()),
-        Some("trust") => run_trust(args.collect()),
-        Some("status") => run_status(),
-        Some("log") => run_log(args.collect()),
-        Some("checkout") => run_checkout(args.collect()),
-        Some("merge-evidence") => run_merge_evidence(args.collect()),
-        Some("merge-plan") => run_merge_plan(args.collect()),
-        Some("merge") => run_merge(args.collect()),
-        Some("inverse-plan") => run_inverse_plan(args.collect()),
-        Some("rollback-preview") => run_rollback_preview(args.collect()),
-        Some("rollback-draft") => run_rollback_draft(args.collect()),
-        Some("rollback-draft-verify") => run_rollback_draft_verify(args.collect()),
-        Some("worktree-status") => run_worktree_status(args.collect()),
-        Some("verify") => run_verify(args.collect()),
-        Some("doctor") => run_doctor(args.collect()),
-        Some("unlock") => run_unlock(args.collect()),
-        Some("compact") => run_compact(args.collect()),
-        Some(other) => Err(format!("unknown command: {other}")),
+        Some(name) => match commands::find(name) {
+            Some(command) => (command.run)(args.collect()),
+            None => Err(format!("unknown command: {name}")),
+        },
     }
 }
 
