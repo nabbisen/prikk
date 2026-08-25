@@ -1,3 +1,5 @@
+mod msrv;
+
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -199,6 +201,7 @@ fn verify(root: &Path, inventory: &Inventory) -> Result<Vec<String>> {
             ));
         }
     }
+    msrv::check(root, &mut errors)?;
     errors.sort();
     Ok(errors)
 }

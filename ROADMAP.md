@@ -163,17 +163,6 @@ port, Windows a rewrite.
 cannot close by construction (no `openat` equivalent). 0.22.0 closed two others that stood through
 0.21.0 (`prikk unlock` process-liveness reporting, and the 128-bit anchor identifier).
 
-### MSRV policy — overdue, not pending: packaging has already happened
-
-Packaging is no longer a future event to write the policy before: crates.io publication and prebuilt
-binaries across four targets (`x86_64`/`aarch64` Linux, `aarch64-apple-darwin`,
-`x86_64-pc-windows-msvc`) both shipped. `rust-version = "1.85"` is the edition-2024 floor, so it cannot
-go lower, and it is declared. What is missing is the rule for when it may *rise*: nothing declares one.
-Proposed: **MSRV rises only when a dependency or language requirement forces it, never for convenience,
-and a rise is a minor-version event naming the requirement that forced it.** Dependency pressure
-(RustCrypto, `rustix`) will force it before "too old" does. Writing the policy itself is a separate
-increment.
-
 ## Corrective Program After 0.17.7
 
 The independent architecture review of 0.17.7 found a critical ref-publication interruption state and

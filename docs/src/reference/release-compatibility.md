@@ -163,6 +163,12 @@ cargo +1.85.0 test --workspace --locked
 cargo +1.85.0 build --workspace --locked
 ```
 
+**MSRV rise policy.** The floor above cannot go lower — it is the edition-2024 minimum — but it can
+rise. It rises only when a dependency or language requirement forces it, never for convenience, and a
+rise is a minor-version event: the release's `CHANGELOG.md` carries a `### Breaking change` entry
+naming the specific dependency or language feature that forced it. A rise whose cause is not recorded
+is indistinguishable from a rise for convenience, which this policy forbids.
+
 Current-stable quality gates are separate from minimum-version compatibility. In particular, strict
 Clippy runs on current stable because its lint set changes between compiler releases.
 

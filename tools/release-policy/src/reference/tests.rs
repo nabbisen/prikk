@@ -17,6 +17,30 @@ fn rust_command() -> String {
 // authority descriptor -- `differential-check` and the Python it invoked are gone, and
 // `PYTHON_PRIMARY` with them, so `RUST_PRIMARY` is the only descriptor left to build a fixture
 // around.
+/// Correctly-transcribed MSRV content for whichever of the six live sites (`msrv.rs`) also carries
+/// an invocation marker in this fixture -- appended after the marker line, since `msrv::check`
+/// (called unconditionally from `verify`) would otherwise report every site as missing.
+fn msrv_authority_fixture(temporary: &std::path::Path) {
+    fs::create_dir_all(temporary.join(".github/workflows")).unwrap();
+    fs::write(
+        temporary.join("Cargo.toml"),
+        "[workspace.package]\nrust-version = \"1.85\"\n",
+    )
+    .unwrap();
+    fs::write(
+        temporary.join(".github/workflows/ci.yml"),
+        "jobs:\n  msrv:\n    name: msrv-1.85.0\n    steps:\n      - uses: dtolnay/rust-toolchain@1.85.0\n",
+    )
+    .unwrap();
+    fs::write(
+        temporary.join("rfcs/EXECUTION-ORDER.md"),
+        "run `cargo +1.85.0 test --workspace --locked` for every candidate\n",
+    )
+    .unwrap();
+}
+
+const MSRV_PROSE_AND_COMMANDS: &str = "\ndeclares Rust 1.85 as its minimum supported version.\ndeclared minimum Rust version is exactly 1.85.0.\ncargo +1.85.0 check --workspace --all-targets --locked\ncargo +1.85.0 test --workspace --locked\ncargo +1.85.0 build --workspace --locked\n";
+
 fn fixture() -> (tempfile::TempDir, Inventory) {
     let temporary = tempfile::tempdir().unwrap();
     fs::create_dir_all(temporary.path().join("release")).unwrap();
@@ -25,6 +49,7 @@ fn fixture() -> (tempfile::TempDir, Inventory) {
     fs::create_dir_all(temporary.path().join("docs/src/reference")).unwrap();
     fs::create_dir_all(temporary.path().join("rfcs")).unwrap();
     fs::write(temporary.path().join("tools/release-policy/Cargo.toml"), "").unwrap();
+    msrv_authority_fixture(temporary.path());
     let path = "tools/release-policy/Cargo.toml";
     let command = rust_command();
     let mut references = Vec::new();
@@ -33,7 +58,12 @@ fn fixture() -> (tempfile::TempDir, Inventory) {
         "docs/src/reference/release-compatibility.md",
         "release/README.md",
     ] {
-        fs::write(temporary.path().join(path), &command).unwrap();
+        let content = if path == "release/README.md" {
+            command.clone()
+        } else {
+            format!("{command}{MSRV_PROSE_AND_COMMANDS}")
+        };
+        fs::write(temporary.path().join(path), content).unwrap();
         references.push(Reference {
             path: path.to_owned(),
             classification: Classification::LiveInvocation,
