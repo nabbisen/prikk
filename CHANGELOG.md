@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.25.0 — 2026-08-26
+
+**`prikk verify --format json` is this release — the first machine-readable output the tool has
+ever had, and the thing that makes a CI publication gate possible without grepping prose.**
+Everything else is smaller.
+
+### Added
+
+- **`prikk verify --format json`.** Emits a `verify-report-v1` document: a schema version, a
+  verdict (`ok` plus every currently-failing condition, derived from the same nine-condition
+  declaration `verify`'s exit code reads — the two cannot disagree), and one entry per
+  verification stage. A CI job can finally assert on `verify` without grepping prose, and the
+  prose output is unchanged.
+- **Conflict witness kinds now reach merge evidence.** Twelve typed kinds that previously never
+  left `patch_algebra`'s internals — why two operations conflict, not only that they do — now
+  appear on `MergeEvidenceDisplayItem` (see Breaking change, below).
+- **An MSRV rise policy, documented and gated.** MSRV rises only when a dependency or language
+  requirement forces it, never for convenience, and a rise is a minor-version event whose
+  `CHANGELOG.md` entry names the requirement that forced it. Six live transcriptions (the
+  toolchain pin, the CI job name, and prose/gate-command lines in two reference pages and
+  `rfcs/EXECUTION-ORDER.md`) are now bound to `Cargo.toml`'s declared version and checked by
+  `reference-check`. **MSRV stays at `1.85`** — this release does not raise it.
+
+### Fixed
+
+Nothing user-facing beyond the additions above.
+
+### Breaking change
+
+**All three changes below are API breaks. None is a format break — no repository written by any
+prior release becomes unreadable by `0.25.0`, and `0.25.0` reads every prior repository exactly as
+before.** They matter to code that links against `prikk-object`/`prikk-store` as libraries, not to
+repository content.
+
+1. **`ObjectType::ProjectGenesis` removed** (`prikk-object`). `ObjectType::from_code(0x0A)` now
+   returns a retirement error (`"object type code 10 is retired (formerly project-genesis) and
+   must never be reused"`) instead of `Ok(ProjectGenesis)`. Breaks any downstream exhaustive
+   `match` on `ObjectType`, and anything naming the variant directly. **No repository can contain
+   a `0x0A` object** — no code path in any released version ever constructed one — so nothing on
+   disk is affected.
+2. **`RepositoryVerification::has_blocking_defect()` removed** (`prikk-store`). It reported only
+   two of the nine conditions under which `prikk verify` actually refuses a repository, and its
+   own documentation invited callers to treat it as the complete answer. **The remedy**: read
+   `prikk verify --format json`'s `verdict.ok`/`verdict.failed_conditions` (new this release,
+   above), or `prikk verify`'s own exit code, either of which reflects all nine conditions.
+3. **`MergeEvidenceDisplayItem` gained three public fields** (`prikk-store`): `witness_kind`,
+   `witness_path`, and `witness_node_id`. The struct is not `#[non_exhaustive]`, so any downstream
+   construction of one by struct literal (rather than by reading a `prepare_merge_evidence` result)
+   breaks.
+
 ## 0.24.0 — 2026-08-25
 
 **A trust gap open since DC-63 is closed: an untrusted signer is now refused at `tag create`,

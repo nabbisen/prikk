@@ -42,7 +42,7 @@ Prikk is designed to be:
 
 ## Current Status
 
-Latest released implementation: **0.24.0**. Windows became a mutating platform in 0.21.0: Prikk now authors, commits, and checks out on Linux, macOS, and Windows, and CI requires a repository authored on Linux, mutated on Windows, and verified back on Linux to produce byte-identical object ids — so the claim that anyone can verify anyone's history is tested across platforms rather than assumed.
+Latest released implementation: **0.25.0**. Windows became a mutating platform in 0.21.0: Prikk now authors, commits, and checks out on Linux, macOS, and Windows, and CI requires a repository authored on Linux, mutated on Windows, and verified back on Linux to produce byte-identical object ids — so the claim that anyone can verify anyone's history is tested across platforms rather than assumed.
 
 Next increment candidates are tracked in `ROADMAP.md`.
 
