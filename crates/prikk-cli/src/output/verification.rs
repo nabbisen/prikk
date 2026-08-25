@@ -14,6 +14,102 @@ fn format_count(count: Option<usize>) -> String {
     }
 }
 
+/// Escape a string for embedding in a JSON string literal, per RFC 8259 §7 (RFC 118 stage 5).
+/// `prikk-cli` has no third-party dependencies (RFC 118 §10 prerequisite 4), so there is no
+/// `serde_json` to lean on here -- this is the repository's first hand-rolled JSON emitter, and
+/// this function is the one place a mistake would actually corrupt output. Handles the two
+/// structural escapes (`"`, `\`), the three conventional short escapes (`\n`, `\r`, `\t`), and
+/// every other C0 control character (U+0000-U+001F) as `\u00XX` -- the minimum RFC 118 stage 5
+/// requires. `StageStatus::Failed`'s message is arbitrary text reaching this from `PrikkError` and
+/// from filesystem paths, so this is proven against hostile input, not a happy path (this module's
+/// own tests).
+fn escape_json_string(input: &str) -> String {
+    let mut escaped = String::with_capacity(input.len() + 2);
+    escaped.push('"');
+    for character in input.chars() {
+        match character {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            other if (other as u32) < 0x20 => {
+                escaped.push_str(&format!("\\u{:04x}", other as u32));
+            }
+            other => escaped.push(other),
+        }
+    }
+    escaped.push('"');
+    escaped
+}
+
+/// `prikk verify --format json` (RFC 118 stage 5): `verify-report-v1` -- named for the tool
+/// (`verify`), the shape (`report`), and versioned like this repository's other machine-readable
+/// schemas (`release-policy-boundary-v1` and its siblings), so a future breaking change to this
+/// shape has somewhere to go without silently reinterpreting what an old consumer already parsed.
+/// Not `verify-full-v1` or similar: this is deliberately a subset of `RepositoryVerification` (the
+/// schema version name must not imply completeness the document does not have).
+///
+/// Emits exactly the schema version, the verdict (every currently-true blocking condition from
+/// `verify_verdict::VERDICT_CONDITIONS` -- the same declaration the exit code reads, so they cannot
+/// disagree), and one entry per [`prikk_store::VerificationStage::ALL`], keyed by `label()` (an
+/// external interface as of RFC 118 stage 4/5 -- do not rename any). Counts and item-level findings
+/// are deliberately out of v1 scope (RFC 118 stage 5 handoff §1).
+pub(crate) fn print_verify_report_json(report: &prikk_store::RepositoryVerification) {
+    let conditions = crate::verify_verdict::all_true_conditions(report);
+    let mut json = String::new();
+    json.push_str("{\n");
+    json.push_str("  \"schema_version\": \"verify-report-v1\",\n");
+    json.push_str("  \"verdict\": {\n");
+    json.push_str(&format!("    \"ok\": {},\n", conditions.is_empty()));
+    json.push_str("    \"failed_conditions\": [");
+    for (index, condition) in conditions.iter().enumerate() {
+        if index > 0 {
+            json.push(',');
+        }
+        json.push_str("\n      {\"id\": ");
+        json.push_str(&escape_json_string(condition.id));
+        json.push_str(", \"message\": ");
+        json.push_str(&escape_json_string(condition.message));
+        json.push('}');
+    }
+    if !conditions.is_empty() {
+        json.push_str("\n    ");
+    }
+    json.push_str("]\n  },\n");
+    json.push_str("  \"stages\": [");
+    for (index, outcome) in report.stage_outcomes.iter().enumerate() {
+        if index > 0 {
+            json.push(',');
+        }
+        json.push_str("\n    {\"stage\": ");
+        json.push_str(&escape_json_string(outcome.stage.label()));
+        match &outcome.status {
+            StageStatus::Evaluated => json.push_str(", \"status\": \"evaluated\"}"),
+            StageStatus::Failed { message } => {
+                json.push_str(", \"status\": \"failed\", \"message\": ");
+                json.push_str(&escape_json_string(message));
+                json.push('}');
+            }
+            StageStatus::NotEvaluated { blocked_by } => {
+                json.push_str(", \"status\": \"not_evaluated\", \"blocked_by\": ");
+                json.push_str(&escape_json_string(blocked_by.label()));
+                json.push('}');
+            }
+            StageStatus::Halted { after } => {
+                json.push_str(", \"status\": \"halted\", \"after\": ");
+                json.push_str(&escape_json_string(after.label()));
+                json.push('}');
+            }
+        }
+    }
+    if !report.stage_outcomes.is_empty() {
+        json.push_str("\n  ");
+    }
+    json.push_str("]\n}");
+    println!("{json}");
+}
+
 /// Print doctor results.
 pub(crate) fn print_doctor_report(layout: &RepositoryLayout, report: &prikk_store::DoctorReport) {
     if let Some(verification) = &report.verification {

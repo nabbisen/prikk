@@ -696,8 +696,15 @@ impl RepositoryVerification {
     /// **Does not, by itself, cover item-level defects (DC-95 Stage 2 Level 2)** — the `Objects`
     /// stage evaluates cleanly (`Evaluated`) even when one of its items individually failed, since
     /// item containment means a bad object no longer aborts the whole stage. See
-    /// [`Self::has_item_failure`] for that question, and [`Self::has_blocking_defect`] for the
-    /// combined check almost every caller actually wants.
+    /// [`Self::has_item_failure`] for that question. **Neither this predicate, nor
+    /// `has_item_failure`, nor any other single predicate on this type answers "would `prikk
+    /// verify` refuse this repository"** — that question has nine conditions, not two, declared
+    /// once in `prikk-cli`'s own `VERDICT_CONDITIONS` (RFC 118 stage 5) and read by both the exit
+    /// code and `--format json`. A `has_blocking_defect()` combining only these two used to exist
+    /// here and was removed (RFC 118 stage 5): it had no caller, and its doc claimed to be "the
+    /// yes/no answer" while silently excluding publication-trust, commit-index, lifecycle-cache,
+    /// active-WAL-ordering, merge-baseline, and ref-publication issues — exactly the shape of claim
+    /// this project has spent a month removing.
     #[must_use]
     pub fn has_stage_failure(&self) -> bool {
         self.stage_outcomes
@@ -743,23 +750,6 @@ impl RepositoryVerification {
                 .received_ref_item_outcomes
                 .iter()
                 .any(|outcome| matches!(outcome.status, RefItemStatus::Failed { .. }))
-    }
-
-    /// Return true when this repository's verification found any blocking reason to refuse it --
-    /// stage-level (`has_stage_failure`) or item-level (`has_item_failure`). A convenience predicate
-    /// for a caller that only wants "is this repository verified at all" and does not care which
-    /// half of that question failed.
-    ///
-    /// **Not currently called by this crate's own production code.** `doctor_repository`'s refusal
-    /// gate is preserved by its own per-stage and per-item `DoctorIssue::error` loops feeding
-    /// `is_healthy()`, not by calling this directly; `prikk verify`'s exit-code chain
-    /// (`main.rs`) calls `has_stage_failure()` and `has_item_failure()` as two separate arms
-    /// precisely so it can report *which* kind of failure occurred, rather than one generic
-    /// message -- collapsing them here would lose that. Kept as public API for an external caller
-    /// that only wants the yes/no answer.
-    #[must_use]
-    pub fn has_blocking_defect(&self) -> bool {
-        self.has_stage_failure() || self.has_item_failure()
     }
 
     /// Return true if the active WAL contained an incomplete trailing record. `None` (the WAL-replay

@@ -86,6 +86,17 @@ pub(crate) struct DoctorArgs {
     pub(crate) repair_main_ref: bool,
 }
 
+/// `prikk verify`'s output format (RFC 118 stage 5). `Prose` is the default and must remain
+/// byte-identical to the pre-stage-5 output; `Json` is additive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum VerifyOutputFormat {
+    /// The original, human-readable line-per-fact report (unchanged by RFC 118 stage 5).
+    Prose,
+    /// `verify-report-v1` (RFC 118 stage 5): schema version, verdict, and one entry per
+    /// `VerificationStage::ALL`.
+    Json,
+}
+
 /// Parsed verify command arguments.
 pub(crate) struct VerifyArgs {
     /// Repository root.
@@ -94,15 +105,28 @@ pub(crate) struct VerifyArgs {
     /// accumulating findings across all twelve. Preserves the pre-Stage-2 bounded-walk behavior for
     /// a large, badly-damaged repository where a full accumulating scan would be costly.
     pub(crate) stop_on_first_error: bool,
+    /// Output format. Default `Prose` (RFC 118 stage 5).
+    pub(crate) format: VerifyOutputFormat,
 }
 
 /// Parse `prikk verify` arguments.
 pub(crate) fn parse_verify_args(args: Vec<String>) -> std::result::Result<VerifyArgs, String> {
     let mut stop_on_first_error = false;
+    let mut format = VerifyOutputFormat::Prose;
     let mut path = None;
-    for arg in args {
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--stop-on-first-error" => stop_on_first_error = true,
+            "--format" => {
+                let Some(value) = iter.next() else {
+                    return Err("verify --format requires a value".to_string());
+                };
+                format = match value.as_str() {
+                    "json" => VerifyOutputFormat::Json,
+                    other => return Err(format!("verify --format does not support {other:?}")),
+                };
+            }
             other if other.starts_with('-') => {
                 return Err(format!("unknown verify argument: {other}"));
             }
@@ -117,6 +141,7 @@ pub(crate) fn parse_verify_args(args: Vec<String>) -> std::result::Result<Verify
     Ok(VerifyArgs {
         root: optional_path_or_current(path)?,
         stop_on_first_error,
+        format,
     })
 }
 

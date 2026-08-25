@@ -27,19 +27,22 @@ mod seal;
 mod sync;
 mod tag;
 mod unlock;
+mod verify_verdict;
 
 use args::{
-    CheckoutMode, MergeEvidenceTargetArg, current_dir, parse_checkout_args, parse_commit_args,
-    parse_doctor_args, parse_inverse_plan_args, parse_log_args, parse_merge_evidence_args,
-    parse_merge_plan_args, parse_rollback_draft_args, parse_rollback_draft_verify_args,
-    parse_rollback_preview_args, parse_verify_args, parse_worktree_status_args,
+    CheckoutMode, MergeEvidenceTargetArg, VerifyOutputFormat, current_dir, parse_checkout_args,
+    parse_commit_args, parse_doctor_args, parse_inverse_plan_args, parse_log_args,
+    parse_merge_evidence_args, parse_merge_plan_args, parse_rollback_draft_args,
+    parse_rollback_draft_verify_args, parse_rollback_preview_args, parse_verify_args,
+    parse_worktree_status_args,
 };
 use output::{
     print_checkout_plan, print_doctor_report, print_help, print_history, print_merge_evidence,
     print_merge_plan, print_patch_deletion_plan, print_patch_inverse_plan,
     print_patch_materialization_report, print_patch_replay_plan, print_rollback_draft_report,
     print_rollback_draft_verification, print_rollback_preview_plan, print_snapshot_checkout_plan,
-    print_snapshot_materialization_report, print_verify_report, print_worktree_status,
+    print_snapshot_materialization_report, print_verify_report, print_verify_report_json,
+    print_worktree_status,
 };
 use prikk_store::{
     ActiveRefMetadata, DEFAULT_ACTIVE_PATCH_LIMIT, DoctorRepairOptions, Ed25519AuthorSigner,
@@ -549,44 +552,33 @@ fn run_verify(args: Vec<String>) -> std::result::Result<(), String> {
         stop_on_first_error: verify_args.stop_on_first_error,
     };
     let report = verify_repository_with_options(&layout, options).map_err(|err| err.to_string())?;
-    print_verify_report(&layout, &report);
-    // Received refs (DC-78 ruling 4) are never read by verify_repository itself — every object
-    // they point at is already checked by the ordinary type-based object scan regardless of which
-    // ref (if any) points to it, so this is purely additive presentation, not a new check.
-    let received = list_received_pointers(&layout).map_err(|err| err.to_string())?;
-    println!("received refs: {}", received.len());
-    for pointer in &received {
-        println!(
-            "received-ref {}: {}",
-            pointer.ref_name, pointer.ref_state_id
-        );
-    }
-    if report.has_stage_failure() {
-        Err(
-            "repository verification did not complete every stage; see stage outcomes above"
-                .to_string(),
-        )
-    } else if report.has_item_failure() {
-        Err(
-            "repository verification found at least one failed object, block, or ref; see item outcomes above"
-                .to_string(),
-        )
-    } else if report.has_active_wal_metadata_integrity_issue() {
-        Err("repository has active-WAL metadata integrity issues".to_string())
-    } else if report.has_blocking_ref_publication_issues() {
-        Err("repository has interrupted or divergent ref publication state".to_string())
-    } else if report.has_publication_trust_issues() {
-        Err("repository has publication-trust issues".to_string())
-    } else if report.has_commit_index_divergence() {
-        Err("commit-index cache disagrees with the worktree for at least one path".to_string())
-    } else if report.has_lifecycle_cache_divergence() {
-        Err("lifecycle-state cache disagrees with an independent replay".to_string())
-    } else if report.has_active_wal_ordering_issue() {
-        Err("active WAL contains an out-of-order or duplicate queued patch sequence".to_string())
-    } else if report.has_merge_baseline_divergence() {
-        Err("a merge block's recorded baseline is not a common ancestor of its parents".to_string())
+    // RFC 118 stage 5: `--format json` emits exactly one JSON document and nothing else -- the
+    // default prose path's received-refs lines below are additive presentation, not part of the
+    // schema, and would corrupt a JSON stream if interleaved with it, so this branch replaces the
+    // whole default body rather than adding to it.
+    if verify_args.format == VerifyOutputFormat::Json {
+        print_verify_report_json(&report);
     } else {
-        Ok(())
+        print_verify_report(&layout, &report);
+        // Received refs (DC-78 ruling 4) are never read by verify_repository itself — every object
+        // they point at is already checked by the ordinary type-based object scan regardless of
+        // which ref (if any) points to it, so this is purely additive presentation, not a new check.
+        let received = list_received_pointers(&layout).map_err(|err| err.to_string())?;
+        println!("received refs: {}", received.len());
+        for pointer in &received {
+            println!(
+                "received-ref {}: {}",
+                pointer.ref_name, pointer.ref_state_id
+            );
+        }
+    }
+    // This used to be a nine-arm hand-written else-if chain. It is now one lookup into
+    // `verify_verdict::VERDICT_CONDITIONS` -- the same declaration `--format json` above reads --
+    // so the exit code and the JSON verdict cannot silently diverge. First-match-wins order and
+    // every message are unchanged from the prior chain.
+    match verify_verdict::first_true_condition(&report) {
+        Some(condition) => Err(condition.message.to_string()),
+        None => Ok(()),
     }
 }
 

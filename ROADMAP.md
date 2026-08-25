@@ -138,16 +138,6 @@ ergonomics feature.
 
 Depends on merge execution existing. Not scoped.
 
-### Structured output for tooling — prerequisite for the M4 slice
-
-`prikk` has **no `--format json`** and no machine-readable output of any kind; every command prints prose
-(verified 2026-08-04). The CI-publication-gate scenario requires `verify` to emit something a job can
-assert on — grepping prose breaks the moment wording changes, and `verify`'s output changed twice in the
-week of 2026-08-04 alone.
-
-**Should land with or just before the M4 attestation slice**: a policy-gated publication whose result can
-only be read by a human is half a gate. `release-policy`'s existing `--format json` is the precedent.
-
 ### Editor, IDE, and file-manager integration — blocked on model gaps, not on API work
 
 Deferred, and the reasons are the point: **no current-branch pointer** (an IDE status bar has nothing to
