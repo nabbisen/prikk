@@ -1,13 +1,14 @@
 //! DC-41 stage 4 property tests: envelope framing (target 1 of 5).
 //!
-//! Covers all nine current `ObjectType` variants (`RecognitionClaim` predates this list's own
-//! upkeep and is not sampled here -- a pre-existing gap, not introduced or fixed by the
-//! repository-identity settlement handoff). Two properties, per the RFC: round-trip
-//! (`decode(encode(x)) == x`) for structurally valid envelopes, and totality (never panics) for
-//! arbitrary bytes fed to the decoder. A third check pins envelope-layer admission against the
-//! DC-40 format-2 schema allowlist (`crate::format::validate_format2_schema`) so the two
-//! variants excluded from format-2 identity positions (`BlockSummaryCache`, `RecoveryNote`) are
-//! exercised on the rejection path rather than skipped.
+//! Covers every live `ObjectType` variant (`ObjectType::ALL`, RFC 118 stage 6) -- until that
+//! stage, this file held its own hand-copied nine-member list, missing `RecognitionClaim` (the
+//! one type that actually travels on the sync wire) since the day it was added; the omission is
+//! now closed by construction, not by being noticed a second time. Two properties, per the RFC:
+//! round-trip (`decode(encode(x)) == x`) for structurally valid envelopes, and totality (never
+//! panics) for arbitrary bytes fed to the decoder. A third check pins envelope-layer admission
+//! against the DC-40 format-2 schema allowlist (`crate::format::validate_format2_schema`) so the
+//! two variants excluded from format-2 identity positions (`BlockSummaryCache`, `RecoveryNote`)
+//! are exercised on the rejection path rather than skipped.
 //!
 //! Case budget is proptest's own default (256/run), overridable with `PROPTEST_CASES` for a
 //! campaign run; no explicit `ProptestConfig` override is set here.
@@ -21,21 +22,9 @@ use prikk_object::{ObjectEnvelope, ObjectType, Signature, SignatureAlgorithm, Si
 use super::{decode_envelope_file, encode_envelope_file_structural};
 use crate::format::validate_format2_schema;
 
-const ALL_OBJECT_TYPES: [ObjectType; 9] = [
-    ObjectType::Patch,
-    ObjectType::Block,
-    ObjectType::RefState,
-    ObjectType::RefUpdate,
-    ObjectType::Tag,
-    ObjectType::Attestation,
-    ObjectType::Blob,
-    ObjectType::BlockSummaryCache,
-    ObjectType::RecoveryNote,
-];
-
 fn object_type_strategy() -> impl Strategy<Value = ObjectType> {
-    (0..ALL_OBJECT_TYPES.len()).prop_map(|index| {
-        ALL_OBJECT_TYPES
+    (0..ObjectType::ALL.len()).prop_map(|index| {
+        ObjectType::ALL
             .get(index)
             .copied()
             .unwrap_or(ObjectType::Patch)
