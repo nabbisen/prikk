@@ -16,10 +16,24 @@
 //!   remedy;
 //! - **breaking, undeclared** -- the only failure.
 //!
-//! **Fixture**: `crates/prikk-cli/tests/fixtures/rfc119_g1_0_23_0_repo`, a real repository written
-//! by the real `0.23.0` binary (built from the `0.23.0` git tag in an isolated worktree, never from
-//! this working tree). **Do not regenerate it.** See the RFC 119 track C report for exactly how it
-//! was produced and what it contains.
+//! **Fixture**: `crates/prikk-cli/tests/fixtures/rfc119_g1_0_24_0_repo`, a real repository written
+//! by the real `0.24.0` binary (built from the `0.24.0` git tag in an isolated worktree, never from
+//! this working tree). **Do not regenerate it.** See the RFC 119 track C report for the original
+//! construction technique, and the G1-fixture-refresh-`0.24.0` report for this specific fixture.
+//!
+//! **Replaced, not accumulated (RFC 119 track C's own follow-up, `g1-fixture-refresh-0-24-0`):**
+//! this gate holds exactly one fixture, from the last release, and each release's own refresh
+//! replaces it rather than adding a second baseline to check alongside it. Pre-1.0, no production
+//! users, and G1's own form is *declare*, not *prevent* -- one baseline is proportionate. **What
+//! this means a reader should not assume**: a future release passing this gate proves it reads the
+//! *immediately preceding* release's data, not every retained release's data -- transitivity does
+//! not hold (`0.25.0` reading `0.24.0`, and `0.24.0` reading `0.23.0`, does not imply `0.25.0` reads
+//! `0.23.0`). The `0.23.0`-vintage fixture this replaced is gone; its own coverage and controls are
+//! recorded in the RFC 119 track C report, not restated here.
+//!
+//! **First fixture to cover `Patch` schema 2** (`PATCH_PARENT_IDS_RETIRED_SCHEMA`): `0.24.0` writes
+//! every `Patch` at schema 2, so both `Patch` records in this fixture are schema 2, not schema 1 --
+//! the `0.23.0`-vintage fixture could not have exercised this, since `0.23.0` never wrote it.
 
 #![allow(clippy::expect_used, clippy::panic)]
 
@@ -32,10 +46,21 @@ use crate::fsutil::read_file_if_exists;
 use crate::layout::{ContainerSlot, RepositoryLayout, persisted_object_types};
 use crate::patch_replay::decode::decode_patch_operations;
 
-/// One declared compatibility break between two adjacent releases -- the shape of Gate A's
-/// `frozen`/`RFC114_ADMITTED_BUT_UNWRITTEN` pair and `format_stability_gate.rs`'s
-/// `FORMATS_WITH_MIGRATION_COVERAGE`: a committed list, never satisfiable by editing alone (the
-/// object type must be real, checked below), always carrying a reason and a remedy.
+/// One declared **forward-direction** compatibility break between two adjacent releases -- the
+/// shape of Gate A's `frozen`/`RFC114_ADMITTED_BUT_UNWRITTEN` pair and
+/// `format_stability_gate.rs`'s `FORMATS_WITH_MIGRATION_COVERAGE`: a committed list, never
+/// satisfiable by editing alone (the object type must be real, checked below), always carrying a
+/// reason and a remedy.
+///
+/// **Forward direction only, deliberately** (RFC 119 `g1-fixture-refresh-0-24-0` handoff §2): this
+/// gate's own mechanism only ever checks *newer code reading an older fixture* -- there is no
+/// mechanism here for the reverse (an old binary reading new data), which would need an actual old
+/// binary invoked as a subprocess, not this gate's Rust-function-call shape (deferred, see this
+/// module's own report). A **reverse** break -- `0.24.0`'s own `Patch` schema 2 is exactly one: it
+/// reads `0.23.0` fine, but `0.23.0` cannot read `0.24.0` -- must **not** be added here: doing so
+/// would assert a forward break that does not exist, and this gate would then look for a failure
+/// its own fixture can never produce. Reverse breaks are recorded in `CHANGELOG.md`'s own "Breaking
+/// change" section instead, where every one to date already is.
 struct DeclaredBreak {
     /// The two releases involved, older first.
     version_pair: &'static str,
@@ -49,14 +74,16 @@ struct DeclaredBreak {
     remedy: &'static str,
 }
 
-/// Seeded with `0.23.0`'s own `Tag` break (RFC 119 track C handoff §5). **Not currently exercised
-/// by [`g1_last_release_fixture_is_compatible_or_the_break_is_declared`]**: that test compares the
-/// `0.23.0`-vintage fixture against *current* code, and nothing has changed `Tag` handling since
-/// `0.23.0` shipped, so the fixture is, correctly, still fully compatible today (see the report's
-/// own note on this). This entry is the historical record of the break that motivated building this
-/// gate at all, carried forward the same way `format_stability_gate.rs` starts with an empty-but-
-/// ready `FORMATS_WITH_MIGRATION_COVERAGE` -- it becomes load-bearing the day a *future* release
-/// breaks `Tag` again, or if this gate's own fixture is ever rebuilt from a pre-`0.23.0` tag.
+/// Seeded with `0.23.0`'s own `Tag` break (RFC 119 track C handoff §5) -- still the only entry.
+/// **`0.24.0`'s own break is not added here**: it is a reverse break (see [`DeclaredBreak`]'s own
+/// doc), not the forward direction this list holds. **Not currently exercised by
+/// [`g1_last_release_fixture_is_compatible_or_the_break_is_declared`]**: that test compares the
+/// current (`0.24.0`-vintage) fixture against *current* code, and nothing has changed `Tag`
+/// handling since `0.23.0` shipped, so the fixture is, correctly, still fully compatible today.
+/// This entry is the historical record of the break that motivated building this gate at all,
+/// carried forward the same way `format_stability_gate.rs` starts with an empty-but-ready
+/// `FORMATS_WITH_MIGRATION_COVERAGE` -- it becomes load-bearing the day a *future* release breaks
+/// `Tag` again, or if this gate's own fixture is ever rebuilt from a pre-`0.23.0` tag.
 const DECLARED_BREAKS: &[DeclaredBreak] = &[DeclaredBreak {
     version_pair: "0.22.1 -> 0.23.0",
     object_type: ObjectType::Tag,
@@ -82,7 +109,7 @@ fn repo_root() -> PathBuf {
 /// The frozen last-release fixture's root (the directory *containing* `.prikk`, matching
 /// `RepositoryLayout::open`'s own expectation).
 fn last_release_fixture_root() -> PathBuf {
-    repo_root().join("crates/prikk-cli/tests/fixtures/rfc119_g1_0_23_0_repo")
+    repo_root().join("crates/prikk-cli/tests/fixtures/rfc119_g1_0_24_0_repo")
 }
 
 /// Read one persisted object type's live (slot A -- compaction never runs on object containers,
@@ -183,9 +210,10 @@ fn every_declared_break_names_a_persisted_object_type() {
 
 /// The real conformance check: every persisted object type in the last-release fixture must either
 /// decode cleanly under current code, or have its failure covered by [`DECLARED_BREAKS`]. This is
-/// the test the four controls exercise (RFC 119 track C handoff §7); it currently passes because
-/// nothing has changed any persisted type's decode contract since `0.23.0` shipped -- the same
-/// "nothing to test yet" state `format_stability_gate.rs`'s own layers 1/2 start in.
+/// the test the four controls exercise (RFC 119 track C handoff §7, `g1-fixture-refresh-0-24-0`
+/// handoff §5); it currently passes because nothing has changed any persisted type's decode
+/// contract since `0.24.0` shipped -- the same "nothing to test yet" state
+/// `format_stability_gate.rs`'s own layers 1/2 start in.
 #[test]
 fn g1_last_release_fixture_is_compatible_or_the_break_is_declared() {
     let root = last_release_fixture_root();
