@@ -68,42 +68,6 @@ crates in `Cargo.lock`, no networked verb in the CLI.
 (`placement.rs:11` permits only `getrandom` and `rustix`). That is part of the sync design, not a
 discovery to be made during it.
 
-### Repository layout when sync arrives — decided 2026-08-04, applied later
-
-**Nested directories under one workspace**, not multiple workspaces:
-`crates/{shared,client,server}/…`, with today's seven crates moving to `crates/shared/` at that point.
-
-**Why not multiple workspaces:** DC-51's placement gate runs `MetadataCommand` against the root
-`Cargo.toml` (`boundary.rs:48-51`) and sees **one** workspace. Splitting would require four invocations
-and reconciliation logic, plus four `Cargo.lock` files — so `--locked` would stop meaning what it means
-today — and four `rust-version` declarations to keep aligned.
-
-**Cargo does not care about directory depth**, so nesting needs no mechanism, only longer `members` paths.
-
-**Not applied now**, deliberately: eight flat members are not messy, and moving them would churn every
-path in `Cargo.toml`, the placement allowlist, and every `use` in the tree for a problem that does not yet
-exist. **Apply it once, when sync lands, informed by what sync actually needs** — which may be far smaller
-than a tier, since a sync endpoint might be a dumb object store with a trust boundary rather than an
-application server.
-
-Separately: **crate names are global on crates.io and nesting does not change them.** Naming discipline is
-its own decision.
-
-**Executable structure is a separate question, raised 2026-08-04 and not decided.** One binary with a
-`prikk serve` subcommand, or separate `prikk` and `prikk-server` binaries?
-
-**The security argument favours separate binaries**, and it follows the project's own "secure by default"
-posture: a single binary means every user who only commits locally still ships and links network-capable
-code they never run. DC-51's placement gate is **per crate**, so a server crate could legitimately take an
-async runtime the client crates cannot — but if the *binary* is one, the client links it anyway. Separate
-binaries keep the gate's benefit at the executable level, not only the crate level.
-
-**Against:** two artifacts per target in DC-70's release workflow, two install paths to document, and a
-version-skew surface between client and server that a single binary makes impossible by construction.
-
-**Decide with the sync threat model**, not before — it depends on whether the server is an application or
-a dumb object store with a trust boundary.
-
 ### Merge execution — shipped in 0.19.0 (DC-74/DC-75); residuals remain
 
 Owner-ruled 2026-08-04: **B then C** — merge execution, then the M4 attestation slice. **DC-74 shipped
