@@ -52,9 +52,21 @@ fn escape_json_string(input: &str) -> String {
 ///
 /// Emits exactly the schema version, the verdict (every currently-true blocking condition from
 /// `verify_verdict::VERDICT_CONDITIONS` -- the same declaration the exit code reads, so they cannot
-/// disagree), and one entry per [`prikk_store::VerificationStage::ALL`], keyed by `label()` (an
-/// external interface as of RFC 118 stage 4/5 -- do not rename any). Counts and item-level findings
-/// are deliberately out of v1 scope (RFC 118 stage 5 handoff §1).
+/// disagree), and one entry per [`prikk_store::VerificationStage::ALL`], **in `ALL` order**, keyed
+/// by `label()` (an external interface as of RFC 118 stage 4/5 -- do not rename any). Counts and
+/// item-level findings are deliberately out of v1 scope (RFC 118 stage 5 handoff §1).
+///
+/// Review fix (stage 5 review v1, condition 1): this walks [`prikk_store::VerificationStage::ALL`]
+/// and looks up each stage's outcome, rather than walking `report.stage_outcomes` directly.
+/// `stage_outcomes` is documented to always carry exactly one entry per `ALL` member, but that
+/// guarantee lives in `verify_repository`'s own test suite (stage 4), not in this function's type
+/// signature -- walking it directly would let the document silently carry fewer than fourteen
+/// entries, in whatever order the pipeline happened to run, if that guarantee were ever violated
+/// upstream. Walking `ALL` instead makes the document **structurally incapable** of that: a missing
+/// outcome is a hard failure (`expect`) before anything is printed -- since `json` is fully built
+/// before the single `println!` below, a violated invariant here means no document is emitted at
+/// all, never a malformed or incomplete one. `emit valid JSON or do not emit` (handoff §3) extends
+/// to `emit a complete document or do not emit`.
 pub(crate) fn print_verify_report_json(report: &prikk_store::RepositoryVerification) {
     let conditions = crate::verify_verdict::all_true_conditions(report);
     let mut json = String::new();
@@ -78,7 +90,19 @@ pub(crate) fn print_verify_report_json(report: &prikk_store::RepositoryVerificat
     }
     json.push_str("]\n  },\n");
     json.push_str("  \"stages\": [");
-    for (index, outcome) in report.stage_outcomes.iter().enumerate() {
+    for (index, stage) in prikk_store::VerificationStage::ALL.iter().enumerate() {
+        let outcome = report
+            .stage_outcomes
+            .iter()
+            .find(|outcome| outcome.stage == *stage)
+            .unwrap_or_else(|| {
+                panic!(
+                    "RepositoryVerification is missing an outcome for stage {:?} \
+                     (VerificationStage::ALL); this is a bug in verify_repository, not in the \
+                     JSON emitter -- refusing to emit an incomplete verify-report-v1 document",
+                    stage.label()
+                )
+            });
         if index > 0 {
             json.push(',');
         }
@@ -103,7 +127,7 @@ pub(crate) fn print_verify_report_json(report: &prikk_store::RepositoryVerificat
             }
         }
     }
-    if !report.stage_outcomes.is_empty() {
+    if !prikk_store::VerificationStage::ALL.is_empty() {
         json.push_str("\n  ");
     }
     json.push_str("]\n}");

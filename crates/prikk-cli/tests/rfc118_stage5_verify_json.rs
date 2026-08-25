@@ -210,6 +210,45 @@ fn every_stage_is_present_in_json_under_stop_on_first_error() {
     let _ = std::fs::remove_dir_all(&repo);
 }
 
+/// Review fix (stage 5 review v1, condition 1): the emitter used to walk `report.stage_outcomes`
+/// (pipeline order) rather than `VerificationStage::ALL` (declared order), so a healthy repository's
+/// JSON silently emitted `received-refs` and `local-tag-trust` third and fourth instead of last --
+/// visibly wrong against the handoff's own §1 instruction ("one entry per `VerificationStage::ALL`,
+/// in `ALL` order") and against this module's own doc comment. Asserts the stage names appear in
+/// exactly `ALL`'s order, not merely that all fourteen are present (control 4 already covers that).
+#[test]
+fn stages_are_emitted_in_verification_stage_all_order() {
+    let repo = support::unique_repo("rfc118-stage5-all-order");
+    support::init(&repo);
+
+    let out = support::prikk(&repo)
+        .args(["verify", "--format", "json"])
+        .output()
+        .unwrap();
+    ok(&out, "verify --format json against a clean repository");
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_valid_json(&stdout);
+
+    let expected: Vec<&str> = prikk_store::VerificationStage::ALL
+        .iter()
+        .map(|stage| stage.label())
+        .collect();
+    let actual: Vec<String> = stdout
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            line.strip_prefix(r#"{"stage": ""#)
+                .map(|rest| rest.split('"').next().unwrap().to_string())
+        })
+        .collect();
+    assert_eq!(
+        actual, expected,
+        "JSON stage order must match VerificationStage::ALL exactly: {stdout}"
+    );
+
+    let _ = std::fs::remove_dir_all(&repo);
+}
+
 /// Minimal JSON syntax validator -- see this file's own module doc for scope.
 fn assert_valid_json(input: &str) {
     let mut chars = input.trim().chars().peekable();
