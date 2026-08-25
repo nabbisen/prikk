@@ -34,6 +34,9 @@
 //! **First fixture to cover `Patch` schema 2** (`PATCH_PARENT_IDS_RETIRED_SCHEMA`): `0.24.0` writes
 //! every `Patch` at schema 2, so both `Patch` records in this fixture are schema 2, not schema 1 --
 //! the `0.23.0`-vintage fixture could not have exercised this, since `0.23.0` never wrote it.
+//! **Asserted, not only claimed**: `last_release_fixture_coverage_matches_the_committed_counts`
+//! pins every persisted type's observed `schema_version`s, not only a record count -- a future
+//! fixture rebuild that silently regressed to all-schema-1 `Patch` records would fail that test.
 
 #![allow(clippy::expect_used, clippy::panic)]
 
@@ -116,8 +119,14 @@ fn last_release_fixture_root() -> PathBuf {
 /// per `ContainerSlot`'s own doc) container file and decode every record with the *same* decoder
 /// each type's real production read path uses -- `Patch` via `decode_patch_operations` (the real
 /// general decoder, patch-schema-2 handoff), everything else via its own `XPayload::decode_canonical`.
-/// Returns the number of records that decoded cleanly, or the first decode failure's message.
-fn check_type_decodes(layout: &RepositoryLayout, object_type: ObjectType) -> Result<usize, String> {
+/// Returns each decoded record's own `schema_version`, in container order, or the first decode
+/// failure's message. **The returned `Vec`'s length is the record count** -- callers that only need
+/// the count (this file has none left; both former call sites now use the schema list itself, per
+/// `g1-fixture-refresh-0-24-0`'s review condition) read `.len()` rather than a separate count.
+fn check_type_decodes(
+    layout: &RepositoryLayout,
+    object_type: ObjectType,
+) -> Result<Vec<u32>, String> {
     let container_path = layout.container_slot_path(object_type, ContainerSlot::A);
     let relative = layout
         .repository_relative(&container_path)
@@ -125,10 +134,10 @@ fn check_type_decodes(layout: &RepositoryLayout, object_type: ObjectType) -> Res
     let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &relative)
         .map_err(|err| err.to_string())?
     else {
-        return Ok(0);
+        return Ok(Vec::new());
     };
     let replay = decode_container_records(object_type, &bytes).map_err(|err| err.to_string())?;
-    let mut checked = 0_usize;
+    let mut schema_versions = Vec::new();
     for record in &replay.records {
         let envelope = &record.envelope;
         let decode_result: Result<(), prikk_error::PrikkError> = match object_type {
@@ -166,9 +175,9 @@ fn check_type_decodes(layout: &RepositoryLayout, object_type: ObjectType) -> Res
                 envelope.object_id()
             )
         })?;
-        checked += 1;
+        schema_versions.push(envelope.schema_version);
     }
-    Ok(checked)
+    Ok(schema_versions)
 }
 
 #[test]
@@ -238,27 +247,36 @@ fn g1_last_release_fixture_is_compatible_or_the_break_is_declared() {
 /// persisted object type, so removing coverage is caught here, distinctly from a decode failure --
 /// the same "committed, never generated at test time" discipline `dc55_identity_evidence.rs`'s own
 /// `every_frozen_object_id_matches_its_own_filename` count uses.
+///
+/// **Pins the observed `schema_version` of every record, not only the count**
+/// (`g1-fixture-refresh-0-24-0` review condition): a record count alone cannot tell a schema-1
+/// `Patch` from a schema-2 one, so it could not have caught a future fixture rebuild that silently
+/// stopped covering schema 2 -- exactly the coverage this fixture exists to add (this module's own
+/// top doc). Each slice's length *is* the expected count; there is no separate count to keep in
+/// sync. Values derived by running the real decode against the committed fixture and reading back
+/// what it reported, not hand-computed -- the same "committed, never generated at test time"
+/// discipline applies to the *values* here, not just their presence.
 #[test]
 fn last_release_fixture_coverage_matches_the_committed_counts() {
     let root = last_release_fixture_root();
     let layout = RepositoryLayout::open(&root).expect("last-release fixture repository opens");
-    let expected: &[(ObjectType, usize)] = &[
-        (ObjectType::Patch, 2),
-        (ObjectType::Block, 1),
-        (ObjectType::Blob, 2),
-        (ObjectType::RefState, 2),
-        (ObjectType::Tag, 1),
-        (ObjectType::RecognitionClaim, 1),
-        (ObjectType::Attestation, 0),
+    let expected: &[(ObjectType, &[u32])] = &[
+        (ObjectType::Patch, &[2, 2]),
+        (ObjectType::Block, &[2]),
+        (ObjectType::Blob, &[1, 1]),
+        (ObjectType::RefState, &[1, 1]),
+        (ObjectType::Tag, &[1]),
+        (ObjectType::RecognitionClaim, &[1]),
+        (ObjectType::Attestation, &[]),
     ];
-    for &(object_type, expected_count) in expected {
+    for &(object_type, expected_schemas) in expected {
         let actual = check_type_decodes(&layout, object_type)
             .unwrap_or_else(|err| panic!("{object_type} must decode cleanly here: {err}"));
         assert_eq!(
-            actual, expected_count,
-            "{object_type}: expected {expected_count} persisted, found {actual} -- update this \
-             count deliberately if the fixture is ever legitimately rebuilt, never to paper over a \
-             coverage regression"
+            actual, expected_schemas,
+            "{object_type}: expected schema versions {expected_schemas:?}, found {actual:?} -- \
+             update this deliberately if the fixture is ever legitimately rebuilt, never to paper \
+             over a coverage regression"
         );
     }
 }
