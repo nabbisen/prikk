@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use crate::boundary;
-use crate::differential;
 use crate::error::{Error, Result};
 use crate::oracle;
 use crate::policy;
@@ -14,7 +13,6 @@ pub(crate) fn run(arguments: Vec<String>) -> Result<()> {
     match command.as_str() {
         "check" if rest.is_empty() => policy::run_check(&root),
         "oracle-check" => oracle_check(&root, rest),
-        "differential-check" => differential_check(&root, rest),
         "boundary-check" => boundary_check(&root, rest),
         "reference-check" => reference_check(&root, rest),
         "release-notes" => release_notes_command(&root, rest),
@@ -34,17 +32,6 @@ fn oracle_check(root: &std::path::Path, arguments: &[String]) -> Result<()> {
         Ok(())
     } else {
         Err(Error::new("oracle verification failed"))
-    }
-}
-
-fn differential_check(root: &std::path::Path, arguments: &[String]) -> Result<()> {
-    let self_test = parse_json_mode(arguments, true)?;
-    let report = differential::run(root, self_test)?;
-    println!("{}", serde_json::to_string_pretty(&report)?);
-    if report.valid {
-        Ok(())
-    } else {
-        Err(Error::new("differential verification failed"))
     }
 }
 
@@ -107,5 +94,5 @@ fn repository_root() -> Result<PathBuf> {
 }
 
 fn usage() -> &'static str {
-    "usage: prikk-release-policy <check|oracle-check|differential-check|boundary-check|reference-check> [--format json] [--self-test]\n       prikk-release-policy release-notes <tag> <dist-dir>"
+    "usage: prikk-release-policy <check|oracle-check|boundary-check|reference-check> [--format json] [--self-test]\n       prikk-release-policy release-notes <tag> <dist-dir>"
 }

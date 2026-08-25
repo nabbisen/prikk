@@ -1,1667 +1,2699 @@
 {
   "schema_version": "oracle-parked-cases-v1",
   "revival_condition": "prikk enters the official-release regime, which requires DC-35 criterion 4's signer bootstrap (two-person signer authority) -- see rfcs/handoffs/119-release-policy-reset/track-a-park-post-1-0-machinery-handoff-v1.md",
-  "parked_by": "RFC 119 track A",
-  "parked_suites": [
-    "signer-authority",
-    "signer-authority-live",
-    "signer-challenge",
-    "signer-governance"
-  ],
-  "cases": [
+  "batches": [
     {
-      "suite_id": "signer-authority",
-      "case_id": "boolean-schema-version",
-      "fixture_case_id": "boolean_schema_version",
-      "inputs": [
+      "parked_by": "RFC 119 track A",
+      "parked_suites": [
+        "signer-authority",
+        "signer-authority-live",
+        "signer-challenge",
+        "signer-governance"
+      ],
+      "cases": [
         {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-authority-cases.json"
-          },
-          "byte_length": 1855,
-          "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
+          "suite_id": "signer-authority",
+          "case_id": "boolean-schema-version",
+          "fixture_case_id": "boolean_schema_version",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-authority-cases.json"
+              },
+              "byte_length": 1855,
+              "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "authority-grammar"
+          }
         },
         {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+          "suite_id": "signer-authority",
+          "case_id": "duplicate",
+          "fixture_case_id": "duplicate",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-authority-cases.json"
+              },
+              "byte_length": 1855,
+              "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "authority-grammar"
+          }
+        },
+        {
+          "suite_id": "signer-authority",
+          "case_id": "empty-fail-closed",
+          "fixture_case_id": "empty_fail_closed",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-authority-cases.json"
+              },
+              "byte_length": 1855,
+              "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          }
+        },
+        {
+          "suite_id": "signer-authority",
+          "case_id": "lowercase",
+          "fixture_case_id": "lowercase",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-authority-cases.json"
+              },
+              "byte_length": 1855,
+              "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "authority-grammar"
+          }
+        },
+        {
+          "suite_id": "signer-authority",
+          "case_id": "malformed-toml",
+          "fixture_case_id": "malformed_toml",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-authority-cases.json"
+              },
+              "byte_length": 1855,
+              "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "authority-grammar"
+          }
+        },
+        {
+          "suite_id": "signer-authority",
+          "case_id": "multiple-sorted",
+          "fixture_case_id": "multiple_sorted",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-authority-cases.json"
+              },
+              "byte_length": 1855,
+              "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          }
+        },
+        {
+          "suite_id": "signer-authority",
+          "case_id": "unknown-field",
+          "fixture_case_id": "unknown_field",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-authority-cases.json"
+              },
+              "byte_length": 1855,
+              "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "authority-grammar"
+          }
+        },
+        {
+          "suite_id": "signer-authority",
+          "case_id": "unsorted",
+          "fixture_case_id": "unsorted",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-authority-cases.json"
+              },
+              "byte_length": 1855,
+              "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "authority-grammar"
+          }
+        },
+        {
+          "suite_id": "signer-authority",
+          "case_id": "unsupported-schema",
+          "fixture_case_id": "unsupported_schema",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-authority-cases.json"
+              },
+              "byte_length": 1855,
+              "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "authority-grammar"
+          }
+        },
+        {
+          "suite_id": "signer-authority",
+          "case_id": "wrong-length",
+          "fixture_case_id": "wrong_length",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-authority-cases.json"
+              },
+              "byte_length": 1855,
+              "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "authority-grammar"
+          }
+        },
+        {
+          "suite_id": "signer-authority-live",
+          "case_id": "release-signers-toml",
+          "fixture_case_id": "release-signers-toml",
+          "inputs": [
+            {
+              "role": "authority",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release-signers.toml"
+              },
+              "byte_length": 56,
+              "sha256": "f8d56841e0b6a683605b62dbbe1af6521acdb92f627dd16ac043704954130296"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "authority-revision-binding-mismatch",
+          "fixture_case_id": "authority_revision_binding_mismatch",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/authority_revision_binding_mismatch/context.json"
+              },
+              "byte_length": 314,
+              "sha256": "bfdc2bc0ac6733668c16b157bf211c291eac2adbe0923ccf73a2ea8afdaf7c08"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/authority_revision_binding_mismatch/challenge.txt"
+              },
+              "byte_length": 352,
+              "sha256": "72f326223d4c6d635216c6e15a2490910e9c7425827f809e4dfc2c5a4907148c"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-grammar-or-binding"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "canonical-golden-bytes",
+          "fixture_case_id": "canonical_golden_bytes",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/canonical_golden_bytes/context.json"
+              },
+              "byte_length": 301,
+              "sha256": "10679b476292e361c3da6bd839fd26ab9e615212811d19abffe9f7c85dc7b93d"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/canonical_golden_bytes/challenge.txt"
+              },
+              "byte_length": 352,
+              "sha256": "72f326223d4c6d635216c6e15a2490910e9c7425827f809e4dfc2c5a4907148c"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "crlf-bytes",
+          "fixture_case_id": "crlf_bytes",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/crlf_bytes/context.json"
+              },
+              "byte_length": 254,
+              "sha256": "d81c92f0db1787b9e34f4a0abe96750c5b28efa14ed8f79e9976d8673ed202fa"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/crlf_bytes/challenge.txt"
+              },
+              "byte_length": 360,
+              "sha256": "b962cca815d33b22127e072096ecdaab601c1382bc44fb9eb6f73a85ddf007e7"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-grammar-or-binding"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "duplicate-field",
+          "fixture_case_id": "duplicate_field",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/duplicate_field/context.json"
+              },
+              "byte_length": 259,
+              "sha256": "50798377ea735e932f3c9ec1e7acab28bbdcefddf12100a6b2f01eab98237ad6"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/duplicate_field/challenge.txt"
+              },
+              "byte_length": 374,
+              "sha256": "ae7eb6b4f774e663dead05e335ddee15be69c7cbe19cccf9ca42b88897908262"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-grammar-or-binding"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "expired-challenge",
+          "fixture_case_id": "expired_challenge",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/expired_challenge/context.json"
+              },
+              "byte_length": 261,
+              "sha256": "ba09d4dd0c1d3f5bafe0aef5eaf5940b94dbfe9a94125dac4397a0f997000d9a"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/expired_challenge/challenge.txt"
+              },
+              "byte_length": 352,
+              "sha256": "72f326223d4c6d635216c6e15a2490910e9c7425827f809e4dfc2c5a4907148c"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-time-window"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "expiry-instant-is-exclusive",
+          "fixture_case_id": "expiry_instant_is_exclusive",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/expiry_instant_is_exclusive/context.json"
+              },
+              "byte_length": 306,
+              "sha256": "87f13060278abe22e8cac98921d744caa9a220ad462ce3a210e77cddde170c1f"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/expiry_instant_is_exclusive/challenge.txt"
+              },
+              "byte_length": 352,
+              "sha256": "72f326223d4c6d635216c6e15a2490910e9c7425827f809e4dfc2c5a4907148c"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-time-window"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "expiry-window-too-long",
+          "fixture_case_id": "expiry_window_too_long",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/expiry_window_too_long/context.json"
+              },
+              "byte_length": 266,
+              "sha256": "e0c4929aa85ccd2810e2c0c7953a92ac8012bc51a491ee9688d035698edebfce"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/expiry_window_too_long/challenge.txt"
+              },
+              "byte_length": 352,
+              "sha256": "c54c83820ce958fb78cfcf096e8bbe0a88796aafa7077450ceb8403e161186db"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-time-window"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "extra-space",
+          "fixture_case_id": "extra_space",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/extra_space/context.json"
+              },
+              "byte_length": 255,
+              "sha256": "953bb7a35bdf68748b9561c208fd88cb87b7d63895e9c6de02e571b107bd5381"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/extra_space/challenge.txt"
+              },
+              "byte_length": 353,
+              "sha256": "e4755b0c1c54bf98ca8b2bc2f10dfb96346e36cc922b493aeba2ab3883c91d76"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-grammar-or-binding"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "issue-time-too-far-in-future",
+          "fixture_case_id": "issue_time_too_far_in_future",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/issue_time_too_far_in_future/context.json"
+              },
+              "byte_length": 272,
+              "sha256": "11dc733fcd4a45d090ee215a3961624ddb5c0e0aca5a4deb415fa768e0c306a3"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/issue_time_too_far_in_future/challenge.txt"
+              },
+              "byte_length": 352,
+              "sha256": "65c110b292ebefda841806d707a2fe989dbc5fce5a00b06827be63dc17353934"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-time-window"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "missing-final-lf",
+          "fixture_case_id": "missing_final_lf",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/missing_final_lf/context.json"
+              },
+              "byte_length": 260,
+              "sha256": "f26fbd519b5d095435fd09a754ac8d42e82115833e871ba796eb32f58283ba32"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/missing_final_lf/challenge.txt"
+              },
+              "byte_length": 351,
+              "sha256": "36a99410527acea74ea71b57e95843f41f7fce90b2fc60d2e3c22760b0e9b4cb"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-grammar-or-binding"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "missing-verifier-result",
+          "fixture_case_id": "missing_verifier_result",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/missing_verifier_result/context.json"
+              },
+              "byte_length": 259,
+              "sha256": "c575e27d548a30f7d30ae5b01ea480b68a179064b1ec34128e60788f8829d5d3"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/missing_verifier_result/challenge.txt"
+              },
+              "byte_length": 352,
+              "sha256": "72f326223d4c6d635216c6e15a2490910e9c7425827f809e4dfc2c5a4907148c"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-grammar-or-binding"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "non-ascii-bytes",
+          "fixture_case_id": "non_ascii_bytes",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/non_ascii_bytes/context.json"
+              },
+              "byte_length": 259,
+              "sha256": "d76c37155b665a417b03102250e3708c8e411eac0eb67ec963935cd5795df7f9"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/non_ascii_bytes/challenge.txt"
+              },
+              "byte_length": 353,
+              "sha256": "72688a93f8190597d73c626c9d41acae0ea8894e3bbfb2a3d8995d3fbdd0c7f5"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-grammar-or-binding"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "observed-fingerprint-mismatch",
+          "fixture_case_id": "observed_fingerprint_mismatch",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/observed_fingerprint_mismatch/context.json"
+              },
+              "byte_length": 313,
+              "sha256": "c6623b3181cced8f0a615e4521c4fdfe462050cefc35031bc6c78d7ce2b4bcc5"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/observed_fingerprint_mismatch/challenge.txt"
+              },
+              "byte_length": 352,
+              "sha256": "72f326223d4c6d635216c6e15a2490910e9c7425827f809e4dfc2c5a4907148c"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-grammar-or-binding"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "reordered-fields",
+          "fixture_case_id": "reordered_fields",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/reordered_fields/context.json"
+              },
+              "byte_length": 260,
+              "sha256": "4862d2a0983d76e232d093e8303c49d338192d500ba702e45ecab00fc600d96e"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/reordered_fields/challenge.txt"
+              },
+              "byte_length": 352,
+              "sha256": "97e40164dc7b74f05825a62d5f0c083b527e204bb2b4771ddfc411cdcba30aab"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-grammar-or-binding"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "wrong-nonce-length",
+          "fixture_case_id": "wrong_nonce_length",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/wrong_nonce_length/context.json"
+              },
+              "byte_length": 262,
+              "sha256": "2afdcf7e22d281e76b38191d4e95b844192e2c59565419478b738f126317c4b8"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/wrong_nonce_length/challenge.txt"
+              },
+              "byte_length": 304,
+              "sha256": "0055e14aea54263e2c795399d2fd3b9348261deaed17dcb1e69d9ed471023418"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-grammar-or-binding"
+          }
+        },
+        {
+          "suite_id": "signer-challenge",
+          "case_id": "wrong-repository",
+          "fixture_case_id": "wrong_repository",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/wrong_repository/context.json"
+              },
+              "byte_length": 260,
+              "sha256": "47e73ede50b585334a78626c6cb6a2373b37d5043746be366c8a9bb717c0eddd"
+            },
+            {
+              "role": "challenge",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "signer-challenge",
+                "entry_id": "release/oracle/vectors/signer-challenge/wrong_repository/challenge.txt"
+              },
+              "byte_length": 353,
+              "sha256": "e08aae0842ba799d063a474362e2c01f3b50789e41418bbfca93d9cbd6923e90"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 2,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "challenge-grammar-or-binding"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "addition-verified",
+          "fixture_case_id": "addition_verified",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "automation-as-approver",
+          "fixture_case_id": "automation_as_approver",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-review-or-hold"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "bootstrap-two-signers-verified",
+          "fixture_case_id": "bootstrap_two_signers_verified",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "classification-only-not-applicable",
+          "fixture_case_id": "classification_only_not_applicable",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "duplicate-introduced-proof",
+          "fixture_case_id": "duplicate_introduced_proof",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-transition-or-proof"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "lowercase-fingerprint",
+          "fixture_case_id": "lowercase_fingerprint",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-transition-or-proof"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "mismatched-introduced-proof-order",
+          "fixture_case_id": "mismatched_introduced_proof_order",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-transition-or-proof"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "missing-accountable-role",
+          "fixture_case_id": "missing_accountable_role",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-review-or-hold"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "missing-introduced-proof",
+          "fixture_case_id": "missing_introduced_proof",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-transition-or-proof"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "not-applicable-with-introduced-fingerprint",
+          "fixture_case_id": "not_applicable_with_introduced_fingerprint",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-transition-or-proof"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "removal-label-adds-fingerprint",
+          "fixture_case_id": "removal_label_adds_fingerprint",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-transition-or-proof"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "removal-only-not-applicable",
+          "fixture_case_id": "removal_only_not_applicable",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "replacement-verified",
+          "fixture_case_id": "replacement_verified",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "same-person-both-approvals",
+          "fixture_case_id": "same_person_both_approvals",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-review-or-hold"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "unexpected-introduced-proof",
+          "fixture_case_id": "unexpected_introduced_proof",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-transition-or-proof"
+          }
+        },
+        {
+          "suite_id": "signer-governance",
+          "case_id": "unsorted-fingerprint-set",
+          "fixture_case_id": "unsorted_fingerprint_set",
+          "inputs": [
+            {
+              "role": "fixture-table",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/fixtures/signer-governance-cases.json"
+              },
+              "byte_length": 9076,
+              "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 1,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 28650,
+              "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+            }
+          ],
+          "expected": {
+            "structural": "not-run",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-transition-or-proof"
+          }
         }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "authority-grammar"
-      }
+      ]
     },
     {
-      "suite_id": "signer-authority",
-      "case_id": "duplicate",
-      "fixture_case_id": "duplicate",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-authority-cases.json"
-          },
-          "byte_length": 1855,
-          "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
+      "parked_by": "RFC 119 track B",
+      "parked_note": "16 of release-evidence's 73 cases -- the suite itself is not parked, only the cases exercising its embedded DC-35 two-person signer-governance sub-object (docs/src/reference/release-compatibility.md 'Release Signer Governance'); the other 57 release-evidence cases are unaffected and remain active",
+      "parked_case_keys": [
+        "release-evidence:active-governance-hold-blocks-complete",
+        "release-evidence:active-governance-hold-valid-pending",
+        "release-evidence:canonical-addition-lifted-transaction",
+        "release-evidence:canonical-bootstrap-hold-transaction",
+        "release-evidence:canonical-removal-hold-transaction",
+        "release-evidence:governance-active-to-classified",
+        "release-evidence:governance-approval-identity-mismatch",
+        "release-evidence:governance-authority-blob-transition-mismatch",
+        "release-evidence:governance-bad-date-time",
+        "release-evidence:governance-classified-to-lifted",
+        "release-evidence:governance-declared-type-mismatch",
+        "release-evidence:governance-duplicate-proof-fingerprint",
+        "release-evidence:governance-fingerprint-set-proof-mismatch",
+        "release-evidence:governance-post-lift-classification-mutation",
+        "release-evidence:governance-premature-lift",
+        "release-evidence:valid-governance-difference-and-proofs"
       ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "authority-grammar"
-      }
-    },
-    {
-      "suite_id": "signer-authority",
-      "case_id": "empty-fail-closed",
-      "fixture_case_id": "empty_fail_closed",
-      "inputs": [
+      "cases": [
         {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-authority-cases.json"
-          },
-          "byte_length": 1855,
-          "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
+          "suite_id": "release-evidence",
+          "case_id": "active-governance-hold-blocks-complete",
+          "fixture_case_id": "active_governance_hold_blocks_complete",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/active_governance_hold_blocks_complete/parsed.json"
+              },
+              "byte_length": 6426,
+              "sha256": "28b51655a7e3d9072886779618604b012e6106953042f761e23e804a37577f9e"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/active_governance_hold_blocks_complete/current.json"
+              },
+              "byte_length": 6064,
+              "sha256": "fc98e4955b3d76f274fbded6ed1c80ac88e946cd74be3216a16088757352d446"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 3,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-review-or-hold"
+          }
         },
         {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
+          "suite_id": "release-evidence",
+          "case_id": "active-governance-hold-valid-pending",
+          "fixture_case_id": "active_governance_hold_valid_pending",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/active_governance_hold_valid_pending/parsed.json"
+              },
+              "byte_length": 4722,
+              "sha256": "10cf431d120ba3edd35bf31651d34a2be4bf746768000c40eda345f30d5ef157"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/active_governance_hold_valid_pending/current.json"
+              },
+              "byte_length": 4374,
+              "sha256": "edb6f6a03dea7581422a0533b488a99ac79a2897ce96d3fcc4d0690c5d1a99bc"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 3,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          }
+        },
+        {
+          "suite_id": "release-evidence",
+          "case_id": "canonical-addition-lifted-transaction",
+          "fixture_case_id": "canonical_addition_lifted_transaction",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/canonical_addition_lifted_transaction/parsed.json"
+              },
+              "byte_length": 5010,
+              "sha256": "b701dfdb9a9956f3b47a69bdde5b03313fdf01ecd1ea5d5e8277bf933b2425ee"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/canonical_addition_lifted_transaction/current.json"
+              },
+              "byte_length": 4644,
+              "sha256": "0e52681686c9943b10340d40a24d459928afdfa0bf316d32b5f4a2c1f1c6b3a4"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 3,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          }
+        },
+        {
+          "suite_id": "release-evidence",
+          "case_id": "canonical-bootstrap-hold-transaction",
+          "fixture_case_id": "canonical_bootstrap_hold_transaction",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/canonical_bootstrap_hold_transaction/parsed.json"
+              },
+              "byte_length": 5039,
+              "sha256": "188dbeb1fffd335319959f0daa3e4113a63da97a10d557569d24703a5d4d28cd"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/canonical_bootstrap_hold_transaction/current.json"
+              },
+              "byte_length": 4675,
+              "sha256": "54f6bc2e77aee0838909e8396dd3940f1d75b18770d125563a068811a7cfcb78"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 3,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          }
+        },
+        {
+          "suite_id": "release-evidence",
+          "case_id": "canonical-removal-hold-transaction",
+          "fixture_case_id": "canonical_removal_hold_transaction",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/canonical_removal_hold_transaction/parsed.json"
+              },
+              "byte_length": 4758,
+              "sha256": "9df7e4f135f44d859230c4c02d2b76280365fd0ccad68859196959c9e7e75718"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/canonical_removal_hold_transaction/current.json"
+              },
+              "byte_length": 4408,
+              "sha256": "7024c882670121e9a933198c379a70fc0be6f273ad65c5871f2d002b83384026"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 3,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          }
+        },
+        {
+          "suite_id": "release-evidence",
+          "case_id": "governance-active-to-classified",
+          "fixture_case_id": "governance_active_to_classified",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_active_to_classified/parsed.json"
+              },
+              "byte_length": 9756,
+              "sha256": "aad0fa4e45453e38edaa922d1374cc49adf182219571cfa36ab27e8f27bf718a"
+            },
+            {
+              "role": "prior-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_active_to_classified/prior.json"
+              },
+              "byte_length": 4374,
+              "sha256": "edb6f6a03dea7581422a0533b488a99ac79a2897ce96d3fcc4d0690c5d1a99bc"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 3,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_active_to_classified/current.json"
+              },
+              "byte_length": 4705,
+              "sha256": "30ca4f10df65a9912c904e222b5dff58e1f092ddde4040eb5b3a3bd8ce18b4c5"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 4,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
           },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
+          "sequence": [
+            {
+              "input_ordinal": 2,
+              "predecessor_name": null,
+              "current_name": "prikk-0.18.0-release-evidence-001.json",
+              "byte_length": 4374,
+              "sha256": "edb6f6a03dea7581422a0533b488a99ac79a2897ce96d3fcc4d0690c5d1a99bc"
+            },
+            {
+              "input_ordinal": 3,
+              "predecessor_name": "prikk-0.18.0-release-evidence-001.json",
+              "current_name": "prikk-0.18.0-release-evidence-002.json",
+              "byte_length": 4705,
+              "sha256": "30ca4f10df65a9912c904e222b5dff58e1f092ddde4040eb5b3a3bd8ce18b4c5"
+            }
+          ]
+        },
+        {
+          "suite_id": "release-evidence",
+          "case_id": "governance-approval-identity-mismatch",
+          "fixture_case_id": "governance_approval_identity_mismatch",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_approval_identity_mismatch/parsed.json"
+              },
+              "byte_length": 5040,
+              "sha256": "e688432da0c42de4808d589ae1f1d57b356e3b9fbc2a5db1ac2d5b44d2184599"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_approval_identity_mismatch/current.json"
+              },
+              "byte_length": 4676,
+              "sha256": "778d6701ca35cf8e18270f3fdbf41012964f62a11a104c420a58917e7c7ef30d"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 3,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-review-or-hold"
+          }
+        },
+        {
+          "suite_id": "release-evidence",
+          "case_id": "governance-authority-blob-transition-mismatch",
+          "fixture_case_id": "governance_authority_blob_transition_mismatch",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_authority_blob_transition_mismatch/parsed.json"
+              },
+              "byte_length": 5010,
+              "sha256": "820f62f6f032b2cf5b99a7564e7381b37129b3a6c38400fda091926b7abd1516"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_authority_blob_transition_mismatch/current.json"
+              },
+              "byte_length": 4644,
+              "sha256": "ebb528283f8843ce46dd66517e2430de4a1402caa1046ff7ea9aa6540749aadc"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 3,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-transition-or-proof"
+          }
+        },
+        {
+          "suite_id": "release-evidence",
+          "case_id": "governance-bad-date-time",
+          "fixture_case_id": "governance_bad_date_time",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_bad_date_time/parsed.json"
+              },
+              "byte_length": 5102,
+              "sha256": "58a6dea90ff865bd4993c34330a511a1219f3d455f34f864f1cd3a76ccd0b6e2"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_bad_date_time/current.json"
+              },
+              "byte_length": 4732,
+              "sha256": "76cd91921c8d816f30b5c3d4ab434440f0a915bc5f398321dd8ca2354f022356"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 3,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "invalid",
+            "semantic": "not-run",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "schema-instance"
+          }
+        },
+        {
+          "suite_id": "release-evidence",
+          "case_id": "governance-classified-to-lifted",
+          "fixture_case_id": "governance_classified_to_lifted",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_classified_to_lifted/parsed.json"
+              },
+              "byte_length": 9905,
+              "sha256": "a933b54df99a1e9674ac42090c5a6076ad8ff5151c48756285553dce98ba6481"
+            },
+            {
+              "role": "prior-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_classified_to_lifted/prior.json"
+              },
+              "byte_length": 4392,
+              "sha256": "2862ad13090990670cda88669fd959bd426e7e280ec6f8374f5542470b6cd39b"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 3,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_classified_to_lifted/current.json"
+              },
+              "byte_length": 4830,
+              "sha256": "ead6cfed413554854df4b922b1c62a93ec8ee10440401ab9050481eab8b19dd5"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 4,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          },
+          "sequence": [
+            {
+              "input_ordinal": 2,
+              "predecessor_name": null,
+              "current_name": "prikk-0.18.0-release-evidence-001.json",
+              "byte_length": 4392,
+              "sha256": "2862ad13090990670cda88669fd959bd426e7e280ec6f8374f5542470b6cd39b"
+            },
+            {
+              "input_ordinal": 3,
+              "predecessor_name": "prikk-0.18.0-release-evidence-001.json",
+              "current_name": "prikk-0.18.0-release-evidence-002.json",
+              "byte_length": 4830,
+              "sha256": "ead6cfed413554854df4b922b1c62a93ec8ee10440401ab9050481eab8b19dd5"
+            }
+          ]
+        },
+        {
+          "suite_id": "release-evidence",
+          "case_id": "governance-declared-type-mismatch",
+          "fixture_case_id": "governance_declared_type_mismatch",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_declared_type_mismatch/parsed.json"
+              },
+              "byte_length": 4754,
+              "sha256": "d3a9582b39d5ce9ec696c4091e98b2746cd9c22d0647a0d98e6251a72b07e95c"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_declared_type_mismatch/current.json"
+              },
+              "byte_length": 4404,
+              "sha256": "97d425e9098dd28f5b92725981f826dc5127d0a67d888fc63c27fd71133c0d5e"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 3,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-transition-or-proof"
+          }
+        },
+        {
+          "suite_id": "release-evidence",
+          "case_id": "governance-duplicate-proof-fingerprint",
+          "fixture_case_id": "governance_duplicate_proof_fingerprint",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_duplicate_proof_fingerprint/parsed.json"
+              },
+              "byte_length": 5117,
+              "sha256": "84e5fc21eb0b6a6e680d800f62f7531394c94022d8854c769f845fd4b63b9721"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_duplicate_proof_fingerprint/current.json"
+              },
+              "byte_length": 4747,
+              "sha256": "d294bed646685ce6592fc88e0009a44ece13401f5fb61d33b3cd009771281f56"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 3,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-transition-or-proof"
+          }
+        },
+        {
+          "suite_id": "release-evidence",
+          "case_id": "governance-fingerprint-set-proof-mismatch",
+          "fixture_case_id": "governance_fingerprint_set_proof_mismatch",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_fingerprint_set_proof_mismatch/parsed.json"
+              },
+              "byte_length": 5091,
+              "sha256": "7ee3402e163570ab8fd8f49540bf9de7f4d56759f0b0eca29d40e1b9ab887121"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_fingerprint_set_proof_mismatch/current.json"
+              },
+              "byte_length": 4725,
+              "sha256": "e4a59e74dad84300d9a24965d865b6060065a094e3d4c7c61ba8e61e31fad721"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 3,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-transition-or-proof"
+          }
+        },
+        {
+          "suite_id": "release-evidence",
+          "case_id": "governance-post-lift-classification-mutation",
+          "fixture_case_id": "governance_post_lift_classification_mutation",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_post_lift_classification_mutation/parsed.json"
+              },
+              "byte_length": 10053,
+              "sha256": "e989e247e0c8c2e55034f323fdc1ddfc19a04a1b09477c1074369534d55daa86"
+            },
+            {
+              "role": "prior-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_post_lift_classification_mutation/prior.json"
+              },
+              "byte_length": 4517,
+              "sha256": "0ae33f07400c0e8052a1df75da55d39824ee535bda8249cd96e9724a58411303"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 3,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_post_lift_classification_mutation/current.json"
+              },
+              "byte_length": 4847,
+              "sha256": "4153f145d97b1b75794eaa141572d6afe3e9981552fdd5b7c82360b875560d61"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 4,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-transition-or-proof"
+          },
+          "sequence": [
+            {
+              "input_ordinal": 2,
+              "predecessor_name": null,
+              "current_name": "prikk-0.18.0-release-evidence-001.json",
+              "byte_length": 4517,
+              "sha256": "0ae33f07400c0e8052a1df75da55d39824ee535bda8249cd96e9724a58411303"
+            },
+            {
+              "input_ordinal": 3,
+              "predecessor_name": "prikk-0.18.0-release-evidence-001.json",
+              "current_name": "prikk-0.18.0-release-evidence-002.json",
+              "byte_length": 4847,
+              "sha256": "4153f145d97b1b75794eaa141572d6afe3e9981552fdd5b7c82360b875560d61"
+            }
+          ]
+        },
+        {
+          "suite_id": "release-evidence",
+          "case_id": "governance-premature-lift",
+          "fixture_case_id": "governance_premature_lift",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_premature_lift/parsed.json"
+              },
+              "byte_length": 9881,
+              "sha256": "1298d70ebcc3f1d345182f60c1e49aba2d830539b6ad0511df5cfa717f785eab"
+            },
+            {
+              "role": "prior-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_premature_lift/prior.json"
+              },
+              "byte_length": 4374,
+              "sha256": "edb6f6a03dea7581422a0533b488a99ac79a2897ce96d3fcc4d0690c5d1a99bc"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 3,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/governance_premature_lift/current.json"
+              },
+              "byte_length": 4824,
+              "sha256": "e88b51a58dbe0a0f3bba4528c0935db8929a6e581e1c1466ee710495715f4094"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 4,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "invalid",
+            "final": "invalid",
+            "case_outcome": "invalid",
+            "primary_reason": "governance-review-or-hold"
+          },
+          "sequence": [
+            {
+              "input_ordinal": 2,
+              "predecessor_name": null,
+              "current_name": "prikk-0.18.0-release-evidence-001.json",
+              "byte_length": 4374,
+              "sha256": "edb6f6a03dea7581422a0533b488a99ac79a2897ce96d3fcc4d0690c5d1a99bc"
+            },
+            {
+              "input_ordinal": 3,
+              "predecessor_name": "prikk-0.18.0-release-evidence-001.json",
+              "current_name": "prikk-0.18.0-release-evidence-002.json",
+              "byte_length": 4824,
+              "sha256": "e88b51a58dbe0a0f3bba4528c0935db8929a6e581e1c1466ee710495715f4094"
+            }
+          ]
+        },
+        {
+          "suite_id": "release-evidence",
+          "case_id": "valid-governance-difference-and-proofs",
+          "fixture_case_id": "valid_governance_difference_and_proofs",
+          "inputs": [
+            {
+              "role": "schema",
+              "ordinal": 0,
+              "location": {
+                "kind": "direct",
+                "path": "release/schemas/release-evidence-v1.schema.json"
+              },
+              "byte_length": 15456,
+              "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
+            },
+            {
+              "role": "fixture-table",
+              "ordinal": 1,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/valid_governance_difference_and_proofs/parsed.json"
+              },
+              "byte_length": 5103,
+              "sha256": "6963c366dab7b96b8639b258369b37c0c74420c8d83d670d14fb4ede5410a27e"
+            },
+            {
+              "role": "current-snapshot",
+              "ordinal": 2,
+              "location": {
+                "kind": "packed",
+                "pack_id": "release-evidence",
+                "entry_id": "release/oracle/vectors/release-evidence/valid_governance_difference_and_proofs/current.json"
+              },
+              "byte_length": 4733,
+              "sha256": "7c83d351852bc0b11d349cc77165f638cefcde30c6d02e2ddb2cdefa5c7a5817"
+            },
+            {
+              "role": "expected-output",
+              "ordinal": 3,
+              "location": {
+                "kind": "direct",
+                "path": "release/oracle/python-observations-v1.json"
+              },
+              "byte_length": 22171,
+              "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+            }
+          ],
+          "expected": {
+            "structural": "valid",
+            "semantic": "valid",
+            "final": "valid",
+            "case_outcome": "valid",
+            "primary_reason": "none"
+          }
         }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "signer-authority",
-      "case_id": "lowercase",
-      "fixture_case_id": "lowercase",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-authority-cases.json"
-          },
-          "byte_length": 1855,
-          "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "authority-grammar"
-      }
-    },
-    {
-      "suite_id": "signer-authority",
-      "case_id": "malformed-toml",
-      "fixture_case_id": "malformed_toml",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-authority-cases.json"
-          },
-          "byte_length": 1855,
-          "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "authority-grammar"
-      }
-    },
-    {
-      "suite_id": "signer-authority",
-      "case_id": "multiple-sorted",
-      "fixture_case_id": "multiple_sorted",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-authority-cases.json"
-          },
-          "byte_length": 1855,
-          "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "signer-authority",
-      "case_id": "unknown-field",
-      "fixture_case_id": "unknown_field",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-authority-cases.json"
-          },
-          "byte_length": 1855,
-          "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "authority-grammar"
-      }
-    },
-    {
-      "suite_id": "signer-authority",
-      "case_id": "unsorted",
-      "fixture_case_id": "unsorted",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-authority-cases.json"
-          },
-          "byte_length": 1855,
-          "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "authority-grammar"
-      }
-    },
-    {
-      "suite_id": "signer-authority",
-      "case_id": "unsupported-schema",
-      "fixture_case_id": "unsupported_schema",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-authority-cases.json"
-          },
-          "byte_length": 1855,
-          "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "authority-grammar"
-      }
-    },
-    {
-      "suite_id": "signer-authority",
-      "case_id": "wrong-length",
-      "fixture_case_id": "wrong_length",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-authority-cases.json"
-          },
-          "byte_length": 1855,
-          "sha256": "dc46994a8fdf9cd24dc02dc187425613ff83a0fd8a7751f01fe287c778d3298a"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "authority-grammar"
-      }
-    },
-    {
-      "suite_id": "signer-authority-live",
-      "case_id": "release-signers-toml",
-      "fixture_case_id": "release-signers-toml",
-      "inputs": [
-        {
-          "role": "authority",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release-signers.toml"
-          },
-          "byte_length": 56,
-          "sha256": "f8d56841e0b6a683605b62dbbe1af6521acdb92f627dd16ac043704954130296"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "authority-revision-binding-mismatch",
-      "fixture_case_id": "authority_revision_binding_mismatch",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/authority_revision_binding_mismatch/context.json"
-          },
-          "byte_length": 314,
-          "sha256": "bfdc2bc0ac6733668c16b157bf211c291eac2adbe0923ccf73a2ea8afdaf7c08"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/authority_revision_binding_mismatch/challenge.txt"
-          },
-          "byte_length": 352,
-          "sha256": "72f326223d4c6d635216c6e15a2490910e9c7425827f809e4dfc2c5a4907148c"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-grammar-or-binding"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "canonical-golden-bytes",
-      "fixture_case_id": "canonical_golden_bytes",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/canonical_golden_bytes/context.json"
-          },
-          "byte_length": 301,
-          "sha256": "10679b476292e361c3da6bd839fd26ab9e615212811d19abffe9f7c85dc7b93d"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/canonical_golden_bytes/challenge.txt"
-          },
-          "byte_length": 352,
-          "sha256": "72f326223d4c6d635216c6e15a2490910e9c7425827f809e4dfc2c5a4907148c"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "crlf-bytes",
-      "fixture_case_id": "crlf_bytes",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/crlf_bytes/context.json"
-          },
-          "byte_length": 254,
-          "sha256": "d81c92f0db1787b9e34f4a0abe96750c5b28efa14ed8f79e9976d8673ed202fa"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/crlf_bytes/challenge.txt"
-          },
-          "byte_length": 360,
-          "sha256": "b962cca815d33b22127e072096ecdaab601c1382bc44fb9eb6f73a85ddf007e7"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-grammar-or-binding"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "duplicate-field",
-      "fixture_case_id": "duplicate_field",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/duplicate_field/context.json"
-          },
-          "byte_length": 259,
-          "sha256": "50798377ea735e932f3c9ec1e7acab28bbdcefddf12100a6b2f01eab98237ad6"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/duplicate_field/challenge.txt"
-          },
-          "byte_length": 374,
-          "sha256": "ae7eb6b4f774e663dead05e335ddee15be69c7cbe19cccf9ca42b88897908262"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-grammar-or-binding"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "expired-challenge",
-      "fixture_case_id": "expired_challenge",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/expired_challenge/context.json"
-          },
-          "byte_length": 261,
-          "sha256": "ba09d4dd0c1d3f5bafe0aef5eaf5940b94dbfe9a94125dac4397a0f997000d9a"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/expired_challenge/challenge.txt"
-          },
-          "byte_length": 352,
-          "sha256": "72f326223d4c6d635216c6e15a2490910e9c7425827f809e4dfc2c5a4907148c"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-time-window"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "expiry-instant-is-exclusive",
-      "fixture_case_id": "expiry_instant_is_exclusive",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/expiry_instant_is_exclusive/context.json"
-          },
-          "byte_length": 306,
-          "sha256": "87f13060278abe22e8cac98921d744caa9a220ad462ce3a210e77cddde170c1f"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/expiry_instant_is_exclusive/challenge.txt"
-          },
-          "byte_length": 352,
-          "sha256": "72f326223d4c6d635216c6e15a2490910e9c7425827f809e4dfc2c5a4907148c"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-time-window"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "expiry-window-too-long",
-      "fixture_case_id": "expiry_window_too_long",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/expiry_window_too_long/context.json"
-          },
-          "byte_length": 266,
-          "sha256": "e0c4929aa85ccd2810e2c0c7953a92ac8012bc51a491ee9688d035698edebfce"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/expiry_window_too_long/challenge.txt"
-          },
-          "byte_length": 352,
-          "sha256": "c54c83820ce958fb78cfcf096e8bbe0a88796aafa7077450ceb8403e161186db"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-time-window"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "extra-space",
-      "fixture_case_id": "extra_space",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/extra_space/context.json"
-          },
-          "byte_length": 255,
-          "sha256": "953bb7a35bdf68748b9561c208fd88cb87b7d63895e9c6de02e571b107bd5381"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/extra_space/challenge.txt"
-          },
-          "byte_length": 353,
-          "sha256": "e4755b0c1c54bf98ca8b2bc2f10dfb96346e36cc922b493aeba2ab3883c91d76"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-grammar-or-binding"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "issue-time-too-far-in-future",
-      "fixture_case_id": "issue_time_too_far_in_future",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/issue_time_too_far_in_future/context.json"
-          },
-          "byte_length": 272,
-          "sha256": "11dc733fcd4a45d090ee215a3961624ddb5c0e0aca5a4deb415fa768e0c306a3"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/issue_time_too_far_in_future/challenge.txt"
-          },
-          "byte_length": 352,
-          "sha256": "65c110b292ebefda841806d707a2fe989dbc5fce5a00b06827be63dc17353934"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-time-window"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "missing-final-lf",
-      "fixture_case_id": "missing_final_lf",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/missing_final_lf/context.json"
-          },
-          "byte_length": 260,
-          "sha256": "f26fbd519b5d095435fd09a754ac8d42e82115833e871ba796eb32f58283ba32"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/missing_final_lf/challenge.txt"
-          },
-          "byte_length": 351,
-          "sha256": "36a99410527acea74ea71b57e95843f41f7fce90b2fc60d2e3c22760b0e9b4cb"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-grammar-or-binding"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "missing-verifier-result",
-      "fixture_case_id": "missing_verifier_result",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/missing_verifier_result/context.json"
-          },
-          "byte_length": 259,
-          "sha256": "c575e27d548a30f7d30ae5b01ea480b68a179064b1ec34128e60788f8829d5d3"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/missing_verifier_result/challenge.txt"
-          },
-          "byte_length": 352,
-          "sha256": "72f326223d4c6d635216c6e15a2490910e9c7425827f809e4dfc2c5a4907148c"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-grammar-or-binding"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "non-ascii-bytes",
-      "fixture_case_id": "non_ascii_bytes",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/non_ascii_bytes/context.json"
-          },
-          "byte_length": 259,
-          "sha256": "d76c37155b665a417b03102250e3708c8e411eac0eb67ec963935cd5795df7f9"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/non_ascii_bytes/challenge.txt"
-          },
-          "byte_length": 353,
-          "sha256": "72688a93f8190597d73c626c9d41acae0ea8894e3bbfb2a3d8995d3fbdd0c7f5"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-grammar-or-binding"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "observed-fingerprint-mismatch",
-      "fixture_case_id": "observed_fingerprint_mismatch",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/observed_fingerprint_mismatch/context.json"
-          },
-          "byte_length": 313,
-          "sha256": "c6623b3181cced8f0a615e4521c4fdfe462050cefc35031bc6c78d7ce2b4bcc5"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/observed_fingerprint_mismatch/challenge.txt"
-          },
-          "byte_length": 352,
-          "sha256": "72f326223d4c6d635216c6e15a2490910e9c7425827f809e4dfc2c5a4907148c"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-grammar-or-binding"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "reordered-fields",
-      "fixture_case_id": "reordered_fields",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/reordered_fields/context.json"
-          },
-          "byte_length": 260,
-          "sha256": "4862d2a0983d76e232d093e8303c49d338192d500ba702e45ecab00fc600d96e"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/reordered_fields/challenge.txt"
-          },
-          "byte_length": 352,
-          "sha256": "97e40164dc7b74f05825a62d5f0c083b527e204bb2b4771ddfc411cdcba30aab"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-grammar-or-binding"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "wrong-nonce-length",
-      "fixture_case_id": "wrong_nonce_length",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/wrong_nonce_length/context.json"
-          },
-          "byte_length": 262,
-          "sha256": "2afdcf7e22d281e76b38191d4e95b844192e2c59565419478b738f126317c4b8"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/wrong_nonce_length/challenge.txt"
-          },
-          "byte_length": 304,
-          "sha256": "0055e14aea54263e2c795399d2fd3b9348261deaed17dcb1e69d9ed471023418"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-grammar-or-binding"
-      }
-    },
-    {
-      "suite_id": "signer-challenge",
-      "case_id": "wrong-repository",
-      "fixture_case_id": "wrong_repository",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/wrong_repository/context.json"
-          },
-          "byte_length": 260,
-          "sha256": "47e73ede50b585334a78626c6cb6a2373b37d5043746be366c8a9bb717c0eddd"
-        },
-        {
-          "role": "challenge",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "signer-challenge",
-            "entry_id": "release/oracle/vectors/signer-challenge/wrong_repository/challenge.txt"
-          },
-          "byte_length": 353,
-          "sha256": "e08aae0842ba799d063a474362e2c01f3b50789e41418bbfca93d9cbd6923e90"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "challenge-grammar-or-binding"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "addition-verified",
-      "fixture_case_id": "addition_verified",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "automation-as-approver",
-      "fixture_case_id": "automation_as_approver",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-review-or-hold"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "bootstrap-two-signers-verified",
-      "fixture_case_id": "bootstrap_two_signers_verified",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "classification-only-not-applicable",
-      "fixture_case_id": "classification_only_not_applicable",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "duplicate-introduced-proof",
-      "fixture_case_id": "duplicate_introduced_proof",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-transition-or-proof"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "lowercase-fingerprint",
-      "fixture_case_id": "lowercase_fingerprint",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-transition-or-proof"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "mismatched-introduced-proof-order",
-      "fixture_case_id": "mismatched_introduced_proof_order",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-transition-or-proof"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "missing-accountable-role",
-      "fixture_case_id": "missing_accountable_role",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-review-or-hold"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "missing-introduced-proof",
-      "fixture_case_id": "missing_introduced_proof",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-transition-or-proof"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "not-applicable-with-introduced-fingerprint",
-      "fixture_case_id": "not_applicable_with_introduced_fingerprint",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-transition-or-proof"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "removal-label-adds-fingerprint",
-      "fixture_case_id": "removal_label_adds_fingerprint",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-transition-or-proof"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "removal-only-not-applicable",
-      "fixture_case_id": "removal_only_not_applicable",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "replacement-verified",
-      "fixture_case_id": "replacement_verified",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "same-person-both-approvals",
-      "fixture_case_id": "same_person_both_approvals",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-review-or-hold"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "unexpected-introduced-proof",
-      "fixture_case_id": "unexpected_introduced_proof",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-transition-or-proof"
-      }
-    },
-    {
-      "suite_id": "signer-governance",
-      "case_id": "unsorted-fingerprint-set",
-      "fixture_case_id": "unsorted_fingerprint_set",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/signer-governance-cases.json"
-          },
-          "byte_length": 9076,
-          "sha256": "5f2ae18a753c3df93b19c54ccaadebe17b7a349e017906a1e73fb6868664edb0"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 28650,
-          "sha256": "6ca68c229d516b1130540a007262dcef1a50acb5bf923aa4c1a94b595a8d6753"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-transition-or-proof"
-      }
+      ]
     }
   ]
 }

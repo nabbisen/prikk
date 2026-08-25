@@ -18,75 +18,49 @@ use crate::json;
 // from the parked suites; every other subject kept at least one member). A subject with zero
 // members after parking would fail `derive`'s own "manifest-contract:coverage-empty-subject" check
 // below, so this list must track exactly what the surviving cases can populate.
-const SUBJECTS: [&str; 9] = [
-    "release-state",
+//
+// RFC 119 track B: "release-state" and "governance"/"hold" dropped in the same round (9 -> 6).
+// `release-state`'s whole 23-case suite was removed (NEVER, superseded by the
+// proposal-authorize-execute procedure) -- the only populator of the "release-state" subject.
+// Separately, 16 of `release-evidence`'s 73 cases were parked: the ones exercising its embedded
+// DC-35 signer-governance sub-object. Every case with "governance" in its name, and every case
+// with "hold" in its name, was among those 16 (re-derived by simulating `subject_membership`
+// against the surviving 57-case set before editing this list) -- so both subjects would otherwise
+// be empty.
+const SUBJECTS: [&str; 6] = [
     "schema",
-    "governance",
     "transition",
     "exact-byte",
     "tag",
-    "hold",
     "completion",
     "sequence",
 ];
 
-const REPAIR_REGRESSIONS: [(&str, &[&str]); 3] = [
-    (
-        "schema-evaluator",
-        &[
-            "boolean_and_integer_are_unique",
-            "boolean_enum_distinct_from_integer",
-            "integer_and_equivalent_number_are_duplicates",
-            "integer_const_rejects_boolean",
-            "unknown_assertion_keyword_fails_closed",
-        ],
-    ),
-    (
-        "json-parser",
-        &[
-            "duplicate_evidence_field",
-            "duplicate_fixture_case_field",
-            "duplicate_name_in_array_object",
-            "duplicate_nested_name",
-            "duplicate_schema_keyword",
-            "duplicate_top_level_name",
-            "escaped_equivalent_duplicate_name",
-            "malformed_json",
-            "unique_object_names",
-        ],
-    ),
-    (
-        "release-evidence",
-        &[
-            "raw_predecessor_digest_mismatch",
-            "full_schema_boolean_version_rejected",
-            "governance_active_to_classified",
-            "governance_classified_to_lifted",
-            "governance_premature_lift",
-            "governance_post_lift_classification_mutation",
-            "tag_verification_signer_primary_fingerprint_immutable",
-            "tag_verification_authority_path_immutable",
-            "tag_verification_authority_blob_id_immutable",
-            "tag_verification_verifier_result_immutable",
-            "tag_verification_status_immutable",
-            "sequence_zero_attempt_growth",
-            "snapshot_object_bytes_mismatch",
-            "pending_verified_without_details",
-            "partial_verified_without_details",
-            "pending_not_observed_with_detail",
-            "pending_failed_without_authority",
-            "partial_failed_without_authority",
-            "pending_failed_with_authority_and_result",
-            "canonical_bootstrap_hold_transaction",
-            "canonical_addition_lifted_transaction",
-            "canonical_removal_hold_transaction",
-            "governance_fingerprint_set_proof_mismatch",
-            "governance_approval_identity_mismatch",
-            "governance_authority_blob_transition_mismatch",
-            "governance_declared_type_mismatch",
-        ],
-    ),
-];
+// RFC 119 track B: the `schema-evaluator` and `json-parser` tuples were removed outright -- both
+// suites were removed (NEVER), so listing their case names here would claim a regression is still
+// protected when nothing runs it any more. Eleven `release-evidence` names were removed for the
+// same reason: they name cases that were parked (LATER), not deleted, but a parked case does not
+// run either, so it cannot honestly appear as a currently-protected regression.
+const REPAIR_REGRESSIONS: [(&str, &[&str]); 1] = [(
+    "release-evidence",
+    &[
+        "raw_predecessor_digest_mismatch",
+        "full_schema_boolean_version_rejected",
+        "tag_verification_signer_primary_fingerprint_immutable",
+        "tag_verification_authority_path_immutable",
+        "tag_verification_authority_blob_id_immutable",
+        "tag_verification_verifier_result_immutable",
+        "tag_verification_status_immutable",
+        "sequence_zero_attempt_growth",
+        "snapshot_object_bytes_mismatch",
+        "pending_verified_without_details",
+        "partial_verified_without_details",
+        "pending_not_observed_with_detail",
+        "pending_failed_without_authority",
+        "partial_failed_without_authority",
+        "pending_failed_with_authority_and_result",
+    ],
+)];
 
 pub(super) fn verify(
     root: &Path,
@@ -201,15 +175,8 @@ fn subject_membership(case: &Case) -> Vec<&'static str> {
     if suite == "signer-challenge" {
         subjects.extend(["challenge", "exact-byte"]);
     }
-    if suite == "release-state" {
-        subjects.insert("release-state");
-    }
-    if matches!(suite, "schema-evaluator" | "json-parser") || case.expected.structural == "invalid"
-    {
+    if case.expected.structural == "invalid" {
         subjects.insert("schema");
-    }
-    if suite == "signer-governance" || fixture.contains("governance") {
-        subjects.insert("governance");
     }
     if fixture.starts_with("transition_") {
         subjects.insert("transition");
@@ -229,9 +196,6 @@ fn subject_membership(case: &Case) -> Vec<&'static str> {
     }
     if fixture.contains("tag") {
         subjects.insert("tag");
-    }
-    if fixture.contains("hold") || fixture.contains("governance") {
-        subjects.insert("hold");
     }
     if [
         "complete",

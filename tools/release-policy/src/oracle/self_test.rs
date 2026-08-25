@@ -20,7 +20,9 @@ pub(super) fn run(root: &Path, oracle: &Oracle) -> Result<Vec<String>> {
     let mut errors = Vec::new();
     // RFC 119 track A: 154 -> 111 when the 43 post-1.0 signer cases were parked (not deleted; see
     // release/oracle/parked-cases-v1.json).
-    if oracle.manifest.cases.len() != 111 {
+    // RFC 119 track B: 111 -> 57. release-state's 23 cases and json-parser/schema-evaluator's 15
+    // were removed outright (NEVER); 16 of release-evidence's 73 were parked (LATER, same file).
+    if oracle.manifest.cases.len() != 57 {
         errors.push("self-test:case-count".to_owned());
     }
     if oracle.inputs.len()
@@ -107,33 +109,6 @@ fn repository_mutations(root: &Path, errors: &mut Vec<String>) -> Result<()> {
         *member_mut(current, "current_name")? = json!("wrong.json");
         Ok(())
     })?;
-    reject_manifest(root, &original, errors, "governance-context", |manifest| {
-        let plain = array_field(manifest, "cases")?
-            .iter()
-            .find(|case| {
-                string_field(case, "suite_id") == Some("release-state")
-                    && string_field(case, "fixture_case_id") == Some("development")
-            })
-            .and_then(|case| case.get("inputs"))
-            .and_then(Value::as_array)
-            .and_then(|inputs| inputs.first())
-            .cloned();
-        let plain = plain.ok_or_else(|| Error::new("self-test plain state input absent"))?;
-        let governed = array_field_mut(manifest, "cases")?
-            .iter_mut()
-            .find(|case| {
-                string_field(case, "suite_id") == Some("release-state")
-                    && string_field(case, "fixture_case_id")
-                        .is_some_and(|name| name.contains("governance"))
-            })
-            .ok_or_else(|| Error::new("self-test governed state case absent"))?;
-        let input = array_field_mut(governed, "inputs")?
-            .first_mut()
-            .ok_or_else(|| Error::new("self-test governed state input absent"))?;
-        *input = plain;
-        Ok(())
-    })?;
-
     let temporary = candidate::create(root)?;
     fs::write(
         temporary.path().join("release/oracle/packs/extra.json"),
@@ -296,13 +271,6 @@ fn member_mut<'a>(value: &'a mut Value, field: &str) -> Result<&'a mut Value> {
 fn array_field_mut<'a>(value: &'a mut Value, field: &str) -> Result<&'a mut Vec<Value>> {
     member_mut(value, field)?
         .as_array_mut()
-        .ok_or_else(|| Error::new(format!("self-test field is not an array: {field}")))
-}
-
-fn array_field<'a>(value: &'a Value, field: &str) -> Result<&'a Vec<Value>> {
-    value
-        .get(field)
-        .and_then(Value::as_array)
         .ok_or_else(|| Error::new(format!("self-test field is not an array: {field}")))
 }
 

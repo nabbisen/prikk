@@ -10,9 +10,11 @@ Run the tracked policy audit from the repository root:
 cargo run --locked -p prikk-release-policy -- check
 ```
 
-The Rust workspace tool strictly parses the actual authority file, derives the outcome of every signer,
-challenge, release-state, and evidence fixture, and fails when a computed outcome differs from its
-`expected` value. Its focused Draft 2020-12 evaluator implements every schema
+The Rust workspace tool strictly parses the actual authority file, derives the outcome of every
+release-evidence fixture, and fails when a computed outcome differs from its `expected` value. (RFC
+119 track A parked the signer/challenge suites and track B removed the release-state suite outright
+-- see `docs/src/reference/release-compatibility.md`'s Core Caveats.) Its focused Draft 2020-12
+evaluator implements every schema
 keyword used by the tracked release-evidence schema, fails closed on an unknown keyword, and uses strict
 JSON value equality. It asserts canonical UTC `date-time` values rather than treating `format` as
 annotation-only. Every policy JSON entry path rejects duplicate object names at any nesting depth before
@@ -23,29 +25,11 @@ from duplicate-name errors. Separate semantic checks cover relations JSON Schema
 including exact signer-proof coverage and append-only snapshot history. Running the command does not
 create bytecode in the worktree.
 
-Emit deterministic machine-readable observations without assigning diagnostic reasons:
-
-```console
-python3 -B release/observe-policy.py
-```
-
-The output binds Python baseline commit `12c137d` and accepted profile-contract commit `ea427df`, sorts
-records by suite and case id, preserves fixture-visible outcomes such as `valid-local-only`, and reports
-structural/semantic stages only where the existing evidence validator computes them. It is a migration
-observation adapter, not the authoritative policy command. Verify computed observations against the
-fixture-owned expected outcomes with:
-
-```console
-python3 -B release/observe-policy.py --check
-```
-
-The expected path independently projects fixture outcomes to final verdicts and verifies the complete
-top-level identity contract. Its negative assurance corrupts only an observed final verdict and then
-all identity fields; both changes must be rejected:
-
-```console
-python3 -B release/observe-policy.py --self-test
-```
+RFC 119 track B removed the Python implementation this tool once migrated from, along with
+`differential-check` (the command that compared the two) and `release/observe-policy.py`,
+`release/check-policy.py`, and the `release/policy_check/` package it invoked. The Rust command
+above is the sole authoritative policy check; `release/oracle/python-observations-v1.json` remains
+as a frozen historical baseline it is still cross-checked against, not a live Python re-run.
 
 ## Signer Authority
 
@@ -125,10 +109,9 @@ evidence blocks release.
 
 ## Release State
 
-[`fixtures/release-state-cases.json`](fixtures/release-state-cases.json) is the table-driven audit input
-for valid development, candidate, private-finalization, and released rows plus forbidden mixed states.
-The audit executes every row. Passing synthetic rows is not evidence that a concrete commit or tag
-passed a release-state row.
+RFC 119 track B removed the release-state audit outright (NEVER, not parked): it was the
+three-authority release-lane state machine, superseded 2026-08-24 by a proposal-authorize-execute
+procedure that matches how releases are actually cut. No release-state check runs today.
 
 ## Distribution Evidence
 

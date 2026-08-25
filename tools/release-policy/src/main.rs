@@ -5,7 +5,6 @@
 mod args;
 mod boundary;
 mod command_scan;
-mod differential;
 mod error;
 mod json;
 mod oracle;

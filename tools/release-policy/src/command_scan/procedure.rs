@@ -1,11 +1,10 @@
 //! Structural extraction for governed shell and workflow procedures.
 
-use super::{Scan, basename, inert_head, publication, python_policy, rust_policy, scan_mode};
+use super::{Scan, basename, inert_head, publication, rust_policy, scan_mode};
 
 pub(super) fn allowed(tokens: &[String], index: usize, head: &str) -> bool {
     let tail = tokens.get(index + 1..).unwrap_or_default();
     match basename(head) {
-        "python" | "python3" => python_policy(tail),
         "cargo" => {
             rust_policy(tail)
                 || publication(tail).is_some()

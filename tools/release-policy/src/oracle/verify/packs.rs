@@ -16,16 +16,18 @@ use crate::schema::SchemaProfile;
 // referenced by exactly one case) would fail with the pack still registered and no case left to
 // reference it. Moved to `release/oracle/parked-packs/signer-challenge-v1.json`, not deleted; see
 // `release/oracle/parked-cases-v1.json`'s `revival_condition` for what would bring it back.
-const PACKS: [(&str, &str); 2] = [
-    (
-        "release-evidence",
-        "release/oracle/packs/release-evidence-v1.json",
-    ),
-    (
-        "release-state",
-        "release/oracle/packs/release-state-v1.json",
-    ),
-];
+//
+// RFC 119 track B: `release-state` was here until its whole suite (23 cases, the superseded
+// three-authority release-lane state machine) was removed outright -- NEVER, not LATER, so its
+// pack was deleted (`release/oracle/packs/release-state-v1.json`), not parked; git history is the
+// record. `release-evidence`'s pack shrank from 182 to 146 entries in the same increment: 16 of
+// its 73 cases (the ones exercising the embedded DC-35 signer-governance sub-object) were parked,
+// and their 36 now-orphaned entries moved to
+// `release/oracle/parked-packs/release-evidence-governance-v1.json`.
+const PACKS: [(&str, &str); 1] = [(
+    "release-evidence",
+    "release/oracle/packs/release-evidence-v1.json",
+)];
 
 pub(super) fn load(
     root: &Path,

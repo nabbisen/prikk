@@ -83,8 +83,6 @@ fn verify_shape(case: &Case) -> Result<()> {
     let mut expected = match case.suite_id.as_str() {
         "signer-authority-live" => vec!["authority", "expected-output"],
         "signer-challenge" => vec!["fixture-table", "challenge", "expected-output"],
-        "release-state" => vec!["fixture-table", "schema", "expected-output"],
-        "json-parser" => vec!["fixture-table", "expected-output"],
         "release-evidence" => vec![
             "schema",
             "fixture-table",
@@ -121,7 +119,6 @@ fn verify_shape(case: &Case) -> Result<()> {
 fn packed_role_allowed(case: &Case, role: &str) -> bool {
     match case.suite_id.as_str() {
         "signer-challenge" => matches!(role, "fixture-table" | "challenge"),
-        "release-state" => role == "fixture-table",
         "release-evidence" => matches!(
             role,
             "fixture-table" | "prior-snapshot" | "current-snapshot"

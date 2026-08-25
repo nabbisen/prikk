@@ -11,7 +11,6 @@ pub(crate) use procedure::{shell as scan_shell, yaml as scan_yaml};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Invocation {
-    PythonPolicy,
     RustPolicy,
     Publication { phase: String, argv: Vec<String> },
 }
@@ -49,7 +48,6 @@ pub(crate) fn invocations(text: &str) -> Vec<Invocation> {
 }
 
 fn scan_command(tokens: &[String], strict: bool, result: &mut Scan) {
-    let mut found_python = false;
     let mut found_rust = false;
     let mut found_publication = false;
     match command_head(tokens) {
@@ -84,10 +82,6 @@ fn scan_command(tokens: &[String], strict: bool, result: &mut Scan) {
     }
     for (index, token) in tokens.iter().enumerate() {
         let tail = tokens.get(index + 1..).unwrap_or_default();
-        if is_python(token) && python_policy(tail) {
-            found_python = true;
-            result.invocations.push(Invocation::PythonPolicy);
-        }
         if cargo(token) {
             if rust_policy(tail) {
                 found_rust = true;
@@ -110,42 +104,12 @@ fn scan_command(tokens: &[String], strict: bool, result: &mut Scan) {
     if tokens.iter().any(|token| dynamic_cargo(token)) {
         result.errors.push("unsupported-cargo-executable");
     }
-    if !found_python && has_python_interpreter(tokens) && has_python_policy_target(tokens) {
-        result.errors.push("unsupported-python-invocation");
-    }
     if !found_rust && rust_policy(tokens) {
         result.errors.push("unsupported-rust-policy-invocation");
     }
     if !found_publication && has_publication_phase(tokens) {
         result.errors.push("unsupported-publication-invocation");
     }
-}
-
-fn is_python(token: &str) -> bool {
-    matches!(basename(token), "python" | "python3")
-}
-
-fn python_policy(tokens: &[String]) -> bool {
-    for token in tokens {
-        if token == "--" || token.starts_with('-') {
-            continue;
-        }
-        return normalize_path(token) == "release/check-policy.py";
-    }
-    false
-}
-
-fn has_python_policy_target(tokens: &[String]) -> bool {
-    tokens
-        .iter()
-        .any(|token| normalize_path(token) == "release/check-policy.py")
-}
-
-fn has_python_interpreter(tokens: &[String]) -> bool {
-    tokens.iter().any(|token| {
-        is_python(token)
-            || (token.starts_with('$') && token.to_ascii_lowercase().contains("python"))
-    })
 }
 
 fn cargo(token: &str) -> bool {
@@ -177,10 +141,6 @@ fn has_publication_phase(tokens: &[String]) -> bool {
 
 fn basename(token: &str) -> &str {
     token.rsplit('/').next().unwrap_or(token)
-}
-
-fn normalize_path(token: &str) -> &str {
-    token.strip_prefix("./").unwrap_or(token)
 }
 
 #[cfg(test)]

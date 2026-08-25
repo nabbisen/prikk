@@ -6,8 +6,8 @@
   "reason_taxonomy_version": 1,
   "reason_map": {
     "path": "release/oracle/reason-map-v1.json",
-    "byte_length": 6388,
-    "sha256": "fc2e7023caabbbaba62457cac7501896f26e8e3aef16353e7f0a6c24eb7ea631"
+    "byte_length": 3697,
+    "sha256": "19715ef82926c696c00ad421092cecee770b4968066419fcbb17498dc0e78740"
   },
   "normative_schema": {
     "path": "release/schemas/release-evidence-v1.schema.json",
@@ -18,603 +18,11 @@
     {
       "pack_id": "release-evidence",
       "path": "release/oracle/packs/release-evidence-v1.json",
-      "byte_length": 1103148,
-      "sha256": "a0d565c1ed1468701329628bd3b39af9b9df678fe93229a702e2b34f4f4f1583"
-    },
-    {
-      "pack_id": "release-state",
-      "path": "release/oracle/packs/release-state-v1.json",
-      "byte_length": 60296,
-      "sha256": "4db4e03826bc0c87b311e2efbd012531be1697437f07a0c8a50996ebbd905ee4"
+      "byte_length": 882127,
+      "sha256": "bccdd8566a6e8761b3ecfc5d9e11171349821272eb8a838fdba27013c9d48ebe"
     }
   ],
   "cases": [
-    {
-      "suite_id": "json-parser",
-      "case_id": "duplicate-evidence-field",
-      "fixture_case_id": "duplicate-evidence-field",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/json-parser/duplicate-evidence-field.json"
-          },
-          "byte_length": 70,
-          "sha256": "ed7268f335ff2f079753a3f2d34b0fc09f3551dd1d9159a2cbe0e6234e4dcda9"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "invalid",
-        "semantic": "not-run",
-        "final": "invalid",
-        "case_outcome": "duplicate-name-error",
-        "primary_reason": "json-syntax-or-duplicate-name"
-      }
-    },
-    {
-      "suite_id": "json-parser",
-      "case_id": "duplicate-fixture-case-field",
-      "fixture_case_id": "duplicate-fixture-case-field",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/json-parser/duplicate-fixture-case-field.json"
-          },
-          "byte_length": 98,
-          "sha256": "221477cd62dcf924d00240ef367cab370990711bc3e7220eabfb9e0b316d112b"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "invalid",
-        "semantic": "not-run",
-        "final": "invalid",
-        "case_outcome": "duplicate-name-error",
-        "primary_reason": "json-syntax-or-duplicate-name"
-      }
-    },
-    {
-      "suite_id": "json-parser",
-      "case_id": "duplicate-name-in-array-object",
-      "fixture_case_id": "duplicate-name-in-array-object",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/json-parser/duplicate-name-in-array-object.json"
-          },
-          "byte_length": 68,
-          "sha256": "378a2ba5ed40482d0c3d70b02e099fa83864e5da26f056a153740d3e4aafdb8f"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "invalid",
-        "semantic": "not-run",
-        "final": "invalid",
-        "case_outcome": "duplicate-name-error",
-        "primary_reason": "json-syntax-or-duplicate-name"
-      }
-    },
-    {
-      "suite_id": "json-parser",
-      "case_id": "duplicate-nested-name",
-      "fixture_case_id": "duplicate-nested-name",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/json-parser/duplicate-nested-name.json"
-          },
-          "byte_length": 52,
-          "sha256": "fd1650b2bc6ece7e1b413a803e2bc73c3e3ade254e8c22a05f7e60f4c9b2e019"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "invalid",
-        "semantic": "not-run",
-        "final": "invalid",
-        "case_outcome": "duplicate-name-error",
-        "primary_reason": "json-syntax-or-duplicate-name"
-      }
-    },
-    {
-      "suite_id": "json-parser",
-      "case_id": "duplicate-schema-keyword",
-      "fixture_case_id": "duplicate-schema-keyword",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/json-parser/duplicate-schema-keyword.json"
-          },
-          "byte_length": 103,
-          "sha256": "e710bd1f70524eb772341e933eebf0d141ef42d1d416f8fda41a881610ad0fcb"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "invalid",
-        "semantic": "not-run",
-        "final": "invalid",
-        "case_outcome": "duplicate-name-error",
-        "primary_reason": "json-syntax-or-duplicate-name"
-      }
-    },
-    {
-      "suite_id": "json-parser",
-      "case_id": "duplicate-top-level-name",
-      "fixture_case_id": "duplicate-top-level-name",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/json-parser/duplicate-top-level-name.json"
-          },
-          "byte_length": 31,
-          "sha256": "b9166c35d800e4287f3f7dfa1e5483244079ad82f431b944152c42802af4a199"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "invalid",
-        "semantic": "not-run",
-        "final": "invalid",
-        "case_outcome": "duplicate-name-error",
-        "primary_reason": "json-syntax-or-duplicate-name"
-      }
-    },
-    {
-      "suite_id": "json-parser",
-      "case_id": "escaped-equivalent-duplicate-name",
-      "fixture_case_id": "escaped-equivalent-duplicate-name",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/json-parser/escaped-equivalent-duplicate-name.json"
-          },
-          "byte_length": 32,
-          "sha256": "582bc9cb62a223da6c09ee609fbf59ffcc0d6d408f4b91f0279faadae2d2b41b"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "invalid",
-        "semantic": "not-run",
-        "final": "invalid",
-        "case_outcome": "duplicate-name-error",
-        "primary_reason": "json-syntax-or-duplicate-name"
-      }
-    },
-    {
-      "suite_id": "json-parser",
-      "case_id": "malformed-json",
-      "fixture_case_id": "malformed-json",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/json-parser/malformed-json.json"
-          },
-          "byte_length": 15,
-          "sha256": "f5705ee38bedb2f41ba0f0ef510a0796aa4b878019b372b1e3b1f01337c21be6"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "invalid",
-        "semantic": "not-run",
-        "final": "invalid",
-        "case_outcome": "parse-error",
-        "primary_reason": "json-syntax-or-duplicate-name"
-      }
-    },
-    {
-      "suite_id": "json-parser",
-      "case_id": "unique-object-names",
-      "fixture_case_id": "unique-object-names",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/json-parser/unique-object-names.json"
-          },
-          "byte_length": 116,
-          "sha256": "5e9a3b9797306aaaa02fe7fb8b6297089e93a7fe6c471e3dc7be8227966ca4bd"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "not-run",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "active-governance-hold-blocks-complete",
-      "fixture_case_id": "active_governance_hold_blocks_complete",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/active_governance_hold_blocks_complete/parsed.json"
-          },
-          "byte_length": 6426,
-          "sha256": "28b51655a7e3d9072886779618604b012e6106953042f761e23e804a37577f9e"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/active_governance_hold_blocks_complete/current.json"
-          },
-          "byte_length": 6064,
-          "sha256": "fc98e4955b3d76f274fbded6ed1c80ac88e946cd74be3216a16088757352d446"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 3,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-review-or-hold"
-      }
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "active-governance-hold-valid-pending",
-      "fixture_case_id": "active_governance_hold_valid_pending",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/active_governance_hold_valid_pending/parsed.json"
-          },
-          "byte_length": 4722,
-          "sha256": "10cf431d120ba3edd35bf31651d34a2be4bf746768000c40eda345f30d5ef157"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/active_governance_hold_valid_pending/current.json"
-          },
-          "byte_length": 4374,
-          "sha256": "edb6f6a03dea7581422a0533b488a99ac79a2897ce96d3fcc4d0690c5d1a99bc"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 3,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "canonical-addition-lifted-transaction",
-      "fixture_case_id": "canonical_addition_lifted_transaction",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/canonical_addition_lifted_transaction/parsed.json"
-          },
-          "byte_length": 5010,
-          "sha256": "b701dfdb9a9956f3b47a69bdde5b03313fdf01ecd1ea5d5e8277bf933b2425ee"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/canonical_addition_lifted_transaction/current.json"
-          },
-          "byte_length": 4644,
-          "sha256": "0e52681686c9943b10340d40a24d459928afdfa0bf316d32b5f4a2c1f1c6b3a4"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 3,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "canonical-bootstrap-hold-transaction",
-      "fixture_case_id": "canonical_bootstrap_hold_transaction",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/canonical_bootstrap_hold_transaction/parsed.json"
-          },
-          "byte_length": 5039,
-          "sha256": "188dbeb1fffd335319959f0daa3e4113a63da97a10d557569d24703a5d4d28cd"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/canonical_bootstrap_hold_transaction/current.json"
-          },
-          "byte_length": 4675,
-          "sha256": "54f6bc2e77aee0838909e8396dd3940f1d75b18770d125563a068811a7cfcb78"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 3,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "canonical-removal-hold-transaction",
-      "fixture_case_id": "canonical_removal_hold_transaction",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/canonical_removal_hold_transaction/parsed.json"
-          },
-          "byte_length": 4758,
-          "sha256": "9df7e4f135f44d859230c4c02d2b76280365fd0ccad68859196959c9e7e75718"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/canonical_removal_hold_transaction/current.json"
-          },
-          "byte_length": 4408,
-          "sha256": "7024c882670121e9a933198c379a70fc0be6f273ad65c5871f2d002b83384026"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 3,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
     {
       "suite_id": "release-evidence",
       "case_id": "complete-checksum-mismatch",
@@ -659,8 +67,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -715,8 +123,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -771,8 +179,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -827,8 +235,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -883,8 +291,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -939,8 +347,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -995,8 +403,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -1051,8 +459,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -1107,8 +515,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -1163,8 +571,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -1219,8 +627,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -1275,8 +683,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -1331,8 +739,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -1387,8 +795,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -1443,8 +851,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -1454,674 +862,6 @@
         "case_outcome": "invalid",
         "primary_reason": "schema-instance"
       }
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "governance-active-to-classified",
-      "fixture_case_id": "governance_active_to_classified",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_active_to_classified/parsed.json"
-          },
-          "byte_length": 9756,
-          "sha256": "aad0fa4e45453e38edaa922d1374cc49adf182219571cfa36ab27e8f27bf718a"
-        },
-        {
-          "role": "prior-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_active_to_classified/prior.json"
-          },
-          "byte_length": 4374,
-          "sha256": "edb6f6a03dea7581422a0533b488a99ac79a2897ce96d3fcc4d0690c5d1a99bc"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 3,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_active_to_classified/current.json"
-          },
-          "byte_length": 4705,
-          "sha256": "30ca4f10df65a9912c904e222b5dff58e1f092ddde4040eb5b3a3bd8ce18b4c5"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 4,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      },
-      "sequence": [
-        {
-          "input_ordinal": 2,
-          "predecessor_name": null,
-          "current_name": "prikk-0.18.0-release-evidence-001.json",
-          "byte_length": 4374,
-          "sha256": "edb6f6a03dea7581422a0533b488a99ac79a2897ce96d3fcc4d0690c5d1a99bc"
-        },
-        {
-          "input_ordinal": 3,
-          "predecessor_name": "prikk-0.18.0-release-evidence-001.json",
-          "current_name": "prikk-0.18.0-release-evidence-002.json",
-          "byte_length": 4705,
-          "sha256": "30ca4f10df65a9912c904e222b5dff58e1f092ddde4040eb5b3a3bd8ce18b4c5"
-        }
-      ]
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "governance-approval-identity-mismatch",
-      "fixture_case_id": "governance_approval_identity_mismatch",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_approval_identity_mismatch/parsed.json"
-          },
-          "byte_length": 5040,
-          "sha256": "e688432da0c42de4808d589ae1f1d57b356e3b9fbc2a5db1ac2d5b44d2184599"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_approval_identity_mismatch/current.json"
-          },
-          "byte_length": 4676,
-          "sha256": "778d6701ca35cf8e18270f3fdbf41012964f62a11a104c420a58917e7c7ef30d"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 3,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-review-or-hold"
-      }
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "governance-authority-blob-transition-mismatch",
-      "fixture_case_id": "governance_authority_blob_transition_mismatch",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_authority_blob_transition_mismatch/parsed.json"
-          },
-          "byte_length": 5010,
-          "sha256": "820f62f6f032b2cf5b99a7564e7381b37129b3a6c38400fda091926b7abd1516"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_authority_blob_transition_mismatch/current.json"
-          },
-          "byte_length": 4644,
-          "sha256": "ebb528283f8843ce46dd66517e2430de4a1402caa1046ff7ea9aa6540749aadc"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 3,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-transition-or-proof"
-      }
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "governance-bad-date-time",
-      "fixture_case_id": "governance_bad_date_time",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_bad_date_time/parsed.json"
-          },
-          "byte_length": 5102,
-          "sha256": "58a6dea90ff865bd4993c34330a511a1219f3d455f34f864f1cd3a76ccd0b6e2"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_bad_date_time/current.json"
-          },
-          "byte_length": 4732,
-          "sha256": "76cd91921c8d816f30b5c3d4ab434440f0a915bc5f398321dd8ca2354f022356"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 3,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "invalid",
-        "semantic": "not-run",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "schema-instance"
-      }
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "governance-classified-to-lifted",
-      "fixture_case_id": "governance_classified_to_lifted",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_classified_to_lifted/parsed.json"
-          },
-          "byte_length": 9905,
-          "sha256": "a933b54df99a1e9674ac42090c5a6076ad8ff5151c48756285553dce98ba6481"
-        },
-        {
-          "role": "prior-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_classified_to_lifted/prior.json"
-          },
-          "byte_length": 4392,
-          "sha256": "2862ad13090990670cda88669fd959bd426e7e280ec6f8374f5542470b6cd39b"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 3,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_classified_to_lifted/current.json"
-          },
-          "byte_length": 4830,
-          "sha256": "ead6cfed413554854df4b922b1c62a93ec8ee10440401ab9050481eab8b19dd5"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 4,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      },
-      "sequence": [
-        {
-          "input_ordinal": 2,
-          "predecessor_name": null,
-          "current_name": "prikk-0.18.0-release-evidence-001.json",
-          "byte_length": 4392,
-          "sha256": "2862ad13090990670cda88669fd959bd426e7e280ec6f8374f5542470b6cd39b"
-        },
-        {
-          "input_ordinal": 3,
-          "predecessor_name": "prikk-0.18.0-release-evidence-001.json",
-          "current_name": "prikk-0.18.0-release-evidence-002.json",
-          "byte_length": 4830,
-          "sha256": "ead6cfed413554854df4b922b1c62a93ec8ee10440401ab9050481eab8b19dd5"
-        }
-      ]
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "governance-declared-type-mismatch",
-      "fixture_case_id": "governance_declared_type_mismatch",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_declared_type_mismatch/parsed.json"
-          },
-          "byte_length": 4754,
-          "sha256": "d3a9582b39d5ce9ec696c4091e98b2746cd9c22d0647a0d98e6251a72b07e95c"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_declared_type_mismatch/current.json"
-          },
-          "byte_length": 4404,
-          "sha256": "97d425e9098dd28f5b92725981f826dc5127d0a67d888fc63c27fd71133c0d5e"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 3,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-transition-or-proof"
-      }
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "governance-duplicate-proof-fingerprint",
-      "fixture_case_id": "governance_duplicate_proof_fingerprint",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_duplicate_proof_fingerprint/parsed.json"
-          },
-          "byte_length": 5117,
-          "sha256": "84e5fc21eb0b6a6e680d800f62f7531394c94022d8854c769f845fd4b63b9721"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_duplicate_proof_fingerprint/current.json"
-          },
-          "byte_length": 4747,
-          "sha256": "d294bed646685ce6592fc88e0009a44ece13401f5fb61d33b3cd009771281f56"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 3,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-transition-or-proof"
-      }
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "governance-fingerprint-set-proof-mismatch",
-      "fixture_case_id": "governance_fingerprint_set_proof_mismatch",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_fingerprint_set_proof_mismatch/parsed.json"
-          },
-          "byte_length": 5091,
-          "sha256": "7ee3402e163570ab8fd8f49540bf9de7f4d56759f0b0eca29d40e1b9ab887121"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_fingerprint_set_proof_mismatch/current.json"
-          },
-          "byte_length": 4725,
-          "sha256": "e4a59e74dad84300d9a24965d865b6060065a094e3d4c7c61ba8e61e31fad721"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 3,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-transition-or-proof"
-      }
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "governance-post-lift-classification-mutation",
-      "fixture_case_id": "governance_post_lift_classification_mutation",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_post_lift_classification_mutation/parsed.json"
-          },
-          "byte_length": 10053,
-          "sha256": "e989e247e0c8c2e55034f323fdc1ddfc19a04a1b09477c1074369534d55daa86"
-        },
-        {
-          "role": "prior-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_post_lift_classification_mutation/prior.json"
-          },
-          "byte_length": 4517,
-          "sha256": "0ae33f07400c0e8052a1df75da55d39824ee535bda8249cd96e9724a58411303"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 3,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_post_lift_classification_mutation/current.json"
-          },
-          "byte_length": 4847,
-          "sha256": "4153f145d97b1b75794eaa141572d6afe3e9981552fdd5b7c82360b875560d61"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 4,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-transition-or-proof"
-      },
-      "sequence": [
-        {
-          "input_ordinal": 2,
-          "predecessor_name": null,
-          "current_name": "prikk-0.18.0-release-evidence-001.json",
-          "byte_length": 4517,
-          "sha256": "0ae33f07400c0e8052a1df75da55d39824ee535bda8249cd96e9724a58411303"
-        },
-        {
-          "input_ordinal": 3,
-          "predecessor_name": "prikk-0.18.0-release-evidence-001.json",
-          "current_name": "prikk-0.18.0-release-evidence-002.json",
-          "byte_length": 4847,
-          "sha256": "4153f145d97b1b75794eaa141572d6afe3e9981552fdd5b7c82360b875560d61"
-        }
-      ]
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "governance-premature-lift",
-      "fixture_case_id": "governance_premature_lift",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_premature_lift/parsed.json"
-          },
-          "byte_length": 9881,
-          "sha256": "1298d70ebcc3f1d345182f60c1e49aba2d830539b6ad0511df5cfa717f785eab"
-        },
-        {
-          "role": "prior-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_premature_lift/prior.json"
-          },
-          "byte_length": 4374,
-          "sha256": "edb6f6a03dea7581422a0533b488a99ac79a2897ce96d3fcc4d0690c5d1a99bc"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 3,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/governance_premature_lift/current.json"
-          },
-          "byte_length": 4824,
-          "sha256": "e88b51a58dbe0a0f3bba4528c0935db8929a6e581e1c1466ee710495715f4094"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 4,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "governance-review-or-hold"
-      },
-      "sequence": [
-        {
-          "input_ordinal": 2,
-          "predecessor_name": null,
-          "current_name": "prikk-0.18.0-release-evidence-001.json",
-          "byte_length": 4374,
-          "sha256": "edb6f6a03dea7581422a0533b488a99ac79a2897ce96d3fcc4d0690c5d1a99bc"
-        },
-        {
-          "input_ordinal": 3,
-          "predecessor_name": "prikk-0.18.0-release-evidence-001.json",
-          "current_name": "prikk-0.18.0-release-evidence-002.json",
-          "byte_length": 4824,
-          "sha256": "e88b51a58dbe0a0f3bba4528c0935db8929a6e581e1c1466ee710495715f4094"
-        }
-      ]
     },
     {
       "suite_id": "release-evidence",
@@ -2167,8 +907,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -2223,8 +963,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -2279,8 +1019,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -2335,8 +1075,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -2391,8 +1131,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -2447,8 +1187,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -2503,8 +1243,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -2559,8 +1299,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -2626,8 +1366,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -2709,8 +1449,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -2792,8 +1532,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -2875,8 +1615,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -2958,8 +1698,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -3041,8 +1781,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -3124,8 +1864,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -3207,8 +1947,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -3290,8 +2030,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -3373,8 +2113,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -3456,8 +2196,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -3539,8 +2279,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -3622,8 +2362,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -3705,8 +2445,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -3788,8 +2528,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -3871,8 +2611,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -3943,8 +2683,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -4010,8 +2750,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -4093,8 +2833,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -4176,8 +2916,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -4259,8 +2999,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -4342,8 +3082,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -4425,8 +3165,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -4508,8 +3248,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -4591,8 +3331,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -4674,8 +3414,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -4757,8 +3497,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -4840,8 +3580,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -4923,8 +3663,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -5006,8 +3746,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -5089,8 +3829,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -5172,8 +3912,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -5255,8 +3995,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -5327,8 +4067,8 @@
             "kind": "direct",
             "path": "release/oracle/python-observations-v1.json"
           },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
+          "byte_length": 12643,
+          "sha256": "9f0f4a80425886deea6c20df8a1e2ea9d797c34ae0dea18f27b233003f567e8a"
         }
       ],
       "expected": {
@@ -5337,1301 +4077,6 @@
         "final": "invalid",
         "case_outcome": "invalid",
         "primary_reason": "schema-instance"
-      }
-    },
-    {
-      "suite_id": "release-evidence",
-      "case_id": "valid-governance-difference-and-proofs",
-      "fixture_case_id": "valid_governance_difference_and_proofs",
-      "inputs": [
-        {
-          "role": "schema",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "fixture-table",
-          "ordinal": 1,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/valid_governance_difference_and_proofs/parsed.json"
-          },
-          "byte_length": 5103,
-          "sha256": "6963c366dab7b96b8639b258369b37c0c74420c8d83d670d14fb4ede5410a27e"
-        },
-        {
-          "role": "current-snapshot",
-          "ordinal": 2,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-evidence",
-            "entry_id": "release/oracle/vectors/release-evidence/valid_governance_difference_and_proofs/current.json"
-          },
-          "byte_length": 4733,
-          "sha256": "7c83d351852bc0b11d349cc77165f638cefcde30c6d02e2ddb2cdefa5c7a5817"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 3,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "abandoned-candidate-retains-target",
-      "fixture_case_id": "abandoned_candidate_retains_target",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/abandoned_candidate_retains_target/context.json"
-          },
-          "byte_length": 316,
-          "sha256": "0aec10ec4b836d715334bf33e805751f86072598c8d690e7d7ea5c144ee1add3"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "release-state"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "authority-changed-after-release",
-      "fixture_case_id": "authority_changed_after_release",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/authority_changed_after_release/context.json"
-          },
-          "byte_length": 5646,
-          "sha256": "25a484b927309bf4ee9b0e433cf02e79b7dc2645966facfcad0b20f75e0d23de"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "release-state"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "authority-changed-in-private-finalization",
-      "fixture_case_id": "authority_changed_in_private_finalization",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/authority_changed_in_private_finalization/context.json"
-          },
-          "byte_length": 5927,
-          "sha256": "afaf5ad581679c442be3148dc9bebbd7fd0fca719718bfa7eaa8e2e52cd105e6"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "release-state"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "authority-changed-in-rc",
-      "fixture_case_id": "authority_changed_in_rc",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/authority_changed_in_rc/context.json"
-          },
-          "byte_length": 5945,
-          "sha256": "83b5532b218606cd9ff443eed92b60fb2f3f6096cd506878b7b5d63f6f275e2c"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "release-state"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "broad-internal-dependencies",
-      "fixture_case_id": "broad_internal_dependencies",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/broad_internal_dependencies/context.json"
-          },
-          "byte_length": 336,
-          "sha256": "c080cdc26184a2a05bcbe784f5403c370154a769079b81bea29fe0efb0c01590"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "release-state"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "candidate-claims-latest-target",
-      "fixture_case_id": "candidate_claims_latest_target",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/candidate_claims_latest_target/context.json"
-          },
-          "byte_length": 304,
-          "sha256": "ae3d08bfb643ac78e5169077aa696dd6696f8b8829bbf34a90627c72c21f6167"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "release-state"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "complete-with-missing-output",
-      "fixture_case_id": "complete_with_missing_output",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/complete_with_missing_output/context.json"
-          },
-          "byte_length": 331,
-          "sha256": "ce064e62ae6a0d4ac5b639771bd9f22545aa6ef24d701cb12c53c1bff5fffe8b"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "release-state"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "development",
-      "fixture_case_id": "development",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/development/context.json"
-          },
-          "byte_length": 317,
-          "sha256": "894d257b845b2164c1e0462ee32dcf6988cf3bae33232746b9050ab10b8f108a"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "development-addition-lifted",
-      "fixture_case_id": "development_addition_lifted",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/development_addition_lifted/context.json"
-          },
-          "byte_length": 5967,
-          "sha256": "0134f68d4b79f0553eb68ebef93d1ebf8d3731e7713904ca37510463272e5c38"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "development-authority-change-invalid-governance",
-      "fixture_case_id": "development_authority_change_invalid_governance",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/development_authority_change_invalid_governance/context.json"
-          },
-          "byte_length": 568,
-          "sha256": "c6933ebb16559aa1d0773b5ab3c7cebe5aab03ddb7f925a74eff9e3194b1ff0f"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "release-state"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "development-bootstrap-active-hold",
-      "fixture_case_id": "development_bootstrap_active_hold",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/development_bootstrap_active_hold/context.json"
-          },
-          "byte_length": 6004,
-          "sha256": "de43559d2cc922a222126758591b257a87293d5963399405ca9c30554f3bfe18"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "development-bootstrap-with-unrelated-hold",
-      "fixture_case_id": "development_bootstrap_with_unrelated_hold",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/development_bootstrap_with_unrelated_hold/context.json"
-          },
-          "byte_length": 5651,
-          "sha256": "f19510304c55219f80a1d28679b46e28f90566ceb18e59c906346ff74be84775"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "release-state"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "development-classification-active-dispute",
-      "fixture_case_id": "development_classification_active_dispute",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/development_classification_active_dispute/context.json"
-          },
-          "byte_length": 5661,
-          "sha256": "4e4957cb0b5752e42e53f77033b84e00cedcb21f9c41034a8ad6012780d4a64d"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "development-removal-active-hold",
-      "fixture_case_id": "development_removal_active_hold",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/development_removal_active_hold/context.json"
-          },
-          "byte_length": 5704,
-          "sha256": "9944a5f8e77365744e7ab9bec8e5785dcc861149ab52f798bfdcb2161a3526bd"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "disputed-tag-claimed-official",
-      "fixture_case_id": "disputed_tag_claimed_official",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/disputed_tag_claimed_official/context.json"
-          },
-          "byte_length": 300,
-          "sha256": "500fafb399cce0388db46a8007b8c470cb9096404e8b489dbb9b19bfcfbadcc9"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "release-state"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "done-without-target-tag",
-      "fixture_case_id": "done_without_target_tag",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/done_without_target_tag/context.json"
-          },
-          "byte_length": 285,
-          "sha256": "9d766419ae971682eb24d885021922f1aa1979c5fa98ba3a4f5164d3c4b4c847"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "release-state"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "private-finalization",
-      "fixture_case_id": "private_finalization",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/private_finalization/context.json"
-          },
-          "byte_length": 304,
-          "sha256": "44dcff642f457cfc783bfc0e183fa41b475c3287fb1c346e21a80302b18e386e"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid-local-only",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "release-candidate",
-      "fixture_case_id": "release_candidate",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/release_candidate/context.json"
-          },
-          "byte_length": 295,
-          "sha256": "f8c4661143745be472337b38d3051ff1ca81fad0b7d4bbfe1576ad540784f703"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "release-with-active-hold",
-      "fixture_case_id": "release_with_active_hold",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/release_with_active_hold/context.json"
-          },
-          "byte_length": 325,
-          "sha256": "59f4866ec35e89e5003294215fe9ec952a02afb5ddd23977edc53b52526c9168"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "release-state"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "released-complete-distribution",
-      "fixture_case_id": "released_complete_distribution",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/released_complete_distribution/context.json"
-          },
-          "byte_length": 300,
-          "sha256": "5cf1d6a3e4a8bf842dba074fd85875d3bcfd516b6e2c7b22d39a4ecd0f720243"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "released-pending-distribution",
-      "fixture_case_id": "released_pending_distribution",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/released_pending_distribution/context.json"
-          },
-          "byte_length": 298,
-          "sha256": "a5aafe95e197c8d4308f4e6a24b905d84a1ba41e91cbb8ba6820776b0be2fbfe"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "valid",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "tag-peels-to-wrong-commit",
-      "fixture_case_id": "tag_peels_to_wrong_commit",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/tag_peels_to_wrong_commit/context.json"
-          },
-          "byte_length": 298,
-          "sha256": "e3b4c54d60d783a4c209027d99b41b65806dc243760746da11baccebc1db70d6"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "release-state"
-      }
-    },
-    {
-      "suite_id": "release-state",
-      "case_id": "tagged-tree-retains-candidate",
-      "fixture_case_id": "tagged_tree_retains_candidate",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "packed",
-            "pack_id": "release-state",
-            "entry_id": "release/oracle/vectors/release-state/tagged_tree_retains_candidate/context.json"
-          },
-          "byte_length": 318,
-          "sha256": "e611b50b038b3f51e2ba4754a7c09dba73d13d1c851a91b8b33a521595422dd9"
-        },
-        {
-          "role": "schema",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/schemas/release-evidence-v1.schema.json"
-          },
-          "byte_length": 15456,
-          "sha256": "a6168f87f69590a32aba6ee44413be7d110cd5d4b3ebd6fb8df442a2f6bc0785"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 2,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "not-run",
-        "semantic": "invalid",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "release-state"
-      }
-    },
-    {
-      "suite_id": "schema-evaluator",
-      "case_id": "boolean-and-integer-are-unique",
-      "fixture_case_id": "boolean_and_integer_are_unique",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/schema-evaluator-cases.json"
-          },
-          "byte_length": 1000,
-          "sha256": "287d7f597f1b1c93b2d9567e4f78e5aa6c440f157d85a70f4367a7ffb46d0dee"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "not-run",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "schema-evaluator",
-      "case_id": "boolean-enum-distinct-from-integer",
-      "fixture_case_id": "boolean_enum_distinct_from_integer",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/schema-evaluator-cases.json"
-          },
-          "byte_length": 1000,
-          "sha256": "287d7f597f1b1c93b2d9567e4f78e5aa6c440f157d85a70f4367a7ffb46d0dee"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "invalid",
-        "semantic": "not-run",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "schema-instance"
-      }
-    },
-    {
-      "suite_id": "schema-evaluator",
-      "case_id": "integer-and-equivalent-number-are-duplicates",
-      "fixture_case_id": "integer_and_equivalent_number_are_duplicates",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/schema-evaluator-cases.json"
-          },
-          "byte_length": 1000,
-          "sha256": "287d7f597f1b1c93b2d9567e4f78e5aa6c440f157d85a70f4367a7ffb46d0dee"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "invalid",
-        "semantic": "not-run",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "schema-instance"
-      }
-    },
-    {
-      "suite_id": "schema-evaluator",
-      "case_id": "integer-const-accepts-integer",
-      "fixture_case_id": "integer_const_accepts_integer",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/schema-evaluator-cases.json"
-          },
-          "byte_length": 1000,
-          "sha256": "287d7f597f1b1c93b2d9567e4f78e5aa6c440f157d85a70f4367a7ffb46d0dee"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "valid",
-        "semantic": "not-run",
-        "final": "valid",
-        "case_outcome": "valid",
-        "primary_reason": "none"
-      }
-    },
-    {
-      "suite_id": "schema-evaluator",
-      "case_id": "integer-const-rejects-boolean",
-      "fixture_case_id": "integer_const_rejects_boolean",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/schema-evaluator-cases.json"
-          },
-          "byte_length": 1000,
-          "sha256": "287d7f597f1b1c93b2d9567e4f78e5aa6c440f157d85a70f4367a7ffb46d0dee"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "invalid",
-        "semantic": "not-run",
-        "final": "invalid",
-        "case_outcome": "invalid",
-        "primary_reason": "schema-instance"
-      }
-    },
-    {
-      "suite_id": "schema-evaluator",
-      "case_id": "unknown-assertion-keyword-fails-closed",
-      "fixture_case_id": "unknown_assertion_keyword_fails_closed",
-      "inputs": [
-        {
-          "role": "fixture-table",
-          "ordinal": 0,
-          "location": {
-            "kind": "direct",
-            "path": "release/fixtures/schema-evaluator-cases.json"
-          },
-          "byte_length": 1000,
-          "sha256": "287d7f597f1b1c93b2d9567e4f78e5aa6c440f157d85a70f4367a7ffb46d0dee"
-        },
-        {
-          "role": "expected-output",
-          "ordinal": 1,
-          "location": {
-            "kind": "direct",
-            "path": "release/oracle/python-observations-v1.json"
-          },
-          "byte_length": 22171,
-          "sha256": "8680400bbcc4eb8d6c75d8a4ffa5a7613993a407bc959bcfe65d15b5c0d85dcc"
-        }
-      ],
-      "expected": {
-        "structural": "validator-error",
-        "semantic": "not-run",
-        "final": "validator-error",
-        "case_outcome": "validator-error",
-        "primary_reason": "schema-profile-or-compilation"
       }
     }
   ]

@@ -14,10 +14,9 @@ const REQUIRED_LIVE_PATHS: [&str; 3] = [
     "docs/src/reference/release-compatibility.md",
     "release/README.md",
 ];
-const PYTHON_PRIMARY: AuthorityDescriptor = AuthorityDescriptor {
-    path: "release/check-policy.py",
-    command: "python3 release/check-policy.py",
-};
+// RFC 119 track B: `PYTHON_PRIMARY` removed along with `differential-check` and the Python it
+// invoked -- `release/check-policy.py` no longer exists, and this tool's own `check` (below) was
+// already the only `primary_executable` the real inventory ever declared.
 const RUST_PRIMARY: AuthorityDescriptor = AuthorityDescriptor {
     path: "tools/release-policy/Cargo.toml",
     command: "cargo run --locked -p prikk-release-policy -- check",
@@ -31,10 +30,6 @@ struct AuthorityDescriptor {
 
 fn required_markers() -> Vec<String> {
     [
-        ["python3 release/", "check-policy.py"].concat(),
-        ["python3 -B release/", "check-policy.py"].concat(),
-        ["python release/", "check-policy.py"].concat(),
-        ["python -B release/", "check-policy.py"].concat(),
         ["cargo run --locked -p prikk-release-policy -- ", "check"].concat(),
         ["cargo run -p prikk-release-policy -- ", "check"].concat(),
     ]
@@ -175,21 +170,13 @@ fn verify(root: &Path, inventory: &Inventory) -> Result<Vec<String>> {
                     .iter()
                     .map(|error| format!("unparseable-reference:{relative}:{error}")),
             );
-        } else {
-            errors.extend(
-                scan.errors
-                    .iter()
-                    .filter(|error| **error == "unsupported-python-invocation")
-                    .map(|error| format!("unparseable-reference:{relative}:{error}")),
-            );
         }
         for invocation in scan.invocations {
-            if matches!(
-                invocation,
-                Invocation::PythonPolicy | Invocation::RustPolicy
-            ) && !registered.iter().any(|(known_path, command, _)| {
-                *known_path == relative && command_matches(command, &invocation)
-            }) {
+            if matches!(invocation, Invocation::RustPolicy)
+                && !registered.iter().any(|(known_path, command, _)| {
+                    *known_path == relative && command_matches(command, &invocation)
+                })
+            {
                 errors.push(format!(
                     "unregistered-reference:{relative}:{}",
                     invocation_name(&invocation)
@@ -217,17 +204,12 @@ fn verify(root: &Path, inventory: &Inventory) -> Result<Vec<String>> {
 }
 
 fn authority_descriptor(executable: &Executable) -> Option<AuthorityDescriptor> {
-    [PYTHON_PRIMARY, RUST_PRIMARY]
-        .into_iter()
-        .find(|descriptor| {
-            executable.path == descriptor.path && executable.command == descriptor.command
-        })
+    (executable.path == RUST_PRIMARY.path && executable.command == RUST_PRIMARY.command)
+        .then_some(RUST_PRIMARY)
 }
 
 fn authority_command(command: &str) -> bool {
-    [PYTHON_PRIMARY, RUST_PRIMARY]
-        .iter()
-        .any(|descriptor| command == descriptor.command)
+    command == RUST_PRIMARY.command
 }
 
 fn regular_file(path: PathBuf) -> bool {
@@ -244,7 +226,6 @@ fn command_matches(command: &str, invocation: &Invocation) -> bool {
 
 fn invocation_name(invocation: &Invocation) -> &'static str {
     match invocation {
-        Invocation::PythonPolicy => "python-policy",
         Invocation::RustPolicy => "rust-policy",
         Invocation::Publication { .. } => "publication",
     }

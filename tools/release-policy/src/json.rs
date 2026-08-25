@@ -12,6 +12,13 @@ pub(crate) enum JsonErrorKind {
 
 #[derive(Debug)]
 pub(crate) struct JsonError {
+    // RFC 119 track B: `policy.rs`'s "json-parser" oracle suite -- the only caller that branched
+    // on this field -- was removed (NEVER: it exercised only this module's own input handling on
+    // files this project authors, not release policy). `kind` itself stays: it is `parse`'s own
+    // classification of failure modes, exercised directly by `json/tests.rs`, independent of
+    // whether any current caller consumes it -- this track's handoff is explicit that removing an
+    // oracle suite is not the same as removing the module it tested.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) kind: JsonErrorKind,
     message: String,
 }

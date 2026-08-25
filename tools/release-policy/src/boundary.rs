@@ -166,15 +166,12 @@ fn check_tool(root: &Path, metadata: &Metadata, errors: &mut Vec<BoundaryError>)
             push(errors, "tool-metadata", format!("{name}.workspace"));
         }
     }
-    if manifest
-        .get("lints")
-        .and_then(toml::Value::as_table)
-        .and_then(|value| value.get("workspace"))
-        .and_then(toml::Value::as_bool)
-        != Some(true)
-    {
-        push(errors, "tool-metadata", "lints.workspace".to_owned());
-    }
+    // RFC 119 track B: a `lints.workspace` check for this crate used to live here too. Removed --
+    // `unsafe_boundary::check` already asserts, for every workspace member including this one,
+    // that it either inherits `[lints] workspace = true` in full or is on the (single-entry)
+    // unsafe-code exemption list re-declaring the guard locally; this crate is not on that list,
+    // so the only way it can pass `unsafe-boundary` at all is `lints.workspace = true`. The two
+    // checks tested the identical condition on the identical file; this one was pure duplication.
     if root.join("tools/release-policy/Cargo.lock").exists() {
         push(errors, "lockfile-boundary", "nested Cargo.lock".to_owned());
     }

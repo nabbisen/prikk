@@ -27,8 +27,11 @@ pub(super) fn verify(root: &Path, errors: &mut Vec<String>) -> Result<()> {
     let value = json::parse(&fs::read(root.join(PATH))?)
         .map_err(|error| Error::new(format!("responsibility map JSON: {error}")))?;
     let mapping: Mapping = serde_json::from_value(value)?;
+    // RFC 119 track B: 50 -> 49. "state-governance-context" dropped when the `release-state`
+    // suite it named was removed outright, along with the "repository:governance-context"
+    // self-test control (`self_test.rs`) it mapped to.
     if mapping.schema_version != "oracle-self-test-responsibility-map-v1"
-        || mapping.responsibilities.len() != 50
+        || mapping.responsibilities.len() != 49
     {
         errors.push("self-test:responsibility-map-identity".to_owned());
     }

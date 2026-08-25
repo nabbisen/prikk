@@ -14,9 +14,14 @@ const MANIFEST: &str = "release/oracle/oracle-manifest-v1.json";
 // RFC 119 track A: retargeted from `signer-challenge` to `release-evidence` -- parking removed
 // every case that referenced the `signer-challenge` pack via a "packed" location (all 16
 // `signer-challenge` cases were the pack's only referrers), so this coordinated-alias control
-// needs a pack/case pair that still exists. `release-evidence` has 182 packed inputs today and
-// uses the identical `release/oracle/vectors/<suite>/<case>/<file>` entry-id shape, so only the
-// pack id and path change here, not the mechanism.
+// needs a pack/case pair that still exists. `release-evidence` had 182 packed inputs at the time
+// and uses the identical `release/oracle/vectors/<suite>/<case>/<file>` entry-id shape, so only
+// the pack id and path change here, not the mechanism.
+//
+// RFC 119 track B: 182 -> 146. 16 of release-evidence's 73 cases (the ones exercising its
+// embedded DC-35 signer-governance sub-object) were parked, taking their 36 packed entries with
+// them (`release/oracle/parked-packs/release-evidence-governance-v1.json`). This control still
+// only needs "any packed release-evidence input," so it is unaffected beyond this count note.
 const TARGET_PACK_ID: &str = "release-evidence";
 const TARGET_PACK_PATH: &str = "release/oracle/packs/release-evidence-v1.json";
 

@@ -1,7 +1,6 @@
 mod challenge;
 mod evidence;
 mod signer;
-mod state;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -9,7 +8,7 @@ use std::path::Path;
 use serde_json::Value;
 
 use crate::error::{Error, Result};
-use crate::json::{self, JsonErrorKind};
+use crate::json;
 use crate::oracle::{Case, Observation, ObservationDocument, Oracle};
 use crate::schema::SchemaProfile;
 
@@ -96,54 +95,6 @@ fn evaluate_case(oracle: &Oracle, case: &Case, schema: &SchemaProfile) -> Result
                 Some(reason) => simple(false, reason),
             }
         }
-        "release-state" => {
-            let context = json::parse(oracle.input(case, "fixture-table")?)
-                .map_err(|error| Error::new(error.to_string()))?;
-            let (valid, local) = state::validate(&context, schema)?;
-            (
-                if valid && local {
-                    "valid-local-only"
-                } else if valid {
-                    "valid"
-                } else {
-                    "invalid"
-                },
-                None,
-                None,
-                if valid { "none" } else { "release-state" },
-            )
-        }
-        "schema-evaluator" => {
-            let row = table_case(oracle.input(case, "fixture-table")?, &case.fixture_case_id)?;
-            let candidate = row
-                .get("schema")
-                .ok_or_else(|| Error::new("schema case missing schema"))?;
-            match SchemaProfile::compile(candidate) {
-                Err(_) => (
-                    "validator-error",
-                    None,
-                    None,
-                    "schema-profile-or-compilation",
-                ),
-                Ok(profile) if profile.is_valid(row.get("instance").unwrap_or(&Value::Null)) => {
-                    simple(true, "none")
-                }
-                Ok(_) => simple(false, "schema-instance"),
-            }
-        }
-        "json-parser" => match json::parse(oracle.input(case, "fixture-table")?) {
-            Ok(_) => simple(true, "none"),
-            Err(error) => (
-                if error.kind == JsonErrorKind::DuplicateName {
-                    "duplicate-name-error"
-                } else {
-                    "parse-error"
-                },
-                None,
-                None,
-                "json-syntax-or-duplicate-name",
-            ),
-        },
         "release-evidence" => evidence::evaluate(oracle, case, schema)?,
         suite => return Err(Error::new(format!("unsupported oracle suite: {suite}"))),
     };

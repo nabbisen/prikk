@@ -1,22 +1,10 @@
 {
   "schema_version": "oracle-coverage-v1",
-  "total_cases": 111,
+  "total_cases": 57,
   "suites": [
     {
-      "suite_id": "json-parser",
-      "case_count": 9
-    },
-    {
       "suite_id": "release-evidence",
-      "case_count": 73
-    },
-    {
-      "suite_id": "release-state",
-      "case_count": 23
-    },
-    {
-      "suite_id": "schema-evaluator",
-      "case_count": 6
+      "case_count": 57
     }
   ],
   "reason_counts": [
@@ -33,75 +21,18 @@
       "case_count": 11
     },
     {
-      "primary_reason": "governance-review-or-hold",
-      "case_count": 3
-    },
-    {
-      "primary_reason": "governance-transition-or-proof",
-      "case_count": 5
-    },
-    {
-      "primary_reason": "json-syntax-or-duplicate-name",
-      "case_count": 8
-    },
-    {
       "primary_reason": "none",
-      "case_count": 32
-    },
-    {
-      "primary_reason": "release-state",
-      "case_count": 14
+      "case_count": 13
     },
     {
       "primary_reason": "schema-instance",
-      "case_count": 21
-    },
-    {
-      "primary_reason": "schema-profile-or-compilation",
-      "case_count": 1
+      "case_count": 17
     }
   ],
   "subjects": [
     {
-      "subject": "release-state",
-      "case_keys": [
-        "release-state:abandoned-candidate-retains-target",
-        "release-state:authority-changed-after-release",
-        "release-state:authority-changed-in-private-finalization",
-        "release-state:authority-changed-in-rc",
-        "release-state:broad-internal-dependencies",
-        "release-state:candidate-claims-latest-target",
-        "release-state:complete-with-missing-output",
-        "release-state:development",
-        "release-state:development-addition-lifted",
-        "release-state:development-authority-change-invalid-governance",
-        "release-state:development-bootstrap-active-hold",
-        "release-state:development-bootstrap-with-unrelated-hold",
-        "release-state:development-classification-active-dispute",
-        "release-state:development-removal-active-hold",
-        "release-state:disputed-tag-claimed-official",
-        "release-state:done-without-target-tag",
-        "release-state:private-finalization",
-        "release-state:release-candidate",
-        "release-state:release-with-active-hold",
-        "release-state:released-complete-distribution",
-        "release-state:released-pending-distribution",
-        "release-state:tag-peels-to-wrong-commit",
-        "release-state:tagged-tree-retains-candidate"
-      ]
-    },
-    {
       "subject": "schema",
       "case_keys": [
-        "json-parser:duplicate-evidence-field",
-        "json-parser:duplicate-fixture-case-field",
-        "json-parser:duplicate-name-in-array-object",
-        "json-parser:duplicate-nested-name",
-        "json-parser:duplicate-schema-keyword",
-        "json-parser:duplicate-top-level-name",
-        "json-parser:escaped-equivalent-duplicate-name",
-        "json-parser:malformed-json",
-        "json-parser:unique-object-names",
         "release-evidence:complete-deployed-pages-missing-commit",
         "release-evidence:complete-failed-release-page",
         "release-evidence:complete-false-exact-requirement",
@@ -112,39 +43,13 @@
         "release-evidence:complete-null-signer-primary-fingerprint",
         "release-evidence:complete-null-verifier-result",
         "release-evidence:full-schema-boolean-version-rejected",
-        "release-evidence:governance-bad-date-time",
         "release-evidence:partial-failed-without-authority",
         "release-evidence:partial-verified-without-details",
         "release-evidence:pending-failed-without-authority",
         "release-evidence:pending-not-observed-with-detail",
         "release-evidence:pending-verified-without-details",
         "release-evidence:tag-verification-authority-path-immutable",
-        "release-evidence:unknown-top-level-field",
-        "schema-evaluator:boolean-and-integer-are-unique",
-        "schema-evaluator:boolean-enum-distinct-from-integer",
-        "schema-evaluator:integer-and-equivalent-number-are-duplicates",
-        "schema-evaluator:integer-const-accepts-integer",
-        "schema-evaluator:integer-const-rejects-boolean",
-        "schema-evaluator:unknown-assertion-keyword-fails-closed"
-      ]
-    },
-    {
-      "subject": "governance",
-      "case_keys": [
-        "release-evidence:active-governance-hold-blocks-complete",
-        "release-evidence:active-governance-hold-valid-pending",
-        "release-evidence:governance-active-to-classified",
-        "release-evidence:governance-approval-identity-mismatch",
-        "release-evidence:governance-authority-blob-transition-mismatch",
-        "release-evidence:governance-bad-date-time",
-        "release-evidence:governance-classified-to-lifted",
-        "release-evidence:governance-declared-type-mismatch",
-        "release-evidence:governance-duplicate-proof-fingerprint",
-        "release-evidence:governance-fingerprint-set-proof-mismatch",
-        "release-evidence:governance-post-lift-classification-mutation",
-        "release-evidence:governance-premature-lift",
-        "release-evidence:valid-governance-difference-and-proofs",
-        "release-state:development-authority-change-invalid-governance"
+        "release-evidence:unknown-top-level-field"
       ]
     },
     {
@@ -184,42 +89,12 @@
         "release-evidence:tag-verification-signer-primary-fingerprint-immutable",
         "release-evidence:tag-verification-status-immutable",
         "release-evidence:tag-verification-verifier-result-immutable",
-        "release-evidence:tag-version-mismatch",
-        "release-state:disputed-tag-claimed-official",
-        "release-state:done-without-target-tag",
-        "release-state:tag-peels-to-wrong-commit",
-        "release-state:tagged-tree-retains-candidate"
-      ]
-    },
-    {
-      "subject": "hold",
-      "case_keys": [
-        "release-evidence:active-governance-hold-blocks-complete",
-        "release-evidence:active-governance-hold-valid-pending",
-        "release-evidence:canonical-bootstrap-hold-transaction",
-        "release-evidence:canonical-removal-hold-transaction",
-        "release-evidence:governance-active-to-classified",
-        "release-evidence:governance-approval-identity-mismatch",
-        "release-evidence:governance-authority-blob-transition-mismatch",
-        "release-evidence:governance-bad-date-time",
-        "release-evidence:governance-classified-to-lifted",
-        "release-evidence:governance-declared-type-mismatch",
-        "release-evidence:governance-duplicate-proof-fingerprint",
-        "release-evidence:governance-fingerprint-set-proof-mismatch",
-        "release-evidence:governance-post-lift-classification-mutation",
-        "release-evidence:governance-premature-lift",
-        "release-evidence:valid-governance-difference-and-proofs",
-        "release-state:development-authority-change-invalid-governance",
-        "release-state:development-bootstrap-active-hold",
-        "release-state:development-bootstrap-with-unrelated-hold",
-        "release-state:development-removal-active-hold",
-        "release-state:release-with-active-hold"
+        "release-evidence:tag-version-mismatch"
       ]
     },
     {
       "subject": "completion",
       "case_keys": [
-        "release-evidence:active-governance-hold-blocks-complete",
         "release-evidence:complete-checksum-mismatch",
         "release-evidence:complete-deployed-pages-missing-commit",
         "release-evidence:complete-failed-release-page",
@@ -244,18 +119,12 @@
         "release-evidence:transition-complete-to-superseded",
         "release-evidence:transition-partial-to-complete",
         "release-evidence:transition-pending-to-complete",
-        "release-evidence:transition-superseded-to-complete",
-        "release-state:complete-with-missing-output",
-        "release-state:released-complete-distribution"
+        "release-evidence:transition-superseded-to-complete"
       ]
     },
     {
       "subject": "sequence",
       "case_keys": [
-        "release-evidence:governance-active-to-classified",
-        "release-evidence:governance-classified-to-lifted",
-        "release-evidence:governance-post-lift-classification-mutation",
-        "release-evidence:governance-premature-lift",
         "release-evidence:raw-predecessor-digest-mismatch",
         "release-evidence:sequence-attempts-not-cumulative",
         "release-evidence:sequence-immutable-tag-changed",
@@ -390,27 +259,7 @@
     }
   ],
   "repair_regressions": [
-    "json-parser:duplicate-evidence-field",
-    "json-parser:duplicate-fixture-case-field",
-    "json-parser:duplicate-name-in-array-object",
-    "json-parser:duplicate-nested-name",
-    "json-parser:duplicate-schema-keyword",
-    "json-parser:duplicate-top-level-name",
-    "json-parser:escaped-equivalent-duplicate-name",
-    "json-parser:malformed-json",
-    "json-parser:unique-object-names",
-    "release-evidence:canonical-addition-lifted-transaction",
-    "release-evidence:canonical-bootstrap-hold-transaction",
-    "release-evidence:canonical-removal-hold-transaction",
     "release-evidence:full-schema-boolean-version-rejected",
-    "release-evidence:governance-active-to-classified",
-    "release-evidence:governance-approval-identity-mismatch",
-    "release-evidence:governance-authority-blob-transition-mismatch",
-    "release-evidence:governance-classified-to-lifted",
-    "release-evidence:governance-declared-type-mismatch",
-    "release-evidence:governance-fingerprint-set-proof-mismatch",
-    "release-evidence:governance-post-lift-classification-mutation",
-    "release-evidence:governance-premature-lift",
     "release-evidence:partial-failed-without-authority",
     "release-evidence:partial-verified-without-details",
     "release-evidence:pending-failed-with-authority-and-result",
@@ -424,11 +273,6 @@
     "release-evidence:tag-verification-authority-path-immutable",
     "release-evidence:tag-verification-signer-primary-fingerprint-immutable",
     "release-evidence:tag-verification-status-immutable",
-    "release-evidence:tag-verification-verifier-result-immutable",
-    "schema-evaluator:boolean-and-integer-are-unique",
-    "schema-evaluator:boolean-enum-distinct-from-integer",
-    "schema-evaluator:integer-and-equivalent-number-are-duplicates",
-    "schema-evaluator:integer-const-rejects-boolean",
-    "schema-evaluator:unknown-assertion-keyword-fails-closed"
+    "release-evidence:tag-verification-verifier-result-immutable"
   ]
 }

@@ -3,18 +3,6 @@ use super::{Invocation, invocations, scan, scan_shell, scan_yaml};
 #[test]
 fn recognizes_bounded_equivalent_forms() {
     for text in [
-        "python3  release/check-policy.py",
-        "env python3 ./release/check-policy.py",
-        "python3 \\\n          release/check-policy.py",
-        "printf '#'; python3 release/check-policy.py",
-        "printf \"#\"; python3 -I -E -s -B ./release/check-policy.py",
-        ": ''#x; python3 release/check-policy.py",
-        ": \"\"#x; python3 release/check-policy.py",
-        "python3 -I -E -s -B -- ./release/check-policy.py",
-    ] {
-        assert_eq!(invocations(text), vec![Invocation::PythonPolicy]);
-    }
-    for text in [
         "cargo  publish --workspace",
         "env cargo \\\n          publish --workspace",
         "command cargo\tpublish -p prikk-release-policy",
@@ -40,14 +28,8 @@ fn recognizes_bounded_equivalent_forms() {
 #[test]
 fn real_comments_and_malformed_commands_fail_closed() {
     assert!(invocations("printf ok # cargo publish --workspace").is_empty());
-    assert!(invocations("printf ok # python3 release/check-policy.py").is_empty());
     assert!(invocations(": '' # cargo publish --workspace").is_empty());
-    assert!(invocations(": \"\" # python3 release/check-policy.py").is_empty());
     assert_eq!(scan("cargo 'publish").errors, vec!["unterminated-quote"]);
-    assert_eq!(
-        scan("python3 -W ignore release/check-policy.py").errors,
-        vec!["unsupported-python-invocation"]
-    );
     let dynamic_publication = scan("$CARGO publish --workspace");
     assert!(
         dynamic_publication
@@ -58,17 +40,6 @@ fn real_comments_and_malformed_commands_fail_closed() {
         dynamic_publication
             .errors
             .contains(&"unsupported-publication-invocation")
-    );
-    let dynamic_python = scan("$PYTHON release/check-policy.py");
-    assert!(
-        dynamic_python
-            .errors
-            .contains(&"unsupported-dynamic-command-head")
-    );
-    assert!(
-        dynamic_python
-            .errors
-            .contains(&"unsupported-python-invocation")
     );
     for command in [
         "$CARGO run --locked -p prikk-release-policy -- check",

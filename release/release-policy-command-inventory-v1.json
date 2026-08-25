@@ -5,10 +5,6 @@
     "command": "cargo run --locked -p prikk-release-policy -- check"
   },
   "invocation_markers": [
-    "python3 release/check-policy.py",
-    "python3 -B release/check-policy.py",
-    "python release/check-policy.py",
-    "python -B release/check-policy.py",
     "cargo run --locked -p prikk-release-policy -- check",
     "cargo run -p prikk-release-policy -- check"
   ],

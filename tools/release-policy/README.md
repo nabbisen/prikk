@@ -1,25 +1,21 @@
 # Prikk Release Policy Tool
 
-This unpublished workspace tool is the Rust migration candidate for Prikk's repository release-policy
-checks. Python remains authoritative until the separately reviewed DC-45 cutover.
+This unpublished workspace tool is the authoritative implementation of Prikk's repository
+release-policy checks. RFC 119 track B removed the Python implementation it once migrated from,
+along with `differential-check`, the tool that compared the two.
 
-The stale-reference gate recognizes exactly two immutable primary authority descriptors:
+The stale-reference gate recognizes exactly one immutable primary authority descriptor:
+`tools/release-policy/Cargo.toml` with `cargo run --locked -p prikk-release-policy -- check`.
 
-- `release/check-policy.py` with the Python 3 executable and that path as its sole argument; and
-- `tools/release-policy/Cargo.toml` with
-  `cargo run --locked -p prikk-release-policy -- check`.
-
-The inventory may select one exact pair but cannot define another authority state. Each required live
-documentation path must register the selected command exactly once; mixed authority, alternate pairs,
-missing or non-regular anchors, and unregistered invocations fail closed. Python remains selected until
-the separately reviewed inventory/documentation-only cutover.
+Each required live documentation path must register that command exactly once; a different
+command, missing or non-regular anchors, and unregistered invocations fail closed.
 
 The workflow scanner intentionally preserves the frozen dependency set during stage 2. It normalizes
 quoted and whitespace-separated block and flow `run` keys through one structural path and fails closed
 when a recognized `run` value cannot be parsed. Replacing this bounded extractor with a YAML dependency
 requires a separate architect-reviewed dependency and `Cargo.lock` re-freeze.
 
-Run the candidate policy evaluator from the repository root:
+Run the policy evaluator from the repository root:
 
 ```console
 cargo run --locked -p prikk-release-policy -- check
@@ -28,7 +24,6 @@ cargo run --locked -p prikk-release-policy -- check
 Implementation and review gates may also run:
 
 - `oracle-check --format json --self-test`
-- `differential-check --format json --self-test`
 - `boundary-check --format json`
 - `reference-check --format json`
 

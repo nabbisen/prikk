@@ -41,7 +41,6 @@
     {"python_check":"manifest-input-digest","rust_check":"repository:input-hash"},
     {"python_check":"manifest-duplicate-case","rust_check":"repository:duplicate-case"},
     {"python_check":"manifest-identity","rust_check":"repository:identity"},
-    {"python_check":"state-governance-context","rust_check":"repository:governance-context"},
     {"python_check":"sequence-reused-member","rust_check":"repository:sequence-reuse"},
     {"python_check":"sequence-reversed-members","rust_check":"matrix:sequence-reversed-members"},
     {"python_check":"sequence-reused-input","rust_check":"matrix:sequence-reused-input"},

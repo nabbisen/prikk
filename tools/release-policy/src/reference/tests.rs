@@ -3,35 +3,30 @@
 use std::fs;
 
 use super::{
-    Classification, Executable, Inventory, PYTHON_PRIMARY, RUST_PRIMARY, Reference,
-    required_markers, verify,
+    Classification, Executable, Inventory, RUST_PRIMARY, Reference, required_markers, verify,
 };
 
 #[path = "tests/authority.rs"]
 mod authority;
 
-fn python_command() -> String {
-    PYTHON_PRIMARY.command.to_owned()
-}
-
 fn rust_command() -> String {
     RUST_PRIMARY.command.to_owned()
 }
 
-fn fixture(primary: &str) -> (tempfile::TempDir, Inventory) {
+// RFC 119 track B: this used to take a `primary: &str` selecting between a Python and a Rust
+// authority descriptor -- `differential-check` and the Python it invoked are gone, and
+// `PYTHON_PRIMARY` with them, so `RUST_PRIMARY` is the only descriptor left to build a fixture
+// around.
+fn fixture() -> (tempfile::TempDir, Inventory) {
     let temporary = tempfile::tempdir().unwrap();
     fs::create_dir_all(temporary.path().join("release")).unwrap();
     fs::create_dir_all(temporary.path().join("tools/release-policy")).unwrap();
     fs::create_dir_all(temporary.path().join("docs/src/contributing")).unwrap();
     fs::create_dir_all(temporary.path().join("docs/src/reference")).unwrap();
     fs::create_dir_all(temporary.path().join("rfcs")).unwrap();
-    fs::write(temporary.path().join("release/check-policy.py"), "").unwrap();
     fs::write(temporary.path().join("tools/release-policy/Cargo.toml"), "").unwrap();
-    let (path, command) = match primary {
-        "python" => ("release/check-policy.py", python_command()),
-        "rust" => ("tools/release-policy/Cargo.toml", rust_command()),
-        _ => unreachable!(),
-    };
+    let path = "tools/release-policy/Cargo.toml";
+    let command = rust_command();
     let mut references = Vec::new();
     for path in [
         "docs/src/contributing/development.md",
@@ -72,7 +67,7 @@ fn fixture(primary: &str) -> (tempfile::TempDir, Inventory) {
 
 #[test]
 fn marker_omission_and_classification_substitution_fail() {
-    let (temporary, mut inventory) = fixture("python");
+    let (temporary, mut inventory) = fixture();
     inventory.invocation_markers.pop();
     assert!(
         verify(temporary.path(), &inventory)
@@ -81,7 +76,7 @@ fn marker_omission_and_classification_substitution_fail() {
             .any(|error| error == "invocation-markers")
     );
 
-    let (temporary, mut inventory) = fixture("python");
+    let (temporary, mut inventory) = fixture();
     inventory.invocation_markers.swap(0, 1);
     assert!(
         verify(temporary.path(), &inventory)
@@ -90,7 +85,7 @@ fn marker_omission_and_classification_substitution_fail() {
             .any(|error| error == "invocation-markers")
     );
 
-    let (temporary, mut inventory) = fixture("python");
+    let (temporary, mut inventory) = fixture();
     inventory.references.first_mut().unwrap().classification =
         Classification::HistoricalOrExplanatory;
     let errors = verify(temporary.path(), &inventory).unwrap();
@@ -107,19 +102,8 @@ fn marker_omission_and_classification_substitution_fail() {
 }
 
 #[test]
-fn unregistered_python_and_rust_variants_fail() {
+fn unregistered_rust_policy_variants_fail() {
     for (index, marker) in [
-        "python3  release/check-policy.py",
-        "env python3 ./release/check-policy.py",
-        "python3 \\\n  release/check-policy.py",
-        "command python -B release/check-policy.py",
-        "printf '#'; python3 release/check-policy.py",
-        "printf \"#\"; python3 release/check-policy.py",
-        ": ''#x; python3 release/check-policy.py",
-        ": \"\"#x; python3 release/check-policy.py",
-        "python3 -I -E -s -B ./release/check-policy.py",
-        "python3 -I -E -s -B -- ./release/check-policy.py",
-        "run: >-\n  python3\n  ./release/check-policy.py",
         "cargo  run --locked -p prikk-release-policy -- check",
         "env cargo run --locked -p prikk-release-policy -- check",
         "cargo \\\n  run -p prikk-release-policy -- check",
@@ -128,7 +112,7 @@ fn unregistered_python_and_rust_variants_fail() {
     .into_iter()
     .enumerate()
     {
-        let (temporary, inventory) = fixture("python");
+        let (temporary, inventory) = fixture();
         let path = format!("docs/unregistered-{index}.md");
         fs::create_dir_all(temporary.path().join("docs")).unwrap();
         fs::write(temporary.path().join(&path), marker).unwrap();
@@ -151,7 +135,7 @@ fn dynamic_rust_policy_commands_fail_closed_in_executable_files() {
     .into_iter()
     .enumerate()
     {
-        let (temporary, inventory) = fixture("python");
+        let (temporary, inventory) = fixture();
         let path = format!("release/dynamic-{index}.sh");
         fs::write(temporary.path().join(&path), command).unwrap();
         assert!(
@@ -166,14 +150,14 @@ fn dynamic_rust_policy_commands_fail_closed_in_executable_files() {
 #[test]
 fn genuine_comment_hides_non_executable_reference() {
     for (index, command) in [
-        "printf ok # python3 release/check-policy.py\n",
-        ": '' # python3 release/check-policy.py\n",
-        ": \"\" # python3 release/check-policy.py\n",
+        "printf ok # cargo run --locked -p prikk-release-policy -- check\n",
+        ": '' # cargo run --locked -p prikk-release-policy -- check\n",
+        ": \"\" # cargo run --locked -p prikk-release-policy -- check\n",
     ]
     .into_iter()
     .enumerate()
     {
-        let (temporary, inventory) = fixture("python");
+        let (temporary, inventory) = fixture();
         let path = format!("docs/commented-{index}.md");
         fs::create_dir_all(temporary.path().join("docs")).unwrap();
         fs::write(temporary.path().join(path), command).unwrap();

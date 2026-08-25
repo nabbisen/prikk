@@ -33,6 +33,17 @@ identity-bearing objects, see the [data model](./data-model.md). For persistence
   gate running. The mechanism, rules, and workflow below remain the documented design -- not
   rewritten, not removed -- and revive together with the oracle cases the day prikk enters the
   official-release regime, which requires DC-35 criterion 4's signer bootstrap.
+- **RFC 119 track B (2026-08-25) removed and parked more of the same apparatus.** The release-state
+  suite (23 cases, the three-authority release-lane state machine superseded 2026-08-24) was removed
+  outright -- `NEVER`, not parked, no revival condition, git history is the record. The `json-parser`
+  and `schema-evaluator` suites (15 cases) were removed as release policy for the same reason; the
+  code they tested (`json.rs`, `schema.rs`) stays, since release-evidence's own schema check still
+  uses it. 16 of `release-evidence`'s 73 cases -- the ones exercising its embedded DC-35
+  signer-governance sub-object -- were parked under the same revival condition as above (second batch
+  in `release/oracle/parked-cases-v1.json`); the other 57 are unaffected. `differential-check` and the
+  Python it invoked (`release/observe-policy.py`, `release/check-policy.py`,
+  `release/policy_check/`) were removed outright, closing the DC-93/DC-94 Python-retirement arc RFC
+  119 §3 traces to this same "system reasoning about itself" pattern.
 
 ## Compatibility Surfaces
 
@@ -206,12 +217,13 @@ The authoritative field inventory is:
 | RFC lifecycle | RFC status/location, inbound links, `rfcs/README.md` |
 | Release identity/status | Git tag and append-only release evidence snapshots |
 
-Unregistered duplicate release claims are audit failures. The positive and forbidden abstract rows are
-tracked in [`release-state-cases.json`](https://github.com/nabbisen/prikk/blob/main/release/fixtures/release-state-cases.json).
+Unregistered duplicate release claims are audit failures.
+
 Run `cargo run --locked -p prikk-release-policy -- check` from the repository root to execute the
-signer, canonical challenge-byte, release-state, and evidence-schema/sequence fixture tables. The Rust
-gate asserts date-time formats, rejects unknown schema assertions, and fails when computed validity
-differs from a fixture's expected outcome. It leaves the worktree unchanged.
+release-evidence schema/sequence fixture tables (RFC 119 track A parked the signer/challenge suites
+and track B removed the release-state suite outright, superseded by the workflow below; see Core
+Caveats). The Rust gate asserts date-time formats, rejects unknown schema assertions, and fails when
+computed validity differs from a fixture's expected outcome. It leaves the worktree unchanged.
 
 ## Required Release Workflow
 
