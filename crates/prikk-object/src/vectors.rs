@@ -116,12 +116,6 @@ pub(crate) const SNAPSHOT_CASES: &[IdCase] = &[
         payload: b"",
     },
     IdCase {
-        name: "empty_project_genesis",
-        object_type: ObjectType::ProjectGenesis,
-        schema_version: 1,
-        payload: b"",
-    },
-    IdCase {
         name: "empty_recognition_claim",
         object_type: ObjectType::RecognitionClaim,
         schema_version: 1,

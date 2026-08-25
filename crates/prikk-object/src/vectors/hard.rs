@@ -45,7 +45,9 @@ fn object_type_codes_match_fdd_section_3() {
         (ObjectType::Blob, 0x07),
         (ObjectType::BlockSummaryCache, 0x08),
         (ObjectType::RecoveryNote, 0x09),
-        (ObjectType::ProjectGenesis, 0x0A),
+        // `0x0A` (`ProjectGenesis`) retired, not reassigned -- repository-identity settlement
+        // handoff v1 §3. `ObjectType::from_code(0x0A)`'s own retirement guard is proven in
+        // `id/tests.rs`, not here: this table only round-trips codes that are currently live.
         // RFC 115 Stage 2 (design-v1.md D3): the first code assigned after FDD-03 §3's original
         // ratified list. Same pinning discipline -- part of the ObjectId preimage, frozen on
         // first write.

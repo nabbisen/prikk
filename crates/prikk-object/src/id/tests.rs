@@ -20,3 +20,24 @@ fn hex_roundtrip() {
     let parsed = text.parse::<ObjectId>();
     assert_eq!(parsed, Ok(id));
 }
+
+/// Repository-identity settlement handoff v1 §3: `0x0A` (formerly `ProjectGenesis`) must be
+/// refused with a message naming the retirement, not the generic "unknown code" every other
+/// never-assigned number gets -- otherwise a retired code and a merely-unassigned one look
+/// identical to a caller, and there is no record that reuse was ever considered a mistake.
+#[allow(clippy::expect_used)]
+#[test]
+fn a_retired_code_is_refused_with_a_distinct_message() {
+    let error = ObjectType::from_code(0x0A).expect_err("0x0A must not decode to anything");
+    let message = error.to_string();
+    assert!(
+        message.contains("retired") && message.contains("project-genesis"),
+        "expected a retirement-specific message, got: {message}"
+    );
+    let never_assigned =
+        ObjectType::from_code(0xFF).expect_err("0xFF has never been assigned and must also fail");
+    assert!(
+        !never_assigned.to_string().contains("retired"),
+        "an ordinary unassigned code must not read as a retirement: {never_assigned}"
+    );
+}

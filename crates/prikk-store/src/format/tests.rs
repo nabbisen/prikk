@@ -59,7 +59,6 @@ fn format2_allowlist_covers_every_registered_type() {
         (ObjectType::RecognitionClaim, 1, true),
         (ObjectType::BlockSummaryCache, 1, false),
         (ObjectType::RecoveryNote, 1, false),
-        (ObjectType::ProjectGenesis, 1, false),
     ] {
         let envelope = ObjectEnvelope::unsigned(object_type, schema, Vec::new());
         assert_eq!(validate_format2_schema(&envelope).is_ok(), allowed);

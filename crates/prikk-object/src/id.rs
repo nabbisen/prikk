@@ -34,13 +34,26 @@ pub enum ObjectType {
     /// Signed doctor-repair note stored inline in `refs/recovery/`. Never a
     /// `RefUpdate` substitute (FDD-02 §10.4).
     RecoveryNote = 0x09,
-    /// Project identity anchor; its `ObjectId` is the `project_id` (FDD-03 §9.13).
-    ProjectGenesis = 0x0A,
+    // `0x0A` was `ProjectGenesis` (FDD-03 §9.13) -- deleted (repository-identity settlement
+    // handoff v1): a project-level genesis object implies repositories carry an identity to
+    // anchor, which the shipped design never grants (RFC 115 §2.4-§2.7: repositories are
+    // anonymous, identity lives only in signer keys and patch ids). No payload module ever
+    // existed for it, `admitted_schemas` always returned `None`, and nothing could construct
+    // one. See `RETIRED_CODES` below -- `0x0A` must never be reassigned.
     /// RFC 115 Stage 2 (design-v1.md D3): a signed claim that named patches were sealed into a
     /// named block, under the signer's key. Never trust-conferring and never existence-checked
     /// against the block/patches it names — see `RecognitionClaimPayload`'s own doc.
     RecognitionClaim = 0x0B,
 }
+
+/// Object type codes retired from the assignable range. `from_code` refuses every one of these
+/// with a message naming the retirement, checked *before* the live-code match below, so
+/// re-adding a code here can never silently start decoding again just because a future match arm
+/// happens to claim it too -- the retirement always wins. There are 245 codes free in the u16
+/// range `from_code`/`code` never use below `0x100`; the benefit of ever reusing a retired one is
+/// zero and the cost of a collision (two different object shapes sharing one identity-preimage
+/// type tag) is unbounded.
+const RETIRED_CODES: &[(u16, &str)] = &[(0x0A, "project-genesis")];
 
 impl ObjectType {
     /// Return the stable u16 code used in object identity bytes.
@@ -51,6 +64,11 @@ impl ObjectType {
 
     /// Parse a stable u16 code.
     pub fn from_code(code: u16) -> Result<Self> {
+        if let Some((_, name)) = RETIRED_CODES.iter().find(|&&(retired, _)| retired == code) {
+            return Err(PrikkError::MalformedData(format!(
+                "object type code {code} is retired (formerly {name}) and must never be reused"
+            )));
+        }
         match code {
             0x01 => Ok(Self::Patch),
             0x02 => Ok(Self::Block),
@@ -61,7 +79,6 @@ impl ObjectType {
             0x07 => Ok(Self::Blob),
             0x08 => Ok(Self::BlockSummaryCache),
             0x09 => Ok(Self::RecoveryNote),
-            0x0A => Ok(Self::ProjectGenesis),
             0x0B => Ok(Self::RecognitionClaim),
             other => Err(PrikkError::MalformedData(format!(
                 "unknown object type code: {other}"
@@ -82,7 +99,6 @@ impl ObjectType {
             Self::Blob => "blob",
             Self::BlockSummaryCache => "block-summary-cache",
             Self::RecoveryNote => "recovery-note",
-            Self::ProjectGenesis => "project-genesis",
             Self::RecognitionClaim => "recognition-claim",
         }
     }

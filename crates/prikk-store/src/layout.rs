@@ -861,13 +861,11 @@ pub fn object_type_directory_name(object_type: ObjectType) -> &'static str {
         ObjectType::Blob => "blob",
         ObjectType::RecognitionClaim => "recognition-claim",
         ObjectType::RefUpdate => "ref-update-inline-only",
-        // New FDD-03 §3 types. Full storage-layout placement (`objects/genesis/`,
-        // `cache/block-summary/`, `refs/recovery/`) is reconciled in the FDD-02
-        // layout phase; these names keep the mapper exhaustive without creating
-        // directories yet.
+        // New FDD-03 §3 types. Full storage-layout placement (`cache/block-summary/`,
+        // `refs/recovery/`) is reconciled in the FDD-02 layout phase; these names keep the
+        // mapper exhaustive without creating directories yet.
         ObjectType::BlockSummaryCache => "block-summary-cache-rebuildable",
         ObjectType::RecoveryNote => "recovery-note-inline-only",
-        ObjectType::ProjectGenesis => "genesis",
     }
 }
 

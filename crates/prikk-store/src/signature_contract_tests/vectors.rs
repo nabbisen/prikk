@@ -359,7 +359,6 @@ const ALL_OBJECT_TYPES: &[ObjectType] = &[
     ObjectType::Blob,
     ObjectType::BlockSummaryCache,
     ObjectType::RecoveryNote,
-    ObjectType::ProjectGenesis,
     ObjectType::RecognitionClaim,
 ];
 
@@ -376,11 +375,10 @@ fn all_object_types_is_exhaustive() {
             | ObjectType::Blob
             | ObjectType::BlockSummaryCache
             | ObjectType::RecoveryNote
-            | ObjectType::ProjectGenesis
             | ObjectType::RecognitionClaim => {}
         }
     }
-    assert_eq!(ALL_OBJECT_TYPES.len(), 11);
+    assert_eq!(ALL_OBJECT_TYPES.len(), 10);
 }
 
 /// RFC 114 §3's completeness self-guard: call the *real* `validate_format2_schema` -- not a copy

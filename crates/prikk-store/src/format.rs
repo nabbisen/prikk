@@ -40,9 +40,7 @@ pub(crate) fn admitted_schemas(object_type: ObjectType) -> Option<&'static [u32]
         | ObjectType::Attestation
         | ObjectType::Blob
         | ObjectType::RecognitionClaim => Some(&[1]),
-        ObjectType::BlockSummaryCache | ObjectType::RecoveryNote | ObjectType::ProjectGenesis => {
-            None
-        }
+        ObjectType::BlockSummaryCache | ObjectType::RecoveryNote => None,
     }
 }
 

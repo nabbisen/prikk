@@ -58,14 +58,6 @@ covered two unrelated blockers and produced a wrong roadmap framing:
   `bundle` artifact between repositories is the operator's own channel, by design, not a gap awaiting a
   future increment. What remains genuinely unautomated — the operator still copies the file themselves —
   is a consequence of that ruling, not an open question about who owns it.
-- **Peer trust** — what a remote is permitted to assert. All trust is local today
-  (`trust maintainer add`); a peer claiming a ref advanced is a new authority question.
-- **Quarantine policy** — what happens to objects that arrive untrusted. **Correction, checked against
-  `layout.rs`:** `.prikk/quarantine` no longer exists in a newly initialized repository's layout —
-  `required_directories()`'s dead-surface consolidation stopped creating it (containers replaced loose
-  objects years ago; nothing writes into it). The original design once anticipated a quarantine
-  directory; nothing does today, so this theme has no groundwork to build on and starts from
-  requirements, not a scaffolded location.
 
 **Prerequisite, per the owner's 2026-08-04 direction ("security is strongly prioritized to function;
 secure by default; we should not be in a hurry"): a threat model before any sync code exists.** Sync is

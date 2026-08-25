@@ -1,11 +1,13 @@
 //! DC-41 stage 4 property tests: envelope framing (target 1 of 5).
 //!
-//! Covers all ten current `ObjectType` variants. Two properties, per the RFC: round-trip
+//! Covers all nine current `ObjectType` variants (`RecognitionClaim` predates this list's own
+//! upkeep and is not sampled here -- a pre-existing gap, not introduced or fixed by the
+//! repository-identity settlement handoff). Two properties, per the RFC: round-trip
 //! (`decode(encode(x)) == x`) for structurally valid envelopes, and totality (never panics) for
 //! arbitrary bytes fed to the decoder. A third check pins envelope-layer admission against the
-//! DC-40 format-2 schema allowlist (`crate::format::validate_format2_schema`) so the three
-//! variants excluded from format-2 identity positions (`BlockSummaryCache`, `RecoveryNote`,
-//! `ProjectGenesis`) are exercised on the rejection path rather than skipped.
+//! DC-40 format-2 schema allowlist (`crate::format::validate_format2_schema`) so the two
+//! variants excluded from format-2 identity positions (`BlockSummaryCache`, `RecoveryNote`) are
+//! exercised on the rejection path rather than skipped.
 //!
 //! Case budget is proptest's own default (256/run), overridable with `PROPTEST_CASES` for a
 //! campaign run; no explicit `ProptestConfig` override is set here.
@@ -19,7 +21,7 @@ use prikk_object::{ObjectEnvelope, ObjectType, Signature, SignatureAlgorithm, Si
 use super::{decode_envelope_file, encode_envelope_file_structural};
 use crate::format::validate_format2_schema;
 
-const ALL_OBJECT_TYPES: [ObjectType; 10] = [
+const ALL_OBJECT_TYPES: [ObjectType; 9] = [
     ObjectType::Patch,
     ObjectType::Block,
     ObjectType::RefState,
@@ -29,7 +31,6 @@ const ALL_OBJECT_TYPES: [ObjectType; 10] = [
     ObjectType::Blob,
     ObjectType::BlockSummaryCache,
     ObjectType::RecoveryNote,
-    ObjectType::ProjectGenesis,
 ];
 
 fn object_type_strategy() -> impl Strategy<Value = ObjectType> {
@@ -125,9 +126,7 @@ proptest! {
             | ObjectType::Attestation
             | ObjectType::Blob
             | ObjectType::RecognitionClaim => schema_version == 1,
-            ObjectType::BlockSummaryCache
-            | ObjectType::RecoveryNote
-            | ObjectType::ProjectGenesis => false,
+            ObjectType::BlockSummaryCache | ObjectType::RecoveryNote => false,
         };
         prop_assert_eq!(validate_format2_schema(&envelope).is_ok(), expected_ok);
     }

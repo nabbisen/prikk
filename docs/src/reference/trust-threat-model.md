@@ -120,6 +120,33 @@ of this repository's history has been synced), or if the patch set resolves to m
 block. Each refusal is a person's decision not to act on an unresolved question — not a cryptographic
 guarantee that the correct answer was found.
 
+**Repositories are anonymous. Identity lives in signer keys and in patch ids — never in a
+repository.** This is a settled property of the shipped design (RFC 115 §2.4–§2.7), not an
+open question or a deferred non-goal: prikk has no peers, only artifacts. `crates/prikk-cli/src/sync.rs`
+opens with *"No network. No socket. No new dependency"* — every sync subcommand reads and writes
+files, and there is no session, no remote party, and nothing to authenticate as a repository in the
+first place. Checkable, not merely asserted:
+
+- `RecognitionClaimPayload` carries `block_id`, `patch_ids`, and `parent_block_ids` — content ids
+  only, never an originator field.
+- `SyncSummaryRefEntry` carries `ref_name`, `digest`, and `patch_count` — again, no originator field.
+- Tags travel and are adopted under the receiver's own key, above, not the sender's.
+- All trust is local (`trust maintainer add`), gated through `GatedOperation`.
+
+**An artifact asserts nothing binding.** A claim never gates admission and never confers trust: the
+receiver applies the claimed order and either it produces a valid state — which the receiver then
+seals under their own key, `verify_signer_trusted` unchanged and still gating — or it does not. A
+hostile or simply wrong claimed order cannot forge a state. So "what is a remote permitted to
+assert?" has an answer: nothing that binds the receiver. The receiver is the sole authority over its
+own store.
+
+**What this forecloses.** There is no repository identifier to spoof, no peer to impersonate, and no
+origin field a receiver could be fooled by, because none of the three exists. That is a security
+property this design has, not a gap in it — the "global identity trust" and "remote trust" entries
+under Threat Boundaries' non-goals list below describe capabilities not yet built, not this: there is
+no repository identity for a future increment to eventually add trust *around*, because the design
+never creates one to begin with.
+
 ## Key Input and Local Trust Store
 
 Current key input is intentionally minimal. The CLI reads AUTHOR key material from
