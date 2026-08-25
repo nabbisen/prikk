@@ -437,3 +437,6 @@ fn print_active_wal_metadata_status(status: &ActiveWalMetadataStatus) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

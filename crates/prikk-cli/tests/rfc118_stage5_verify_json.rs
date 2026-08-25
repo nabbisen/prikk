@@ -62,18 +62,29 @@ fn plant_stray_object_entry(layout: &RepositoryLayout, name: &str) {
     std::fs::create_dir_all(prefix_dir.join(name)).expect("create the stray non-file entry");
 }
 
-/// Control 1 (RFC 118 stage 5 handoff §6.1): a stage `Failed` whose message contains a double
-/// quote, a backslash, a newline, a tab, and a raw control character (`U+0001`) -- all reaching the
-/// message through the stray entry's own file name, which `verify_objects`' error message embeds
-/// verbatim via `Path::display`. Proves `escape_json_string` on genuinely hostile input, not a
-/// happy path, and proves the whole document still parses as JSON.
+/// Windows hostile-test fix handoff: this control used to plant a directory named
+/// `quote"back\\slash<LF>newline<TAB>tab<U+0001>control` -- a double quote, a backslash, a newline,
+/// a tab, and a raw control byte, exactly the set Win32 forbids in a filename (`<>:"/\\|?*` and
+/// every C0 control). The directory could never be created on Windows, so the control never ran
+/// there at all (Windows mutation suite, 2026-08-25) -- `escape_json_string`'s hostile-byte proof
+/// now lives in a filesystem-free unit test (`output/verification/tests.rs`), which can use bytes
+/// no filesystem would ever accept.
+///
+/// **A portable name cannot replace that proof**, and this is stated rather than silently assumed:
+/// every character JSON requires escaping (`"`, `\\`, and every C0 control) is also filesystem-illegal
+/// on Windows, so no filename-legal-everywhere string can exercise the escaper's hostile-input
+/// path. What a portable name *can* still prove, on every platform: a real structural `Objects`-stage
+/// failure's message -- which embeds the full stray path via `Path::display`, including Windows'
+/// own `\\` path separators -- reaches `--format json` intact, the document still parses, and
+/// ordinary punctuation in the planted name (which needs no escaping) survives unmangled. That is a
+/// real, if narrower, end-to-end proof, not a placeholder.
 #[test]
-fn hostile_stage_failure_message_escapes_correctly_and_the_document_still_parses() {
-    let repo = support::unique_repo("rfc118-stage5-hostile-message");
+fn stage_failure_message_with_ordinary_punctuation_reaches_valid_json() {
+    let repo = support::unique_repo("rfc118-stage5-portable-message");
     support::init(&repo);
     let layout = RepositoryLayout::open(&repo).expect("layout opens");
-    let hostile_name = "quote\"back\\slash\nnewline\ttab\u{1}control";
-    plant_stray_object_entry(&layout, hostile_name);
+    let portable_name = "can't (be here)";
+    plant_stray_object_entry(&layout, portable_name);
 
     let out = support::prikk(&repo)
         .args(["verify", "--format", "json"])
@@ -87,25 +98,15 @@ fn hostile_stage_failure_message_escapes_correctly_and_the_document_still_parses
     assert_valid_json(&stdout);
     assert!(
         stdout.contains(r#""ok": false"#),
-        "hostile stage failure must report ok: false: {stdout}"
+        "a structural stage failure must report ok: false: {stdout}"
     );
     assert!(
         stdout.contains(r#""id": "stage-failure""#),
-        "hostile stage failure must name the stage-failure condition: {stdout}"
+        "a structural stage failure must name the stage-failure condition: {stdout}"
     );
-    // The hostile bytes must survive, escaped, inside the failed stage's own message field.
-    // The raw control byte (U+0001) is escaped generically as `\u0001`.
-    let expected_escaped = "quote\\\"back\\\\slash\\nnewline\\ttab\\u0001control";
     assert!(
-        stdout.contains(expected_escaped),
-        "hostile bytes were not escaped as expected: {stdout}"
-    );
-    // And the raw, unescaped bytes must NOT appear bare in the output (a raw newline or control
-    // character in a JSON string would itself be invalid JSON, which assert_valid_json also
-    // catches, but checking directly here names the actual defect this control exists to prevent).
-    assert!(
-        !stdout.contains("quote\"back\\slash\nnewline\ttab"),
-        "hostile bytes leaked into the output unescaped: {stdout}"
+        stdout.contains(portable_name),
+        "ordinary punctuation must survive unescaped and unmangled: {stdout}"
     );
 
     let _ = std::fs::remove_dir_all(&repo);
