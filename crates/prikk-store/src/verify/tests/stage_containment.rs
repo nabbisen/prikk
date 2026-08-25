@@ -604,3 +604,112 @@ fn verify_repository_with_options_halts_every_later_stage_when_stop_on_first_err
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
+
+/// RFC 118 stage 4 §3: the completeness invariant `RepositoryVerification::stage_outcomes`'s own
+/// doc promises -- exactly one outcome per [`VerificationStage::ALL`] entry -- asserted against a
+/// **real** `verify_repository` report, not a hand-built `RepositoryVerification`. A test that
+/// constructs the value it then checks proves nothing about the pipeline that actually produces it;
+/// a freshly-initialized, otherwise-untouched repository is enough, since every stage here is
+/// expected to run to completion with nothing to find.
+#[test]
+fn verify_repository_reports_exactly_one_outcome_per_all_entry() -> Result<()> {
+    let root = unique_temp_dir("stage2-completeness-full-accumulation");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    let report = verify_repository(&layout)?;
+    assert_stage_outcomes_cover_all_exactly_once(&report.stage_outcomes);
+    for outcome in &report.stage_outcomes {
+        assert_eq!(
+            outcome.status,
+            StageStatus::Evaluated,
+            "a freshly-initialized repository should have nothing to find, but {} resolved to {:?}",
+            outcome.stage,
+            outcome.status
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 118 stage 4 §3: the same completeness invariant under `--stop-on-first-error`, the path
+/// `verify_repository_reports_exactly_one_outcome_per_all_entry` (above) does not exercise --
+/// `Halted` exists precisely so an early stop still emits an entry per stage, and an omission here
+/// is the failure a CI completeness gate would actually hit, not a full-accumulation walk. One
+/// planted structural defect in `Objects` (the same technique
+/// `verify_repository_with_options_halts_every_later_stage_when_stop_on_first_error_is_set` above
+/// uses) is enough to force a halt; that test already proves the halt's dependency-graph naming is
+/// correct stage by stage, so this one only asserts the coverage count.
+#[test]
+fn verify_repository_with_options_stop_on_first_error_reports_exactly_one_outcome_per_all_entry()
+-> Result<()> {
+    let root = unique_temp_dir("stage2-completeness-stop-on-first-error");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    let mut objects = FileObjectStore::new(layout.clone());
+    let stray_id = objects.write_object(&ObjectEnvelope::unsigned(
+        ObjectType::Blob,
+        1,
+        b"payload".to_vec(),
+    ))?;
+    let prefix_dir = layout
+        .object_path(ObjectType::Blob, stray_id)
+        .parent()
+        .ok_or_else(|| PrikkError::Io("object path has no parent".to_string()))?
+        .to_path_buf();
+    std::fs::create_dir_all(prefix_dir.join("stray-directory"))?;
+
+    let report = verify_repository_with_options(
+        &layout,
+        VerifyOptions {
+            stop_on_first_error: true,
+        },
+    )?;
+    assert!(report.has_stage_failure());
+    assert!(matches!(
+        find_stage(&report.stage_outcomes, VerificationStage::Objects).status,
+        StageStatus::Failed { .. }
+    ));
+    assert_stage_outcomes_cover_all_exactly_once(&report.stage_outcomes);
+    let halted: Vec<VerificationStage> = report
+        .stage_outcomes
+        .iter()
+        .filter(|outcome| matches!(outcome.status, StageStatus::Halted { .. }))
+        .map(|outcome| outcome.stage)
+        .collect();
+    assert!(
+        halted.contains(&VerificationStage::ReceivedRefs)
+            && halted.contains(&VerificationStage::LocalTagTrust),
+        "ReceivedRefs and LocalTagTrust have no real dependency of their own, so a halt after \
+         Objects should report both Halted, not silently drop them: {halted:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// Shared by both completeness tests above: every [`VerificationStage::ALL`] member appears in
+/// `outcomes` exactly once, and nothing appears that is not in `ALL`.
+fn assert_stage_outcomes_cover_all_exactly_once(outcomes: &[StageOutcome]) {
+    use std::collections::BTreeSet;
+    let reported: BTreeSet<VerificationStage> =
+        outcomes.iter().map(|outcome| outcome.stage).collect();
+    assert_eq!(
+        outcomes.len(),
+        VerificationStage::ALL.len(),
+        "expected exactly one outcome per VerificationStage::ALL entry ({}), got {}: {outcomes:?}",
+        VerificationStage::ALL.len(),
+        outcomes.len()
+    );
+    assert_eq!(
+        reported.len(),
+        VerificationStage::ALL.len(),
+        "expected no duplicate stage in stage_outcomes: {outcomes:?}"
+    );
+    for &stage in VerificationStage::ALL {
+        assert!(
+            reported.contains(&stage),
+            "VerificationStage::ALL names {stage}, which stage_outcomes does not report at all"
+        );
+    }
+}
