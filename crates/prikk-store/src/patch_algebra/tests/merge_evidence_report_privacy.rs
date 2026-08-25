@@ -68,6 +68,7 @@ fn report_item_fixture(
         operation_kind: Some(MergeEvidenceOperationKind::ChangePerm),
         node_id: Some(node_id),
         path: None,
+        witness_kind: None,
         outcome: MergeEvidenceOutcome::Deferred,
         evidence_scope: None,
         proof_phase: MergeEvidenceProofPhase::ComposedReplay,

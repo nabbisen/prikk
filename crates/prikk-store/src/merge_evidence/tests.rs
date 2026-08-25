@@ -203,6 +203,14 @@ fn cross_display_preserves_distinct_left_and_right_operations() -> Result<()> {
     assert_eq!(right_operation.op_seq, Some(1));
     assert_eq!(right_operation.kind, Some("DeleteNode"));
     assert_eq!(right_operation.path.as_deref(), Some("tracked.txt"));
+    // A ChangePerm/DeleteNode pair on the same node is a `DeleteMutationConflict` -- and,
+    // deliberately in this scenario, the witness carries no path at all (only `node_id`): a
+    // real, end-to-end proof that `witness_node_id` is not redundant with `operation.path` for
+    // every conflict kind, quoted in the conflict-witness-presentation report as "user-visible
+    // output" from the actual public `MergeEvidenceDisplayItem` a caller receives.
+    assert_eq!(cross_item.witness_kind, Some("delete-mutation-conflict"));
+    assert_eq!(cross_item.witness_path, None);
+    assert_eq!(cross_item.witness_node_id, Some(node_id));
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }

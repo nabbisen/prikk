@@ -128,6 +128,67 @@ Current public proof phases include:
 
 `composed-replay` exists only behind test-only display code and is not a current public phase.
 
+## Conflict Witness Kinds
+
+`reason_code: pair_conflict` names the outcome bucket, not the reason: all twelve conflict-witness
+kinds `patch_algebra` distinguishes internally reported as the same generic `pair_conflict` code,
+which told a reader nothing about *why* a specific pair conflicted (conflict-witness-presentation
+handoff v1). `MergeEvidenceDisplayItem` now additionally carries the specific kind, path, and node
+identity a cross-side (`Conflict`/`OrderedDependency`) item's witness recorded:
+
+| Field | Meaning |
+|---|---|
+| `witness_kind` | The specific reason this pair conflicts or orders, as a stable kebab-case label. `None` for items with no underlying witness. |
+| `witness_path` | The repository-relative path the witness recorded as the reason for conflict, when it recorded one. Distinct from each side's own `operation.path`/`peer_operation.path` — present even for node-identity conflicts where neither side's own operation carries a path at all. |
+| `witness_node_id` | The shared node identity, typed (not a rendered string — no stable human-facing node-identity rendering exists in this codebase to freeze into this field). The only correlating signal for conflict kinds with no path at all. |
+
+Current `witness_kind` labels:
+
+| Label | Meaning |
+|---|---|
+| `same-path-create` | Both sides create a node at the identical path. |
+| `node-id-reuse` | A node identity is reused across unrelated creations. |
+| `live-state-mismatch` | A side's precondition does not match the state the other side's operation requires. |
+| `kind-mismatch` | The two sides disagree about the node's kind (file, symlink, etc.). |
+| `mode-mismatch` | The two sides set different, incompatible permission modes. |
+| `blob-mismatch` | The two sides replace binary content with different, incompatible results. |
+| `text-span-overlap` | Both sides edit the identical text span. |
+| `text-anchor-stale` | A text edit's anchor no longer matches the state it was planned against. |
+| `delete-mutation-conflict` | One side deletes a node the other side mutates. |
+| `unsupported-operation` | The operation kind is outside the currently supported algebra subset. |
+| `malformed-operation` | The operation itself failed to decode into usable facts. |
+| `unknown-relation` | The pair's relation does not match any more specific classification. |
+
+These labels are **an external interface**, the same footing `reason_code` and proof-phase strings
+are already on (Privacy and Output Limits, below): renaming, removing, or reusing one is a breaking
+change to any tool reading merge evidence.
+
+## Conflict Resolution Is Refused By Design
+
+**Automation may not author a conflict resolution.** This is a settled architectural position
+(conflict-witness-presentation handoff v1), not an unscoped feature waiting to be built, and it
+follows directly from two decisions already made elsewhere in this project:
+
+- **DC-35**: *"Automation may verify evidence but cannot occupy either accountable approval
+  identity."*
+- **DC-74** applied that at the patch layer already, and its own reasoning is why arbitration can't
+  be added later as an ergonomics feature: in a context-dependent (Darcs-style) model, merging a
+  patch *transforms* it — its canonical bytes change, its `ObjectId` moves, and the original AUTHOR
+  signature no longer covers the result, so whoever performs the merge must re-sign content they did
+  not write. That is DC-35's "automation cannot occupy an accountable approval identity," arriving at
+  the patch layer. **Prikk's merge design avoids this entirely**: `prikk merge` (DC-74) adopts the
+  other side's patches verbatim, unmodified, under their original AUTHOR signatures — nobody
+  re-signs content they did not write.
+
+**An automatic conflict arbitrator would reintroduce exactly the problem DC-74 was built to avoid**:
+resolving a conflict means producing new content — a patch — and a patch must be authored and signed
+by whoever is accountable for it. So conflict arbitration is refused by the architecture itself, not
+merely unscoped or deferred to a future increment.
+
+**Resolution already exists, and needs nothing further built**: `prikk merge` refuses on any
+conflict, and a person reconciles the two sides by authoring ordinary patches under their own key —
+the same committing every other change in this repository already goes through.
+
 ## Merge Plan Mapping
 
 `prikk merge-plan` preserves the underlying evidence outcome and maps it to a non-executable planning
@@ -159,10 +220,16 @@ operation payloads. Displayed paths are repository-relative when available and s
 
 **`prikk merge` (DC-74) executes confluent merges** — see the [merge guide](../guide/merge.md). Still
 deferred: automatic merge-base discovery, branch merge semantics beyond a two-sided confluent merge,
-conflict resolution, active-WAL merge drafts, worktree conflict materialization, conflict-resolution
-UI, persisted proof/witness/merge-evidence/merge-plan objects, same-node text operational transforms,
-path-scoped analysis, display-path filtering, JSON output, patch-algebra crate extraction, and public
-stable Rust APIs for replay, patch algebra, merge evidence, or merge planning internals.
+active-WAL merge drafts, worktree conflict materialization, conflict-resolution UI, persisted
+proof/witness/merge-evidence/merge-plan objects, same-node text operational transforms, path-scoped
+analysis, display-path filtering, JSON output, patch-algebra crate extraction, and public stable Rust
+APIs for replay, patch algebra, merge evidence, or merge planning internals.
+
+**Conflict resolution itself is not on this list** — see Conflict Resolution Is Refused By Design,
+above. "Deferred" means eventually built; automatic conflict resolution is refused by the
+architecture and will not be built at all. A conflict-resolution *UI* remains deferred in the sense
+above, but only for the human-authored-patch workflow this page already describes, never for an
+automatic resolver.
 
 ## Claim-to-Source Anchors
 
@@ -178,6 +245,9 @@ stable Rust APIs for replay, patch algebra, merge evidence, or merge planning in
 | `merge-plan` maps evidence outcomes to `ConfluentSubset` and `Blocked*` statuses without adding merge execution. | [`merge_plan.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/merge_evidence/merge_plan.rs), [DC-25](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-25-MERGE-PLANNING-SURFACE.md), [merge plan guide](../guide/merge-plan.md) |
 | Evidence and plan output avoid raw text spans, replacement text, blob bytes, absolute host paths, and arbitrary object debug dumps. | [`display.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/merge_evidence/display.rs), [DC-21](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-21-MERGE-CONFLICT-EVIDENCE-CONTRACT.md), [DC-23](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-23-MERGE-EVIDENCE-UX-STABILIZATION.md) |
 | Patch algebra, merge evidence, and merge plan internals are not public stable Rust APIs. | [DC-20](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-20-REPLAY-BOUNDARY-STABILIZATION.md), [DC-25](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-25-MERGE-PLANNING-SURFACE.md), [implementation status](https://github.com/nabbisen/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
+| Conflict-witness kinds (twelve) are generated with their labels from one macro invocation, the same discipline `VerificationStage` uses. | [`types.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/patch_algebra/types.rs), [conflict-witness-presentation handoff v1](https://github.com/nabbisen/prikk/blob/main/rfcs/handoffs/DC-21-merge-conflict-evidence-contract/conflict-witness-presentation-handoff-v1.md) |
+| `MergeEvidenceDisplayItem` publishes `witness_kind`/`witness_path`/`witness_node_id`, but never the underlying `left_op_seq`/`right_op_seq` pair or raw `text_span` bytes. | [`display.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/merge_evidence/display.rs), [`mapping.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/patch_algebra/report/mapping.rs) |
+| Automatic conflict resolution is refused by design (DC-35 applied at the patch layer, per DC-74). | [DC-35](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-35-RELEASE-COMPATIBILITY-STATUS-CORRECTION.md), [DC-74](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-74-MERGE-EXECUTION.md), [`merge_execute.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/merge_execute.rs), [conflict-witness-presentation handoff v1](https://github.com/nabbisen/prikk/blob/main/rfcs/handoffs/DC-21-merge-conflict-evidence-contract/conflict-witness-presentation-handoff-v1.md) |
 
 ## Provenance
 

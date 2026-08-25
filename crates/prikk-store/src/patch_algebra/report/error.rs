@@ -27,6 +27,7 @@ pub(super) fn evidence_error_report(
             operation_kind: None,
             node_id: evidence_error_node_id(error),
             path: None,
+            witness_kind: None,
             outcome,
             evidence_scope: Some(scope.into()),
             proof_phase: MergeEvidenceProofPhase::Classification,

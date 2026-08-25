@@ -1,8 +1,9 @@
-use prikk_object::ObjectId;
+use prikk_object::{NodeId, ObjectId};
 
 use crate::patch_algebra::{
-    MergeEvidenceItem, MergeEvidenceOperationKind, MergeEvidenceOutcome, MergeEvidenceProofPhase,
-    MergeEvidenceReasonCode, MergeEvidenceReport, MergeEvidenceScope, MergeEvidenceSide,
+    ConflictWitnessKind, MergeEvidenceItem, MergeEvidenceOperationKind, MergeEvidenceOutcome,
+    MergeEvidenceProofPhase, MergeEvidenceReasonCode, MergeEvidenceReport, MergeEvidenceScope,
+    MergeEvidenceSide,
 };
 
 /// Public display view for read-only merge/conflict evidence.
@@ -62,6 +63,30 @@ pub struct MergeEvidenceDisplayItem {
     pub proof_phase: &'static str,
     /// Stable DC-21 reason code.
     pub reason_code: &'static str,
+    /// Conflict-witness-presentation handoff v1: the specific reason two operations conflict or
+    /// order, when this item carries a witness (`reason_code` names only the coarse outcome
+    /// bucket -- `pair_conflict` covers all twelve `ConflictWitnessKind` variants alike; this
+    /// names which one). **Stable kebab-case, an external interface** -- the same footing
+    /// `VerificationStage::label()` and `reason_code` are already on: renaming, removing, or
+    /// reusing one is a breaking change to any tool reading it. `None` for items with no
+    /// underlying witness (confluent, evidence-failure, coarse unknown-reason items).
+    pub witness_kind: Option<&'static str>,
+    /// Repository-relative path the conflicting operations share, when the witness recorded one.
+    /// Distinct from `operation.path`/`peer_operation.path` (each side's *own* recorded path,
+    /// present only for path-bearing operation kinds like `CreateFile`/`DeleteNode`): this is the
+    /// witness's own account of *why* the pair conflicts, present even for node-identity
+    /// conflicts (e.g. `ChangePerm` vs `ReplaceBinary`) where neither side's own operation
+    /// summary carries a path at all.
+    pub witness_path: Option<String>,
+    /// The shared node identity two conflicting operations both act on, when the witness recorded
+    /// one. Exposed as the typed [`NodeId`] (the same footing `baseline_block_id: ObjectId`
+    /// already is in [`MergeEvidenceDisplay`]) rather than a rendered string, since no stable
+    /// human-facing rendering for a node identity exists anywhere in this codebase to freeze into
+    /// this one struct. **The one field this handoff explicitly left to argument**: published
+    /// because it is the *only* correlating signal for conflict kinds with no path at all (a
+    /// `ChangePerm`/`ReplaceBinary` mismatch on the same node carries no path on either side), not
+    /// because a raw 32-byte identity is legible to a person on its own.
+    pub witness_node_id: Option<NodeId>,
 }
 
 /// Public operation summary for merge-evidence display.
@@ -137,6 +162,9 @@ fn item_from_report(
         evidence_scope: item.evidence_scope.map(scope_name),
         proof_phase: proof_phase_name(item.proof_phase),
         reason_code: reason_code_name(item.reason_code),
+        witness_kind: item.witness_kind.map(ConflictWitnessKind::label),
+        witness_path: item.path.as_ref().map(|path| path.as_str().to_string()),
+        witness_node_id: item.node_id,
     }
 }
 

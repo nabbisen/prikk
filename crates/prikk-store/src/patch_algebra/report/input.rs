@@ -140,6 +140,9 @@ fn first_malformed_operation(
             operation_kind: Some(operation_kind(operation)),
             node_id: None,
             path: None,
+            witness_kind: Some(
+                crate::patch_algebra::types::ConflictWitnessKind::MalformedOperation,
+            ),
             outcome: MergeEvidenceOutcome::InvalidCandidate,
             evidence_scope: Some(MergeEvidenceScope::UnsealedCandidate),
             proof_phase: MergeEvidenceProofPhase::Classification,

@@ -13,11 +13,11 @@ pub(super) use super::super::facts::path_effects;
 pub(super) use super::super::report::{
     MergeEvidenceItem, MergeEvidenceOperationKind, MergeEvidenceOutcome, MergeEvidenceProofPhase,
     MergeEvidenceReasonCode, MergeEvidenceScope, MergeEvidenceSide, analyze_merge_evidence,
-    analyze_pair_merge_evidence,
+    analyze_pair_merge_evidence, pair_class_report,
 };
 pub(super) use super::super::types::{
-    CommutationResult, ConflictWitnessKind, ConfluenceResult, ConfluenceWitnessKind, PairClass,
-    RequiredOrder, UnknownReason,
+    CommutationResult, ConflictWitness, ConflictWitnessKind, ConfluenceResult,
+    ConfluenceWitnessKind, PairClass, RequiredOrder, UnknownReason,
 };
 pub(super) use crate::node_lifecycle::NodeLifecycleState;
 pub(super) use crate::patch_replay::decode::DecodedOperationKind;

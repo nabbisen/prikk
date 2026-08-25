@@ -84,7 +84,7 @@ pub(super) fn witness_report(
 }
 
 #[cfg(test)]
-pub(super) fn pair_class_report(
+pub(crate) fn pair_class_report(
     pair_class: &PairClass,
     candidate_scope: EvidenceScope,
 ) -> (MergeEvidenceOutcome, Vec<MergeEvidenceItem>) {
@@ -140,6 +140,7 @@ fn malformed_operation_report(
                 operation_kind: None,
                 node_id: None,
                 path: None,
+                witness_kind: None,
                 outcome: MergeEvidenceOutcome::EvidenceFailure,
                 evidence_scope: Some(candidate_scope.into()),
                 proof_phase: MergeEvidenceProofPhase::Classification,
@@ -163,6 +164,7 @@ pub(super) fn report_item(
         operation_kind: None,
         node_id: None,
         path: None,
+        witness_kind: None,
         outcome,
         evidence_scope: None,
         proof_phase,
@@ -213,6 +215,7 @@ fn witness_item(
         operation_kind: None,
         node_id: conflict_witness.and_then(|witness| witness.node_id),
         path: conflict_witness.and_then(|witness| witness.path.clone()),
+        witness_kind: conflict_witness.map(|witness| witness.kind),
         outcome,
         evidence_scope: None,
         proof_phase,
@@ -235,6 +238,7 @@ fn conflict_witness_item(
         operation_kind: None,
         node_id: witness.node_id,
         path: witness.path.clone(),
+        witness_kind: Some(witness.kind),
         outcome,
         evidence_scope: None,
         proof_phase: MergeEvidenceProofPhase::Classification,

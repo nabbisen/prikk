@@ -67,6 +67,12 @@ fn concrete_conflict_report_is_not_generic_not_confluent() {
     assert_eq!(item.peer_operation_index, Some(0));
     assert_eq!(item.op_seq, Some(1));
     assert_eq!(item.peer_op_seq, Some(2));
+    // ChangePerm vs ChangePerm on the same node falls through `classify_same_node`'s catch-all
+    // arm, not a more specific kind -- this is genuinely `UnknownRelation`, not an oversight.
+    assert_eq!(
+        item.witness_kind,
+        Some(ConflictWitnessKind::UnknownRelation)
+    );
 }
 
 #[test]
@@ -238,6 +244,154 @@ fn malformed_unsealed_candidate_operation_is_invalid_candidate() {
             .path,
         None
     );
+}
+
+/// Control 1 (conflict-witness-presentation handoff v1 §6.1), kind 1 of 3: two sides create
+/// distinct nodes at the identical path.
+#[test]
+fn same_path_create_conflict_names_its_kind_and_path() {
+    let baseline = NodeLifecycleState::new();
+    let left = [create_file(1, "shared.txt", node(1), blob(1), MODE_REGULAR)];
+    let right = [create_file(2, "shared.txt", node(2), blob(2), MODE_REGULAR)];
+    let evidence = TestTextResolver::empty()
+        .with_blob(blob(1), BlobKind::Binary, b"left".to_vec())
+        .with_blob(blob(2), BlobKind::Binary, b"right".to_vec());
+
+    let report = analyze_merge_evidence(
+        blob(0xb0),
+        None,
+        &baseline,
+        &evidence,
+        EvidenceScope::SealedCandidateRequired,
+        &left,
+        &right,
+    );
+
+    assert_eq!(report.outcome, MergeEvidenceOutcome::Conflict);
+    let item = first_item(&report.items);
+    assert_eq!(item.witness_kind, Some(ConflictWitnessKind::SamePathCreate));
+    assert_eq!(
+        item.path.as_ref().map(|path| path.as_str()),
+        Some("shared.txt")
+    );
+}
+
+/// Control 1, kind 2 of 3: two sides edit the identical text span (same technique
+/// `same_node_identical_text_span_is_conflict_not_independent` uses to force a shared `span_id`).
+#[test]
+fn text_span_overlap_conflict_names_its_kind() {
+    let mut baseline = NodeLifecycleState::new();
+    seed_text(
+        &mut baseline,
+        node(1),
+        "note.txt",
+        b"alpha beta gamma",
+        MODE_REGULAR,
+    );
+    let left = edit_text(1, node(1), b"alpha beta gamma", b"alpha BETA gamma");
+    let mut right = edit_text(2, node(1), b"alpha beta gamma", b"alpha BETTER gamma");
+    if let (
+        DecodedOperationKind::EditText {
+            span_id: right_span,
+            ..
+        },
+        DecodedOperationKind::EditText {
+            span_id: left_span, ..
+        },
+    ) = (&mut right.kind, &left.kind)
+    {
+        *right_span = *left_span;
+    }
+    let left = [left];
+    let right = [right];
+    let evidence = TestTextResolver::new([(node(1), b"alpha beta gamma".to_vec())]);
+
+    let report = analyze_merge_evidence(
+        blob(0xb0),
+        None,
+        &baseline,
+        &evidence,
+        EvidenceScope::SealedCandidateRequired,
+        &left,
+        &right,
+    );
+
+    assert_eq!(report.outcome, MergeEvidenceOutcome::Conflict);
+    assert_eq!(
+        first_item(&report.items).witness_kind,
+        Some(ConflictWitnessKind::TextSpanOverlap)
+    );
+}
+
+/// Control 1, kind 3 of 3 (delete-related): both sides delete the same node -- a genuine
+/// `DeleteMutationConflict`, not an ordinary "one deletes, one is untouched" case.
+#[test]
+fn delete_mutation_conflict_names_its_kind_and_path() {
+    let mut baseline = NodeLifecycleState::new();
+    seed_binary(&mut baseline, node(1), "doomed.bin", blob(1), MODE_REGULAR);
+    let left = [delete_file(
+        1,
+        "doomed.bin",
+        node(1),
+        NodeKind::BinaryFile,
+        blob(1),
+        MODE_REGULAR,
+    )];
+    let right = [delete_file(
+        2,
+        "doomed.bin",
+        node(1),
+        NodeKind::BinaryFile,
+        blob(1),
+        MODE_REGULAR,
+    )];
+
+    let report = analyze_merge_evidence(
+        blob(0xb0),
+        None,
+        &baseline,
+        &TestTextResolver::empty(),
+        EvidenceScope::SealedCandidateRequired,
+        &left,
+        &right,
+    );
+
+    assert_eq!(report.outcome, MergeEvidenceOutcome::Conflict);
+    let item = first_item(&report.items);
+    assert_eq!(
+        item.witness_kind,
+        Some(ConflictWitnessKind::DeleteMutationConflict)
+    );
+    assert_eq!(
+        item.path.as_ref().map(|path| path.as_str()),
+        Some("doomed.bin")
+    );
+}
+
+/// Control 2 (conflict-witness-presentation handoff v1 §6.2): every `ConflictWitnessKind` reaches
+/// `MergeEvidenceItem::witness_kind` through the shared mapping path, not only the ones this file
+/// happens to construct a real classification scenario for.
+#[test]
+fn every_conflict_witness_kind_reaches_the_report_item() {
+    for &kind in ConflictWitnessKind::ALL {
+        let witness = ConflictWitness {
+            kind,
+            left_op_seq: 1,
+            right_op_seq: 2,
+            node_id: None,
+            path: None,
+            text_span: None,
+        };
+        let (_, items) = pair_class_report(
+            &PairClass::Conflict { witness },
+            EvidenceScope::SealedCandidateRequired,
+        );
+        assert_eq!(
+            first_item(&items).witness_kind,
+            Some(kind),
+            "kind {kind:?} did not reach the report item"
+        );
+    }
 }
 
 fn first_item(items: &[MergeEvidenceItem]) -> &MergeEvidenceItem {

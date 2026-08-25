@@ -26,6 +26,7 @@ pub(crate) use report::{
     MergeEvidenceReasonCode, MergeEvidenceReport, MergeEvidenceScope, MergeEvidenceSide,
     analyze_merge_evidence,
 };
+pub(crate) use types::ConflictWitnessKind;
 
 #[cfg(test)]
 mod tests;

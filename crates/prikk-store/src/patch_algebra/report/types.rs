@@ -1,5 +1,6 @@
 use prikk_object::{NodeId, ObjectId};
 
+use crate::patch_algebra::types::ConflictWitnessKind;
 use crate::path::RepoPath;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,6 +62,12 @@ pub(crate) struct MergeEvidenceItem {
     pub(crate) operation_kind: Option<MergeEvidenceOperationKind>,
     pub(crate) node_id: Option<NodeId>,
     pub(crate) path: Option<RepoPath>,
+    /// Conflict-witness-presentation handoff v1: the specific `ConflictWitnessKind` this item's
+    /// underlying witness carries, when it has one (`Cross` items produced from a real
+    /// `ConflictWitness` -- `PairClass::Conflict`/`OrderedDependency`). `None` for report-level
+    /// items with no per-pair witness (confluent, evidence-failure, and coarse unknown-reason
+    /// items) -- `reason_code` already covers those.
+    pub(crate) witness_kind: Option<ConflictWitnessKind>,
     pub(crate) outcome: MergeEvidenceOutcome,
     pub(crate) evidence_scope: Option<MergeEvidenceScope>,
     pub(crate) proof_phase: MergeEvidenceProofPhase,
