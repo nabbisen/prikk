@@ -42,7 +42,7 @@ Prikk is designed to be:
 
 ## Current Status
 
-Latest released implementation: **0.23.0**. Windows became a mutating platform in 0.21.0: Prikk now authors, commits, and checks out on Linux, macOS, and Windows, and CI requires a repository authored on Linux, mutated on Windows, and verified back on Linux to produce byte-identical object ids — so the claim that anyone can verify anyone's history is tested across platforms rather than assumed.
+Latest released implementation: **0.24.0**. Windows became a mutating platform in 0.21.0: Prikk now authors, commits, and checks out on Linux, macOS, and Windows, and CI requires a repository authored on Linux, mutated on Windows, and verified back on Linux to produce byte-identical object ids — so the claim that anyone can verify anyone's history is tested across platforms rather than assumed.
 
 Next increment candidates are tracked in `ROADMAP.md`.
 
@@ -62,9 +62,11 @@ Known limits worth stating up front: merge-base discovery is manual; conflicts a
 but never resolved; sync exists between repositories, but **prikk does not move the bytes itself** —
 confidentiality is the user's channel's property, not prikk's — negotiation is branch-scoped (tags
 travel and are adopted separately, under the receiver's own key), and there is no discovery or
-remote-tracking; `verify` cost is linear in history length; and `verify` checks author signatures
+remote-tracking; `verify` cost is linear in history length; `verify` checks author signatures
 repository-wide, but only as trust-on-first-use continuity — it proves the same author signed as last
-time, not who that author is on first contact.
+time, not who that author is on first contact; and `verify` checks a locally-published tag's
+maintainer signature against this repository's own trust policy, but a received, not-yet-adopted tag
+is deliberately exempt — its signature is the sender's, under a key this repository has not adopted.
 
 **Mutation runs on Linux, macOS, and Windows** as of 0.21.0. Windows has narrower guarantees in two
 named places — see the [platform support

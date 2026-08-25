@@ -1,6 +1,99 @@
 # Changelog
 
-## 0.23.0 — 2026-08-23
+## 0.24.0 — <cut date, set by the owner at tag time>
+
+**A trust gap open since DC-63 is closed: an untrusted signer is now refused at `tag create`,
+`branch create`, and `branch close`, not just at `seal`.** `verify` gained one more coverage
+surface — locally-published `Tag` signatures, checked against the same maintainer trust policy
+those commands themselves enforce. `Patch`'s schema drops `parent_patch_ids`, a field every
+construction site has written as inert since it shipped.
+
+**Everything else is gates, tests, and documentation.** This is predominantly an assurance
+release — internal command/documentation binding, a release-compatibility gate, and a reduced
+release-policy tool — not new product capability, and it is described that way rather than
+inflated.
+
+**Read the breaking change below before you author a patch under `0.24.0` and then try to read the
+repository with `0.23.0`.**
+
+### Added
+
+- **`verify` gained a `LocalTagTrust` stage.** A locally-published `Tag`'s own MAINTAINER
+  signature is now checked against the repository-local trust policy, the same one `053e442`
+  (below) gates `tag create`/`branch create`/`branch close` on. **A received, not-yet-adopted tag
+  is deliberately exempt** — its signature is the sender's, under a key this repository has not
+  adopted; `sync adopt-tag` creates a local, receiver-signed tag from it, which then *is* checked.
+  This is a different trust model from `verify`'s author-signature check (below): an explicit,
+  operator-managed policy (`add_trusted_maintainer`/`remove_trusted_maintainer`), not
+  trust-on-first-use pinning.
+
+### Fixed
+
+- **`tag create`, `branch create`, and `branch close` now refuse an untrusted signer.** DC-11
+  required this and DC-63 adopted it in words, but not in code — the gap has been open since
+  DC-63. `seal` already enforced it; these three commands now match.
+- **`doctor --repair-main-ref`'s refusal message no longer names a stale version or an
+  unreachable format-1 scenario.**
+
+### Breaking change
+
+**A repository written by `0.24.0` cannot be read by `0.23.0`. The reverse is not true —
+`0.24.0` reads a `0.23.0` repository fine.**
+
+`0.23.0` admits `Patch` envelope schema `1` only. `0.24.0` admits schemas `1` and `2`, and
+**every patch `0.24.0` authors is written at schema `2`** — `parent_patch_ids`, inert since it
+shipped (`Vec::new()` at every construction site, read nowhere), is retired outright rather than
+carried forward as dead weight. A `0.23.0` binary reading a schema-2 `Patch` fails with
+`format-2 patch does not accept envelope schema 2 (accepted: [1])`.
+
+**There is no in-repository remedy.** Do not downgrade to `0.23.0` after authoring patches under
+`0.24.0` — there is no repair path back, the same as `0.23.0`'s own `Tag` break one release ago.
+If you need a repository `0.23.0` can still read, keep authoring it under `0.23.0`.
+
+### Known limitation
+
+- **`verify`'s author-signature check remains trust-on-first-use**: it proves the same author
+  signed as last time, not who that author is on first contact. Unchanged by this release, and a
+  different trust model from `LocalTagTrust` above.
+- **`verify`'s `LocalTagTrust` stage covers locally-published tags only.** A received, unadopted
+  tag is exempt by design.
+- **No prikk release passes the DC-35 signer audit** — `release-signers.toml` is empty and
+  fail-closed. Unchanged by this release.
+- **"Two machines" is exercised as two repositories**, not two hosts — file-based and
+  channel-agnostic, but no cross-host test exists yet.
+- **Negotiation is branch-scoped.** `remotes/*` is excluded structurally; a tag's deletion and
+  movement do not travel — only its creation and adoption do.
+- **No discovery, remote identity, or remote-tracking semantics.**
+- **Tag adoption resolves by scanning local blocks**, measured superlinear — 12.6 ms over 500
+  blocks, 86 ms over 2000.
+- **`seal`'s cost is unchanged: O(N) reads per call**, so building N commits remains O(N²) in
+  total reads.
+
+### Why
+
+This release closes a real enforcement gap (`tag create`/`branch create`/`branch close` trusting
+an unchecked signer since DC-63) and extends `verify`'s coverage to a surface that was previously
+unchecked (`LocalTagTrust`), rather than adding product capability. `Patch` schema 2 removes a
+field that has never done anything since it shipped, verified rather than assumed to be inert
+(`f1528b8`'s completeness guard, below). No `MILESTONES.md` status-claim criterion changes state
+in this release.
+
+### Verified rather than assumed
+
+- **RFC 114 Gate A's completeness guard was corrected from `ObjectType`-granular to
+  pair-granular** (`f1528b8`) — a second schema on an already-vectored type previously passed
+  silently, which is exactly the shape `(Patch, 2)` above takes. **Observed failing in both
+  directions**: an unvectored pair added, and a vectored pair removed.
+- **RFC 119 track C's release-compatibility gate (G1) was demonstrated with reverted code-path
+  mutations**, not a one-time measurement — the declared-break path and the undeclared-break
+  path were each shown to fail for the real reason before being reverted.
+- **The five trust-gated surfaces this release did not touch — `seal`, `merge`, and `sync`
+  `build`/`seal`/`adopt-tag` — gained their own caller-level negative controls** (`aa1b25d`),
+  closing the last gap in trust-gate coverage: every trust-gated surface now has a control proving
+  an untrusted signer is refused at that exact call site, not just somewhere upstream.
+- **RFC 118's command-documentation join gate is bidirectional**: it fails if a real CLI command
+  has no matching documentation, and fails if documentation describes a command that does not
+  exist.
 
 **History moves between repositories.** `prikk sync` negotiates what one repository has that another
 doesn't, moves it as an artifact file over whatever channel the operator already has, and the receiver
