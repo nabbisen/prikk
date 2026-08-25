@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.24.0 — <cut date, set by the owner at tag time>
+## 0.24.0 — 2026-08-25
 
 **A trust gap open since DC-63 is closed: an untrusted signer is now refused at `tag create`,
 `branch create`, and `branch close`, not just at `seal`.** `verify` gained one more coverage
