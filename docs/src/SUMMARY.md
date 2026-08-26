@@ -4,6 +4,7 @@
 
 # Guide
 
+- [Install](guide/install.md)
 - [Security and Signing Setup](guide/security-setup.md)
 - [History Inspection](guide/history.md)
 - [Repository Status](guide/status.md)

@@ -7,6 +7,8 @@ implementation phase and will grow as FDD-approved implementation areas land.
 > **p** of *patches*, and because a patch history is exactly that: dots — patches as nodes — connected
 > into a DAG.
 
+To install and start using the CLI, see [Install](guide/install.md).
+
 For the current architecture and trust boundaries, start with:
 
 - [Data Model](reference/data-model.md)
