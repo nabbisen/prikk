@@ -174,6 +174,12 @@ fn tar(tail: &[String]) -> bool {
         // verify-cross-platform-history.
         || tail == ["-czf", "windows-mutated-repo.tar.gz", "-C", "fixture-repo"]
         || tail == ["-xzf", "windows-mutated-repo.tar.gz", "-C", "windows-repo"]
+        // RFC 115/DC-89: the same create/extract round-trip, for the receiver's own repository
+        // handed from receiver-prepare to receiver-accept across the cross-host sync exchange --
+        // it must survive the same tar-not-zip transport as the fixture and the Windows-mutated
+        // repository above, for the identical DC-71 B2 reason (empty directories).
+        || tail == ["-czf", "receiver-repo.tar.gz", "-C", "receiver-repo"]
+        || tail == ["-xzf", "receiver-repo.tar.gz", "-C", "receiver-repo"]
 }
 
 /// `gh release create $TAG <assets...> --repo nabbisen/prikk --title $TAG --notes-file <path>`.

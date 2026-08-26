@@ -188,6 +188,18 @@ jobs:
           name: read-only-fixture-repo
           path: fixture-repo.tar.gz
           if-no-files-found: error
+      # RFC 115/DC-89: the sender's half of the cross-host sync negotiation (receiver-prepare
+      # below). A small summary, not the sealed repository itself -- the negotiation phase is the
+      # whole point of not needing the receiver to hold anything yet.
+      - name: Write the sync summary for the cross-host exchange
+        run: |
+          cd fixture-repo
+          ../target/debug/prikk sync summary --output ../fixture-summary.psyncsu1
+      - uses: actions/upload-artifact@v7
+        with:
+          name: fixture-sync-summary
+          path: fixture-summary.psyncsu1
+          if-no-files-found: error
 
   non-linux-verify:
     strategy:
@@ -406,3 +418,138 @@ jobs:
       # matching that pattern rather than reintroducing one keeps this to a single governed command.
       - name: Compare object ids — Windows-computed against the independent Linux reference
         run: diff -u linux-object-ids.txt windows-object-ids.txt && echo "=== object ids identical across platforms ==="
+
+  # RFC 115/DC-89: closes criterion 1's own stated limit -- "file-based and channel-agnostic, so
+  # nothing in it is host-local, but no cross-host test exists." `rfc116_sync_cli.rs` exercises
+  # `prikk sync` end to end already, but in one process on one machine; no `prikk sync` verb runs
+  # anywhere in CI before this. Same principle as the fixture job: a CI job earns its place only by
+  # proving a claim that cannot be proven in one process on one machine.
+  #
+  # Sender = the existing `fixture` job's own repository, reused, not re-authored (it already
+  # carries real history: two commits on heads/main, a closed branch, a tag). Receiver = a fresh
+  # `prikk init` on Windows -- chosen over macOS because it is where path and filesystem behaviour
+  # differs the most from the sender.
+  #
+  # Three jobs, three artifacts, because the flow forces a hop: `sync have` runs on the receiver;
+  # `sync build` runs on the sender; the receiver's own repository must survive between its two
+  # turns, so it -- not just the have-list -- is what crosses back out as an artifact here.
+  # `sync summary`/`sync compare` are included (not gates in themselves, but part of the workflow a
+  # real user runs) via one extra step on the existing `fixture` job above, avoiding a fourth job:
+  # the summary is a small negotiation artifact the sender can produce the moment it is sealed,
+  # with no dependency on the receiver's own state.
+  receiver-prepare:
+    name: cross-host sync -- prepare receiver (Windows)
+    runs-on: windows-latest
+    needs: fixture
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build -p prikk --locked
+      - uses: actions/download-artifact@v8
+        with:
+          name: fixture-sync-summary
+      - name: Init the receiver and negotiate against the sender's summary
+        shell: bash
+        run: |
+          mkdir -p receiver-repo
+          target/debug/prikk init receiver-repo
+          cd receiver-repo
+          ../target/debug/prikk sync compare --summary ../fixture-summary.psyncsu1
+          ../target/debug/prikk sync have heads/main --output ../receiver-have.psynchv1
+      # tar, not the artifact zip -- the same DC-71 B2 ruling the fixture job's own packaging step
+      # rests on (empty directories do not survive actions/upload-artifact's zip transport).
+      - name: Package the receiver repository
+        shell: bash
+        run: tar -czf receiver-repo.tar.gz -C receiver-repo .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: receiver-have-list
+          path: receiver-have.psynchv1
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: receiver-repo-prepared
+          path: receiver-repo.tar.gz
+          if-no-files-found: error
+
+  sender-build:
+    name: cross-host sync -- build the exchange artifact (Linux)
+    runs-on: ubuntu-latest
+    needs: [fixture, receiver-prepare]
+    env:
+      PRIKK_MAINTAINER_KEY_ID: dev-maintainer
+      PRIKK_MAINTAINER_SEED: "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build -p prikk --locked
+      - uses: actions/download-artifact@v8
+        with:
+          name: read-only-fixture-repo
+      - uses: actions/download-artifact@v8
+        with:
+          name: receiver-have-list
+      - name: Unpack the fixture repository
+        run: |
+          mkdir -p fixture-repo
+          tar -xzf fixture-repo.tar.gz -C fixture-repo
+      # The sender must already be sealed for sync build to resolve a ref tip at all -- it is
+      # (this is the existing fixture, untouched here) -- found the hard way during the 0.26.0 G1
+      # refresh: an unsealed sender reads as empty on its own side too, and sync build then reports
+      # "already in sync" for the wrong reason (both sides empty, not both sides equal).
+      - name: Build the exchange artifact closing the receiver's gap
+        run: |
+          cd fixture-repo
+          ../target/debug/prikk sync build heads/main --have ../receiver-have.psynchv1 --output ../exchange.pexch002
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cross-host-exchange-artifact
+          path: exchange.pexch002
+          if-no-files-found: error
+
+  receiver-accept:
+    name: cross-host sync -- accept and seal (Windows)
+    runs-on: windows-latest
+    needs: [receiver-prepare, sender-build]
+    env:
+      PRIKK_MAINTAINER_KEY_ID: dev-maintainer
+      PRIKK_MAINTAINER_SEED: "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build -p prikk --locked
+      - uses: actions/download-artifact@v8
+        with:
+          name: receiver-repo-prepared
+      - uses: actions/download-artifact@v8
+        with:
+          name: cross-host-exchange-artifact
+      - name: Unpack the receiver repository
+        shell: bash
+        run: |
+          mkdir -p receiver-repo
+          tar -xzf receiver-repo.tar.gz -C receiver-repo
+      # Claim ids move by file (sync.rs's own design, RFC 116 stage 5 §2), not by parsing stdout --
+      # `--claims-out` and `sync seal --claims <file>` exist precisely so this step needs no
+      # fragile string-splitting. `sync pending` brackets the seal: 1 before, 0 after, so the
+      # exchange is finished, not merely accepted.
+      - name: Accept the exchange artifact and finish the exchange
+        shell: bash
+        run: |
+          cd receiver-repo
+          ../target/debug/prikk sync accept ../exchange.pexch002 --claims-out ../claims.txt
+          ../target/debug/prikk sync pending
+          ../target/debug/prikk trust maintainer add \
+            --key-id "$PRIKK_MAINTAINER_KEY_ID" \
+            --public-key a00899dfd3357aee69729405913f9324dfc033cec04a2215239eda64ae6d9d91
+          ../target/debug/prikk sync seal heads/main --claims ../claims.txt
+          ../target/debug/prikk sync pending
+      - name: Verify the receiver holds the sender's history
+        shell: bash
+        run: |
+          cd receiver-repo
+          ../target/debug/prikk verify
+          ../target/debug/prikk log
