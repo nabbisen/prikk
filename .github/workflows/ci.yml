@@ -139,16 +139,22 @@ jobs:
       # an edit to the *same* file -- an edit exercises replay and anchoring that a create alone
       # never touches); a short-lived heads/docs branch with its own sealed commit, then closed
       # ("not delete -- pointer, history, and objects stay", per its own help text -- exactly the
-      # state worth carrying across this boundary); a tag at heads/main's current tip.
+      # state worth carrying across this boundary); a tag at heads/main's current tip. Everything
+      # here is sealed -- see the worktree-pollution note below for why.
       #
-      # Everything here is sealed, deliberately: this tool shares one worktree across every ref
-      # (there is no per-branch checkout yet), so a file left behind for one ref's commit reads as
-      # a new file to the *next* commit on a different ref. Ending on an unsealed edit would mean
-      # returning to heads/main after opening heads/docs, which would drag docs.txt into that next
-      # commit unless it were removed first -- and this file's own boundary-check gate closes over
-      # every command in this workflow, so an ad hoc `rm` is not an available way to clean that up.
-      # Closing out heads/docs and cutting the tag as the last two steps avoids the problem instead
-      # of working around it.
+      # DC-89 worktree-pollution fix: heads/docs's own commit EDITS readme.txt -- it does not
+      # create a second file. This tool shares one worktree across every ref (there is no
+      # per-branch checkout yet); a second file (`docs.txt`, this step's first attempt) sits in the
+      # worktree, unremoved, after heads/docs is closed -- it reads as a *new* file to
+      # windows-mutate's and linux-mutate-reference's own commit against heads/main,
+      # which run against this exact fixture later. A new file means a CreateFile operation, which
+      # mints a fresh NodeId from the OS CSPRNG (node_id_gen.rs) -- different per platform by
+      # design, so the two mutation jobs produced different blocks from "the same" mutation and
+      # verify-cross-platform-history failed on main (root-caused and reproduced locally: two
+      # independent runs of the same mutation against the polluted fixture minted two different
+      # node ids and produced two different blocks on the same machine, before this fix). Editing
+      # readme.txt again on heads/docs leaves nothing extra in the worktree, so the later mutation
+      # jobs see only their own single append and mint no node id at all.
       - name: Author the fixture repository
         run: |
           mkdir -p fixture-repo
@@ -164,8 +170,8 @@ jobs:
           ../target/debug/prikk commit -m "expand readme"
           ../target/debug/prikk seal --allow-no-audit
           ../target/debug/prikk branch create heads/docs --from heads/main
-          echo "usage notes" > docs.txt
-          ../target/debug/prikk commit --ref heads/docs -m "add usage notes"
+          echo "see also: the docs branch, opened to work out how this section should read" >> readme.txt
+          ../target/debug/prikk commit --ref heads/docs -m "note the docs branch in the readme"
           ../target/debug/prikk seal --allow-no-audit --ref heads/docs
           ../target/debug/prikk branch close heads/docs
           ../target/debug/prikk tag create tags/v1 --target heads/main
