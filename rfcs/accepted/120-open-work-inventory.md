@@ -1,8 +1,13 @@
 # RFC 120 — Open-work inventory: one place the candidate set is complete
 
-**Status.** **Proposed** — design recorded by the architect at the owner's instruction, 2026-08-26,
-after answering *"what are our remaining themes?"* with an incomplete list. **No implementation
-authority; the gate in §5 must not be built before this is accepted.**
+**Status.** **ACCEPTED by the project owner 2026-08-27**, at the reduced scope ruled in §6 —
+`rfcs/proposed/*.md` bound to one thin index section in `ROADMAP.md`, with a "findings without a file"
+section beside it. The milestone half (§6 Q2) and `rfcs/accepted/` (§6 Q3) are **deliberately excluded**
+and need their own decisions.
+
+Recorded by the architect at the owner's instruction, 2026-08-26, after answering *"what are our
+remaining themes?"* with an incomplete list. **The scope reduction came from evidence, not from wanting
+less work** — see §5a.
 
 **Tracks.** A correction to how this project records open work, not a product capability.
 
