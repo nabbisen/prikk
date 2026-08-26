@@ -165,6 +165,65 @@ stops having an answer.
    submodules, octopus merges beyond two parents, replace refs, grafts, shallow clones. **A refusal is a
    better outcome than a silent approximation**, and the list belongs in the design, not in bug reports.
 
+## 4a. Architect's rulings, 2026-08-27
+
+**The owner accepted this RFC as the next theme. These rule the §4 decisions that are the architect's;
+§4.3–§4.5 are marked below as the owner's and are deliberately left open.**
+
+### §4.1 — provenance lives in `Attestation`, and this would be its first real use
+
+**Ruled: `Attestation`, not the patch payload.**
+
+**The decisive fact, verified rather than assumed:** `AttestationPayload` is fully defined
+(`target_block_id`, `policy_version`, `plugin_set_hash`, `results`, `status`), admitted at schema 1,
+canonically encodable, and carried through every format gate — and **nothing in production constructs
+one.** Its only construction site is `vectors.rs`, the test-vector generator. Four consecutive G1
+fixture coverage tables record it as absent for exactly this reason.
+
+**So the choice is not neutral.** Putting import provenance in the patch payload would change what a
+`Patch` *is* for every prikk repository, imported or not. Putting it in an `Attestation` activates a
+type that has been defined, gated, and vector-tested for its whole life without ever being written —
+**and whose existing shape already says what an import needs to say**: a statement *about* a target,
+carrying a status and a set of results, signed separately from the thing it describes.
+
+**A design must still answer** whether `AttestationPayload`'s current fields fit an import statement or
+need a schema, and **that is a format change if so** — see RFC 114's frozen surface.
+
+### §4.2 — derived operations are marked at the operation, not inferred at read time
+
+**Ruled: an importer that infers must record that it inferred, in the object it writes.**
+
+Rename inference is the case: Git records a deletion and a creation, and a renamer's confidence is a
+heuristic. **A reader must be able to tell an asserted rename from an inferred one without re-running
+the heuristic**, because re-running it is exactly what a different tool version would do differently.
+
+**This follows the project's own established line** — facts derive, judgment is authored, the join is
+gated. **An inference is judgment.** It must be recorded as such, not recomputed by whoever reads next.
+
+### §3.1 — the three questions the IR turns on
+
+**Ruled, in the RFC's own terms:** the IR's atom is *what the source system could actually guarantee*,
+not what prikk would like it to have guaranteed. **The governing rule the RFC already states — "the
+boundary itself is recorded" — is adopted as binding**, and it answers all three: a record asserts what
+its source guaranteed, preservation covers whatever a future reader's ability to *check* depends on,
+and omission is permitted only where the omission is itself stated.
+
+**This is the same discipline as `verify`'s stage inventory**: absence must be explicit, never silent.
+
+### Owner's, not the architect's — left open deliberately
+
+- **§4.3 — what the importer signs, if anything.** *"I imported this"* is signable; *"this person
+  authored this"* is not the importer's to assert. **This is DC-35 territory** — who may sign what —
+  and the architect should not settle it alone.
+- **§4.4 — whether imported history may be sealed at all, and by whom.** Sealing is a maintainer act.
+  Whether an import may be sealed, and whether the importer may be that maintainer, is an authority
+  question.
+- **§4.5 — the source-side floor.** Which Git features are refused rather than approximated is product
+  scope: it decides who can migrate and who is told no.
+
+**§4.3–§4.5 are the gate on any per-source RFC.** §5's sequencing (foundations, then Git, then SVN,
+then CVS) cannot start until they are ruled.
+
 ## 5. The three sources are not one problem, and should not be one increment
 
 **Git — hard but tractable.** Content-addressed, atomic commits, a real DAG. The work is identity
