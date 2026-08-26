@@ -57,6 +57,7 @@ pub(super) fn check(root: &Path, errors: &mut Vec<BoundaryError>) -> Result<()> 
     }
     check_source_tree(root, errors);
     check_descriptions(root, errors);
+    check_readmes(root, errors);
     Ok(())
 }
 
@@ -91,26 +92,118 @@ fn check_descriptions(root: &Path, errors: &mut Vec<BoundaryError>) {
             );
             continue;
         }
-        let lower = description.to_lowercase();
-        for word in PROVISIONAL_SUBSTRINGS {
-            if lower.contains(word) {
-                push(
-                    errors,
-                    "package-description",
-                    format!("{crate_name}: provisional word {word:?}"),
-                );
-            }
+        for word in provisional_words_in(description) {
+            push(
+                errors,
+                "package-description",
+                format!("{crate_name}: provisional word {word:?}"),
+            );
         }
-        for word in PROVISIONAL_WHOLE_WORDS {
-            if contains_word(&lower, word) {
+    }
+}
+
+/// Crate-README-currency handoff v1 §4: extends the same wordlist to each published crate's
+/// `readme` target, and §1's actual rule -- a README must not restate its own description -- made
+/// mechanical rather than editorial. Covers all eight `PRODUCTS`, `prikk` included: its `readme`
+/// points at the workspace root `README.md`, a much longer document, but a scan of it today finds
+/// none of the five words, so there is no false-positive cost to including it (the trigger the
+/// handoff named for scoping this down to seven).
+fn check_readmes(root: &Path, errors: &mut Vec<BoundaryError>) {
+    for (crate_name, manifest_path) in PRODUCTS {
+        let Ok(manifest_text) = fs::read_to_string(root.join(manifest_path)) else {
+            push(
+                errors,
+                "package-readme",
+                format!("{crate_name}: manifest unreadable"),
+            );
+            continue;
+        };
+        let Ok(manifest) = toml::from_str::<toml::Value>(&manifest_text) else {
+            push(
+                errors,
+                "package-readme",
+                format!("{crate_name}: manifest unparseable"),
+            );
+            continue;
+        };
+        let Some(package) = manifest.get("package") else {
+            push(
+                errors,
+                "package-readme",
+                format!("{crate_name}: manifest has no [package] table"),
+            );
+            continue;
+        };
+        let Some(readme_field) = package.get("readme").and_then(toml::Value::as_str) else {
+            push(
+                errors,
+                "package-readme",
+                format!("{crate_name}: manifest has no readme field"),
+            );
+            continue;
+        };
+        let Some(manifest_dir) = root.join(manifest_path).parent().map(Path::to_path_buf) else {
+            push(
+                errors,
+                "package-readme",
+                format!("{crate_name}: manifest path has no parent"),
+            );
+            continue;
+        };
+        let Ok(readme_text) = fs::read_to_string(manifest_dir.join(readme_field)) else {
+            push(
+                errors,
+                "package-readme",
+                format!("{crate_name}: readme unreadable ({readme_field})"),
+            );
+            continue;
+        };
+        for word in provisional_words_in(&readme_text) {
+            push(
+                errors,
+                "package-readme",
+                format!("{crate_name}: provisional word {word:?} in readme"),
+            );
+        }
+        // `prikk`'s `readme` is the workspace root `README.md`, not a crate-local file -- and its
+        // description was deliberately *sourced from* that document's own opening sentence (this
+        // handoff's review named that a technique worth reusing precisely because the description
+        // cannot overclaim relative to the README). That is the opposite direction from the seven
+        // library crates' defect (a lazy three-line README copying the description), so the
+        // duplication check below does not apply to it.
+        if crate_name == "prikk" {
+            continue;
+        }
+        let description = package
+            .get("description")
+            .and_then(toml::Value::as_str)
+            .unwrap_or_default();
+        let readme_flat = readme_text.split_whitespace().collect::<Vec<_>>().join(" ");
+        for sentence in description_sentences(description) {
+            if readme_flat.to_lowercase().contains(&sentence) {
                 push(
                     errors,
-                    "package-description",
-                    format!("{crate_name}: provisional word {word:?}"),
+                    "package-readme-duplication",
+                    format!("{crate_name}: readme repeats description sentence {sentence:?}"),
                 );
             }
         }
     }
+}
+
+/// Case-insensitive words/substrings this check flags in either surface, matched against `text`.
+fn provisional_words_in(text: &str) -> Vec<&'static str> {
+    let lower = text.to_lowercase();
+    let mut hits: Vec<&'static str> = PROVISIONAL_SUBSTRINGS
+        .into_iter()
+        .filter(|word| lower.contains(word))
+        .collect();
+    hits.extend(
+        PROVISIONAL_WHOLE_WORDS
+            .into_iter()
+            .filter(|word| contains_word(&lower, word)),
+    );
+    hits
 }
 
 /// Whether `word` appears in `haystack` as a standalone token -- split on non-alphanumeric
@@ -120,6 +213,17 @@ fn contains_word(haystack: &str, word: &str) -> bool {
     haystack
         .split(|character: char| !character.is_alphanumeric())
         .any(|token| token == word)
+}
+
+/// A description's sentences, normalized for a literal-substring duplication check against a
+/// README: split on `". "`, lowercased, trailing period trimmed, trivially short fragments (e.g.
+/// stray semicolon clauses) dropped so they cannot produce a spurious match.
+fn description_sentences(description: &str) -> Vec<String> {
+    description
+        .split(". ")
+        .map(|sentence| sentence.trim().trim_end_matches('.').to_lowercase())
+        .filter(|sentence| sentence.len() >= 15)
+        .collect()
 }
 
 fn check_source_tree(root: &Path, errors: &mut Vec<BoundaryError>) {
