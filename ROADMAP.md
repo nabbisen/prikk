@@ -114,6 +114,54 @@ port, Windows a rewrite.
 cannot close by construction (no `openat` equivalent). 0.22.0 closed two others that stood through
 0.21.0 (`prikk unlock` process-liveness reporting, and the 128-bit anchor identifier).
 
+## Open-Work Index
+
+RFC 120: every file in `rfcs/proposed/` is named below, or the gate that checks this section
+fails. **This is an inventory, not a priority order** — presence means an item exists and is open,
+nothing about when it should be worked or how it compares to anything else. **Not a claim that the
+index is true**, only that it is complete with respect to `rfcs/proposed/`; for a theme's current
+state, read the RFC itself, or this file's own Future Themes prose above. **Not a replacement for
+review records** — `.git-exclude/reviewed/` stays where reasoning lives; this carries only that an
+item is open.
+
+<!-- open-work-index:start -->
+- [`108-workspace-concurrent-sessions.md`](rfcs/proposed/108-workspace-concurrent-sessions.md) — RFC 108, Workspace: concurrent sessions in one physical project
+- [`109-agent-native-interface.md`](rfcs/proposed/109-agent-native-interface.md) — RFC 109, Agent-native interface
+- [`110-agent-safety-and-provenance.md`](rfcs/proposed/110-agent-safety-and-provenance.md) — RFC 110, Agent safety and code provenance
+- [`113-history-import-foundations.md`](rfcs/proposed/113-history-import-foundations.md) — RFC 113, History import foundations (Git, Subversion, CVS)
+- [`DC-43-RELEASE-SECURITY-CONTROLS.md`](rfcs/proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) — DC-43, Release Security and Distribution Controls
+- [`DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md`](rfcs/proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) — DC-44, Migration, Backup, and Restore Evidence
+- [`DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md`](rfcs/proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) — DC-49, Portable-Logic Platform Matrix
+<!-- open-work-index:end -->
+
+**Two backlog tables elsewhere in this file carry live open rows of their own, referenced here
+rather than absorbed** — the richer `Trigger / next action`/`Completion condition` columns are
+what make those rows actionable, not a nag, and flattening them into this thin index would lose
+that (RFC 120 §6 Q1). The `0.16.0 Release Task Management` table and the `Post-0.16.1
+Documentation Reference Backlog` table both appear later in this file; the latter's `TASK-14`,
+`TASK-15`, and `TASK-16` rows are still `Open`.
+
+**Deliberately excluded, by ruling, not oversight** (RFC 120 §6 Q2/Q3): `MILESTONES.md`'s
+milestone rows — free prose, no marker a gate can read without interpreting it — and
+`rfcs/accepted/`, thirteen files dominated by finished work; an index that lists eight finished
+RFCs teaches readers to ignore it.
+
+### Findings without a file
+
+Seeded from review notes that exist nowhere else in this repository — `.git-exclude/reviewed/` is
+git-excluded, so a finding recorded only there is invisible to a fresh clone. **The gate cannot
+enforce that this section stays current** (RFC 120 §4): its emptiness would not mean no findings
+exist, only that none were written down here.
+
+1. `sync build` reports *"already in sync"* when the sender's ref is unsealed — RFC 116 §4's
+   deliberate behaviour (a test pins it), but the wording names a state the user is not in. A
+   question about wording on a ruled surface, not a defect.
+2. No local reproduction path exists for the cross-host CI jobs (`.github/workflows/ci.yml`'s
+   `receiver-prepare`/`sender-build`/`receiver-accept`) — verifying the flow before writing the
+   jobs required a hand-built, role-by-role proxy that exists in no tracked file.
+3. `MILESTONES.md:334`'s `M5` row still reads `| M5 | Sync and Quarantine | no | — |`, while
+   criterion 1 (line 159) records sync **MET** and quarantine was dissolved this session.
+
 ## Corrective Program After 0.17.7
 
 The independent architecture review of 0.17.7 found a critical ref-publication interruption state and
