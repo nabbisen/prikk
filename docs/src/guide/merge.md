@@ -95,8 +95,15 @@ against a repository containing a merged block — tested, not argued
 ## Deferred
 
 - Automatic merge-base discovery — `--baseline-block` stays explicit.
-- Conflict arbitration / resolution.
 - Widening `patch_algebra`'s conservative subset.
 - Merging more than two sides in one command.
-- Populating `PatchPayload.parent_patch_ids` — no construction site sets it; the patch DAG it implies
-  is a different structure than the block-parentage DC-75 records, answering a different question.
+
+**Conflict arbitration / resolution is not on this list.** "Deferred" means eventually built;
+automatic conflict resolution is refused by the architecture and will not be built at all — see
+[Conflict Resolution Is Refused By
+Design](../reference/patch-algebra.md#conflict-resolution-is-refused-by-design).
+
+**`PatchPayload.parent_patch_ids` is not on this list either.** It was removed at Patch schema 2
+(`0.24.0`), not left unpopulated — there is no patch DAG because the field no longer exists, not
+because it is inert. `BlockPayload.parent_block_ids`, which DC-75 records, answers a related but
+different question: block-level parentage, not a patch DAG.

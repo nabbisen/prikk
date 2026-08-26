@@ -57,11 +57,13 @@ Three edges deserve comment:
 
 - **`RefState → RefState`** is a backward chain via `previous_ref_state_id`, with a monotonic
   `update_seq`. Publication is compare-and-swap against the expected previous state.
-- **`Patch → Patch`** exists in the format as `parent_patch_ids` but is **inert**: every construction
-  site sets it empty, including the authoring path, and nothing reads it. **There is no patch DAG.**
-  Merge provenance is carried by block parentage instead. RFC 115's `accept_exchange_artifact` goes
-  further than merely not populating it: an incoming Patch carrying a non-empty `parent_patch_ids` is
-  **refused outright** (`patch_exchange/accept.rs`), not merely ignored.
+- **`Patch → Patch` does not exist.** `parent_patch_ids` (`PatchPayload` tag 2) was removed outright
+  at Patch schema 2 (`0.24.0`), not merely left unpopulated — **there is no patch DAG, by
+  construction, not by omission.** Merge provenance is carried by block parentage instead. Schema 1
+  patches (written before the retirement) may still carry the tag on disk, always empty;
+  `accept_exchange_artifact` refuses it schema-blind — an incoming Patch carrying a non-empty
+  `parent_patch_ids` at *any* schema is **refused outright** (`patch_exchange/accept.rs`), not
+  merely ignored.
 - **`Tag → Patch` is a digest, not a pointer, and resolving it is a search.** A tag's `target_block_id`
   is the local pointer half of its identity; `patch_set_digest` (RFC 117 T1) is the *portable* half —
   the digest of `target_block_id`'s own patch closure, the same value two repositories holding the same
@@ -286,8 +288,9 @@ accumulate reclaimable dead records.
 
 Stated here so it is not inferred from silence:
 
-- **No patch DAG.** `parent_patch_ids` is inert — every construction site sets it empty, and an
-  incoming Patch carrying a non-empty one is refused outright on import.
+- **No patch DAG.** `parent_patch_ids` was removed outright at Patch schema 2 (`0.24.0`), not left
+  inert — an incoming Patch carrying a non-empty one (legal only at schema 1) is still refused
+  outright on import.
 - **A ref's `required_attestation_ids` are cleared by every ordinary seal**, while branch closure
   preserves them.
 - **`RenamePath` and `CreateSymlink`** decode and validate but cannot be authored.

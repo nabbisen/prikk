@@ -46,13 +46,13 @@ covered two unrelated blockers and produced a wrong roadmap framing:
   designate which one state derivation and replay follow. **The premise this bullet used to give as
   its open question — "the patch DAG already records a merge structurally" — was refuted by DC-75
   itself**, which exists precisely because that was false: `parent_patch_ids` (a `PatchPayload` field,
-  distinct from `BlockPayload.parent_block_ids`) is `Vec::new()` at every construction site and read
-  nowhere — there is no patch DAG, which is why block-level parentage had to be added.
+  distinct from `BlockPayload.parent_block_ids`) was `Vec::new()` at every construction site and read
+  nowhere — there was no patch DAG, which is why block-level parentage had to be added.
   **`patch_replay.rs`'s own "fails closed on multi-parent" doc comment was also imprecise** — it walks
-  a well-formed `Merge` block fine, via its mainline parent; it refuses only a malformed one. **What
-  remains genuinely open is `parent_patch_ids`' own fate** — whether it is ever populated, repurposed,
-  or removed — which is an owner ruling, not a design theme to adjudicate here. Product **M3**, named
-  "Block DAG and Checkout", is discharged by this shipping, not still describing unbuilt scope.
+  a well-formed `Merge` block fine, via its mainline parent; it refuses only a malformed one.
+  **`parent_patch_ids`'s own fate is no longer open**: it was removed outright, not populated or
+  repurposed, at Patch schema 2 (`0.24.0`). Product **M3**, named "Block DAG and Checkout", is
+  discharged by this shipping, not still describing unbuilt scope.
 - **Transport — settled by RFC 116's accepted ruling, not open.** `prikk-store` stays bytes-in/bytes-out
   and prikk stays off the network; sync-over-any-channel satisfies criterion 1, so moving a `sync`/
   `bundle` artifact between repositories is the operator's own channel, by design, not a gap awaiting a
@@ -80,19 +80,6 @@ on it, not the unbuilt half.
 **Real residuals, not closed by 0.19.0**: merge-base discovery is manual (`--baseline-block` is
 explicit; nothing computes it), rename detection does not exist (no `ConflictWitnessKind` variant names
 one), and semantic merge remains out of scope (a stated non-goal since DC-16).
-
-### Conflict arbitration — recorded, and it is a trust question before it is a UX one
-
-**Conflict *detection* exists.** `patch_algebra` produces typed conflict witnesses (`ConflictWitnessKind` —
-`SamePathCreate`, `NodeIdReuse`, `LiveStateMismatch`, text-anchor kinds). **Nothing resolves them.**
-
-**The question that decides the design:** in prikk's model a resolution is itself a **patch**, which must be
-authored and signed. So an arbitrator that resolves automatically is producing signed content on someone's
-behalf. That is the same class of question as DC-35's "automation may verify evidence but cannot occupy an
-accountable approval identity" — and it should be answered from that precedent rather than treated as an
-ergonomics feature.
-
-Depends on merge execution existing. Not scoped.
 
 ### Editor, IDE, and file-manager integration — blocked on model gaps, not on API work
 
