@@ -134,6 +134,21 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build
         run: cargo build -p prikk --locked
+      # DC-89: a realistic small project's worth of history, not a single genesis commit -- still
+      # authored with the real binary, still on Linux. Two commits on heads/main (a create, then
+      # an edit to the *same* file -- an edit exercises replay and anchoring that a create alone
+      # never touches); a short-lived heads/docs branch with its own sealed commit, then closed
+      # ("not delete -- pointer, history, and objects stay", per its own help text -- exactly the
+      # state worth carrying across this boundary); a tag at heads/main's current tip.
+      #
+      # Everything here is sealed, deliberately: this tool shares one worktree across every ref
+      # (there is no per-branch checkout yet), so a file left behind for one ref's commit reads as
+      # a new file to the *next* commit on a different ref. Ending on an unsealed edit would mean
+      # returning to heads/main after opening heads/docs, which would drag docs.txt into that next
+      # commit unless it were removed first -- and this file's own boundary-check gate closes over
+      # every command in this workflow, so an ad hoc `rm` is not an available way to clean that up.
+      # Closing out heads/docs and cutting the tag as the last two steps avoids the problem instead
+      # of working around it.
       - name: Author the fixture repository
         run: |
           mkdir -p fixture-repo
@@ -145,6 +160,15 @@ jobs:
           echo "hello prikk" > readme.txt
           ../target/debug/prikk commit -m genesis
           ../target/debug/prikk seal --allow-no-audit
+          echo "a small history to prove replay and anchoring across platforms" >> readme.txt
+          ../target/debug/prikk commit -m "expand readme"
+          ../target/debug/prikk seal --allow-no-audit
+          ../target/debug/prikk branch create heads/docs --from heads/main
+          echo "usage notes" > docs.txt
+          ../target/debug/prikk commit --ref heads/docs -m "add usage notes"
+          ../target/debug/prikk seal --allow-no-audit --ref heads/docs
+          ../target/debug/prikk branch close heads/docs
+          ../target/debug/prikk tag create tags/v1 --target heads/main
       # DC-71 B2 ruling: actions/upload-artifact's zip does not preserve empty directories (e.g.
       # refs/tmp, a required-but-empty directory — layout.rs), so the conformance job downloaded a
       # silently corrupted repository and never tested a valid one. tar preserves them; the zip
