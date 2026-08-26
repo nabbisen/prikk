@@ -16,6 +16,24 @@
 //!   remedy;
 //! - **breaking, undeclared** -- the only failure.
 //!
+//! **The reverse direction -- an old binary reading data current code wrote -- is declined, not
+//! deferred** (RFC 119 `reverse-direction-test-declined` handoff v1). Forward is the direction
+//! that protects users, since users upgrade; a schema bump breaks the reverse *by design* (a
+//! deliberate format change, not an accident -- [`DeclaredBreak`]'s own doc names the concrete
+//! example); and a test built to fail on every deliberate format change would train its own
+//! allowlist to grow unexamined -- "recorded, not rejected," the pattern this project already
+//! rejects elsewhere. Declining rests on one verified fact: the failure mode is fail-closed.
+//! `format.rs::validate_format2_schema` refuses an unadmitted schema with a specific `Integrity`
+//! error naming the object type, the schema found, and the accepted set -- an old binary *refuses*
+//! unrecognized data, it does not misread it. `CHANGELOG.md`'s per-release reverse-break statement
+//! already tells a downgrading user what changed; building and caching an old binary per platform,
+//! in CI, for the direction that matters least, is not worth that cost. **What this gives up**: an
+//! *accidental* reverse break goes undetected until someone downgrades, surfacing then as a clear,
+//! specific refusal -- never silent corruption. Acceptable at pre-1.0, not forever. **Void if**:
+//! prikk ever supports downgrade as a documented workflow, or a future format change lets an old
+//! binary *misinterpret* new bytes rather than refuse them -- the second voids this outright, since
+//! the whole ruling rests on failing closed.
+//!
 //! **Fixture**: `crates/prikk-cli/tests/fixtures/rfc119_g1_0_25_0_repo`, a real repository written
 //! by the real `0.25.0` binary (built from the `0.25.0` git tag in an isolated worktree, never from
 //! this working tree). **Do not regenerate it.** See the RFC 119 track C report for the original
