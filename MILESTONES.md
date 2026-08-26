@@ -331,7 +331,7 @@ work look scheduled, or scheduled work look overdue.
 | M2 | Minimal Patch Engine | yes | Assurance and distribution baseline |
 | M3 | Block DAG and Checkout | **partially** — checkout and block DAG shipped; multi-patch active blocks implemented (DC-66); **NFR-PERF-02 now met** (DC-57's 800/1000 thresholds, configurable, enforced); **NFR-PERF-03 remains unowned** (merge-scope bounding is a DC-57 non-goal) | Migration and recoverable backup |
 | M4 | WASM Plugin and Audit | no | — |
-| M5 | Sync and Quarantine | no | — |
+| M5 | Sync and Quarantine | **bundled two unrelated halves — one shipped, one dissolved, no single yes/no is honest.** Sync half: **MET** (criterion 1, line 159, 2026-08-22). Quarantine half: **dissolved**, not built and not open — nothing enters the store un-adopted, so the halfway state the label named never arises (`ROADMAP.md`'s own Sync theme). Whether "M5" still names one coherent milestone is the owner's question, not answered by this row. | — |
 | M6 | Alpha Hardening | no | — |
 | M7 | Public Preview Readiness | no | — |
 
@@ -460,7 +460,11 @@ gates.
 5. DC-46 Workspace Rust 1.85 Compatibility.
 6. DC-47 Stable Clippy Gate Alignment (complete at `ea95e92`; post-commit evidence accepted).
 7. DC-48 Legacy Clippy Production Retirement (complete at `383e503`; post-commit evidence accepted).
-8. DC-49 Portable-Logic Platform Matrix (blocked on the M1 portability-claim correction).
+8. DC-49 Portable-Logic Platform Matrix (**unblocked** — its own blocking wording, "Linux-only
+   exercised gates" in `durability-recovery.md`/`concurrency-locking.md`, was corrected at
+   `873caa7` through ordinary development [DC-87 Stage 2], not through the formal M1 hold sequence
+   its own Trigger describes, which remains dormant — see `rfcs/proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md`'s
+   own status update).
 9. DC-50 First-Party SHA-256 ROI Decision (closed at `4005efb` with a **replace** decision; produced no
    code and authorized exactly one successor, DC-55).
 10. DC-51 Product Dependency Placement Gate.

@@ -121,8 +121,8 @@ block. Each refusal is a person's decision not to act on an unresolved question 
 guarantee that the correct answer was found.
 
 **Repositories are anonymous. Identity lives in signer keys and in patch ids — never in a
-repository.** This is a settled property of the shipped design (RFC 115 §2.4–§2.7), not an
-open question or a deferred non-goal: prikk has no peers, only artifacts. `crates/prikk-cli/src/sync.rs`
+repository.** This is a settled property of the shipped design, not an open question or a deferred
+non-goal: prikk has no peers, only artifacts. `crates/prikk-cli/src/sync.rs`
 opens with *"No network. No socket. No new dependency"* — every sync subcommand reads and writes
 files, and there is no session, no remote party, and nothing to authenticate as a repository in the
 first place. Checkable, not merely asserted:
@@ -210,9 +210,21 @@ objects, and legacy rollback marker signatures. Diagnostics should avoid raw tex
 text, blob bytes, absolute host paths, `.prikk` private paths, signer secrets, key material, and
 arbitrary object debug dumps.
 
-Current non-goals include global identity trust, remote trust, hosted forge semantics, key lifecycle
-management, hardware signing, multi-maintainer thresholds, production audit policy, plugin execution,
-and stable repository-format migration.
+**Not built yet, not refused** — this page's own Core Caveats already say so ("no key rotation,
+hardware signing, remote trust, a distinct peer/sync trust framework, or stable migration policy
+**yet**"): global identity trust, remote trust, hardware signing, key lifecycle management (with
+one exception — rotating an AUTHOR key under its *own* `key_id` is refused, indistinguishably from
+impersonation, per Core Caveats above; a new `key_id` is not restricted), stable repository-format
+migration, and multi-maintainer thresholds (the trust store's `required` policy already supports a
+threshold; only `required = 1` is deployed today).
+
+**Genuinely unclear from this project's own record** — no statement here or elsewhere on this page
+calls these either built-later or ruled out, so neither column would be honest: hosted forge
+semantics, production audit policy, and plugin execution.
+
+**What this page's own repository-identity settlement (above) refuses, by contrast, is
+permanent** — see [Non-Goals](non-goals.md) for the confirmed refused set and what "refused" means
+as distinct from everything on this list.
 
 ## Claim-to-Source Anchors
 

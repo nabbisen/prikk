@@ -56,11 +56,14 @@ left to quarantine.
   **`parent_patch_ids`'s own fate is no longer open**: it was removed outright, not populated or
   repurposed, at Patch schema 2 (`0.24.0`). Product **M3**, named "Block DAG and Checkout", is
   discharged by this shipping, not still describing unbuilt scope.
-- **Transport — settled by RFC 116's accepted ruling, not open.** `prikk-store` stays bytes-in/bytes-out
-  and prikk stays off the network; sync-over-any-channel satisfies criterion 1, so moving a `sync`/
-  `bundle` artifact between repositories is the operator's own channel, by design, not a gap awaiting a
-  future increment. What remains genuinely unautomated — the operator still copies the file themselves —
-  is a consequence of that ruling, not an open question about who owns it.
+- **Transport — deferred by RFC 116's accepted ruling, not settled shut.** RFC 116 itself: `prikk-store`
+  stays bytes-in/bytes-out and prikk stays off the network *"in this increment"*; *"if a protocol is
+  later wanted, it belongs in its own crate or its own binary"*; transport is *"deferred and kept outside
+  the verification core."* **What is settled, and survives this correction**: sync-over-any-channel
+  already satisfies criterion 1 today, so moving a `sync`/`bundle` artifact between repositories is the
+  operator's own channel right now, by design — not an open question about who owns that copy in the
+  meantime. **What is not settled**: whether a protocol ever gets built is left open by RFC 116's own
+  words, not ruled out by them.
 
 **Verified before shipping, and still true**: zero networking crates in `Cargo.lock`, no networked
 verb in the CLI. Sync was the first capability that could have given prikk an attack surface it did
@@ -215,7 +218,7 @@ references. The durable homes below are authoritative `docs/src/reference/` or `
 | TASK-11 path & worktree safety rules | 2 | Architect + maintainer | Released in 0.17.6 | Complete; use the reference as the current public path/worktree safety baseline. | Reviewed path/worktree safety reference is committed with current gaps marked. | `docs/src/reference/path-safety.md` |
 | TASK-12 concurrency & locking model | 2 | Architect + maintainer | Released in 0.17.7 | Complete; use the reference as the current public concurrency/locking baseline. | Reviewed locking/concurrency docs are committed and describe manual stale-lock limits. | `docs/src/reference/concurrency-locking.md` |
 | TASK-13 release, versioning & compatibility policy | 2 | Maintainer | DC-35 policy implementation and DC-45 Rust authority cutover committed; signer set empty | Bootstrap the first signer only through its separate reviewed governance transaction, observe the public 72-hour hold, and obtain an explicit hold-lift ruling before the 0.18.0 release candidate. | Reviewed release/compatibility policy and Rust authority gate are committed; signer bootstrap evidence, elapsed hold, and hold-lift ruling are recorded before RC preparation. | `docs/src/reference/release-compatibility.md` |
-| TASK-14 consolidated non-goals / deferred features | 3 | Maintainer/architect | Open | Start when deferred-feature lists begin drifting across README, ROADMAP, mdBook, and release notes. | Reviewed non-goals page is committed and links ROADMAP as the planning authority. | `docs/src/reference/non-goals.md` |
+| TASK-14 consolidated non-goals / deferred features | 3 | Maintainer/architect | Complete, committed `7babdb4` | Complete; use the page as the current public refused-vs-deferred baseline. | Reviewed non-goals page is committed and links ROADMAP as the planning authority. | `docs/src/reference/non-goals.md` |
 | TASK-15 roles & user-classes orientation | 3 | Designer | Open | Start when the docs need a clearer audience map after the Reference section settles. | Reviewed orientation page or index update is committed. | `docs/src/index.md` or `docs/src/guide/audience.md` |
 | TASK-16 error taxonomy & diagnostics | 3 | Implementer/architect | Open | Start with TASK-07 or when diagnostics need user-facing interpretation. | Reviewed diagnostics reference is committed and grounded in `crates/prikk-error`. | `docs/src/reference/errors.md` |
 
