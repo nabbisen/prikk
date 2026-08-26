@@ -1,6 +1,6 @@
 [package]
 name        = "prikk-replay"
-description = "Workspace-internal replay and lifecycle semantics for Prikk."
+description = "Replay and lifecycle semantics for Prikk repositories. Internal to the prikk CLI; its API may change without notice before 1.0."
 readme      = "README.md"
 version.workspace       = true
 edition.workspace       = true

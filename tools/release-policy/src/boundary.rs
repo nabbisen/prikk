@@ -22,7 +22,7 @@ const PRODUCTS: [(&str, &str); 8] = [
     ("prikk-store", "crates/prikk-store/Cargo.toml"),
     ("prikk", "crates/prikk-cli/Cargo.toml"),
 ];
-const CATEGORY_ORDER: [&str; 11] = [
+const CATEGORY_ORDER: [&str; 12] = [
     "workspace-members",
     "default-members",
     "tool-metadata",
@@ -33,6 +33,7 @@ const CATEGORY_ORDER: [&str; 11] = [
     "rfc-naming",
     "publication-allowlist",
     "package-contents",
+    "package-description",
     "source-archive-contents",
 ];
 

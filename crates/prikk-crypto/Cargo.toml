@@ -1,6 +1,6 @@
 [package]
 name        = "prikk-crypto"
-description = "Prikk cryptographic primitives (v1 Ed25519 signing and verification)."
+description = "Ed25519 signing and verification primitives for Prikk. Internal to the prikk CLI; its API may change without notice before 1.0."
 readme      = "README.md"
 version.workspace       = true
 edition.workspace       = true

@@ -1,6 +1,6 @@
 [package]
 name        = "prikk-object"
-description = "Prikk object identity, canonical encoding, and object payload types."
+description = "Object identity, canonical encoding, and payload types for Prikk. Internal to the prikk CLI; its API may change without notice before 1.0."
 readme      = "README.md"
 version.workspace       = true
 edition.workspace       = true

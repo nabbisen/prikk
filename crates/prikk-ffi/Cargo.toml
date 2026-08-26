@@ -1,6 +1,6 @@
 [package]
 name        = "prikk-ffi"
-description = "Prikk's sole FFI surface -- DC-96, the exemption named in UNSAFE_EXEMPT_CRATES."
+description = "Windows filesystem-identity FFI bindings for Prikk. Internal to the prikk CLI; its API may change without notice before 1.0."
 readme      = "README.md"
 version.workspace       = true
 edition.workspace       = true

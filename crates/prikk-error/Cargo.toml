@@ -1,6 +1,6 @@
 [package]
 name        = "prikk-error"
-description = "Prikk shared error taxonomy."
+description = "Shared error taxonomy for Prikk crates. Internal to the prikk CLI; its API may change without notice before 1.0."
 readme      = "README.md"
 version.workspace       = true
 edition.workspace       = true

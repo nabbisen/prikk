@@ -1,6 +1,6 @@
 [package]
 name        = "prikk"
-description = "Prikk CLI initial scaffold."
+description = "A standalone distributed version control system built around block-oriented patch theory."
 readme      = "../../README.md"
 version.workspace       = true
 edition.workspace       = true

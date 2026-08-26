@@ -8,6 +8,14 @@ use super::{BoundaryError, PRODUCTS, push};
 use crate::error::{Error, Result};
 use crate::json;
 
+/// Published-crate-posture handoff v1 §5: never correct in a published crate's description.
+/// A wordlist ages badly in general, but these five are never right in a released manifest --
+/// `scaffold`/`initial`/`placeholder`/`TODO`/`WIP` are exactly the provisional language that let
+/// `prikk`/`prikk-store` describe themselves as scaffolding for two releases after they stopped
+/// being one. Case-insensitive substring match: descriptions here are short and hand-written, not
+/// user-generated text, so the false-positive surface is negligible next to the defect this closes.
+const PROVISIONAL_WORDS: [&str; 5] = ["scaffold", "initial", "placeholder", "todo", "wip"];
+
 pub(super) fn check(root: &Path, errors: &mut Vec<BoundaryError>) -> Result<()> {
     for (package, _) in PRODUCTS {
         let output = Command::new("cargo")
@@ -39,7 +47,52 @@ pub(super) fn check(root: &Path, errors: &mut Vec<BoundaryError>) -> Result<()> 
         }
     }
     check_source_tree(root, errors);
+    check_descriptions(root, errors);
     Ok(())
+}
+
+fn check_descriptions(root: &Path, errors: &mut Vec<BoundaryError>) {
+    for (crate_name, manifest_path) in PRODUCTS {
+        let Ok(text) = fs::read_to_string(root.join(manifest_path)) else {
+            push(
+                errors,
+                "package-description",
+                format!("{crate_name}: manifest unreadable"),
+            );
+            continue;
+        };
+        let Ok(manifest) = toml::from_str::<toml::Value>(&text) else {
+            push(
+                errors,
+                "package-description",
+                format!("{crate_name}: manifest unparseable"),
+            );
+            continue;
+        };
+        let description = manifest
+            .get("package")
+            .and_then(|package| package.get("description"))
+            .and_then(toml::Value::as_str)
+            .unwrap_or_default();
+        if description.trim().is_empty() {
+            push(
+                errors,
+                "package-description",
+                format!("{crate_name}: missing description"),
+            );
+            continue;
+        }
+        let lower = description.to_lowercase();
+        for word in PROVISIONAL_WORDS {
+            if lower.contains(word) {
+                push(
+                    errors,
+                    "package-description",
+                    format!("{crate_name}: provisional word {word:?}"),
+                );
+            }
+        }
+    }
 }
 
 fn check_source_tree(root: &Path, errors: &mut Vec<BoundaryError>) {
@@ -109,3 +162,7 @@ fn check_direct_inputs(root: &Path, manifest: &Value, errors: &mut Vec<BoundaryE
         }
     }
 }
+
+#[cfg(test)]
+#[path = "package/tests.rs"]
+mod tests;
