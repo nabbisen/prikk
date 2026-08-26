@@ -56,11 +56,14 @@ or add the directory you placed it in to `PATH` yourself.
 prikk --version
 ```
 
-prints the installed version, for example:
+prints the version you installed, in the form:
 
 ```
-prikk 0.25.0
+prikk <version>
 ```
+
+Check that `<version>` matches the release you downloaded — that match is the actual
+verification, not any particular number this page could show.
 
 If the shell reports "command not found" instead, the binary is not on `PATH` yet.
 
