@@ -9,12 +9,21 @@ use crate::error::{Error, Result};
 use crate::json;
 
 /// Published-crate-posture handoff v1 §5: never correct in a published crate's description.
-/// A wordlist ages badly in general, but these five are never right in a released manifest --
-/// `scaffold`/`initial`/`placeholder`/`TODO`/`WIP` are exactly the provisional language that let
+/// A wordlist ages badly in general, but these are never right in a released manifest --
+/// `scaffold`/`placeholder`/`TODO`/`WIP` are exactly the provisional language that let
 /// `prikk`/`prikk-store` describe themselves as scaffolding for two releases after they stopped
 /// being one. Case-insensitive substring match: descriptions here are short and hand-written, not
-/// user-generated text, so the false-positive surface is negligible next to the defect this closes.
-const PROVISIONAL_WORDS: [&str; 5] = ["scaffold", "initial", "placeholder", "todo", "wip"];
+/// user-generated text, so the false-positive surface is negligible for these four -- deliberately
+/// substring, not whole-word, so it still catches `scaffolding` and not just `scaffold`.
+const PROVISIONAL_SUBSTRINGS: [&str; 4] = ["scaffold", "placeholder", "todo", "wip"];
+
+/// `initial` is checked separately, as a whole word, not a substring (review of this handoff's
+/// v1 report): unlike the four above, `initial` is a common English prefix in exactly the
+/// vocabulary this project's own crates legitimately use -- "repository initialization",
+/// "initialize the WAL" -- and a substring match rejects those alongside the real defect. A
+/// whole-word match still catches the actual origin case (`"Prikk CLI initial scaffold."`, where
+/// `scaffold` alone already flags it) while leaving `initialize`/`initialization` alone.
+const PROVISIONAL_WHOLE_WORDS: [&str; 1] = ["initial"];
 
 pub(super) fn check(root: &Path, errors: &mut Vec<BoundaryError>) -> Result<()> {
     for (package, _) in PRODUCTS {
@@ -83,7 +92,7 @@ fn check_descriptions(root: &Path, errors: &mut Vec<BoundaryError>) {
             continue;
         }
         let lower = description.to_lowercase();
-        for word in PROVISIONAL_WORDS {
+        for word in PROVISIONAL_SUBSTRINGS {
             if lower.contains(word) {
                 push(
                     errors,
@@ -92,7 +101,25 @@ fn check_descriptions(root: &Path, errors: &mut Vec<BoundaryError>) {
                 );
             }
         }
+        for word in PROVISIONAL_WHOLE_WORDS {
+            if contains_word(&lower, word) {
+                push(
+                    errors,
+                    "package-description",
+                    format!("{crate_name}: provisional word {word:?}"),
+                );
+            }
+        }
     }
+}
+
+/// Whether `word` appears in `haystack` as a standalone token -- split on non-alphanumeric
+/// boundaries, not a raw substring search. `haystack` must already be lowercased; `word` is
+/// compared as given.
+fn contains_word(haystack: &str, word: &str) -> bool {
+    haystack
+        .split(|character: char| !character.is_alphanumeric())
+        .any(|token| token == word)
 }
 
 fn check_source_tree(root: &Path, errors: &mut Vec<BoundaryError>) {

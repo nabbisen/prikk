@@ -71,6 +71,38 @@ fn provisional_word_is_case_insensitive() {
 }
 
 #[test]
+fn initial_is_a_whole_word_not_a_substring() {
+    // Review of this handoff's v1 report: `initial` as a raw substring rejected legitimate
+    // descriptions using `initialize`/`initialization`, vocabulary this project's own crates have
+    // every reason to use. Whole-word matching must let this through.
+    let temporary = tempfile::tempdir().unwrap();
+    write_baseline(temporary.path());
+    write_manifest(
+        temporary.path(),
+        "crates/prikk-hash/Cargo.toml",
+        "[package]\ndescription = \"SHA-256 hash primitives used during repository initialization.\"\n",
+    );
+    let mut errors = Vec::new();
+    check_descriptions(temporary.path(), &mut errors);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn initial_as_a_standalone_word_still_fails() {
+    let temporary = tempfile::tempdir().unwrap();
+    write_baseline(temporary.path());
+    write_manifest(
+        temporary.path(),
+        "crates/prikk-hash/Cargo.toml",
+        "[package]\ndescription = \"Initial hash primitives for Prikk.\"\n",
+    );
+    let mut errors = Vec::new();
+    check_descriptions(temporary.path(), &mut errors);
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].detail, "prikk-hash: provisional word \"initial\"");
+}
+
+#[test]
 fn missing_description_fails() {
     let temporary = tempfile::tempdir().unwrap();
     write_baseline(temporary.path());
