@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.26.0 — 2026-08-26
+
+**crates.io still serves `prikk`'s description as `"Prikk CLI initial scaffold."`, and
+`prikk-store`'s as `"Prikk storage crate scaffold."`** — both fixed in the repository since, but a
+published description only updates on the next publish, and the seven crate READMEs that render
+beneath it carry the same stale text. This cut exists to correct that. Everything else is smaller.
+
+### Added
+
+- **Conflict witnesses now report a path.** Ten sites previously discarded one that was available
+  — merge evidence now says *where* a conflict is, not only that one exists. This is the one
+  behaviour change in this release, and it is why the version moves rather than the patch level.
+- **An install guide**, which the documentation site never had: checksum verification per
+  platform, `PATH` setup, confirming the install, and uninstalling.
+- **Corrected crate metadata.** All eight published descriptions and seven library-crate READMEs
+  rewritten to reflect current posture instead of scaffold-era placeholder text.
+
+### Fixed
+
+Nothing user-facing beyond the additions above.
+
+**Everything else is documentation currency and test-gate hardening.**
+
 ## 0.25.0 — 2026-08-26
 
 **`prikk verify --format json` is this release — the first machine-readable output the tool has
