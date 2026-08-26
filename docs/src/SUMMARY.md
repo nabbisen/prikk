@@ -41,6 +41,7 @@
 - [Durability and Crash Recovery](reference/durability-recovery.md)
 - [Integrity and Recovery Diagnostics](reference/integrity-recovery.md)
 - [Patch Algebra and Merge Evidence](reference/patch-algebra.md)
+- [Non-Goals](reference/non-goals.md)
 
 # Contributing
 
