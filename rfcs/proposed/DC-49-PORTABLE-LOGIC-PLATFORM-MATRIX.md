@@ -2,9 +2,26 @@
 
 **Status.** Proposed; design review required. Descoped from DC-41 during design re-review v1 and recorded
 here so it is owned rather than lost.
+
+**Status update, 2026-08-27 (evidenced).** The blocker below has cleared. This RFC's own Trigger
+names the public "Linux-only exercised gates" wording in `docs/src/reference/durability-recovery.md`
+and `docs/src/reference/concurrency-locking.md` as the precondition. Both pages now read "gates
+exercised on Linux, macOS, and Windows" — corrected by DC-87 Stage 2 at `873caa7`, well before this
+check, as an ordinary consequence of cross-platform mutation shipping (0.21.0), not through the
+specific hold-gated M1 release-activation sequence this RFC's Trigger describes (that sequence
+remains dormant per `MILESTONES.md`'s own "Conditional M1 first-shipping-release activation
+order," never entered). The substance the Trigger cared about — a green non-Linux CI badge
+alongside wording that still called the non-Linux posture a coverage gap rather than the
+functional impossibility DC-37 makes it — no longer exists: the wording is corrected, and current
+CI already runs cross-platform mutation gates for real, which is stronger evidence than the doc
+edit alone would have been. **DC-49 is unblocked by its own stated criterion.**
+`MILESTONES.md:463` still reads *"blocked on the M1 portability-claim correction"* and is stale in
+the same way; not edited here (no instruction names that file for this handoff).
+
 **Target milestone.** M2 - post-correction assurance milestone.
-**Schedule position.** Blocked. Not startable until the M1 portability-claim correction ships (see
-Trigger). Independent of DC-41's own acceptance or completion.
+**Schedule position.** ~~Blocked. Not startable until the M1 portability-claim correction ships (see
+Trigger).~~ **Unblocked — see the status update above.** Independent of DC-41's own acceptance or
+completion.
 **Tracks.** The cross-platform-evidence portion of architect review N4 that DC-41 could not deliver inside
 the parked development lane.
 **Touches.** `.github/workflows/ci.yml` and the DC-45 governed-procedure command classifier. No production

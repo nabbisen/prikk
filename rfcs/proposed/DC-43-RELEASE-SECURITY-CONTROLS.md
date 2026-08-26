@@ -1,9 +1,22 @@
 # RFC (proposed) - DC-43 Release Security and Distribution Controls
 
 **Status.** Proposed; security/architect design review required.
+
+**Status update, 2026-08-27 (evidenced, not a ruling — the schedule position below is stale; the
+public-preview prerequisite is unaffected and stands as originally written).** DC-42, the cited
+predecessor, does not exist as live work: it was superseded 2026-07-29 into DC-56, DC-57, and
+DC-58 (`rfcs/archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md`), and all three have since been
+implemented — DC-56 at `8748f00`, DC-57 at `caa2fc2` (accepted 2026-08-02), DC-58 at `6f53da3`
+(accepted 2026-07-31; `rfcs/EXECUTION-ORDER.md` lines 121, 127, 189). **There is no longer a
+predecessor for this RFC to sit behind.** The record does not support naming a specific successor
+in DC-42's place either — nothing establishes that DC-43 should now wait on any one of the three,
+or on anything else. The schedule position is unknown, not merely outdated, and should be read
+that way rather than corrected to a guess.
+
 **Target milestone.** M2 - required before reconsidering public-preview readiness.
-**Schedule position.** Third remaining post-M1 increment, after DC-42. Completion remains a prerequisite
-for any public-preview reconsideration; this program order is not implementation authority.
+**Schedule position.** ~~Third remaining post-M1 increment, after DC-42.~~ **Stale — see the status
+update above.** Completion remains a prerequisite for any public-preview reconsideration; this
+program order is not implementation authority.
 **Tracks.** Architect review N7.
 **Touches.** Vulnerability reporting, dependency policy, SBOM/provenance, release attestations, release-
 key lifecycle, registry-owner lifecycle, CI platform policy, and public release documentation.
