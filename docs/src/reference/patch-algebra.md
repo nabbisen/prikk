@@ -139,8 +139,8 @@ identity a cross-side (`Conflict`/`OrderedDependency`) item's witness recorded:
 | Field | Meaning |
 |---|---|
 | `witness_kind` | The specific reason this pair conflicts or orders, as a stable kebab-case label. `None` for items with no underlying witness. |
-| `witness_path` | The repository-relative path the witness recorded as the reason for conflict, when it recorded one. Distinct from each side's own `operation.path`/`peer_operation.path` — present even for node-identity conflicts where neither side's own operation carries a path at all. |
-| `witness_node_id` | The shared node identity, typed (not a rendered string — no stable human-facing node-identity rendering exists in this codebase to freeze into this field). The only correlating signal for conflict kinds with no path at all. |
+| `witness_path` | The repository-relative path the witness recorded as the reason for conflict, when it recorded one. Distinct from each side's own `operation.path`/`peer_operation.path`: derived from whichever operand's own path field or live baseline path resolves (conflict-witness-path-derivation handoff v1), so it is present even for node-identity conflicts where neither side's own operation carries a path at all — as long as the shared node has a live entry in the baseline. `None` when the two operands resolve to two different paths (a single field cannot pick one) or when the node has no live baseline entry to derive from. |
+| `witness_node_id` | The shared node identity, typed (not a rendered string — no stable human-facing node-identity rendering exists in this codebase to freeze into this field). The only correlating signal for the conflicts that stay genuinely path-less: a node-identity mismatch against a node with no live entry in the baseline at all. |
 
 Current `witness_kind` labels:
 

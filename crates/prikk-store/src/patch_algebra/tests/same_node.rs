@@ -104,3 +104,23 @@ fn same_node_two_mode_changes_to_different_modes_conflict() {
         ConflictWitnessKind::UnknownRelation,
     );
 }
+
+#[test]
+fn same_node_two_mode_changes_on_unknown_node_has_no_path() {
+    // Conflict-witness-path-derivation handoff v1, §6 control 2: a genuinely path-less conflict
+    // must still report `None` honestly, not via a hand-maintained exclusion list. Neither
+    // `ChangePerm` operand carries its own path, and this node never appears in the baseline, so
+    // `witness::operand_path`'s only source for it (a baseline live-node lookup) has nothing to
+    // find -- the property in `support.rs` must pass without either operand "touching" a path.
+    let baseline = NodeLifecycleState::new();
+    let left = change_perm(1, node(1), MODE_REGULAR, MODE_EXECUTABLE);
+    let right = change_perm(2, node(1), MODE_REGULAR, 0o100600);
+
+    match classify_pair(&baseline, &left, &right) {
+        PairClass::Conflict { witness } => {
+            assert_eq!(witness.kind, ConflictWitnessKind::UnknownRelation);
+            assert!(witness.path.is_none());
+        }
+        other => panic!("expected conflict, got {other:?}"),
+    }
+}

@@ -46,6 +46,25 @@ fn same_path_create_create_is_conflict() {
 }
 
 #[test]
+fn node_id_reuse_conflict_has_no_shared_path() {
+    // Conflict-witness-path-derivation handoff v1, §3: two `CreateFile`s reusing one node id at
+    // different paths have no single path to report -- neither is "the" path. Left alone (`None`)
+    // rather than picking one is correct: each side's own path is already visible independently
+    // via `MergeEvidenceDisplayItem.operation.path`/`.peer_operation.path`.
+    let baseline = NodeLifecycleState::new();
+    let left = create_file(1, "first.bin", node(1), blob(1), MODE_REGULAR);
+    let right = create_file(2, "second.bin", node(1), blob(2), MODE_REGULAR);
+
+    match classify_pair(&baseline, &left, &right) {
+        PairClass::Conflict { witness } => {
+            assert_eq!(witness.kind, ConflictWitnessKind::NodeIdReuse);
+            assert!(witness.path.is_none());
+        }
+        other => panic!("expected conflict, got {other:?}"),
+    }
+}
+
+#[test]
 fn create_then_replace_binary_same_node_is_ordered_when_create_preimage_is_valid() {
     let baseline = NodeLifecycleState::new();
     let left = create_file(1, "fresh.bin", node(1), blob(1), MODE_REGULAR);

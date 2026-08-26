@@ -4,7 +4,7 @@ use crate::node_lifecycle::NodeLifecycleState;
 
 use super::preimage::baseline_file_matches;
 use super::types::{Action, ConflictWitnessKind, OperationFacts, PairClass, RequiredOrder};
-use super::witness::{conflict, ordered};
+use super::witness::{conflict, derive_path, ordered};
 
 pub(super) fn classify_mutate_then_delete(
     baseline: &NodeLifecycleState,
@@ -38,7 +38,7 @@ pub(super) fn classify_mutate_then_delete(
                 left,
                 right,
                 Some(node_id),
-                None,
+                derive_path(baseline, left, right),
             ))
         }
         (
@@ -66,7 +66,7 @@ pub(super) fn classify_mutate_then_delete(
                 left,
                 right,
                 Some(node_id),
-                None,
+                derive_path(baseline, left, right),
             ))
         }
         (
@@ -96,7 +96,7 @@ pub(super) fn classify_mutate_then_delete(
                 left,
                 right,
                 Some(node_id),
-                None,
+                derive_path(baseline, left, right),
             ))
         }
         (
@@ -126,7 +126,7 @@ pub(super) fn classify_mutate_then_delete(
                 left,
                 right,
                 Some(node_id),
-                None,
+                derive_path(baseline, left, right),
             ))
         }
         (Action::DeleteFile { .. }, Action::ChangePerm { .. } | Action::ReplaceBinary { .. })
@@ -136,7 +136,7 @@ pub(super) fn classify_mutate_then_delete(
                 left,
                 right,
                 Some(node_id),
-                None,
+                derive_path(baseline, left, right),
             ))
         }
         _ => None,

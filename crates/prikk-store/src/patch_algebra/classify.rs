@@ -15,7 +15,7 @@ use super::types::{
     Action, ConflictWitnessKind, OperationFacts, PairClass, RequiredOrder, UnknownReason,
 };
 use super::witness::{
-    common_node, conflict, conflict_with_span, first_intersection, ordered, unknown,
+    common_node, conflict, conflict_with_span, derive_path, operand_path, ordered, unknown,
     unknown_from_facts,
 };
 use crate::node_lifecycle::NodeLifecycleState;
@@ -48,12 +48,25 @@ pub(crate) fn classify_pair_with_text_resolver<R: PatchAlgebraEvidence>(
     if let Some(reason) =
         deferred_reason(&left_facts.action).or(deferred_reason(&right_facts.action))
     {
+        // Prefer the pairwise-shared path (correct when both operands act on the same node --
+        // e.g. `RenamePath` paired with a `ChangePerm` on the same node id, where the rename
+        // itself carries no path but the shared node's live path does). Only when that is
+        // ambiguous or absent -- an unrelated peer, e.g. `CreateSymlink` paired with some other
+        // node's `CreateFile` -- fall back to the deferred operand's own path, so an unrelated
+        // peer's disagreement never discards a path the deferred operand genuinely has.
+        let path = derive_path(baseline, &left_facts, &right_facts).or_else(|| {
+            if deferred_reason(&left_facts.action).is_some() {
+                operand_path(baseline, &left_facts)
+            } else {
+                operand_path(baseline, &right_facts)
+            }
+        });
         return Ok(unknown(
             reason,
             left,
             right,
             common_node(&left_facts, &right_facts),
-            None,
+            path,
         ));
     }
 
@@ -83,16 +96,12 @@ fn classify_path_relation(
         .newly_occupied
         .is_disjoint(&right.path_effects.newly_occupied)
     {
-        let path = first_intersection(
-            &left.path_effects.newly_occupied,
-            &right.path_effects.newly_occupied,
-        );
         return Some(conflict(
             ConflictWitnessKind::SamePathCreate,
             left,
             right,
             common_node(left, right),
-            path,
+            derive_path(baseline, left, right),
         ));
     }
 
@@ -101,7 +110,6 @@ fn classify_path_relation(
         .freed
         .is_disjoint(&right.path_effects.required_free)
     {
-        let path = first_intersection(&left.path_effects.freed, &right.path_effects.required_free);
         if !is_delete_preimage_valid(baseline, left)
             || !is_create_after_delete_valid(baseline, left, right)
         {
@@ -110,7 +118,7 @@ fn classify_path_relation(
                 left,
                 right,
                 common_node(left, right),
-                path,
+                derive_path(baseline, left, right),
             ));
         }
         return Some(ordered(
@@ -119,7 +127,7 @@ fn classify_path_relation(
             left,
             right,
             common_node(left, right),
-            path,
+            derive_path(baseline, left, right),
         ));
     }
 
@@ -128,7 +136,6 @@ fn classify_path_relation(
         .freed
         .is_disjoint(&left.path_effects.required_free)
     {
-        let path = first_intersection(&right.path_effects.freed, &left.path_effects.required_free);
         if !is_delete_preimage_valid(baseline, right)
             || !is_create_after_delete_valid(baseline, right, left)
         {
@@ -137,7 +144,7 @@ fn classify_path_relation(
                 left,
                 right,
                 common_node(left, right),
-                path,
+                derive_path(baseline, left, right),
             ));
         }
         return Some(ordered(
@@ -146,7 +153,7 @@ fn classify_path_relation(
             left,
             right,
             common_node(left, right),
-            path,
+            derive_path(baseline, left, right),
         ));
     }
 
@@ -155,13 +162,12 @@ fn classify_path_relation(
         .freed
         .is_disjoint(&right.path_effects.freed)
     {
-        let path = first_intersection(&left.path_effects.freed, &right.path_effects.freed);
         return Some(conflict(
             ConflictWitnessKind::DeleteMutationConflict,
             left,
             right,
             common_node(left, right),
-            path,
+            derive_path(baseline, left, right),
         ));
     }
 
@@ -211,6 +217,7 @@ fn classify_same_node<R: PatchAlgebraEvidence>(
             left,
             right,
             node_id,
+            derive_path(baseline, left, right),
             *left_span,
         )),
         (Action::EditText { .. }, Action::EditText { .. }) => Ok(unknown_from_facts(
@@ -218,7 +225,7 @@ fn classify_same_node<R: PatchAlgebraEvidence>(
             left,
             right,
             Some(node_id),
-            None,
+            derive_path(baseline, left, right),
         )),
         (Action::ChangePerm { old_mode, .. }, Action::ReplaceBinary { old_blob_id, .. })
         | (Action::ReplaceBinary { old_blob_id, .. }, Action::ChangePerm { old_mode, .. }) => {
@@ -236,7 +243,7 @@ fn classify_same_node<R: PatchAlgebraEvidence>(
                     left,
                     right,
                     Some(node_id),
-                    None,
+                    derive_path(baseline, left, right),
                 ))
             }
         }
@@ -257,7 +264,7 @@ fn classify_same_node<R: PatchAlgebraEvidence>(
             left,
             right,
             Some(node_id),
-            None,
+            derive_path(baseline, left, right),
         )),
     }
 }

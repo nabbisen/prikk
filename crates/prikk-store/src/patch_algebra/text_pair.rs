@@ -8,7 +8,7 @@ use super::evidence_types::{
 };
 use super::preimage::baseline_text_blob_for_mode;
 use super::types::{Action, ConflictWitnessKind, OperationFacts, PairClass};
-use super::witness::{conflict, conflict_with_span};
+use super::witness::{conflict, conflict_with_span, derive_path};
 
 pub(super) fn classify_mode_and_text_edit<R: PatchAlgebraEvidence>(
     baseline: &NodeLifecycleState,
@@ -25,7 +25,7 @@ pub(super) fn classify_mode_and_text_edit<R: PatchAlgebraEvidence>(
             left,
             right,
             Some(node_id),
-            None,
+            derive_path(baseline, left, right),
         ));
     };
     let current_text = match text_resolver.baseline_text(
@@ -51,6 +51,7 @@ pub(super) fn classify_mode_and_text_edit<R: PatchAlgebraEvidence>(
                     left,
                     right,
                     node_id,
+                    derive_path(baseline, left, right),
                     *span_id,
                 ));
             }
@@ -69,6 +70,7 @@ pub(super) fn classify_mode_and_text_edit<R: PatchAlgebraEvidence>(
                     left,
                     right,
                     node_id,
+                    derive_path(baseline, left, right),
                     *span_id,
                 )),
             }

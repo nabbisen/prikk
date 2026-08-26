@@ -83,9 +83,13 @@ pub struct MergeEvidenceDisplayItem {
     /// already is in [`MergeEvidenceDisplay`]) rather than a rendered string, since no stable
     /// human-facing rendering for a node identity exists anywhere in this codebase to freeze into
     /// this one struct. **The one field this handoff explicitly left to argument**: published
-    /// because it is the *only* correlating signal for conflict kinds with no path at all (a
-    /// `ChangePerm`/`ReplaceBinary` mismatch on the same node carries no path on either side), not
-    /// because a raw 32-byte identity is legible to a person on its own.
+    /// because it remains the *only* correlating signal for the conflicts that are genuinely
+    /// path-less -- a `ChangePerm`/`ReplaceBinary` mismatch on a node with no live entry in the
+    /// baseline at all (conflict-witness-path-derivation handoff v1 derives `witness_path` from a
+    /// node's live baseline path when its own operation carries no path field, so most same-node
+    /// `ChangePerm`/`ReplaceBinary` mismatches do carry one; only a mismatch against a node that
+    /// was never live stays path-less) -- not because a raw 32-byte identity is legible to a
+    /// person on its own.
     pub witness_node_id: Option<NodeId>,
 }
 
