@@ -42,7 +42,7 @@ left to quarantine.
   negotiates via artifacts (`summary`/`compare`/`have`/`build`/`accept`/`pending`/`seal`), patch-level
   history moves in the `PEXCH002` exchange artifact, and tags travel and are adopted under the
   receiver's own key (`sync tags`/`adopt-tag`). Criterion 1's row carries the stated limits — prikk does
-  not move the bytes itself, "two machines" is exercised as two repositories with no cross-host test,
+  not move the bytes itself, sealed history is exchanged Linux-to-Windows in CI (`74be0ab`), with the receiver's sealed-block ids byte-identical to the sender's,
   and there is no discovery or remote-tracking — read it before citing this row further.
 - **Multi-parent block lineage — shipped, DC-75, 0.19.0.** `merge_execute.rs:168-171` stores both
   parents in `BlockPayload.parent_block_ids`; `:176` sets `mainline_parent_id` (`BlockPayload:63`) to
