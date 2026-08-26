@@ -1,7 +1,8 @@
 # Prikk Documentation
 
-Prikk is a design-first experimental VCS. This documentation is intentionally short in the early
-implementation phase and will grow as FDD-approved implementation areas land.
+Prikk is an experimental, design-first distributed version control system built around
+block-oriented patch theory. This documentation now covers a full guide and reference section, and
+continues to grow as new areas land.
 
 > **About the name.** *Prikk* is the Norwegian word for *dot*. It was chosen because it opens with the
 > **p** of *patches*, and because a patch history is exactly that: dots — patches as nodes — connected
