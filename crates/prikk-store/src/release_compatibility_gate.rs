@@ -55,6 +55,14 @@ use crate::fsutil::read_file_if_exists;
 use crate::layout::{ContainerSlot, RepositoryLayout, persisted_object_types};
 use crate::patch_replay::decode::decode_patch_operations;
 
+/// The release this gate's fixture was built from. [`last_release_fixture_root`] derives its path
+/// from this rather than carrying the version as a second, independent literal; every
+/// `DeclaredBreak`'s [`DeclaredBreak::older_version`] is checked against this too (RFC 119
+/// `g1-declared-break-version-scope` handoff v1 §4) -- the fixture is always *the last release*
+/// and the gate always compares it against *current* code, so `<this constant> -> current` is the
+/// only version pair a declared break can ever describe here.
+const LAST_RELEASE_FIXTURE_VERSION: &str = "0.25.0";
+
 /// One declared **forward-direction** compatibility break between two adjacent releases -- the
 /// shape of Gate A's `frozen`/`RFC114_ADMITTED_BUT_UNWRITTEN` pair and
 /// `format_stability_gate.rs`'s `FORMATS_WITH_MIGRATION_COVERAGE`: a committed list, never
@@ -70,9 +78,22 @@ use crate::patch_replay::decode::decode_patch_operations;
 /// would assert a forward break that does not exist, and this gate would then look for a failure
 /// its own fixture can never produce. Reverse breaks are recorded in `CHANGELOG.md`'s own "Breaking
 /// change" section instead, where every one to date already is.
+///
+/// **Version-scoped, not just object-type-scoped** (RFC 119 `g1-declared-break-version-scope`
+/// handoff v1 §1/§3): an entry only excuses a failure when [`DeclaredBreak::older_version`] equals
+/// [`LAST_RELEASE_FIXTURE_VERSION`] *and* the object type matches. The fixture is always the last
+/// release and the gate always compares it against current code, so an entry whose older side is
+/// any other version cannot apply to anything this gate actually checks -- keeping one anyway
+/// would let it silently excuse an unrelated live failure on a matching object type forever, which
+/// is the defect this version scoping exists to close. `every_declared_break_applies_to_the_current_fixture`
+/// makes a stale entry fail loudly rather than sit inert.
 struct DeclaredBreak {
-    /// The two releases involved, older first.
-    version_pair: &'static str,
+    /// The release the break decodes *from* -- must equal [`LAST_RELEASE_FIXTURE_VERSION`] for
+    /// this entry to excuse anything.
+    older_version: &'static str,
+    /// The release the break was introduced in. Informational only: current code is always the
+    /// implicit "newer" side when this gate runs, so this is never compared against anything.
+    newer_version: &'static str,
     /// Which persisted object type stops decoding.
     object_type: ObjectType,
     /// Quoted from `CHANGELOG.md`, not re-derived -- the wording is the record.
@@ -83,29 +104,28 @@ struct DeclaredBreak {
     remedy: &'static str,
 }
 
-/// Seeded with `0.23.0`'s own `Tag` break (RFC 119 track C handoff §5) -- still the only entry.
-/// **`0.24.0`'s own break is not added here**: it is a reverse break (see [`DeclaredBreak`]'s own
-/// doc), not the forward direction this list holds. **Not currently exercised by
-/// [`g1_last_release_fixture_is_compatible_or_the_break_is_declared`]**: that test compares the
-/// current (`0.25.0`-vintage) fixture against *current* code, and nothing has changed `Tag`
-/// handling since `0.23.0` shipped, so the fixture is, correctly, still fully compatible today.
-/// This entry is the historical record of the break that motivated building this gate at all,
-/// carried forward the same way `format_stability_gate.rs` starts with an empty-but-ready
-/// `FORMATS_WITH_MIGRATION_COVERAGE` -- it becomes load-bearing the day a *future* release breaks
-/// `Tag` again, or if this gate's own fixture is ever rebuilt from a pre-`0.23.0` tag.
-const DECLARED_BREAKS: &[DeclaredBreak] = &[DeclaredBreak {
-    version_pair: "0.22.1 -> 0.23.0",
-    object_type: ObjectType::Tag,
-    reason: "TagPayload gained two fields -- patch_set_digest and patch_count (RFC 117) -- added \
-             in place at schema_version 1, not as a new schema version. 0.23.0 reading a 0.22.1 tag \
-             fails with `Tag missing patch_set_digest`; 0.22.1 reading a 0.23.0 tag fails with \
-             `unknown Tag field tag: 6` (CHANGELOG.md, 0.23.0 \"Breaking change\").",
-    remedy: "A repository written by 0.22.1 that already holds a tag cannot be repaired under \
-             0.23.0 -- there is no `prikk tag delete`, and `prikk tag create` refuses when a tag \
-             ref of that name already exists. Keep using 0.22.1 for that repository, or start a \
-             fresh repository under 0.23.0. There is no in-place remediation today (CHANGELOG.md, \
-             0.23.0 \"Breaking change\").",
-}];
+impl DeclaredBreak {
+    /// Rendered for messages -- `older_version`/`newer_version` are kept as separate fields
+    /// (checked independently) rather than one pre-joined string (which nothing could check
+    /// without parsing it back apart).
+    fn version_pair(&self) -> String {
+        format!("{} -> {}", self.older_version, self.newer_version)
+    }
+}
+
+/// **Empty, deliberately** (RFC 119 `g1-declared-break-version-scope` handoff v1 §4 adjudication:
+/// retire, don't relocate). `0.23.0`'s own `Tag` break (RFC 119 track C handoff §5) was this list's
+/// first and, until this refresh, only entry -- but its `older_version` is `0.22.1`, which no
+/// longer equals [`LAST_RELEASE_FIXTURE_VERSION`], so it can no longer apply to anything this gate
+/// checks. Keeping it as a second, gate-adjacent historical record -- rather than retiring it --
+/// would be exactly the "system reasoning about itself" duplication RFC 119 exists to remove:
+/// `CHANGELOG.md`'s own `0.23.0` "Breaking change" section is already the complete, load-bearing
+/// record of that break (this entry's own `reason`/`remedy` text was quoted from it verbatim, not
+/// independently derived), so nothing is lost by not also carrying it here. **Empty-but-ready**,
+/// the same shape `format_stability_gate.rs`'s own `FORMATS_WITH_MIGRATION_COVERAGE` starts in --
+/// this becomes non-empty the day a release breaks a persisted type against *this gate's own*
+/// fixture version, not on a general "some day" basis.
+const DECLARED_BREAKS: &[DeclaredBreak] = &[];
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -116,9 +136,13 @@ fn repo_root() -> PathBuf {
 }
 
 /// The frozen last-release fixture's root (the directory *containing* `.prikk`, matching
-/// `RepositoryLayout::open`'s own expectation).
+/// `RepositoryLayout::open`'s own expectation). Derived from [`LAST_RELEASE_FIXTURE_VERSION`]
+/// rather than carrying the version as a second literal inside the path string.
 fn last_release_fixture_root() -> PathBuf {
-    repo_root().join("crates/prikk-cli/tests/fixtures/rfc119_g1_0_25_0_repo")
+    let directory_version = LAST_RELEASE_FIXTURE_VERSION.replace('.', "_");
+    repo_root().join(format!(
+        "crates/prikk-cli/tests/fixtures/rfc119_g1_{directory_version}_repo"
+    ))
 }
 
 /// Read one persisted object type's live (slot A -- compaction never runs on object containers,
@@ -205,29 +229,50 @@ fn every_declared_break_names_a_persisted_object_type() {
         assert!(
             persisted_object_types().contains(&declared.object_type),
             "DECLARED_BREAKS entry for {} names {}, which is not a persisted object type",
-            declared.version_pair,
+            declared.version_pair(),
             declared.object_type
         );
         assert!(
             !declared.reason.trim().is_empty(),
             "DECLARED_BREAKS entry for {} ({}) has no reason",
-            declared.version_pair,
+            declared.version_pair(),
             declared.object_type
         );
         assert!(
             !declared.remedy.trim().is_empty(),
             "DECLARED_BREAKS entry for {} ({}) has no remedy",
-            declared.version_pair,
+            declared.version_pair(),
+            declared.object_type
+        );
+    }
+}
+
+/// Layer 2 (RFC 119 `g1-declared-break-version-scope` handoff v1 §4): every declared break must
+/// apply to *this* fixture, not merely name a real object type. The fixture is always the last
+/// release and the gate always compares it against current code, so `older_version` must equal
+/// [`LAST_RELEASE_FIXTURE_VERSION`] -- an entry that fails this check cannot excuse anything the
+/// gate actually verifies and must be retired or updated, not left to sit inert (§1/§3: sitting
+/// inert is how it silently excuses an unrelated future break on a matching object type).
+#[test]
+fn every_declared_break_applies_to_the_current_fixture() {
+    for declared in DECLARED_BREAKS {
+        assert_eq!(
+            declared.older_version,
+            LAST_RELEASE_FIXTURE_VERSION,
+            "DECLARED_BREAKS entry for {} ({}) names an older version that does not match the \
+             current fixture ({LAST_RELEASE_FIXTURE_VERSION}) -- this entry cannot apply to \
+             anything the gate checks and must be retired or updated, not left in place",
+            declared.version_pair(),
             declared.object_type
         );
     }
 }
 
 /// The real conformance check: every persisted object type in the last-release fixture must either
-/// decode cleanly under current code, or have its failure covered by [`DECLARED_BREAKS`]. This is
-/// the test the four controls exercise (RFC 119 track C handoff §7, `g1-fixture-refresh-0-25-0`
-/// handoff §7); it currently passes because nothing has changed any persisted type's decode
-/// contract since `0.25.0` shipped -- the same "nothing to test yet" state
+/// decode cleanly under current code, or have its failure covered by [`DECLARED_BREAKS`] for *this*
+/// fixture's own version. This is the test the four controls exercise (RFC 119 track C handoff §7,
+/// `g1-fixture-refresh-0-25-0` handoff §7); it currently passes because nothing has changed any
+/// persisted type's decode contract since `0.25.0` shipped -- the same "nothing to test yet" state
 /// `format_stability_gate.rs`'s own layers 1/2 start in.
 #[test]
 fn g1_last_release_fixture_is_compatible_or_the_break_is_declared() {
@@ -235,14 +280,16 @@ fn g1_last_release_fixture_is_compatible_or_the_break_is_declared() {
     let layout = RepositoryLayout::open(&root).expect("last-release fixture repository opens");
     for &object_type in &persisted_object_types() {
         if let Err(message) = check_type_decodes(&layout, object_type) {
-            let declared = DECLARED_BREAKS
-                .iter()
-                .any(|break_| break_.object_type == object_type);
+            let declared = DECLARED_BREAKS.iter().any(|break_| {
+                break_.object_type == object_type
+                    && break_.older_version == LAST_RELEASE_FIXTURE_VERSION
+            });
             assert!(
                 declared,
                 "undeclared compatibility break: {message}, against the last-release fixture at \
-                 {} -- if this break is authorized, add a DECLARED_BREAKS entry with a reason and a \
-                 remedy; if not, this is a live defect",
+                 {} -- if this break is authorized, add a DECLARED_BREAKS entry (with older_version \
+                 == {LAST_RELEASE_FIXTURE_VERSION:?}) naming a reason and a remedy; if not, this is \
+                 a live defect",
                 root.display()
             );
         }
