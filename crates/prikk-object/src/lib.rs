@@ -14,6 +14,8 @@ pub mod payload;
 pub mod signature;
 
 #[cfg(test)]
+mod object_type_table_binding_gate;
+#[cfg(test)]
 mod vectors;
 
 pub use canonical::{CanonicalEncode, CanonicalWriter, WireType};

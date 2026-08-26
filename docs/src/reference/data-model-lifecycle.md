@@ -8,9 +8,10 @@ see [System Architecture](./architecture.md).
 
 ## The object taxonomy
 
-Eleven object types. The type code is part of object identity, so an object of one type can never
+Ten object types. The type code is part of object identity, so an object of one type can never
 collide with another type's id.
 
+<!-- object-taxonomy-table:start -->
 | Code | Type | Role | Stored in |
 |---|---|---|---|
 | `0x01` | **Patch** | An authored change: an ordered list of operations | `objects/` |
@@ -22,8 +23,8 @@ collide with another type's id.
 | `0x07` | **Blob** | File content, addressed by hash | `objects/` |
 | `0x08` | **BlockSummaryCache** | Rebuildable derived summary — **never a root of trust** | `cache/` |
 | `0x09` | **RecoveryNote** | A signed doctor-repair note; never a `RefUpdate` substitute | `refs/recovery/` |
-| `0x0A` | **ProjectGenesis** | Project identity anchor; its id *is* the `project_id` | `objects/` |
 | `0x0B` | **RecognitionClaim** | A signed claim: named patches were sealed into a named block, under the signer's key | `objects/` |
+<!-- object-taxonomy-table:end -->
 
 ## How they relate
 
@@ -295,10 +296,10 @@ Stated here so it is not inferred from silence:
   preserves them.
 - **`RenamePath` and `CreateSymlink`** decode and validate but cannot be authored.
 - **Merge-base discovery is manual** — `--baseline-block` is always explicit.
-- **`ProjectGenesis` is a reserved type code with no payload module.** It names itself
-  `"project-genesis"` and has a test vector, but `validate_format2_schema` refuses it outright in a
-  format-2 identity position — there is no project-genesis lifecycle, and none is implied by the code
-  existing to reject it.
+- **`0x0A` was `ProjectGenesis`, removed by the repository-identity settlement.** The code is
+  permanently retired and must never be reassigned — see [Trust Roots and
+  Roles](./trust-threat-model.md#trust-roots-and-roles) for why repositories carry no identity to
+  anchor.
 - **`Attestation` is defined but never constructed.** No production code path builds one; the object
   type and directory exist, and nothing populates them.
 - **A tag's deletion and movement do not travel.** `sync`/`bundle` move a tag's *creation* and its
