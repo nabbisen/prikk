@@ -101,7 +101,54 @@ mechanism.**
 `MILESTONES.md` means editing that file, which requires the owner's explicit instruction** — so the
 milestone half of §5 is separable and may be deferred without weakening the RFC-half.
 
-## 6. Open questions a design must answer
+## 5a. Findings from the §6 research, 2026-08-27
+
+**The dev team researched §6 and built nothing, as the status line requires.** Two of its evidence
+claims were wrong in ways that changed the rulings, and one produced a new finding.
+
+**`ROADMAP.md`'s backlog tables are not historical.** The research reported them "fully populated with
+`Done`/`Released` rows — nothing new has landed." They hold **three `Open` rows**:
+
+| TASK-14 | consolidated non-goals / deferred features | *start when deferred-feature lists begin drifting* |
+| TASK-15 | roles & user-classes orientation | *start when the docs need a clearer audience map* |
+| TASK-16 | error taxonomy & diagnostics | *start with TASK-07 or when diagnostics need user-facing intent* |
+
+**Both the researcher and the architect read that section as historical and skipped it.** It is a third
+instance of §1's own defect — open work sitting where a reader stops looking — and this one is *inside
+`ROADMAP.md`*, the document §5 proposes to make authoritative. **TASK-14's own trigger arguably fired
+this week**, given how many deferred-feature entries were deleted.
+
+**`rfcs/accepted/` holds thirteen RFCs, not five.** The research cited 115–119. It also contains 100,
+102, 103, 105, 106, 107, 112, and 114 — long finished. **That difference decides Q3.**
+
+## 6. Rulings
+
+**Q1 — thin lines, and do not absorb the existing tables.** The gate checks presence only, so any
+column it does not read is unverified transcription that can drift. **But the backlog tables are live
+(§5a) and their `Trigger / next action` column is what makes TASK-14/15/16 actionable rather than a
+nag.** So: **a thin gated index, which *references* those tables rather than replacing them.** Do not
+flatten a working structure to fit a new one.
+
+**Q2 — defer the milestone half.** `MILESTONES.md`'s "State today" column is free prose (`MET,
+2026-08-22`; `OPEN, and deliberately so — not a blocker`), and a regex over it is fragile in both
+directions. **Adopting the researcher's reasoning verbatim: encoding a heuristic over prose the gate
+does not control is a worse failure than not gating yet.** Revisit only if a structured status
+convention is adopted, which needs the owner's instruction independently.
+
+**Q3 — `rfcs/proposed/` only; exclude `rfcs/accepted/`.** Thirteen accepted RFCs are dominated by
+finished work, and distinguishing "accepted and still open" from "accepted and shipped" needs the same
+prose-marker that Q2 just refused. **An index that lists eight finished RFCs teaches readers to ignore
+it** — the opposite failure from the one this RFC exists to fix, and no less damaging.
+
+**Q4 — a named section in the same document.** Adopting the researcher's reasoning: a separate tracked
+file recreates a second place a reader must know to check. **The gate still cannot enforce that a
+fileless finding was ever written down** (§4), and that limit stays stated.
+
+**Net scope: gate `rfcs/proposed/*.md` against one thin index section in `ROADMAP.md`, with a
+"findings without a file" section beside it.** Substantially smaller than §5 first implied, and every
+reduction came from evidence rather than from wanting less work.
+
+## 7. Open questions a design must answer
 
 1. **Does the index carry one line per item, or the existing backlog table's shape**
    (`ID | Tier | Owner | Status | Trigger / next action | Completion condition`)? The richer shape
@@ -112,7 +159,7 @@ milestone half of §5 is separable and may be deferred without weakening the RFC
 4. **Where do fileless findings go** — a tracked backlog file, or a line in the index itself?
    **This is §4's unresolved half and the one that decides whether the index is genuinely single.**
 
-## 7. What this is not
+## 8. What this is not
 
 - **Not a priority mechanism** (§3).
 - **Not a claim that the index is true**, only that it is complete with respect to its sources.
