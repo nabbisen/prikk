@@ -133,9 +133,26 @@ previous release's instructions holds history the current release refuses.** Tha
 may require migration"* demonstrated, one release ago, so the sentence stands and by the rule above the
 badge stands with it.
 
-**What would change it:** criterion 4 closing, **and** a release that ships no breaking change to a
-shipped payload — putting the `Tag` break at least one release behind rather than in the current one.
-**Re-assess at the next cut** ([[release scheduling is the architect's]]).
+**Re-assessed 2026-08-26 at the `0.25.0` cut, badge unchanged — but the 2026-08-24 rationale has
+expired, and the reason it stands is now different.** That assessment rested on the paired sentence
+being *demonstrated*: `0.23.0` had shipped a forward payload break, so a user held history the current
+release refused. **That is no longer true of the current release.** `DECLARED_BREAKS` still holds
+exactly one entry (`0.22.1 -> 0.23.0`); `0.24.0`'s `Patch` schema change was **reverse-only** (`0.23.0`
+cannot read `0.24.0`, but `0.24.0` reads `0.23.0`); and `0.25.0`'s three breaking changes are
+**API-only** — no repository written by any prior release became unreadable. G1 confirms current code
+reads the `0.24.0` fixture. **The `Tag` break is two releases behind, and the second condition below is
+met.**
+
+**So criterion 4 is now the only thing holding the badge** — `release-signers.toml` still reads
+`authorized_primary_fingerprints = []`, and it is open by the owner's ruling rather than by evidence.
+**The paired sentence remains true** — pre-1.0 with an explicit no-backward-compatibility posture,
+future releases genuinely may require migration — **but it is now true as a forward-looking claim, not
+as a demonstrated one.** Recording that distinction so the next assessment does not inherit a rationale
+that no longer applies.
+
+**What would change it:** **criterion 4 closing, alone.** The second condition — a release shipping no
+breaking change to a shipped payload — **was met at `0.24.0` and again at `0.25.0`**, so it is no
+longer a gate. **Re-assess at the next cut** ([[release scheduling is the architect's]]).
 
 | # | Criterion | Why it gates the claim | State today |
 |---|---|---|---|
