@@ -26,11 +26,14 @@ Recorded 2026-08-04 so they are findable rather than conversational. **None is s
 own prerequisite. Ordering against the accepted roadmap items (node-model apply → merge execution → M4
 attestation slice) is not implied.
 
-### Sync — recorded independently, prerequisite is a threat model
+### Sync — shipped 2026-08-22 (RFC 115/116/117, `c9c8576`); residuals remain
 
-M5 bundles "Sync and Quarantine." **They are separable, and sync alone is at least three distinct
-questions** — bundling them under one label would repeat the "increment 4.4" error, where one marker
-covered two unrelated blockers and produced a wrong roadmap framing:
+Recorded 2026-08-09 as M5 bundling "Sync and Quarantine." **They were separable, and sync alone was
+at least three distinct questions** — bundling them under one label would have repeated the
+"increment 4.4" error, where one marker covered two unrelated blockers and produced a wrong roadmap
+framing. **All three are now resolved**, in the three bullets below. Quarantine, the label's other
+half, was dissolved this session: nothing enters the store un-adopted, so there is no halfway state
+left to quarantine.
 
 - **Sync — criterion 1 of the status-claim criteria** (`MILESTONES.md`). **MET 2026-08-22 (`c9c8576`).**
   Recorded 2026-08-09: nothing in the tree exchanged history between repositories, so a *distributed*
@@ -59,14 +62,19 @@ covered two unrelated blockers and produced a wrong roadmap framing:
   future increment. What remains genuinely unautomated — the operator still copies the file themselves —
   is a consequence of that ruling, not an open question about who owns it.
 
-**Prerequisite, per the owner's 2026-08-04 direction ("security is strongly prioritized to function;
-secure by default; we should not be in a hurry"): a threat model before any sync code exists.** Sync is
-the first capability that gives prikk an attack surface it does not have today — verified: zero networking
-crates in `Cargo.lock`, no networked verb in the CLI.
+**Verified before shipping, and still true**: zero networking crates in `Cargo.lock`, no networked
+verb in the CLI. Sync was the first capability that could have given prikk an attack surface it did
+not have before — the owner's 2026-08-04 direction ("security is strongly prioritized to function;
+secure by default; we should not be in a hurry") is why a threat model preceded it
+(`docs/src/reference/trust-threat-model.md` covers sync substantively: Core Caveats, the
+trust-gated operation list, and the tag arrival/adoption rules). The verification above is the
+evidence behind that page's anonymity ruling, and for why sync raises no installer or transport
+question of its own.
 
-**Dependency note.** An async runtime in `prikk-store` would need a DC-51 amendment
-(`placement.rs:11` permits only `getrandom` and `rustix`). That is part of the sync design, not a
-discovery to be made during it.
+**Constraint, not a pending decision.** Sync shipped without an async runtime. The DC-51 boundary
+that would have applied if it had needed one still stands (`placement.rs:14` permits only
+`getrandom` and `rustix` for `prikk-store`) — a real limit on any future runtime addition, not
+unfinished sync design.
 
 ### Merge execution — shipped in 0.19.0 (DC-74/DC-75); residuals remain
 
