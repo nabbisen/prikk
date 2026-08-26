@@ -88,3 +88,34 @@ someday."
 
 **Stop and escalate, do not guess**, if: you find a path where an old binary would misread rather than
 refuse. **That voids §1 outright.**
+
+---
+
+## Addendum, 2026-08-26 — still current at `6ac12c1`
+
+**This handoff was issued at `01fd32f` and has not been taken. The file moved twice underneath it. I
+re-checked rather than leaving you to discover it.**
+
+**What changed in `release_compatibility_gate.rs` since issuance:**
+
+- **`9c7472e`** — fixture refreshed to `0.25.0`; the path is now derived from a constant, and the
+  module doc was refreshed.
+- **`6ac12c1`** — `DECLARED_BREAKS` version-scoped and **emptied**; `version_pair` split into
+  `older_version`/`newer_version` with a `version_pair()` method; new
+  `every_declared_break_applies_to_the_current_fixture` test.
+
+**Nothing in this handoff is invalidated by either.** Re-verified just now:
+
+- **The decline is still unrecorded** — zero decline language in the file, which is why every fixture
+  refresh has re-raised the question. Three consecutive increments have now checked for it.
+- **The forward-only explanation survives** on `DeclaredBreak`'s own doc (lines ~74-76), including
+  `0.24.0`'s `Patch` schema 2 as the worked reverse-break example. **Do not restate it** — §2 asks for
+  the *ruling*, which belongs in the **module doc** (`//!`), where the one-fixture and transitivity
+  reasoning already lives (lines ~25, ~29). Two different things in two different places.
+- **Ground 4 still holds** — `format.rs::validate_format2_schema` still refuses an unadmitted schema
+  with an `Integrity` error naming type, schema, and accepted set. **Control 1 must still quote it from
+  a real call.**
+
+**One number to update in your head:** §5 control 2 says the suite must be green with **no count
+change**. **The current baseline is 1359**, not whatever it was when this was issued. A doc-only edit
+must leave it at 1359.
