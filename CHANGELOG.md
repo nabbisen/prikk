@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.27.0 — 2026-08-28
+
+**`prikk unlock` no longer fails on the repository it exists to recover.** On `0.26.0`, a repository
+missing `.prikk/refs/locks` — one directory — defeated the command you run precisely when a lock is
+wedged. It is fixed, and `doctor` now names damage of that kind instead of leaving it to be inferred
+from a command that died. Everything else is smaller.
+
+### Fixed
+
+- **`prikk unlock` tolerates a missing `refs/locks`.** It previously returned
+  `i/o error: directory is absent: refs/locks` and cleared nothing.
+- **`prikk verify` tolerates a missing `refs/tmp`.** It previously failed its `Refs` stage and, under
+  `--stop-on-first-error`, halted every downstream stage — so one missing directory reduced the whole
+  report to almost nothing.
+- **`prikk doctor --repair-wal-tail`'s refusal no longer blames `verify`.** It said *"repository
+  verification has errors"* for checks that are not part of `verify` at all, sending readers to look
+  at output that had nothing to say.
+
+### Added
+
+- **`prikk doctor` reports every required directory that is missing or occupied by the wrong kind of
+  entry**, sourced from the same inventory `init` creates from. Nothing checked these after a
+  repository was created; the old failure was an accident of a directory read, not a check.
+- **`prikk verify` states how many active sessions exist and that it covers the default one only, by
+  construction** — in prose, and as an `active_sessions` object in `--format json`, so a CI gate can
+  act on `count` versus `verified_count` rather than parse text. Existing keys are unchanged.
+- **`prikk doctor` reports each active session's write-ahead-log and reference-name metadata state.**
+- **`prikk doctor --repair-wal-tail` repairs each active session independently**, naming any it
+  skipped and why, and exiting non-zero when it skipped one. Damage in one session no longer prevents
+  recovering another.
+
+### Changed — library API
+
+`prikk-store`'s `DoctorIssue` gained an `active_session` field and `DoctorRepairReport` gained an
+`active_repairs` field. **Both structs have public fields and no `#[non_exhaustive]`, so code
+constructing either with a struct literal must be updated.** Reading them is unaffected.
+
+### Groundwork, not yet usable
+
+Most of this release is the mechanism for concurrent workspaces (RFC 108): the active-session
+directory is fully general, every diagnostic surface handles more than one, and recovery is
+independent. **No command creates a second workspace, and none of this is reachable yet** — naming,
+command surface, and whether a workspace can be shared are all still undecided.
+
 ## 0.26.0 — 2026-08-26
 
 **crates.io still serves `prikk`'s description as `"Prikk CLI initial scaffold."`, and
