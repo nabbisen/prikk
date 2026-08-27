@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/nabbisen/prikk/main/assets/logo/prikk-lockup-520.png" alt="Prikk" width="360">
+<img src="https://raw.githubusercontent.com/nabbisen/prikk/main/assets/logo/prikk-header-520.png" alt="Prikk" width="360">
 
 # Prikk
 
