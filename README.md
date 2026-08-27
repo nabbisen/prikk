@@ -1,7 +1,5 @@
 <img src="https://raw.githubusercontent.com/nabbisen/prikk/main/assets/logo/prikk-header-520.png" alt="Prikk" width="360">
 
-# Prikk
-
 ![Status](https://img.shields.io/badge/status-early--implementation-orange)
 [![CI](https://github.com/nabbisen/prikk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nabbisen/prikk/actions/workflows/ci.yml)
 [![license](https://img.shields.io/crates/l/prikk.svg)](LICENSE)
