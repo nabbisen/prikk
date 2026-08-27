@@ -7,8 +7,8 @@ use prikk_hash::{sha256, to_hex};
 use prikk_object::{ObjectId, ObjectType, is_windows_reserved_name};
 
 use crate::fsutil::{
-    MutationRoot, create_new_file_required, ensure_directory_required, read_file_if_exists,
-    read_file_required,
+    EntryKind, MutationRoot, create_new_file_required, ensure_directory_required, inspect_entry,
+    list_directory, read_file_if_exists, read_file_required,
 };
 
 const REPO_DIR: &str = ".prikk";
@@ -411,6 +411,54 @@ impl RepositoryLayout {
     #[must_use]
     pub(crate) fn active_lock_path(&self, name: &str) -> PathBuf {
         self.active_session_dir(name).join("active.lock")
+    }
+
+    /// Return the active-session names currently present on disk (RFC 108 increment 2) -- the
+    /// read-back counterpart of `active_session_dir`'s own construction authority, sited here
+    /// rather than in `active.rs` for the same reason: `active.rs`'s own module doc describes it
+    /// as the *operational* boundary for one active session's WAL/lock/ref-metadata lifecycle,
+    /// never a discovery registry, while this layout already owns the shape `active/<name>/`
+    /// enumerates over.
+    ///
+    /// **A missing `active/` directory returns an empty list, not an error.** `unlock` is a
+    /// recovery surface, run precisely when a repository may not be fully valid --
+    /// `required_directories` guarantees this directory on a *valid* repository, which is not the
+    /// guarantee this caller can rely on. Checked with `inspect_entry` first (the same
+    /// absence-tolerant pattern `verify/objects.rs::scan_loose_file_temp_debris` and
+    /// `patch_checkout.rs`'s deleted-file handling already use), not assumed from
+    /// `list_directory`'s own doc comment: `list_directory` itself errors outright on an absent
+    /// directory (confirmed directly against its `PosixReader` implementation, not inferred), so
+    /// a caller that skipped this check would make `prikk unlock` fail on exactly the damaged
+    /// repository it exists to recover.
+    ///
+    /// **Sorted by raw name bytes** for deterministic output across platforms --
+    /// `scan_loose_file_temp_debris` established this exact key already; directory listing order
+    /// is not guaranteed and differs by filesystem, so an unsorted result would make output from
+    /// this method platform-dependent with no `#[cfg(target_os)]` anywhere to show it.
+    pub(crate) fn active_session_names(&self) -> Result<Vec<String>> {
+        let active_dir = self.active_dir();
+        let relative = self.repository_relative(&active_dir)?;
+        match inspect_entry(self.repository_mutation_root(), &relative)? {
+            None => return Ok(Vec::new()),
+            Some(EntryKind::Directory) => {}
+            Some(_) => {
+                return Err(PrikkError::Integrity(format!(
+                    "unexpected non-directory where the active-session root should be: {}",
+                    active_dir.display()
+                )));
+            }
+        }
+        let mut entries = list_directory(self.repository_mutation_root(), &relative)?;
+        entries.sort_by(|left, right| {
+            left.name
+                .as_encoded_bytes()
+                .cmp(right.name.as_encoded_bytes())
+        });
+        Ok(entries
+            .into_iter()
+            .filter(|entry| entry.kind == EntryKind::Directory)
+            .map(|entry| entry.name.to_string_lossy().into_owned())
+            .collect())
     }
 
     /// Return the default active-session directory.

@@ -2,8 +2,9 @@
 
 use prikk_error::Result;
 
-use super::{PidLiveness, clear_lock, find_held_lock, list_held_locks};
+use super::{PidLiveness, clear_lock, find_held_lock, list_held_locks, read_lock_if_present};
 use crate::RepositoryLayout;
+use crate::fsutil::{EntryKind, list_directory};
 use crate::layout::{DEFAULT_ACTIVE_NAME, LockableContainer};
 use crate::lock::{ActiveLock, RefLock, acquire_container_locks};
 use crate::test_support::unique_temp_dir;
@@ -177,6 +178,99 @@ fn find_held_lock_matches_a_lock_reached_through_a_symlinked_route() -> Result<(
     drop(active);
     let _ = std::fs::remove_file(&symlink_root);
     let _ = std::fs::remove_dir_all(real_root);
+    Ok(())
+}
+
+/// RFC 108 increment 2 control 1: `list_held_locks` on a single-(default)-active repository must
+/// return exactly what `a54a560`'s hardcoded single-active read returned. Reconstructs that prior
+/// implementation's own three reads directly here (not by inspecting the diff) and asserts the new
+/// enumeration-based version produces the identical sequence -- this is the increment's central
+/// control, per its own §3.
+#[test]
+fn list_held_locks_matches_the_prior_single_active_read_exactly() -> Result<()> {
+    let root = unique_temp_dir("unlock-single-active-parity");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let active = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
+    let ref_lock = RefLock::acquire(&layout, "heads/main")?;
+    let container_lock = acquire_container_locks(&layout, &[LockableContainer::TrustPolicy])?;
+
+    let mut expected = Vec::new();
+    expected.extend(read_lock_if_present(
+        &layout,
+        &layout.default_active_lock_path(),
+    )?);
+    let ref_locks_dir = layout.refs_dir().join("locks");
+    let ref_locks_relative = layout.repository_relative(&ref_locks_dir)?;
+    for entry in list_directory(layout.repository_mutation_root(), &ref_locks_relative)? {
+        if entry.kind != EntryKind::Regular {
+            continue;
+        }
+        expected.extend(read_lock_if_present(
+            &layout,
+            &ref_locks_dir.join(&entry.name),
+        )?);
+    }
+    for container in LockableContainer::ALL {
+        expected.extend(read_lock_if_present(
+            &layout,
+            &layout.lockable_container_lock_path(container),
+        )?);
+    }
+
+    assert_eq!(list_held_locks(&layout)?, expected);
+
+    drop(active);
+    drop(ref_lock);
+    drop(container_lock);
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 108 increment 2 control 2: nothing in the codebase creates a second active session yet, so
+/// this test constructs `active/second/` and its lock file directly, matching `lock.rs::lock_body`'s
+/// own on-disk format (`pid=`/`kind=`/`note=` lines). Fails if `list_held_locks` is ever reverted to
+/// the old hardcoded single-active read, because the hand-planted second lock would then simply be
+/// absent from its output.
+#[test]
+fn list_held_locks_reports_a_hand_planted_second_active() -> Result<()> {
+    let root = unique_temp_dir("unlock-second-active");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let active = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
+
+    let second_lock_path = layout.active_lock_path("second");
+    std::fs::create_dir_all(layout.active_session_dir("second"))?;
+    std::fs::write(
+        &second_lock_path,
+        format!("pid={}\nkind=active\nnote=test\n", std::process::id()),
+    )?;
+
+    let locks = list_held_locks(&layout)?;
+    assert_eq!(locks.len(), 2);
+    let paths: Vec<&std::path::Path> = locks.iter().map(|lock| lock.path.as_path()).collect();
+    assert!(paths.contains(&active.path()));
+    assert!(paths.contains(&second_lock_path.as_path()));
+    for lock in &locks {
+        assert_eq!(lock.kind, "active");
+    }
+
+    drop(active);
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 108 increment 2 control 3: `unlock` is a recovery surface, run precisely when a repository
+/// may not be fully valid. Removing `active/` entirely (simulating exactly that kind of damage) must
+/// not make `list_held_locks` error -- an empty result is what lets the rest of `unlock`'s recovery
+/// flow continue past a directory that only *valid* repositories are guaranteed to have.
+#[test]
+fn list_held_locks_succeeds_when_the_active_directory_is_entirely_missing() -> Result<()> {
+    let root = unique_temp_dir("unlock-missing-active-dir");
+    let layout = RepositoryLayout::init(root.clone())?;
+    std::fs::remove_dir_all(layout.active_dir())?;
+
+    assert!(list_held_locks(&layout)?.is_empty());
+
+    let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
 

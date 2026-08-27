@@ -293,6 +293,76 @@ fn init_allocates_every_active_default_container_name_once_excluding_the_runtime
     Ok(())
 }
 
+/// RFC 108 increment 2 control 4 ("the layout pin that does not currently exist"): the only two
+/// tests pinning the on-disk active-session name before this one were `active/tests.rs`'s ref-name
+/// literal and one `unlock` symlink test, both against `DEFAULT_ACTIVE_NAME` only. This pins the
+/// shape for a non-default name directly against the layout methods that construct it -- if
+/// `active/<name>/`'s path, its lock filename, or its WAL filename ever move, this fails
+/// independently of whether anything today actually creates a second name.
+#[test]
+fn active_session_paths_for_a_non_default_name_pin_the_on_disk_shape() -> Result<()> {
+    let root = unique_temp_dir("layout-active-session-shape");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    assert_eq!(
+        layout.active_session_dir("second"),
+        root.join(".prikk/active/second")
+    );
+    assert_eq!(
+        layout.active_lock_path("second"),
+        root.join(".prikk/active/second/active.lock")
+    );
+    assert_eq!(
+        layout.active_queue_wal_path("second"),
+        root.join(".prikk/active/second/queue.wal")
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 108 increment 2: `active_session_names` is the new enumeration primitive itself, pinned
+/// directly rather than only through `unlock::list_held_locks`. Covers all three of the handoff's
+/// §2.1 adjudications in one place: sorted output (a name that would otherwise sort last by
+/// creation order sorts first here, because raw bytes order "aaa-first" before "zzz-last"),
+/// non-directory entries filtered out, and a missing `active/` returning an empty list rather than
+/// an error.
+#[test]
+fn active_session_names_enumerates_sorted_directories_and_tolerates_absence() -> Result<()> {
+    let root = unique_temp_dir("layout-active-session-names");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    assert_eq!(
+        layout.active_session_names()?,
+        vec![DEFAULT_ACTIVE_NAME.to_string()],
+        "a fresh repository's init-created active/default/ is the only session present"
+    );
+
+    std::fs::create_dir_all(layout.active_session_dir("zzz-last"))?;
+    std::fs::create_dir_all(layout.active_session_dir("aaa-first"))?;
+    std::fs::write(layout.active_dir().join("stray-file"), b"not a session")?;
+
+    assert_eq!(
+        layout.active_session_names()?,
+        vec![
+            "aaa-first".to_string(),
+            "default".to_string(),
+            "zzz-last".to_string(),
+        ],
+        "sorted by raw name bytes, and the stray non-directory file is not a session"
+    );
+
+    std::fs::remove_dir_all(layout.active_dir())?;
+    assert_eq!(
+        layout.active_session_names()?,
+        Vec::<String>::new(),
+        "a missing active/ directory is empty, not an error -- unlock is a recovery surface"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 /// Dead-surface consolidation, acceptance criterion 3: `required_directories()` dropping this
 /// project's dead directories (`objects/` + its type subdirectories, `refs/by-id/`, `refs/logs/`,
 /// `quarantine/`) is asserted, not argued, to be genuinely "not a format change" -- a fresh

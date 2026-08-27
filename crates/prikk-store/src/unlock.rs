@@ -135,14 +135,20 @@ fn read_lock_if_present(layout: &RepositoryLayout, path: &Path) -> Result<Option
     }))
 }
 
-/// Enumerate every lock file currently present: the active-session lock, every per-ref lock, and
-/// every one of the four container locks. Read-only -- never clears anything, matching the module's
-/// own "enumerate and report, never decide" split.
+/// Enumerate every lock file currently present: every active session's lock, every per-ref lock,
+/// and every one of the four container locks. Read-only -- never clears anything, matching the
+/// module's own "enumerate and report, never decide" split.
+///
+/// RFC 108 increment 2: previously read one hardcoded active-session lock. `layout.rs`'s own
+/// enumeration is what makes this plural now, so a second active session -- still not creatable by
+/// anything today -- is found rather than silently missed the day something does create one.
 pub fn list_held_locks(layout: &RepositoryLayout) -> Result<Vec<HeldLock>> {
     let mut locks = Vec::new();
 
-    if let Some(lock) = read_lock_if_present(layout, &layout.default_active_lock_path())? {
-        locks.push(lock);
+    for name in layout.active_session_names()? {
+        if let Some(lock) = read_lock_if_present(layout, &layout.active_lock_path(&name))? {
+            locks.push(lock);
+        }
     }
 
     let ref_locks_dir = layout.refs_dir().join("locks");
