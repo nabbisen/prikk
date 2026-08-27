@@ -56,8 +56,8 @@ use crate::test_support::{
 };
 use crate::wal::{WalRecord, WalRecordStatus, encode_record_for_test};
 use crate::{
-    DEFAULT_ACTIVE_NAME, DoctorRepairOptions, FileObjectStore, ObjectWriter, RepositoryLayout,
-    VerificationStage, Wal, repair_repository, verify_repository,
+    ActiveSessionRepairStatus, DEFAULT_ACTIVE_NAME, DoctorRepairOptions, FileObjectStore,
+    ObjectWriter, RepositoryLayout, VerificationStage, Wal, repair_repository, verify_repository,
 };
 
 fn write_wal_records(wal: &Wal, records: &[WalRecord]) -> Result<()> {
@@ -514,9 +514,21 @@ fn verify_repository_reports_two_independently_damaged_wal_records_with_offsets(
         "criterion 1: both damaged records must be reported, each with its own offset"
     );
 
+    // RFC 108 increment 3d: criterion 5 is now "refuses to repair *this* active session" rather
+    // than "the whole call errors" -- a damaged record in `default`'s own WAL is exactly as
+    // active-scoped as every other WAL-record finding this arc has attributed, and with only
+    // `default` on disk there is no other active session for the call to succeed on regardless.
+    // `repair_repository` itself still succeeds (nothing repository-wide is wrong), but `default`'s
+    // own entry in `active_repairs` must show it was skipped, not silently repaired over.
+    let repair = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())?;
     assert!(
-        repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail()).is_err(),
-        "criterion 5: repair_repository must still refuse on a WAL carrying a damaged record"
+        repair.active_repairs.iter().any(|outcome| {
+            outcome.active_session.to_str() == Some(DEFAULT_ACTIVE_NAME)
+                && matches!(outcome.status, ActiveSessionRepairStatus::Skipped { .. })
+        }),
+        "criterion 5: repair_repository must still refuse to repair a WAL carrying a damaged \
+         record, now expressed as `default` being skipped rather than the whole call erroring: \
+         {repair:?}"
     );
 
     let _ = std::fs::remove_dir_all(root);

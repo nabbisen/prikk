@@ -3,22 +3,52 @@
 use std::io::Write;
 
 use prikk_object::{
-    BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, ObjectEnvelope, ObjectType, RefKind,
-    RefStatePayload, RefUpdatePayload,
+    BlockKind, BlockPayload, CanonicalEncode, MerkleRoot, NodeId, ObjectEnvelope, ObjectType,
+    Operation, OperationKind, PatchPayload, PatchPurpose, RefKind, RefStatePayload,
+    RefUpdatePayload,
 };
 
 use crate::{
-    DEFAULT_ACTIVE_NAME, DoctorRepairOptions, DoctorSeverity, Ed25519MaintainerSigner,
-    FileObjectStore, MaintainerSigner, ObjectWriter, RepositoryLayout, Wal, add_trusted_maintainer,
-    derive_next_state_root, doctor_repository, maintainer_signature as real_maintainer_signature,
-    repair_repository, write_active_ref_metadata,
+    ActiveSessionRepairStatus, DEFAULT_ACTIVE_NAME, DoctorRepairOptions, DoctorSeverity,
+    Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectWriter, RepositoryLayout,
+    Wal, add_trusted_maintainer, derive_next_state_root, doctor_repository,
+    maintainer_signature as real_maintainer_signature, repair_repository,
+    write_active_ref_metadata,
 };
 
 use crate::test_support::{
-    maintainer_signature as legacy_maintainer_signature, sample_object_id, signed_patch_envelope,
-    unique_temp_dir,
+    maintainer_signature as legacy_maintainer_signature, rollback_author_signature,
+    sample_object_id, signed_patch_envelope, unique_temp_dir,
 };
 use crate::wal::{WalRecord, encode_record_for_test};
+
+/// A `Normal`-purpose Patch envelope distinguished by `label` (via `sample_object_id`), for tests
+/// that need two or more genuinely different patches to tell apart by identity, not just count --
+/// `signed_patch_envelope()` always produces the same fixed content and therefore the same object
+/// id. Mirrors `verify/tests/wal_cluster.rs::normal_patch_envelope`'s own shape (kept file-local
+/// rather than shared, matching this test tree's established per-file-helper convention).
+fn distinct_patch_envelope(label: &str) -> prikk_error::Result<ObjectEnvelope> {
+    let payload = PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::CreateFile(prikk_object::CreateFile {
+                path: "a.txt".to_string(),
+                node_id: NodeId::from_bytes([0x61; 32]),
+                blob_id: sample_object_id(label),
+                mode: 0o100_644,
+            }),
+        }],
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+    };
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);
+    envelope.add_signature(rollback_author_signature())?;
+    Ok(envelope)
+}
 
 #[test]
 fn doctor_reports_healthy_repository() {
@@ -545,6 +575,13 @@ fn doctor_refuses_missing_main_ref_pointer_reconstruction() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// RFC 108 increment 3d, §2.1: a busy active-session lock used to fail the whole `repair_repository`
+/// call (`Err(LockConflict)`); now it is expressed as that one active session being `Skipped`, with
+/// the reason naming the lock conflict -- the requirement itself ("you cannot mutate a WAL without
+/// its lock") is unchanged, only how "cannot mutate right now" is reported now that a busy `default`
+/// must not stop some *other* active session from being repaired in the same call (§D3.3). With only
+/// `default` on disk here there is no other active session to demonstrate that half with -- see
+/// `repair_repository_does_not_fail_the_whole_run_when_one_active_sessions_lock_is_busy` for that.
 #[test]
 fn doctor_repair_requires_active_lock_before_wal_mutation() -> prikk_error::Result<()> {
     let root = unique_temp_dir("doctor-active-lock");
@@ -553,10 +590,12 @@ fn doctor_repair_requires_active_lock_before_wal_mutation() -> prikk_error::Resu
     let before = std::fs::read(layout.default_queue_wal_path())?;
     let active_lock = crate::ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
 
-    let error = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())
-        .err()
-        .ok_or_else(|| prikk_error::PrikkError::Integrity("repair unexpectedly ran".to_string()))?;
-    assert!(matches!(error, prikk_error::PrikkError::LockConflict(_)));
+    let report = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())?;
+    assert!(report.active_repairs.iter().any(|outcome| {
+        outcome.active_session.to_str() == Some(DEFAULT_ACTIVE_NAME)
+            && matches!(&outcome.status, ActiveSessionRepairStatus::Skipped { reason } if reason.contains("lock"))
+    }));
+    assert_eq!(report.wal_repair.truncated_bytes, 0);
     assert_eq!(std::fs::read(layout.default_queue_wal_path())?, before);
 
     drop(active_lock);
@@ -762,6 +801,304 @@ fn repair_repository_still_refuses_when_the_wal_replay_stage_fails() -> prikk_er
     assert!(!before.is_healthy());
     let repair = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail());
     assert!(repair.is_err());
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 108 increment 3d control 1 (first row): the handoff's own measurement, quoted --
+/// `second=unreadable-wal -> repair of default: REFUSED`, before this increment. `default` carries
+/// a genuinely repairable trailing partial tail; `second`'s WAL is genuinely unreadable (the same
+/// inadmissible-`schema_version` construction increment 3c's own tests use, since garbage bytes
+/// alone never make `Wal::replay()` itself return `Err` -- RFC 102 Stage 2's isolate-and-continue
+/// design). `default` must still repair.
+#[test]
+fn repair_repository_still_repairs_default_when_second_wal_is_unreadable() -> prikk_error::Result<()>
+{
+    let root = unique_temp_dir("repair-default-ok-second-unreadable");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let default_wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
+    write_active_ref_metadata(&layout, "heads/main")?;
+    default_wal.append_patch(&signed_patch_envelope())?;
+    {
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(layout.default_queue_wal_path())?;
+        file.write_all(b"partial")?;
+        file.sync_all()?;
+    }
+    std::fs::create_dir_all(layout.active_session_dir("second"))?;
+    let mut envelope = signed_patch_envelope();
+    envelope.schema_version = 99;
+    let record = WalRecord { seq: 1, envelope };
+    std::fs::write(
+        layout.active_queue_wal_path("second"),
+        encode_record_for_test(&record)?,
+    )?;
+
+    let before = doctor_repository(&layout);
+    assert!(
+        !before.is_healthy(),
+        "second's unreadable WAL is a real error: {before:?}"
+    );
+
+    let repair = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())?;
+    assert_eq!(
+        repair.wal_repair.truncated_bytes, 7,
+        "default must still repair despite second being broken: {repair:?}"
+    );
+    assert!(repair.active_repairs.iter().any(|outcome| {
+        outcome.active_session.to_str() == Some(DEFAULT_ACTIVE_NAME)
+            && matches!(outcome.status, ActiveSessionRepairStatus::Repaired(_))
+    }));
+    assert!(repair.active_repairs.iter().any(|outcome| {
+        outcome.active_session.to_str() == Some("second")
+            && matches!(outcome.status, ActiveSessionRepairStatus::Skipped { .. })
+    }));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 108 increment 3d control 1 (second row): `second=missing-ref-metadata -> repair of default:
+/// REFUSED`, before this increment. `second` has WAL records but no ref-name metadata at all
+/// (nothing creates one for a hand-planted active); `default` again carries a repairable trailing
+/// partial tail. `default` must still repair.
+#[test]
+fn repair_repository_still_repairs_default_when_second_ref_metadata_is_missing()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("repair-default-ok-second-missing-metadata");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let default_wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
+    write_active_ref_metadata(&layout, "heads/main")?;
+    default_wal.append_patch(&signed_patch_envelope())?;
+    {
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(layout.default_queue_wal_path())?;
+        file.write_all(b"partial")?;
+        file.sync_all()?;
+    }
+    std::fs::create_dir_all(layout.active_session_dir("second"))?;
+    let record = WalRecord {
+        seq: 1,
+        envelope: distinct_patch_envelope("second-record")?,
+    };
+    std::fs::write(
+        layout.active_queue_wal_path("second"),
+        encode_record_for_test(&record)?,
+    )?;
+    // No `active/second/ref-name` file at all.
+
+    let before = doctor_repository(&layout);
+    assert!(
+        !before.is_healthy(),
+        "second's missing ref metadata is a real error: {before:?}"
+    );
+
+    let repair = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())?;
+    assert_eq!(
+        repair.wal_repair.truncated_bytes, 7,
+        "default must still repair despite second being broken: {repair:?}"
+    );
+    assert!(repair.active_repairs.iter().any(|outcome| {
+        outcome.active_session.to_str() == Some("second")
+            && matches!(outcome.status, ActiveSessionRepairStatus::Skipped { .. })
+    }));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 108 increment 3d control 2 -- §2.2's mirror direction, named in the handoff as "the control
+/// most likely to be missing, because the bug it catches is invisible if you only test the
+/// direction §1 names." `default` itself has a blocking issue (WAL records present, ref-name
+/// metadata never written); `second` is healthy with its own repairable trailing partial. `second`
+/// must still repair -- the direction an implementation that attributed only the *new* per-active
+/// issues, and left `default`'s own untouched, would still get wrong.
+#[test]
+fn repair_repository_still_repairs_second_when_default_ref_metadata_is_missing()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("repair-second-ok-default-broken");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let default_wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
+    default_wal.append_patch(&signed_patch_envelope())?;
+    // No `write_active_ref_metadata` call for `default` -- WAL has a record, metadata is Missing.
+
+    std::fs::create_dir_all(layout.active_session_dir("second"))?;
+    std::fs::write(layout.active_queue_wal_path("second"), b"partial")?;
+
+    let before = doctor_repository(&layout);
+    assert!(!before.is_healthy());
+    assert!(before.issues.iter().any(|issue| {
+        issue.code == "PRIKK-DOCTOR-ACTIVE-REF-METADATA-MISSING"
+            && issue.active_session.as_deref() == Some(std::ffi::OsStr::new(DEFAULT_ACTIVE_NAME))
+    }));
+
+    let repair = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())?;
+    assert!(repair.active_repairs.iter().any(|outcome| {
+        outcome.active_session.to_str() == Some(DEFAULT_ACTIVE_NAME)
+            && matches!(outcome.status, ActiveSessionRepairStatus::Skipped { .. })
+    }));
+    let second_outcome = repair
+        .active_repairs
+        .iter()
+        .find(|outcome| outcome.active_session.to_str() == Some("second"))
+        .ok_or_else(|| {
+            prikk_error::PrikkError::Integrity("second not present in active_repairs".to_string())
+        })?;
+    match &second_outcome.status {
+        ActiveSessionRepairStatus::Repaired(wal_repair) => {
+            assert_eq!(wal_repair.truncated_bytes, 7);
+        }
+        other => {
+            return Err(prikk_error::PrikkError::Integrity(format!(
+                "expected second to repair, got {other:?}"
+            )));
+        }
+    }
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 108 increment 3d control 3 -- §D3.3's own demonstration, as the RFC words it: "show a
+/// Workspace's WAL recovering independently of every other." Two active sessions, each with its own
+/// trailing partial tail *and its own distinct patch record* (not the same fixed content
+/// `signed_patch_envelope()` always produces) -- repair must recover each one's own record and must
+/// not swap or mix them. Asserted on **preserved record identity**, not merely counts (DC-66's own
+/// reasoning applies here exactly: "N records preserved" does not say whose work survived).
+#[test]
+fn repair_repository_recovers_each_active_sessions_own_records_independently()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("repair-two-actives-independent-recovery");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    let default_wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
+    write_active_ref_metadata(&layout, "heads/main")?;
+    let default_envelope = distinct_patch_envelope("default-record")?;
+    let default_patch_id = default_envelope.object_id();
+    default_wal.append_patch(&default_envelope)?;
+    {
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(layout.default_queue_wal_path())?;
+        file.write_all(b"partial")?;
+        file.sync_all()?;
+    }
+
+    std::fs::create_dir_all(layout.active_session_dir("second"))?;
+    // `write_active_ref_metadata` is `default`-only by design (RFC 108 increment 3c, §2.2) -- write
+    // `second`'s own ref-name metadata directly, the same way its WAL is hand-planted.
+    std::fs::write(
+        layout.active_session_dir("second").join("ref-name"),
+        b"heads/other",
+    )?;
+    let second_envelope = distinct_patch_envelope("second-record")?;
+    let second_patch_id = second_envelope.object_id();
+    assert_ne!(
+        default_patch_id, second_patch_id,
+        "the two fixtures must actually be distinct for this control to prove anything"
+    );
+    let second_record = WalRecord {
+        seq: 1,
+        envelope: second_envelope,
+    };
+    let mut second_bytes = encode_record_for_test(&second_record)?;
+    second_bytes.extend_from_slice(b"partial");
+    std::fs::write(layout.active_queue_wal_path("second"), &second_bytes)?;
+
+    let repair = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())?;
+    for (name, expected_patch_id) in [
+        (DEFAULT_ACTIVE_NAME, default_patch_id),
+        ("second", second_patch_id),
+    ] {
+        let outcome = repair
+            .active_repairs
+            .iter()
+            .find(|outcome| outcome.active_session.to_str() == Some(name))
+            .ok_or_else(|| {
+                prikk_error::PrikkError::Integrity(format!("{name} not present in active_repairs"))
+            })?;
+        match &outcome.status {
+            ActiveSessionRepairStatus::Repaired(wal_repair) => {
+                assert_eq!(
+                    wal_repair.truncated_bytes, 7,
+                    "{name}'s own trailing partial tail"
+                );
+                assert_eq!(
+                    wal_repair.preserved_patch_ids,
+                    vec![expected_patch_id],
+                    "{name} must recover exactly its own record, never the other active \
+                     session's"
+                );
+            }
+            other => {
+                return Err(prikk_error::PrikkError::Integrity(format!(
+                    "expected {name} to repair, got {other:?}"
+                )));
+            }
+        }
+    }
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 108 increment 3d control 4 -- §2.1: a busy lock on one **non-default** active session must
+/// not fail the run. `second`'s lock is held for the whole call; `default` must still repair, and
+/// `second` must be reported as skipped with a reason naming the lock, not silently dropped or
+/// treated as a run-wide failure.
+#[test]
+fn repair_repository_does_not_fail_the_whole_run_when_one_active_sessions_lock_is_busy()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("repair-second-lock-busy");
+    let layout = RepositoryLayout::init(root.clone())?;
+    write_active_ref_metadata(&layout, "heads/main")?;
+    Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME).append_patch(&signed_patch_envelope())?;
+    {
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(layout.default_queue_wal_path())?;
+        file.write_all(b"partial")?;
+        file.sync_all()?;
+    }
+    std::fs::create_dir_all(layout.active_session_dir("second"))?;
+    std::fs::write(layout.active_queue_wal_path("second"), b"partial")?;
+    let second_lock = crate::ActiveLock::acquire(&layout, "second")?;
+
+    let repair = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())?;
+    assert_eq!(
+        repair.wal_repair.truncated_bytes, 7,
+        "default must still repair: {repair:?}"
+    );
+    assert!(repair.active_repairs.iter().any(|outcome| {
+        outcome.active_session.to_str() == Some("second")
+            && matches!(&outcome.status, ActiveSessionRepairStatus::Skipped { reason } if reason.contains("lock"))
+    }));
+
+    drop(second_lock);
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 108 increment 3d control 5: repository-wide damage must still refuse the **entire** run, not
+/// repair a subset -- "a repair that proceeds over [repository-wide damage] would be a worse bug
+/// than the one you are fixing" (§4). Removing a required directory is increment 2's own
+/// silent-hole check (`push_missing_required_directory_issues`), which pushes an `active_session:
+/// None` error -- unrelated to any one active session, so it must refuse before the per-active loop
+/// is even reached.
+#[test]
+fn repair_repository_still_refuses_everything_for_repository_wide_damage() -> prikk_error::Result<()>
+{
+    let root = unique_temp_dir("repair-repository-wide-damage");
+    let layout = RepositoryLayout::init(root.clone())?;
+    std::fs::remove_dir_all(layout.refs_dir().join("locks"))?;
+
+    let error = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())
+        .err()
+        .ok_or_else(|| prikk_error::PrikkError::Integrity("repair unexpectedly ran".to_string()))?;
+    assert!(!error.to_string().is_empty());
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

@@ -120,8 +120,8 @@ pub use compact::{
     plan_compact_received_index, plan_compact_ref_pointer_index, plan_compact_trust_policy,
 };
 pub use doctor::{
-    DoctorIssue, DoctorRepairOptions, DoctorRepairReport, DoctorReport, DoctorSeverity,
-    doctor_repository, repair_repository,
+    ActiveSessionRepairOutcome, ActiveSessionRepairStatus, DoctorIssue, DoctorRepairOptions,
+    DoctorRepairReport, DoctorReport, DoctorSeverity, doctor_repository, repair_repository,
 };
 pub use history::{
     DEFAULT_HISTORY_LIMIT, HistoryEntry, RefHistory, load_received_ref_history, load_ref_history,

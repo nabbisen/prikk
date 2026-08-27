@@ -12,8 +12,8 @@ use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryLayout};
 use crate::lock::ActiveLock;
 use crate::refs::{RefFileStatus, RefItemStatus};
 use crate::verify::{
-    ActiveWalMetadataStatus, ObjectItemStatus, RepositoryVerification, StageStatus,
-    classify_active_wal_metadata, verify_repository,
+    ActiveWalMetadataStatus, ObjectItemStatus, RepositoryVerification, StageOutcome, StageStatus,
+    VerificationStage, classify_active_wal_metadata, verify_repository,
 };
 use crate::wal::{Wal, WalRecordStatus, WalRepair};
 
@@ -51,10 +51,19 @@ pub struct DoctorIssue {
     pub message: String,
     /// Suggested next action.
     pub recommendation: String,
+    /// Which active session this issue is about, if it is about exactly one (RFC 108 increment
+    /// 3d). `None` means repository-wide -- the issue is not specific to any one active session's
+    /// WAL or metadata, and blocks `repair_repository` for every active, exactly as every issue did
+    /// before this field existed. **This default is what makes the field safe to add**: every call
+    /// site that does not opt in via `for_active_session` keeps today's meaning unchanged. Only this
+    /// arc's own per-active issues (`ACTIVE-SESSION-*`, `default`'s own `ACTIVE-REF-METADATA-*`, and
+    /// the handful of stage/record outcomes that are inherently about one active's WAL) opt in.
+    pub active_session: Option<std::ffi::OsString>,
 }
 
 impl DoctorIssue {
-    /// Construct an informational diagnostic.
+    /// Construct an informational diagnostic. Repository-wide (`active_session: None`) unless
+    /// `for_active_session` is chained onto the result.
     #[must_use]
     pub fn info(
         code: &'static str,
@@ -66,10 +75,12 @@ impl DoctorIssue {
             severity: DoctorSeverity::Info,
             message: message.into(),
             recommendation: recommendation.into(),
+            active_session: None,
         }
     }
 
-    /// Construct a warning diagnostic.
+    /// Construct a warning diagnostic. Repository-wide (`active_session: None`) unless
+    /// `for_active_session` is chained onto the result.
     #[must_use]
     pub fn warning(
         code: &'static str,
@@ -81,10 +92,12 @@ impl DoctorIssue {
             severity: DoctorSeverity::Warning,
             message: message.into(),
             recommendation: recommendation.into(),
+            active_session: None,
         }
     }
 
-    /// Construct an error diagnostic.
+    /// Construct an error diagnostic. Repository-wide (`active_session: None`) unless
+    /// `for_active_session` is chained onto the result.
     #[must_use]
     pub fn error(
         code: &'static str,
@@ -96,7 +109,20 @@ impl DoctorIssue {
             severity: DoctorSeverity::Error,
             message: message.into(),
             recommendation: recommendation.into(),
+            active_session: None,
         }
+    }
+
+    /// Attribute this issue to one active session's own WAL/metadata rather than the whole
+    /// repository (RFC 108 increment 3d, §3.1's adjudication: a builder step chained onto the
+    /// existing `::error`/`::warning`/`::info` constructors, not a fourth parameter on each of
+    /// them or a parallel set of constructors -- every one of this crate's existing call sites
+    /// (repository-wide) needed zero edits, and only the handful of genuinely per-active call
+    /// sites gained one chained call each).
+    #[must_use]
+    pub fn for_active_session(mut self, name: impl Into<std::ffi::OsString>) -> Self {
+        self.active_session = Some(name.into());
+        self
     }
 }
 
@@ -169,13 +195,52 @@ impl DoctorRepairOptions {
     }
 }
 
+/// Outcome of attempting to repair one active session, as part of `repair_repository`'s per-active
+/// pass (RFC 108 increment 3d).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ActiveSessionRepairStatus {
+    /// The repair ran against this active session (or no repair was requested; `WalRepair`'s own
+    /// three fields are all zero/empty in that case, same shape `repair_repository` always used
+    /// when `truncate_wal_tail` was `false`).
+    Repaired(WalRepair),
+    /// Not attempted -- either this active session had its own blocking `DoctorIssue`
+    /// (`before.issues` named it specifically, not repository-wide), or its active-session lock
+    /// could not be acquired (someone else is writing to it right now). **Not a failure of the
+    /// run** (RFC 108 §D3.3/§2.1): every other eligible active session is still attempted.
+    Skipped {
+        /// Why this active session was not repaired.
+        reason: String,
+    },
+}
+
+/// One active session's own repair outcome, named (RFC 108 increment 3d) -- `repair_repository`'s
+/// per-active pass produces one of these per entry in `RepositoryLayout::active_session_names`, in
+/// that same sorted order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActiveSessionRepairOutcome {
+    /// Which active session this outcome is about.
+    pub active_session: std::ffi::OsString,
+    /// What happened when repair reached it.
+    pub status: ActiveSessionRepairStatus,
+}
+
 /// Report returned by an opt-in doctor repair run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DoctorRepairReport {
     /// Doctor report before any repair action.
     pub before: DoctorReport,
-    /// WAL repair summary.
+    /// `default`'s own WAL repair summary -- unchanged in type and meaning from before RFC 108
+    /// increment 3d existed: every field is zero/empty when no repair ran (whether because none was
+    /// requested, `default` had its own blocking issue, or `default`'s lock could not be acquired).
+    /// **A zero here is not proof `default` was actually repaired** -- the same "zero is a claim"
+    /// caution this project applies elsewhere (`prikk-cli`'s own `format_count`): check
+    /// `active_repairs`' own entry for `default` for the real answer, including *why* if it was
+    /// skipped. Kept, unchanged, so every existing caller of this one field needs no edit.
     pub wal_repair: WalRepair,
+    /// One outcome per active session on disk, in `RepositoryLayout::active_session_names`'s sorted
+    /// order (RFC 108 increment 3d) -- including `default`, whose entry `wal_repair` above
+    /// duplicates for callers that have not moved to this richer field yet.
+    pub active_repairs: Vec<ActiveSessionRepairOutcome>,
     /// Doctor report after repair action.
     pub after: DoctorReport,
 }
@@ -283,40 +348,49 @@ fn push_non_default_active_session_wal_issues(
         match Wal::for_layout(layout, &name).replay() {
             Ok(replay) => {
                 if replay.trailing_partial_bytes != 0 {
-                    issues.push(DoctorIssue::warning(
-                        "PRIKK-DOCTOR-ACTIVE-SESSION-WAL-TRAILING-PARTIAL",
-                        format!(
-                            "active session {name:?} has {} trailing byte(s) that look like an \
-                             incomplete final record",
-                            replay.trailing_partial_bytes
-                        ),
-                        "preserve the repository; per-active-session WAL repair is not yet \
-                         implemented (RFC 108 increment 3d)",
-                    ));
+                    issues.push(
+                        DoctorIssue::warning(
+                            "PRIKK-DOCTOR-ACTIVE-SESSION-WAL-TRAILING-PARTIAL",
+                            format!(
+                                "active session {name:?} has {} trailing byte(s) that look like \
+                                 an incomplete final record",
+                                replay.trailing_partial_bytes
+                            ),
+                            "run `prikk doctor --repair-wal-tail` to truncate only this active \
+                             session's incomplete final WAL bytes",
+                        )
+                        .for_active_session(name.clone()),
+                    );
                 }
                 match classify_active_wal_metadata(layout, &name, replay.records.is_empty()) {
                     Ok(status) => {
                         push_active_session_ref_metadata_issue(&name, &status, issues);
                     }
                     Err(error) => {
-                        issues.push(DoctorIssue::error(
-                            "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-UNREADABLE",
-                            format!(
-                                "active session {name:?}'s ref metadata failed to read: {error}"
-                            ),
-                            "preserve the repository and inspect the active session's ref metadata \
-                             before attempting repair",
-                        ));
+                        issues.push(
+                            DoctorIssue::error(
+                                "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-UNREADABLE",
+                                format!(
+                                    "active session {name:?}'s ref metadata failed to read: {error}"
+                                ),
+                                "preserve the repository and inspect the active session's ref \
+                                 metadata before attempting repair",
+                            )
+                            .for_active_session(name.clone()),
+                        );
                     }
                 }
             }
             Err(error) => {
-                issues.push(DoctorIssue::error(
-                    "PRIKK-DOCTOR-ACTIVE-SESSION-WAL-UNREADABLE",
-                    format!("active session {name:?}'s WAL failed to read: {error}"),
-                    "preserve the repository and inspect the active session's WAL before attempting \
-                     repair",
-                ));
+                issues.push(
+                    DoctorIssue::error(
+                        "PRIKK-DOCTOR-ACTIVE-SESSION-WAL-UNREADABLE",
+                        format!("active session {name:?}'s WAL failed to read: {error}"),
+                        "preserve the repository and inspect the active session's WAL before \
+                         attempting repair",
+                    )
+                    .for_active_session(name.clone()),
+                );
             }
         }
     }
@@ -335,34 +409,103 @@ fn push_active_session_ref_metadata_issue(
     issues: &mut Vec<DoctorIssue>,
 ) {
     match status {
-        ActiveWalMetadataStatus::MissingForNonEmptyWal => issues.push(DoctorIssue::error(
-            "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-MISSING",
-            format!("active session {name:?} has WAL records but its ref metadata is missing"),
-            "preserve the repository and inspect the active session's WAL before attempting repair",
-        )),
-        ActiveWalMetadataStatus::InvalidForNonEmptyWal { reason } => issues.push(DoctorIssue::error(
-            "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-MALFORMED",
-            format!(
-                "active session {name:?} has WAL records but its ref metadata is malformed: {reason}"
-            ),
-            "preserve the repository and inspect the active session's WAL before attempting repair",
-        )),
-        ActiveWalMetadataStatus::ValidForEmptyWal { ref_name } => issues.push(DoctorIssue::warning(
-            "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-DEBRIS",
-            format!(
-                "active session {name:?}'s WAL is empty but stale ref metadata remains for {ref_name}"
-            ),
-            "no repair is required; the next guarded append will replace stale metadata",
-        )),
-        ActiveWalMetadataStatus::InvalidForEmptyWal { reason } => issues.push(DoctorIssue::warning(
-            "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-MALFORMED-DEBRIS",
-            format!(
-                "active session {name:?}'s WAL is empty but malformed ref metadata remains: {reason}"
-            ),
-            "no repair is required; the next guarded append will replace stale metadata",
-        )),
+        ActiveWalMetadataStatus::MissingForNonEmptyWal => issues.push(
+            DoctorIssue::error(
+                "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-MISSING",
+                format!("active session {name:?} has WAL records but its ref metadata is missing"),
+                "preserve the repository and inspect the active session's WAL before attempting \
+                 repair",
+            )
+            .for_active_session(name.to_os_string()),
+        ),
+        ActiveWalMetadataStatus::InvalidForNonEmptyWal { reason } => issues.push(
+            DoctorIssue::error(
+                "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-MALFORMED",
+                format!(
+                    "active session {name:?} has WAL records but its ref metadata is malformed: \
+                     {reason}"
+                ),
+                "preserve the repository and inspect the active session's WAL before attempting \
+                 repair",
+            )
+            .for_active_session(name.to_os_string()),
+        ),
+        ActiveWalMetadataStatus::ValidForEmptyWal { ref_name } => issues.push(
+            DoctorIssue::warning(
+                "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-DEBRIS",
+                format!(
+                    "active session {name:?}'s WAL is empty but stale ref metadata remains for \
+                     {ref_name}"
+                ),
+                "no repair is required; the next guarded append will replace stale metadata",
+            )
+            .for_active_session(name.to_os_string()),
+        ),
+        ActiveWalMetadataStatus::InvalidForEmptyWal { reason } => issues.push(
+            DoctorIssue::warning(
+                "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-MALFORMED-DEBRIS",
+                format!(
+                    "active session {name:?}'s WAL is empty but malformed ref metadata remains: \
+                     {reason}"
+                ),
+                "no repair is required; the next guarded append will replace stale metadata",
+            )
+            .for_active_session(name.to_os_string()),
+        ),
         ActiveWalMetadataStatus::MissingForEmptyWal
         | ActiveWalMetadataStatus::ValidForNonEmptyWal { .. } => {}
+    }
+}
+
+/// Return `Some(DEFAULT_ACTIVE_NAME)` when `outcome` is about a stage that reads `default`'s own
+/// active WAL and nothing else, `None` when it does not (RFC 108 increment 3d, §2.2).
+///
+/// **Not a new classification -- a fixed fact about `verify_repository`'s own pipeline, already
+/// documented at each stage's own call site in `verify.rs`.** `verify_repository_with_options`
+/// hardcodes exactly one `Wal::for_layout(layout, DEFAULT_ACTIVE_NAME)` call; `WalReplay` reads it
+/// directly, and `WalPersistence`/`RollbackDrafts`/`WalRecordSchema`/`ActiveWalMetadata`/`WalOrdering`
+/// each have `default`'s own `replay` as their **only** real dependency (`verify.rs`'s own
+/// `not_evaluated(_, VerificationStage::WalReplay)` calls for all five). A failure or non-evaluation
+/// in any of these six can only ever mean `default`'s own WAL or ref-name metadata is the problem --
+/// `second`'s state cannot cause it, since nothing here ever reads `second`.
+///
+/// `PublicationReclassification` is the one genuinely mixed stage: `verify.rs`'s own comment above
+/// its call site says its `NotEvaluated` names whichever of `WalReplay`/`Refs`/`ActiveWalMetadata`
+/// blocked it first, and `Refs` is repository-wide sealed-history verification, not WAL-scoped.
+/// `blocked_by` already carries that answer -- read it, rather than inventing a second way to derive
+/// it: attribute only when it names one of the two WAL-scoped upstream stages. A `Failed` outcome
+/// here (every real dependency evaluated, but the cross-check between WAL records and ref evidence
+/// itself failed) stays repository-wide, deliberately: the failure could stem from either half, and
+/// treating a genuinely ambiguous cause as repository-wide is the conservative reading `repair`
+/// should default to, not a gap.
+///
+/// Every other stage (`Objects`, `Refs`, `RefUpdateSchemaTrust`, `CommitIndex`, `LifecycleCache`,
+/// `ReceivedRefs`, `LocalTagTrust`) is independent of the active WAL entirely -- `verify.rs`'s own
+/// comments for `CommitIndex`/`LifecycleCache` say so explicitly ("No upstream stage dependency").
+/// **No wildcard arm**: a fifteenth `VerificationStage` variant must not silently fall through
+/// either side of this match -- it fails to compile until a real decision is recorded here, the same
+/// defense `verification_stages!`'s own macro already gives `ALL`/`label()`.
+fn active_session_owning_stage_outcome(outcome: &StageOutcome) -> Option<&'static str> {
+    match outcome.stage {
+        VerificationStage::WalReplay
+        | VerificationStage::WalPersistence
+        | VerificationStage::RollbackDrafts
+        | VerificationStage::WalRecordSchema
+        | VerificationStage::ActiveWalMetadata
+        | VerificationStage::WalOrdering => Some(DEFAULT_ACTIVE_NAME),
+        VerificationStage::PublicationReclassification => match &outcome.status {
+            StageStatus::NotEvaluated {
+                blocked_by: VerificationStage::WalReplay | VerificationStage::ActiveWalMetadata,
+            } => Some(DEFAULT_ACTIVE_NAME),
+            _ => None,
+        },
+        VerificationStage::Objects
+        | VerificationStage::Refs
+        | VerificationStage::RefUpdateSchemaTrust
+        | VerificationStage::CommitIndex
+        | VerificationStage::LifecycleCache
+        | VerificationStage::ReceivedRefs
+        | VerificationStage::LocalTagTrust => None,
     }
 }
 
@@ -402,11 +545,15 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
                         )
                     }
                 };
-                issues.push(DoctorIssue::error(
+                let issue = DoctorIssue::error(
                     "PRIKK-DOCTOR-VERIFY-STAGE-INCOMPLETE",
                     message,
                     "preserve the repository and inspect the failing stage before attempting repair",
-                ));
+                );
+                issues.push(match active_session_owning_stage_outcome(outcome) {
+                    Some(name) => issue.for_active_session(name),
+                    None => issue,
+                });
             }
             // DC-95 Stage 2 Level 2: item containment means the `Objects` stage above can be
             // `Evaluated` even when one of its items individually failed -- these two loops are what
@@ -476,34 +623,45 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
             // RFC 102 Stage 2: isolate-and-continue reading means a damaged WAL record no longer
             // fails the whole `WalReplay` stage -- same shape as the two ref loops above, one level
             // in for the WAL's own records.
+            // RFC 108 increment 3d: `wal_record_outcomes` is built entirely from `default`'s own
+            // replay (`verify.rs`'s single hardcoded `Wal::for_layout(layout, DEFAULT_ACTIVE_NAME)`)
+            // -- a damaged record here can only ever be `default`'s, on the same footing as
+            // `active_session_owning_stage_outcome`'s reasoning for the stage-outcome loop above.
             for outcome in &verification.wal_record_outcomes {
                 if let WalRecordStatus::Failed { message } = &outcome.status {
-                    issues.push(DoctorIssue::error(
-                        "PRIKK-DOCTOR-VERIFY-WAL-RECORD-INCOMPLETE",
-                        format!(
-                            "WAL record at offset {} failed verification: {message}",
-                            outcome.offset
-                        ),
-                        "preserve the repository and inspect the failing WAL record before attempting repair",
-                    ));
+                    issues.push(
+                        DoctorIssue::error(
+                            "PRIKK-DOCTOR-VERIFY-WAL-RECORD-INCOMPLETE",
+                            format!(
+                                "WAL record at offset {} failed verification: {message}",
+                                outcome.offset
+                            ),
+                            "preserve the repository and inspect the failing WAL record before \
+                             attempting repair",
+                        )
+                        .for_active_session(DEFAULT_ACTIVE_NAME),
+                    );
                 }
             }
             if verification
                 .trailing_partial_wal_bytes
                 .is_some_and(|n| n != 0)
             {
-                issues.push(DoctorIssue::warning(
-                    "PRIKK-DOCTOR-WAL-TRAILING-PARTIAL",
-                    format!(
-                        concat!(
-                            "active WAL has {} trailing byte(s) that look like an incomplete ",
-                            "final record"
+                issues.push(
+                    DoctorIssue::warning(
+                        "PRIKK-DOCTOR-WAL-TRAILING-PARTIAL",
+                        format!(
+                            concat!(
+                                "active WAL has {} trailing byte(s) that look like an incomplete ",
+                                "final record"
+                            ),
+                            verification.trailing_partial_wal_bytes.unwrap_or_default()
                         ),
-                        verification.trailing_partial_wal_bytes.unwrap_or_default()
-                    ),
-                    "run `prikk doctor --repair-wal-tail` to truncate only the incomplete \
-                     final WAL bytes",
-                ));
+                        "run `prikk doctor --repair-wal-tail` to truncate only the incomplete \
+                         final WAL bytes",
+                    )
+                    .for_active_session(DEFAULT_ACTIVE_NAME),
+                );
             }
             for issue in &verification.publication_trust_issues {
                 issues.push(DoctorIssue::error(
@@ -574,11 +732,35 @@ pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
     }
 }
 
-/// Run an explicitly requested, narrow repair action.
+fn empty_wal_repair() -> WalRepair {
+    WalRepair {
+        preserved_records: 0,
+        truncated_bytes: 0,
+        preserved_patch_ids: Vec::new(),
+    }
+}
+
+/// Run an explicitly requested, narrow repair action, now per-active-session (RFC 108 §D3.3,
+/// increment 3d).
 ///
-/// The repair is refused if verification fails for any reason other than a trailing partial WAL
-/// record reported by normal replay. This preserves data until a future, more specific repair
-/// command is implemented.
+/// **§3.2's gate**: `before`'s issues are partitioned by `active_session`. Any `Error` with
+/// `active_session: None` is repository-wide (a required directory missing, sealed-history/object/
+/// ref verification, an incomplete publication) and refuses the **whole** run outright, exactly as
+/// every refusal did before this increment -- proceeding over genuine repository-wide damage would
+/// be a worse bug than the one this increment fixes (§4). An `Error` with `active_session:
+/// Some(name)` refuses only *that* active session's own repair; every other eligible active session
+/// is still attempted.
+///
+/// **§3.3's per-active pass**: iterates `RepositoryLayout::active_session_names` (already sorted,
+/// so the order is deterministic), acquiring **one** active session's lock at a time and releasing
+/// it (via `ActiveLock`'s own `Drop`) before moving to the next -- never two at once (§2.1: holding
+/// N locks simultaneously reintroduces exactly the coupling this increment removes, and the
+/// requirement is symmetric, so `default` is looped like every other name rather than
+/// pre-acquired specially). A lock that cannot be acquired, or a repair action that itself fails
+/// (e.g. `truncate_trailing_partial`'s own refusal on a damaged record, §4 -- unweakened, just no
+/// longer able to fail the whole run) is recorded as `Skipped` with the reason, never propagated:
+/// "nothing could be repaired" must never be the answer because one active session is busy or
+/// broken (§2.1).
 pub fn repair_repository(
     layout: &RepositoryLayout,
     options: DoctorRepairOptions,
@@ -591,37 +773,88 @@ pub fn repair_repository(
                 .to_string(),
         ));
     }
-    let _active_lock = ActiveLock::acquire(layout, DEFAULT_ACTIVE_NAME)?;
     crate::refs::ensure_no_incomplete_publication(layout)?;
     let before = doctor_repository(layout);
-    if !before.is_healthy() {
-        // RFC 108 increment 3b: this used to say "repository verification has errors," but
-        // `before.is_healthy()` can be false from a doctor-level check that never touches
-        // `verify_repository` at all -- `push_missing_required_directory_issues` (increment 2) and
-        // `push_non_default_active_session_wal_issues` (this increment) both push `DoctorIssue::error`
-        // directly, before `verify_repository` is even called. A reader who went looking at `verify`
-        // output for the reason would find nothing. The refusal itself is unchanged -- only the
-        // message.
+    if before
+        .issues
+        .iter()
+        .any(|issue| issue.severity == DoctorSeverity::Error && issue.active_session.is_none())
+    {
+        // RFC 108 increment 3b's message correction still applies (this may be a doctor-level
+        // check, not a `verify` finding) -- now also naming that a *repository-wide* issue is what
+        // refused everything, since increment 3d gives an active-scoped issue a narrower gate.
         return Err(PrikkError::Integrity(
-            "doctor repair refused because the repository is not healthy; see `prikk doctor`'s own \
-             issue list for which check reported it -- not necessarily a `verify` finding"
+            "doctor repair refused because the repository has a repository-wide issue; see `prikk \
+             doctor`'s own issue list for which check reported it -- not necessarily a `verify` \
+             finding, and not scoped to any one active session"
                 .to_string(),
         ));
     }
-    let wal_repair = if options.truncate_wal_tail {
-        let wal = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME);
-        wal.truncate_trailing_partial()?
-    } else {
-        WalRepair {
-            preserved_records: 0,
-            truncated_bytes: 0,
-            preserved_patch_ids: Vec::new(),
+
+    let mut active_repairs = Vec::new();
+    for name in layout.active_session_names()? {
+        if let Some(reason) = before.issues.iter().find_map(|issue| {
+            (issue.severity == DoctorSeverity::Error
+                && issue.active_session.as_deref() == Some(name.as_os_str()))
+            .then(|| {
+                format!(
+                    "this active session has its own blocking issue: {}",
+                    issue.message
+                )
+            })
+        }) {
+            active_repairs.push(ActiveSessionRepairOutcome {
+                active_session: name,
+                status: ActiveSessionRepairStatus::Skipped { reason },
+            });
+            continue;
         }
-    };
+        let lock = match ActiveLock::acquire(layout, &name) {
+            Ok(lock) => lock,
+            Err(error) => {
+                active_repairs.push(ActiveSessionRepairOutcome {
+                    active_session: name,
+                    status: ActiveSessionRepairStatus::Skipped {
+                        reason: format!("could not acquire its active-session lock: {error}"),
+                    },
+                });
+                continue;
+            }
+        };
+        let repair_result = if options.truncate_wal_tail {
+            Wal::for_layout(layout, &name).truncate_trailing_partial()
+        } else {
+            Ok(empty_wal_repair())
+        };
+        drop(lock);
+        active_repairs.push(ActiveSessionRepairOutcome {
+            active_session: name,
+            status: match repair_result {
+                Ok(wal_repair) => ActiveSessionRepairStatus::Repaired(wal_repair),
+                Err(error) => ActiveSessionRepairStatus::Skipped {
+                    reason: format!("repair attempt failed: {error}"),
+                },
+            },
+        });
+    }
+
+    // `wal_repair` keeps its exact prior type and meaning (`default`'s own outcome) -- see its own
+    // doc comment on `DoctorRepairReport` for what a zero here does and does not prove now that
+    // `Ok` is reachable even when `default` itself was skipped.
+    let wal_repair = active_repairs
+        .iter()
+        .find(|outcome| outcome.active_session.to_str() == Some(DEFAULT_ACTIVE_NAME))
+        .map(|outcome| match &outcome.status {
+            ActiveSessionRepairStatus::Repaired(wal_repair) => wal_repair.clone(),
+            ActiveSessionRepairStatus::Skipped { .. } => empty_wal_repair(),
+        })
+        .unwrap_or_else(empty_wal_repair);
+
     let after = doctor_repository(layout);
     Ok(DoctorRepairReport {
         before,
         wal_repair,
+        active_repairs,
         after,
     })
 }
@@ -635,32 +868,45 @@ fn add_active_wal_metadata_issues(
     let Some(status) = &verification.active_wal_metadata_status else {
         return;
     };
+    // RFC 108 increment 3d, §2.2: these are exactly as active-scoped as the non-default issues
+    // above -- only their code names differ, for historical reasons (they predate this arc). Same
+    // code, same severity, same message as before this increment (§4) -- only `.for_active_session`
+    // is new, so `repair_repository`'s new per-active gate treats a `default`-only metadata problem
+    // as `default`'s own, not repository-wide.
     match status {
-        ActiveWalMetadataStatus::MissingForNonEmptyWal => issues.push(DoctorIssue::error(
-            "PRIKK-DOCTOR-ACTIVE-REF-METADATA-MISSING",
-            "active WAL has records but active ref metadata is missing",
-            "preserve the repository and inspect the active WAL before sealing or appending",
-        )),
-        ActiveWalMetadataStatus::InvalidForNonEmptyWal { reason } => {
-            issues.push(DoctorIssue::error(
-                "PRIKK-DOCTOR-ACTIVE-REF-METADATA-MALFORMED",
-                format!("active WAL has records but active ref metadata is malformed: {reason}"),
+        ActiveWalMetadataStatus::MissingForNonEmptyWal => issues.push(
+            DoctorIssue::error(
+                "PRIKK-DOCTOR-ACTIVE-REF-METADATA-MISSING",
+                "active WAL has records but active ref metadata is missing",
                 "preserve the repository and inspect the active WAL before sealing or appending",
-            ));
+            )
+            .for_active_session(DEFAULT_ACTIVE_NAME),
+        ),
+        ActiveWalMetadataStatus::InvalidForNonEmptyWal { reason } => {
+            issues.push(
+                DoctorIssue::error(
+                    "PRIKK-DOCTOR-ACTIVE-REF-METADATA-MALFORMED",
+                    format!("active WAL has records but active ref metadata is malformed: {reason}"),
+                    "preserve the repository and inspect the active WAL before sealing or appending",
+                )
+                .for_active_session(DEFAULT_ACTIVE_NAME),
+            );
         }
         ActiveWalMetadataStatus::ValidForEmptyWal { ref_name } => issues.push(
             DoctorIssue::warning(
                 "PRIKK-DOCTOR-ACTIVE-REF-METADATA-DEBRIS",
                 format!("active WAL is empty but stale ref metadata remains for {ref_name}"),
                 "no repair is required; the next guarded active-WAL append will replace stale metadata",
-            ),
+            )
+            .for_active_session(DEFAULT_ACTIVE_NAME),
         ),
         ActiveWalMetadataStatus::InvalidForEmptyWal { reason } => issues.push(
             DoctorIssue::warning(
                 "PRIKK-DOCTOR-ACTIVE-REF-METADATA-MALFORMED-DEBRIS",
                 format!("active WAL is empty but malformed ref metadata remains: {reason}"),
                 "no repair is required; the next guarded active-WAL append will replace stale metadata",
-            ),
+            )
+            .for_active_session(DEFAULT_ACTIVE_NAME),
         ),
         ActiveWalMetadataStatus::MissingForEmptyWal
         | ActiveWalMetadataStatus::ValidForNonEmptyWal { .. } => {}
