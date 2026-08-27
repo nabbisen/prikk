@@ -34,10 +34,10 @@
 //! binary *misinterpret* new bytes rather than refuse them -- the second voids this outright, since
 //! the whole ruling rests on failing closed.
 //!
-//! **Fixture**: `crates/prikk-cli/tests/fixtures/rfc119_g1_0_26_0_repo`, a real repository written
-//! by the real `0.26.0` binary (built from the `0.26.0` git tag in an isolated worktree, never from
+//! **Fixture**: `crates/prikk-cli/tests/fixtures/rfc119_g1_0_27_0_repo`, a real repository written
+//! by the real `0.27.0` binary (built from the `0.27.0` git tag in an isolated worktree, never from
 //! this working tree). **Do not regenerate it.** See the RFC 119 track C report for the original
-//! construction technique, and the G1-fixture-refresh-`0.26.0` report for this specific fixture.
+//! construction technique, and the G1-fixture-refresh-`0.27.0` report for this specific fixture.
 //!
 //! **Replaced, not accumulated (RFC 119 track C's own follow-up, `g1-fixture-refresh-0-24-0`):**
 //! this gate holds exactly one fixture, from the last release, and each release's own refresh
@@ -45,18 +45,18 @@
 //! users, and G1's own form is *declare*, not *prevent* -- one baseline is proportionate. **What
 //! this means a reader should not assume**: a future release passing this gate proves it reads the
 //! *immediately preceding* release's data, not every retained release's data -- transitivity does
-//! not hold (`0.27.0` reading `0.26.0`, and `0.26.0` reading `0.25.0`, does not imply `0.27.0` reads
-//! `0.25.0`). The `0.25.0`-vintage fixture this replaced is gone; its own coverage and controls are
-//! recorded in the G1-fixture-refresh-`0.25.0` report, not restated here.
+//! not hold (`0.28.0` reading `0.27.0`, and `0.27.0` reading `0.26.0`, does not imply `0.28.0` reads
+//! `0.26.0`). The `0.26.0`-vintage fixture this replaced is gone; its own coverage and controls are
+//! recorded in the G1-fixture-refresh-`0.26.0` report, not restated here.
 //!
-//! **Schemas unchanged from `0.25.0`'s own fixture** (`admitted_schemas` has not moved since
+//! **Schemas unchanged from `0.26.0`'s own fixture** (`admitted_schemas` has not moved since
 //! `0.24.0`): this refresh's schema-version arrays are identical to the ones it replaced --
 //! `last_release_fixture_coverage_matches_the_committed_counts`'s committed values did not need to
 //! change, only the fixture bytes and this file's own path constant did. **That makes provenance
 //! the only evidence this refresh happened at all** -- nothing in this test suite can distinguish a
 //! genuinely rebuilt fixture from the old one with its directory renamed, since a schema-array
 //! change (like `0.24.0`'s own first coverage of `Patch` schema 2, `PATCH_PARENT_IDS_RETIRED_SCHEMA`)
-//! is not available this time to serve as incidental evidence. The G1-fixture-refresh-`0.26.0`
+//! is not available this time to serve as incidental evidence. The G1-fixture-refresh-`0.27.0`
 //! report is where that provenance is recorded (worktree commit, `--version` output).
 //! **Asserted, not only claimed**: `last_release_fixture_coverage_matches_the_committed_counts`
 //! pins every persisted type's observed `schema_version`s, not only a record count -- a future
@@ -79,7 +79,7 @@ use crate::patch_replay::decode::decode_patch_operations;
 /// `g1-declared-break-version-scope` handoff v1 §4) -- the fixture is always *the last release*
 /// and the gate always compares it against *current* code, so `<this constant> -> current` is the
 /// only version pair a declared break can ever describe here.
-const LAST_RELEASE_FIXTURE_VERSION: &str = "0.26.0";
+const LAST_RELEASE_FIXTURE_VERSION: &str = "0.27.0";
 
 /// One declared **forward-direction** compatibility break between two adjacent releases -- the
 /// shape of Gate A's `frozen`/`RFC114_ADMITTED_BUT_UNWRITTEN` pair and
@@ -289,8 +289,8 @@ fn every_declared_break_applies_to_the_current_fixture() {
 /// The real conformance check: every persisted object type in the last-release fixture must either
 /// decode cleanly under current code, or have its failure covered by [`DECLARED_BREAKS`] for *this*
 /// fixture's own version. This is the test the four controls exercise (RFC 119 track C handoff §7,
-/// `g1-fixture-refresh-0-26-0` handoff §7); it currently passes because nothing has changed any
-/// persisted type's decode contract since `0.26.0` shipped -- the same "nothing to test yet" state
+/// `g1-fixture-refresh-0-27-0` handoff §7); it currently passes because nothing has changed any
+/// persisted type's decode contract since `0.27.0` shipped -- the same "nothing to test yet" state
 /// `format_stability_gate.rs`'s own layers 1/2 start in.
 #[test]
 fn g1_last_release_fixture_is_compatible_or_the_break_is_declared() {
