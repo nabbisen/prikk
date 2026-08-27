@@ -1,26 +1,26 @@
 # Prikk logo assets
 
-**`prikk-header-1040.png` / `-520.png`** — the README header. Cropped directly from the reference
-image (`prikk-logo-base.png`), with the descriptor and body text removed and the margins evened up.
-Nothing else is altered, so the mark, the wordmark and the balance between them are the original's own.
+Every file here is derived from the single reference image `prikk-logo-base.png` by cropping and
+resizing only. **Nothing is redrawn or recoloured**, so the mark, the wordmark, and the balance
+between them are the original's own.
 
-**`prikk-mark.svg`**, **`prikk-wordmark.svg`** — the vector rebuild, exactly as delivered in the design
-bundle, unmodified. The PNGs beside them are rendered from the SVG:
+| file | what it is |
+|---|---|
+| `prikk-header-1040.png`, `-520.png` | README header — mark + `Prikk`, descriptor and body text removed, margins evened |
+| `prikk-mark-512.png`, `-256.png` | the symbol alone, square, for an avatar or a social image |
+
+How they were produced from the reference image (base coordinates):
 
 ```
-rsvg-convert -w 512 prikk-mark.svg -o prikk-mark-512.png
-rsvg-convert -w 128 prikk-mark.svg -o prikk-mark-128.png
+header : paint out the descriptor at 742,476 .. 1425,548, then crop 1304x528+166+112
+mark   : crop 528x528+186+112
 ```
 
 Palette: sage `#7B927D`, warm tan `#DCC4A7`, terracotta `#D97C5F`, cream `#FBF4EC`.
 
 ## Known limits
 
-- **There is no vector lockup.** The bundle's `prikk-lockup.svg` renders its descriptor as live text in
-  Comfortaa, which overflows its own canvas and clips to "DISTRIBUTED VERSION CONTROL SY". Fixing it
-  needs the font to outline the text, so it is not included here. The header PNG is used instead.
-- **The vector mark is a tracing and differs from the reference image**: it encloses the blocks in a
-  full rounded rectangle where the original has only a soft arc at the top right, and its connector
-  paths are cream where the original's are warm tan.
-- **The header PNG has no alpha** — it carries the reference image's cream background, as the original
-  does.
+- **These are raster images with no alpha** — they carry the reference image's cream background, as
+  the original does. There is no vector version.
+- **The mark is too detailed for a 32px favicon**; a favicon needs a simplified mark that does not
+  exist yet.
