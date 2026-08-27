@@ -321,6 +321,73 @@ fn active_session_paths_for_a_non_default_name_pin_the_on_disk_shape() -> Result
     Ok(())
 }
 
+/// RFC 108 increment 3a review condition: `active_session_relative_dir`'s own doc comment claims
+/// its output is "asserted equal to `repository_relative`'s own output for the same absolute path,
+/// not merely believed to be, by this file's own pinning test" -- there was no such test until this
+/// one. Pins exactly the property `wal.rs::Wal::for_layout` depends on to stay infallible: stripping
+/// `self.prikk_dir` off an `active_*` absolute path always yields what the `*_relative_*` builder
+/// computes directly, for every name shape `format!`'s old reconstruction could represent.
+#[test]
+fn active_relative_path_builders_match_repository_relative_for_ascii_names() -> Result<()> {
+    let root = unique_temp_dir("layout-active-relative-equivalence-ascii");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    for name in [
+        DEFAULT_ACTIVE_NAME,
+        "second",
+        "a b c",
+        "dot.name",
+        "nested/name",
+    ] {
+        assert_eq!(
+            layout.active_session_relative_dir(name),
+            layout.repository_relative(&layout.active_session_dir(name))?,
+            "active_session_relative_dir must match repository_relative for {name:?}"
+        );
+        assert_eq!(
+            layout.active_queue_wal_relative_path(name),
+            layout.repository_relative(&layout.active_queue_wal_path(name))?,
+            "active_queue_wal_relative_path must match repository_relative for {name:?}"
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// Same property, for the two name shapes `format!`'s old reconstruction could not have represented
+/// at all -- invalid UTF-8 and a truncated multi-byte UTF-8 sequence. Pure path arithmetic (no
+/// filesystem call is made for these names, on any path), but gated `#[cfg(target_os = "linux")]`
+/// rather than left portable, matching this arc's own established convention for constructing these
+/// exact byte sequences as an `OsStr` -- not because this test could turn `main` red the way
+/// increment 2's did, but so a reader does not have to re-derive that these particular bytes are the
+/// increment-2-established ones.
+#[cfg(target_os = "linux")]
+#[test]
+fn active_relative_path_builders_match_repository_relative_for_non_utf8_names() -> Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+
+    let root = unique_temp_dir("layout-active-relative-equivalence-non-utf8");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    for name in [
+        std::ffi::OsStr::from_bytes(b"bad\xFFname"),
+        std::ffi::OsStr::from_bytes(b"\xC3(mixed"),
+    ] {
+        assert_eq!(
+            layout.active_session_relative_dir(name),
+            layout.repository_relative(&layout.active_session_dir(name))?
+        );
+        assert_eq!(
+            layout.active_queue_wal_relative_path(name),
+            layout.repository_relative(&layout.active_queue_wal_path(name))?
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 /// RFC 108 increment 2: `active_session_names` is the new enumeration primitive itself, pinned
 /// directly rather than only through `unlock::list_held_locks`. Covers all three of the handoff's
 /// §2.1 adjudications in one place: sorted output (a name that would otherwise sort last by
