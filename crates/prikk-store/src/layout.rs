@@ -421,6 +421,31 @@ impl RepositoryLayout {
         self.active_session_dir(name).join("active.lock")
     }
 
+    /// Return the active-session directory for `name`, relative to the repository root -- the
+    /// `repository_relative`-equivalent of `active_session_dir`, but derived directly from the same
+    /// components rather than computed by stripping a prefix off the absolute path.
+    ///
+    /// RFC 108 increment 3a: `wal.rs::Wal::for_layout` used to rebuild its own relative path via
+    /// `format!("active/{name}/queue.wal")` -- a reconstruction that cannot accept a non-UTF-8
+    /// `name` at all (`format!` requires `Display`), unlike `lock.rs::ActiveLock::acquire`, which
+    /// already derives its relative path from its own absolute one via `repository_relative`. This
+    /// method gives `Wal::for_layout` the same derive-not-reconstruct shape without making it
+    /// fallible: `active_session_dir` is built by joining `name` onto `self.prikk_dir` in the first
+    /// place, so stripping that exact prefix back off can never fail and always yields exactly
+    /// `Path::new("active").join(name)` -- asserted equal to `repository_relative`'s own output for
+    /// the same absolute path, not merely believed to be, by this file's own pinning test.
+    #[must_use]
+    pub(crate) fn active_session_relative_dir(&self, name: impl AsRef<Path>) -> PathBuf {
+        Path::new("active").join(name)
+    }
+
+    /// Return the active WAL path for `name`, relative to the repository root. See
+    /// `active_session_relative_dir`'s own doc for why this is infallible and byte-exact.
+    #[must_use]
+    pub(crate) fn active_queue_wal_relative_path(&self, name: impl AsRef<Path>) -> PathBuf {
+        self.active_session_relative_dir(name).join("queue.wal")
+    }
+
     /// Return the active-session names currently present on disk (RFC 108 increment 2) -- the
     /// read-back counterpart of `active_session_dir`'s own construction authority, sited here
     /// rather than in `active.rs` for the same reason: `active.rs`'s own module doc describes it

@@ -19,7 +19,11 @@ impl ActiveLock {
     /// Acquire a lock through exclusive file creation, for the active session named `name` (RFC
     /// 108 increment 1: previously hardcoded to `"default"`; generalizes the same way
     /// `RefLock::acquire` below already takes `ref_name`).
-    pub fn acquire(layout: &RepositoryLayout, name: &str) -> Result<Self> {
+    ///
+    /// RFC 108 increment 3a: `name` widened from `&str` to `impl AsRef<Path>`, matching
+    /// `wal.rs::Wal::for_layout`. No other change needed here -- `relative` was already **derived**
+    /// from `path` via `repository_relative`, never reconstructed from `name` the way `Wal` used to.
+    pub fn acquire(layout: &RepositoryLayout, name: impl AsRef<Path>) -> Result<Self> {
         let path = layout.active_lock_path(name);
         let relative = layout.repository_relative(&path)?;
         let mutation_root = layout.repository_mutation_root().clone();

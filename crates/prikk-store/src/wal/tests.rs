@@ -31,6 +31,53 @@ fn wal_file_exists_after_init_and_replays_identically_to_missing() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// RFC 108 increment 3a control 1: a non-UTF-8 session name must reach `Wal::for_layout` and
+/// produce byte-exact paths, not a mangled or silently-dropped one -- the exact hazard this
+/// increment closes. `wal.rs`'s old `format!("active/{name}/queue.wal")` could not even accept such
+/// a name (`format!`/`Display` require valid UTF-8); the new `active_queue_wal_relative_path`
+/// derivation is built from the same raw `OsStr` components as the absolute path, with no text
+/// round-trip anywhere.
+///
+/// **Gated to `target_os = "linux"`, not `unix`**: RFC 108 increment 2 turned `main` red gating an
+/// equivalent test on `unix` -- APFS rejects a directory name containing an invalid UTF-8 byte
+/// outright (`EILSEQ`), so this exact byte sequence is not constructible on macOS at all.
+#[cfg(target_os = "linux")]
+#[test]
+fn wal_for_layout_produces_byte_exact_paths_for_a_non_utf8_session_name() -> prikk_error::Result<()>
+{
+    use std::os::unix::ffi::OsStrExt;
+
+    let root = unique_temp_dir("wal-non-utf8-active-name");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let bad_name = std::ffi::OsStr::from_bytes(b"bad\xFFname");
+    std::fs::create_dir_all(layout.active_session_dir(bad_name))?;
+    // Mirrors what `init` does for the default session: the WAL file must already exist before
+    // `append_patch` (which appends to an existing file, matching `default_queue_wal_path`'s own
+    // init-time creation) -- nothing pre-creates it for a hand-planted second session.
+    std::fs::write(layout.active_queue_wal_path(bad_name), b"")?;
+
+    let wal = Wal::for_layout(&layout, bad_name);
+    assert_eq!(wal.path(), layout.active_queue_wal_path(bad_name).as_path());
+
+    let envelope = signed_patch_envelope();
+    let seq = wal.append_patch(&envelope);
+    assert_eq!(seq, Ok(1));
+    assert!(
+        layout.active_queue_wal_path(bad_name).is_file(),
+        "the WAL file must exist at the exact byte-exact path, not a mangled one"
+    );
+    let replay = wal.replay()?;
+    assert_eq!(replay.trailing_partial_bytes, 0);
+    assert_eq!(replay.records.len(), 1);
+    assert_eq!(
+        replay.records.first().map(|record| &record.envelope),
+        Some(&envelope)
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 #[test]
 fn wal_roundtrips_signed_patch_envelope() {
     let root = unique_temp_dir("wal");

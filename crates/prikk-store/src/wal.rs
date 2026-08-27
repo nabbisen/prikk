@@ -118,10 +118,18 @@ impl Wal {
     /// named `name` (RFC 108 increment 1: previously hardcoded to `"default"`; the layout stays
     /// the authority on the absolute path, so this only accepts a name rather than building path
     /// segments of its own beyond the relative literal it already carried).
+    ///
+    /// RFC 108 increment 3a: `name` widened from `&str` to `impl AsRef<Path>`, matching
+    /// `layout.rs`'s own `active_*` methods, so a name obtained from `active_session_names()` (an
+    /// `OsString`, not necessarily valid UTF-8) reaches this constructor without a lossy `String`
+    /// round-trip -- and the relative path is now `layout.active_queue_wal_relative_path(name)`,
+    /// derived from the same components as the absolute path, not rebuilt through `format!` (which
+    /// cannot even accept a non-UTF-8 name, `Display` requires valid text).
     #[must_use]
-    pub fn for_layout(layout: &RepositoryLayout, name: &str) -> Self {
+    pub fn for_layout(layout: &RepositoryLayout, name: impl AsRef<Path>) -> Self {
+        let name = name.as_ref();
         let path = layout.active_queue_wal_path(name);
-        let relative = PathBuf::from(format!("active/{name}/queue.wal"));
+        let relative = layout.active_queue_wal_relative_path(name);
         Self {
             path,
             mutation: Some((layout.repository_mutation_root().clone(), relative)),

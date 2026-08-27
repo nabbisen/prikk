@@ -36,6 +36,33 @@ fn failed_lock_file_sync_retains_stale_lock() -> prikk_error::Result<()> {
     Ok(())
 }
 
+/// RFC 108 increment 3a control 1, `ActiveLock`'s half: a non-UTF-8 session name must reach
+/// `ActiveLock::acquire` and produce a byte-exact lock path. Unlike `Wal::for_layout`,
+/// `ActiveLock::acquire` already derived its `relative` field from `path` via `repository_relative`
+/// rather than reconstructing it from `name` -- this pins that it keeps working once `name` is
+/// widened to `impl AsRef<Path>`, it does not newly fix anything here.
+///
+/// **Gated to `target_os = "linux"`, not `unix`** -- see the sibling test in `wal/tests.rs` for why.
+#[cfg(target_os = "linux")]
+#[test]
+fn active_lock_acquires_a_byte_exact_path_for_a_non_utf8_session_name() -> prikk_error::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+
+    let root = unique_temp_dir("active-lock-non-utf8-name");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let bad_name = std::ffi::OsStr::from_bytes(b"bad\xFFname");
+    std::fs::create_dir_all(layout.active_session_dir(bad_name))?;
+
+    let lock = ActiveLock::acquire(&layout, bad_name)?;
+    assert_eq!(lock.path(), layout.active_lock_path(bad_name).as_path());
+    assert!(layout.active_lock_path(bad_name).is_file());
+    assert!(ActiveLock::acquire(&layout, bad_name).is_err());
+
+    drop(lock);
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 /// Holding a container lock creates its file; dropping the guard removes it -- the same round trip
 /// `ActiveLock`/`RefLock` already prove, extended to the new container locks.
 #[test]
