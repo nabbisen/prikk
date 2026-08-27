@@ -257,8 +257,21 @@ fn push_missing_required_directory_issues(
 /// assertions pin its exact behaviour), so re-deriving it a second way here would be duplication with
 /// no coverage gained, the "two readers of one fact" shape this project keeps punishing. Skipping
 /// `default` costs a small asymmetry (its trailing-partial warning and a non-default one use
-/// different `DoctorIssue` codes), but every active session's WAL state is still surfaced by exactly
-/// one path each -- the actual requirement.
+/// different `DoctorIssue` codes), not a coverage gap -- WAL replay state is covered for every active
+/// session by exactly one path each.
+///
+/// **A real gap, found in review, recorded rather than silently left: this function does not check a
+/// non-default active's *ref-name metadata*** (`default`'s equivalent is
+/// `verification.active_wal_metadata_status`, read via `read_active_ref_metadata` /
+/// `default_active_ref_name_path` -- both hardcoded to `default`, with no generalized accessor for
+/// any other name yet). A non-default active whose WAL has records but whose ref-name metadata is
+/// missing or malformed (`ActiveWalMetadataStatus::MissingForNonEmptyWal`/`InvalidForNonEmptyWal`'s
+/// own failure shape for `default`) is invisible to doctor today -- confirmed by direct
+/// measurement: WAL records present, ref-name metadata absent, and doctor reports the repository
+/// healthy. **Deliberately not covered here rather than covered badly**: closing it needs a
+/// generalized ref-name-path accessor `active.rs` does not have yet (only `default_active_ref_name_path`
+/// exists), which is `active.rs`'s own ref-name-metadata generalization -- RFC 108 increment 3c's,
+/// alongside per-active repair, not a read-only reporting increment's.
 fn push_non_default_active_session_wal_issues(
     layout: &RepositoryLayout,
     issues: &mut Vec<DoctorIssue>,
