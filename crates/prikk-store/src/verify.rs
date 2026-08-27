@@ -304,7 +304,7 @@ mod trust;
 use prikk_error::{PrikkError, Result};
 use prikk_object::{BlockPayload, ObjectId, ObjectType, RefKind, RefStatePayload};
 
-use crate::active::{ActiveRefMetadata, read_active_ref_metadata};
+use crate::active::ActiveRefMetadata;
 use crate::block_state::{BlockStateOutcome, BlockStateStatus};
 use crate::commit_index::{CommitIndexDivergence, verify_divergence};
 use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryFormat, RepositoryLayout};
@@ -1200,7 +1200,7 @@ pub fn verify_repository_with_options(
     let active_wal_metadata_status = if let Some(replay) = &replay {
         pipeline.run(
             VerificationStage::ActiveWalMetadata,
-            classify_active_wal_metadata(layout, replay.records.is_empty()),
+            classify_active_wal_metadata(layout, DEFAULT_ACTIVE_NAME, replay.records.is_empty()),
         )
     } else {
         pipeline.not_evaluated(
@@ -1491,11 +1491,21 @@ fn verify_local_tag_publication_trust(
     Ok(())
 }
 
-fn classify_active_wal_metadata(
+/// RFC 108 increment 3c: widened from `default`-only to `name: impl AsRef<Path>`, matching every
+/// other `active_*` accessor's own generalization, so `doctor.rs`'s per-active reporting can reuse
+/// this exact classification for a non-default active rather than re-deriving the same six-arm match
+/// a second time. `pub(crate)` (was private) for that one new caller; the sole existing call site
+/// below still passes `DEFAULT_ACTIVE_NAME`, so `default`'s own classification is byte-for-byte
+/// unchanged.
+pub(crate) fn classify_active_wal_metadata(
     layout: &RepositoryLayout,
+    name: impl AsRef<std::path::Path>,
     wal_is_empty: bool,
 ) -> Result<ActiveWalMetadataStatus> {
-    match (wal_is_empty, read_active_ref_metadata(layout)?) {
+    match (
+        wal_is_empty,
+        crate::active::read_active_ref_metadata_for(layout, name)?,
+    ) {
         (true, ActiveRefMetadata::Missing) => Ok(ActiveWalMetadataStatus::MissingForEmptyWal),
         (true, ActiveRefMetadata::Valid(ref_name)) => {
             Ok(ActiveWalMetadataStatus::ValidForEmptyWal { ref_name })

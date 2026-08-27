@@ -13,7 +13,7 @@ use crate::lock::ActiveLock;
 use crate::refs::{RefFileStatus, RefItemStatus};
 use crate::verify::{
     ActiveWalMetadataStatus, ObjectItemStatus, RepositoryVerification, StageStatus,
-    verify_repository,
+    classify_active_wal_metadata, verify_repository,
 };
 use crate::wal::{Wal, WalRecordStatus, WalRepair};
 
@@ -238,11 +238,12 @@ fn push_missing_required_directory_issues(
     }
 }
 
-/// Report each **non-default** active session's WAL state directly: a trailing partial tail, or a
-/// WAL that fails to replay at all. `default`'s own WAL health stays exactly where it already was --
-/// sourced from `verification.trailing_partial_wal_bytes`/the `WalReplay` stage outcome below, both
-/// untouched by this function -- so this is new coverage, not a second reader of a fact doctor
-/// already had for `default`.
+/// Report each **non-default** active session's WAL replay state (a trailing partial tail, or a WAL
+/// that fails to replay at all) *and* ref-name metadata state, reaching parity with what
+/// `verification.trailing_partial_wal_bytes`/`verification.active_wal_metadata_status` give
+/// `default`. `default`'s own reporting stays exactly where it already was -- sourced from those two
+/// `verification` fields and the `WalReplay` stage outcome below, all untouched by this function --
+/// so this is new coverage, not a second reader of a fact doctor already had for `default`.
 ///
 /// RFC 108 §D3.3/§D3.4, increment 3b: with a second active session on disk, doctor was previously
 /// silent about its WAL entirely -- the same silent-hole shape increment 2 closed for `unlock`'s
@@ -251,27 +252,21 @@ fn push_missing_required_directory_issues(
 /// `PRIKK-DOCTOR-VERIFY-STAGE-INCOMPLETE` error below); a non-default active has no stage watching
 /// it, so this function is the only thing that will report one failing to replay at all.
 ///
-/// **Adjudication (handoff §2.2): doctor does not re-read `default`'s WAL here.** The alternative --
-/// one uniform loop over every active including `default`, ignoring what `verification` already
-/// computed -- was rejected: `default`'s path is already correct and already tested (existing
-/// assertions pin its exact behaviour), so re-deriving it a second way here would be duplication with
-/// no coverage gained, the "two readers of one fact" shape this project keeps punishing. Skipping
-/// `default` costs a small asymmetry (its trailing-partial warning and a non-default one use
-/// different `DoctorIssue` codes), not a coverage gap -- WAL replay state is covered for every active
-/// session by exactly one path each.
+/// **Adjudication (increment 3b handoff §2.2, unchanged by 3c): doctor does not re-read `default`'s
+/// WAL or metadata here.** The alternative -- one uniform loop over every active including
+/// `default`, ignoring what `verification` already computed -- was rejected: `default`'s path is
+/// already correct and already tested (existing assertions pin its exact behaviour), so re-deriving
+/// it a second way here would be duplication with no coverage gained, the "two readers of one fact"
+/// shape this project keeps punishing. Skipping `default` costs a small asymmetry (its issues and a
+/// non-default one's use different `DoctorIssue` codes), not a coverage gap -- WAL replay state *and*
+/// ref-name metadata state are now covered for every active session, by exactly one path each.
 ///
-/// **A real gap, found in review, recorded rather than silently left: this function does not check a
-/// non-default active's *ref-name metadata*** (`default`'s equivalent is
-/// `verification.active_wal_metadata_status`, read via `read_active_ref_metadata` /
-/// `default_active_ref_name_path` -- both hardcoded to `default`, with no generalized accessor for
-/// any other name yet). A non-default active whose WAL has records but whose ref-name metadata is
-/// missing or malformed (`ActiveWalMetadataStatus::MissingForNonEmptyWal`/`InvalidForNonEmptyWal`'s
-/// own failure shape for `default`) is invisible to doctor today -- confirmed by direct
-/// measurement: WAL records present, ref-name metadata absent, and doctor reports the repository
-/// healthy. **Deliberately not covered here rather than covered badly**: closing it needs a
-/// generalized ref-name-path accessor `active.rs` does not have yet (only `default_active_ref_name_path`
-/// exists), which is `active.rs`'s own ref-name-metadata generalization -- RFC 108 increment 3c's,
-/// alongside per-active repair, not a read-only reporting increment's.
+/// **Increment 3c closed the gap increment 3b recorded here**: this function now calls
+/// `classify_active_wal_metadata` -- the exact same classification `verification` runs for `default`,
+/// widened (increment 3c) to take a name -- rather than re-deriving the six-arm match a second time.
+/// Parity is by construction, not by separately matching the same intent: both arms increment 3b's
+/// review asked about (`MissingForNonEmptyWal` and `InvalidForNonEmptyWal`) are covered, because both
+/// come from the one shared function `default`'s own path already calls.
 fn push_non_default_active_session_wal_issues(
     layout: &RepositoryLayout,
     issues: &mut Vec<DoctorIssue>,
@@ -286,19 +281,35 @@ fn push_non_default_active_session_wal_issues(
             continue;
         }
         match Wal::for_layout(layout, &name).replay() {
-            Ok(replay) if replay.trailing_partial_bytes != 0 => {
-                issues.push(DoctorIssue::warning(
-                    "PRIKK-DOCTOR-ACTIVE-SESSION-WAL-TRAILING-PARTIAL",
-                    format!(
-                        "active session {name:?} has {} trailing byte(s) that look like an \
-                         incomplete final record",
-                        replay.trailing_partial_bytes
-                    ),
-                    "preserve the repository; per-active-session WAL repair is not yet implemented \
-                     (RFC 108 increment 3c)",
-                ));
+            Ok(replay) => {
+                if replay.trailing_partial_bytes != 0 {
+                    issues.push(DoctorIssue::warning(
+                        "PRIKK-DOCTOR-ACTIVE-SESSION-WAL-TRAILING-PARTIAL",
+                        format!(
+                            "active session {name:?} has {} trailing byte(s) that look like an \
+                             incomplete final record",
+                            replay.trailing_partial_bytes
+                        ),
+                        "preserve the repository; per-active-session WAL repair is not yet \
+                         implemented (RFC 108 increment 3d)",
+                    ));
+                }
+                match classify_active_wal_metadata(layout, &name, replay.records.is_empty()) {
+                    Ok(status) => {
+                        push_active_session_ref_metadata_issue(&name, &status, issues);
+                    }
+                    Err(error) => {
+                        issues.push(DoctorIssue::error(
+                            "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-UNREADABLE",
+                            format!(
+                                "active session {name:?}'s ref metadata failed to read: {error}"
+                            ),
+                            "preserve the repository and inspect the active session's ref metadata \
+                             before attempting repair",
+                        ));
+                    }
+                }
             }
-            Ok(_) => {}
             Err(error) => {
                 issues.push(DoctorIssue::error(
                     "PRIKK-DOCTOR-ACTIVE-SESSION-WAL-UNREADABLE",
@@ -308,6 +319,50 @@ fn push_non_default_active_session_wal_issues(
                 ));
             }
         }
+    }
+}
+
+/// The non-default counterpart of `add_active_wal_metadata_issues` below -- same six-arm intent
+/// (an error for WAL records with missing/malformed metadata, a warning for stale/malformed debris
+/// on an empty WAL, silence for the two healthy arms), reusing the exact `ActiveWalMetadataStatus`
+/// `classify_active_wal_metadata` already produces rather than re-deriving it. Distinct `DoctorIssue`
+/// codes from `default`'s (`ACTIVE-SESSION-REF-METADATA-*` vs. `ACTIVE-REF-METADATA-*`), matching
+/// increment 3b's own `ACTIVE-SESSION-WAL-*` convention -- and the message must name the active
+/// session, since `default`'s equivalent message never needed to distinguish one active from another.
+fn push_active_session_ref_metadata_issue(
+    name: &std::ffi::OsStr,
+    status: &ActiveWalMetadataStatus,
+    issues: &mut Vec<DoctorIssue>,
+) {
+    match status {
+        ActiveWalMetadataStatus::MissingForNonEmptyWal => issues.push(DoctorIssue::error(
+            "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-MISSING",
+            format!("active session {name:?} has WAL records but its ref metadata is missing"),
+            "preserve the repository and inspect the active session's WAL before attempting repair",
+        )),
+        ActiveWalMetadataStatus::InvalidForNonEmptyWal { reason } => issues.push(DoctorIssue::error(
+            "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-MALFORMED",
+            format!(
+                "active session {name:?} has WAL records but its ref metadata is malformed: {reason}"
+            ),
+            "preserve the repository and inspect the active session's WAL before attempting repair",
+        )),
+        ActiveWalMetadataStatus::ValidForEmptyWal { ref_name } => issues.push(DoctorIssue::warning(
+            "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-DEBRIS",
+            format!(
+                "active session {name:?}'s WAL is empty but stale ref metadata remains for {ref_name}"
+            ),
+            "no repair is required; the next guarded append will replace stale metadata",
+        )),
+        ActiveWalMetadataStatus::InvalidForEmptyWal { reason } => issues.push(DoctorIssue::warning(
+            "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-MALFORMED-DEBRIS",
+            format!(
+                "active session {name:?}'s WAL is empty but malformed ref metadata remains: {reason}"
+            ),
+            "no repair is required; the next guarded append will replace stale metadata",
+        )),
+        ActiveWalMetadataStatus::MissingForEmptyWal
+        | ActiveWalMetadataStatus::ValidForNonEmptyWal { .. } => {}
     }
 }
 

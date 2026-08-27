@@ -524,10 +524,19 @@ impl RepositoryLayout {
         self.active_lock_path(DEFAULT_ACTIVE_NAME)
     }
 
+    /// Return the active-session ref-name metadata path for `name`. See `active_session_dir`'s doc
+    /// for why this takes `impl AsRef<Path>` rather than `&str` (RFC 108 increment 3c: the same
+    /// `OsString`-from-`active_session_names()` reach every other `active_*` accessor already
+    /// supports).
+    #[must_use]
+    pub(crate) fn active_ref_name_path(&self, name: impl AsRef<Path>) -> PathBuf {
+        self.active_session_dir(name).join("ref-name")
+    }
+
     /// Return the default active-session ref-name metadata path.
     #[must_use]
     pub fn default_active_ref_name_path(&self) -> PathBuf {
-        self.default_active_dir().join("ref-name")
+        self.active_ref_name_path(DEFAULT_ACTIVE_NAME)
     }
 
     /// Return the ref root directory.

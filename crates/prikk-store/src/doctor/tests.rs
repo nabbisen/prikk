@@ -122,6 +122,95 @@ fn doctor_reports_an_unreadable_wal_for_a_non_default_active_session() -> prikk_
     Ok(())
 }
 
+/// RFC 108 increment 3c control 1: the gap increment 3b recorded, flipped. A non-default active
+/// with WAL records but no ref-name metadata file was previously invisible to doctor entirely
+/// (measured before this change: `healthy=true`, no code at all) -- now reported under its own code,
+/// distinct from `default`'s `PRIKK-DOCTOR-ACTIVE-REF-METADATA-MISSING`.
+#[test]
+fn doctor_reports_missing_ref_metadata_for_a_non_default_active_with_wal_records()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("doctor-non-default-ref-metadata-missing");
+    let layout = RepositoryLayout::init(root.clone())?;
+    std::fs::create_dir_all(layout.active_session_dir("second"))?;
+    let record = WalRecord {
+        seq: 1,
+        envelope: signed_patch_envelope(),
+    };
+    std::fs::write(
+        layout.active_queue_wal_path("second"),
+        encode_record_for_test(&record)?,
+    )?;
+    // No `active/second/ref-name` file at all -- nothing creates one for a hand-planted active.
+
+    let report = doctor_repository(&layout);
+    assert!(!report.is_healthy());
+    assert!(report.issues.iter().any(|issue| issue.code
+        == "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-MISSING"
+        && issue.message.contains("second")));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 108 increment 3c control 2: parity means both arms `default` distinguishes, not just the
+/// missing one -- malformed ref-name metadata (present, but not a valid `heads/<name>` local branch
+/// ref) on a non-default active with WAL records reports
+/// `PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-MALFORMED`, distinct from the missing case above and
+/// from `default`'s own `PRIKK-DOCTOR-ACTIVE-REF-METADATA-MALFORMED`.
+#[test]
+fn doctor_reports_malformed_ref_metadata_for_a_non_default_active_with_wal_records()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("doctor-non-default-ref-metadata-malformed");
+    let layout = RepositoryLayout::init(root.clone())?;
+    std::fs::create_dir_all(layout.active_session_dir("second"))?;
+    let record = WalRecord {
+        seq: 1,
+        envelope: signed_patch_envelope(),
+    };
+    std::fs::write(
+        layout.active_queue_wal_path("second"),
+        encode_record_for_test(&record)?,
+    )?;
+    std::fs::write(
+        layout.active_session_dir("second").join("ref-name"),
+        b"not-a-local-branch-ref",
+    )?;
+
+    let report = doctor_repository(&layout);
+    assert!(!report.is_healthy());
+    assert!(report.issues.iter().any(|issue| issue.code
+        == "PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA-MALFORMED"
+        && issue.message.contains("second")));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 108 increment 3c control 3: the easy mistake this handoff named explicitly -- a check that
+/// fires on a healthy second active is worse than no check. An **empty** non-default WAL with no
+/// ref-name metadata (the ordinary, unremarkable state of a hand-planted active nobody has used yet)
+/// must stay quiet: `ActiveWalMetadataStatus::MissingForEmptyWal` is the one arm both `default`'s and
+/// this function's own match treat as silent.
+#[test]
+fn doctor_stays_quiet_about_an_empty_non_default_active_with_no_ref_metadata()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("doctor-non-default-empty-no-metadata");
+    let layout = RepositoryLayout::init(root.clone())?;
+    std::fs::create_dir_all(layout.active_session_dir("second"))?;
+    std::fs::write(layout.active_queue_wal_path("second"), b"")?;
+
+    let report = doctor_repository(&layout);
+    assert!(report.is_healthy());
+    assert!(!report.issues.iter().any(|issue| {
+        issue
+            .code
+            .starts_with("PRIKK-DOCTOR-ACTIVE-SESSION-REF-METADATA")
+    }));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 /// Recovery-listing-tolerance follow-up, the silent-hole control: now that
 /// `unlock::list_held_locks` tolerates its own required directory (`refs/locks`) being absent
 /// rather than erroring, something must still say so -- otherwise a repository missing it reports

@@ -100,9 +100,19 @@ impl ActiveSession {
     }
 }
 
-/// Read active-WAL ref metadata without mutating it.
-pub fn read_active_ref_metadata(layout: &RepositoryLayout) -> Result<ActiveRefMetadata> {
-    let relative = layout.repository_relative(&layout.default_active_ref_name_path())?;
+/// Read active-WAL ref metadata for `name`, without mutating it.
+///
+/// RFC 108 increment 3c: generalized from the `default`-only `read_active_ref_metadata`, the same
+/// wrapper shape increment 1 used for `default_active_dir`/`default_queue_wal_path` -- a new
+/// parameterized function, with the existing zero-argument one reimplemented in terms of it, so
+/// every one of `read_active_ref_metadata`'s own callers needs no edit. `pub(crate)` for now: the
+/// only caller that needs a non-default name is `doctor.rs`'s own per-active-session reporting,
+/// inside this crate; nothing outside it constructs a second active session yet either.
+pub(crate) fn read_active_ref_metadata_for(
+    layout: &RepositoryLayout,
+    name: impl AsRef<std::path::Path>,
+) -> Result<ActiveRefMetadata> {
+    let relative = layout.repository_relative(&layout.active_ref_name_path(name))?;
     let Some(bytes) = read_file_if_exists(layout.repository_mutation_root(), &relative)? else {
         return Ok(ActiveRefMetadata::Missing);
     };
@@ -127,10 +137,24 @@ pub fn read_active_ref_metadata(layout: &RepositoryLayout) -> Result<ActiveRefMe
     }
 }
 
+/// Read active-WAL ref metadata without mutating it.
+pub fn read_active_ref_metadata(layout: &RepositoryLayout) -> Result<ActiveRefMetadata> {
+    read_active_ref_metadata_for(layout, DEFAULT_ACTIVE_NAME)
+}
+
 /// Write active-WAL ref metadata, replacing whatever was there before. `pub` API, so the
 /// replace-semantics contract is enforced structurally rather than by caller discipline (design-v1.md
 /// §14.6's condition): truncates to empty, then appends the canonical ref name, so a second call can
 /// never concatenate two names into one file the way a bare append would.
+///
+/// **`default`-only, deliberately, unlike the read side (RFC 108 increment 3c).** Generalizing the
+/// read path had a real, named caller waiting (`doctor.rs`'s per-active reporting); generalizing this
+/// write path does not -- nothing appends to or seals a non-default active's WAL yet, so a
+/// parameterized writer here would be dead surface the day it landed (this project's own
+/// dead-surface-consolidation history is why that is worth avoiding, not merely untidy). **What would
+/// justify generalizing it**: a caller that actually appends to or clears a non-default active's WAL
+/// -- RFC 108 increment 3d (per-active repair) is the first candidate, and it is the one to
+/// generalize this alongside, not before.
 pub fn write_active_ref_metadata(layout: &RepositoryLayout, ref_name: &str) -> Result<String> {
     layout.require_current_format()?;
     let canonical = validate_local_branch_ref(ref_name)?;
@@ -147,6 +171,9 @@ pub fn write_active_ref_metadata(layout: &RepositoryLayout, ref_name: &str) -> R
 /// Clear active-WAL ref metadata and fsync the active-session directory. Returns whether there was
 /// non-empty content to clear (the pre-migration "did a file exist to remove" contract, now answered
 /// by content rather than presence -- the file itself is permanent from `init` onward).
+///
+/// **`default`-only, for the same reason `write_active_ref_metadata` above is** -- no caller clears a
+/// non-default active's metadata yet.
 pub fn remove_active_ref_metadata(layout: &RepositoryLayout) -> Result<bool> {
     layout.require_current_format()?;
     remove_active_ref_metadata_authorized(layout)
