@@ -68,7 +68,8 @@ fn doctor_reports_a_missing_refs_locks_directory_even_though_unlock_tolerates_it
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        assert!(std::fs::remove_dir_all(layout.refs_dir().join("locks")).is_ok());
+        let refs_locks_dir = layout.refs_dir().join("locks");
+        assert!(std::fs::remove_dir_all(&refs_locks_dir).is_ok());
 
         // `unlock` itself must not fail -- that is the fix this check exists alongside, not the
         // thing under test here, but worth pinning at the seam between the two.
@@ -76,10 +77,14 @@ fn doctor_reports_a_missing_refs_locks_directory_even_though_unlock_tolerates_it
 
         let report = doctor_repository(&layout);
         assert!(!report.is_healthy());
+        // Derived from `refs_locks_dir`, not re-typed as a `/`-separated literal -- `dir.display()`
+        // renders `refs\locks` on Windows, and a hardcoded `"refs/locks"` substring never matches
+        // that (the `Windows mutation test suite` failure this fix addresses).
+        let expected_fragment = refs_locks_dir.display().to_string();
         assert!(report.issues.iter().any(|issue| issue.code
             == "PRIKK-DOCTOR-MISSING-REQUIRED-DIRECTORY"
             && issue.severity == DoctorSeverity::Error
-            && issue.message.contains("refs/locks")));
+            && issue.message.contains(&expected_fragment)));
     }
     let _ = std::fs::remove_dir_all(root);
 }
@@ -95,16 +100,20 @@ fn doctor_reports_a_missing_refs_tmp_directory_even_though_verify_tolerates_it()
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        assert!(std::fs::remove_dir_all(layout.refs_dir().join("tmp")).is_ok());
+        let refs_tmp_dir = layout.refs_dir().join("tmp");
+        assert!(std::fs::remove_dir_all(&refs_tmp_dir).is_ok());
 
         assert!(crate::verify_repository(&layout).is_ok_and(|report| !report.has_stage_failure()));
 
         let report = doctor_repository(&layout);
         assert!(!report.is_healthy());
+        // Derived from `refs_tmp_dir`, not re-typed as a `/`-separated literal -- see the sibling
+        // test above for why a hardcoded `"refs/tmp"` substring never matches on Windows.
+        let expected_fragment = refs_tmp_dir.display().to_string();
         assert!(report.issues.iter().any(|issue| issue.code
             == "PRIKK-DOCTOR-MISSING-REQUIRED-DIRECTORY"
             && issue.severity == DoctorSeverity::Error
-            && issue.message.contains("refs/tmp")));
+            && issue.message.contains(&expected_fragment)));
     }
     let _ = std::fs::remove_dir_all(root);
 }
