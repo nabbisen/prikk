@@ -156,6 +156,59 @@ seal-early, because permanence is then a feature.
 ever be reclaimed? Today nothing reclaims them, and a feature that creates unreachable permanent history by
 design should say what happens to it after a year of abandoned experiments.
 
+### 6.2 Owner's ruling, 2026-08-27: **unsealed** — seal late
+
+**Workspace patches are unsealed.** A Workspace is a private staging area; work crosses into permanent
+history only at integration.
+
+**This reverses the owner's own 2026-08-18 instinct (§6.1), and the three costs priced there are why
+it should.** Sealing early makes every wrong turn permanent in a tool with **no amend, no rewrite, and
+no force-push**; an abandoned Workspace's blocks would remain in the repository indefinitely,
+unreachable and unreclaimed, since `prikk compact` reclaims records from three containers and **not**
+blocks or objects. **The decision test in §6 answers itself once stated: a user must be able to throw
+away "let me try something" without trace, and sealing early makes discarding impossible.**
+
+**It also avoids a cost that would have landed on a badge criterion.** `verify` is O(N³); per-Workspace
+sealed history multiplies N. **Three times the history is roughly twenty-seven times the verification
+cost**, which would have made criterion 3 pressing rather than theoretical. Seal-late does not incur it.
+
+### 6.3 What the ruling forces — and it is cheaper than §6 feared
+
+§6 states the consequence: unsealed stacks are WAL records, **and the WAL is repository-scoped**, so
+concurrent Workspaces need either several WALs or a WAL that is no longer repository-scoped.
+
+**Verified against the code, the layout already anticipates this:**
+
+```rust
+pub fn active_dir(&self) -> PathBuf { self.prikk_dir.join("active") }
+pub fn default_active_dir(&self) -> PathBuf { self.active_dir().join("default") }
+```
+
+**`.prikk/active/<name>/queue.wal` is already the shape** — with exactly one name, `default`, in use,
+and `Wal::for_layout` hardcoding both it and the relative literal `"active/default/queue.wal"`.
+
+**So this is not a repository-topology problem after all.** The directory structure accommodates
+several actives today; what is hardcoded is the *choice* of one. **That is a materially smaller design
+than §6's framing implied, and it is the strongest argument that the ruling is affordable.**
+
+### 6.4 What a design must now answer
+
+**These are the next questions, and none is settled by the ruling:**
+
+1. **Does `Wal` become workspace-scoped, or does a Workspace own a `Wal`?** The type already carries a
+   `layout` and a mutation root; which of those generalise is the first mechanical question.
+2. **What serialises, and when.** §6.1's finding stands: sealing takes a repository-wide `ActiveLock`
+   (`seal.rs:81`). Under seal-late that lock is hit **only at integration**, which is the point of the
+   ruling — but the design must say what concurrent Workspaces contend for in between.
+3. **Crash safety is now load-bearing for Workspace data.** Unsealed work is protected *only* by the
+   WAL. Invariant 7 of §5 — *"crashes must not silently destroy recoverable Workspace changes"* — is no
+   longer a general aspiration; it is the guarantee this ruling depends on.
+4. **What `verify` says about a Workspace.** Unsealed work is outside sealed history by construction.
+   Whether `verify` reports it, ignores it, or refuses to comment is a user-facing decision.
+
+**Unchanged by this ruling:** §5's ten safety invariants, and §4's three candidate physical
+architectures — the ruling constrains *when work becomes history*, not *how trees are materialised*.
+
 ## 7. One `.prikk` or many? — and the answer routes to two different projects
 
 Follows directly from §6, and the concept's diagrams are compatible with both.
