@@ -318,3 +318,105 @@ reached from the opposite direction.
 names which of them it discharges.** Otherwise ten guarantees become ten orphans — which is exactly how
 DC-70's criterion 3 sat mis-scoped across four releases, satisfied by a mechanism other than the one it
 named, with nobody able to tell.
+
+
+---
+
+# Design, 2026-08-27
+
+**Authored by the architect on the owner's ruling that Workspace patches are unsealed (§6.2).**
+**This is the design §5–§7 called for. It does not grant implementation authority; a handoff does.**
+
+## D1. Architecture: A, with C's identity model
+
+**§4's B — shared-base copy-on-write / reflink trees — is eliminated on evidence.** Reflink needs
+btrfs, XFS, or APFS. **Windows NTFS has none.** Criterion 6 is met precisely because all three
+platforms mutate equally, and `prikk-store` is confined by DC-51 to `getrandom` and `rustix`. **B
+would make Workspace a Linux-and-macOS feature and un-meet a banked criterion.**
+
+**Between A and C, §2 has already ruled the user-facing half**: *"a simple materialized environment is
+preferred wherever it provides the required guarantees"*, and *"the physical tree is an implementation
+mechanism required to give ordinary build tools ordinary semantics."*
+
+**Chosen: A — independent materialized trees — with C's definition of identity.** A Workspace *is* its
+patch composition; the tree is the environment that composition renders into. **prikk must be able to
+name, list, and reason about a Workspace without materialising it**, which `verify`, any listing
+surface, and any agent-facing interface will need.
+
+**Why not C wholesale:** the concept requires building and testing concurrently, which needs real files
+simultaneously. C must therefore materialise every *active* Workspace anyway, converging on A wherever
+work is happening, and differing only for dormant ones — at the price of a render step or first-access
+latency in exactly the workflows §2 says the tree exists to keep ordinary.
+
+## D2. The mechanism: `active/<workspace>/`, and it already exists
+
+**The WAL and the lock share one hardcoding, so they generalise together:**
+
+```rust
+layout.default_active_dir()       -> active_dir().join("default")
+layout.default_queue_wal_path()   -> default_active_dir().join("queue.wal")
+layout.default_active_lock_path() -> (same "default" parent)
+Wal::for_layout(layout)           -> hardcodes "active/default/queue.wal"
+ActiveLock::acquire(layout)       -> hardcodes the default lock path
+```
+
+**`.prikk/active/<name>/` is already the shape.** Exactly one name is in use. **This is the single
+mechanical change the ruling forces** — not a repository-topology redesign, and not two changes.
+
+**`ActiveLock` already has a second, ref-scoped constructor** (`lock.rs:67`), so more than one lock
+granularity is already an accepted idea here.
+
+## D3. Answers to §6.4
+
+1. **A Workspace owns a `Wal`; `Wal` becomes workspace-scoped.** `Wal::for_layout` gains a workspace
+   name rather than `Wal` learning about Workspaces. **The layout stays the authority on paths**, which
+   is the existing division of responsibility.
+2. **What serialises:** editing, building and testing serialise on **nothing** — separate trees,
+   separate WALs, separate active locks. **Integration serialises**, because sealing takes the
+   repository-wide lock, and that is correct: seal-late means the bottleneck is hit once per
+   integration rather than once per commit.
+3. **Crash safety is load-bearing and must be stated as such.** Under seal-late, unsealed Workspace
+   work is protected *only* by its WAL. **Invariant 7 stops being an aspiration.** A design increment
+   must show a Workspace's WAL recovering independently of every other.
+4. **`verify` reports Workspaces as out of scope, explicitly.** Unsealed work is outside sealed history
+   by construction; `verify`'s claim is about sealed history. **Silence would be the wrong answer** —
+   the project's own rule is that absence must be explicit. A named line saying "N workspaces, not
+   verified here, by construction" is the shape.
+
+## D4. §5's ten invariants — what already holds
+
+**Six are satisfied by D2's mechanism plus existing machinery, and a design that re-solves them wastes
+effort:**
+
+| # | Invariant | Status under this design |
+|---|---|---|
+| 1 | Multiple Workspaces active concurrently | **D2** — separate actives |
+| 2 | One cannot overwrite another's state | **D2** — separate trees, separate locks |
+| 3 | Ordinary ops cannot modify the canonical base | **Already true** — the base is sealed history; unsealed work cannot alter it |
+| 4 | Each can build and test independently | **D1** — real trees, ordinary tool semantics |
+| 5 | Same-file edits stay independent until integration | **Already true** — patches are content-anchored, not tree-diffed |
+| 6 | Build state cannot corrupt another | **D1** — build output lives in the tree, not `.prikk` |
+| 9 | Publication and merge are explicit | **Already true** — `seal` and `merge` are commands |
+
+**Four need real design work:**
+
+- **7 — crashes must not silently destroy recoverable changes.** D3.3.
+- **8 — patch creation and state transitions are atomic or recoverable.** The WAL provides this per
+  active today; the transitions *between* Workspace states are new.
+- **10 — Workspace state is inspectable and auditable.** This is where C's identity model pays: a
+  Workspace's composition is inspectable without materialising it.
+- **Workspace lifecycle itself** — creation, abandonment, and integration are not in §5 but are the
+  operations that make the invariants meaningful. **Abandonment is the one the ruling makes cheap**:
+  unsealed work discards without trace, which was §6's decision test.
+
+## D5. What this design does not settle
+
+- **Naming and CLI surface.** Not designed here.
+- **Whether a Workspace may be shared or only exists locally.** §2 implies local; it is not ruled.
+- **Interaction with RFC 109's agent-native interface**, which may want Workspace as a primitive.
+- **The first increment's scope.** Generalising `active/<name>/` is the smallest useful thing and is
+  separable from every user-facing surface.
+
+**Recommended first increment:** generalise `active/<name>/` for the WAL and the active lock, with no
+CLI surface and no Workspace concept exposed — **a mechanical change with existing tests as its
+control**, which de-risks everything above it before any user-facing decision is made.
