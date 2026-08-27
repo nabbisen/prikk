@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/nabbisen/prikk/main/assets/logo/prikk-lockup-520.png" alt="Prikk" width="360">
+
 # Prikk
 
 ![Status](https://img.shields.io/badge/status-early--implementation-orange)
