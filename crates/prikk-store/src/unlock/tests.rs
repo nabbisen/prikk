@@ -262,10 +262,24 @@ fn list_held_locks_reports_a_hand_planted_second_active() -> Result<()> {
 /// `OsString` unchanged, and this function must derive its path from it directly (never through a
 /// lossy `to_string_lossy()` round-trip), or a held lock under a non-UTF-8 session name is silently
 /// dropped from the report -- the exact defect this increment exists to prevent, reintroduced one
-/// layer down. A session name containing an invalid UTF-8 byte is a valid POSIX directory name;
+/// layer down. A session name containing an invalid UTF-8 byte is a valid directory name on Linux;
 /// probed directly (not assumed) against the pre-fix implementation, which reported zero locks for
 /// this exact setup.
-#[cfg(unix)]
+///
+/// **Gated to `target_os = "linux"`, not `unix`.** `unix` is an OS family, not a filesystem-behaviour
+/// class, and this test needs the latter: Linux's VFS treats a filename as an opaque byte string
+/// (rejecting only NUL and `/`) regardless of which native filesystem is mounted underneath, but
+/// macOS's APFS enforces UTF-8 and rejects this exact byte sequence outright. **Not reasoned about --
+/// run and found wrong**: this test under `#[cfg(unix)]` failed `macOS mutation test suite` in CI
+/// (run `33037284343`) with `Error: Io("Illegal byte sequence (os error 92)")` (`EILSEQ`) raised by
+/// `create_dir_all` while building the fixture, before the assertion ever ran. **The product fact
+/// this establishes, not merely the CI failure**: the silent-lock-drop defect this test guards
+/// against is reachable on Linux (proven here, and by `stable`/`msrv-1.85.0` CI both passing on
+/// `ubuntu-latest`) and on Windows (see the `cfg(windows)` variant below), but on APFS it is
+/// unreachable **by this specific mechanism**, because a session directory with this name cannot
+/// exist there at all -- not because the enumeration or the fix behaves differently on that
+/// platform.
+#[cfg(target_os = "linux")]
 #[test]
 fn list_held_locks_reports_a_lock_under_a_non_utf8_session_name() -> Result<()> {
     use std::os::unix::ffi::OsStrExt;
@@ -297,11 +311,19 @@ fn list_held_locks_reports_a_lock_under_a_non_utf8_session_name() -> Result<()> 
     Ok(())
 }
 
-/// Windows analogue of the POSIX non-UTF-8 case above: an unpaired UTF-16 surrogate is not valid
+/// Windows analogue of the Linux non-UTF-8 case above: an unpaired UTF-16 surrogate is not valid
 /// UTF-16 text (so it cannot round-trip through `to_string_lossy()`), but it is a valid NTFS
 /// directory name component -- `OsString` on Windows is WTF-8 precisely so this is representable.
 /// Runs for real on CI's `windows-mutation` job, which executes `cargo test` natively on
-/// `windows-latest`, not merely cross-compiles it.
+/// `windows-latest`, not merely cross-compiles it -- confirmed passing there.
+///
+/// **This is established for NTFS specifically (what `windows-latest` mounts), not for `windows` as
+/// an OS family.** The Linux test above exists because gating on the OS family (`unix`) rather than
+/// the filesystem property turned out to be wrong for macOS/APFS -- the same gap could exist here for
+/// ReFS or a network filesystem (SMB/CIFS), and it has **not** been established either way. Left as
+/// `#[cfg(windows)]` because CI only ever exercises NTFS today and no finer built-in `cfg` exists to
+/// name the property directly; if a future CI job runs on a different Windows filesystem and this
+/// fails there, that is new evidence, not a contradiction of this note.
 #[cfg(windows)]
 #[test]
 fn list_held_locks_reports_a_lock_under_a_non_utf8_session_name() -> Result<()> {
