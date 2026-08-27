@@ -14,7 +14,10 @@ mod worktree;
 
 pub(crate) use help::print_help;
 pub(crate) use merge_evidence::{print_merge_evidence, print_merge_plan};
-pub(crate) use verification::{print_doctor_report, print_verify_report, print_verify_report_json};
+pub(crate) use verification::{
+    print_active_session_repairs, print_doctor_report, print_verify_report,
+    print_verify_report_json,
+};
 pub(crate) use worktree::{print_history, print_worktree_status};
 
 /// Print a checkout plan.

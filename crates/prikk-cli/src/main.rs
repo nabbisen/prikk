@@ -37,25 +37,25 @@ use args::{
     parse_worktree_status_args,
 };
 use output::{
-    print_checkout_plan, print_doctor_report, print_help, print_history, print_merge_evidence,
-    print_merge_plan, print_patch_deletion_plan, print_patch_inverse_plan,
-    print_patch_materialization_report, print_patch_replay_plan, print_rollback_draft_report,
-    print_rollback_draft_verification, print_rollback_preview_plan, print_snapshot_checkout_plan,
-    print_snapshot_materialization_report, print_verify_report, print_verify_report_json,
-    print_worktree_status,
+    print_active_session_repairs, print_checkout_plan, print_doctor_report, print_help,
+    print_history, print_merge_evidence, print_merge_plan, print_patch_deletion_plan,
+    print_patch_inverse_plan, print_patch_materialization_report, print_patch_replay_plan,
+    print_rollback_draft_report, print_rollback_draft_verification, print_rollback_preview_plan,
+    print_snapshot_checkout_plan, print_snapshot_materialization_report, print_verify_report,
+    print_verify_report_json, print_worktree_status,
 };
 use prikk_store::{
-    ActiveRefMetadata, DEFAULT_ACTIVE_NAME, DEFAULT_ACTIVE_PATCH_LIMIT, DoctorRepairOptions,
-    Ed25519AuthorSigner, Ed25519MaintainerSigner, MergeEvidenceTarget, RefStore, RepositoryLayout,
-    VerifyOptions, Wal, WorktreePatchCommitOptions, add_trusted_maintainer, append_rollback_draft,
-    commit_worktree_changes_signed, doctor_repository, list_received_pointers,
-    load_received_ref_history, load_ref_history, materialize_patch_checkout,
-    materialize_patch_checkout_with_deletions, materialize_snapshot_checkout,
-    plan_patch_checkout_deletions, prepare_checkout_plan, prepare_merge_evidence,
-    prepare_merge_plan, prepare_patch_inverse_plan, prepare_patch_replay_plan,
-    prepare_rollback_preview, prepare_snapshot_checkout_plan, read_active_ref_metadata,
-    remove_trusted_maintainer, repair_repository, verify_active_rollback_draft,
-    verify_repository_with_options, worktree_status,
+    ActiveRefMetadata, ActiveSessionRepairStatus, DEFAULT_ACTIVE_NAME, DEFAULT_ACTIVE_PATCH_LIMIT,
+    DoctorRepairOptions, Ed25519AuthorSigner, Ed25519MaintainerSigner, MergeEvidenceTarget,
+    RefStore, RepositoryLayout, VerifyOptions, Wal, WorktreePatchCommitOptions,
+    add_trusted_maintainer, append_rollback_draft, commit_worktree_changes_signed,
+    doctor_repository, list_received_pointers, load_received_ref_history, load_ref_history,
+    materialize_patch_checkout, materialize_patch_checkout_with_deletions,
+    materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan,
+    prepare_merge_evidence, prepare_merge_plan, prepare_patch_inverse_plan,
+    prepare_patch_replay_plan, prepare_rollback_preview, prepare_snapshot_checkout_plan,
+    read_active_ref_metadata, remove_trusted_maintainer, repair_repository,
+    verify_active_rollback_draft, verify_repository_with_options, worktree_status,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -592,17 +592,35 @@ fn run_doctor(args: Vec<String>) -> std::result::Result<(), String> {
         };
         let repair = repair_repository(&layout, options).map_err(|err| err.to_string())?;
         println!("doctor repository: {}", layout.prikk_dir().display());
-        println!(
-            "repair: truncated {} trailing WAL byte(s); preserved {} record(s)",
-            repair.wal_repair.truncated_bytes, repair.wal_repair.preserved_records
-        );
-        // DC-66 criterion 5: a repair against a queue of N must say *which* patches survived, not
-        // just how many — "3 records preserved" does not identify them for N > 1.
-        for patch_id in &repair.wal_repair.preserved_patch_ids {
-            println!("repair: preserved queued patch {patch_id}");
-        }
+        // RFC 108 increment 3d review v1 §1's condition: `repair.wal_repair`'s own two lines
+        // (still present in the struct, unchanged, for `default`-only callers) used to be the only
+        // thing printed here -- silently omitting every other active session's own outcome, and
+        // omitting even `default`'s own reason when it was `Skipped` rather than repaired.
+        // `print_active_session_repairs` replaces them, covering every active session
+        // (`default` included) from the one field that already carries the full, honest answer.
+        print_active_session_repairs(&repair.active_repairs);
         print_doctor_report(&layout, &repair.after);
-        if repair.after.is_healthy() {
+        // Exit-rule adjudication (review v1 §1): "every skip is a failure" is the correct rule
+        // *here*, not as a general principle, but because this branch is only reached when
+        // `doctor_args.repair_wal_tail` requested exactly this repair -- `repair_main_ref` always
+        // refuses inside `repair_repository` itself, before any active session is even attempted, so
+        // reaching this line means `truncate_wal_tail: true` was requested unconditionally. A
+        // `Skipped` entry in `active_repairs` is therefore never vacuous here: it always means a WAL
+        // tail truncation the operator asked for did not happen. (A hypothetical caller of
+        // `repair_repository` that requests no repair at all, `DoctorRepairOptions::none()`, would
+        // need a different rule -- skips would be expected, not a failure -- but no CLI path reaches
+        // this line with that combination, so that rule is not built here.)
+        let any_active_session_skipped = repair
+            .active_repairs
+            .iter()
+            .any(|outcome| matches!(outcome.status, ActiveSessionRepairStatus::Skipped { .. }));
+        if any_active_session_skipped {
+            Err(
+                "doctor repair skipped one or more active sessions; see the per-active outcomes \
+                 above for which and why"
+                    .to_string(),
+            )
+        } else if repair.after.is_healthy() {
             Ok(())
         } else {
             Err("doctor repair finished but repository health errors remain".to_string())

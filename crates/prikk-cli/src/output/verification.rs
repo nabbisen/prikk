@@ -1,6 +1,7 @@
 use prikk_store::{
-    ActiveWalMetadataStatus, AuthorSignatureVerification, BlockStateStatus, DoctorSeverity,
-    ObjectItemStatus, RefFileStatus, RefItemStatus, RepositoryLayout, StageStatus,
+    ActiveSessionRepairOutcome, ActiveSessionRepairStatus, ActiveWalMetadataStatus,
+    AuthorSignatureVerification, BlockStateStatus, DoctorSeverity, ObjectItemStatus, RefFileStatus,
+    RefItemStatus, RepositoryLayout, StageStatus,
 };
 
 /// Render a count sourced from one verification stage. `None` means that stage did not evaluate to
@@ -149,6 +150,41 @@ pub(crate) fn print_verify_report_json(report: &prikk_store::RepositoryVerificat
     }
     json.push_str("]\n}");
     println!("{json}");
+}
+
+/// Print each active session's own repair outcome (RFC 108 increment 3d review v1 §1's condition):
+/// `repair_repository`'s `active_repairs` used to reach only the returned struct, never the
+/// operator -- a skipped active session's own reason (already a good, specific message; see each
+/// `DoctorIssue`'s own text) was silently discarded, and a wholly-skipped repair still printed
+/// `default`'s own scalar summary and exited `0`. Named per active session, in
+/// `RepositoryLayout::active_session_names`'s own sorted order (unchanged from `active_repairs`
+/// itself), so an operator sees exactly which active sessions were repaired and which were not,
+/// and why, in one place.
+pub(crate) fn print_active_session_repairs(active_repairs: &[ActiveSessionRepairOutcome]) {
+    for outcome in active_repairs {
+        match &outcome.status {
+            ActiveSessionRepairStatus::Repaired(wal_repair) => {
+                println!(
+                    "active session {:?}: repaired (truncated {} byte(s), preserved {} \
+                     record(s))",
+                    outcome.active_session,
+                    wal_repair.truncated_bytes,
+                    wal_repair.preserved_records
+                );
+                // DC-66 criterion 5, extended per-active: "N records preserved" does not identify
+                // them for N > 1, for any one active session either.
+                for patch_id in &wal_repair.preserved_patch_ids {
+                    println!("  preserved queued patch {patch_id}");
+                }
+            }
+            ActiveSessionRepairStatus::Skipped { reason } => {
+                println!(
+                    "active session {:?}: skipped -- {reason}",
+                    outcome.active_session
+                );
+            }
+        }
+    }
 }
 
 /// Print doctor results.
