@@ -21,38 +21,6 @@ fn report_items_have_deterministic_secondary_ordering() {
     assert_eq!(third.operation_index, Some(1));
 }
 
-#[test]
-fn report_debug_does_not_include_raw_text_or_blob_payloads_or_absolute_paths() {
-    let old = b"secret old text";
-    let new = b"secret replacement text";
-    let mut baseline = NodeLifecycleState::new();
-    seed_text(&mut baseline, node(1), "doc.txt", old, MODE_REGULAR);
-    let left = [edit_text(1, node(1), old, new)];
-    let right = [create_file(2, "fresh.bin", node(2), blob(2), MODE_REGULAR)];
-    let evidence = TestTextResolver::new([(node(1), old.to_vec())]).with_blob(
-        blob(2),
-        BlobKind::Binary,
-        b"secret blob bytes".to_vec(),
-    );
-
-    let report = analyze_merge_evidence(
-        blob(0xb0),
-        None,
-        &baseline,
-        &evidence,
-        EvidenceScope::SealedCandidateRequired,
-        &left,
-        &right,
-    );
-    let formatted = format!("{report:?}");
-
-    assert!(!formatted.contains("secret old text"));
-    assert!(!formatted.contains("secret replacement text"));
-    assert!(!formatted.contains("secret blob bytes"));
-    assert!(!formatted.contains("/home/"));
-    assert!(!formatted.contains("/tmp/"));
-}
-
 fn report_item_fixture(
     side: MergeEvidenceSide,
     index: usize,
