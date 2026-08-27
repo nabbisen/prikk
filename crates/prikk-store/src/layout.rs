@@ -396,20 +396,28 @@ impl RepositoryLayout {
     /// choice of name was hardcoded. This method is the layout's own generalization of it,
     /// kept `pub(crate)` for now since nothing outside this crate constructs a second active
     /// session yet -- that is a later increment's CLI-surface decision, not this one's.
+    ///
+    /// RFC 108 increment 2 review: widened from `&str` to `impl AsRef<Path>` so a name obtained
+    /// from `active_session_names()` -- an `OsString`, which may not be valid UTF-8 on a POSIX
+    /// filesystem -- can be used to **derive** this path directly, rather than forcing a caller to
+    /// **reconstruct** it through a lossy `String` round-trip first. Every existing caller passes a
+    /// `&str` literal (`DEFAULT_ACTIVE_NAME`), which still satisfies this bound unchanged.
     #[must_use]
-    pub(crate) fn active_session_dir(&self, name: &str) -> PathBuf {
+    pub(crate) fn active_session_dir(&self, name: impl AsRef<Path>) -> PathBuf {
         self.active_dir().join(name)
     }
 
-    /// Return the active WAL path for `name`.
+    /// Return the active WAL path for `name`. See `active_session_dir`'s doc for why this takes
+    /// `impl AsRef<Path>` rather than `&str`.
     #[must_use]
-    pub(crate) fn active_queue_wal_path(&self, name: &str) -> PathBuf {
+    pub(crate) fn active_queue_wal_path(&self, name: impl AsRef<Path>) -> PathBuf {
         self.active_session_dir(name).join("queue.wal")
     }
 
-    /// Return the active lock path for `name`.
+    /// Return the active lock path for `name`. See `active_session_dir`'s doc for why this takes
+    /// `impl AsRef<Path>` rather than `&str`.
     #[must_use]
-    pub(crate) fn active_lock_path(&self, name: &str) -> PathBuf {
+    pub(crate) fn active_lock_path(&self, name: impl AsRef<Path>) -> PathBuf {
         self.active_session_dir(name).join("active.lock")
     }
 
@@ -435,7 +443,19 @@ impl RepositoryLayout {
     /// `scan_loose_file_temp_debris` established this exact key already; directory listing order
     /// is not guaranteed and differs by filesystem, so an unsorted result would make output from
     /// this method platform-dependent with no `#[cfg(target_os)]` anywhere to show it.
-    pub(crate) fn active_session_names(&self) -> Result<Vec<String>> {
+    ///
+    /// **Returns `OsString`, not `String`.** A review of the first version of this method found it
+    /// returning `String` via `to_string_lossy()`, and the one consumer (`unlock::list_held_locks`)
+    /// then reconstructing a path from that lossy string with `active_lock_path(&name)` -- for any
+    /// session directory whose name is not valid UTF-8 (valid on POSIX filesystems), the
+    /// reconstructed path does not match the path on disk, so `read_lock_if_present` finds nothing
+    /// and a held lock is silently dropped from the report. That is the exact defect this increment
+    /// exists to prevent, reintroduced one layer down. The per-ref lock loop already gets this
+    /// right (`ref_locks_dir.join(&entry.name)`, the `OsString` straight from the listing, never
+    /// round-tripped through `String`) -- this method now follows that same neighbour. Every caller
+    /// of `active_session_dir`/`active_queue_wal_path`/`active_lock_path` **derives** its path from
+    /// this value directly; none may re-`to_string_lossy()` it first.
+    pub(crate) fn active_session_names(&self) -> Result<Vec<std::ffi::OsString>> {
         let active_dir = self.active_dir();
         let relative = self.repository_relative(&active_dir)?;
         match inspect_entry(self.repository_mutation_root(), &relative)? {
@@ -457,7 +477,7 @@ impl RepositoryLayout {
         Ok(entries
             .into_iter()
             .filter(|entry| entry.kind == EntryKind::Directory)
-            .map(|entry| entry.name.to_string_lossy().into_owned())
+            .map(|entry| entry.name)
             .collect())
     }
 

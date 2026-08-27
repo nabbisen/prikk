@@ -334,7 +334,7 @@ fn active_session_names_enumerates_sorted_directories_and_tolerates_absence() ->
 
     assert_eq!(
         layout.active_session_names()?,
-        vec![DEFAULT_ACTIVE_NAME.to_string()],
+        vec![std::ffi::OsString::from(DEFAULT_ACTIVE_NAME)],
         "a fresh repository's init-created active/default/ is the only session present"
     );
 
@@ -345,9 +345,9 @@ fn active_session_names_enumerates_sorted_directories_and_tolerates_absence() ->
     assert_eq!(
         layout.active_session_names()?,
         vec![
-            "aaa-first".to_string(),
-            "default".to_string(),
-            "zzz-last".to_string(),
+            std::ffi::OsString::from("aaa-first"),
+            std::ffi::OsString::from("default"),
+            std::ffi::OsString::from("zzz-last"),
         ],
         "sorted by raw name bytes, and the stray non-directory file is not a session"
     );
@@ -355,7 +355,7 @@ fn active_session_names_enumerates_sorted_directories_and_tolerates_absence() ->
     std::fs::remove_dir_all(layout.active_dir())?;
     assert_eq!(
         layout.active_session_names()?,
-        Vec::<String>::new(),
+        Vec::<std::ffi::OsString>::new(),
         "a missing active/ directory is empty, not an error -- unlock is a recovery surface"
     );
 

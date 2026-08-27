@@ -258,6 +258,91 @@ fn list_held_locks_reports_a_hand_planted_second_active() -> Result<()> {
     Ok(())
 }
 
+/// RFC 108 increment 2 review, permanent regression: `active_session_names` must return the raw
+/// `OsString` unchanged, and this function must derive its path from it directly (never through a
+/// lossy `to_string_lossy()` round-trip), or a held lock under a non-UTF-8 session name is silently
+/// dropped from the report -- the exact defect this increment exists to prevent, reintroduced one
+/// layer down. A session name containing an invalid UTF-8 byte is a valid POSIX directory name;
+/// probed directly (not assumed) against the pre-fix implementation, which reported zero locks for
+/// this exact setup.
+#[cfg(unix)]
+#[test]
+fn list_held_locks_reports_a_lock_under_a_non_utf8_session_name() -> Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+
+    let root = unique_temp_dir("unlock-non-utf8-active-name");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let active = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
+
+    let bad_name = std::ffi::OsStr::from_bytes(b"bad\xFFname");
+    let bad_lock_path = layout.active_lock_path(bad_name);
+    std::fs::create_dir_all(layout.active_session_dir(bad_name))?;
+    std::fs::write(
+        &bad_lock_path,
+        format!("pid={}\nkind=active\nnote=test\n", std::process::id()),
+    )?;
+
+    let locks = list_held_locks(&layout)?;
+    let paths: Vec<&std::path::Path> = locks.iter().map(|lock| lock.path.as_path()).collect();
+    assert_eq!(
+        locks.len(),
+        2,
+        "a held lock under a non-UTF-8 session name must not be silently dropped"
+    );
+    assert!(paths.contains(&active.path()));
+    assert!(paths.contains(&bad_lock_path.as_path()));
+
+    drop(active);
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// Windows analogue of the POSIX non-UTF-8 case above: an unpaired UTF-16 surrogate is not valid
+/// UTF-16 text (so it cannot round-trip through `to_string_lossy()`), but it is a valid NTFS
+/// directory name component -- `OsString` on Windows is WTF-8 precisely so this is representable.
+/// Runs for real on CI's `windows-mutation` job, which executes `cargo test` natively on
+/// `windows-latest`, not merely cross-compiles it.
+#[cfg(windows)]
+#[test]
+fn list_held_locks_reports_a_lock_under_a_non_utf8_session_name() -> Result<()> {
+    use std::os::windows::ffi::OsStringExt;
+
+    let root = unique_temp_dir("unlock-non-utf8-active-name");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let active = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
+
+    let bad_name = std::ffi::OsString::from_wide(&[
+        u16::from(b'b'),
+        u16::from(b'a'),
+        u16::from(b'd'),
+        0xD800, // unpaired high surrogate
+        u16::from(b'n'),
+        u16::from(b'a'),
+        u16::from(b'm'),
+        u16::from(b'e'),
+    ]);
+    let bad_lock_path = layout.active_lock_path(&bad_name);
+    std::fs::create_dir_all(layout.active_session_dir(&bad_name))?;
+    std::fs::write(
+        &bad_lock_path,
+        format!("pid={}\nkind=active\nnote=test\n", std::process::id()),
+    )?;
+
+    let locks = list_held_locks(&layout)?;
+    let paths: Vec<&std::path::Path> = locks.iter().map(|lock| lock.path.as_path()).collect();
+    assert_eq!(
+        locks.len(),
+        2,
+        "a held lock under a non-UTF-8 session name must not be silently dropped"
+    );
+    assert!(paths.contains(&active.path()));
+    assert!(paths.contains(&bad_lock_path.as_path()));
+
+    drop(active);
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 /// RFC 108 increment 2 control 3: `unlock` is a recovery surface, run precisely when a repository
 /// may not be fully valid. Removing `active/` entirely (simulating exactly that kind of damage) must
 /// not make `list_held_locks` error -- an empty result is what lets the rest of `unlock`'s recovery
