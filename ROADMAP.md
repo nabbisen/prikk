@@ -128,7 +128,6 @@ review records** — `.git-exclude/reviewed/` stays where reasoning lives; this 
 item is open.
 
 <!-- open-work-index:start -->
-- [`108-workspace-concurrent-sessions.md`](rfcs/proposed/108-workspace-concurrent-sessions.md) — RFC 108, Workspace: concurrent sessions in one physical project
 - [`109-agent-native-interface.md`](rfcs/proposed/109-agent-native-interface.md) — RFC 109, Agent-native interface
 - [`110-agent-safety-and-provenance.md`](rfcs/proposed/110-agent-safety-and-provenance.md) — RFC 110, Agent safety and code provenance
 - [`113-history-import-foundations.md`](rfcs/proposed/113-history-import-foundations.md) — RFC 113, History import foundations (Git, Subversion, CVS)

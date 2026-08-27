@@ -1,8 +1,13 @@
 # RFC 108 — Workspace: concurrent sessions in one physical project
 
-**Status.** **Proposed** — concept under discussion. Authored by the project owner 2026-08-18; recorded
-here by the architect with the open questions a design must answer first. **No design exists and
-implementation must not start from this record.**
+**Status.** **ACCEPTED by the project owner 2026-08-27**, on the design recorded below. Authored by the
+project owner 2026-08-18 as a concept; the owner ruled §6 — **Workspace patches are unsealed** (§6.2) —
+on 2026-08-27, and the architect's design (D1–D5) follows from that ruling.
+
+**A design now exists.** Implementation is scoped by handoff, and D5's recommended first increment is
+the mechanical one: generalise `active/<name>/` for the WAL and the active lock, with no CLI surface
+and no Workspace concept exposed. **D5 also names what this design deliberately does not settle** —
+naming and CLI surface, whether a Workspace may be shared, and the RFC 109 interaction.
 
 **Tracks.** A new product capability, not a correction.
 
