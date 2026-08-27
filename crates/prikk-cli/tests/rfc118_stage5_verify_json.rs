@@ -3,9 +3,10 @@
 //! `prikk-cli` has no third-party dependencies (RFC 118 §10 prerequisite 4), so there is no
 //! `serde_json` here either -- [`assert_valid_json`] below is a small, hand-written recursive-
 //! descent syntax check, written only to prove the emitted document parses, not a general-purpose
-//! parser. It covers exactly the four JSON forms `print_verify_report_json` can emit: objects,
-//! arrays, strings (with the same escapes `escape_json_string` writes), and the `true`/`false`
-//! literals.
+//! parser. It covers exactly the five JSON forms `print_verify_report_json` can emit: objects,
+//! arrays, strings (with the same escapes `escape_json_string` writes), the `true`/`false`
+//! literals, and (since RFC 108 increment 3b's `active_sessions.count`/`verified_count`) bare
+//! non-negative-integer numbers.
 
 #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
 
@@ -278,7 +279,56 @@ fn parse_value(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
         Some('t') => parse_literal(chars, "true"),
         Some('f') => parse_literal(chars, "false"),
         Some('n') => parse_literal(chars, "null"),
+        // RFC 108 increment 3b: `active_sessions.count`/`verified_count` are this emitter's first
+        // bare JSON numbers -- every prior form this validator covered was documented in the
+        // module doc above as exactly objects/arrays/strings/true/false. Extending the validator to
+        // recognize a fifth, genuinely new emitted form is not loosening an existing assertion.
+        Some(character) if character == '-' || character.is_ascii_digit() => parse_number(chars),
         other => panic!("unexpected token starting a JSON value: {other:?}"),
+    }
+}
+
+/// RFC 8259 §6 number grammar, minimally: optional leading `-`, one or more integer digits, an
+/// optional `.` fraction, an optional `e`/`E` exponent. Sufficient for this emitter's own output
+/// (plain non-negative integer counts today) without special-casing those specific values -- a
+/// syntax validator that only accepted the exact digits currently emitted would stop being a syntax
+/// validator.
+fn parse_number(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
+    if chars.peek() == Some(&'-') {
+        chars.next();
+    }
+    let mut has_digit = false;
+    while matches!(chars.peek(), Some(character) if character.is_ascii_digit()) {
+        chars.next();
+        has_digit = true;
+    }
+    assert!(has_digit, "expected at least one digit in a JSON number");
+    if chars.peek() == Some(&'.') {
+        chars.next();
+        let mut has_fraction_digit = false;
+        while matches!(chars.peek(), Some(character) if character.is_ascii_digit()) {
+            chars.next();
+            has_fraction_digit = true;
+        }
+        assert!(
+            has_fraction_digit,
+            "expected digit(s) after the decimal point in a JSON number"
+        );
+    }
+    if matches!(chars.peek(), Some('e' | 'E')) {
+        chars.next();
+        if matches!(chars.peek(), Some('+' | '-')) {
+            chars.next();
+        }
+        let mut has_exponent_digit = false;
+        while matches!(chars.peek(), Some(character) if character.is_ascii_digit()) {
+            chars.next();
+            has_exponent_digit = true;
+        }
+        assert!(
+            has_exponent_digit,
+            "expected digit(s) in a JSON number exponent"
+        );
     }
 }
 

@@ -18,6 +18,7 @@ use crate::test_support::{
     maintainer_signature as legacy_maintainer_signature, sample_object_id, signed_patch_envelope,
     unique_temp_dir,
 };
+use crate::wal::{WalRecord, encode_record_for_test};
 
 #[test]
 fn doctor_reports_healthy_repository() {
@@ -54,6 +55,71 @@ fn doctor_reports_trailing_partial_wal_warning() {
         );
     }
     let _ = std::fs::remove_dir_all(root);
+}
+
+/// RFC 108 §D3.3/§D3.4, increment 3b, control 3 (the silent hole this half of the increment
+/// exists to close): a second active session's trailing partial WAL was previously invisible to
+/// `doctor` entirely -- neither `verification.trailing_partial_wal_bytes` (a `default`-only scalar)
+/// nor anything else touched it. Plants `active/second/` by hand (nothing in the codebase creates a
+/// second active yet, the same technique increment 2's own controls use) with a trailing partial
+/// WAL tail, and asserts `doctor` now names it. `default`'s own warning-count assertion in the
+/// sibling test above is untouched by this -- confirming the two paths do not interfere.
+#[test]
+fn doctor_reports_a_trailing_partial_wal_for_a_non_default_active_session()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("doctor-non-default-partial-wal");
+    let layout = RepositoryLayout::init(root.clone())?;
+    std::fs::create_dir_all(layout.active_session_dir("second"))?;
+    std::fs::write(layout.active_queue_wal_path("second"), b"partial")?;
+
+    // This is a warning, not an error -- asserted explicitly, not left to an ambiguous "unhealthy"
+    // check that a reader might misread as implying the opposite severity.
+    let report = doctor_repository(&layout);
+    assert!(report.is_healthy());
+    assert!(report.issues.iter().any(|issue| issue.code
+        == "PRIKK-DOCTOR-ACTIVE-SESSION-WAL-TRAILING-PARTIAL"
+        && issue.message.contains("second")
+        && issue.message.contains('7')));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// The other new arm: a non-default active whose WAL fails to *replay* at all -- distinct from a
+/// merely-partial tail -- is reported as `PRIKK-DOCTOR-ACTIVE-SESSION-WAL-UNREADABLE`, an error.
+/// `default`'s equivalent failure is already caught by `verification`'s own `WalReplay` stage
+/// outcome (`repair_repository_still_refuses_when_the_wal_replay_stage_fails` below covers that
+/// side); a non-default active has no stage watching it, so this is the only thing that will.
+///
+/// **`Wal::replay()` tolerates almost everything by design** (RFC 102 Stage 2 isolate-and-continue:
+/// a bad magic or checksum is a per-record item finding, resynced past, never a hard `Err` from
+/// `decode_records` itself) -- so garbage bytes alone do not reach this arm; confirmed directly
+/// before writing this test, not assumed. The one thing that does make `replay()` itself return
+/// `Err` is `validate_read_schema` rejecting an otherwise well-formed record's envelope schema.
+/// Constructed here via `encode_record_for_test` (the same structural, validation-bypassing encoder
+/// `verify/tests/wal_cluster.rs` uses) with `schema_version` mutated to a value
+/// `format.rs::admitted_schemas` does not accept for `Patch`.
+#[test]
+fn doctor_reports_an_unreadable_wal_for_a_non_default_active_session() -> prikk_error::Result<()> {
+    let root = unique_temp_dir("doctor-non-default-unreadable-wal");
+    let layout = RepositoryLayout::init(root.clone())?;
+    std::fs::create_dir_all(layout.active_session_dir("second"))?;
+    let mut envelope = signed_patch_envelope();
+    envelope.schema_version = 99;
+    let record = WalRecord { seq: 1, envelope };
+    std::fs::write(
+        layout.active_queue_wal_path("second"),
+        encode_record_for_test(&record)?,
+    )?;
+
+    let report = doctor_repository(&layout);
+    assert!(!report.is_healthy());
+    assert!(report.issues.iter().any(|issue| issue.code
+        == "PRIKK-DOCTOR-ACTIVE-SESSION-WAL-UNREADABLE"
+        && issue.message.contains("second")));
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
 }
 
 /// Recovery-listing-tolerance follow-up, the silent-hole control: now that
@@ -437,6 +503,46 @@ fn doctor_rechecks_publication_guard_after_acquiring_active_lock() -> prikk_erro
     );
     assert_eq!(std::fs::read(layout.default_queue_wal_path())?, before);
     assert_eq!(std::fs::read(&candidate)?, b"candidate");
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 108 increment 3b, §2.3's second carried item: `repair_repository`'s refusal message used to
+/// say *"repository verification has errors"* unconditionally, but `before.is_healthy()` can be
+/// `false` from a doctor-level check that never calls `verify_repository` at all --
+/// `push_missing_required_directory_issues` (increment 2) is exactly that: it pushes its
+/// `DoctorIssue::error` before `verify_repository` is even invoked. Removes `refs/locks` (a required
+/// directory) to construct precisely that case -- `verify_repository` itself would report a clean
+/// pass here (nothing it checks reads `refs/locks`) -- and pins that the corrected message no longer
+/// blames "repository verification," which is exactly what a reader would have gone looking at and
+/// found nothing wrong with.
+#[test]
+fn repair_repository_refusal_message_does_not_blame_verify_for_a_doctor_level_check()
+-> prikk_error::Result<()> {
+    let root = unique_temp_dir("doctor-repair-refusal-message");
+    let layout = RepositoryLayout::init(root.clone())?;
+    std::fs::remove_dir_all(layout.refs_dir().join("locks"))?;
+
+    let before = doctor_repository(&layout);
+    assert!(!before.is_healthy());
+    assert!(
+        before
+            .issues
+            .iter()
+            .any(|issue| issue.code == "PRIKK-DOCTOR-MISSING-REQUIRED-DIRECTORY"),
+        "the unhealthy verdict here must come from the doctor-level check, not verify -- \
+         confirming the fixture actually exercises the case this message fix is for"
+    );
+
+    let error = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())
+        .err()
+        .ok_or_else(|| prikk_error::PrikkError::Integrity("repair unexpectedly ran".to_string()))?;
+    let message = error.to_string();
+    assert!(
+        !message.contains("repository verification"),
+        "message must not blame `verify` for a doctor-level check: {message}"
+    );
+
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }

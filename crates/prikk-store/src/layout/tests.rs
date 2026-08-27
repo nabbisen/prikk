@@ -356,13 +356,16 @@ fn active_relative_path_builders_match_repository_relative_for_ascii_names() -> 
 }
 
 /// Same property, for the two name shapes `format!`'s old reconstruction could not have represented
-/// at all -- invalid UTF-8 and a truncated multi-byte UTF-8 sequence. Pure path arithmetic (no
-/// filesystem call is made for these names, on any path), but gated `#[cfg(target_os = "linux")]`
-/// rather than left portable, matching this arc's own established convention for constructing these
-/// exact byte sequences as an `OsStr` -- not because this test could turn `main` red the way
-/// increment 2's did, but so a reader does not have to re-derive that these particular bytes are the
-/// increment-2-established ones.
-#[cfg(target_os = "linux")]
+/// at all -- invalid UTF-8 and a truncated multi-byte UTF-8 sequence.
+///
+/// **Widened from `#[cfg(target_os = "linux")]` to `#[cfg(unix)]`** (increment 3a review, carried
+/// forward): the real dependency is `std::os::unix::ffi::OsStrExt`, a `unix` API, not a Linux one.
+/// `target_os = "linux"` was too narrow here -- unlike the `unlock`/`wal`/`lock` non-UTF-8 tests,
+/// which genuinely need `linux` because they *write* the name to disk and APFS returns `EILSEQ` for
+/// it, this test does pure path arithmetic (`RepositoryLayout::init` creates only an ordinary temp
+/// repository; the non-UTF-8 bytes never reach a filesystem call). The mechanism that justifies the
+/// narrow gate elsewhere cannot fire here, so there is nothing for `cfg(unix)` to lose.
+#[cfg(unix)]
 #[test]
 fn active_relative_path_builders_match_repository_relative_for_non_utf8_names() -> Result<()> {
     use std::os::unix::ffi::OsStrExt;

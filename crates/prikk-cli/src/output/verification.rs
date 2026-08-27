@@ -56,6 +56,19 @@ fn escape_json_string(input: &str) -> String {
 /// by `label()` (an external interface as of RFC 118 stage 4/5 -- do not rename any). Counts and
 /// item-level findings are deliberately out of v1 scope (RFC 118 stage 5 handoff §1).
 ///
+/// **RFC 108 §D3.4, increment 3b: one exception, named and argued rather than silently added.**
+/// That handoff's own escape hatch for exactly this shape ("if you believe one specific count is
+/// required... name it and argue it -- do not add the set") is what licenses `active_sessions`
+/// below: `report.active_session_count`, plus a fixed `verified_count` (currently always `1`,
+/// `default` -- not yet a computed value, since nothing today verifies more than one). **This is
+/// additive, not a `verify-report-v1` schema break**: it is a new top-level key, every existing key
+/// keeps its exact prior meaning, and a consumer that does not know the key ignores it, same as any
+/// forward-compatible JSON consumer already must. The CI-gate use case this schema exists for reads
+/// `verdict.ok`/`verdict.failed_conditions`, unaffected by an added sibling key. Not bumped to a
+/// hypothetical `v2`: this repository's schema-versioning convention (`release-policy-boundary-v1`
+/// and siblings) reserves that for a change that reinterprets or removes something a v1 consumer
+/// already parsed, which this is not.
+///
 /// Review fix (stage 5 review v1, condition 1): this walks [`prikk_store::VerificationStage::ALL`]
 /// and looks up each stage's outcome, rather than walking `report.stage_outcomes` directly.
 /// `stage_outcomes` is documented to always carry exactly one entry per `ALL` member, but that
@@ -89,6 +102,10 @@ pub(crate) fn print_verify_report_json(report: &prikk_store::RepositoryVerificat
         json.push_str("\n    ");
     }
     json.push_str("]\n  },\n");
+    json.push_str(&format!(
+        "  \"active_sessions\": {{\"count\": {}, \"verified_count\": 1}},\n",
+        report.active_session_count
+    ));
     json.push_str("  \"stages\": [");
     for (index, stage) in prikk_store::VerificationStage::ALL.iter().enumerate() {
         let outcome = report
@@ -162,6 +179,15 @@ pub(crate) fn print_verify_report(
     report: &prikk_store::RepositoryVerification,
 ) {
     println!("verified repository: {}", layout.prikk_dir().display());
+    // RFC 108 §D3.4, increment 3b: named, not silent -- this report's own claims below are about
+    // sealed history, and an active session's unsealed WAL is not sealed history by definition.
+    // Printed before the stage list so a reader cannot reach "verification stages: N" and believe
+    // that N already accounts for every active session on disk.
+    println!(
+        "active sessions: {} total, 1 covered by sealed-history verification (default only, by \
+         construction -- see `prikk doctor` for the rest)",
+        report.active_session_count
+    );
     // DC-95 Stage 2 Level 1: the reader consults stage outcomes first, counts and findings second --
     // a `Failed`/`NotEvaluated` stage's own counts below read `unknown`, not `0`, for the same reason.
     println!("verification stages: {}", report.stage_outcomes.len());

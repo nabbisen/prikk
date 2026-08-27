@@ -657,6 +657,28 @@ fn verify_repository_accepts_merge_block_with_genuine_common_ancestor_baseline()
     Ok(())
 }
 
+/// RFC 108 §D3.4, increment 3b, control 1 (single active) and control 2 (a hand-planted second):
+/// `active_session_count` is sourced from `RepositoryLayout::active_session_names`, so a fresh
+/// repository reports `1` and gains one per session planted directly -- nothing in the codebase
+/// creates a second active yet, so this test constructs `active/second/` itself, the same technique
+/// increment 2's own controls use. Every other field on the report is untouched by this: this test
+/// does not assert on them, but the full-suite gate run for this increment separately confirmed zero
+/// existing assertions moved.
+#[test]
+fn verify_repository_reports_active_session_count() -> Result<()> {
+    let root = unique_temp_dir("verify-active-session-count");
+    let layout = RepositoryLayout::init(root.clone())?;
+
+    assert_eq!(verify_repository(&layout)?.active_session_count, 1);
+
+    std::fs::create_dir_all(layout.active_session_dir("second"))?;
+    std::fs::write(layout.active_queue_wal_path("second"), b"")?;
+    assert_eq!(verify_repository(&layout)?.active_session_count, 2);
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 #[test]
 fn verify_repository_counts_objects_and_wal_records() {
     let root = unique_temp_dir("verify");

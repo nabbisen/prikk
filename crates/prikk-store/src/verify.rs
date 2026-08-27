@@ -655,6 +655,16 @@ pub struct RepositoryVerification {
     /// before this stage existed — see the stage's own module note for what that means for a
     /// repository that already holds one.
     pub received_ref_item_outcomes: Vec<RefItemOutcome>,
+    /// Number of active sessions present on disk when this verification ran (RFC 108 §D3.4,
+    /// increment 3b). **Not itself a verification result** -- every other field on this report
+    /// describes exactly `DEFAULT_ACTIVE_NAME`'s sealed-history state, unconditionally, regardless
+    /// of this count. `verify`'s claim is about sealed history; an active session's own unsealed WAL
+    /// is not sealed history by definition (§D3.4's own ruling: *"`verify` reports Workspaces as out
+    /// of scope, explicitly... Silence would be the wrong answer"*). This field exists so that scope
+    /// boundary is stated, not silent -- the project's rule that absence must be explicit, applied
+    /// here to a *coverage* absence rather than a missing-directory one. Sourced from
+    /// `RepositoryLayout::active_session_names`, never a second, independently derived count.
+    pub active_session_count: usize,
 }
 
 /// A `Merge` block (DC-75) whose recorded `merge_baseline_block_id` is not a common ancestor of its
@@ -985,6 +995,13 @@ pub fn verify_repository_with_options(
     // call graph, confirmed by RFC 111 Q1's inventory), so it takes one decoded index snapshot here,
     // once, instead of the O(N) per-object-read decode `FileObjectStore` used to pay.
     let object_store = ObjectReadSnapshot::open(layout)?;
+    // RFC 108 §D3.4, increment 3b: propagated with `?`, unconditionally, the same footing as
+    // `ObjectReadSnapshot::open` immediately above -- a repository whose `active/` root is not
+    // enumerable at all is not a case any downstream stage could meaningfully evaluate either, and
+    // `active_session_names` itself already tolerates the one case that must not hard-fail (`active/`
+    // absent entirely, `Ok(vec![])`). Sourced from `RepositoryLayout::active_session_names`, the same
+    // enumeration `unlock`/`doctor` already use -- never a second, independently derived count.
+    let active_session_count = layout.active_session_names()?.len();
     let mut trust_verifier = PublicationTrustVerifier::new(layout);
     let mut pipeline = StagePipeline::new(options.stop_on_first_error);
 
@@ -1292,6 +1309,7 @@ pub fn verify_repository_with_options(
         merge_baseline_divergences,
         block_seals,
         received_ref_item_outcomes,
+        active_session_count,
     })
 }
 

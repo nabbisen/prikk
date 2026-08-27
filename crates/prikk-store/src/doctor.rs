@@ -238,11 +238,72 @@ fn push_missing_required_directory_issues(
     }
 }
 
+/// Report each **non-default** active session's WAL state directly: a trailing partial tail, or a
+/// WAL that fails to replay at all. `default`'s own WAL health stays exactly where it already was --
+/// sourced from `verification.trailing_partial_wal_bytes`/the `WalReplay` stage outcome below, both
+/// untouched by this function -- so this is new coverage, not a second reader of a fact doctor
+/// already had for `default`.
+///
+/// RFC 108 §D3.3/§D3.4, increment 3b: with a second active session on disk, doctor was previously
+/// silent about its WAL entirely -- the same silent-hole shape increment 2 closed for `unlock`'s
+/// per-ref-lock listing and `verify`'s ref-candidate-debris scan. `default`'s WAL replay failure is
+/// already caught by `verification`'s own `WalReplay` stage outcome (relayed into a
+/// `PRIKK-DOCTOR-VERIFY-STAGE-INCOMPLETE` error below); a non-default active has no stage watching
+/// it, so this function is the only thing that will report one failing to replay at all.
+///
+/// **Adjudication (handoff §2.2): doctor does not re-read `default`'s WAL here.** The alternative --
+/// one uniform loop over every active including `default`, ignoring what `verification` already
+/// computed -- was rejected: `default`'s path is already correct and already tested (existing
+/// assertions pin its exact behaviour), so re-deriving it a second way here would be duplication with
+/// no coverage gained, the "two readers of one fact" shape this project keeps punishing. Skipping
+/// `default` costs a small asymmetry (its trailing-partial warning and a non-default one use
+/// different `DoctorIssue` codes), but every active session's WAL state is still surfaced by exactly
+/// one path each -- the actual requirement.
+fn push_non_default_active_session_wal_issues(
+    layout: &RepositoryLayout,
+    issues: &mut Vec<DoctorIssue>,
+) {
+    let Ok(names) = layout.active_session_names() else {
+        // Absence or a wrong-type occupant at `active/` itself is already reported by
+        // `push_missing_required_directory_issues` above -- nothing further to add here.
+        return;
+    };
+    for name in names {
+        if name.to_str() == Some(DEFAULT_ACTIVE_NAME) {
+            continue;
+        }
+        match Wal::for_layout(layout, &name).replay() {
+            Ok(replay) if replay.trailing_partial_bytes != 0 => {
+                issues.push(DoctorIssue::warning(
+                    "PRIKK-DOCTOR-ACTIVE-SESSION-WAL-TRAILING-PARTIAL",
+                    format!(
+                        "active session {name:?} has {} trailing byte(s) that look like an \
+                         incomplete final record",
+                        replay.trailing_partial_bytes
+                    ),
+                    "preserve the repository; per-active-session WAL repair is not yet implemented \
+                     (RFC 108 increment 3c)",
+                ));
+            }
+            Ok(_) => {}
+            Err(error) => {
+                issues.push(DoctorIssue::error(
+                    "PRIKK-DOCTOR-ACTIVE-SESSION-WAL-UNREADABLE",
+                    format!("active session {name:?}'s WAL failed to read: {error}"),
+                    "preserve the repository and inspect the active session's WAL before attempting \
+                     repair",
+                ));
+            }
+        }
+    }
+}
+
 /// Run doctor diagnostics for a repository layout.
 #[must_use]
 pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
     let mut issues = Vec::new();
     push_missing_required_directory_issues(layout, &mut issues);
+    push_non_default_active_session_wal_issues(layout, &mut issues);
     match verify_repository(layout) {
         Ok(verification) => {
             issues.push(DoctorIssue::info(
@@ -466,8 +527,17 @@ pub fn repair_repository(
     crate::refs::ensure_no_incomplete_publication(layout)?;
     let before = doctor_repository(layout);
     if !before.is_healthy() {
+        // RFC 108 increment 3b: this used to say "repository verification has errors," but
+        // `before.is_healthy()` can be false from a doctor-level check that never touches
+        // `verify_repository` at all -- `push_missing_required_directory_issues` (increment 2) and
+        // `push_non_default_active_session_wal_issues` (this increment) both push `DoctorIssue::error`
+        // directly, before `verify_repository` is even called. A reader who went looking at `verify`
+        // output for the reason would find nothing. The refusal itself is unchanged -- only the
+        // message.
         return Err(PrikkError::Integrity(
-            "doctor repair refused because repository verification has errors".to_string(),
+            "doctor repair refused because the repository is not healthy; see `prikk doctor`'s own \
+             issue list for which check reported it -- not necessarily a `verify` finding"
+                .to_string(),
         ));
     }
     let wal_repair = if options.truncate_wal_tail {
