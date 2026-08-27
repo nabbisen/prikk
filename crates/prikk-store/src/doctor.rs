@@ -7,6 +7,7 @@
 use prikk_error::{PrikkError, Result};
 
 use crate::block_state::BlockStateStatus;
+use crate::fsutil::{EntryKind, inspect_entry};
 use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryLayout};
 use crate::lock::ActiveLock;
 use crate::refs::{RefFileStatus, RefItemStatus};
@@ -179,10 +180,69 @@ pub struct DoctorRepairReport {
     pub after: DoctorReport,
 }
 
+/// Report every required directory that is missing or occupied by something other than a
+/// directory, sourced from `RepositoryLayout::required_directories` -- the same inventory `init`
+/// itself creates from, never a second hand-typed list of paths.
+///
+/// **This is the "some surface must say a required directory is missing" half of the
+/// recovery-listing-tolerance follow-up.** `unlock`'s per-ref lock listing and `verify`'s
+/// ref-candidate-debris scan both now tolerate their own required directory being absent rather
+/// than erroring -- correct for keeping those two commands usable on a damaged repository, but on
+/// its own it would convert a loud failure into a silent one (a repository missing `refs/locks`
+/// would report "no locks held", confidently and wrongly, with nothing anywhere saying the
+/// directory is gone). `doctor` is where an operator actually looks to ask "what is wrong with this
+/// repository," so this check runs here, independently of whatever any individual listing chose to
+/// tolerate -- it does not depend on `unlock` or `verify` having been run at all.
+fn push_missing_required_directory_issues(
+    layout: &RepositoryLayout,
+    issues: &mut Vec<DoctorIssue>,
+) {
+    for dir in layout.required_directories() {
+        let relative = match layout.repository_relative(&dir) {
+            Ok(relative) => relative,
+            Err(err) => {
+                issues.push(DoctorIssue::error(
+                    "PRIKK-DOCTOR-REQUIRED-DIRECTORY-UNREADABLE",
+                    format!(
+                        "could not resolve required directory {}: {err}",
+                        dir.display()
+                    ),
+                    "preserve the repository and inspect its layout before attempting repair",
+                ));
+                continue;
+            }
+        };
+        match inspect_entry(layout.repository_mutation_root(), &relative) {
+            Ok(None) => issues.push(DoctorIssue::error(
+                "PRIKK-DOCTOR-MISSING-REQUIRED-DIRECTORY",
+                format!("required directory is missing: {}", dir.display()),
+                "recreate the directory matching a fresh `init`'s own layout, or restore the \
+                 repository from backup; doctor does not create required directories automatically",
+            )),
+            Ok(Some(EntryKind::Directory)) => {}
+            Ok(Some(_)) => issues.push(DoctorIssue::error(
+                "PRIKK-DOCTOR-REQUIRED-DIRECTORY-WRONG-TYPE",
+                format!(
+                    "required directory location is occupied by something other than a directory: {}",
+                    dir.display()
+                ),
+                "preserve the repository for inspection; doctor does not replace unexpected \
+                 filesystem entries",
+            )),
+            Err(err) => issues.push(DoctorIssue::error(
+                "PRIKK-DOCTOR-REQUIRED-DIRECTORY-UNREADABLE",
+                format!("could not check required directory {}: {err}", dir.display()),
+                "preserve the repository and inspect its layout before attempting repair",
+            )),
+        }
+    }
+}
+
 /// Run doctor diagnostics for a repository layout.
 #[must_use]
 pub fn doctor_repository(layout: &RepositoryLayout) -> DoctorReport {
     let mut issues = Vec::new();
+    push_missing_required_directory_issues(layout, &mut issues);
     match verify_repository(layout) {
         Ok(verification) => {
             issues.push(DoctorIssue::info(

@@ -56,6 +56,85 @@ fn doctor_reports_trailing_partial_wal_warning() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// Recovery-listing-tolerance follow-up, the silent-hole control: now that
+/// `unlock::list_held_locks` tolerates its own required directory (`refs/locks`) being absent
+/// rather than erroring, something must still say so -- otherwise a repository missing it reports
+/// "no locks held", confidently and wrongly, with nothing anywhere naming the real defect.
+/// `doctor_repository` is that something, sourced from `RepositoryLayout::required_directories`
+/// rather than a second hand-typed list of paths.
+#[test]
+fn doctor_reports_a_missing_refs_locks_directory_even_though_unlock_tolerates_it() {
+    let root = unique_temp_dir("doctor-missing-refs-locks");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        assert!(std::fs::remove_dir_all(layout.refs_dir().join("locks")).is_ok());
+
+        // `unlock` itself must not fail -- that is the fix this check exists alongside, not the
+        // thing under test here, but worth pinning at the seam between the two.
+        assert!(crate::list_held_locks(&layout).is_ok_and(|locks| locks.is_empty()));
+
+        let report = doctor_repository(&layout);
+        assert!(!report.is_healthy());
+        assert!(report.issues.iter().any(|issue| issue.code
+            == "PRIKK-DOCTOR-MISSING-REQUIRED-DIRECTORY"
+            && issue.severity == DoctorSeverity::Error
+            && issue.message.contains("refs/locks")));
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// Same control, the other site: `refs/tmp` missing is what made
+/// `refs/verify.rs::candidate_issues` fail outright before this follow-up (and, under
+/// `--stop-on-first-error`, halt every later verification stage -- see
+/// `verify::tests::stage_containment`). `verify_repository` itself now returns cleanly over it;
+/// `doctor` is what still calls the repository unhealthy.
+#[test]
+fn doctor_reports_a_missing_refs_tmp_directory_even_though_verify_tolerates_it() {
+    let root = unique_temp_dir("doctor-missing-refs-tmp");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        assert!(std::fs::remove_dir_all(layout.refs_dir().join("tmp")).is_ok());
+
+        assert!(crate::verify_repository(&layout).is_ok_and(|report| !report.has_stage_failure()));
+
+        let report = doctor_repository(&layout);
+        assert!(!report.is_healthy());
+        assert!(report.issues.iter().any(|issue| issue.code
+            == "PRIKK-DOCTOR-MISSING-REQUIRED-DIRECTORY"
+            && issue.severity == DoctorSeverity::Error
+            && issue.message.contains("refs/tmp")));
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// The `Some(_)` arm of the new required-directory check: a required directory location occupied by
+/// something other than a directory is a distinct, real defect from absence, reported under its own
+/// code -- a reader fixing "missing" by creating an empty directory would not think to first remove
+/// the file already sitting in its way.
+#[test]
+fn doctor_reports_a_required_directory_occupied_by_a_file() {
+    let root = unique_temp_dir("doctor-required-dir-wrong-type");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let locks_dir = layout.refs_dir().join("locks");
+        assert!(std::fs::remove_dir_all(&locks_dir).is_ok());
+        assert!(std::fs::write(&locks_dir, b"not a directory").is_ok());
+
+        let report = doctor_repository(&layout);
+        assert!(!report.is_healthy());
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| issue.code == "PRIKK-DOCTOR-REQUIRED-DIRECTORY-WRONG-TYPE")
+        );
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
 /// DC-95 Stage 2 Level 1: a hard error inside a verification stage no longer aborts
 /// `verify_repository` itself -- it's contained as a `Failed` outcome for that stage, so
 /// `doctor_repository` still gets a full `RepositoryVerification` to report against (`verification`

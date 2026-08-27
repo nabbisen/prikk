@@ -36,7 +36,9 @@ use std::path::{Path, PathBuf};
 
 use prikk_error::Result;
 
-use crate::fsutil::{EntryKind, list_directory, read_file_if_exists, remove_file_required};
+use crate::fsutil::{
+    EntryKind, list_directory_tolerating_absence, read_file_if_exists, remove_file_required,
+};
 use crate::layout::{LockableContainer, RepositoryLayout};
 
 /// Best-effort, advisory-only liveness of a lock's recorded `pid=`. See the module doc for why a
@@ -142,6 +144,14 @@ fn read_lock_if_present(layout: &RepositoryLayout, path: &Path) -> Result<Option
 /// RFC 108 increment 2: previously read one hardcoded active-session lock. `layout.rs`'s own
 /// enumeration is what makes this plural now, so a second active session -- still not creatable by
 /// anything today -- is found rather than silently missed the day something does create one.
+///
+/// **Tolerates a missing `refs/locks` directory rather than erroring** (recovery-listing-tolerance
+/// follow-up): this is a recovery surface, run precisely when a repository may not be fully valid,
+/// and `refs/locks` being absent used to make this whole function -- and `prikk unlock` with it --
+/// fail outright, defeating the one command that exists to clear a wedged lock. The absence itself
+/// is reported by `doctor`, not here (`doctor_repository`'s own sweep over
+/// `RepositoryLayout::required_directories`), so this function stays a pure listing rather than
+/// growing a second, ad hoc way to say "something is missing."
 pub fn list_held_locks(layout: &RepositoryLayout) -> Result<Vec<HeldLock>> {
     let mut locks = Vec::new();
 
@@ -153,13 +163,20 @@ pub fn list_held_locks(layout: &RepositoryLayout) -> Result<Vec<HeldLock>> {
 
     let ref_locks_dir = layout.refs_dir().join("locks");
     let ref_locks_relative = layout.repository_relative(&ref_locks_dir)?;
-    for entry in list_directory(layout.repository_mutation_root(), &ref_locks_relative)? {
-        if entry.kind != EntryKind::Regular {
-            continue;
-        }
-        let path = ref_locks_dir.join(&entry.name);
-        if let Some(lock) = read_lock_if_present(layout, &path)? {
-            locks.push(lock);
+    if let Some(entries) = list_directory_tolerating_absence(
+        layout.repository_mutation_root(),
+        &ref_locks_dir,
+        &ref_locks_relative,
+        "the per-ref lock directory",
+    )? {
+        for entry in entries {
+            if entry.kind != EntryKind::Regular {
+                continue;
+            }
+            let path = ref_locks_dir.join(&entry.name);
+            if let Some(lock) = read_lock_if_present(layout, &path)? {
+                locks.push(lock);
+            }
         }
     }
 

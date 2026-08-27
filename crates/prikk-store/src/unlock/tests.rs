@@ -1,5 +1,7 @@
 #![allow(clippy::indexing_slicing)]
 
+use std::path::PathBuf;
+
 use prikk_error::Result;
 
 use super::{PidLiveness, clear_lock, find_held_lock, list_held_locks, read_lock_if_present};
@@ -376,6 +378,76 @@ fn list_held_locks_succeeds_when_the_active_directory_is_entirely_missing() -> R
     std::fs::remove_dir_all(layout.active_dir())?;
 
     assert!(list_held_locks(&layout)?.is_empty());
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// Recovery-listing-tolerance follow-up, site 1's "after" control: `refs/locks` is a required
+/// directory (`layout.rs::required_directories`), and before this fix a missing one made this whole
+/// function -- and `prikk unlock` with it -- fail outright (`Err: i/o error: directory is absent:
+/// refs/locks`), defeating the one command that exists to clear a wedged lock on a repository that
+/// may not be fully valid. The report quotes the reverted-and-reran probe showing that real "before"
+/// error; this is the "after". The absence itself is reported by `doctor`, not here -- see
+/// `push_missing_required_directory_issues`'s own doc and
+/// `doctor::tests::doctor_reports_a_missing_refs_locks_directory_even_though_unlock_tolerates_it`.
+#[test]
+fn list_held_locks_succeeds_when_refs_locks_directory_is_missing() -> Result<()> {
+    let root = unique_temp_dir("unlock-missing-refs-locks-dir");
+    let layout = RepositoryLayout::init(root.clone())?;
+    std::fs::remove_dir_all(layout.refs_dir().join("locks"))?;
+
+    assert!(list_held_locks(&layout)?.is_empty());
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// Recovery-listing-tolerance follow-up, control 3: the per-ref lock listing's sort is load-bearing,
+/// not merely present. Verified by temporarily removing only the `sort_by` call inside
+/// `fsutil::list_directory_tolerating_absence` and re-running this exact test -- it failed (quoted in
+/// the report) -- then restoring it via `Edit`, matching RFC 108 increment 2's own lesson that a sort
+/// test which would pass regardless of the sort is not a control.
+///
+/// **The insertion order matters and was chosen deliberately, not copied from increment 2's own
+/// example.** A first attempt planted these same three names in `["zzz", "mmm", "aaa"]` order and
+/// passed even with the sort removed: this filesystem's raw `readdir` happens to return entries in
+/// *reverse insertion order* (confirmed by direct probe), and the reverse of an already-descending
+/// insertion order is ascending -- indistinguishable from the sorted result by accident, exactly the
+/// false-positive control the increment-2 report warned about. `["mmm", "zzz", "aaa"]` avoids that:
+/// its reverse (`aaa, zzz, mmm`) is not sorted order (`aaa, mmm, zzz`), confirmed by the same probe
+/// before writing this assertion.
+///
+/// Lock file names are hand-planted, not derived through `RefLock::acquire` (which hashes the ref
+/// name via `ref_name_storage_key` into an unpredictable-by-design filename) -- this test only needs
+/// *some* three names whose sorted order differs from this filesystem's actual raw order, and
+/// controlling them directly is simpler than fighting the hash.
+#[test]
+fn list_held_locks_reports_per_ref_locks_in_sorted_order() -> Result<()> {
+    let root = unique_temp_dir("unlock-ref-lock-order");
+    let layout = RepositoryLayout::init(root.clone())?;
+    let locks_dir = layout.refs_dir().join("locks");
+    for name in ["mmm", "zzz", "aaa"] {
+        std::fs::write(
+            locks_dir.join(format!("{name}.lock")),
+            format!("pid={}\nkind=ref\nnote=test\n", std::process::id()),
+        )?;
+    }
+
+    let locks = list_held_locks(&layout)?;
+    let ref_lock_paths: Vec<PathBuf> = locks
+        .iter()
+        .filter(|lock| lock.kind == "ref")
+        .map(|lock| lock.path.clone())
+        .collect();
+    let expected: Vec<PathBuf> = ["aaa", "mmm", "zzz"]
+        .iter()
+        .map(|name| locks_dir.join(format!("{name}.lock")))
+        .collect();
+    assert_eq!(
+        ref_lock_paths, expected,
+        "per-ref locks must come back sorted by raw name bytes, not directory-listing order"
+    );
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

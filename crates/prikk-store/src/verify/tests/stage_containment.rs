@@ -605,6 +605,52 @@ fn verify_repository_with_options_halts_every_later_stage_when_stop_on_first_err
     Ok(())
 }
 
+/// Recovery-listing-tolerance follow-up, site 2's "after" control. Before this fix, a missing
+/// `refs/tmp` directory made `refs/verify.rs::candidate_issues`'s bare `list_directory` call fail
+/// outright, which `verify_refs`'s own `Err` propagation turned into a `Failed` `Refs` stage outcome
+/// -- and, under `--stop-on-first-error`, halted every stage after it, exactly the shape asserted
+/// above for a genuinely broken `Objects` stage. The report quotes a reverted-and-reran probe
+/// showing that real "before" failure; this test is the "after": `Refs` now evaluates cleanly over
+/// the missing directory, so nothing downstream is halted by it.
+#[test]
+fn verify_repository_tolerates_a_missing_ref_candidate_directory_even_with_stop_on_first_error()
+-> Result<()> {
+    let root = unique_temp_dir("stage2-missing-refs-tmp-tolerated");
+    let layout = RepositoryLayout::init(root.clone())?;
+    std::fs::remove_dir_all(layout.refs_dir().join("tmp"))?;
+
+    let report = verify_repository_with_options(
+        &layout,
+        VerifyOptions {
+            stop_on_first_error: true,
+        },
+    )?;
+    assert!(
+        !report.has_stage_failure(),
+        "expected a clean report despite the missing refs/tmp, got: {report:?}"
+    );
+    assert!(matches!(
+        find_stage(&report.stage_outcomes, VerificationStage::Refs).status,
+        StageStatus::Evaluated
+    ));
+    for later in [
+        VerificationStage::WalReplay,
+        VerificationStage::CommitIndex,
+        VerificationStage::LifecycleCache,
+    ] {
+        assert!(
+            matches!(
+                find_stage(&report.stage_outcomes, later).status,
+                StageStatus::Evaluated
+            ),
+            "stage {later} should not have been halted by a tolerated missing refs/tmp"
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
 /// RFC 118 stage 4 §3: the completeness invariant `RepositoryVerification::stage_outcomes`'s own
 /// doc promises -- exactly one outcome per [`VerificationStage::ALL`] entry -- asserted against a
 /// **real** `verify_repository` report, not a hand-built `RepositoryVerification`. A test that

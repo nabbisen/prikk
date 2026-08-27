@@ -1,11 +1,10 @@
 //! Joint ref pointer and ref-log verification.
 
 use std::collections::BTreeSet;
-use std::path::Path;
 
 use prikk_error::{PrikkError, Result};
 
-use crate::fsutil::{EntryKind, list_directory};
+use crate::fsutil::{EntryKind, list_directory_tolerating_absence};
 use crate::layout::RepositoryLayout;
 use crate::object_store::ObjectReadSnapshot;
 use crate::signature_diagnostics::{
@@ -268,10 +267,27 @@ fn next_log_sequence(log: Option<&LogState>) -> Result<u64> {
         .ok_or_else(|| PrikkError::Integrity("ref-log sequence overflow".to_string()))
 }
 
+/// **Tolerates a missing `refs/tmp` directory rather than erroring** (recovery-listing-tolerance
+/// follow-up): a bare `list_directory` call here used to fail this whole scan -- and, through
+/// `verify_refs`'s `Err` being caught into a `Failed` stage outcome, halt every downstream
+/// verification stage under `--stop-on-first-error` -- over one missing debris-scan directory. The
+/// absence itself is reported by `doctor`'s own sweep over `RepositoryLayout::required_directories`,
+/// not here, so this stays a pure scan rather than growing a second way to say "something is
+/// missing."
 fn candidate_issues(layout: &RepositoryLayout) -> Result<Vec<RefPublicationIssue>> {
     let mut issues = Vec::new();
-    let relative = Path::new("refs/tmp");
-    for entry in list_directory(layout.repository_mutation_root(), relative)? {
+    let dir = layout.refs_dir().join("tmp");
+    let relative = layout.repository_relative(&dir)?;
+    let Some(entries) = list_directory_tolerating_absence(
+        layout.repository_mutation_root(),
+        &dir,
+        &relative,
+        "the ref candidate directory",
+    )?
+    else {
+        return Ok(issues);
+    };
+    for entry in entries {
         if entry.kind == EntryKind::Regular {
             issues.push(RefPublicationIssue {
                 code: "PRIKK-VERIFY-REF-CANDIDATE-DEBRIS",
