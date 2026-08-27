@@ -2,7 +2,7 @@
 
 mod proptest_framing;
 
-use crate::{RepositoryLayout, Wal};
+use crate::{DEFAULT_ACTIVE_NAME, RepositoryLayout, Wal};
 
 use crate::fsutil::{TestFailPoint, fail_once_for_test};
 use crate::test_support::{rollback_patch_envelope, signed_patch_envelope, unique_temp_dir};
@@ -20,7 +20,7 @@ fn wal_file_exists_after_init_and_replays_identically_to_missing() {
     if let Ok(layout) = layout {
         assert!(layout.default_queue_wal_path().exists());
         assert!(std::fs::read(layout.default_queue_wal_path()).is_ok_and(|bytes| bytes.is_empty()));
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         let replay = wal.replay();
         assert!(replay.is_ok());
         if let Ok(replay) = replay {
@@ -37,7 +37,7 @@ fn wal_roundtrips_signed_patch_envelope() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         let envelope = signed_patch_envelope();
         let seq = wal.append_patch(&envelope);
         assert_eq!(seq, Ok(1));
@@ -63,7 +63,7 @@ fn wal_rejects_unsigned_patch_envelope() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         let mut envelope = signed_patch_envelope();
         envelope.signatures.clear();
         let result = wal.append_patch(&envelope);
@@ -78,7 +78,7 @@ fn wal_file_sync_failure_retains_replayable_record() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         fail_once_for_test(TestFailPoint::RequiredFileSync);
         assert!(wal.append_patch(&signed_patch_envelope()).is_err());
         let replay = wal.replay();
@@ -99,7 +99,7 @@ fn first_wal_directory_sync_failure_retains_replayable_record() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         fail_once_for_test(TestFailPoint::RequiredDirectorySync);
         assert!(wal.append_patch(&signed_patch_envelope()).is_err());
         let replay = wal.replay();
@@ -120,7 +120,7 @@ fn wal_truncate_failure_retains_partial_tail_and_retry_repairs_it() -> prikk_err
 
     let root = unique_temp_dir("wal-truncate-failure");
     let layout = RepositoryLayout::init(root.clone())?;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
     let mut file = std::fs::OpenOptions::new().append(true).open(wal.path())?;
     file.write_all(b"partial")?;
@@ -150,7 +150,7 @@ fn wal_truncate_preserves_all_complete_records_in_a_torn_queue_and_reports_their
 
     let root = unique_temp_dir("wal-torn-queue");
     let layout = RepositoryLayout::init(root.clone())?;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     let first = signed_patch_envelope();
     let second = rollback_patch_envelope();
     assert_eq!(wal.append_patch(&first)?, 1);
@@ -189,7 +189,7 @@ fn wal_truncate_preserves_all_complete_records_in_a_torn_queue_and_reports_their
 fn existing_wal_append_write_failure_is_retryable() -> prikk_error::Result<()> {
     let root = unique_temp_dir("wal-append-write-failure");
     let layout = RepositoryLayout::init(root.clone())?;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     assert_eq!(wal.append_patch(&signed_patch_envelope()), Ok(1));
     let mut second = signed_patch_envelope();
     if let Some(signature) = second.signatures.first_mut() {
@@ -210,7 +210,7 @@ fn existing_wal_append_write_failure_is_retryable() -> prikk_error::Result<()> {
 fn wal_replay_and_append_remain_on_retained_repository_root() -> prikk_error::Result<()> {
     let root = unique_temp_dir("wal-root-replacement");
     let layout = RepositoryLayout::init(root.clone())?;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     assert_eq!(wal.append_patch(&signed_patch_envelope()), Ok(1));
     let displaced = root.join(".prikk-displaced");
     std::fs::rename(layout.prikk_dir(), &displaced)?;

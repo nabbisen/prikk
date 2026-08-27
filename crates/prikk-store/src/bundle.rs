@@ -83,7 +83,7 @@ use crate::author_key_index::{
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_bytes_u64, push_u64};
 use crate::fsutil::len_to_u64;
-use crate::layout::{LockableContainer, RepositoryLayout};
+use crate::layout::{DEFAULT_ACTIVE_NAME, LockableContainer, RepositoryLayout};
 use crate::lock::{ActiveLock, acquire_container_locks};
 use crate::object_store::{ObjectReadSnapshot, ObjectReader, ObjectWriteSession, ObjectWriter};
 use crate::patch_replay::decode::{
@@ -558,7 +558,7 @@ pub fn import_bundle(
     // the same defect this fixes).
     let mut recorded_author_key_count = 0_usize;
     {
-        let active_lock = ActiveLock::acquire(layout)?;
+        let active_lock = ActiveLock::acquire(layout, DEFAULT_ACTIVE_NAME)?;
         for (&key_id, &public_key) in &bundle_key_ids {
             check_author_key_conflict(layout, key_id, public_key)?;
         }

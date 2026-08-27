@@ -38,8 +38,8 @@ use prikk_object::{
     RefUpdatePayload,
 };
 use prikk_store::{
-    DEFAULT_CHECKOUT_REF, FileObjectStore, GatedOperation, MaintainerSigner, ObjectReader,
-    ObjectWriteSession, RefPublication, RefStore, Wal, maintainer_signature,
+    DEFAULT_ACTIVE_NAME, DEFAULT_CHECKOUT_REF, FileObjectStore, GatedOperation, MaintainerSigner,
+    ObjectReader, ObjectWriteSession, RefPublication, RefStore, Wal, maintainer_signature,
     require_active_ref_for_non_empty_wal, validate_local_branch_ref, verify_signer_trusted,
 };
 
@@ -258,7 +258,7 @@ fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
         return Err(format!("branch {canonical} is already closed"));
     }
 
-    let replay = Wal::for_layout(&layout)
+    let replay = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
         .replay()
         .map_err(|err| err.to_string())?;
     // RFC 102 Stage 2: a WAL whose only record is damaged would otherwise read as

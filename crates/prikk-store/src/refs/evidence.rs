@@ -5,13 +5,13 @@ use prikk_object::{BlockPayload, ObjectType, RefStatePayload};
 
 use super::{RefPublication, RefStore};
 use crate::active::{ActiveRefMetadata, read_active_ref_metadata};
-use crate::layout::RepositoryLayout;
+use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryLayout};
 use crate::object_store::{FileObjectStore, ObjectReader};
 use crate::trust::{load_maintainer_trust_policy, verify_trusted_publication_envelope};
 use crate::wal::Wal;
 
 pub(super) fn has_incomplete_active_cleanup(layout: &RepositoryLayout) -> Result<bool> {
-    let replay = Wal::for_layout(layout).replay()?;
+    let replay = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME).replay()?;
     let ActiveRefMetadata::Valid(ref_name) = read_active_ref_metadata(layout)? else {
         return Ok(false);
     };
@@ -64,7 +64,7 @@ pub(super) fn validate_signer_backed_recovery(
             ));
         }
     }
-    let replay = Wal::for_layout(layout).replay()?;
+    let replay = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME).replay()?;
     if replay.records.is_empty() || replay.trailing_partial_bytes != 0 {
         return Err(PrikkError::Integrity(
             "signer-backed ref recovery requires a complete non-empty active WAL".to_string(),

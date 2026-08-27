@@ -114,11 +114,14 @@ impl Wal {
         }
     }
 
-    /// Create a WAL handle authorized by a validated repository layout.
+    /// Create a WAL handle authorized by a validated repository layout, for the active session
+    /// named `name` (RFC 108 increment 1: previously hardcoded to `"default"`; the layout stays
+    /// the authority on the absolute path, so this only accepts a name rather than building path
+    /// segments of its own beyond the relative literal it already carried).
     #[must_use]
-    pub fn for_layout(layout: &RepositoryLayout) -> Self {
-        let path = layout.default_queue_wal_path();
-        let relative = PathBuf::from("active/default/queue.wal");
+    pub fn for_layout(layout: &RepositoryLayout, name: &str) -> Self {
+        let path = layout.active_queue_wal_path(name);
+        let relative = PathBuf::from(format!("active/{name}/queue.wal"));
         Self {
             path,
             mutation: Some((layout.repository_mutation_root().clone(), relative)),

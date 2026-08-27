@@ -16,7 +16,8 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::{ObjectEnvelope, Signature, SignatureAlgorithm, SignerRole, ascii_fold};
 
 use crate::layout::{
-    LockableContainer, RepositoryLayout, validate_maintainer_key_id_storage_safety,
+    DEFAULT_ACTIVE_NAME, LockableContainer, RepositoryLayout,
+    validate_maintainer_key_id_storage_safety,
 };
 use crate::lock::{ActiveLock, acquire_container_locks};
 use crate::maintainer_signing::MaintainerSigner;
@@ -87,7 +88,7 @@ pub fn add_trusted_maintainer(
     public_key_hex: &str,
 ) -> Result<(AdoptedMaintainerKey, bool)> {
     layout.require_current_format()?;
-    let _active_lock = ActiveLock::acquire(layout)?;
+    let _active_lock = ActiveLock::acquire(layout, DEFAULT_ACTIVE_NAME)?;
     // RFC 102 Stage 6 Step 2, design-v1.md §15.8: `TrustPolicy` gets its own container-scoped lock,
     // not just `ActiveLock` -- the owner's decision 2 (design-v1.md §15.7) that the exclusion
     // mechanism against the compactor must be container-scoped, so a `prikk compact` run on an
@@ -151,7 +152,7 @@ pub fn add_trusted_maintainer(
 /// introducing it now would be a new state `verify`'s trust classification does not account for.
 pub fn remove_trusted_maintainer(layout: &RepositoryLayout, key_id: &str) -> Result<bool> {
     layout.require_current_format()?;
-    let _active_lock = ActiveLock::acquire(layout)?;
+    let _active_lock = ActiveLock::acquire(layout, DEFAULT_ACTIVE_NAME)?;
     // See `add_trusted_maintainer`'s identical comment: `TrustPolicy`'s own container-scoped lock,
     // additional to `ActiveLock`, per design-v1.md §15.7/§15.8.
     let _trust_policy_lock = acquire_container_locks(layout, &[LockableContainer::TrustPolicy])?;

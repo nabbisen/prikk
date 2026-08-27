@@ -56,8 +56,8 @@ use crate::test_support::{
 };
 use crate::wal::{WalRecord, WalRecordStatus, encode_record_for_test};
 use crate::{
-    DoctorRepairOptions, FileObjectStore, ObjectWriter, RepositoryLayout, VerificationStage, Wal,
-    repair_repository, verify_repository,
+    DEFAULT_ACTIVE_NAME, DoctorRepairOptions, FileObjectStore, ObjectWriter, RepositoryLayout,
+    VerificationStage, Wal, repair_repository, verify_repository,
 };
 
 fn write_wal_records(wal: &Wal, records: &[WalRecord]) -> Result<()> {
@@ -116,7 +116,7 @@ fn verify_repository_detects_wal_checksum_mismatch() -> Result<()> {
         ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);
     envelope.add_signature(rollback_author_signature())?;
 
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     wal.append_patch(&envelope)?;
 
     let mut bytes = std::fs::read(wal.path())?;
@@ -146,7 +146,7 @@ fn verify_repository_detects_wal_checksum_mismatch() -> Result<()> {
 fn verify_repository_detects_non_patch_active_wal_record() -> Result<()> {
     let root = unique_temp_dir("verify-wal-type-mismatch");
     let layout = RepositoryLayout::init(root.clone())?;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     let record = WalRecord {
         seq: 1,
         envelope: signed_patch_blob_envelope(),
@@ -220,7 +220,7 @@ fn verify_repository_detects_rollback_draft_operation_sequence_mismatch() -> Res
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload_bytes);
     envelope.add_signature(rollback_author_signature())?;
 
-    Wal::for_layout(&layout).append_patch(&envelope)?;
+    Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME).append_patch(&envelope)?;
 
     let report = verify_repository(&layout)?;
     assert_stage_failed(
@@ -263,7 +263,7 @@ fn verify_repository_detects_rollback_draft_unsupported_operation() -> Result<()
         ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);
     envelope.add_signature(rollback_author_signature())?;
 
-    Wal::for_layout(&layout).append_patch(&envelope)?;
+    Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME).append_patch(&envelope)?;
 
     let report = verify_repository(&layout)?;
     assert_stage_failed(
@@ -305,7 +305,7 @@ fn verify_repository_detects_rollback_draft_missing_author_signature() -> Result
         signer_role: SignerRole::Maintainer,
     })?;
 
-    Wal::for_layout(&layout).append_patch(&envelope)?;
+    Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME).append_patch(&envelope)?;
 
     let report = verify_repository(&layout)?;
     assert_stage_failed(
@@ -340,7 +340,7 @@ fn verify_repository_detects_rollback_draft_legacy_marker_key_id() -> Result<()>
         ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);
     envelope.add_signature(crate::test_support::legacy_rollback_marker_signature())?;
 
-    Wal::for_layout(&layout).append_patch(&envelope)?;
+    Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME).append_patch(&envelope)?;
 
     let report = verify_repository(&layout)?;
     assert_stage_failed(
@@ -427,7 +427,7 @@ fn record_bounds(offsets: &[usize], total_len: usize) -> Vec<(usize, usize)> {
 fn wal_replay_isolates_two_damaged_records_and_reads_every_sound_record() -> Result<()> {
     let root = unique_temp_dir("wal-replay-two-damaged");
     let layout = RepositoryLayout::init(root.clone())?;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
 
     let offsets = append_distinct_records(&wal, &["one", "two", "three", "four", "five"])?;
     let mut bytes = std::fs::read(wal.path())?;
@@ -479,7 +479,7 @@ fn wal_replay_isolates_two_damaged_records_and_reads_every_sound_record() -> Res
 fn verify_repository_reports_two_independently_damaged_wal_records_with_offsets() -> Result<()> {
     let root = unique_temp_dir("verify-wal-two-damaged");
     let layout = RepositoryLayout::init(root.clone())?;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
 
     let offsets = append_distinct_records(&wal, &["alpha", "beta", "gamma"])?;
     let mut bytes = std::fs::read(wal.path())?;
@@ -533,7 +533,7 @@ fn verify_repository_reports_two_independently_damaged_wal_records_with_offsets(
 fn wal_replay_still_tolerates_a_trailing_partial_frame_unchanged() -> Result<()> {
     let root = unique_temp_dir("wal-replay-trailing-partial");
     let layout = RepositoryLayout::init(root.clone())?;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
 
     wal.append_patch(&normal_patch_envelope("one")?)?;
     wal.append_patch(&normal_patch_envelope("two")?)?;

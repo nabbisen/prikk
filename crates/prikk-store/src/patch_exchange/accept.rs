@@ -13,7 +13,7 @@ use crate::author_key_index::{
     check_author_key_conflict, lookup_author_key_entries, record_author_key_material,
     verify_author_signature_against_material,
 };
-use crate::layout::RepositoryLayout;
+use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryLayout};
 use crate::lock::ActiveLock;
 use crate::object_store::{ObjectReadSnapshot, ObjectWriteSession, ObjectWriter};
 use crate::patch_replay::decode::{
@@ -303,7 +303,7 @@ pub fn accept_exchange_artifact(
     // structure, copied.
     let mut recorded_author_key_count = 0_usize;
     {
-        let active_lock = ActiveLock::acquire(layout)?;
+        let active_lock = ActiveLock::acquire(layout, DEFAULT_ACTIVE_NAME)?;
         for (&key_id, &public_key) in &artifact_key_ids {
             check_author_key_conflict(layout, key_id, public_key)?;
         }

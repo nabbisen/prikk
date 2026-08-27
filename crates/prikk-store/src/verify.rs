@@ -307,7 +307,7 @@ use prikk_object::{BlockPayload, ObjectId, ObjectType, RefKind, RefStatePayload}
 use crate::active::{ActiveRefMetadata, read_active_ref_metadata};
 use crate::block_state::{BlockStateOutcome, BlockStateStatus};
 use crate::commit_index::{CommitIndexDivergence, verify_divergence};
-use crate::layout::{RepositoryFormat, RepositoryLayout};
+use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryFormat, RepositoryLayout};
 use crate::lifecycle_cache::incremental::{
     LifecycleCacheDivergence, verify_divergence as verify_lifecycle_cache_divergence,
 };
@@ -1118,7 +1118,7 @@ pub fn verify_repository_with_options(
     };
 
     // Stage: WalReplay. No upstream stage dependency.
-    let wal = Wal::for_layout(layout);
+    let wal = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME);
     let replay = pipeline.run(VerificationStage::WalReplay, wal.replay());
 
     // Stage: WalPersistence. Depends on WalReplay.

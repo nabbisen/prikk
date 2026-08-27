@@ -6,7 +6,7 @@ use prikk_object::{
 };
 
 use crate::{
-    Ed25519AuthorSigner, FileObjectStore, ObjectWriter, RepositoryLayout, Wal,
+    DEFAULT_ACTIVE_NAME, Ed25519AuthorSigner, FileObjectStore, ObjectWriter, RepositoryLayout, Wal,
     append_rollback_draft, author_signature, prepare_patch_inverse_plan,
     verify_active_rollback_draft, verify_repository,
 };
@@ -86,7 +86,7 @@ fn rollback_draft_verify_refuses_plain_active_patch() {
     if let Ok(layout) = layout {
         let published = publish_snapshot_then_patch_block(&layout);
         assert!(published.is_ok());
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         let append = wal.append_patch(&signed_patch_envelope());
         assert!(append.is_ok());
         let verification = verify_active_rollback_draft(&layout, "heads/main");
@@ -111,7 +111,11 @@ fn rollback_draft_verify_rejects_normal_purpose_byte_identical_inverse_ops() {
             let envelope = signed_patch_from_payload(inverse.inverse_payload, &test_signer());
             assert!(envelope.is_ok());
             if let Ok(envelope) = envelope {
-                assert!(Wal::for_layout(&layout).append_patch(&envelope).is_ok());
+                assert!(
+                    Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+                        .append_patch(&envelope)
+                        .is_ok()
+                );
             }
         }
         let verification = verify_active_rollback_draft(&layout, "heads/main");
@@ -142,7 +146,11 @@ fn rollback_draft_verify_rejects_stale_inverse_anchor() {
             let envelope = signed_patch_from_payload(inverse.inverse_payload, &test_signer());
             assert!(envelope.is_ok());
             if let Ok(envelope) = envelope {
-                assert!(Wal::for_layout(&layout).append_patch(&envelope).is_ok());
+                assert!(
+                    Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+                        .append_patch(&envelope)
+                        .is_ok()
+                );
             }
         }
         let verification = verify_active_rollback_draft(&layout, "heads/main");
@@ -173,7 +181,11 @@ fn rollback_draft_verify_rejects_generated_presentation_hint() {
             let envelope = signed_patch_from_payload(inverse.inverse_payload, &test_signer());
             assert!(envelope.is_ok());
             if let Ok(envelope) = envelope {
-                assert!(Wal::for_layout(&layout).append_patch(&envelope).is_ok());
+                assert!(
+                    Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+                        .append_patch(&envelope)
+                        .is_ok()
+                );
             }
         }
         let verification = verify_active_rollback_draft(&layout, "heads/main");

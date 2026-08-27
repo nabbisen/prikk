@@ -29,7 +29,7 @@ use crate::active::{prepare_empty_active_ref_for_append, require_active_ref_for_
 use crate::author_signing::AuthorSigner;
 use crate::commit_index::{self, CommitIndex, CommitIndexEntry};
 use crate::fsutil::{RootFileStat, read_file_if_exists};
-use crate::layout::RepositoryLayout;
+use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryLayout};
 use crate::lifecycle_cache::incremental::resolve_baseline_state;
 use crate::lock::ActiveLock;
 use crate::node_id_gen::{NodeIdEntropySource, NodeIdGenerator};
@@ -192,7 +192,8 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     // either loses the lock here (LockConflict) or, if it runs after this releases, sees the appended
     // record and fails the "seal first" guard. Released on return (RAII). The append below uses the
     // raw WAL under this held lock (not `ActiveSession::append_patch`, which would re-acquire).
-    let active_lock = ActiveLock::acquire(layout).map_err(AuthorError::Store)?;
+    let active_lock =
+        ActiveLock::acquire(layout, DEFAULT_ACTIVE_NAME).map_err(AuthorError::Store)?;
     crate::refs::ensure_no_incomplete_publication(layout).map_err(AuthorError::Store)?;
 
     // RFC 102 Stage 1: a dirty worktree marker means a prior materialization call did not complete
@@ -208,7 +209,7 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
         )));
     }
 
-    let wal = Wal::for_layout(layout);
+    let wal = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME);
     let active_replay = wal.replay().map_err(AuthorError::Store)?;
     if active_replay.trailing_partial_bytes != 0 {
         return Err(AuthorError::Store(PrikkError::InvalidName(format!(

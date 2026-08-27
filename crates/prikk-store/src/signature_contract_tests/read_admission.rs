@@ -1,7 +1,7 @@
 use prikk_object::{ObjectEnvelope, ObjectType};
 
 use super::admission::strict_rejection_variants;
-use crate::layout::ContainerSlot;
+use crate::layout::{ContainerSlot, DEFAULT_ACTIVE_NAME};
 use crate::refs::encode_log_record_for_test;
 use crate::test_support::{
     signed_patch_blob_envelope, signed_patch_envelope, signed_ref_update_envelope, unique_temp_dir,
@@ -82,7 +82,11 @@ fn format2_wal_reads_reject_every_strict_envelope_failure() -> prikk_error::Resu
             encode_record_for_test(&record)?,
         )?;
 
-        assert!(Wal::for_layout(&layout).replay().is_err());
+        assert!(
+            Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+                .replay()
+                .is_err()
+        );
         assert!(verify_repository(&layout)?.has_stage_failure());
         let _ = std::fs::remove_dir_all(root);
     }

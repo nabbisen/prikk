@@ -9,8 +9,9 @@ use crate::test_support::{
 };
 use crate::worktree::materialize_manifest_entries;
 use crate::{
-    FileObjectStore, ObjectWriter, RefLock, RefPublication, RefStore, RepoPath, RepositoryLayout,
-    SnapshotEntry, SnapshotManifest, Wal, add_trusted_maintainer, write_active_ref_metadata,
+    DEFAULT_ACTIVE_NAME, FileObjectStore, ObjectWriter, RefLock, RefPublication, RefStore,
+    RepoPath, RepositoryLayout, SnapshotEntry, SnapshotManifest, Wal, add_trusted_maintainer,
+    write_active_ref_metadata,
 };
 
 #[test]
@@ -49,7 +50,7 @@ fn object_observed_component_sync_propagates_and_retries() -> prikk_error::Resul
 fn wal_observed_component_sync_propagates_and_retries() -> prikk_error::Result<()> {
     let root = unique_temp_dir("wal-observed-component");
     let layout = RepositoryLayout::init(root.clone())?;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     let patch = signed_patch_envelope();
     fail_once_for_test(TestFailPoint::ObservedDirectoryParentSync);
     assert!(wal.append_patch(&patch).is_err());

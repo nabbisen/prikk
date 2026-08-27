@@ -3,9 +3,9 @@
 mod fixture;
 
 use crate::{
-    ActiveLock, ActiveRefMetadata, ActiveSession, DEFAULT_ACTIVE_PATCH_LIMIT, DoctorSeverity,
-    RefStore, Wal, doctor_repository, finish_active_publication_cleanup, read_active_ref_metadata,
-    verify_repository,
+    ActiveLock, ActiveRefMetadata, ActiveSession, DEFAULT_ACTIVE_NAME, DEFAULT_ACTIVE_PATCH_LIMIT,
+    DoctorSeverity, RefStore, Wal, doctor_repository, finish_active_publication_cleanup,
+    read_active_ref_metadata, verify_repository,
 };
 use fixture::{Fixture, PersistedState};
 
@@ -195,7 +195,7 @@ fn every_state_has_explicit_production_retry_and_exact_post_state() -> prikk_err
     for case in CASES {
         let fixture = Fixture::new(case.state)?;
         let before = fixture.state_bytes()?;
-        let active_lock = ActiveLock::acquire(&fixture.layout)?;
+        let active_lock = ActiveLock::acquire(&fixture.layout, DEFAULT_ACTIVE_NAME)?;
         let store = RefStore::new(fixture.layout.clone());
         let first = store.finish_interrupted_publication(&active_lock, &fixture.publication);
         let second = store.finish_interrupted_publication(&active_lock, &fixture.publication);
@@ -206,7 +206,7 @@ fn every_state_has_explicit_production_retry_and_exact_post_state() -> prikk_err
                 assert_eq!(store.replay_log("heads/main")?.records.len(), log_records);
                 finish_active_publication_cleanup(&fixture.layout, &active_lock)?;
                 assert!(
-                    Wal::for_layout(&fixture.layout)
+                    Wal::for_layout(&fixture.layout, DEFAULT_ACTIVE_NAME)
                         .replay()?
                         .records
                         .is_empty()
@@ -260,7 +260,13 @@ fn every_state_has_explicit_representative_command_mutation_outcome() -> prikk_e
         );
         assert_eq!(result.is_ok(), case.mutation_succeeds);
         if case.mutation_succeeds {
-            assert_eq!(Wal::for_layout(&fixture.layout).replay()?.records.len(), 1);
+            assert_eq!(
+                Wal::for_layout(&fixture.layout, DEFAULT_ACTIVE_NAME)
+                    .replay()?
+                    .records
+                    .len(),
+                1
+            );
             assert_eq!(
                 read_active_ref_metadata(&fixture.layout)?,
                 ActiveRefMetadata::Valid("heads/main".to_string())

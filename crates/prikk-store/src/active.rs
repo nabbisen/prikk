@@ -15,7 +15,7 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::ObjectEnvelope;
 
 use crate::fsutil::{append_file_required, read_file_if_exists, truncate_file_empty_required};
-use crate::layout::RepositoryLayout;
+use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryLayout};
 use crate::lock::ActiveLock;
 use crate::refs::{ensure_no_incomplete_publication, validate_local_branch_ref};
 use crate::wal::Wal;
@@ -61,9 +61,9 @@ impl ActiveSession {
         active_patch_limit: usize,
     ) -> Result<ActiveCommitResult> {
         self.layout.require_current_format()?;
-        let _lock = ActiveLock::acquire(&self.layout)?;
+        let _lock = ActiveLock::acquire(&self.layout, DEFAULT_ACTIVE_NAME)?;
         ensure_no_incomplete_publication(&self.layout)?;
-        let wal = Wal::for_layout(&self.layout);
+        let wal = Wal::for_layout(&self.layout, DEFAULT_ACTIVE_NAME);
         let replay = wal.replay()?;
         if replay.trailing_partial_bytes != 0 {
             return Err(PrikkError::Integrity(format!(
@@ -168,7 +168,7 @@ pub fn finish_active_publication_cleanup(
 ) -> Result<()> {
     layout.require_current_format()?;
     active_lock.require_layout(layout)?;
-    Wal::for_layout(layout).truncate_empty()?;
+    Wal::for_layout(layout, DEFAULT_ACTIVE_NAME).truncate_empty()?;
     remove_active_ref_metadata_authorized(layout)?;
     Ok(())
 }

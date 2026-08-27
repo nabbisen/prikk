@@ -12,6 +12,11 @@ use crate::fsutil::{
 };
 
 const REPO_DIR: &str = ".prikk";
+/// The one active-session name in use today (RFC 108 increment 1). `.prikk/active/<name>/`
+/// already supports any name; every current caller of `Wal::for_layout`/`ActiveLock::acquire`
+/// passes this constant rather than a re-typed literal, so a second active session -- a later
+/// increment's own CLI-surface decision -- needs no caller here to change when it exists.
+pub const DEFAULT_ACTIVE_NAME: &str = "default";
 const LEGACY_FORMAT_VERSION: &[u8] = b"1\n";
 const LEGACY_FORMAT_2_VERSION: &[u8] = b"2\n";
 const LEGACY_FORMAT_3_VERSION: &[u8] = b"3\n";
@@ -385,22 +390,45 @@ impl RepositoryLayout {
         self.prikk_dir.join("active")
     }
 
+    /// Return the active-session directory for `name`.
+    ///
+    /// RFC 108 increment 1: `.prikk/active/<name>/` was already the on-disk shape; only the
+    /// choice of name was hardcoded. This method is the layout's own generalization of it,
+    /// kept `pub(crate)` for now since nothing outside this crate constructs a second active
+    /// session yet -- that is a later increment's CLI-surface decision, not this one's.
+    #[must_use]
+    pub(crate) fn active_session_dir(&self, name: &str) -> PathBuf {
+        self.active_dir().join(name)
+    }
+
+    /// Return the active WAL path for `name`.
+    #[must_use]
+    pub(crate) fn active_queue_wal_path(&self, name: &str) -> PathBuf {
+        self.active_session_dir(name).join("queue.wal")
+    }
+
+    /// Return the active lock path for `name`.
+    #[must_use]
+    pub(crate) fn active_lock_path(&self, name: &str) -> PathBuf {
+        self.active_session_dir(name).join("active.lock")
+    }
+
     /// Return the default active-session directory.
     #[must_use]
     pub fn default_active_dir(&self) -> PathBuf {
-        self.active_dir().join("default")
+        self.active_session_dir(DEFAULT_ACTIVE_NAME)
     }
 
     /// Return the default active WAL path.
     #[must_use]
     pub fn default_queue_wal_path(&self) -> PathBuf {
-        self.default_active_dir().join("queue.wal")
+        self.active_queue_wal_path(DEFAULT_ACTIVE_NAME)
     }
 
     /// Return the default active lock path.
     #[must_use]
     pub fn default_active_lock_path(&self) -> PathBuf {
-        self.default_active_dir().join("active.lock")
+        self.active_lock_path(DEFAULT_ACTIVE_NAME)
     }
 
     /// Return the default active-session ref-name metadata path.

@@ -8,8 +8,8 @@ use prikk_object::{
 };
 
 use crate::{
-    DoctorRepairOptions, DoctorSeverity, Ed25519MaintainerSigner, FileObjectStore,
-    MaintainerSigner, ObjectWriter, RepositoryLayout, Wal, add_trusted_maintainer,
+    DEFAULT_ACTIVE_NAME, DoctorRepairOptions, DoctorSeverity, Ed25519MaintainerSigner,
+    FileObjectStore, MaintainerSigner, ObjectWriter, RepositoryLayout, Wal, add_trusted_maintainer,
     derive_next_state_root, doctor_repository, maintainer_signature as real_maintainer_signature,
     repair_repository, write_active_ref_metadata,
 };
@@ -111,7 +111,7 @@ fn doctor_repair_truncates_only_trailing_partial_wal() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         assert!(write_active_ref_metadata(&layout, "heads/main").is_ok());
         assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
         let mut file = std::fs::OpenOptions::new()
@@ -165,7 +165,7 @@ fn doctor_reports_non_empty_active_wal_missing_metadata_as_error() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
 
         let report = doctor_repository(&layout);
@@ -308,7 +308,7 @@ fn doctor_repair_requires_active_lock_before_wal_mutation() -> prikk_error::Resu
     let layout = RepositoryLayout::init(root.clone())?;
     std::fs::write(layout.default_queue_wal_path(), b"partial")?;
     let before = std::fs::read(layout.default_queue_wal_path())?;
-    let active_lock = crate::ActiveLock::acquire(&layout)?;
+    let active_lock = crate::ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
 
     let error = repair_repository(&layout, DoctorRepairOptions::truncate_wal_tail())
         .err()
@@ -329,7 +329,7 @@ fn doctor_rechecks_publication_guard_after_acquiring_active_lock() -> prikk_erro
     let layout = RepositoryLayout::init(root.clone())?;
     std::fs::write(layout.default_queue_wal_path(), b"partial")?;
     let before = std::fs::read(layout.default_queue_wal_path())?;
-    let active_lock = crate::ActiveLock::acquire(&layout)?;
+    let active_lock = crate::ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
     let candidate = layout.ref_tmp_path("heads/main");
     let parent = candidate
         .parent()
@@ -466,7 +466,7 @@ fn repair_repository_still_refuses_when_the_refs_stage_fails() -> prikk_error::R
 fn repair_repository_still_refuses_when_the_wal_replay_stage_fails() -> prikk_error::Result<()> {
     let root = unique_temp_dir("doctor-repair-refuses-wal-replay");
     let layout = RepositoryLayout::init(root.clone())?;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     assert!(write_active_ref_metadata(&layout, "heads/main").is_ok());
     assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
     let mut bytes = std::fs::read(wal.path())?;

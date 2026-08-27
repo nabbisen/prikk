@@ -11,9 +11,9 @@ use crate::test_support::{
     rollback_patch_envelope, signed_patch_blob_envelope, signed_patch_envelope, unique_temp_dir,
 };
 use crate::{
-    Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectWriter, RefPublication,
-    RefStore, RepositoryLayout, Wal, add_trusted_maintainer, derive_next_state_root,
-    maintainer_signature, verify_repository, write_active_ref_metadata,
+    DEFAULT_ACTIVE_NAME, Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectWriter,
+    RefPublication, RefStore, RepositoryLayout, Wal, add_trusted_maintainer,
+    derive_next_state_root, maintainer_signature, verify_repository, write_active_ref_metadata,
 };
 
 #[test]
@@ -85,7 +85,7 @@ fn full_verification_retains_wal_objects_trust_and_recovery_diagnosis_after_root
         ref_update,
     })?;
     write_active_ref_metadata(&layout, "heads/main")?;
-    Wal::for_layout(&layout).append_patch(&patch)?;
+    Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME).append_patch(&patch)?;
     crate::refs::remove_pointer_entries_for_test(
         &layout,
         crate::layout::ref_name_key_bytes("heads/main"),
@@ -96,7 +96,7 @@ fn full_verification_retains_wal_objects_trust_and_recovery_diagnosis_after_root
     std::fs::rename(layout.prikk_dir(), root.join(".prikk-retained"))?;
     let replacement = RepositoryLayout::init(root.clone())?;
     write_active_ref_metadata(&replacement, "heads/main")?;
-    Wal::for_layout(&replacement).append_patch(&rollback_patch_envelope())?;
+    Wal::for_layout(&replacement, DEFAULT_ACTIVE_NAME).append_patch(&rollback_patch_envelope())?;
     let mut replacement_objects = FileObjectStore::new(replacement.clone());
     replacement_objects.write_object(&patch)?;
     replacement_objects.write_object(&corrupt_signature_transport(block)?)?;
@@ -199,7 +199,7 @@ fn assert_retained_missing_pointer(
         issue.code == "PRIKK-VERIFY-REF-DIVERGENCE"
             && issue.ref_name.as_deref() == Some("heads/main")
     }));
-    let replay = Wal::for_layout(layout).replay()?;
+    let replay = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME).replay()?;
     assert_eq!(replay.records.len(), 1);
     assert_eq!(
         replay

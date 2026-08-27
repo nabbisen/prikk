@@ -6,8 +6,8 @@ use prikk_crypto::verify_ed25519;
 use prikk_object::{ObjectType, PatchPurpose, Signature, SignatureAlgorithm, SignerRole};
 
 use crate::{
-    AuthorSigner, Ed25519AuthorSigner, FileObjectStore, ObjectWriter, RefPublication, RefStore,
-    RepositoryLayout, Wal, append_rollback_draft,
+    AuthorSigner, DEFAULT_ACTIVE_NAME, Ed25519AuthorSigner, FileObjectStore, ObjectWriter,
+    RefPublication, RefStore, RepositoryLayout, Wal, append_rollback_draft,
 };
 
 use crate::test_support::{
@@ -95,7 +95,7 @@ fn rollback_draft_appends_inverse_patch_to_empty_active_wal() {
             assert_eq!(report.author_key_id, "rollback-author-key");
             assert_eq!(report.inverse_operation_count, 2);
             assert_eq!(report.preview_change_count, 2);
-            let wal = Wal::for_layout(&layout);
+            let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
             let replay = wal.replay();
             assert!(replay.is_ok());
             if let Ok(replay) = replay {
@@ -169,7 +169,12 @@ fn rollback_draft_refuses_candidate_debris_before_planning_or_wal_mutation()
             .contains("repository mutation is blocked by incomplete ref publication")
     );
     assert_eq!(std::fs::read(&candidate)?, b"candidate");
-    assert!(Wal::for_layout(&layout).replay()?.records.is_empty());
+    assert!(
+        Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+            .replay()?
+            .records
+            .is_empty()
+    );
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }
@@ -194,7 +199,7 @@ fn rollback_draft_appends_arbitrary_span_text_inverse() {
                     .map(|operation| operation.kind.as_str()),
                 Some("edit-text")
             );
-            let wal = Wal::for_layout(&layout);
+            let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
             let replay = wal.replay();
             assert!(replay.is_ok());
             if let Ok(replay) = replay {
@@ -227,7 +232,7 @@ fn rollback_draft_rejects_ref_change_between_planning_and_append() {
         if let Err(error) = report {
             assert!(error.to_string().contains("target ref changed"));
         }
-        let replay = Wal::for_layout(&layout).replay();
+        let replay = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME).replay();
         assert!(replay.is_ok());
         if let Ok(replay) = replay {
             assert_eq!(replay.records.len(), 0);
@@ -244,7 +249,7 @@ fn rollback_draft_refuses_non_empty_active_wal() {
     if let Ok(layout) = layout {
         let result = publish_snapshot_then_patch_block(&layout);
         assert!(result.is_ok());
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         let append = wal.append_patch(&signed_patch_envelope());
         assert!(append.is_ok());
         let signer = test_signer();

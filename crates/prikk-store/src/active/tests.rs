@@ -3,9 +3,9 @@
 #![allow(clippy::unwrap_used)]
 
 use crate::{
-    ActiveLock, ActiveRefMetadata, ActiveSession, DEFAULT_ACTIVE_PATCH_LIMIT, RepositoryLayout,
-    Wal, finish_active_publication_cleanup, read_active_ref_metadata, remove_active_ref_metadata,
-    write_active_ref_metadata,
+    ActiveLock, ActiveRefMetadata, ActiveSession, DEFAULT_ACTIVE_NAME, DEFAULT_ACTIVE_PATCH_LIMIT,
+    RepositoryLayout, Wal, finish_active_publication_cleanup, read_active_ref_metadata,
+    remove_active_ref_metadata, write_active_ref_metadata,
 };
 
 use crate::fsutil::{TestFailPoint, fail_after_for_test, fail_once_for_test};
@@ -19,12 +19,12 @@ fn active_lock_rejects_second_writer() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let first = ActiveLock::acquire(&layout);
+        let first = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME);
         assert!(first.is_ok());
-        let second = ActiveLock::acquire(&layout);
+        let second = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME);
         assert!(second.is_err());
         drop(first);
-        let third = ActiveLock::acquire(&layout);
+        let third = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME);
         assert!(third.is_ok());
     }
     let _ = std::fs::remove_dir_all(root);
@@ -43,7 +43,7 @@ fn active_session_appends_signed_patch_under_lock() {
         if let Ok(result) = result {
             assert_eq!(result.wal_sequence, 1);
         }
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         let replay = wal.replay();
         assert!(replay.is_ok());
         if let Ok(replay) = replay {
@@ -81,7 +81,9 @@ fn active_session_append_queues_distinct_patch_onto_non_empty_wal() {
         .unwrap();
     assert_eq!(second.wal_sequence, 2);
 
-    let replay = Wal::for_layout(&layout).replay().unwrap();
+    let replay = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+        .replay()
+        .unwrap();
     assert_eq!(replay.records.len(), 2);
     assert_eq!(
         read_active_ref_metadata(&layout).unwrap(),
@@ -118,7 +120,7 @@ fn active_session_append_does_not_overwrite_other_ref_metadata() {
     let root = unique_temp_dir("active-session-owned");
     let layout = RepositoryLayout::init(root.clone()).unwrap();
     write_active_ref_metadata(&layout, "heads/topic").unwrap();
-    Wal::for_layout(&layout)
+    Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
         .append_patch(&signed_patch_envelope())
         .unwrap();
     let session = ActiveSession::new(layout.clone());
@@ -135,7 +137,9 @@ fn active_session_append_does_not_overwrite_other_ref_metadata() {
         read_active_ref_metadata(&layout).unwrap(),
         ActiveRefMetadata::Valid("heads/topic".to_string())
     );
-    let replay = Wal::for_layout(&layout).replay().unwrap();
+    let replay = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+        .replay()
+        .unwrap();
     assert_eq!(replay.records.len(), 1);
 
     let _ = std::fs::remove_dir_all(root);
@@ -249,12 +253,12 @@ fn active_publication_cleanup_failures_preserve_retryable_states() {
     let root = unique_temp_dir("active-publication-cleanup-failpoint-wal");
     let layout = RepositoryLayout::init(root.clone()).unwrap();
     write_active_ref_metadata(&layout, "heads/main").unwrap();
-    Wal::for_layout(&layout)
+    Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
         .append_patch(&signed_patch_envelope())
         .unwrap();
     let wal_before = std::fs::read(layout.default_queue_wal_path()).unwrap();
     let metadata_before = std::fs::read(layout.default_active_ref_name_path()).unwrap();
-    let active_lock = ActiveLock::acquire(&layout).unwrap();
+    let active_lock = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME).unwrap();
 
     fail_once_for_test(TestFailPoint::Truncate);
     assert!(finish_active_publication_cleanup(&layout, &active_lock).is_err());
@@ -286,11 +290,11 @@ fn active_publication_cleanup_failures_preserve_retryable_states() {
     let root = unique_temp_dir("active-publication-cleanup-failpoint-metadata");
     let layout = RepositoryLayout::init(root.clone()).unwrap();
     write_active_ref_metadata(&layout, "heads/main").unwrap();
-    Wal::for_layout(&layout)
+    Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
         .append_patch(&signed_patch_envelope())
         .unwrap();
     let metadata_before = std::fs::read(layout.default_active_ref_name_path()).unwrap();
-    let active_lock = ActiveLock::acquire(&layout).unwrap();
+    let active_lock = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME).unwrap();
 
     fail_after_for_test(TestFailPoint::Truncate, 1);
     assert!(finish_active_publication_cleanup(&layout, &active_lock).is_err());

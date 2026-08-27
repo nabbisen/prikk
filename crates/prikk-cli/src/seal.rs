@@ -11,10 +11,10 @@ use prikk_object::{
     RefUpdatePayload,
 };
 use prikk_store::{
-    ActiveLock, ActiveRefMetadata, GatedOperation, MaintainerSigner, ObjectWriteSession,
-    ObjectWriter, RefPublication, RefStore, RepositoryLayout, Wal, derive_next_state_root,
-    finish_active_publication_cleanup, read_active_ref_metadata, remove_active_ref_metadata,
-    validate_local_branch_ref, verify_signer_trusted,
+    ActiveLock, ActiveRefMetadata, DEFAULT_ACTIVE_NAME, GatedOperation, MaintainerSigner,
+    ObjectWriteSession, ObjectWriter, RefPublication, RefStore, RepositoryLayout, Wal,
+    derive_next_state_root, finish_active_publication_cleanup, read_active_ref_metadata,
+    remove_active_ref_metadata, validate_local_branch_ref, verify_signer_trusted,
 };
 
 mod support;
@@ -78,8 +78,9 @@ fn seal_active_no_audit(
     signer: &impl MaintainerSigner,
 ) -> std::result::Result<SealCommandResult, String> {
     let ref_name = validate_local_branch_ref(ref_name).map_err(|err| err.to_string())?;
-    let active_lock = ActiveLock::acquire(&layout).map_err(|err| err.to_string())?;
-    let wal = Wal::for_layout(&layout);
+    let active_lock =
+        ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME).map_err(|err| err.to_string())?;
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     let replay = wal.replay().map_err(|err| err.to_string())?;
     if replay.trailing_partial_bytes != 0 {
         return Err(format!(

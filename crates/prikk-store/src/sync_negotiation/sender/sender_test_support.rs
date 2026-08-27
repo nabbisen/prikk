@@ -18,7 +18,8 @@ use crate::rfc111_seal_simulation::simulate_one_seal;
 use crate::sync_negotiation::sync_test_support::fresh_repo;
 use crate::wal::Wal;
 use crate::{
-    Ed25519AuthorSigner, FileObjectStore, ObjectWriter, RepositoryLayout, add_trusted_maintainer,
+    DEFAULT_ACTIVE_NAME, Ed25519AuthorSigner, FileObjectStore, ObjectWriter, RepositoryLayout,
+    add_trusted_maintainer,
 };
 
 pub(super) use crate::sync_negotiation::sync_test_support::cleanup;
@@ -99,7 +100,7 @@ pub(super) fn seal_patches_onto(
     // bookkeeping the real `ActiveSession::append_patch` commit path maintains, which the raw
     // `Wal::append_patch` below deliberately bypasses (it only appends bytes).
     crate::active::write_active_ref_metadata(layout, ref_name)?;
-    let wal = Wal::for_layout(layout);
+    let wal = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME);
     for patch in patches {
         wal.append_patch(patch)?;
     }

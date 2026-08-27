@@ -11,6 +11,7 @@ use prikk_object::{BlockKind, ObjectId, ObjectType};
 use super::{AcceptOptions, ClaimSignatureVerification, accept_exchange_artifact};
 use crate::author_key_index::{lookup_author_key_entries, record_author_key_material};
 use crate::author_signing::AuthorSigner as _;
+use crate::layout::DEFAULT_ACTIVE_NAME;
 use crate::lock::ActiveLock;
 use crate::maintainer_signing::MaintainerSigner as _;
 use crate::patch_exchange::exchange_test_support::public_key_hex;
@@ -45,7 +46,7 @@ fn build_single_patch_artifact(
     let patch = signed_author_patch_envelope(signer, "accept.txt", 0x30, blob_id)?;
     let patch_id = objects.write_object(&patch)?;
     if record_locally {
-        let active_lock = ActiveLock::acquire(&sender)?;
+        let active_lock = ActiveLock::acquire(&sender, DEFAULT_ACTIVE_NAME)?;
         record_author_key_material(
             &sender,
             signer.key_id(),
@@ -103,7 +104,7 @@ fn row1_a_refused_exchange_records_no_key_material_and_no_claim() -> Result<()> 
     // The single mutated line: flip one byte of the AUTHOR signature itself.
     patch.signatures[0].signature_bytes[0] ^= 0x01;
     let patch_id = objects.write_object(&patch)?;
-    let active_lock = ActiveLock::acquire(&sender)?;
+    let active_lock = ActiveLock::acquire(&sender, DEFAULT_ACTIVE_NAME)?;
     record_author_key_material(
         &sender,
         signer.key_id(),
@@ -131,7 +132,7 @@ fn row1_a_refused_exchange_records_no_key_material_and_no_claim() -> Result<()> 
     // pre-seeded entry is what "byte-for-byte" actually needs to be checked against.
     let receiver = fresh_repo("pexch-accept-row1-receiver")?;
     let unrelated_signer = author_signer(0x14)?;
-    let unrelated_lock = ActiveLock::acquire(&receiver)?;
+    let unrelated_lock = ActiveLock::acquire(&receiver, DEFAULT_ACTIVE_NAME)?;
     record_author_key_material(
         &receiver,
         unrelated_signer.key_id(),
@@ -192,7 +193,7 @@ fn phase_d_lock_contention_after_verification_leaves_no_claim_behind() -> Result
     let blob_id = objects.write_object(&blob)?;
     let patch = signed_author_patch_envelope(&signer, "phase-d.txt", 0x17, blob_id)?;
     let patch_id = objects.write_object(&patch)?;
-    let active_lock = ActiveLock::acquire(&sender)?;
+    let active_lock = ActiveLock::acquire(&sender, DEFAULT_ACTIVE_NAME)?;
     record_author_key_material(
         &sender,
         signer.key_id(),
@@ -214,7 +215,7 @@ fn phase_d_lock_contention_after_verification_leaves_no_claim_behind() -> Result
     let receiver = fresh_repo("pexch-accept-phased-receiver")?;
     // Held for the whole accept call below -- the single line simulating the Phase D window: the
     // nested `ActiveLock::acquire` inside `accept_exchange_artifact` must fail while this is held.
-    let held_lock = ActiveLock::acquire(&receiver)?;
+    let held_lock = ActiveLock::acquire(&receiver, DEFAULT_ACTIVE_NAME)?;
 
     let result = accept_exchange_artifact(&receiver, &bytes, &AcceptOptions::default_limits());
     assert!(
@@ -247,7 +248,7 @@ fn row2_row3_an_unadopted_claim_signer_accepts_but_confers_no_trust() -> Result<
         let blob_id = objects.write_object(&blob)?;
         let patch = signed_author_patch_envelope(&signer, "row23.txt", 0x22, blob_id)?;
         let patch_id = objects.write_object(&patch)?;
-        let active_lock = ActiveLock::acquire(&sender)?;
+        let active_lock = ActiveLock::acquire(&sender, DEFAULT_ACTIVE_NAME)?;
         record_author_key_material(
             &sender,
             signer.key_id(),
@@ -365,7 +366,7 @@ fn row6_a_patch_signature_that_fails_against_transported_material_refuses() -> R
     let mut patch = signed_author_patch_envelope(&signer, "row6.txt", 0x61, blob_id)?;
     patch.signatures[0].signature_bytes[0] ^= 0x01;
     let patch_id = objects.write_object(&patch)?;
-    let active_lock = ActiveLock::acquire(&sender)?;
+    let active_lock = ActiveLock::acquire(&sender, DEFAULT_ACTIVE_NAME)?;
     record_author_key_material(
         &sender,
         signer.key_id(),
@@ -465,7 +466,7 @@ fn row8_a_digest_mismatch_refuses_before_signature_work() -> Result<()> {
     let blob_b_id = objects.write_object(&blob_b)?;
     let patch_b = signed_author_patch_envelope(&signer, "row8-b.txt", 0x82, blob_b_id)?;
     let patch_b_id = objects.write_object(&patch_b)?;
-    let active_lock = ActiveLock::acquire(&sender)?;
+    let active_lock = ActiveLock::acquire(&sender, DEFAULT_ACTIVE_NAME)?;
     record_author_key_material(
         &sender,
         signer.key_id(),
@@ -632,7 +633,7 @@ fn a_non_empty_parent_patch_ids_refuses() -> Result<()> {
     let id = patch.object_id();
     patch.add_signature(crate::author_signing::author_signature(&signer, id)?)?;
     let patch_id = objects.write_object(&patch)?;
-    let active_lock = ActiveLock::acquire(&sender)?;
+    let active_lock = ActiveLock::acquire(&sender, DEFAULT_ACTIVE_NAME)?;
     record_author_key_material(
         &sender,
         signer.key_id(),

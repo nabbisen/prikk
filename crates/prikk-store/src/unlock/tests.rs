@@ -4,7 +4,7 @@ use prikk_error::Result;
 
 use super::{PidLiveness, clear_lock, find_held_lock, list_held_locks};
 use crate::RepositoryLayout;
-use crate::layout::LockableContainer;
+use crate::layout::{DEFAULT_ACTIVE_NAME, LockableContainer};
 use crate::lock::{ActiveLock, RefLock, acquire_container_locks};
 use crate::test_support::unique_temp_dir;
 
@@ -26,7 +26,7 @@ fn every_held_lock_kind_is_enumerated_with_its_own_pid_live() -> Result<()> {
     let root = unique_temp_dir("unlock-enumerate-all-kinds");
     let layout = RepositoryLayout::init(root.clone())?;
 
-    let active = ActiveLock::acquire(&layout)?;
+    let active = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
     let ref_lock = RefLock::acquire(&layout, "heads/main")?;
     let container_lock = acquire_container_locks(&layout, &[LockableContainer::TrustPolicy])?;
 
@@ -77,15 +77,15 @@ fn a_lock_recording_a_nonexistent_pid_is_reported_as_not_appearing_to_run() -> R
 fn clear_lock_removes_the_named_lock_and_it_becomes_reacquirable() -> Result<()> {
     let root = unique_temp_dir("unlock-clear");
     let layout = RepositoryLayout::init(root.clone())?;
-    let active = ActiveLock::acquire(&layout)?;
+    let active = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
     let path = active.path().to_path_buf();
     // Simulate a crash: the lock file survives, but nothing still holds it in-process.
     std::mem::forget(active);
 
-    assert!(ActiveLock::acquire(&layout).is_err());
+    assert!(ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME).is_err());
     clear_lock(&layout, &path)?;
     assert!(list_held_locks(&layout)?.is_empty());
-    assert!(ActiveLock::acquire(&layout).is_ok());
+    assert!(ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME).is_ok());
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())
@@ -154,7 +154,7 @@ fn a_wedged_container_lock_blocks_compaction_until_unlock_clears_it() -> Result<
 fn find_held_lock_matches_a_lock_reached_through_a_symlinked_route() -> Result<()> {
     let real_root = unique_temp_dir("unlock-symlink-real");
     let layout = RepositoryLayout::init(real_root.clone())?;
-    let active = ActiveLock::acquire(&layout)?;
+    let active = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
 
     let symlink_root = unique_temp_dir("unlock-symlink-link");
     std::fs::remove_dir(&symlink_root)?;
@@ -187,7 +187,7 @@ fn find_held_lock_matches_a_lock_reached_through_a_symlinked_route() -> Result<(
 fn find_held_lock_returns_none_for_a_target_that_does_not_exist() -> Result<()> {
     let root = unique_temp_dir("unlock-bogus-target");
     let layout = RepositoryLayout::init(root.clone())?;
-    let _active = ActiveLock::acquire(&layout)?;
+    let _active = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
 
     let locks = list_held_locks(&layout)?;
     let bogus = root.join("this-path-was-never-created").join("active.lock");

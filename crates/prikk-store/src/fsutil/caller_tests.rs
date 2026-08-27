@@ -13,15 +13,16 @@ use crate::test_support::{
 };
 use crate::worktree::materialize_manifest_entries;
 use crate::{
-    FileObjectStore, ObjectWriter, RefPublication, RefStore, RepoPath, RepositoryLayout,
-    SnapshotEntry, SnapshotManifest, Wal, add_trusted_maintainer, write_active_ref_metadata,
+    DEFAULT_ACTIVE_NAME, FileObjectStore, ObjectWriter, RefPublication, RefStore, RepoPath,
+    RepositoryLayout, SnapshotEntry, SnapshotManifest, Wal, add_trusted_maintainer,
+    write_active_ref_metadata,
 };
 
 #[test]
 fn wal_required_open_failure_propagates_and_retries() -> prikk_error::Result<()> {
     let root = unique_temp_dir("wal-required-open-caller");
     let layout = RepositoryLayout::init(root.clone())?;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     let patch = signed_patch_envelope();
     fail_once_for_test(TestFailPoint::RequiredOpen);
     assert!(wal.append_patch(&patch).is_err());

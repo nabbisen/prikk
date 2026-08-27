@@ -6,8 +6,8 @@ use crate::test_support::{
     sample_object_id, signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
 };
 use crate::{
-    FileObjectStore, MemoryObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout,
-    Wal,
+    DEFAULT_ACTIVE_NAME, FileObjectStore, MemoryObjectStore, ObjectWriter, RefPublication,
+    RefStore, RepositoryLayout, Wal,
 };
 
 pub(super) fn strict_rejection_variants(
@@ -55,7 +55,7 @@ fn object_and_memory_writers_reject_before_mutation() -> prikk_error::Result<()>
 fn wal_and_ref_log_reject_before_mutation() -> prikk_error::Result<()> {
     let root = unique_temp_dir("dc39-log-writers");
     let layout = RepositoryLayout::init(root.clone())?;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     for patch in strict_rejection_variants(ObjectType::Patch, b"patch") {
         assert!(wal.append_patch(&patch).is_err());
     }

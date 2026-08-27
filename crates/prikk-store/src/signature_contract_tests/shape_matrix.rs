@@ -9,8 +9,9 @@ use crate::test_support::{
     sample_object_id, signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
 };
 use crate::{
-    AuthorSigner, FileObjectStore, MaintainerSigner, MemoryObjectStore, ObjectWriter,
-    RefPublication, RefStore, RepositoryLayout, Wal, author_signature, maintainer_signature,
+    AuthorSigner, DEFAULT_ACTIVE_NAME, FileObjectStore, MaintainerSigner, MemoryObjectStore,
+    ObjectWriter, RefPublication, RefStore, RepositoryLayout, Wal, author_signature,
+    maintainer_signature,
 };
 
 const LENGTHS: [usize; 5] = [0, 1, 63, 64, 65];
@@ -112,7 +113,7 @@ fn wal_and_ref_log_shape_matrix_reject_before_mutation() -> prikk_error::Result<
         let root = unique_temp_dir(&format!("dc39-log-shape-{length}"));
         let layout = RepositoryLayout::init(root.clone())?;
         let patch = malformed_envelope(ObjectType::Patch, &[length as u8], length);
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         assert_eq!(wal.append_patch(&patch).is_ok(), length == 64);
         // RFC 102 Stage 1: the WAL file now exists from `init` onward (created empty), so success is
         // proven by a replayed record existing, not by the file's existence.

@@ -2,7 +2,7 @@ use prikk_object::ObjectType;
 
 use super::malformed_envelope;
 use crate::test_support::unique_temp_dir;
-use crate::{RepositoryLayout, Wal};
+use crate::{DEFAULT_ACTIVE_NAME, RepositoryLayout, Wal};
 
 // RFC 103: `format1_diagnostics_are_byte_preserving_suppressed_and_deterministic` (which exercised
 // `signature_diagnostics.rs`'s issues through an opened format-1 repository) is removed along with
@@ -18,7 +18,11 @@ fn strict_writers_do_not_admit_legacy_diagnostic_envelopes() -> prikk_error::Res
     let malformed = malformed_envelope(ObjectType::Patch, b"legacy", 63);
     assert!(malformed.validate().is_ok());
     assert!(malformed.validate_strict().is_err());
-    assert!(Wal::for_layout(&layout).append_patch(&malformed).is_err());
+    assert!(
+        Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+            .append_patch(&malformed)
+            .is_err()
+    );
 
     let _ = std::fs::remove_dir_all(root);
     Ok(())

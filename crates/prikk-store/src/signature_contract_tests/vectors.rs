@@ -5,8 +5,8 @@ use prikk_object::{
 };
 
 use crate::{
-    AuthorSigner, Ed25519AuthorSigner, Ed25519MaintainerSigner, MaintainerSigner, author_signature,
-    maintainer_signature,
+    AuthorSigner, DEFAULT_ACTIVE_NAME, Ed25519AuthorSigner, Ed25519MaintainerSigner,
+    MaintainerSigner, author_signature, maintainer_signature,
 };
 
 const PUBLIC_KEY: [u8; 32] = [
@@ -247,7 +247,7 @@ fn dc53_vector_6_a_conflicting_key_is_rejected_at_record_time() -> prikk_error::
 
     let root = crate::test_support::unique_temp_dir("dc53-vector6-record");
     let layout = crate::layout::RepositoryLayout::init(root.clone())?;
-    let active_lock = crate::lock::ActiveLock::acquire(&layout)?;
+    let active_lock = crate::lock::ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
     crate::author_key_index::record_author_key_material(
         &layout,
         VECTOR6_KEY_ID,
@@ -276,7 +276,7 @@ fn dc53_vector_6_verification_fails_closed_against_a_conflicting_key_id() -> pri
 {
     let root = crate::test_support::unique_temp_dir("dc53-vector6-verify");
     let layout = crate::layout::RepositoryLayout::init(root.clone())?;
-    let active_lock = crate::lock::ActiveLock::acquire(&layout)?;
+    let active_lock = crate::lock::ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
     crate::author_key_index::record_author_key_material(
         &layout,
         VECTOR6_KEY_ID,

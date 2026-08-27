@@ -13,7 +13,7 @@ use prikk_object::{
 use super::{SealFromAcceptedOutcome, seal_from_accepted_claim};
 use crate::author_signing::author_signature;
 use crate::fsutil::read_file_if_exists;
-use crate::layout::ContainerSlot;
+use crate::layout::{ContainerSlot, DEFAULT_ACTIVE_NAME};
 use crate::maintainer_signing::{
     Ed25519MaintainerSigner, MaintainerSigner as _, maintainer_signature,
 };
@@ -622,7 +622,7 @@ fn row10_a_non_empty_active_wal_refuses() -> Result<()> {
     let mut objects = FileObjectStore::new(fixture.layout.clone());
     let blob_id = write_blob(&mut objects, b"queued\n")?;
     let queued = create_file_patch(&author, "queued.txt", 0x9B, blob_id)?;
-    Wal::for_layout(&fixture.layout).append_patch(&queued)?;
+    Wal::for_layout(&fixture.layout, DEFAULT_ACTIVE_NAME).append_patch(&queued)?;
 
     let result = seal_from_accepted_claim(
         &fixture.layout,

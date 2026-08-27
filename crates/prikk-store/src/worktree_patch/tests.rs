@@ -19,10 +19,10 @@ use crate::test_support::{
 };
 use crate::worktree_patch::commit_worktree_changes_with_generator;
 use crate::{
-    ActiveLock, ActiveRefMetadata, AuthorSigner, Ed25519AuthorSigner, FileObjectStore,
-    ObjectReader, ObjectWriter, RefPublication, RefStore, RepoPath, RepositoryLayout, Wal,
-    WorktreePatchCommitOptions, WorktreePatchOperationKind, finish_active_publication_cleanup,
-    read_active_ref_metadata,
+    ActiveLock, ActiveRefMetadata, AuthorSigner, DEFAULT_ACTIVE_NAME, Ed25519AuthorSigner,
+    FileObjectStore, ObjectReader, ObjectWriter, RefPublication, RefStore, RepoPath,
+    RepositoryLayout, Wal, WorktreePatchCommitOptions, WorktreePatchOperationKind,
+    finish_active_publication_cleanup, read_active_ref_metadata,
 };
 
 /// Deterministic Ed25519 AUTHOR signer for reproducible authoring (real signing, fixed seed).
@@ -115,7 +115,7 @@ fn publish_node_baseline(layout: &RepositoryLayout, files: &[(&str, &[u8], BlobK
 /// one). Returns the new block id. Requires `ref_name` to already have a published tip (use
 /// `publish_node_baseline` first); does not cover sealing a queue chained straight from `Genesis`.
 fn seal_active_patch(layout: &RepositoryLayout, ref_name: &str) -> ObjectId {
-    let wal = Wal::for_layout(layout);
+    let wal = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME);
     let replay = wal.replay().unwrap();
     assert!(
         !replay.records.is_empty(),
@@ -169,7 +169,7 @@ fn seal_active_patch(layout: &RepositoryLayout, ref_name: &str) -> ObjectId {
         })
         .unwrap();
 
-    let active_lock = ActiveLock::acquire(layout).unwrap();
+    let active_lock = ActiveLock::acquire(layout, DEFAULT_ACTIVE_NAME).unwrap();
     finish_active_publication_cleanup(layout, &active_lock).unwrap();
     block_id
 }
@@ -400,7 +400,9 @@ fn text_file_edited_across_a_queue_then_sealed_together_succeeds() {
     assert_eq!(v3.text_edit_count, 1);
     assert_ne!(v2.patch_id, v3.patch_id);
 
-    let replay = Wal::for_layout(&layout).replay().unwrap();
+    let replay = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+        .replay()
+        .unwrap();
     assert_eq!(replay.records.len(), 2, "v2 and v3 both queued, unsealed");
 
     // Seal both together: one block, two patch ids — DC-64's apply_one_block/apply_patch_ids loop at
@@ -473,7 +475,7 @@ fn crash_during_seal_with_a_queued_pair_preserves_both_and_completes_on_retry() 
     )
     .unwrap();
 
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     let replay_before = wal.replay().unwrap();
     assert_eq!(replay_before.records.len(), 2);
 
@@ -556,7 +558,9 @@ fn active_patch_hard_block_fires_before_any_write_and_leaves_no_partial_state() 
     )
     .unwrap();
 
-    let replay_before = Wal::for_layout(&layout).replay().unwrap();
+    let replay_before = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+        .replay()
+        .unwrap();
     assert_eq!(replay_before.records.len(), 2, "queue is now at the limit");
     let objects_before = count_object_files(&layout);
 
@@ -578,7 +582,9 @@ fn active_patch_hard_block_fires_before_any_write_and_leaves_no_partial_state() 
 
     // No partial state: the WAL is byte-identical to before the blocked attempt, and no new object
     // (blob or patch) was written for the refused commit's content.
-    let replay_after = Wal::for_layout(&layout).replay().unwrap();
+    let replay_after = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+        .replay()
+        .unwrap();
     assert_eq!(replay_after, replay_before);
     let objects_after = count_object_files(&layout);
     assert_eq!(
@@ -646,7 +652,9 @@ fn seal_remains_available_at_and_above_the_hard_bound() {
     // `seal` itself takes no `WorktreePatchCommitOptions` and consults no active-patch limit at all;
     // it only drains the queue it is given.
     let block_id = seal_active_patch(&layout, "heads/main");
-    let replay = Wal::for_layout(&layout).replay().unwrap();
+    let replay = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+        .replay()
+        .unwrap();
     assert_eq!(replay.records.len(), 0, "seal must fully drain the queue");
 
     let ref_store = RefStore::new(layout.clone());
@@ -685,7 +693,9 @@ fn active_session_append_patch_enforces_its_own_limit() {
         err.to_string().contains("at or above the configured limit"),
         "unexpected error: {err}"
     );
-    let replay = Wal::for_layout(&layout).replay().unwrap();
+    let replay = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+        .replay()
+        .unwrap();
     assert_eq!(replay.records.len(), 1, "the blocked append must not land");
 
     let _ = std::fs::remove_dir_all(root);
@@ -1721,7 +1731,9 @@ fn genesis_second_commit_before_seal_queues() {
         WorktreePatchOperationKind::CreateFile
     );
 
-    let replay = Wal::for_layout(&layout).replay().unwrap();
+    let replay = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+        .replay()
+        .unwrap();
     assert_eq!(replay.records.len(), 2);
 
     let _ = std::fs::remove_dir_all(root);
@@ -1918,7 +1930,9 @@ fn queued_commits_mint_distinct_node_ids_and_see_each_others_creates() {
     assert_eq!(second.changes[0].path, "b.txt");
     assert_ne!(first.patch_id, second.patch_id);
 
-    let replay = Wal::for_layout(&layout).replay().unwrap();
+    let replay = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
+        .replay()
+        .unwrap();
     assert_eq!(replay.records.len(), 2);
 
     seal_active_patch(&layout, "heads/main");

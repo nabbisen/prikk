@@ -7,7 +7,7 @@
 use prikk_error::{PrikkError, Result};
 
 use crate::block_state::BlockStateStatus;
-use crate::layout::RepositoryLayout;
+use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryLayout};
 use crate::lock::ActiveLock;
 use crate::refs::{RefFileStatus, RefItemStatus};
 use crate::verify::{
@@ -402,7 +402,7 @@ pub fn repair_repository(
                 .to_string(),
         ));
     }
-    let _active_lock = ActiveLock::acquire(layout)?;
+    let _active_lock = ActiveLock::acquire(layout, DEFAULT_ACTIVE_NAME)?;
     crate::refs::ensure_no_incomplete_publication(layout)?;
     let before = doctor_repository(layout);
     if !before.is_healthy() {
@@ -411,7 +411,7 @@ pub fn repair_repository(
         ));
     }
     let wal_repair = if options.truncate_wal_tail {
-        let wal = Wal::for_layout(layout);
+        let wal = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME);
         wal.truncate_trailing_partial()?
     } else {
         WalRepair {

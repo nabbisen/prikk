@@ -14,7 +14,7 @@ use prikk_object::{
 
 use crate::active::prepare_empty_active_ref_for_append;
 use crate::author_signing::{AuthorSigner, author_signature};
-use crate::layout::RepositoryLayout;
+use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryLayout};
 use crate::lock::ActiveLock;
 use crate::object_store::{ObjectReadSnapshot, ObjectReader};
 use crate::patch_inverse::{PatchInverseOperationSummary, prepare_patch_inverse_plan};
@@ -128,8 +128,8 @@ pub fn append_rollback_draft(
     envelope.add_signature(signature)?;
     let inverse_patch_id = envelope.object_id();
 
-    let wal = Wal::for_layout(layout);
-    let active_lock = ActiveLock::acquire(layout)?;
+    let wal = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME);
+    let active_lock = ActiveLock::acquire(layout, DEFAULT_ACTIVE_NAME)?;
     crate::refs::ensure_no_incomplete_publication(layout)?;
     let replay = wal.replay()?;
     if replay.trailing_partial_bytes != 0 {

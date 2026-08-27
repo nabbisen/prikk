@@ -19,9 +19,10 @@ use crate::maintainer_signing::MaintainerSigner;
 use crate::wal::{WalRecord, encode_record_for_test};
 use crate::{
     ActiveWalMetadataStatus, AuthorSignatureVerification, AuthorSigner, BlockStateStatus,
-    Ed25519AuthorSigner, FileObjectStore, ObjectItemStatus, ObjectVerification, ObjectWriter,
-    RepositoryLayout, RepositoryVerification, StageStatus, VerificationStage, Wal,
-    author_signature, derive_next_state_root, verify_repository, write_active_ref_metadata,
+    DEFAULT_ACTIVE_NAME, Ed25519AuthorSigner, FileObjectStore, ObjectItemStatus,
+    ObjectVerification, ObjectWriter, RepositoryLayout, RepositoryVerification, StageStatus,
+    VerificationStage, Wal, author_signature, derive_next_state_root, verify_repository,
+    write_active_ref_metadata,
 };
 
 use crate::test_support::{
@@ -667,7 +668,7 @@ fn verify_repository_counts_objects_and_wal_records() {
         assert!(blob.add_signature(dummy_signature()).is_ok());
         assert!(store.write_object(&blob).is_ok());
 
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         assert!(write_active_ref_metadata(&layout, "heads/main").is_ok());
         assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
 
@@ -701,7 +702,7 @@ fn verify_repository_reports_active_wal_ordering_violation() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         // Ensure the WAL file and its parent directory exist, then overwrite with two hand-crafted
         // records sharing sequence 1 — an ordering violation no append path can produce.
         assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
@@ -751,7 +752,7 @@ fn verify_repository_reports_missing_active_metadata_for_non_empty_wal() {
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
 
         let report = verify_repository(&layout);
@@ -803,7 +804,7 @@ fn verify_repository_reports_malformed_active_metadata_for_non_empty_wal_as_inte
     let layout = RepositoryLayout::init(root.clone());
     assert!(layout.is_ok());
     if let Ok(layout) = layout {
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         assert!(wal.append_patch(&signed_patch_envelope()).is_ok());
         assert!(std::fs::write(layout.default_active_ref_name_path(), b"tags/v1").is_ok());
 
@@ -984,7 +985,7 @@ fn verify_repository_fails_a_tampered_author_signature_against_recorded_key_mate
     let root = unique_temp_dir("verify-author-signature-fails");
     let layout = RepositoryLayout::init(root.clone())?;
     let signer = Ed25519AuthorSigner::from_seed("fails-author", &[0x61; 32])?;
-    let active_lock = crate::lock::ActiveLock::acquire(&layout)?;
+    let active_lock = crate::lock::ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
     crate::author_key_index::record_author_key_material(
         &layout,
         signer.key_id(),
@@ -1016,7 +1017,7 @@ fn verify_repository_fails_for_a_key_id_with_conflicting_recorded_keys() -> Resu
     let root = unique_temp_dir("verify-author-signature-conflict");
     let layout = RepositoryLayout::init(root.clone())?;
     let signer = Ed25519AuthorSigner::from_seed("conflict-author", &[0x91; 32])?;
-    let active_lock = crate::lock::ActiveLock::acquire(&layout)?;
+    let active_lock = crate::lock::ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
     crate::author_key_index::record_author_key_material(
         &layout,
         signer.key_id(),
@@ -1047,7 +1048,7 @@ fn verify_repository_reports_sound_for_a_signature_verifying_against_recorded_ma
     let root = unique_temp_dir("verify-author-signature-sound");
     let layout = RepositoryLayout::init(root.clone())?;
     let signer = Ed25519AuthorSigner::from_seed("sound-author", &[0x71; 32])?;
-    let active_lock = crate::lock::ActiveLock::acquire(&layout)?;
+    let active_lock = crate::lock::ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
     crate::author_key_index::record_author_key_material(
         &layout,
         signer.key_id(),

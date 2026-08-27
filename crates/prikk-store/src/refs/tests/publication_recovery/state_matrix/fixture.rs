@@ -15,8 +15,8 @@ use crate::test_support::{
     signed_patch_envelope, unique_temp_dir,
 };
 use crate::{
-    Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectReader, ObjectWriter,
-    RefPublication, RefStore, RepositoryLayout, Wal, add_trusted_maintainer,
+    DEFAULT_ACTIVE_NAME, Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectReader,
+    ObjectWriter, RefPublication, RefStore, RepositoryLayout, Wal, add_trusted_maintainer,
     derive_next_state_root, maintainer_signature, write_active_ref_metadata,
 };
 
@@ -63,7 +63,7 @@ impl Fixture {
             write_active_ref_metadata(&layout, "heads/topic")?;
         } else {
             write_active_ref_metadata(&layout, "heads/main")?;
-            Wal::for_layout(&layout).append_patch(&patch)?;
+            Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME).append_patch(&patch)?;
         }
         Ok(Self {
             root,

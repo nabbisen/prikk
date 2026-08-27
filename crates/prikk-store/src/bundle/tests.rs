@@ -17,7 +17,7 @@ use crate::bundle::{
     BundleImportOptions, DEFAULT_BUNDLE_MAX_OBJECT_COUNT, decode_bundle, encode_bundle,
     encode_bundle_v1_for_test, export_bundle, import_bundle,
 };
-use crate::layout::{ContainerSlot, LockableContainer};
+use crate::layout::{ContainerSlot, DEFAULT_ACTIVE_NAME, LockableContainer};
 use crate::lock::{ActiveLock, acquire_container_locks};
 use crate::received::read_received_pointer;
 use crate::test_support::{
@@ -151,7 +151,7 @@ fn seal_two_block_history_with_author(
     let patch_id = object_store.write_object(&patch)?;
 
     if record_locally {
-        let active_lock = ActiveLock::acquire(layout)?;
+        let active_lock = ActiveLock::acquire(layout, DEFAULT_ACTIVE_NAME)?;
         record_author_key_material(
             layout,
             signer.key_id(),
@@ -649,7 +649,7 @@ fn import_rejects_a_transported_key_conflicting_with_local_material() -> prikk_e
 
     let target_root = unique_temp_dir("dc53-import-local-conflict-target");
     let target = RepositoryLayout::init(target_root.clone())?;
-    let active_lock = ActiveLock::acquire(&target)?;
+    let active_lock = ActiveLock::acquire(&target, DEFAULT_ACTIVE_NAME)?;
     record_author_key_material(&target, signer.key_id(), [0xdd; 32], &active_lock)?;
     drop(active_lock);
 
@@ -708,7 +708,7 @@ fn import_rejects_a_later_conflicting_key_without_recording_an_earlier_one()
 
     let target_root = unique_temp_dir("dc53-multi-key-import-target");
     let target = RepositoryLayout::init(target_root.clone())?;
-    let active_lock = ActiveLock::acquire(&target)?;
+    let active_lock = ActiveLock::acquire(&target, DEFAULT_ACTIVE_NAME)?;
     record_author_key_material(&target, signer_b.key_id(), [0xdd; 32], &active_lock)?;
     drop(active_lock);
 
@@ -1329,7 +1329,7 @@ fn row6_a_refused_import_writes_no_pointer_and_records_no_key_material() -> prik
     let good_report = import_bundle(&target, &good_bytes, &BundleImportOptions::default_limits())?;
 
     let unrelated_signer = transport_test_signer(0xc6)?;
-    let unrelated_lock = ActiveLock::acquire(&target)?;
+    let unrelated_lock = ActiveLock::acquire(&target, DEFAULT_ACTIVE_NAME)?;
     record_author_key_material(
         &target,
         unrelated_signer.key_id(),

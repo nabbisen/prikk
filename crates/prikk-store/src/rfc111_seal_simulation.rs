@@ -23,9 +23,9 @@ use prikk_object::{
 };
 
 use crate::{
-    ActiveLock, Ed25519MaintainerSigner, MaintainerSigner, ObjectReader, ObjectWriteSession,
-    ObjectWriter, RefPublication, RefStore, RepositoryLayout, Wal, derive_next_state_root,
-    finish_active_publication_cleanup, maintainer_signature,
+    ActiveLock, DEFAULT_ACTIVE_NAME, Ed25519MaintainerSigner, MaintainerSigner, ObjectReader,
+    ObjectWriteSession, ObjectWriter, RefPublication, RefStore, RepositoryLayout, Wal,
+    derive_next_state_root, finish_active_publication_cleanup, maintainer_signature,
 };
 
 fn signed_envelope(
@@ -49,8 +49,8 @@ pub(crate) fn simulate_one_seal(
     ref_name: &str,
     signer: &Ed25519MaintainerSigner,
 ) -> Result<ObjectId> {
-    let active_lock = ActiveLock::acquire(layout)?;
-    let wal = Wal::for_layout(layout);
+    let active_lock = ActiveLock::acquire(layout, DEFAULT_ACTIVE_NAME)?;
+    let wal = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME);
     let replay = wal.replay()?;
 
     let mut object_store = ObjectWriteSession::open(layout)?;

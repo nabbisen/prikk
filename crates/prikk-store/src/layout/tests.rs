@@ -276,7 +276,7 @@ fn init_allocates_every_active_default_container_name_once_excluding_the_runtime
     );
 
     let lock_path = layout.default_active_lock_path();
-    let lock = crate::ActiveLock::acquire(&layout)?;
+    let lock = crate::ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME)?;
     assert!(lock_path.is_file(), "expected the lock file to now exist");
     let mut with_lock = files_under(&layout.default_active_dir())?;
     assert!(

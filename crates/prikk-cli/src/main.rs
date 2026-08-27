@@ -45,9 +45,9 @@ use output::{
     print_worktree_status,
 };
 use prikk_store::{
-    ActiveRefMetadata, DEFAULT_ACTIVE_PATCH_LIMIT, DoctorRepairOptions, Ed25519AuthorSigner,
-    Ed25519MaintainerSigner, MergeEvidenceTarget, RefStore, RepositoryLayout, VerifyOptions, Wal,
-    WorktreePatchCommitOptions, add_trusted_maintainer, append_rollback_draft,
+    ActiveRefMetadata, DEFAULT_ACTIVE_NAME, DEFAULT_ACTIVE_PATCH_LIMIT, DoctorRepairOptions,
+    Ed25519AuthorSigner, Ed25519MaintainerSigner, MergeEvidenceTarget, RefStore, RepositoryLayout,
+    VerifyOptions, Wal, WorktreePatchCommitOptions, add_trusted_maintainer, append_rollback_draft,
     commit_worktree_changes_signed, doctor_repository, list_received_pointers,
     load_received_ref_history, load_ref_history, materialize_patch_checkout,
     materialize_patch_checkout_with_deletions, materialize_snapshot_checkout,
@@ -282,7 +282,7 @@ fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {
 fn run_status() -> std::result::Result<(), String> {
     let root = current_dir()?;
     let layout = open_repository(root)?;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     let replay = wal.replay().map_err(|err| err.to_string())?;
     println!("prikk repository: {}", layout.prikk_dir().display());
     let ref_store = RefStore::new(layout.clone());

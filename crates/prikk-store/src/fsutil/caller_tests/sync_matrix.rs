@@ -9,8 +9,8 @@ use crate::test_support::{
 };
 use crate::worktree::materialize_manifest_entries;
 use crate::{
-    ActiveLock, FileObjectStore, ObjectWriter, RefPublication, RefStore, RepoPath,
-    RepositoryLayout, SnapshotEntry, SnapshotManifest, Wal, write_active_ref_metadata,
+    ActiveLock, DEFAULT_ACTIVE_NAME, FileObjectStore, ObjectWriter, RefPublication, RefStore,
+    RepoPath, RepositoryLayout, SnapshotEntry, SnapshotManifest, Wal, write_active_ref_metadata,
 };
 
 /// RFC 102 Stage 5, design-v1.md §14.10: `FORMAT` now goes through `create_new_file_required`
@@ -81,7 +81,7 @@ fn object_write_sync_failure_retains_and_classifies() -> prikk_error::Result<()>
 fn wal_parent_sync_failure_retains_one_record_and_retries() -> prikk_error::Result<()> {
     let root = unique_temp_dir("wal-sync-matrix");
     let layout = RepositoryLayout::init(root.clone())?;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     let patch = signed_patch_envelope();
     fail_once_for_test(TestFailPoint::RequiredDirectorySync);
     assert!(wal.append_patch(&patch).is_err());
@@ -153,11 +153,11 @@ fn lock_parent_sync_failure_retains_stale_state_until_explicit_cleanup() -> prik
     let layout = RepositoryLayout::init(root.clone())?;
     let lock_path = layout.default_active_lock_path();
     fail_once_for_test(TestFailPoint::RequiredDirectorySync);
-    assert!(ActiveLock::acquire(&layout).is_err());
+    assert!(ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME).is_err());
     assert!(lock_path.is_file());
-    assert!(ActiveLock::acquire(&layout).is_err());
+    assert!(ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME).is_err());
     std::fs::remove_file(&lock_path)?;
-    assert!(ActiveLock::acquire(&layout).is_ok());
+    assert!(ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME).is_ok());
     let _ = std::fs::remove_dir_all(root);
     Ok(())
 }

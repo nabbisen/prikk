@@ -15,8 +15,8 @@ use prikk_object::{
 use crate::maintainer_signing::MaintainerSigner;
 use crate::test_support::{signed_patch_blob_envelope, signed_patch_envelope, unique_temp_dir};
 use crate::{
-    Ed25519MaintainerSigner, FileObjectStore, ObjectWriter, RefPublication, RefStore,
-    RepositoryLayout, StageOutcome, StageStatus, VerificationStage, VerifyOptions, Wal,
+    DEFAULT_ACTIVE_NAME, Ed25519MaintainerSigner, FileObjectStore, ObjectWriter, RefPublication,
+    RefStore, RepositoryLayout, StageOutcome, StageStatus, VerificationStage, VerifyOptions, Wal,
     add_trusted_maintainer, maintainer_signature, verify_repository,
     verify_repository_with_options,
 };
@@ -105,7 +105,7 @@ fn verify_repository_reports_two_independent_stage_failures_together() -> Result
     objects.write_object(&signed_patch_blob_envelope())?;
     let mut patch = signed_patch_envelope();
     patch.schema_version = 99;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     let bytes = crate::wal::encode_record_for_test(&crate::wal::WalRecord {
         seq: 1,
         envelope: patch,
@@ -422,7 +422,7 @@ fn verify_repository_marks_every_wal_replay_dependent_as_not_evaluated() -> Resu
     // a record encoded with a wrong schema version is the new fixture.
     let mut patch = signed_patch_envelope();
     patch.schema_version = 99;
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     let bytes = crate::wal::encode_record_for_test(&crate::wal::WalRecord {
         seq: 1,
         envelope: patch,
@@ -519,7 +519,7 @@ fn verify_repository_with_options_halts_every_later_stage_when_stop_on_first_err
     let mut objects = FileObjectStore::new(layout.clone());
     objects.write_object(&signed_patch_blob_envelope())?;
     let patch = signed_patch_envelope();
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     wal.append_patch(&patch)?;
     let mut bytes = std::fs::read(wal.path())?;
     let last_byte = bytes

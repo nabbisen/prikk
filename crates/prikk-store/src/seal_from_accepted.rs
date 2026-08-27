@@ -53,7 +53,7 @@ use prikk_object::{
 use crate::block_state::{CandidateStateDerivationError, derive_next_state_root_for_candidate};
 use crate::container::decode_container_records;
 use crate::fsutil::read_file_if_exists;
-use crate::layout::{ContainerSlot, RepositoryLayout, persisted_object_types};
+use crate::layout::{ContainerSlot, DEFAULT_ACTIVE_NAME, RepositoryLayout, persisted_object_types};
 use crate::lifecycle_cache::replay::LifecycleReplayError;
 use crate::lock::ActiveLock;
 use crate::maintainer_signing::{MaintainerSigner, maintainer_signature};
@@ -162,14 +162,14 @@ pub fn seal_from_accepted_claim(
     let trust_policy = maintainer_trust_policy_or_empty(layout)?;
     let claim_signature_outcome = verify_claim_signature(&claim_envelope, &trust_policy)?;
 
-    let active_lock = ActiveLock::acquire(layout)?;
+    let active_lock = ActiveLock::acquire(layout, DEFAULT_ACTIVE_NAME)?;
     crate::refs::ensure_no_incomplete_publication(layout)?;
 
     // §5: the active WAL must be empty. Sealing accepted patches advances the branch tip; locally
     // queued WAL patches were composed against the *old* tip, and since DC-66 a queue chains
     // baselines, so advancing the tip underneath them invalidates assumptions they were built on --
     // the same reasoning `rollback_draft` already applies for exactly this class of reason.
-    let wal = Wal::for_layout(layout);
+    let wal = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME);
     let replay = wal.replay()?;
     if replay.trailing_partial_bytes != 0 {
         return Err(PrikkError::Integrity(format!(

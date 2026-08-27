@@ -16,9 +16,11 @@ pub struct ActiveLock {
 }
 
 impl ActiveLock {
-    /// Acquire a lock through exclusive file creation.
-    pub fn acquire(layout: &RepositoryLayout) -> Result<Self> {
-        let path = layout.default_active_lock_path();
+    /// Acquire a lock through exclusive file creation, for the active session named `name` (RFC
+    /// 108 increment 1: previously hardcoded to `"default"`; generalizes the same way
+    /// `RefLock::acquire` below already takes `ref_name`).
+    pub fn acquire(layout: &RepositoryLayout, name: &str) -> Result<Self> {
+        let path = layout.active_lock_path(name);
         let relative = layout.repository_relative(&path)?;
         let mutation_root = layout.repository_mutation_root().clone();
         acquire_lock_file(&mutation_root, &relative, &path, "active")?;

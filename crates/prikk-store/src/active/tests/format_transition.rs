@@ -2,7 +2,7 @@
 
 use crate::test_support::{signed_patch_envelope, unique_temp_dir};
 use crate::{
-    ActiveLock, RepositoryLayout, Wal, finish_active_publication_cleanup,
+    ActiveLock, DEFAULT_ACTIVE_NAME, RepositoryLayout, Wal, finish_active_publication_cleanup,
     remove_active_ref_metadata, write_active_ref_metadata,
 };
 
@@ -23,11 +23,11 @@ fn changed_or_missing_retained_format_marker_blocks_active_and_wal_mutation() {
         let root = unique_temp_dir(&format!("retained-format-{name}"));
         let layout = RepositoryLayout::init(root.clone()).unwrap();
         write_active_ref_metadata(&layout, "heads/main").unwrap();
-        let wal = Wal::for_layout(&layout);
+        let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
         wal.append_patch(&signed_patch_envelope()).unwrap();
         let wal_before = std::fs::read(wal.path()).unwrap();
         let metadata_before = std::fs::read(layout.default_active_ref_name_path()).unwrap();
-        let active_lock = ActiveLock::acquire(&layout).unwrap();
+        let active_lock = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME).unwrap();
 
         match marker {
             Some(bytes) => std::fs::write(layout.format_path(), bytes).unwrap(),
@@ -57,11 +57,11 @@ fn public_cleanup_primitives_refuse_legacy_bytes_unchanged() {
     let root = unique_temp_dir("legacy-public-cleanup-refusal");
     let layout = RepositoryLayout::init(root.clone()).unwrap();
     write_active_ref_metadata(&layout, "heads/main").unwrap();
-    let wal = Wal::for_layout(&layout);
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     wal.append_patch(&signed_patch_envelope()).unwrap();
     let wal_before = std::fs::read(wal.path()).unwrap();
     let metadata_before = std::fs::read(layout.default_active_ref_name_path()).unwrap();
-    let active_lock = ActiveLock::acquire(&layout).unwrap();
+    let active_lock = ActiveLock::acquire(&layout, DEFAULT_ACTIVE_NAME).unwrap();
     std::fs::write(layout.format_path(), b"1\n").unwrap();
 
     let bare_wal = Wal::new(wal.path());

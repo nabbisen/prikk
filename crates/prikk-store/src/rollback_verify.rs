@@ -13,7 +13,7 @@ use prikk_object::{
     SignatureAlgorithm, SignerRole,
 };
 
-use crate::layout::RepositoryLayout;
+use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryLayout};
 use crate::patch_inverse::prepare_patch_inverse_plan;
 use crate::patch_replay::decode::{decode_patch_operations, ensure_apply_supported};
 use crate::rollback_draft::is_rollback_draft_envelope;
@@ -53,7 +53,7 @@ pub fn verify_active_rollback_draft(
     layout: &RepositoryLayout,
     ref_name: &str,
 ) -> Result<RollbackDraftVerification> {
-    let wal = Wal::for_layout(layout);
+    let wal = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME);
     let replay = wal.replay()?;
     if replay.trailing_partial_bytes != 0 {
         return Err(PrikkError::Integrity(format!(
