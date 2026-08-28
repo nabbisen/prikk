@@ -1,27 +1,7 @@
 <h1><img src="https://raw.githubusercontent.com/nabbisen/prikk/main/assets/logo/prikk-header-520.png" alt="Prikk" width="360"></h1>
 
-![Status](https://img.shields.io/badge/status-early--implementation-orange)
-[![CI](https://github.com/nabbisen/prikk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nabbisen/prikk/actions/workflows/ci.yml)
 [![license](https://img.shields.io/crates/l/prikk.svg)](LICENSE)
-[![crates.io](https://img.shields.io/crates/v/prikk.svg?label=prikk)](https://crates.io/crates/prikk)
-[![documentation](https://img.shields.io/badge/docs-github_pages-brightgreen)](https://nabbisen.github.io/prikk/)
-[![Dependency Status](https://deps.rs/crate/prikk/latest/status.svg)](https://deps.rs/crate/prikk)
-
-[![crates.io](https://img.shields.io/crates/v/prikk-crypto.svg?label=crypto)](https://crates.io/crates/prikk-crypto)
-[![docs.rs](https://img.shields.io/docsrs/prikk-crypto?version=latest)](https://docs.rs/prikk-crypto)
-[![Dependency Status](https://deps.rs/crate/prikk-crypto/latest/status.svg)](https://deps.rs/crate/prikk-crypto)
-[![crates.io](https://img.shields.io/crates/v/prikk-error.svg?label=error)](https://crates.io/crates/prikk-error)
-[![docs.rs](https://img.shields.io/docsrs/prikk-error?version=latest)](https://docs.rs/prikk-error)
-[![Dependency Status](https://deps.rs/crate/prikk-error/latest/status.svg)](https://deps.rs/crate/prikk-error)
-[![crates.io](https://img.shields.io/crates/v/prikk-hash.svg?label=hash)](https://crates.io/crates/prikk-hash)
-[![docs.rs](https://img.shields.io/docsrs/prikk-hash?version=latest)](https://docs.rs/prikk-hash)
-[![Dependency Status](https://deps.rs/crate/prikk-hash/latest/status.svg)](https://deps.rs/crate/prikk-hash)
-[![crates.io](https://img.shields.io/crates/v/prikk-object.svg?label=object)](https://crates.io/crates/prikk-object)
-[![docs.rs](https://img.shields.io/docsrs/prikk-object?version=latest)](https://docs.rs/prikk-object)
-[![Dependency Status](https://deps.rs/crate/prikk-object/latest/status.svg)](https://deps.rs/crate/prikk-object)
-[![crates.io](https://img.shields.io/crates/v/prikk-store.svg?label=store)](https://crates.io/crates/prikk-store)
-[![docs.rs](https://img.shields.io/docsrs/prikk-store?version=latest)](https://docs.rs/prikk-store)
-[![Dependency Status](https://deps.rs/crate/prikk-store/latest/status.svg)](https://deps.rs/crate/prikk-store)
+[![CI](https://github.com/nabbisen/prikk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nabbisen/prikk/actions/workflows/ci.yml)
 
 **Prikk is a standalone distributed version control system built around block-oriented patch theory.**
 
@@ -39,6 +19,22 @@ Prikk is designed to be:
 - flexible enough for local, peer, and future hosted workflows;
 - fast for long-lived repositories by separating active patch reasoning from sealed block history;
 - explainable when patch reasoning cannot prove a safe result.
+
+## Crates
+
+`prikk` is the command-line tool. The others are the libraries it is built from, published so the
+CLI can be built from crates.io — **their APIs may change without notice before 1.0.**
+
+| Crate | Purpose | Version | Docs | Dependencies |
+|---|---|---|---|---|
+| [`prikk`](https://crates.io/crates/prikk) | the command-line tool | [![crates.io](https://img.shields.io/crates/v/prikk.svg?label=%20)](https://crates.io/crates/prikk) | [![documentation](https://img.shields.io/badge/docs-github_pages-brightgreen)](https://nabbisen.github.io/prikk/) | [![Dependency Status](https://deps.rs/crate/prikk/latest/status.svg)](https://deps.rs/crate/prikk) |
+| [`prikk-store`](https://crates.io/crates/prikk-store) | repository storage engine — layout, object storage, WAL durability, verification, patch replay | [![crates.io](https://img.shields.io/crates/v/prikk-store.svg?label=%20)](https://crates.io/crates/prikk-store) | [![docs.rs](https://img.shields.io/docsrs/prikk-store?version=latest&label=%20)](https://docs.rs/prikk-store) | [![Dependency Status](https://deps.rs/crate/prikk-store/latest/status.svg)](https://deps.rs/crate/prikk-store) |
+| [`prikk-object`](https://crates.io/crates/prikk-object) | object identity, canonical encoding, and payload types | [![crates.io](https://img.shields.io/crates/v/prikk-object.svg?label=%20)](https://crates.io/crates/prikk-object) | [![docs.rs](https://img.shields.io/docsrs/prikk-object?version=latest&label=%20)](https://docs.rs/prikk-object) | [![Dependency Status](https://deps.rs/crate/prikk-object/latest/status.svg)](https://deps.rs/crate/prikk-object) |
+| [`prikk-replay`](https://crates.io/crates/prikk-replay) | replay and lifecycle semantics | [![crates.io](https://img.shields.io/crates/v/prikk-replay.svg?label=%20)](https://crates.io/crates/prikk-replay) | [![docs.rs](https://img.shields.io/docsrs/prikk-replay?version=latest&label=%20)](https://docs.rs/prikk-replay) | [![Dependency Status](https://deps.rs/crate/prikk-replay/latest/status.svg)](https://deps.rs/crate/prikk-replay) |
+| [`prikk-crypto`](https://crates.io/crates/prikk-crypto) | Ed25519 signing and verification | [![crates.io](https://img.shields.io/crates/v/prikk-crypto.svg?label=%20)](https://crates.io/crates/prikk-crypto) | [![docs.rs](https://img.shields.io/docsrs/prikk-crypto?version=latest&label=%20)](https://docs.rs/prikk-crypto) | [![Dependency Status](https://deps.rs/crate/prikk-crypto/latest/status.svg)](https://deps.rs/crate/prikk-crypto) |
+| [`prikk-hash`](https://crates.io/crates/prikk-hash) | SHA-256 primitives | [![crates.io](https://img.shields.io/crates/v/prikk-hash.svg?label=%20)](https://crates.io/crates/prikk-hash) | [![docs.rs](https://img.shields.io/docsrs/prikk-hash?version=latest&label=%20)](https://docs.rs/prikk-hash) | [![Dependency Status](https://deps.rs/crate/prikk-hash/latest/status.svg)](https://deps.rs/crate/prikk-hash) |
+| [`prikk-error`](https://crates.io/crates/prikk-error) | shared error taxonomy | [![crates.io](https://img.shields.io/crates/v/prikk-error.svg?label=%20)](https://crates.io/crates/prikk-error) | [![docs.rs](https://img.shields.io/docsrs/prikk-error?version=latest&label=%20)](https://docs.rs/prikk-error) | [![Dependency Status](https://deps.rs/crate/prikk-error/latest/status.svg)](https://deps.rs/crate/prikk-error) |
+| [`prikk-ffi`](https://crates.io/crates/prikk-ffi) | Windows filesystem-identity FFI bindings | [![crates.io](https://img.shields.io/crates/v/prikk-ffi.svg?label=%20)](https://crates.io/crates/prikk-ffi) | [![docs.rs](https://img.shields.io/docsrs/prikk-ffi?version=latest&label=%20)](https://docs.rs/prikk-ffi) | [![Dependency Status](https://deps.rs/crate/prikk-ffi/latest/status.svg)](https://deps.rs/crate/prikk-ffi) |
 
 ## Current Status
 
