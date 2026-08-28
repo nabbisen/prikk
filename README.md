@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/nabbisen/prikk/main/assets/logo/prikk-header-520.png" alt="Prikk" width="360">
+<h1><img src="https://raw.githubusercontent.com/nabbisen/prikk/main/assets/logo/prikk-header-520.png" alt="Prikk" width="360"></h1>
 
 ![Status](https://img.shields.io/badge/status-early--implementation-orange)
 [![CI](https://github.com/nabbisen/prikk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nabbisen/prikk/actions/workflows/ci.yml)
