@@ -1,6 +1,7 @@
 <h1><img src="https://raw.githubusercontent.com/nabbisen/prikk/main/assets/logo/prikk-header-520.png" alt="Prikk" width="360"></h1>
 
 [![license](https://img.shields.io/crates/l/prikk.svg)](LICENSE)
+[![documentation](https://img.shields.io/badge/docs-github_pages-brightgreen)](https://nabbisen.github.io/prikk/)
 [![CI](https://github.com/nabbisen/prikk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nabbisen/prikk/actions/workflows/ci.yml)
 
 **Prikk is a standalone distributed version control system built around block-oriented patch theory.**
