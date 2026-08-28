@@ -24,3 +24,9 @@ Palette: sage `#7B927D`, warm tan `#DCC4A7`, terracotta `#D97C5F`, cream `#FBF4E
   the original does. There is no vector version.
 - **The mark is too detailed for a 32px favicon**; a favicon needs a simplified mark that does not
   exist yet.
+
+## Copies
+
+`prikk-header-520.png` is duplicated at `docs/src/assets/prikk-header-520.png` for the mdbook site,
+because mdbook only serves files under `docs/src/`. **Update both together**, or the documentation
+site will keep showing the old logo.

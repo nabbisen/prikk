@@ -1,3 +1,5 @@
+![Prikk](assets/prikk-header-520.png)
+
 # Prikk Documentation
 
 Prikk is an experimental, design-first distributed version control system built around
