@@ -117,6 +117,34 @@ port, Windows a rewrite.
 cannot close by construction (no `openat` equivalent). 0.22.0 closed two others that stood through
 0.21.0 (`prikk unlock` process-liveness reporting, and the 128-bit anchor identifier).
 
+### BSD mutation (FreeBSD, OpenBSD) — unscheduled; the blocker is CI evidence, not the port
+
+**Recorded 2026-08-28 after the owner observed that git, Mercurial and — closest to home — Pijul
+support FreeBSD, and git supports OpenBSD.**
+
+**The current boundary is an allowlist of reviewed platforms, not a capability limit.** The POSIX
+mutation path uses `rustix::fs::openat`, `OFlags`, `fchmod` and `io::dup`, all of which FreeBSD has.
+Measured, in a throwaway worktree: widening every `target_os = "linux"` gate to include `freebsd`
+produces **exactly two compile errors**, both because FreeBSD's `mode_t` is 16-bit where Linux's is
+32-bit (`linux.rs:114`, `read.rs:186`). With two casts, `x86_64-unknown-freebsd` compiles clean and
+Linux is unaffected.
+
+**OpenBSD is less certain.** `rustup` has no prebuilt std for it (tier 3), so nothing could be
+verified here, and its `mode_t` is 32-bit unlike FreeBSD's — so even the two casts may differ. A
+native build using OpenBSD's ports Rust is the only way to find out.
+
+**Prerequisite: a CI mechanism that runs a real BSD kernel — and it is the same prerequisite for
+both.** GitHub Actions has no native runner for either; `vmactions/freebsd-vm` and
+`vmactions/openbsd-vm` both exist, so this is one third-party action and one policy decision (CI
+policy requires actions pinned to a reviewed immutable revision), not two separate problems. The code
+asymmetry between the two BSDs is real; the CI asymmetry is not.
+
+**Why the cfg must not be widened before that exists.** Compiling proves nothing about `fsync`
+semantics, rename atomicity, or `O_NOFOLLOW` behaviour on a filesystem nobody has reviewed. DC-71 is
+the precedent: `prikk-store` once failed to compile off Linux and nobody noticed until CI was taught
+to look. **A platform that compiles and silently corrupts is worse than one that refuses cleanly**,
+and refusing cleanly is what happens today.
+
 ## Open-Work Index
 
 RFC 120: every file in `rfcs/proposed/` is named below, or the gate that checks this section

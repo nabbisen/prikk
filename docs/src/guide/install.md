@@ -76,10 +76,11 @@ repository mutation requires Linux, macOS, or Windows root-scoped filesystem cap
 So `init`, `commit`, and `seal` will not work. Reading an existing repository does — `verify`, `log`,
 `status`, `doctor`, and the other read-only commands.
 
-**This is a deliberate boundary, not a missing port.** Mutation depends on root-scoped filesystem
-primitives that have a reviewed durability implementation on those three platforms only; there is no
-reviewed equivalent elsewhere, and Prikk refuses rather than writing history through a path nobody has
-audited. [Platform Support](../reference/platform-support.md) states what each supported platform
+**This is a review boundary rather than a technical one.** FreeBSD has the filesystem primitives
+Prikk's POSIX path uses; what it does not have is a durability implementation anyone has reviewed, or
+CI that exercises one. Prikk refuses rather than writing history through a path nobody has audited.
+Support is [recorded as a future
+theme](https://github.com/nabbisen/prikk/blob/main/ROADMAP.md#future-themes) and is not scheduled. [Platform Support](../reference/platform-support.md) states what each supported platform
 guarantees, including two narrower guarantees on Windows.
 
 ## Put the binary on `PATH`
