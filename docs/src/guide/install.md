@@ -41,6 +41,47 @@ format), not confirmed by running it.
 A passing checksum proves the download matches what was published; it does not prove *who*
 published it — see [Release, Versioning, and Compatibility](../reference/release-compatibility.md#core-caveats).
 
+## Build from source
+
+Prebuilt archives cover four targets: `x86_64` and `aarch64` Linux, `aarch64` macOS, and `x86_64`
+Windows. Anywhere else, build it yourself — there is no separate porting step:
+
+```sh
+cargo install prikk            # from crates.io, and puts it on PATH for you
+```
+
+or from a clone, which is also what you want when working on Prikk itself:
+
+```sh
+git clone https://github.com/nabbisen/prikk
+cd prikk
+cargo build -p prikk --release --locked   # binary at target/release/prikk
+```
+
+### Other Linux architectures
+
+**Fully supported.** Nothing in Prikk is gated on CPU architecture — only on the operating system —
+so any architecture Rust targets on Linux builds and runs with no reduction in capability.
+
+### FreeBSD, OpenBSD, and other platforms
+
+**They build, but they are read-only.** Prikk compiles for FreeBSD, and nothing in it is
+OpenBSD-specific, so the same applies there — but **repository mutation is refused at runtime on any
+platform other than Linux, macOS, and Windows**:
+
+```
+repository mutation requires Linux, macOS, or Windows root-scoped filesystem capabilities
+```
+
+So `init`, `commit`, and `seal` will not work. Reading an existing repository does — `verify`, `log`,
+`status`, `doctor`, and the other read-only commands.
+
+**This is a deliberate boundary, not a missing port.** Mutation depends on root-scoped filesystem
+primitives that have a reviewed durability implementation on those three platforms only; there is no
+reviewed equivalent elsewhere, and Prikk refuses rather than writing history through a path nobody has
+audited. [Platform Support](../reference/platform-support.md) states what each supported platform
+guarantees, including two narrower guarantees on Windows.
+
 ## Put the binary on `PATH`
 
 `cargo binstall`/`cargo install` place the binary in Cargo's own bin directory (`~/.cargo/bin` on

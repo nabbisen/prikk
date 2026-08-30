@@ -145,10 +145,16 @@ reference](./docs/src/reference/platform-support.md)). This closes a defect fixe
 set against a real repository on GitHub's `windows-latest` and `macos-latest` runners on every
 change, so this cannot silently rot again.
 
-To build from a clone instead — the path to use when working on prikk itself:
+**On a platform with no prebuilt binary — other Linux architectures, or a BSD — build it yourself.**
+Nothing in prikk is gated on CPU architecture, only on the operating system, so any architecture Rust
+targets on Linux builds with no reduction in capability. FreeBSD compiles too, but **mutation is
+refused at runtime off Linux/macOS/Windows**, so it is read-only there. See the [install
+guide](./docs/src/guide/install.md#build-from-source).
+
+To build from a clone — also the path to use when working on prikk itself:
 
 ```sh
-cargo build -p prikk && export PATH="$PWD/target/debug:$PATH"
+cargo build -p prikk --release --locked && export PATH="$PWD/target/release:$PATH"
 ```
 
 ## Quick Start
