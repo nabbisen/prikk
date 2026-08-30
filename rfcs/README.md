@@ -50,15 +50,13 @@ These records are under design review. All proposed RFCs must respect the depend
 
 | ID | Title | Milestone |
 |---|---|---|
-| 108 | [Workspace Concurrent Sessions](./proposed/108-workspace-concurrent-sessions.md) | Unscheduled. Owner concept, 2026-08-18, recorded with the architect's assessment. **No design exists**; its one blocking question — whether Workspace patches are sealed or unsealed — is unanswered, and everything else follows from it |
 | 109 | [Agent-Native Interface](./proposed/109-agent-native-interface.md) | Unscheduled. Owner concept, 2026-08-18. Depends on criterion 3 (now met) and criterion 2 (open — it gates the AST-sealing question). **No design exists** |
 | 110 | [Agent Safety and Provenance](./proposed/110-agent-safety-and-provenance.md) | Unscheduled. Owner concept, 2026-08-18, **direction not yet established** and recorded as such. Pillar 1 largely redistributes into RFC 108; Pillar 2 needs criterion 5 as a floor, since provenance sealed over unverified authorship manufactures the appearance of verification. **No design exists** |
 | 113 | [History Import Foundations](./proposed/113-history-import-foundations.md) | Unscheduled. Owner direction 2026-08-19: migrate from Git, Subversion and CVS with history preserved. **Amended the same day — the decoder/encoder tooling becomes its own project**, because prikk's whole third-party runtime surface is five crates and a Git decoder needs `gix` or `libgit2`. **This RFC is therefore prikk's import *contract***, not an importer plan. Records the shared problem (prikk records node identity these systems never had; imported commits cannot carry valid prikk AUTHOR signatures — **DC-53's `Unverifiable` is already the right vocabulary**) and §3.1's three IR questions: what a record is, what must be preserved, what may be omitted. Depends on criteria 2 and 1. **No design exists** |
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / **0.20.0** (retargeted from 0.19.0, owner ruling 2026-08-08). **Release-blocked** — inherits key lifecycle from DC-35, which needs amendment, and blocked behind criterion 4's signer bootstrap |
 | DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
-| DC-49 | [Portable-Logic Platform Matrix](./proposed/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | M2; blocked on a release-lane event |
 
-**Blocked, not available:** **DC-43** and **DC-49** both wait on release-lane events; DC-43 additionally
+**Blocked, not available:** **DC-43** waits on a release-lane event, and additionally
 inherits DC-35's unamended key lifecycle and criterion 4's signer bootstrap, which only the project owner
 can begin. **DC-44** is scheduled beyond M2.
 
@@ -82,6 +80,7 @@ These reviewed designs may govern downstream work but have not yet released.
 
 | ID | Title | Milestone |
 |---|---|---|
+| 108 | [Workspace Concurrent Sessions](./accepted/108-workspace-concurrent-sessions.md) | Accepted 2026-08-27 on the owner's unsealed ruling. **Mechanism complete and unreleased-as-a-feature**: `active/<name>/` is general, every diagnostic surface handles more than one active session, and repair is per-active and independent (increments 1-3d, `f623c6e`). No command creates a second workspace yet; §D5 leaves naming, CLI surface, and sharing unsettled |
 | DC-34 | [Publication and Identity Authority](./accepted/DC-34-PUBLICATION-IDENTITY-AUTHORITY.md) | M0 complete; governs DC-38 through DC-40 |
 | DC-35 | [Release Compatibility and Status Correction](./accepted/DC-35-RELEASE-COMPATIBILITY-STATUS-CORRECTION.md) | M1 / 0.18.0; implementation accepted; signer bootstrap pending separately |
 | DC-36 | [Existing-Object Publication Integrity](./accepted/DC-36-EXISTING-OBJECT-PUBLICATION-INTEGRITY.md) | M1 / 0.18.0; implementation accepted |
@@ -219,6 +218,7 @@ These records currently live under `archive/`.
 
 | ID | Title | Status |
 |---|---|---|
+| DC-49 | [Portable-Logic Platform Matrix](./archive/DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md) | Closed 2026-08-28 — satisfied by other means; the five crates already run on macOS and Windows via the mutation jobs since 0.21.0 |
 | DC-09 | [Phase 4 Node Model and Operation Application](./archive/DC-09-PHASE-4-NODE-MODEL.md) | Superseded / partially implemented historical umbrella. |
 | DC-42 | [Performance and Maintainability Gates](./archive/DC-42-PERFORMANCE-MAINTAINABILITY-GATES.md) | Superseded 2026-07-29 into DC-56, DC-57, DC-58. Never implemented; design review found it bundled three unrelated increments. |
 | DC-52 | [Python and Oracle Decommissioning](./archive/DC-52-PYTHON-ORACLE-DECOMMISSIONING.md) | Moved to `archive/`. **Unblocked 2026-08-08** — `DC-45:419`'s condition was discharged by 0.19.0's release and its accepted post-release stability rerun. Deletion remains a separate architect-reviewed change, and fixture compaction only after deletion review. Listed under *Proposed* until 2026-08-18 while its file already lived here |

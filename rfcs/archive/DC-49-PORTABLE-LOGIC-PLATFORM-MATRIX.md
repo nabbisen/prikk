@@ -18,6 +18,28 @@ edit alone would have been. **DC-49 is unblocked by its own stated criterion.**
 `MILESTONES.md:463` still reads *"blocked on the M1 portability-claim correction"* and is stale in
 the same way; not edited here (no instruction names that file for this handoff).
 
+**CLOSED 2026-08-28 — satisfied by other means, not implemented.** The job this RFC specifies would
+be redundant. All five crates it names (`prikk-hash`, `prikk-error`, `prikk-object`, `prikk-crypto`,
+`prikk-replay`) already run their full test suites on **both macOS and Windows on every change**, via
+`cargo test --workspace --locked --no-fail-fast` in the `macos-mutation` and `windows-mutation` jobs.
+Verified by reading which test binaries executed in CI run `33341507105`, not inferred from the
+workflow file.
+
+**Its premise expired at 0.21.0.** This RFC states that the five crates are "not exercised outside
+Linux" and that `prikk-store`/`prikk-cli` "cannot be exercised elsewhere" because DC-37 makes mutation
+Linux-only. **0.21.0 made macOS and Windows mutating platforms** (criterion 6, MET); the mutation jobs
+began running the whole workspace, and these crates came with them. Two of the Non-goals below are
+inverted by the same change: DC-37's Linux-only boundary *was* altered, and the project now makes a
+public macOS/Windows platform-support claim on stronger evidence than this job would have produced.
+
+**Implementing it would also require a governed-procedure amendment** (`command_scan/procedure.rs`
+does not accept the `cargo test -p … -p …` production) — a governed surface changed for a job adding
+no coverage.
+
+**Recorded rather than deleted**, so the reasoning survives; see
+`.git-exclude/reviewed/dc49-already-satisfied-2026-08-28.md`. **This is the second time this RFC was
+overtaken by ordinary development** — its blocker cleared the same way, at DC-87 Stage 2.
+
 **Target milestone.** M2 - post-correction assurance milestone.
 **Schedule position.** ~~Blocked. Not startable until the M1 portability-claim correction ships (see
 Trigger).~~ **Unblocked — see the status update above.** Independent of DC-41's own acceptance or
