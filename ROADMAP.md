@@ -35,22 +35,35 @@ path would widen adoption — a shell installer of the kind `rustup` and `bun` s
 (`cargo install`) or a manual download-verify-extract-PATH sequence. Both are more work than one
 command.
 
-**The constraint, which the design has to answer rather than route around:**
-`release-signers.toml` still reads `authorized_primary_fingerprints = []` and is fail-closed, so **no
-release yet passes the DC-35 signer-authority audit** — that is criterion 4, open by the owner's
-ruling. A `curl | sh` installer is a stronger trust request than a download page: it asks a user to
-execute an unreviewed script that fetches a binary whose authority is, by the project's own
-statement, not yet established. **Shipping one now would teach users to trust a channel Prikk itself
-does not vouch for.**
+**DC-35 does not constrain this, and an earlier architect objection that it did was wrong.** DC-35's
+own scope statement governs *"official upstream Prikk tags, official release-page assets, and official
+package namespaces"* — the authority of origin. It says nothing about installers, scripts, or how a
+published asset is fetched; the words do not appear in it. **An installer is transport, not a new
+authority claim**, and the project already recommends downloading those same assets by hand from the
+release page, and already publishes to crates.io for `cargo install`. **The installer adds no trust
+category that is not already offered.**
 
-**A path that does not wait on criterion 4 exists, and should be weighed first:** submission to
-package managers — Homebrew, Scoop, the AUR, nixpkgs — where the distribution channel supplies its own
-signing and review, and the user's trust decision is one they have already made. That gets
-`brew install prikk` without Prikk asserting an authority it does not have.
+**The owner's shape, 2026-08-28, and both halves are right:**
 
-**Constraint to answer in design:** either criterion 4 closing, or a design that states plainly what the installer does
-and does not prove. **Uninstall is the easy half** and should not be an afterthought — whatever
-installs must remove cleanly, including `PATH` edits it made.
+- **The script downloads from the release page** — the same assets, the same trust position as the
+  manual path it replaces.
+- **CI generates the script** — so it is a tracked, reviewed, versioned build artifact rather than a
+  hand-maintained blob on a web server, and it can be checksummed like any other release asset.
+
+**It is likely to improve integrity in practice, not weaken it.** The install guide currently asks a
+user to verify a `.sha256` by hand, which most people skip. A generated installer can verify it
+automatically and refuse on mismatch — turning an optional manual step into an unconditional one.
+
+**The one real constraint is what it may claim, not whether it may exist.** `release-signers.toml` is
+still empty and fail-closed, so no release passes the DC-35 signer-authority audit; the installer and
+its documentation must not imply otherwise. That is a wording requirement on the increment, not a
+prerequisite for it.
+
+**Package-manager submission — Homebrew, Scoop, the AUR, nixpkgs — remains worth doing alongside**, not
+instead: it reaches users who will never run a script, and the channel supplies its own review.
+
+**Uninstall is the easy half and should not be an afterthought** — whatever installs must remove
+cleanly, including any `PATH` edits it made.
 
 ### Beginner's help — selected 2026-08-28
 
