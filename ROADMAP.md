@@ -117,6 +117,51 @@ port, Windows a rewrite.
 cannot close by construction (no `openat` equivalent). 0.22.0 closed two others that stood through
 0.21.0 (`prikk unlock` process-liveness reporting, and the 128-bit anchor identifier).
 
+### Universal installer and uninstaller — unscheduled; a signer-authority question sits inside it
+
+**Owner's, 2026-08-28:** installing Prikk is harder than it should be for newcomers, and an easier
+path would widen adoption — a shell installer of the kind `rustup` and `bun` ship.
+
+**The goal is right and the entry cost is real.** Today a newcomer needs either a Rust toolchain
+(`cargo install`) or a manual download-verify-extract-PATH sequence. Both are more work than one
+command.
+
+**The constraint, which the design has to answer rather than route around:**
+`release-signers.toml` still reads `authorized_primary_fingerprints = []` and is fail-closed, so **no
+release yet passes the DC-35 signer-authority audit** — that is criterion 4, open by the owner's
+ruling. A `curl | sh` installer is a stronger trust request than a download page: it asks a user to
+execute an unreviewed script that fetches a binary whose authority is, by the project's own
+statement, not yet established. **Shipping one now would teach users to trust a channel Prikk itself
+does not vouch for.**
+
+**A path that does not wait on criterion 4 exists, and should be weighed first:** submission to
+package managers — Homebrew, Scoop, the AUR, nixpkgs — where the distribution channel supplies its own
+signing and review, and the user's trust decision is one they have already made. That gets
+`brew install prikk` without Prikk asserting an authority it does not have.
+
+**Prerequisite:** either criterion 4 closing, or a design that states plainly what the installer does
+and does not prove. **Uninstall is the easy half** and should not be an afterthought — whatever
+installs must remove cleanly, including `PATH` edits it made.
+
+### Beginner's help — unscheduled; the guide is complete and the on-ramp is missing
+
+**Owner's, 2026-08-28:** starting a project with Prikk is hard for newcomers; guides, tutorials, FAQs
+and troubleshooting are needed.
+
+**The diagnosis is confirmed by the shape of what exists.** `docs/src/guide/` has **twenty
+feature-organised pages** — one per command or capability — and **no tutorial, no FAQ, and no
+troubleshooting page**. There is no narrative "first ten minutes" path, and the guide's second entry
+is *Security and Signing Setup*, which a reader meets before they have created anything.
+
+**A newcomer's first questions are not command questions.** *What do I run first? Why did `commit`
+refuse? What is sealing and must I do it? Why does this need keys at all?* Those are answered today
+only by reading several reference pages and inferring.
+
+**Prerequisite: none — this is writable now.** It is unscheduled by priority, not by blocker. **The
+`Post-0.16.1 Documentation Reference Backlog` table below already carries `TASK-15` (roles and
+user-classes orientation), which overlaps the audience half of this theme**; whoever takes this should
+reconcile the two rather than start a third parallel effort.
+
 ### BSD mutation (FreeBSD, OpenBSD) — unscheduled; the blocker is CI evidence, not the port
 
 **Recorded 2026-08-28 after the owner observed that git, Mercurial and — closest to home — Pijul
