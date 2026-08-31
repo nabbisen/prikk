@@ -239,6 +239,14 @@ item is open.
 - [`110-agent-safety-and-provenance.md`](rfcs/proposed/110-agent-safety-and-provenance.md) — RFC 110, Agent safety and code provenance
 - [`113-history-import-foundations.md`](rfcs/proposed/113-history-import-foundations.md) — RFC 113, History import foundations (Git, Subversion, CVS)
 - [`DC-43-RELEASE-SECURITY-CONTROLS.md`](rfcs/proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) — DC-43, Release Security and Distribution Controls (schedule position stale — cited predecessor superseded and implemented; see the RFC's own status update)
+- [`121-cli-boundary-contract.md`](rfcs/proposed/121-cli-boundary-contract.md) — RFC 121, The CLI's boundary contract: EPIPE panic, exit codes, per-command help, arg-parser hygiene (external audit 2026-08-31)
+- [`122-worktree-status-baseline-repair.md`](rfcs/proposed/122-worktree-status-baseline-repair.md) — RFC 122, `worktree-status` runs on no repository this CLI produces (external audit 2026-08-31, High)
+- [`123-commit-message-and-authorship-metadata.md`](rfcs/proposed/123-commit-message-and-authorship-metadata.md) — RFC 123, The commit message is validated and then discarded (external audit 2026-08-31, High; **owner ruling required** — format decision)
+- [`124-worktree-ignore-mechanism.md`](rfcs/proposed/124-worktree-ignore-mechanism.md) — RFC 124, No ignore mechanism exists at any layer (external audit 2026-08-31)
+- [`125-format-boundary-input-hardening.md`](rfcs/proposed/125-format-boundary-input-hardening.md) — RFC 125, Four places the decoder accepts what the encoder would never write (external audit 2026-08-31)
+- [`126-verification-infrastructure-coverage.md`](rfcs/proposed/126-verification-infrastructure-coverage.md) — RFC 126, Four flanks the verification culture never reached (external audit 2026-08-31; **owner ruling required** — criterion as a dev-dependency)
+- [`127-release-notes-history-coverage.md`](rfcs/proposed/127-release-notes-history-coverage.md) — RFC 127, A released version's changelog heading was destroyed and the gate cannot see it (external audit 2026-08-31)
+- [`128-outward-facing-project-surface.md`](rfcs/proposed/128-outward-facing-project-surface.md) — RFC 128, What an outsider finds before they read any code (external audit 2026-08-31; **owner ruling required** — disclosure channel)
 <!-- open-work-index:end -->
 
 **Two backlog tables elsewhere in this file carry live open rows of their own, referenced here
@@ -268,6 +276,56 @@ exist, only that none were written down here.
    jobs required a hand-built, role-by-role proxy that exists in no tracked file.
 3. `MILESTONES.md:334`'s `M5` row still reads `| M5 | Sync and Quarantine | no | — |`, while
    criterion 1 (line 159) records sync **MET** and quarantine was dissolved this session.
+
+## Corrective Program After the 2026-08-31 External Audit
+
+An independent external architect audited both the specifications and the codebase at 0.27.1
+(`3eb3101`), producing four reports and an integrated summary. **Zero Critical findings, two High,
+sixteen Medium.** The architect's review of that audit — every load-bearing claim re-derived here
+against a freshly built binary rather than accepted from the report — is at
+`.git-exclude/reviewed/external-audit-20260831-review-v1.md`, and its verdict is that the audit is
+sound: every checkable claim was true at its baseline.
+
+**Three findings were already stale** at the time of review, all artifacts of a nine-commit-old
+baseline: `sync`'s non-atomic artifact writes (fixed at `1c13ade`, the commit immediately after the
+audit's baseline), "DC-44 is in progress" (closed at `3a8d730`), and the test count.
+
+**Eight RFCs carry the substantive work** and are named in the Open-Work Index above. **Three of them
+cannot start without an owner ruling** — RFC 123 (is a commit message evidence or annotation?),
+RFC 126 (criterion as a dev-dependency), RFC 128 (the vulnerability-disclosure channel).
+
+### Proposed ordering — the architect's proposal; sequencing is the owner's to authorize
+
+| Band | Items | Why here |
+|---|---|---|
+| **Before the next cut** | RFC 127; RFC 121's EPIPE fix alone; RFC 122; RFC 128's `SECURITY.md` | 127 is a regression that has already shipped in a published artifact. EPIPE is a panic every user who pipes to `head` meets. 122 is the only High-severity broken command on the mainline. `SECURITY.md` is one page and its absence is disproportionate for a trust-centric product |
+| **Next** | RFC 125; RFC 126 §3–§4 (`cargo audit` in CI, doc gating); the rest of RFC 121 | 125 is latent security, cheap, and encode/decode-symmetric. 126's first half is a CI job and a lint flag — the two gates that stop everything else drifting silently |
+| **After a ruling** | RFC 123; RFC 124; RFC 126 §2/§5 | Each needs a decision before design, not more analysis |
+| **Unscheduled** | the two performance walls and the pre-1.0 API debt below | Both are gated behind RFC 114's stability work rather than racing it |
+
+### Tracked here rather than as RFCs — none needs a design decision
+
+| ID | Item | Completion condition |
+|---|---|---|
+| AUD-01 | `IndexSnapshot::lookup` is a linear scan (`object_store.rs:174-179`); `verify`/`seal` do O(objects) lookups | A map built inside `IndexSnapshot::open`, last-entry-wins preserved, with the existing RFC 111 cost gate extended to cover it |
+| AUD-02 | `wal.rs:171` replays the whole WAL on every append — O(N²) over a queue of N commits | Per-invocation replay cache, or `(last_seq, clean-tail offset)` tracking with tail-only re-verification |
+| AUD-03 | Four-plus hand-copied TLV cursors; the duplicate-field strictness split in RFC 125 §2.3 exists because each copy evolved separately | One canonical cursor in `prikk-object::canonical`, decoders migrated incrementally |
+| AUD-04 | `PrikkError` discards `io::ErrorKind`, implements no `source()`, and is not `#[non_exhaustive]` | A structured `Io { kind, context }` variant, `source()`, and `#[non_exhaustive]` — **before any stability promise**, no new dependency |
+| AUD-05 | `prikk-crypto` is the only non-exempt crate without source-level `#![forbid(unsafe_code)]` | The attribute added (manifest inheritance already forbids it; this is belt-and-braces uniformity) |
+| AUD-06 | `unwrap_used`/`expect_used`/`indexing_slicing` are `warn`; the verified **zero** production occurrences is held by review, not by the build | Raised to `deny` at the workspace root, tests keeping their scoped `#![allow]`s |
+| AUD-07 | `refs.rs:504-511` states `tags/V1` and `tags/v1` "coexist as distinct refs"; `validate_no_ref_name_collision` (`publication.rs:164-175`) refuses exactly that on creation | Comment corrected, with the residual gap (pre-existing collisions, NFC/NFD) named rather than dropped |
+| AUD-08 | `merge_execute.rs:187` increments `update_seq` unchecked where the WAL uses `checked_add` for the same shape | `checked_add`, for consistency rather than for reachability |
+
+### Recorded, and deliberately not corrective work
+
+The audit's completeness matrix lists `mv`, `show`, `diff`, rebase, cherry-pick, stash, blame,
+bisect, grep, hooks, submodule, clone bootstrap, and branch switching as Missing. **These are scope,
+not defects** — the audit itself scores them "largely by intent", and the README already states them.
+They belong to the owner's product direction and are not tracked here as corrections.
+
+**One result worth recording as a result.** The auditor wrote that the audit *"moved twice as fast
+because of"* this project's long provenance comments. That is the first external measurement of a
+house rule this project has been paying for continuously and could never assess from the inside.
 
 ## Corrective Program After 0.17.7
 
