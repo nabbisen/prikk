@@ -5,6 +5,9 @@
 # Guide
 
 - [Install](guide/install.md)
+- [Tutorial](guide/tutorial.md)
+- [Troubleshooting](guide/troubleshooting.md)
+- [FAQ](guide/faq.md)
 - [Security and Signing Setup](guide/security-setup.md)
 - [History Inspection](guide/history.md)
 - [Repository Status](guide/status.md)

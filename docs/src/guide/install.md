@@ -109,10 +109,11 @@ verification, not any particular number this page could show.
 
 If the shell reports "command not found" instead, the binary is not on `PATH` yet.
 
-## Next: Security and Signing Setup
+## Next: Tutorial
 
-Installing the binary configures no signing keys. Every commit and seal needs one — continue with
-[Security and Signing Setup](security-setup.md), the real first step.
+Installing the binary configures no signing keys. Continue with the [Tutorial](tutorial.md) — it
+walks through your first commit and seal, key setup included, using disposable public example keys.
+[Security and Signing Setup](security-setup.md) covers real key handling once you are past that.
 
 ## Uninstalling
 

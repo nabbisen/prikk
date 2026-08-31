@@ -159,6 +159,10 @@ cargo build -p prikk --release --locked && export PATH="$PWD/target/release:$PAT
 
 ## Quick Start
 
+The commands below, with explanation and the two refusals you will actually hit along the way, are
+the [Tutorial](./docs/src/guide/tutorial.md) — this block is a copy-pasteable summary of it, not a
+second, independent walkthrough; its authority for what each step means and why is the tutorial page.
+
 ```sh
 mkdir -p ./sample-repo && cd ./sample-repo
 prikk init .
@@ -181,31 +185,14 @@ prikk verify
 prikk doctor
 ```
 
-### Ref names are fully qualified
+The sample seed and key values above are public examples and must never be used for real signing —
+see [Security and Signing Setup](./docs/src/guide/security-setup.md) for the current setup boundary.
 
-`branch create`, `branch close`, and `tag create` take a **fully-qualified** ref — `heads/topic`, not
-`topic`; `tags/v1`, not `v1`. A bare name is rejected: `invalid name: ref topic is not a local branch ref;
-expected heads/<name>`. There is no current-branch pointer and no `branch switch`, so every command that
-targets a ref resolves `--ref` explicitly.
-
-### Committing more than once before sealing
-
-`commit` may run repeatedly without an intervening `seal`; the active session queues the patches and
-`seal` batches them into one block. `status` reports the queue — `queued patches: 2 targeting heads/main`.
-Committing and sealing one-for-one still works exactly as before; nothing forces accumulation.
-
-Two environment variables bound the queue, both fail-closed on a malformed value:
-
-- `PRIKK_ACTIVE_PATCH_WARN` — warn at this many queued patches (default 800)
-- `PRIKK_ACTIVE_PATCH_LIMIT` — refuse further commits at this many (default 1000)
-
-The limit is checked before any write, so a refused commit leaves no partial state.
-
-For a fresh repository, the first `commit` authors a genesis patch set and the first `seal` publishes a
-Root block on `heads/main`. The current key-input mechanism is intentionally minimal: seeds are passed
-through environment variables for local experimentation, not as a complete key-management system. The
-sample values above are public examples and must never be used for real signing. See the
-[security and signing setup guide](./docs/src/guide/security-setup.md) for the current setup boundary.
+Ran into a refusal, or wondering why a step works the way it does? The
+[Troubleshooting](./docs/src/guide/troubleshooting.md) and [FAQ](./docs/src/guide/faq.md) pages cover
+exactly this walkthrough — including why ref names are fully qualified (`heads/topic`, not `topic`),
+why `commit` and `seal` each need their own key, and how commits queue across multiple `commit` calls
+before one `seal`.
 
 ## Useful Commands
 

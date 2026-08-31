@@ -10,7 +10,8 @@ continues to grow as new areas land.
 > **p** of *patches*, and because a patch history is exactly that: dots — patches as nodes — connected
 > into a DAG.
 
-To install and start using the CLI, see [Install](guide/install.md).
+New here? [Install](guide/install.md), then the [Tutorial](guide/tutorial.md) — a first repository
+from an empty directory to a sealed, verified commit, key setup included.
 
 For the current architecture and trust boundaries, start with:
 
