@@ -54,11 +54,10 @@ These records are under design review. All proposed RFCs must respect the depend
 | 110 | [Agent Safety and Provenance](./proposed/110-agent-safety-and-provenance.md) | Unscheduled. Owner concept, 2026-08-18, **direction not yet established** and recorded as such. Pillar 1 largely redistributes into RFC 108; Pillar 2 needs criterion 5 as a floor, since provenance sealed over unverified authorship manufactures the appearance of verification. **No design exists** |
 | 113 | [History Import Foundations](./proposed/113-history-import-foundations.md) | Unscheduled. Owner direction 2026-08-19: migrate from Git, Subversion and CVS with history preserved. **Amended the same day — the decoder/encoder tooling becomes its own project**, because prikk's whole third-party runtime surface is five crates and a Git decoder needs `gix` or `libgit2`. **This RFC is therefore prikk's import *contract***, not an importer plan. Records the shared problem (prikk records node identity these systems never had; imported commits cannot carry valid prikk AUTHOR signatures — **DC-53's `Unverifiable` is already the right vocabulary**) and §3.1's three IR questions: what a record is, what must be preserved, what may be omitted. Depends on criteria 2 and 1. **No design exists** |
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / **0.20.0** (retargeted from 0.19.0, owner ruling 2026-08-08). **Release-blocked** — inherits key lifecycle from DC-35, which needs amendment, and blocked behind criterion 4's signer bootstrap |
-| DC-44 | [Migration, Backup, and Restore Evidence](./proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | M3 / unassigned |
 
 **Blocked, not available:** **DC-43** waits on a release-lane event, and additionally
 inherits DC-35's unamended key lifecycle and criterion 4's signer bootstrap, which only the project owner
-can begin. **DC-44** is scheduled beyond M2.
+can begin. **DC-44 is no longer here** — closed 2026-09-01 and moved to `done/`.
 
 **Recorded, not scheduled:** **113** is the owner's migration direction of 2026-08-19, recorded with the
 architect's assessment before any importer exists to set precedent. **108, 109 and 110** are the project
@@ -208,6 +207,7 @@ These records currently live under `done/`.
 | DC-47 | [Stable Clippy Gate Alignment](./done/DC-47-STABLE-CLIPPY-GATE-ALIGNMENT.md) | M2 / before 0.19.0 RC; complete at `ea95e92`, post-commit evidence accepted |
 | DC-48 | [Legacy Clippy Production Retirement](./done/DC-48-LEGACY-CLIPPY-PRODUCTION-RETIREMENT.md) | M2 / before 0.19.0 RC; complete at `383e503`, post-commit evidence accepted |
 | DC-62 | [Commit Benchmark Memory Axis](./done/DC-62-COMMIT-BENCHMARK-MEMORY-AXIS.md) | **Complete at `07b1fc8`** — implemented `963caae`, N1 repaired at `07b1fc8`, both reviews accepted. Measures peak commit memory with no new dependency by sampling `/proc/<pid>/status` `VmHWM`, against a measured 6,144 KB floor. Confirms O(worktree bytes): **9.92x** above-floor growth for 10x repository size where absolute VmHWM shows 2.58x. DC-56's precondition satisfied |
+| DC-44 | [Migration, Backup, and Restore Evidence](./done/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) | **Closed 2026-09-01.** Four increments: offline `bundle verify` `d7c180c`, atomic and collision-safe export `fd2424d` (and the four `sync` output sites `1c13ade`), the self-describing `PBNDL003` manifest `c135dd0`, and the backup/restore guide page `a4d875b` corrected at `d487194`. Design goal 4 (format-1 migration) superseded by RFC 114's format-refusal ruling. Multi-ref export and a rehearsed format-migration restore remain open and are named in the shipped documentation, not carried here |
 
 `PR-*` files are legacy implementation handoff records retained as historical shipped records. New
 design-change records use `DC-*` RFCs plus optional `rfcs/handoffs/DC-*` companions.

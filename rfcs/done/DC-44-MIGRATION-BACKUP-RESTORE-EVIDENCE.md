@@ -1,6 +1,6 @@
-# RFC (proposed) - DC-44 Migration, Backup, and Restore Evidence
+# RFC (done) - DC-44 Migration, Backup, and Restore Evidence
 
-**Status.** Proposed; scheduled beyond M2 and not current implementation authority — **superseded by the 2026-09-01 update immediately below, which closes this RFC.**
+**Status.** **DONE, 2026-09-01.** Before closure this line read *"Proposed; scheduled beyond M2 and not current implementation authority"* — kept as the record of what it said. Disposition below.
 
 **Status update, 2026-09-01 — CLOSED. Every design goal is delivered or explicitly superseded.**
 The 2026-08-27 update below stands as the record of what was true then; this supersedes its
@@ -20,9 +20,8 @@ repository-format change. Both are stated in `backup-restore.md`'s own Limits se
 `Still deferred` list of `integrity-recovery.md`, `durability-recovery.md`,
 `concurrency-locking.md`, and `repository-layout.md` — not carried as unfinished DC-44 work.
 
-**This file stays in `rfcs/proposed/` pending the owner's disposition of the open-work board**;
-moving it to `rfcs/done/` and retiring its ROADMAP marker are coupled by RFC 120's index gate and
-are one decision, not mine to take alone.
+**Moved to `rfcs/done/` and its ROADMAP Open-Work Index marker retired on 2026-09-01**, on the
+owner's instruction — the two are coupled by RFC 120's index gate and were taken as one action.
 
 **Status update, 2026-08-27 (evidenced, not a verdict — reported with the confidence the evidence
 supports, not more).** Part of the gap this RFC exists to close has since been answered elsewhere,

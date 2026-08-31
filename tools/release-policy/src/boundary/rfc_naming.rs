@@ -61,14 +61,13 @@
 
 use super::{BoundaryError, push};
 
-/// `rfcs/proposed/` -- 4 pre-RFC-100 `DC-*` proposals plus `.gitkeep`. Added to this gate's scope
+/// `rfcs/proposed/` -- 3 pre-RFC-100 `DC-*` proposals plus `.gitkeep`. Added to this gate's scope
 /// by `RFC-105-investigation-ruling-v1.md` §3, correcting an omission in the RFC's first draft:
 /// it is where a *new* RFC first appears, so a gate that skipped it would be blind at exactly the
 /// moment the naming rule applies.
 const RFC_PROPOSED_LEGACY: &[&str] = &[
     ".gitkeep",
     "DC-43-RELEASE-SECURITY-CONTROLS.md",
-    "DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md",
     "DC-49-PORTABLE-LOGIC-PLATFORM-MATRIX.md",
     "DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md",
 ];
@@ -113,7 +112,7 @@ const RFC_ACCEPTED_LEGACY: &[&str] = &[
     "DC-99-WINDOWS-CAPABILITY-PARITY.md",
 ];
 
-/// `rfcs/done/` -- 49 pre-RFC-100 `DC-*` RFCs and 30 `PR-*` handoffs. `000-rfc-lifecycle-policy.md`
+/// `rfcs/done/` -- 50 pre-RFC-100 `DC-*` RFCs and 30 `PR-*` handoffs. `000-rfc-lifecycle-policy.md`
 /// already conforms and needs no entry here.
 const RFC_DONE_LEGACY: &[&str] = &[
     "DC-10-ROLLBACK-DRAFT-SIGNING.md",
@@ -142,6 +141,7 @@ const RFC_DONE_LEGACY: &[&str] = &[
     "DC-33-CONCURRENCY-LOCKING-REFERENCE.md",
     "DC-39-SIGNATURE-ENVELOPE-AUTHORITY.md",
     "DC-40-STATE-MERKLE-FORMAT-TRANSITION.md",
+    "DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md",
     "DC-46-WORKSPACE-RUST-1.85-COMPATIBILITY.md",
     "DC-47-STABLE-CLIPPY-GATE-ALIGNMENT.md",
     "DC-48-LEGACY-CLIPPY-PRODUCTION-RETIREMENT.md",

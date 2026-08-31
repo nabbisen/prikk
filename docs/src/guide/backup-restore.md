@@ -291,7 +291,7 @@ outside this page's own scope, since bundle export/import add no "pull" concept 
 | `bundle import` records objects and author-key material and creates a `remotes/<ref>` received pointer; it advances no local ref and adopts no maintainer key. | [`bundle.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/bundle.rs) |
 | `verify_repository`, unmodified, is what checks a restored repository — the bundle format adds no separate verification path. | [`bundle.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/bundle.rs), [`verify.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/verify.rs) |
 | AUTHOR key material transported in a bundle is trust-on-first-use; it proves continuity of authorship, not identity. | [Trust and Threat Model](../reference/trust-threat-model.md) |
-| Multi-ref export does not exist, and no rehearsed restore across a repository-format change has been performed. | [`bundle.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/bundle.rs), [rfcs/proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md](https://github.com/nabbisen/prikk/blob/main/rfcs/proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) |
+| Multi-ref export does not exist, and no rehearsed restore across a repository-format change has been performed. | [`bundle.rs`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/bundle.rs), [rfcs/done/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) |
 
 ## Provenance
 

@@ -239,7 +239,6 @@ item is open.
 - [`110-agent-safety-and-provenance.md`](rfcs/proposed/110-agent-safety-and-provenance.md) — RFC 110, Agent safety and code provenance
 - [`113-history-import-foundations.md`](rfcs/proposed/113-history-import-foundations.md) — RFC 113, History import foundations (Git, Subversion, CVS)
 - [`DC-43-RELEASE-SECURITY-CONTROLS.md`](rfcs/proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) — DC-43, Release Security and Distribution Controls (schedule position stale — cited predecessor superseded and implemented; see the RFC's own status update)
-- [`DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md`](rfcs/proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md) — DC-44, Migration, Backup, and Restore Evidence (superseded in part by RFC 114's format-refusal ruling; remainder unverified as complete — see the RFC's own status update)
 <!-- open-work-index:end -->
 
 **Two backlog tables elsewhere in this file carry live open rows of their own, referenced here
