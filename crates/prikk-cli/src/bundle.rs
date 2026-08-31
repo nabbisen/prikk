@@ -1,4 +1,5 @@
-//! `prikk bundle` — export/import a verifiable subset of history (DC-78 §D4/§D6).
+//! `prikk bundle` — export/import/verify a verifiable subset of history (DC-78 §D4/§D6; `verify`
+//! is DC-44 increment 1, `bundle-offline-verify-handoff-v1.md`).
 //!
 //! `bundle export` writes a self-contained file: the exported ref's own RefState plus every object
 //! reachable from its target Block back to genesis. `bundle import` writes those objects into the
@@ -9,24 +10,32 @@
 //! imported is an ordinary `prikk verify`, unmodified — the bundle format adds no new verification
 //! path. Turning a received ref into local history is an ordinary `merge`, using machinery that
 //! already exists; this module does not add a "pull" concept.
+//!
+//! `bundle verify` answers "is this backup any good?" without restoring it: it reads a bundle file
+//! and reports whether it is structurally sound and internally consistent, writing nothing and
+//! needing no repository — `run_verify` below never calls `crate::open_repository`, unlike
+//! `run_export`/`run_import`. It shares `import`'s own decode and closure-validation path
+//! (`prikk_store::verify_bundle`, DC-44 increment 1 §2) rather than a second decoder, so the two
+//! cannot silently drift apart on what counts as well-formed.
 
 use std::path::PathBuf;
 
 use prikk_store::{
     BundleImportOptions, DEFAULT_BUNDLE_MAX_OBJECT_COUNT, DEFAULT_BUNDLE_MAX_TOTAL_BYTES,
-    export_bundle, import_bundle,
+    export_bundle, import_bundle, verify_bundle,
 };
 
-/// Dispatch `prikk bundle [export|import]`.
+/// Dispatch `prikk bundle [export|import|verify]`.
 pub fn run_bundle(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
     let mut iter = args.into_iter();
     match iter.next().as_deref() {
         Some("export") => run_export(root, iter.collect()),
         Some("import") => run_import(root, iter.collect()),
+        Some("verify") => run_verify(iter.collect()),
         Some(other) => Err(format!(
-            "unknown bundle subcommand: {other} (expected export or import)"
+            "unknown bundle subcommand: {other} (expected export, import, or verify)"
         )),
-        None => Err("bundle requires a subcommand: export or import".to_string()),
+        None => Err("bundle requires a subcommand: export, import, or verify".to_string()),
     }
 }
 
@@ -76,6 +85,56 @@ fn run_import(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
          `trust maintainer add` to trust the sealing key, then `merge` to incorporate this history"
     );
     Ok(())
+}
+
+fn run_verify(args: Vec<String>) -> std::result::Result<(), String> {
+    let parsed = parse_verify_args(args)?;
+    let bytes = std::fs::read(&parsed.input).map_err(|err| {
+        format!(
+            "failed to read bundle from {}: {err}",
+            parsed.input.display()
+        )
+    })?;
+    let options = bundle_import_options_from_env()?;
+    let report = verify_bundle(&bytes, &options).map_err(|err| err.to_string())?;
+    println!("bundle verifies: {}", report.ref_name);
+    println!("RefState: {}", report.ref_state_id);
+    println!("tip block: {}", report.tip_block_id);
+    println!("objects: {}", report.object_count);
+    println!(
+        "author key material: {} present (continuity only, not a trust decision)",
+        report.author_key_count
+    );
+    println!(
+        "note: this checks structural and internal consistency only -- no signature is \
+         cryptographically verified (a standalone bundle carries no trust material to check one \
+         against), and this bundle's own author-key section is recorded here, never \
+         independently verified, the same as at import. A verified bundle is not yet a trusted \
+         one -- import it and run `prikk verify` for that."
+    );
+    Ok(())
+}
+
+struct VerifyArgs {
+    input: PathBuf,
+}
+
+fn parse_verify_args(args: Vec<String>) -> std::result::Result<VerifyArgs, String> {
+    let mut input = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--input" => {
+                let Some(value) = iter.next() else {
+                    return Err("bundle verify --input requires a value".to_string());
+                };
+                input = Some(PathBuf::from(value));
+            }
+            other => return Err(format!("unknown bundle verify argument: {other}")),
+        }
+    }
+    let input = input.ok_or_else(|| "bundle verify requires --input".to_string())?;
+    Ok(VerifyArgs { input })
 }
 
 /// DC-86: `BundleImportOptions` from `PRIKK_BUNDLE_MAX_OBJECTS`/`PRIKK_BUNDLE_MAX_BYTES`, in

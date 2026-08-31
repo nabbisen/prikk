@@ -243,6 +243,7 @@ prikk tag [list]
 prikk tag create tags/<name> --target <ref|block> [-m <message>]
 prikk bundle export --ref REF --output <file>
 prikk bundle import --input <file>
+prikk bundle verify --input <file>
 prikk sync summary --output <file>
 prikk sync compare --summary <file>
 prikk sync have <ref> --output <file>

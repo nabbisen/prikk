@@ -160,6 +160,23 @@ pub struct BundleExportReport {
     pub author_key_count: usize,
 }
 
+/// Summary of an offline bundle verification (DC-44 increment 1). Never written by anything that
+/// touches a repository — [`verify_bundle`] reads only the file bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BundleVerifyReport {
+    /// The exported ref's own name in the source repository.
+    pub ref_name: String,
+    /// The exported ref's RefState object id.
+    pub ref_state_id: ObjectId,
+    /// The ref's resolved tip Block id (one hop for a Branch, two for a Tag — the same resolution
+    /// `export_bundle` performs).
+    pub tip_block_id: ObjectId,
+    /// Total objects carried in the bundle.
+    pub object_count: usize,
+    /// AUTHOR key entries carried in the bundle's author-key section.
+    pub author_key_count: usize,
+}
+
 /// Summary of a bundle import.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BundleImportReport {
@@ -373,155 +390,8 @@ pub fn import_bundle(
     bytes: &[u8],
     options: &BundleImportOptions,
 ) -> Result<BundleImportReport> {
-    if bytes.len() > options.max_total_bytes {
-        return Err(PrikkError::MalformedData(format!(
-            "bundle is {} bytes, over the configured limit of {} bytes",
-            bytes.len(),
-            options.max_total_bytes
-        )));
-    }
-    let (origin_ref_name, objects, author_keys) = decode_bundle(bytes, options.max_object_count)?;
-    let Some(ref_state_envelope) = objects.first() else {
-        return Err(PrikkError::MalformedData(
-            "bundle contains no objects".to_string(),
-        ));
-    };
-    if ref_state_envelope.object_type != ObjectType::RefState {
-        return Err(PrikkError::MalformedData(
-            "bundle's first object must be the exported ref's RefState".to_string(),
-        ));
-    }
-    let ref_state_id = ref_state_envelope.object_id();
-
-    // DC-53 Stage 2, D7/C2: reject the whole import before any write if the bundle's own
-    // author-key section already disagrees with itself -- a hostile or stale bundle must not be
-    // able to leave a receiver with an unresolvable, permanently unverifiable key_id.
-    // `record_author_key_material` below still catches a conflict against *this repository's*
-    // existing material; this catches a conflict *within the bundle*, which that call alone
-    // wouldn't see if the bundle's own two conflicting entries happened to be processed in an order
-    // where the first one matched nothing local yet.
-    let mut bundle_key_ids: BTreeMap<&str, [u8; 32]> = BTreeMap::new();
-    for entry in &author_keys {
-        match bundle_key_ids.get(entry.key_id.as_str()) {
-            Some(existing) if *existing != entry.public_key => {
-                return Err(PrikkError::MalformedData(format!(
-                    "bundle's author-key section carries two different public keys for key_id {} \
-                     -- refusing the whole import",
-                    entry.key_id
-                )));
-            }
-            Some(_) => {}
-            None => {
-                bundle_key_ids.insert(&entry.key_id, entry.public_key);
-            }
-        }
-    }
-
-    // DC-78 closure-validation handoff §2/§3: everything below is read-only and must run, and pass,
-    // before the first object write below -- a refused bundle must leave no pointer at all, and the
-    // pointer is written last, so validating up front is what makes that true. §2's own definition of
-    // "present": carried by this bundle, or already in this repository -- an incremental import onto
-    // a repository that already holds part of the history must not be refused for objects it already
-    // has (D7's rule again). `accept_exchange_artifact` (`patch_exchange/accept.rs`) already gets this
-    // right for the patch-exchange path; this makes `import_bundle` match it rather than "align" it
-    // to something new (§6's own instruction).
     let read_snapshot = ObjectReadSnapshot::open(layout)?;
-    let bundle_objects_by_id: BTreeMap<ObjectId, ObjectEnvelope> = objects
-        .iter()
-        .map(|envelope| (envelope.object_id(), envelope.clone()))
-        .collect();
-
-    // Item 1: the exported ref's target resolves. Reuses `ensure_ref_target_valid`
-    // (`refs/verify/scan.rs`) unchanged -- it is already kind-aware (one hop for a Branch, two for a
-    // Tag) and already `pub(crate)` at `crate::refs`, so no visibility widening was needed to reach it
-    // from here.
-    let ref_state_payload = RefStatePayload::decode_canonical(
-        &ref_state_envelope.canonical_payload,
-        ref_state_envelope.schema_version,
-    )?;
-    let combined_reader = BundleAndLocalReader {
-        bundle_objects: &bundle_objects_by_id,
-        local: &read_snapshot,
-    };
-    ensure_ref_target_valid(
-        &combined_reader,
-        ref_state_payload.kind,
-        ref_state_payload.target_object_id,
-        ref_state_id,
-    )?;
-
-    // Items 2 and 3: every blob a carried patch's operations reference, and every patch a carried
-    // block names, must be present. Mirrors `accept_exchange_artifact`'s Phase B item 6 exactly,
-    // including the "or already present locally" half.
-    for envelope in &objects {
-        if envelope.object_type != ObjectType::Patch {
-            continue;
-        }
-        for operation in
-            decode_patch_operations(&envelope.canonical_payload, envelope.schema_version)?
-        {
-            for blob_id in bundle_referenced_blob_ids(&operation.kind) {
-                if !bundle_objects_by_id.contains_key(&blob_id)
-                    && !read_snapshot.contains_object(ObjectType::Blob, blob_id)
-                {
-                    return Err(PrikkError::Integrity(format!(
-                        "patch {} references blob {blob_id}, which is neither carried by this \
-                         bundle nor already present in this repository -- refusing the whole \
-                         import, no partial write",
-                        envelope.object_id()
-                    )));
-                }
-            }
-        }
-    }
-    for envelope in &objects {
-        if envelope.object_type != ObjectType::Block {
-            continue;
-        }
-        let block_id = envelope.object_id();
-        let block_payload = BlockPayload::decode_canonical(&envelope.canonical_payload)?;
-        for patch_id in &block_payload.patch_ids {
-            if !bundle_objects_by_id.contains_key(patch_id)
-                && !read_snapshot.contains_object(ObjectType::Patch, *patch_id)
-            {
-                return Err(PrikkError::Integrity(format!(
-                    "block {block_id} names patch {patch_id}, which is neither carried by this \
-                     bundle nor already present in this repository -- refusing the whole import, \
-                     no partial write"
-                )));
-            }
-        }
-        // Item 4: every parent a carried block names must be present too. `export_bundle` walks the
-        // full ancestor closure, so this holds for anything the current exporter produces -- checking
-        // it is set membership and costs nothing (handoff §2 item 4).
-        for parent_block_id in &block_payload.parent_block_ids {
-            if !bundle_objects_by_id.contains_key(parent_block_id)
-                && !read_snapshot.contains_object(ObjectType::Block, *parent_block_id)
-            {
-                return Err(PrikkError::Integrity(format!(
-                    "block {block_id} names parent {parent_block_id}, which is neither carried \
-                     by this bundle nor already present in this repository -- refusing the whole \
-                     import, no partial write"
-                )));
-            }
-        }
-        // Review condition (`DC-78-import-closure-validation-review-v1.md` §3): a Block's own
-        // `snapshot_blob_ref` is a blob reference too, same rule as a Patch's operation-level ones --
-        // `export_bundle` already puts it in the same `blob_ids` set as those, so every legitimate
-        // export already satisfies this; the check exists for the untrusted, hand-crafted case, which
-        // is exactly the case this whole increment is for.
-        if let Some(snapshot_blob_id) = block_payload.snapshot_blob_ref {
-            if !bundle_objects_by_id.contains_key(&snapshot_blob_id)
-                && !read_snapshot.contains_object(ObjectType::Blob, snapshot_blob_id)
-            {
-                return Err(PrikkError::Integrity(format!(
-                    "block {block_id} names snapshot blob {snapshot_blob_id}, which is neither \
-                     carried by this bundle nor already present in this repository -- refusing \
-                     the whole import, no partial write"
-                )));
-            }
-        }
-    }
+    let contents = validate_bundle_contents(bytes, options, Some(&read_snapshot))?;
 
     // RFC 111 §6.1 Stage 2: `import_bundle`'s ref-equivalent write is `received::write_received_-
     // pointer`, a wholly separate mechanism (received-ref index, not the pointer-index/ref-log
@@ -529,7 +399,7 @@ pub fn import_bundle(
     // reading `received.rs`. No ref-publication threading needed, only the plain swap.
     let mut object_store = ObjectWriteSession::open(layout)?;
     let mut written_object_count = 0_usize;
-    for envelope in &objects {
+    for envelope in &contents.objects {
         let id = envelope.object_id();
         if !object_store.contains_object(envelope.object_type, id)? {
             written_object_count = written_object_count.checked_add(1).ok_or_else(|| {
@@ -559,10 +429,10 @@ pub fn import_bundle(
     let mut recorded_author_key_count = 0_usize;
     {
         let active_lock = ActiveLock::acquire(layout, DEFAULT_ACTIVE_NAME)?;
-        for (&key_id, &public_key) in &bundle_key_ids {
-            check_author_key_conflict(layout, key_id, public_key)?;
+        for (key_id, public_key) in &contents.bundle_key_ids {
+            check_author_key_conflict(layout, key_id, *public_key)?;
         }
-        for entry in &author_keys {
+        for entry in &contents.author_keys {
             record_author_key_material(layout, &entry.key_id, entry.public_key, &active_lock)?;
             recorded_author_key_count =
                 recorded_author_key_count.checked_add(1).ok_or_else(|| {
@@ -573,7 +443,7 @@ pub fn import_bundle(
         }
     }
 
-    let received_ref_name = format!("remotes/{origin_ref_name}");
+    let received_ref_name = format!("remotes/{}", contents.origin_ref_name);
     // RFC 102 Stage 6 Step 2, design-v1.md §15.8: `import_bundle` held no lock at all before this
     // stage. Scoped to the received-index write alone, not the object writes above: those have
     // their own, separately registered concurrency gap -- see
@@ -581,14 +451,253 @@ pub fn import_bundle(
     // out of this stage's scope.
     let _received_index_lock =
         acquire_container_locks(layout, &[LockableContainer::ReceivedIndex])?;
-    crate::received::write_received_pointer(layout, &received_ref_name, ref_state_id)?;
+    crate::received::write_received_pointer(layout, &received_ref_name, contents.ref_state_id)?;
 
     Ok(BundleImportReport {
         ref_name: received_ref_name,
-        ref_state_id,
-        object_count: objects.len(),
+        ref_state_id: contents.ref_state_id,
+        object_count: contents.objects.len(),
         written_object_count,
         recorded_author_key_count,
+    })
+}
+
+/// Read a bundle and report whether it is structurally sound and internally consistent, **without
+/// writing anything and without needing a repository** (DC-44 increment 1,
+/// `bundle-offline-verify-handoff-v1.md`). Runs the exact same decode and closure validation
+/// [`import_bundle`] runs before its first write, via [`validate_bundle_contents`] — §2's "reuse
+/// the decode path, do not re-implement it."
+///
+/// **What this proves**: the bundle decodes under the same rules `import_bundle` would apply
+/// (magic, framing, declared counts against actual content, every object's envelope structurally
+/// valid); and every object another carried object names by id — a Block's `patch_ids`,
+/// `parent_block_ids`, and `snapshot_blob_ref`, a Patch operation's blob ids, the exported ref's
+/// own target — resolves to an object *in this bundle* whose own freshly recomputed
+/// [`ObjectEnvelope::object_id`] equals the id it was named by. That equality is the real
+/// integrity check: an object whose bytes are corrupted recomputes to a different id, so whatever
+/// named the original id no longer finds it, exactly the way a corrupted patch stops resolving
+/// from the block that names it.
+///
+/// **What this does not prove** (§3.2 — stated here, not just in documentation, so a caller
+/// cannot mistake "verified" for "trusted"): no signature is cryptographically checked. Every
+/// object's signature is only checked *structurally* (`ObjectEnvelope::validate`, reused from
+/// `decode_envelope_file` — algorithm shape, non-empty bytes), because that is all a bundle file
+/// carries the material to check — verifying an AUTHOR or MAINTAINER signature against a real key
+/// needs trust material this file does not carry (the bundle's own optional author-key section
+/// records transported material for later import; it is never independently verified even then —
+/// "import records material; verify decides," unchanged by this increment). A verified bundle is
+/// not yet a *trusted* one.
+///
+/// **What this cannot prove relative to an arbitrary receiving repository**: `import_bundle`'s own
+/// closure check accepts a reference satisfied by objects the bundle carries *or* objects the
+/// target repository already has (an incremental import onto non-empty history). Offline
+/// verification has no repository to ask, so it requires every reference to resolve within the
+/// bundle itself. Every bundle `export_bundle` produces already satisfies this — export walks the
+/// full ancestor closure back to genesis unconditionally (ruling 2), never assuming a receiver
+/// already holds part of the history — so this is not a weaker approximation for a real export;
+/// it is stricter than `import` only for a hand-crafted or already-imported-elsewhere bundle that
+/// deliberately omits something on the assumption a specific receiver already has it, which this
+/// tool never produces.
+pub fn verify_bundle(bytes: &[u8], options: &BundleImportOptions) -> Result<BundleVerifyReport> {
+    let contents = validate_bundle_contents(bytes, options, None)?;
+    let combined_reader = BundleAndLocalReader {
+        bundle_objects: &contents.bundle_objects_by_id,
+        local: None,
+    };
+    let (tip_block_id, _tag_envelope) =
+        crate::refs::resolve_ref_tip_block(&combined_reader, &contents.ref_state_payload)?;
+    Ok(BundleVerifyReport {
+        ref_name: contents.origin_ref_name,
+        ref_state_id: contents.ref_state_id,
+        tip_block_id,
+        object_count: contents.objects.len(),
+        author_key_count: contents.author_keys.len(),
+    })
+}
+
+/// Everything [`import_bundle`] and [`verify_bundle`] both need from a decoded bundle, after every
+/// read-only check has passed. `bundle_objects_by_id` and `ref_state_payload` are kept (not just
+/// the raw `objects`) because both callers need them again — `import_bundle` for nothing further
+/// (it already has `objects`), `verify_bundle` for `resolve_ref_tip_block`'s own `ObjectReader`
+/// call — without redoing the id-keyed map build or the RefState decode a second time.
+struct BundleContents {
+    origin_ref_name: String,
+    objects: Vec<ObjectEnvelope>,
+    author_keys: Vec<AuthorKeyEntry>,
+    ref_state_id: ObjectId,
+    ref_state_payload: RefStatePayload,
+    bundle_key_ids: BTreeMap<String, [u8; 32]>,
+    bundle_objects_by_id: BTreeMap<ObjectId, ObjectEnvelope>,
+}
+
+/// Decode `bytes` and run every read-only structural and closure check [`import_bundle`] performs
+/// before its first write — shared, not reimplemented, by [`verify_bundle`] (DC-44 increment 1
+/// handoff §2). `local` is `Some(repository)` for import, where a referenced object may be
+/// satisfied by the bundle *or* the repository's own existing objects (D7's incremental-import
+/// rule); `None` for offline verification, where a reference must resolve within the bundle
+/// itself — the only thing checkable with no repository to ask (`verify_bundle`'s own doc comment
+/// explains why this is not a weaker check for a real export).
+fn validate_bundle_contents(
+    bytes: &[u8],
+    options: &BundleImportOptions,
+    local: Option<&ObjectReadSnapshot>,
+) -> Result<BundleContents> {
+    if bytes.len() > options.max_total_bytes {
+        return Err(PrikkError::MalformedData(format!(
+            "bundle is {} bytes, over the configured limit of {} bytes",
+            bytes.len(),
+            options.max_total_bytes
+        )));
+    }
+    let (origin_ref_name, objects, author_keys) = decode_bundle(bytes, options.max_object_count)?;
+    let Some(ref_state_envelope) = objects.first() else {
+        return Err(PrikkError::MalformedData(
+            "bundle contains no objects".to_string(),
+        ));
+    };
+    if ref_state_envelope.object_type != ObjectType::RefState {
+        return Err(PrikkError::MalformedData(
+            "bundle's first object must be the exported ref's RefState".to_string(),
+        ));
+    }
+    let ref_state_id = ref_state_envelope.object_id();
+
+    // DC-53 Stage 2, D7/C2: reject the whole import/verification before any write if the bundle's
+    // own author-key section already disagrees with itself -- a hostile or stale bundle must not
+    // be able to leave a receiver with an unresolvable, permanently unverifiable key_id.
+    // `record_author_key_material` (import-only, after this function returns) still catches a
+    // conflict against *this repository's* existing material; this catches a conflict *within the
+    // bundle*, which that call alone wouldn't see if the bundle's own two conflicting entries
+    // happened to be processed in an order where the first one matched nothing local yet.
+    let mut bundle_key_ids: BTreeMap<String, [u8; 32]> = BTreeMap::new();
+    for entry in &author_keys {
+        match bundle_key_ids.get(entry.key_id.as_str()) {
+            Some(existing) if *existing != entry.public_key => {
+                return Err(PrikkError::MalformedData(format!(
+                    "bundle's author-key section carries two different public keys for key_id {} \
+                     -- refusing the whole bundle",
+                    entry.key_id
+                )));
+            }
+            Some(_) => {}
+            None => {
+                bundle_key_ids.insert(entry.key_id.clone(), entry.public_key);
+            }
+        }
+    }
+
+    // DC-78 closure-validation handoff §2/§3: everything below is read-only. For import, it must
+    // run, and pass, before the first object write -- a refused bundle must leave no pointer at
+    // all, and the pointer is written last, so validating up front is what makes that true. §2's
+    // own definition of "present" when `local` is `Some`: carried by this bundle, or already in
+    // this repository -- an incremental import onto a repository that already holds part of the
+    // history must not be refused for objects it already has (D7's rule again).
+    // `accept_exchange_artifact` (`patch_exchange/accept.rs`) already gets this right for the
+    // patch-exchange path; this makes `import_bundle` match it rather than "align" it to something
+    // new (§6's own instruction). When `local` is `None`, "present" narrows to "carried by this
+    // bundle" -- see `verify_bundle`'s own doc comment for why that is the correct offline check.
+    let bundle_objects_by_id: BTreeMap<ObjectId, ObjectEnvelope> = objects
+        .iter()
+        .map(|envelope| (envelope.object_id(), envelope.clone()))
+        .collect();
+    let local_available = local.is_some();
+    let present = |object_type: ObjectType, id: ObjectId| -> bool {
+        bundle_objects_by_id.contains_key(&id)
+            || local.is_some_and(|snapshot| snapshot.contains_object(object_type, id))
+    };
+    let missing_clause = if local_available {
+        "neither carried by this bundle nor already present in this repository -- refusing the \
+         whole import, no partial write"
+    } else {
+        "not carried by this bundle -- refusing to verify; an offline check with no repository to \
+         ask cannot know whether a receiver would already hold it"
+    };
+
+    // Item 1: the exported ref's target resolves. Reuses `ensure_ref_target_valid`
+    // (`refs/verify/scan.rs`) unchanged -- it is already kind-aware (one hop for a Branch, two for a
+    // Tag) and already `pub(crate)` at `crate::refs`, so no visibility widening was needed to reach it
+    // from here.
+    let ref_state_payload = RefStatePayload::decode_canonical(
+        &ref_state_envelope.canonical_payload,
+        ref_state_envelope.schema_version,
+    )?;
+    let combined_reader = BundleAndLocalReader {
+        bundle_objects: &bundle_objects_by_id,
+        local,
+    };
+    ensure_ref_target_valid(
+        &combined_reader,
+        ref_state_payload.kind,
+        ref_state_payload.target_object_id,
+        ref_state_id,
+    )?;
+
+    // Items 2 and 3: every blob a carried patch's operations reference, and every patch a carried
+    // block names, must be present. Mirrors `accept_exchange_artifact`'s Phase B item 6 exactly,
+    // including the "or already present locally" half when `local` is `Some`.
+    for envelope in &objects {
+        if envelope.object_type != ObjectType::Patch {
+            continue;
+        }
+        for operation in
+            decode_patch_operations(&envelope.canonical_payload, envelope.schema_version)?
+        {
+            for blob_id in bundle_referenced_blob_ids(&operation.kind) {
+                if !present(ObjectType::Blob, blob_id) {
+                    return Err(PrikkError::Integrity(format!(
+                        "patch {} references blob {blob_id}, which is {missing_clause}",
+                        envelope.object_id()
+                    )));
+                }
+            }
+        }
+    }
+    for envelope in &objects {
+        if envelope.object_type != ObjectType::Block {
+            continue;
+        }
+        let block_id = envelope.object_id();
+        let block_payload = BlockPayload::decode_canonical(&envelope.canonical_payload)?;
+        for patch_id in &block_payload.patch_ids {
+            if !present(ObjectType::Patch, *patch_id) {
+                return Err(PrikkError::Integrity(format!(
+                    "block {block_id} names patch {patch_id}, which is {missing_clause}"
+                )));
+            }
+        }
+        // Item 4: every parent a carried block names must be present too. `export_bundle` walks the
+        // full ancestor closure, so this holds for anything the current exporter produces -- checking
+        // it is set membership and costs nothing (handoff §2 item 4).
+        for parent_block_id in &block_payload.parent_block_ids {
+            if !present(ObjectType::Block, *parent_block_id) {
+                return Err(PrikkError::Integrity(format!(
+                    "block {block_id} names parent {parent_block_id}, which is {missing_clause}"
+                )));
+            }
+        }
+        // Review condition (`DC-78-import-closure-validation-review-v1.md` §3): a Block's own
+        // `snapshot_blob_ref` is a blob reference too, same rule as a Patch's operation-level ones --
+        // `export_bundle` already puts it in the same `blob_ids` set as those, so every legitimate
+        // export already satisfies this; the check exists for the untrusted, hand-crafted case, which
+        // is exactly the case this whole increment is for.
+        if let Some(snapshot_blob_id) = block_payload.snapshot_blob_ref {
+            if !present(ObjectType::Blob, snapshot_blob_id) {
+                return Err(PrikkError::Integrity(format!(
+                    "block {block_id} names snapshot blob {snapshot_blob_id}, which is \
+                     {missing_clause}"
+                )));
+            }
+        }
+    }
+
+    Ok(BundleContents {
+        origin_ref_name,
+        objects,
+        author_keys,
+        ref_state_id,
+        ref_state_payload,
+        bundle_key_ids,
+        bundle_objects_by_id,
     })
 }
 
@@ -602,13 +711,14 @@ fn read_required(
         .ok_or_else(|| PrikkError::Integrity(format!("missing {object_type} object: {id}")))
 }
 
-/// `import_bundle`'s own view of §2's "present" definition: carried by this bundle, or already in
-/// this repository. Checked before any bundle object is written, so a bundle-carried object is not
-/// yet reachable through `local` even once import succeeds -- `bundle_objects` is what makes it
-/// visible during validation.
+/// `validate_bundle_contents`'s own view of §2's "present" definition: carried by this bundle, or
+/// already in this repository when one is available. Checked before any bundle object is written,
+/// so a bundle-carried object is not yet reachable through `local` even once import succeeds --
+/// `bundle_objects` is what makes it visible during validation. `local` is `None` for offline
+/// verification (`verify_bundle`), which has no repository to fall back to.
 struct BundleAndLocalReader<'a> {
     bundle_objects: &'a BTreeMap<ObjectId, ObjectEnvelope>,
-    local: &'a ObjectReadSnapshot,
+    local: Option<&'a ObjectReadSnapshot>,
 }
 
 impl ObjectReader for BundleAndLocalReader<'_> {
@@ -616,7 +726,10 @@ impl ObjectReader for BundleAndLocalReader<'_> {
         if let Some(envelope) = self.bundle_objects.get(&id) {
             return Ok(Some(envelope.clone()));
         }
-        self.local.read_object(id)
+        match self.local {
+            Some(local) => local.read_object(id),
+            None => Ok(None),
+        }
     }
 }
 

@@ -97,6 +97,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         help_lines: &[
             "  prikk bundle export --ref REF --output <file>  Write a self-contained history bundle",
             "  prikk bundle import --input <file>        Import a bundle as an untrusted received pointer",
+            "  prikk bundle verify --input <file>        Check a bundle offline; writes nothing, needs no repository",
         ],
     },
     Command {

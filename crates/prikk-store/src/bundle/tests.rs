@@ -15,8 +15,10 @@ use crate::author_key_index::{
 use crate::author_signing::{AuthorSigner, author_signature};
 use crate::bundle::{
     BundleImportOptions, DEFAULT_BUNDLE_MAX_OBJECT_COUNT, decode_bundle, encode_bundle,
-    encode_bundle_v1_for_test, export_bundle, import_bundle,
+    encode_bundle_v1_for_test, export_bundle, import_bundle, verify_bundle,
 };
+use crate::file_codec::{encode_envelope_file, push_bytes_u64, push_u64};
+use crate::fsutil::len_to_u64;
 use crate::layout::{ContainerSlot, DEFAULT_ACTIVE_NAME, LockableContainer};
 use crate::lock::{ActiveLock, acquire_container_locks};
 use crate::received::read_received_pointer;
@@ -1657,5 +1659,300 @@ fn tag_ref_and_heads_ref_at_the_same_block_export_the_same_object_closure()
     assert_eq!(tag_objects.len(), heads_objects.len() + 1);
 
     let _ = std::fs::remove_dir_all(root);
+    Ok(())
+}
+
+// DC-44 increment 1 (`bundle-offline-verify-handoff-v1.md`): `bundle verify`, offline. Every test
+// below exercises `verify_bundle` through the same `validate_bundle_contents` `import_bundle`
+// itself calls -- §2's "reuse the decode path, do not re-implement it" -- and several also run
+// `import_bundle` against the identical bytes to demonstrate control 3's "verify and import
+// agree" in both directions, not merely assert it.
+
+/// Control 1: a good bundle, produced by a real `export_bundle`, verifies -- and the report
+/// matches what export itself reported, field for field.
+#[test]
+fn verify_of_a_real_export_succeeds_and_matches_the_export_report() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc44-verify-good");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    let tip_block_id = seal_two_block_history(&source)?;
+    let (export_report, bytes) = export_bundle(&source, "heads/main")?;
+
+    let verify_report = verify_bundle(&bytes, &BundleImportOptions::default_limits())?;
+    assert_eq!(verify_report.ref_name, export_report.ref_name);
+    assert_eq!(verify_report.tip_block_id, tip_block_id);
+    assert_eq!(verify_report.object_count, export_report.object_count);
+    assert_eq!(
+        verify_report.author_key_count,
+        export_report.author_key_count
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    Ok(())
+}
+
+/// Control 2 (framing) + control 3 (agreement): the exact three malformed byte sequences
+/// `import_of_malformed_bytes_fails_closed` already covers for import -- confirmed here to be
+/// refused by `verify_bundle` too, with no repository at all.
+#[test]
+fn verify_rejects_the_same_malformed_bytes_import_rejects() {
+    let options = BundleImportOptions::default_limits();
+    assert!(verify_bundle(b"not a bundle", &options).is_err());
+    assert!(verify_bundle(b"PBNDL001", &options).is_err());
+    assert!(verify_bundle(&[], &options).is_err());
+}
+
+/// Control 2 (framing): a bundle truncated partway through its object list is refused, by both
+/// `verify` and `import` -- exercising `ByteCursor`'s own "unexpected end of record" rather than
+/// a bespoke truncation check, since decode is shared.
+#[test]
+fn verify_and_import_agree_a_truncated_bundle_is_refused() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc44-verify-truncated");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    seal_two_block_history(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (truncated, _) = bytes.split_at(bytes.len() / 2);
+    let options = BundleImportOptions::default_limits();
+
+    assert!(
+        verify_bundle(truncated, &options).is_err(),
+        "a truncated bundle must fail verification"
+    );
+    let target_root = unique_temp_dir("dc44-verify-truncated-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    assert!(
+        import_bundle(&target, truncated, &options).is_err(),
+        "the same truncated bytes must fail import too"
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// Control 2 (framing): a bundle whose declared object count disagrees with what actually
+/// follows -- both directions (claims more than it carries, claims fewer than it carries) --
+/// refused by `verify` and `import` alike.
+#[test]
+fn verify_and_import_agree_a_declared_count_that_disagrees_with_content_is_refused()
+-> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc44-verify-count-mismatch");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    seal_two_block_history(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    assert!(
+        objects.len() > 1,
+        "fixture sanity: need room to under-count"
+    );
+    let options = BundleImportOptions::default_limits();
+
+    for declared_count in [
+        len_to_u64(objects.len())? + 1, // claims one more object than it carries
+        len_to_u64(objects.len())? - 1, // claims one fewer -- leaves trailing bytes unconsumed
+    ] {
+        let malformed_bytes =
+            encode_bundle_with_declared_count(&ref_name, &objects, &author_keys, declared_count)?;
+        assert!(
+            verify_bundle(&malformed_bytes, &options).is_err(),
+            "declared count {declared_count} against {} real objects must fail verification",
+            objects.len()
+        );
+        let target_root = unique_temp_dir("dc44-verify-count-mismatch-target");
+        let target = RepositoryLayout::init(target_root.clone())?;
+        assert!(
+            import_bundle(&target, &malformed_bytes, &options).is_err(),
+            "the same bytes must fail import too"
+        );
+        let _ = std::fs::remove_dir_all(target_root);
+    }
+
+    let _ = std::fs::remove_dir_all(source_root);
+    Ok(())
+}
+
+/// Hand-encode a `PBNDL002` bundle with a caller-chosen declared object count, independent of
+/// `objects.len()` -- `encode_bundle` always writes the true count, so producing a disagreeing one
+/// needs this sibling rather than a parameter on the real encoder (which must never be able to
+/// lie about its own input).
+fn encode_bundle_with_declared_count(
+    ref_name: &str,
+    objects: &[ObjectEnvelope],
+    author_keys: &[AuthorKeyEntry],
+    declared_count: u64,
+) -> prikk_error::Result<Vec<u8>> {
+    let mut out = Vec::new();
+    out.extend_from_slice(b"PBNDL002");
+    push_bytes_u64(&mut out, ref_name.as_bytes())?;
+    push_u64(&mut out, declared_count);
+    for envelope in objects {
+        push_bytes_u64(&mut out, &encode_envelope_file(envelope)?)?;
+    }
+    push_u64(&mut out, len_to_u64(author_keys.len())?);
+    for entry in author_keys {
+        push_bytes_u64(&mut out, entry.key_id.as_bytes())?;
+        out.extend_from_slice(&entry.public_key);
+    }
+    Ok(out)
+}
+
+/// Control 2's decisive case, and the reason this increment is worth building (§3.1): a Patch
+/// object whose bytes were corrupted -- replaced with different, still individually well-formed
+/// Patch content, so it decodes cleanly on its own -- recomputes to a different object id than the
+/// one the child Block's own `patch_ids` names. Neither `verify` nor `import` can find "that id"
+/// among the bundle's objects any more, because it no longer exists; both refuse, for the same
+/// reason, via the same closure check.
+#[test]
+fn verify_and_import_agree_a_corrupted_object_whose_id_no_longer_matches_its_bytes_is_refused()
+-> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc44-verify-corrupted-id");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    seal_two_block_history(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let original_patch_id = objects
+        .iter()
+        .find(|envelope| envelope.object_type == ObjectType::Patch)
+        .ok_or_else(|| {
+            prikk_error::PrikkError::Integrity("fixture sanity: exactly one patch".to_string())
+        })?
+        .object_id();
+
+    // A different, still-valid Patch payload -- different node id and path from
+    // `signed_patch_envelope`'s own fixture, referencing the same blob so only the patch's own
+    // identity changes, not blob closure.
+    let blob_id = objects
+        .iter()
+        .find(|envelope| envelope.object_type == ObjectType::Blob)
+        .ok_or_else(|| {
+            prikk_error::PrikkError::Integrity(
+                "fixture sanity: the patch's own blob travels too".to_string(),
+            )
+        })?
+        .object_id();
+    let corrupted_payload = PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::CreateFile(CreateFile {
+                path: "corrupted.txt".to_string(),
+                node_id: NodeId::from_bytes([0x99; 32]),
+                blob_id,
+                mode: 0o100_644,
+            }),
+        }],
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+    };
+    let corrupted_bytes = corrupted_payload.to_canonical_bytes()?;
+    let corrupted_objects: Vec<ObjectEnvelope> = objects
+        .into_iter()
+        .map(|mut envelope| {
+            if envelope.object_type == ObjectType::Patch {
+                envelope.canonical_payload = corrupted_bytes.clone();
+            }
+            envelope
+        })
+        .collect();
+    let corrupted_patch_id = corrupted_objects
+        .iter()
+        .find(|envelope| envelope.object_type == ObjectType::Patch)
+        .ok_or_else(|| {
+            prikk_error::PrikkError::Integrity(
+                "fixture sanity: still exactly one patch".to_string(),
+            )
+        })?
+        .object_id();
+    assert_ne!(
+        original_patch_id, corrupted_patch_id,
+        "fixture sanity: the corruption must actually change the recomputed id"
+    );
+    let corrupted_bundle_bytes = encode_bundle(&ref_name, &corrupted_objects, &author_keys)?;
+
+    let options = BundleImportOptions::default_limits();
+    let verify_err = match verify_bundle(&corrupted_bundle_bytes, &options) {
+        Ok(report) => panic!("a corrupted patch id must fail verification: {report:?}"),
+        Err(err) => err,
+    };
+    assert!(
+        verify_err.to_string().contains("names patch"),
+        "expected a closure-check failure naming the missing patch id: {verify_err}"
+    );
+
+    let target_root = unique_temp_dir("dc44-verify-corrupted-id-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let import_err = match import_bundle(&target, &corrupted_bundle_bytes, &options) {
+        Ok(report) => panic!("the same corrupted bytes must fail import too: {report:?}"),
+        Err(err) => err,
+    };
+    assert!(
+        import_err.to_string().contains("names patch"),
+        "expected the identical closure-check failure at import: {import_err}"
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// Control 3, the other direction: a bundle missing a patch-referenced blob is refused by
+/// `verify` exactly as `row2_a_bundle_missing_a_referenced_blob_is_refused` already proves it is
+/// refused by `import` -- same fixture-construction technique, both callers checked here.
+#[test]
+fn verify_and_import_agree_a_bundle_missing_a_referenced_blob_is_refused() -> prikk_error::Result<()>
+{
+    let source_root = unique_temp_dir("dc44-verify-missing-blob");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    seal_two_block_history(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let broken_objects: Vec<ObjectEnvelope> = objects
+        .into_iter()
+        .filter(|envelope| envelope.object_type != ObjectType::Blob)
+        .collect();
+    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys)?;
+    let options = BundleImportOptions::default_limits();
+
+    let verify_err = match verify_bundle(&broken_bytes, &options) {
+        Ok(report) => {
+            panic!("a bundle missing a patch-referenced blob must fail verification: {report:?}")
+        }
+        Err(err) => err,
+    };
+    assert!(verify_err.to_string().contains("references blob"));
+
+    let target_root = unique_temp_dir("dc44-verify-missing-blob-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let import_err = match import_bundle(&target, &broken_bytes, &options) {
+        Ok(report) => panic!("the same bundle must fail import too: {report:?}"),
+        Err(err) => err,
+    };
+    assert!(import_err.to_string().contains("references blob"));
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// Control 3, positive direction restated for `verify` specifically (control 1 already proves
+/// `verify` accepts a good bundle; this proves `import` accepts the identical bytes too, closing
+/// the loop both ways in one place).
+#[test]
+fn verify_and_import_agree_a_well_formed_bundle_is_accepted() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc44-verify-agree-good");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    seal_two_block_history(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let options = BundleImportOptions::default_limits();
+
+    assert!(verify_bundle(&bytes, &options).is_ok());
+
+    let target_root = unique_temp_dir("dc44-verify-agree-good-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    assert!(import_bundle(&target, &bytes, &options).is_ok());
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
     Ok(())
 }
