@@ -21,6 +21,7 @@ mod branch;
 mod bundle;
 mod commands;
 mod compact;
+mod durable_output;
 mod merge;
 mod output;
 mod seal;

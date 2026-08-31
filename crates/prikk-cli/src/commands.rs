@@ -95,7 +95,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         name: "bundle",
         run: crate::run_bundle,
         help_lines: &[
-            "  prikk bundle export --ref REF --output <file>  Write a self-contained history bundle",
+            "  prikk bundle export --ref REF --output <file> [--force]  Write a self-contained history bundle; refuses an existing file unless --force",
             "  prikk bundle import --input <file>        Import a bundle as an untrusted received pointer",
             "  prikk bundle verify --input <file>        Check a bundle offline; writes nothing, needs no repository",
         ],

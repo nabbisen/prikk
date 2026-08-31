@@ -241,7 +241,7 @@ prikk branch create heads/<name> [--from REF]
 prikk branch close heads/<name>
 prikk tag [list]
 prikk tag create tags/<name> --target <ref|block> [-m <message>]
-prikk bundle export --ref REF --output <file>
+prikk bundle export --ref REF --output <file> [--force]
 prikk bundle import --input <file>
 prikk bundle verify --input <file>
 prikk sync summary --output <file>

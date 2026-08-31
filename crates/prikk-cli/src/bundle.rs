@@ -2,7 +2,12 @@
 //! is DC-44 increment 1, `bundle-offline-verify-handoff-v1.md`).
 //!
 //! `bundle export` writes a self-contained file: the exported ref's own RefState plus every object
-//! reachable from its target Block back to genesis. `bundle import` writes those objects into the
+//! reachable from its target Block back to genesis. **Refuses an existing file at the destination
+//! unless `--force` is passed** (DC-44 increment 2,
+//! `bundle-export-durability-handoff-v1.md` §3.1 — destroying a backup must never be silent), and
+//! writes atomically and durably (§3.2 — `crate::durable_output`, not the anchored contract, which
+//! is confined to repository-internal paths and does not apply to an arbitrary destination). `bundle
+//! import` writes those objects into the
 //! local object store and records a `received` pointer (`remotes/<origin ref name>`) — it never
 //! touches `refs/by-id/`, never advances a local ref, and never adopts a MAINTAINER key into the
 //! local trust policy. Imported history stays present but untrusted until the operator explicitly
@@ -41,15 +46,24 @@ pub fn run_bundle(root: PathBuf, args: Vec<String>) -> std::result::Result<(), S
 
 fn run_export(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
     let parsed = parse_export_args(args)?;
+    // DC-44 increment 2 §3.1: checked before opening the repository at all, so the common
+    // "there is already a backup at this path" case fails fast rather than after a read. Not
+    // race-free against a file created after this check -- see `durable_output`'s own doc
+    // comment for why that is an accepted, stated limit rather than a gap this pretends to close.
+    if !parsed.force && crate::durable_output::destination_exists(&parsed.output) {
+        return Err(format!(
+            "refusing to overwrite existing file at {} (pass --force to overwrite it \
+             intentionally)",
+            parsed.output.display()
+        ));
+    }
     let layout = crate::open_repository(root)?;
     let (report, bytes) =
         export_bundle(&layout, &parsed.ref_name).map_err(|err| err.to_string())?;
-    std::fs::write(&parsed.output, &bytes).map_err(|err| {
-        format!(
-            "failed to write bundle to {}: {err}",
-            parsed.output.display()
-        )
-    })?;
+    // DC-44 increment 2 §3.2: atomic and durable -- a failure here leaves whatever was previously
+    // at `parsed.output` untouched, never a partial file. See `durable_output`'s own doc comment
+    // for exactly what this does and does not guarantee.
+    crate::durable_output::write_new_file_durably(&parsed.output, &bytes)?;
     println!("exported {}", report.ref_name);
     println!("tip block: {}", report.tip_block_id);
     println!("objects: {}", report.object_count);
@@ -167,11 +181,13 @@ fn parse_bundle_limit_env(name: &str, default: usize) -> std::result::Result<usi
 struct ExportArgs {
     ref_name: String,
     output: PathBuf,
+    force: bool,
 }
 
 fn parse_export_args(args: Vec<String>) -> std::result::Result<ExportArgs, String> {
     let mut ref_name = None;
     let mut output = None;
+    let mut force = false;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
@@ -190,12 +206,17 @@ fn parse_export_args(args: Vec<String>) -> std::result::Result<ExportArgs, Strin
                 };
                 output = Some(PathBuf::from(value));
             }
+            "--force" => force = true,
             other => return Err(format!("unknown bundle export argument: {other}")),
         }
     }
     let ref_name = ref_name.ok_or_else(|| "bundle export requires --ref".to_string())?;
     let output = output.ok_or_else(|| "bundle export requires --output".to_string())?;
-    Ok(ExportArgs { ref_name, output })
+    Ok(ExportArgs {
+        ref_name,
+        output,
+        force,
+    })
 }
 
 struct ImportArgs {
