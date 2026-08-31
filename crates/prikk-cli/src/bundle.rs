@@ -22,12 +22,19 @@
 //! `run_export`/`run_import`. It shares `import`'s own decode and closure-validation path
 //! (`prikk_store::verify_bundle`, DC-44 increment 1 §2) rather than a second decoder, so the two
 //! cannot silently drift apart on what counts as well-formed.
+//!
+//! **`bundle export` and `bundle verify` both print the bundle's self-describing manifest**
+//! (DC-44 increment 3, `bundle-manifest-handoff-v1.md`): the on-disk repository format and tool
+//! version that produced it, and a fixed note stating this bundle is one ref's closure only --
+//! other refs in the source repository, if any, are not included, and the bundle makes no claim
+//! about them. A `PBNDL001`/`PBNDL002` bundle predates the manifest section, so `verify` says so
+//! plainly rather than printing absent fields as if they were checked and found empty.
 
 use std::path::PathBuf;
 
 use prikk_store::{
-    BundleImportOptions, DEFAULT_BUNDLE_MAX_OBJECT_COUNT, DEFAULT_BUNDLE_MAX_TOTAL_BYTES,
-    export_bundle, import_bundle, verify_bundle,
+    BundleImportOptions, BundleManifest, BundleScope, DEFAULT_BUNDLE_MAX_OBJECT_COUNT,
+    DEFAULT_BUNDLE_MAX_TOTAL_BYTES, export_bundle, import_bundle, verify_bundle,
 };
 
 /// Dispatch `prikk bundle [export|import|verify]`.
@@ -71,6 +78,7 @@ fn run_export(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
         "author key material: {} included (continuity only, not a trust decision)",
         report.author_key_count
     );
+    print_manifest(&report.manifest);
     println!("wrote {}", parsed.output.display());
     Ok(())
 }
@@ -119,6 +127,13 @@ fn run_verify(args: Vec<String>) -> std::result::Result<(), String> {
         "author key material: {} present (continuity only, not a trust decision)",
         report.author_key_count
     );
+    match &report.manifest {
+        Some(manifest) => print_manifest(manifest),
+        None => println!(
+            "manifest: not present (this bundle predates the PBNDL003 manifest section -- \
+             repository format, tool version, and scope are unknown)"
+        ),
+    }
     println!(
         "note: this checks structural and internal consistency only -- no signature is \
          cryptographically verified (a standalone bundle carries no trust material to check one \
@@ -127,6 +142,21 @@ fn run_verify(args: Vec<String>) -> std::result::Result<(), String> {
          one -- import it and run `prikk verify` for that."
     );
     Ok(())
+}
+
+/// DC-44 increment 3 §4.3: printed by both `bundle export` and `bundle verify` for a
+/// manifest-bearing (`PBNDL003`) bundle. `BundleScope` has exactly one variant today, so the
+/// `match` prints one fixed sentence -- kept as a match, not an `if let`, so a future second
+/// variant forces this print site to be revisited rather than silently keep the old wording.
+fn print_manifest(manifest: &BundleManifest) {
+    println!("repository format: {}", manifest.repository_format);
+    println!("tool version: {}", manifest.tool_version);
+    match manifest.scope {
+        BundleScope::SingleRef => println!(
+            "note: this bundle contains one ref's closure only -- other refs in the source \
+             repository, if any, are not included, and this bundle makes no claim about them"
+        ),
+    }
 }
 
 struct VerifyArgs {

@@ -107,9 +107,9 @@ pub use block_state::{
     BlockStateOutcome, BlockStateStatus, derive_next_state_root, validate_block_v2_shape,
 };
 pub use bundle::{
-    BundleExportReport, BundleImportOptions, BundleImportReport, BundleVerifyReport,
-    DEFAULT_BUNDLE_MAX_OBJECT_COUNT, DEFAULT_BUNDLE_MAX_TOTAL_BYTES, export_bundle, import_bundle,
-    verify_bundle,
+    BundleExportReport, BundleImportOptions, BundleImportReport, BundleManifest, BundleScope,
+    BundleVerifyReport, DEFAULT_BUNDLE_MAX_OBJECT_COUNT, DEFAULT_BUNDLE_MAX_TOTAL_BYTES,
+    export_bundle, import_bundle, verify_bundle,
 };
 pub use checkout::{
     CheckoutMaterialization, CheckoutPlan, DEFAULT_CHECKOUT_REF, SnapshotCheckoutPlan,

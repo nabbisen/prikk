@@ -14,8 +14,9 @@ use crate::author_key_index::{
 };
 use crate::author_signing::{AuthorSigner, author_signature};
 use crate::bundle::{
-    BundleImportOptions, DEFAULT_BUNDLE_MAX_OBJECT_COUNT, decode_bundle, encode_bundle,
-    encode_bundle_v1_for_test, export_bundle, import_bundle, verify_bundle,
+    BundleImportOptions, BundleManifest, BundleScope, DEFAULT_BUNDLE_MAX_OBJECT_COUNT,
+    decode_bundle, encode_bundle, encode_bundle_v1_for_test, encode_bundle_v2_for_test,
+    export_bundle, import_bundle, verify_bundle,
 };
 use crate::file_codec::{encode_envelope_file, push_bytes_u64, push_u64};
 use crate::fsutil::len_to_u64;
@@ -30,6 +31,18 @@ use crate::{
     Ed25519AuthorSigner, Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectReader,
     ObjectWriter, RefPublication, RefStore, RepositoryLayout,
 };
+
+/// A `BundleManifest` for tests that re-encode already-decoded `objects`/`ref_name` and only care
+/// about something else (author-key tampering, a declared-count boundary) -- `encode_bundle` itself
+/// derives the manifest's `declared_ref_name`/`declared_object_count` from its own `ref_name`/
+/// `objects` parameters, so this only needs to supply the three fields it does not derive.
+fn test_manifest() -> BundleManifest {
+    BundleManifest {
+        repository_format: 6,
+        tool_version: "test".to_string(),
+        scope: BundleScope::SingleRef,
+    }
+}
 
 /// Seal a two-block `heads/main` (a Root block plus a Normal child referencing one Patch, whose
 /// `CreateFile` operation itself references one Blob) into `layout`, returning the tip Block id —
@@ -551,14 +564,14 @@ fn dc53_stage2_vector8_a_transported_key_that_does_not_verify_reads_failed()
     seal_two_block_history_with_author(&source, &signer, true)?;
 
     let (_, bytes) = export_bundle(&source, "heads/main")?;
-    let (ref_name, objects, mut author_keys) =
+    let (ref_name, objects, mut author_keys, _manifest) =
         decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     assert_eq!(author_keys.len(), 1);
     if let Some(entry) = author_keys.first_mut() {
         // Swap in an unrelated public key for the same key_id -- the forgery this vector targets.
         entry.public_key = [0xbb; 32];
     }
-    let tampered = encode_bundle(&ref_name, &objects, &author_keys)?;
+    let tampered = encode_bundle(&ref_name, &objects, &author_keys, &test_manifest())?;
 
     let target_root = unique_temp_dir("dc53-vector8-target");
     let target = RepositoryLayout::init(target_root.clone())?;
@@ -592,7 +605,7 @@ fn import_rejects_a_bundle_whose_author_key_section_disagrees_with_itself()
     seal_two_block_history_with_author(&source, &signer, true)?;
 
     let (_, bytes) = export_bundle(&source, "heads/main")?;
-    let (ref_name, objects, mut author_keys) =
+    let (ref_name, objects, mut author_keys, _manifest) =
         decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     assert_eq!(author_keys.len(), 1);
     let key_id = author_keys
@@ -605,7 +618,7 @@ fn import_rejects_a_bundle_whose_author_key_section_disagrees_with_itself()
         key_id: key_id.clone(),
         public_key: [0xcc; 32],
     });
-    let hostile = encode_bundle(&ref_name, &objects, &author_keys)?;
+    let hostile = encode_bundle(&ref_name, &objects, &author_keys, &test_manifest())?;
 
     let target_root = unique_temp_dir("dc53-bundle-internal-conflict-target");
     let target = RepositoryLayout::init(target_root.clone())?;
@@ -693,7 +706,7 @@ fn import_rejects_a_later_conflicting_key_without_recording_an_earlier_one()
     let signer_a = transport_test_signer(0xb1)?;
     seal_two_block_history_with_author(&source, &signer_a, true)?;
     let (_, bytes) = export_bundle(&source, "heads/main")?;
-    let (ref_name, objects, mut author_keys) =
+    let (ref_name, objects, mut author_keys, _manifest) =
         decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     assert_eq!(
         author_keys.len(),
@@ -706,7 +719,7 @@ fn import_rejects_a_later_conflicting_key_without_recording_an_earlier_one()
         key_id: signer_b.key_id().to_string(),
         public_key: signer_b.public_key_bytes(),
     });
-    let hostile = encode_bundle(&ref_name, &objects, &author_keys)?;
+    let hostile = encode_bundle(&ref_name, &objects, &author_keys, &test_manifest())?;
 
     let target_root = unique_temp_dir("dc53-multi-key-import-target");
     let target = RepositoryLayout::init(target_root.clone())?;
@@ -815,7 +828,7 @@ fn author_key_count_limit_fires_exactly_at_the_boundary() -> prikk_error::Result
             public_key: [2; 32],
         },
     ];
-    let bytes = encode_bundle(&ref_name, &objects, &author_keys)?;
+    let bytes = encode_bundle(&ref_name, &objects, &author_keys, &test_manifest())?;
 
     let refused = decode_bundle(&bytes, 1);
     assert!(
@@ -869,9 +882,11 @@ fn a_pbndl001_bundle_imports_and_its_patch_reads_unverifiable() -> prikk_error::
     // nothing to drop.
     crate::rfc111_seal_simulation::simulate_one_seal(&source, "heads/main", &maintainer)?;
 
-    let (_, v2_bytes) = export_bundle(&source, "heads/main")?;
-    let (ref_name, objects, author_keys) =
-        decode_bundle(&v2_bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    // DC-44 increment 3: renamed from "v2" -- `export_bundle` now always emits `PBNDL003`, not
+    // `PBNDL002`; only `v1_bytes` below is genuinely format-specific.
+    let (_, current_bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, author_keys, _manifest) =
+        decode_bundle(&current_bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     assert_eq!(
         author_keys.len(),
         1,
@@ -964,7 +979,8 @@ fn row1_a_bundle_whose_ref_target_is_absent_is_refused() -> prikk_error::Result<
     )?;
 
     let (_, bytes) = export_bundle(&source, "tags/v1")?;
-    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let (ref_name, objects, author_keys, _manifest) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     assert!(
         objects
             .iter()
@@ -975,7 +991,12 @@ fn row1_a_bundle_whose_ref_target_is_absent_is_refused() -> prikk_error::Result<
         .into_iter()
         .filter(|envelope| envelope.object_type != ObjectType::Tag)
         .collect();
-    let pre_fix_shaped_bytes = encode_bundle(&ref_name, &pre_fix_shaped_objects, &author_keys)?;
+    let pre_fix_shaped_bytes = encode_bundle(
+        &ref_name,
+        &pre_fix_shaped_objects,
+        &author_keys,
+        &test_manifest(),
+    )?;
 
     let target_root = unique_temp_dir("dc78-closure-row1-target");
     let target = RepositoryLayout::init(target_root.clone())?;
@@ -1009,7 +1030,8 @@ fn row2_a_bundle_missing_a_referenced_blob_is_refused() -> prikk_error::Result<(
     let source = RepositoryLayout::init(source_root.clone())?;
     seal_two_block_history(&source)?;
     let (_, bytes) = export_bundle(&source, "heads/main")?;
-    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let (ref_name, objects, author_keys, _manifest) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     assert!(
         objects
             .iter()
@@ -1020,7 +1042,7 @@ fn row2_a_bundle_missing_a_referenced_blob_is_refused() -> prikk_error::Result<(
         .into_iter()
         .filter(|envelope| envelope.object_type != ObjectType::Blob)
         .collect();
-    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys)?;
+    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys, &test_manifest())?;
 
     let target_root = unique_temp_dir("dc78-closure-row2-target");
     let target = RepositoryLayout::init(target_root.clone())?;
@@ -1056,7 +1078,8 @@ fn row2b_a_bundle_missing_a_blocks_snapshot_blob_is_refused() -> prikk_error::Re
     let source = RepositoryLayout::init(source_root.clone())?;
     let (_, snapshot_blob_id) = seal_two_block_history_with_snapshot_blob(&source)?;
     let (_, bytes) = export_bundle(&source, "heads/main")?;
-    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let (ref_name, objects, author_keys, _manifest) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     assert!(
         objects
             .iter()
@@ -1082,7 +1105,7 @@ fn row2b_a_bundle_missing_a_blocks_snapshot_blob_is_refused() -> prikk_error::Re
         .into_iter()
         .filter(|envelope| envelope.object_id() != snapshot_blob_id)
         .collect();
-    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys)?;
+    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys, &test_manifest())?;
 
     let target_root = unique_temp_dir("dc78-closure-row2b-target");
     let target = RepositoryLayout::init(target_root.clone())?;
@@ -1116,7 +1139,8 @@ fn row3_a_bundle_missing_a_blocks_patch_is_refused() -> prikk_error::Result<()> 
     let source = RepositoryLayout::init(source_root.clone())?;
     seal_two_block_history(&source)?;
     let (_, bytes) = export_bundle(&source, "heads/main")?;
-    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let (ref_name, objects, author_keys, _manifest) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     assert!(
         objects
             .iter()
@@ -1127,7 +1151,7 @@ fn row3_a_bundle_missing_a_blocks_patch_is_refused() -> prikk_error::Result<()> 
         .into_iter()
         .filter(|envelope| envelope.object_type != ObjectType::Patch)
         .collect();
-    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys)?;
+    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys, &test_manifest())?;
 
     let target_root = unique_temp_dir("dc78-closure-row3-target");
     let target = RepositoryLayout::init(target_root.clone())?;
@@ -1160,7 +1184,8 @@ fn row4_a_bundle_missing_a_blocks_parent_is_refused() -> prikk_error::Result<()>
     let source = RepositoryLayout::init(source_root.clone())?;
     let child_block_id = seal_two_block_history(&source)?;
     let (_, bytes) = export_bundle(&source, "heads/main")?;
-    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let (ref_name, objects, author_keys, _manifest) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     let is_root_block = |envelope: &ObjectEnvelope| {
         envelope.object_type == ObjectType::Block && envelope.object_id() != child_block_id
     };
@@ -1172,7 +1197,7 @@ fn row4_a_bundle_missing_a_blocks_parent_is_refused() -> prikk_error::Result<()>
         .into_iter()
         .filter(|envelope| !is_root_block(envelope))
         .collect();
-    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys)?;
+    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys, &test_manifest())?;
 
     let target_root = unique_temp_dir("dc78-closure-row4-target");
     let target = RepositoryLayout::init(target_root.clone())?;
@@ -1224,7 +1249,8 @@ fn row5_objects_already_held_locally_satisfy_present() -> prikk_error::Result<()
     let (_, bytes) = export_bundle(&source, "heads/main")?;
 
     // Scenario A: item 3 (block's own patch) and item 4 (block's own parent).
-    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let (ref_name, objects, author_keys, _manifest) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     let target_root = unique_temp_dir("dc78-closure-row5-target");
     let target = RepositoryLayout::init(target_root.clone())?;
     let mut target_objects = FileObjectStore::new(target.clone());
@@ -1246,7 +1272,7 @@ fn row5_objects_already_held_locally_satisfy_present() -> prikk_error::Result<()
         2,
         "fixture sanity: only the RefState and tip Block should remain in the partial bundle"
     );
-    let partial_bytes = encode_bundle(&ref_name, &carried_objects, &author_keys)?;
+    let partial_bytes = encode_bundle(&ref_name, &carried_objects, &author_keys, &test_manifest())?;
 
     let report = import_bundle(
         &target,
@@ -1266,7 +1292,7 @@ fn row5_objects_already_held_locally_satisfy_present() -> prikk_error::Result<()
     );
 
     // Scenario B: item 2 (blob referenced by a carried patch's own operations).
-    let (ref_name_b, objects_b, author_keys_b) =
+    let (ref_name_b, objects_b, author_keys_b, _manifest_b) =
         decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     let target_b_root = unique_temp_dir("dc78-closure-row5-target-b");
     let target_b = RepositoryLayout::init(target_b_root.clone())?;
@@ -1291,7 +1317,12 @@ fn row5_objects_already_held_locally_satisfy_present() -> prikk_error::Result<()
         "fixture sanity: the Patch that references the omitted Blob must itself be carried, or \
          the blob check's own loop never runs"
     );
-    let partial_bytes_b = encode_bundle(&ref_name_b, &carried_objects_b, &author_keys_b)?;
+    let partial_bytes_b = encode_bundle(
+        &ref_name_b,
+        &carried_objects_b,
+        &author_keys_b,
+        &test_manifest(),
+    )?;
 
     let report_b = import_bundle(
         &target_b,
@@ -1361,7 +1392,7 @@ fn row6_a_refused_import_writes_no_pointer_and_records_no_key_material() -> prik
     let attack_source = RepositoryLayout::init(attack_source_root.clone())?;
     seal_two_block_history_with_author(&attack_source, &attack_signer, true)?;
     let (_, attack_bytes) = export_bundle(&attack_source, "heads/main")?;
-    let (ref_name, objects, author_keys) =
+    let (ref_name, objects, author_keys, _manifest) =
         decode_bundle(&attack_bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     assert_eq!(
         author_keys.len(),
@@ -1372,7 +1403,7 @@ fn row6_a_refused_import_writes_no_pointer_and_records_no_key_material() -> prik
         .into_iter()
         .filter(|envelope| envelope.object_type != ObjectType::Patch)
         .collect();
-    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys)?;
+    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys, &test_manifest())?;
 
     let result = import_bundle(
         &target,
@@ -1409,20 +1440,29 @@ fn row6_a_refused_import_writes_no_pointer_and_records_no_key_material() -> prik
     Ok(())
 }
 
-/// §5 row 7 (regression guard): a well-formed bundle still imports, `PBNDL002` and `PBNDL001` alike.
+/// §5 row 7 (regression guard): a well-formed bundle still imports, the current format and
+/// `PBNDL001` alike. **Renamed from "v2" to "current" (DC-44 increment 3):** `export_bundle` now
+/// always emits `PBNDL003`, so `bytes` below is a `PBNDL003` bundle, not `PBNDL002` -- see
+/// `a_pbndl002_bundle_imports_with_no_manifest_but_recorded_author_key_material` for the dedicated,
+/// real-bytes `PBNDL002` case control 2 asks for.
 #[test]
 fn row7_a_well_formed_bundle_still_imports_both_formats() -> prikk_error::Result<()> {
     let source_root = unique_temp_dir("dc78-closure-row7-source");
     let source = RepositoryLayout::init(source_root.clone())?;
     seal_two_block_history(&source)?;
     let (_, bytes) = export_bundle(&source, "heads/main")?;
-    let (ref_name, objects, _author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let (ref_name, objects, _author_keys, _manifest) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     let v1_bytes = encode_bundle_v1_for_test(&ref_name, &objects)?;
 
-    let v2_target_root = unique_temp_dir("dc78-closure-row7-v2-target");
-    let v2_target = RepositoryLayout::init(v2_target_root.clone())?;
-    import_bundle(&v2_target, &bytes, &BundleImportOptions::default_limits())?;
-    assert!(read_received_pointer(&v2_target, "remotes/heads/main")?.is_some());
+    let current_target_root = unique_temp_dir("dc78-closure-row7-current-target");
+    let current_target = RepositoryLayout::init(current_target_root.clone())?;
+    import_bundle(
+        &current_target,
+        &bytes,
+        &BundleImportOptions::default_limits(),
+    )?;
+    assert!(read_received_pointer(&current_target, "remotes/heads/main")?.is_some());
 
     let v1_target_root = unique_temp_dir("dc78-closure-row7-v1-target");
     let v1_target = RepositoryLayout::init(v1_target_root.clone())?;
@@ -1434,9 +1474,231 @@ fn row7_a_well_formed_bundle_still_imports_both_formats() -> prikk_error::Result
     assert!(read_received_pointer(&v1_target, "remotes/heads/main")?.is_some());
 
     let _ = std::fs::remove_dir_all(source_root);
-    let _ = std::fs::remove_dir_all(v2_target_root);
+    let _ = std::fs::remove_dir_all(current_target_root);
     let _ = std::fs::remove_dir_all(v1_target_root);
     Ok(())
+}
+
+/// DC-44 increment 3, control 2: `PBNDL002` (an author-key section, but no manifest) still
+/// imports, with real bytes -- the same real export's own objects/author-keys, re-encoded in the
+/// `PBNDL002` shape via `encode_bundle_v2_for_test`, not a hand-built approximation. Uses
+/// `seal_two_block_history_with_author` (not the plain structural fixture) so the author-key
+/// section actually carries something, the same reason the existing `PBNDL001` test does.
+#[test]
+fn a_pbndl002_bundle_imports_with_no_manifest_but_recorded_author_key_material()
+-> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc44-manifest-pbndl002-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    // A genuinely, fully sealed history, not the lightweight `signed_block` structural fixture
+    // (`seal_two_block_history_with_author`) -- see
+    // `verify_of_a_real_export_succeeds_and_matches_the_export_report`'s own doc comment for why
+    // this test's own `verify_repository` call below needs one that can actually pass it.
+    let author = transport_test_signer(0xc1)?;
+    let maintainer =
+        Ed25519MaintainerSigner::from_seed("dc44-manifest-pbndl002-maintainer", &[0xc2; 32])?;
+    crate::trust::add_trusted_maintainer(
+        &source,
+        maintainer.key_id(),
+        &prikk_hash::to_hex(&maintainer.public_key_bytes()),
+    )?;
+    std::fs::write(
+        source.root().join("dc44-pbndl002.txt"),
+        b"dc44 pbndl002 fixture\n",
+    )?;
+    crate::worktree_patch::commit_worktree_changes_signed(
+        &source,
+        "heads/main",
+        "dc44 pbndl002 fixture",
+        crate::worktree_patch::WorktreePatchCommitOptions::default(),
+        &author,
+    )?;
+    crate::rfc111_seal_simulation::simulate_one_seal(&source, "heads/main", &maintainer)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, author_keys, _manifest) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    assert_eq!(author_keys.len(), 1, "fixture sanity: material to carry");
+    let v2_bytes = encode_bundle_v2_for_test(&ref_name, &objects, &author_keys)?;
+
+    // `verify_bundle` sees no manifest at all -- absence, not a decode failure (§4.2).
+    let verify_report = verify_bundle(&v2_bytes, &BundleImportOptions::default_limits())?;
+    assert_eq!(verify_report.manifest, None);
+    assert_eq!(verify_report.author_key_count, 1);
+
+    let target_root = unique_temp_dir("dc44-manifest-pbndl002-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let report = import_bundle(&target, &v2_bytes, &BundleImportOptions::default_limits())?;
+    assert_eq!(report.recorded_author_key_count, 1);
+    assert!(read_received_pointer(&target, "remotes/heads/main")?.is_some());
+    let repository_report = crate::verify_repository(&target)?;
+    assert!(
+        !repository_report.has_item_failure(),
+        "verify must pass against a repository that imported a PBNDL002 bundle: \
+         {repository_report:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// DC-44 increment 3, control 3 -- the control that proves the manifest is additive, not a
+/// change to object identity. The exact same real objects, re-encoded once in the `PBNDL002` shape
+/// (no manifest) and once by the real, current `export_bundle` (`PBNDL003`, with a manifest), must
+/// decode to the identical set of object ids either way.
+#[test]
+fn object_ids_are_unchanged_across_the_pbndl003_bump() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc44-manifest-object-ids-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    seal_two_block_history(&source)?;
+    let (_, current_bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, author_keys, manifest) =
+        decode_bundle(&current_bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    assert!(
+        manifest.is_some(),
+        "fixture sanity: a real export carries a manifest"
+    );
+
+    let v2_bytes = encode_bundle_v2_for_test(&ref_name, &objects, &author_keys)?;
+    let (_, v2_objects, _, v2_manifest) =
+        decode_bundle(&v2_bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    assert!(
+        v2_manifest.is_none(),
+        "fixture sanity: PBNDL002 carries no manifest"
+    );
+
+    let current_ids: std::collections::BTreeSet<ObjectId> =
+        objects.iter().map(ObjectEnvelope::object_id).collect();
+    let v2_ids: std::collections::BTreeSet<ObjectId> =
+        v2_objects.iter().map(ObjectEnvelope::object_id).collect();
+    assert_eq!(
+        current_ids, v2_ids,
+        "the manifest section must not change a single object's own id"
+    );
+    assert!(
+        !current_ids.is_empty(),
+        "fixture sanity: a non-trivial closure"
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    Ok(())
+}
+
+/// DC-44 increment 3, control 4: a manifest that disagrees with the payload is refused, by both
+/// `verify` and `import` -- the same treatment the bundle-internal author-key self-consistency
+/// check above already gets. Three independent disagreements, each its own case: the manifest's
+/// declared ref name against the bundle's own header, the manifest's declared ref name against the
+/// exported RefState's own signed name, and the manifest's declared object count against how many
+/// objects the bundle actually carries.
+#[test]
+fn a_manifest_that_disagrees_with_the_payload_is_refused_by_verify_and_import()
+-> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("dc44-manifest-disagreement-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    seal_two_block_history(&source)?;
+    let (_, bytes) = export_bundle(&source, "heads/main")?;
+    let (ref_name, objects, author_keys, manifest) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let Some(manifest) = manifest else {
+        return Err(prikk_error::PrikkError::Integrity(
+            "fixture sanity: a real export carries a manifest".to_string(),
+        ));
+    };
+    let manifest = BundleManifest {
+        repository_format: manifest.repository_format,
+        tool_version: manifest.tool_version,
+        scope: manifest.scope,
+    };
+
+    let options = BundleImportOptions::default_limits();
+    let target_root = unique_temp_dir("dc44-manifest-disagreement-target");
+
+    // Case 1: the manifest's own declared object count disagrees with what the bundle actually
+    // carries -- built by hand-encoding the manifest section with a wrong count, since
+    // `encode_bundle` itself always derives an agreeing count from the real `objects` slice.
+    let wrong_count_bytes = encode_bundle_with_wrong_manifest_object_count(
+        &ref_name,
+        &objects,
+        &author_keys,
+        &manifest,
+    )?;
+    assert!(verify_bundle(&wrong_count_bytes, &options).is_err());
+    let target = RepositoryLayout::init(target_root.clone())?;
+    assert!(import_bundle(&target, &wrong_count_bytes, &options).is_err());
+    assert!(
+        read_received_pointer(&target, "remotes/heads/main")?.is_none(),
+        "a refused import must leave no pointer"
+    );
+
+    // Case 2: the manifest's declared ref name disagrees with the bundle's own header ref name.
+    let wrong_header_bytes =
+        encode_bundle_with_wrong_manifest_ref_name(&ref_name, &objects, &author_keys, &manifest)?;
+    assert!(verify_bundle(&wrong_header_bytes, &options).is_err());
+    assert!(import_bundle(&target, &wrong_header_bytes, &options).is_err());
+
+    // Case 3: the manifest's declared ref name disagrees with the exported RefState's own signed
+    // `ref_name` -- both the header and the manifest agree with each other, but not with the
+    // signed payload underneath, so the header-vs-manifest check alone would miss this.
+    let mismatched_signed_name = format!("{ref_name}-does-not-exist");
+    let bytes_with_mismatched_header =
+        encode_bundle(&mismatched_signed_name, &objects, &author_keys, &manifest)?;
+    assert!(verify_bundle(&bytes_with_mismatched_header, &options).is_err());
+    assert!(import_bundle(&target, &bytes_with_mismatched_header, &options).is_err());
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+fn encode_bundle_with_wrong_manifest_object_count(
+    ref_name: &str,
+    objects: &[ObjectEnvelope],
+    author_keys: &[AuthorKeyEntry],
+    manifest: &BundleManifest,
+) -> prikk_error::Result<Vec<u8>> {
+    let mut out = Vec::new();
+    out.extend_from_slice(b"PBNDL003");
+    push_bytes_u64(&mut out, ref_name.as_bytes())?;
+    push_u64(&mut out, len_to_u64(objects.len())?);
+    for envelope in objects {
+        push_bytes_u64(&mut out, &encode_envelope_file(envelope)?)?;
+    }
+    push_u64(&mut out, len_to_u64(author_keys.len())?);
+    for entry in author_keys {
+        push_bytes_u64(&mut out, entry.key_id.as_bytes())?;
+        out.extend_from_slice(&entry.public_key);
+    }
+    push_u64(&mut out, u64::from(manifest.repository_format));
+    push_bytes_u64(&mut out, manifest.tool_version.as_bytes())?;
+    push_bytes_u64(&mut out, ref_name.as_bytes())?;
+    push_u64(&mut out, len_to_u64(objects.len())? + 1); // wrong: one more than reality
+    push_u64(&mut out, 0);
+    Ok(out)
+}
+
+fn encode_bundle_with_wrong_manifest_ref_name(
+    ref_name: &str,
+    objects: &[ObjectEnvelope],
+    author_keys: &[AuthorKeyEntry],
+    manifest: &BundleManifest,
+) -> prikk_error::Result<Vec<u8>> {
+    let mut out = Vec::new();
+    out.extend_from_slice(b"PBNDL003");
+    push_bytes_u64(&mut out, ref_name.as_bytes())?;
+    push_u64(&mut out, len_to_u64(objects.len())?);
+    for envelope in objects {
+        push_bytes_u64(&mut out, &encode_envelope_file(envelope)?)?;
+    }
+    push_u64(&mut out, len_to_u64(author_keys.len())?);
+    for entry in author_keys {
+        push_bytes_u64(&mut out, entry.key_id.as_bytes())?;
+        out.extend_from_slice(&entry.public_key);
+    }
+    push_u64(&mut out, u64::from(manifest.repository_format));
+    push_bytes_u64(&mut out, manifest.tool_version.as_bytes())?;
+    push_bytes_u64(&mut out, format!("{ref_name}-wrong").as_bytes())?; // wrong: disagrees with header
+    push_u64(&mut out, len_to_u64(objects.len())?);
+    push_u64(&mut out, 0);
+    Ok(out)
 }
 
 // DC-78 bundle-export tag-ref gap follow-up (`bundle-export-tag-ref-gap-v1.md`): a tag ref must
@@ -1634,8 +1896,8 @@ fn tag_ref_and_heads_ref_at_the_same_block_export_the_same_object_closure()
     let (_, heads_bytes) = export_bundle(&layout, "heads/main")?;
     let (_, tag_bytes) = export_bundle(&layout, "tags/v1")?;
 
-    let (_, heads_objects, _) = decode_bundle(&heads_bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
-    let (_, tag_objects, _) = decode_bundle(&tag_bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let (_, heads_objects, _, _) = decode_bundle(&heads_bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let (_, tag_objects, _, _) = decode_bundle(&tag_bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
 
     let closure_only = |objects: &[ObjectEnvelope]| {
         objects
@@ -1669,12 +1931,47 @@ fn tag_ref_and_heads_ref_at_the_same_block_export_the_same_object_closure()
 // agree" in both directions, not merely assert it.
 
 /// Control 1: a good bundle, produced by a real `export_bundle`, verifies -- and the report
-/// matches what export itself reported, field for field.
+/// matches what export itself reported, field for field. A genuinely, fully sealed history --
+/// real commit, real seal, real adopted maintainer, the same discipline
+/// `a_pbndl001_bundle_imports_and_its_patch_reads_unverifiable` documents -- not the lightweight
+/// `signed_block` structural fixture (`seal_two_block_history`), which never computes a real
+/// state-merkle-root and would fail `verify_repository`'s block-state stage below for reasons
+/// unrelated to this test (DC-44 increment 3, control 1's own "verify the restored repository"
+/// half needs a fixture that can actually pass it).
 #[test]
 fn verify_of_a_real_export_succeeds_and_matches_the_export_report() -> prikk_error::Result<()> {
     let source_root = unique_temp_dir("dc44-verify-good");
     let source = RepositoryLayout::init(source_root.clone())?;
-    let tip_block_id = seal_two_block_history(&source)?;
+    let author = transport_test_signer(0xc4)?;
+    let maintainer =
+        Ed25519MaintainerSigner::from_seed("dc44-verify-good-maintainer", &[0xc5; 32])?;
+    crate::trust::add_trusted_maintainer(
+        &source,
+        maintainer.key_id(),
+        &prikk_hash::to_hex(&maintainer.public_key_bytes()),
+    )?;
+    std::fs::write(
+        source.root().join("dc44-verify-good.txt"),
+        b"dc44 manifest fixture\n",
+    )?;
+    crate::worktree_patch::commit_worktree_changes_signed(
+        &source,
+        "heads/main",
+        "dc44 manifest fixture",
+        crate::worktree_patch::WorktreePatchCommitOptions::default(),
+        &author,
+    )?;
+    let sealed_ref_state_id =
+        crate::rfc111_seal_simulation::simulate_one_seal(&source, "heads/main", &maintainer)?;
+    let source_object_store = FileObjectStore::new(source.clone());
+    let sealed_ref_state_envelope = source_object_store
+        .read_typed(sealed_ref_state_id, ObjectType::RefState)?
+        .ok_or_else(|| prikk_error::PrikkError::Integrity("missing sealed RefState".to_string()))?;
+    let tip_block_id = RefStatePayload::decode_canonical(
+        &sealed_ref_state_envelope.canonical_payload,
+        sealed_ref_state_envelope.schema_version,
+    )?
+    .target_object_id;
     let (export_report, bytes) = export_bundle(&source, "heads/main")?;
 
     let verify_report = verify_bundle(&bytes, &BundleImportOptions::default_limits())?;
@@ -1685,8 +1982,30 @@ fn verify_of_a_real_export_succeeds_and_matches_the_export_report() -> prikk_err
         verify_report.author_key_count,
         export_report.author_key_count
     );
+    // DC-44 increment 3, control 1 (round trip) + control 5 (verify reports the manifest):
+    // `verify_bundle`'s own manifest must match `export_bundle`'s exactly, and it must be present
+    // at all -- a real export always emits `PBNDL003`.
+    assert_eq!(verify_report.manifest, Some(export_report.manifest));
+
+    // Control 1's other half: the same bundle, imported and then verified by ordinary,
+    // unmodified `verify_repository` -- the manifest changes nothing about what import writes or
+    // what verify checks (module doc: "no new verification path").
+    let import_target_root = unique_temp_dir("dc44-verify-good-import-target");
+    let import_target = RepositoryLayout::init(import_target_root.clone())?;
+    import_bundle(
+        &import_target,
+        &bytes,
+        &BundleImportOptions::default_limits(),
+    )?;
+    let repository_report = crate::verify_repository(&import_target)?;
+    assert!(
+        !repository_report.has_item_failure(),
+        "verify must pass against a repository that imported a PBNDL003 bundle: \
+         {repository_report:?}"
+    );
 
     let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(import_target_root);
     Ok(())
 }
 
@@ -1739,7 +2058,8 @@ fn verify_and_import_agree_a_declared_count_that_disagrees_with_content_is_refus
     let source = RepositoryLayout::init(source_root.clone())?;
     seal_two_block_history(&source)?;
     let (_, bytes) = export_bundle(&source, "heads/main")?;
-    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let (ref_name, objects, author_keys, _manifest) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     assert!(
         objects.len() > 1,
         "fixture sanity: need room to under-count"
@@ -1808,7 +2128,8 @@ fn verify_and_import_agree_a_corrupted_object_whose_id_no_longer_matches_its_byt
     let source = RepositoryLayout::init(source_root.clone())?;
     seal_two_block_history(&source)?;
     let (_, bytes) = export_bundle(&source, "heads/main")?;
-    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let (ref_name, objects, author_keys, _manifest) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     let original_patch_id = objects
         .iter()
         .find(|envelope| envelope.object_type == ObjectType::Patch)
@@ -1868,7 +2189,12 @@ fn verify_and_import_agree_a_corrupted_object_whose_id_no_longer_matches_its_byt
         original_patch_id, corrupted_patch_id,
         "fixture sanity: the corruption must actually change the recomputed id"
     );
-    let corrupted_bundle_bytes = encode_bundle(&ref_name, &corrupted_objects, &author_keys)?;
+    let corrupted_bundle_bytes = encode_bundle(
+        &ref_name,
+        &corrupted_objects,
+        &author_keys,
+        &test_manifest(),
+    )?;
 
     let options = BundleImportOptions::default_limits();
     let verify_err = match verify_bundle(&corrupted_bundle_bytes, &options) {
@@ -1906,12 +2232,13 @@ fn verify_and_import_agree_a_bundle_missing_a_referenced_blob_is_refused() -> pr
     let source = RepositoryLayout::init(source_root.clone())?;
     seal_two_block_history(&source)?;
     let (_, bytes) = export_bundle(&source, "heads/main")?;
-    let (ref_name, objects, author_keys) = decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
+    let (ref_name, objects, author_keys, _manifest) =
+        decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)?;
     let broken_objects: Vec<ObjectEnvelope> = objects
         .into_iter()
         .filter(|envelope| envelope.object_type != ObjectType::Blob)
         .collect();
-    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys)?;
+    let broken_bytes = encode_bundle(&ref_name, &broken_objects, &author_keys, &test_manifest())?;
     let options = BundleImportOptions::default_limits();
 
     let verify_err = match verify_bundle(&broken_bytes, &options) {

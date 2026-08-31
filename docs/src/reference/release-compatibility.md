@@ -138,21 +138,29 @@ editing the marker does not change the on-disk shape it describes.
 ## Bundle Format Transitions
 
 The bundle exchange artifact (`prikk bundle export`/`import`) carries its own magic and version,
-independent of the repository format above. Bundles are always **exported** as `PBNDL002` (DC-53
-Stage 2), which added an AUTHOR key-material section after the object list — an addition the prior
-`PBNDL001` format has no room for and cannot be extended into silently, so the bump is fail-closed on
-the write side: an older client meeting a newer bundle refuses it outright with its own hardcoded
-magic check.
+independent of the repository format above. Bundles are always **exported** as `PBNDL003` (DC-44
+increment 3, `bundle-manifest-handoff-v1.md`), which added a self-describing manifest section after
+the author-key section — an addition `PBNDL002` has no room for and cannot be extended into
+silently, so the bump is fail-closed on the write side: an older client meeting a newer bundle
+refuses it outright with its own hardcoded magic check. The manifest names the on-disk repository
+format and the exporting tool's own version, and states plainly that a bundle is one ref's closure
+only — other refs in the source repository, if any, are not included, and the bundle makes no claim
+about them. Both `prikk bundle export` and `prikk bundle verify` print it.
 
-**`PBNDL001` bundles are still accepted on import** (corrected shortly after the `PBNDL002` bump
-shipped — `bundle-v1-import-regression-v1.md`). This is read compatibility only, the same asymmetry
-every repository-format transition on this page already has: read what an older client wrote, write
-only the current format. This is also what keeps the repository-format migration path above actually
-usable — an old repository can only be opened by an old prikk build, and that build only ever produces
-a `PBNDL001` bundle, so refusing to import one would sever that migration in both directions at once.
-A `PBNDL001` bundle decodes exactly like a `PBNDL002` one whose author-key section is empty: the
-Patches it carries read `Unverifiable`, the same outcome DC-53 already defines for any Patch this
-repository never recorded AUTHOR key material for.
+**`PBNDL001` and `PBNDL002` bundles are still accepted on import** (`PBNDL001` acceptance corrected
+shortly after the `PBNDL002` bump shipped — `bundle-v1-import-regression-v1.md`; `PBNDL002`
+acceptance is this bump's own §3 obligation, verified with real bytes, not a hand-built
+approximation). This is read compatibility only, the same asymmetry every repository-format
+transition on this page already has: read what an older client wrote, write only the current
+format. This is also what keeps the repository-format migration path above actually usable — an old
+repository can only be opened by an old prikk build, and that build only ever produces a `PBNDL001`
+bundle, so refusing to import one would sever that migration in both directions at once. A
+`PBNDL001` bundle decodes exactly like a `PBNDL002` one whose author-key section is empty, which in
+turn decodes exactly like a `PBNDL003` one whose manifest section is absent: the Patches a
+`PBNDL001` bundle carries read `Unverifiable`, the same outcome DC-53 already defines for any Patch
+this repository never recorded AUTHOR key material for, and a `PBNDL001`/`PBNDL002` bundle's own
+`verify` report simply states no manifest is present rather than printing absent fields as if they
+had been checked.
 
 The workspace's declared minimum Rust version is exactly 1.85.0. The locked product workspace must
 check, test, and build on that toolchain:

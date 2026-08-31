@@ -17,7 +17,9 @@ use prikk_object::{ObjectEnvelope, ObjectType, Signature, SignatureAlgorithm, Si
 
 use crate::author_key_index::AuthorKeyEntry;
 
-use super::super::{DEFAULT_BUNDLE_MAX_OBJECT_COUNT, decode_bundle, encode_bundle};
+use super::super::{
+    BundleManifest, BundleScope, DEFAULT_BUNDLE_MAX_OBJECT_COUNT, decode_bundle, encode_bundle,
+};
 
 fn key_id_strategy() -> impl Strategy<Value = String> {
     "[a-zA-Z0-9_-]{1,8}"
@@ -76,21 +78,50 @@ fn ref_name_strategy() -> impl Strategy<Value = String> {
     "[a-zA-Z0-9_/-]{0,32}"
 }
 
+/// DC-44 increment 3: `tool_version`'s own charset is unconstrained by any parser rule (unlike
+/// `key_id_strategy`, which must match `Signature::validate_key_id`) -- any valid UTF-8 a real
+/// `CARGO_PKG_VERSION` could ever contain, plus a wider net than that build ever actually produces.
+fn tool_version_strategy() -> impl Strategy<Value = String> {
+    "[a-zA-Z0-9.+_-]{0,16}"
+}
+
+/// `BundleScope` has exactly one variant today ([`BundleScope::SingleRef`]) -- `Just` rather than a
+/// generator with nothing to vary, so this strategy still reads as "the manifest's scope," ready to
+/// widen the day a second variant exists.
+fn manifest_strategy() -> impl Strategy<Value = BundleManifest> {
+    (any::<u32>(), tool_version_strategy()).prop_map(|(repository_format, tool_version)| {
+        BundleManifest {
+            repository_format,
+            tool_version,
+            scope: BundleScope::SingleRef,
+        }
+    })
+}
+
 proptest! {
     #[test]
     fn bundle_round_trips_an_arbitrary_object_set(
         ref_name in ref_name_strategy(),
         objects in proptest::collection::vec(envelope_strategy(), 0..8),
-        author_keys in proptest::collection::vec(author_key_strategy(), 0..8)
+        author_keys in proptest::collection::vec(author_key_strategy(), 0..8),
+        manifest in manifest_strategy()
     ) {
-        let bytes = encode_bundle(&ref_name, &objects, &author_keys)
-            .expect("generation invariants keep the ref name, objects, and author keys encodable");
-        let (decoded_ref_name, decoded_objects, decoded_author_keys) =
+        let bytes = encode_bundle(&ref_name, &objects, &author_keys, &manifest)
+            .expect("generation invariants keep the ref name, objects, author keys, and manifest \
+                     encodable");
+        let (decoded_ref_name, decoded_objects, decoded_author_keys, decoded_manifest) =
             decode_bundle(&bytes, DEFAULT_BUNDLE_MAX_OBJECT_COUNT)
                 .expect("a bundle this small must decode under the default object-count limit");
-        prop_assert_eq!(decoded_ref_name, ref_name);
-        prop_assert_eq!(decoded_objects, objects);
+        prop_assert_eq!(decoded_ref_name, ref_name.clone());
+        prop_assert_eq!(decoded_objects, objects.clone());
         prop_assert_eq!(decoded_author_keys, author_keys);
+        let decoded_manifest =
+            decoded_manifest.expect("encode_bundle always writes the current, manifest-bearing magic");
+        prop_assert_eq!(decoded_manifest.repository_format, manifest.repository_format);
+        prop_assert_eq!(decoded_manifest.tool_version, manifest.tool_version);
+        prop_assert_eq!(decoded_manifest.scope, manifest.scope);
+        prop_assert_eq!(decoded_manifest.declared_ref_name, ref_name);
+        prop_assert_eq!(decoded_manifest.declared_object_count, objects.len() as u64);
     }
 
     #[test]

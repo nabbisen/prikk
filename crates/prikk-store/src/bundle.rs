@@ -83,7 +83,7 @@ use crate::author_key_index::{
 use crate::byte_cursor::ByteCursor;
 use crate::file_codec::{decode_envelope_file, encode_envelope_file, push_bytes_u64, push_u64};
 use crate::fsutil::len_to_u64;
-use crate::layout::{DEFAULT_ACTIVE_NAME, LockableContainer, RepositoryLayout};
+use crate::layout::{DEFAULT_ACTIVE_NAME, LockableContainer, RepositoryFormat, RepositoryLayout};
 use crate::lock::{ActiveLock, acquire_container_locks};
 use crate::object_store::{ObjectReadSnapshot, ObjectReader, ObjectWriteSession, ObjectWriter};
 use crate::patch_replay::decode::{
@@ -91,13 +91,18 @@ use crate::patch_replay::decode::{
 };
 use crate::refs::{RefStore, ensure_ref_target_valid};
 
-/// DC-53 Stage 2, D6: the format bump that made room for the author-key section. Always emitted on
-/// export; `PBNDL001` is still accepted on import (see `RETIRED_BUNDLE_MAGIC_V1`), so this is a
-/// write-side-only version, not a hard cutover.
-const BUNDLE_MAGIC: &[u8; 8] = b"PBNDL002";
-/// `PBNDL001` (Stage 1 and earlier bundles, no author-key section). Accepted on import -- see
-/// `decode_bundle`'s own doc and the module doc's follow-up note -- never emitted on export.
+/// DC-44 increment 3, `bundle-manifest-handoff-v1.md`: the format bump that made room for the
+/// self-describing manifest section. Always emitted on export; `PBNDL001` and `PBNDL002` are both
+/// still accepted on import (see `RETIRED_BUNDLE_MAGIC_V1`/`RETIRED_BUNDLE_MAGIC_V2`), so this is a
+/// write-side-only version, not a hard cutover -- the same asymmetry the `PBNDL001` -> `PBNDL002`
+/// bump already established.
+const BUNDLE_MAGIC: &[u8; 8] = b"PBNDL003";
+/// `PBNDL001` (Stage 1 and earlier bundles, no author-key section, no manifest). Accepted on import
+/// -- see `decode_bundle`'s own doc and the module doc's follow-up note -- never emitted on export.
 const RETIRED_BUNDLE_MAGIC_V1: &[u8; 8] = b"PBNDL001";
+/// `PBNDL002` (DC-53 Stage 2 through DC-44 increment 2: an author-key section, but no manifest).
+/// Accepted on import, never emitted on export -- same read-only asymmetry as `PBNDL001`.
+const RETIRED_BUNDLE_MAGIC_V2: &[u8; 8] = b"PBNDL002";
 
 /// DC-86 default hard block on a bundle's declared object count, checked as early as the format
 /// allows — right after the count header field, before a single object is decoded. Not a claim about
@@ -145,6 +150,59 @@ impl BundleImportOptions {
     }
 }
 
+/// DC-44 increment 3, `bundle-manifest-handoff-v1.md` §1: a bundle is one ref's closure, not a
+/// claim about the rest of the source repository. `SingleRef` is the only variant today because
+/// `export_bundle` is single-ref by design (§5 -- multi-ref export is a different increment); a
+/// future multi-ref export would add a variant here, never repurpose this one to mean something
+/// else. Stated in the manifest so a restoring operator meets the limitation in the artifact
+/// itself, not only on a documentation page they may not read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BundleScope {
+    /// This bundle carries exactly one ref's full genesis-complete closure. Other refs, if any
+    /// exist in the exporting repository at export time, are not included, and this bundle makes
+    /// no claim about them -- silence about a ref is not evidence it does not exist.
+    SingleRef,
+}
+
+impl BundleScope {
+    const fn wire_tag(self) -> u64 {
+        match self {
+            Self::SingleRef => 0,
+        }
+    }
+
+    fn from_wire_tag(tag: u64) -> Result<Self> {
+        match tag {
+            0 => Ok(Self::SingleRef),
+            other => Err(PrikkError::MalformedData(format!(
+                "bundle manifest declares unknown scope tag {other}"
+            ))),
+        }
+    }
+}
+
+/// DC-44 increment 3: a bundle's self-describing manifest (`PBNDL003` only -- `None` on
+/// [`BundleVerifyReport`] for a `PBNDL001`/`PBNDL002` bundle, which carries no manifest section at
+/// all). Every field here answers a question [`verify_bundle`] could not answer before this
+/// increment (handoff §2's own criterion) -- object digests were considered and rejected: an
+/// object's id already is a content hash of its own bytes, and increment 1 already verifies every
+/// closure reference resolves to an object whose freshly recomputed id matches, so a manifest-level
+/// digest would duplicate a check that already exists rather than add one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BundleManifest {
+    /// The on-disk repository format (`layout::RepositoryFormat`) that produced this bundle --
+    /// answers "which repository format produced this," which `verify_bundle` could not say
+    /// before (handoff §2). A different axis from the bundle wire format (`PBNDL00x`) itself, the
+    /// same distinction `layout.rs`'s own `RepositoryFormat` doc already draws.
+    pub repository_format: u32,
+    /// The exporting `prikk` build's own version (`CARGO_PKG_VERSION`) -- provenance for triage,
+    /// not a compatibility signal (the magic bump is what actually gates compatibility).
+    pub tool_version: String,
+    /// §1's honesty gap, closed: this bundle is one ref's closure, and other refs (if any) are not
+    /// included. The only variant today; see [`BundleScope`].
+    pub scope: BundleScope,
+}
+
 /// Summary of a bundle export.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BundleExportReport {
@@ -158,6 +216,9 @@ pub struct BundleExportReport {
     /// distinct `key_id` among the bundle's Patches for which this repository has local material,
     /// never a count of the Patches themselves.
     pub author_key_count: usize,
+    /// DC-44 increment 3: this export's own self-describing manifest. Always present -- export
+    /// always emits `PBNDL003`.
+    pub manifest: BundleManifest,
 }
 
 /// Summary of an offline bundle verification (DC-44 increment 1). Never written by anything that
@@ -175,6 +236,10 @@ pub struct BundleVerifyReport {
     pub object_count: usize,
     /// AUTHOR key entries carried in the bundle's author-key section.
     pub author_key_count: usize,
+    /// DC-44 increment 3: this bundle's own self-describing manifest, if it carries one.
+    /// `None` for a `PBNDL001`/`PBNDL002` bundle -- both predate the manifest section, and the
+    /// absence itself is meaningful, not a decode failure (§4.2: their decode path is unchanged).
+    pub manifest: Option<BundleManifest>,
 }
 
 /// Summary of a bundle import.
@@ -367,13 +432,19 @@ pub fn export_bundle(
 
     let object_count = objects.len();
     let author_key_count = author_keys.len();
-    let bytes = encode_bundle(ref_name, &objects, &author_keys)?;
+    let manifest = BundleManifest {
+        repository_format: repository_format_number(layout.format()),
+        tool_version: env!("CARGO_PKG_VERSION").to_string(),
+        scope: BundleScope::SingleRef,
+    };
+    let bytes = encode_bundle(ref_name, &objects, &author_keys, &manifest)?;
     Ok((
         BundleExportReport {
             ref_name: ref_name.to_string(),
             tip_block_id,
             object_count,
             author_key_count,
+            manifest,
         },
         bytes,
     ))
@@ -512,6 +583,7 @@ pub fn verify_bundle(bytes: &[u8], options: &BundleImportOptions) -> Result<Bund
         tip_block_id,
         object_count: contents.objects.len(),
         author_key_count: contents.author_keys.len(),
+        manifest: contents.manifest,
     })
 }
 
@@ -528,6 +600,9 @@ struct BundleContents {
     ref_state_payload: RefStatePayload,
     bundle_key_ids: BTreeMap<String, [u8; 32]>,
     bundle_objects_by_id: BTreeMap<ObjectId, ObjectEnvelope>,
+    /// DC-44 increment 3: `Some` for a `PBNDL003` bundle, already checked for internal agreement
+    /// against the payload; `None` for `PBNDL001`/`PBNDL002`, which carry no manifest section.
+    manifest: Option<BundleManifest>,
 }
 
 /// Decode `bytes` and run every read-only structural and closure check [`import_bundle`] performs
@@ -549,7 +624,8 @@ fn validate_bundle_contents(
             options.max_total_bytes
         )));
     }
-    let (origin_ref_name, objects, author_keys) = decode_bundle(bytes, options.max_object_count)?;
+    let (origin_ref_name, objects, author_keys, decoded_manifest) =
+        decode_bundle(bytes, options.max_object_count)?;
     let Some(ref_state_envelope) = objects.first() else {
         return Err(PrikkError::MalformedData(
             "bundle contains no objects".to_string(),
@@ -621,6 +697,48 @@ fn validate_bundle_contents(
         &ref_state_envelope.canonical_payload,
         ref_state_envelope.schema_version,
     )?;
+
+    // DC-44 increment 3, control 4: a manifest that disagrees with the payload is refused, the
+    // same shape as the bundle-internal author-key self-consistency check above. `declared_ref_-
+    // name`/`declared_object_count` exist on the wire only to be checked here -- checked against
+    // two independent sources, not one: the bundle's own top-level header (`origin_ref_name`,
+    // unrelated to the manifest section, decoded straight from the wire) and the exported RefState's
+    // own *signed* `ref_name` field, the strongest available source of truth. `PBNDL001`/`PBNDL002`
+    // carry no manifest section (`decoded_manifest` is `None`), so this check does not run for
+    // them at all -- their decode and validation path is unchanged (§4.2).
+    let manifest = match decoded_manifest {
+        Some(raw) => {
+            if raw.declared_ref_name != origin_ref_name {
+                return Err(PrikkError::MalformedData(format!(
+                    "bundle's manifest declares ref {}, but the bundle's own header names {} -- \
+                     refusing the whole bundle",
+                    raw.declared_ref_name, origin_ref_name
+                )));
+            }
+            if raw.declared_ref_name != ref_state_payload.ref_name {
+                return Err(PrikkError::MalformedData(format!(
+                    "bundle's manifest declares ref {}, but the exported RefState's own signed \
+                     ref name is {} -- refusing the whole bundle",
+                    raw.declared_ref_name, ref_state_payload.ref_name
+                )));
+            }
+            let actual_object_count = len_to_u64(objects.len())?;
+            if raw.declared_object_count != actual_object_count {
+                return Err(PrikkError::MalformedData(format!(
+                    "bundle's manifest declares {} objects, but the bundle actually carries {} -- \
+                     refusing the whole bundle",
+                    raw.declared_object_count, actual_object_count
+                )));
+            }
+            Some(BundleManifest {
+                repository_format: raw.repository_format,
+                tool_version: raw.tool_version,
+                scope: raw.scope,
+            })
+        }
+        None => None,
+    };
+
     let combined_reader = BundleAndLocalReader {
         bundle_objects: &bundle_objects_by_id,
         local,
@@ -698,7 +816,21 @@ fn validate_bundle_contents(
         ref_state_payload,
         bundle_key_ids,
         bundle_objects_by_id,
+        manifest,
     })
+}
+
+/// The numeric on-disk repository format for the manifest's `repository_format` field. A local
+/// mapping, not a `layout.rs` addition: `RepositoryFormat` is a "different axis" from the bundle
+/// wire format by design (`layout.rs`'s own doc comment), so this stays a small translation at the
+/// one place that needs a bare number, rather than teaching `layout.rs` about bundles. Kept as an
+/// exhaustive match deliberately -- `layout.rs`'s own doc already notes the enum's shape carries
+/// meaning, so a future format 7 variant must force this match to be revisited, not silently fall
+/// through to a stale number.
+const fn repository_format_number(format: RepositoryFormat) -> u32 {
+    match format {
+        RepositoryFormat::CurrentV6 => 6,
+    }
 }
 
 fn read_required(
@@ -782,6 +914,7 @@ fn encode_bundle(
     ref_name: &str,
     objects: &[ObjectEnvelope],
     author_keys: &[AuthorKeyEntry],
+    manifest: &BundleManifest,
 ) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     out.extend_from_slice(BUNDLE_MAGIC);
@@ -796,6 +929,18 @@ fn encode_bundle(
         push_bytes_u64(&mut out, entry.key_id.as_bytes())?;
         out.extend_from_slice(&entry.public_key);
     }
+    // DC-44 increment 3: the manifest section, appended after the author-key section (§4.2 --
+    // one more section in the same append-only shape, not a rearrangement of what came before).
+    // `ref_name`/`objects.len()` are written a second time here, deliberately: not new
+    // information, but an independently-set declaration that `validate_bundle_contents` checks
+    // against the header and the RefState's own signed `ref_name` (control 4) -- the same
+    // "hostile bundle disagreeing with itself" defense the author-key section's own internal
+    // consistency check already established above.
+    push_u64(&mut out, u64::from(manifest.repository_format));
+    push_bytes_u64(&mut out, manifest.tool_version.as_bytes())?;
+    push_bytes_u64(&mut out, ref_name.as_bytes())?;
+    push_u64(&mut out, len_to_u64(objects.len())?);
+    push_u64(&mut out, manifest.scope.wire_tag());
     Ok(out)
 }
 
@@ -817,10 +962,57 @@ fn encode_bundle_v1_for_test(ref_name: &str, objects: &[ObjectEnvelope]) -> Resu
     Ok(out)
 }
 
-fn decode_bundle(
-    bytes: &[u8],
-    max_object_count: usize,
-) -> Result<(String, Vec<ObjectEnvelope>, Vec<AuthorKeyEntry>)> {
+/// Encode a `PBNDL002`-shaped bundle -- an author-key section, but no manifest. DC-44 increment 3's
+/// own control 2 ("`PBNDL001` and `PBNDL002` must still import ... with real bytes, not a
+/// hand-built approximation"), mirroring `encode_bundle_v1_for_test`'s own precedent: built from the
+/// same encoding primitives as `encode_bundle`, its pre-manifest-section body exactly, rather than
+/// hand-editing bytes. Test-only: no production caller ever emits this format since `encode_bundle`
+/// above always writes `BUNDLE_MAGIC` (`PBNDL003`).
+#[cfg(all(test, target_os = "linux"))]
+fn encode_bundle_v2_for_test(
+    ref_name: &str,
+    objects: &[ObjectEnvelope],
+    author_keys: &[AuthorKeyEntry],
+) -> Result<Vec<u8>> {
+    let mut out = Vec::new();
+    out.extend_from_slice(RETIRED_BUNDLE_MAGIC_V2);
+    push_bytes_u64(&mut out, ref_name.as_bytes())?;
+    push_u64(&mut out, len_to_u64(objects.len())?);
+    for envelope in objects {
+        push_bytes_u64(&mut out, &encode_envelope_file(envelope)?)?;
+    }
+    push_u64(&mut out, len_to_u64(author_keys.len())?);
+    for entry in author_keys {
+        push_bytes_u64(&mut out, entry.key_id.as_bytes())?;
+        out.extend_from_slice(&entry.public_key);
+    }
+    Ok(out)
+}
+
+/// Everything decoded from a bundle's manifest section (`PBNDL003` only), before cross-checking
+/// against the rest of the payload. `declared_ref_name`/`declared_object_count` exist on the wire
+/// only to be checked against independent sources in `validate_bundle_contents` -- the public
+/// [`BundleManifest`], built only after that check passes, drops both. `PartialEq`/`Debug` are for
+/// the round-trip property test's own benefit (`proptest_decode_bundle.rs`), not a production need.
+#[derive(Debug, PartialEq, Eq)]
+struct DecodedManifest {
+    repository_format: u32,
+    tool_version: String,
+    scope: BundleScope,
+    declared_ref_name: String,
+    declared_object_count: u64,
+}
+
+/// `decode_bundle`'s own return shape, named so the signature reads as "ref name, objects,
+/// author keys, manifest" instead of a four-tuple clippy's own `type_complexity` lint flags.
+type DecodedBundle = (
+    String,
+    Vec<ObjectEnvelope>,
+    Vec<AuthorKeyEntry>,
+    Option<DecodedManifest>,
+);
+
+fn decode_bundle(bytes: &[u8], max_object_count: usize) -> Result<DecodedBundle> {
     let mut cursor = ByteCursor::new(bytes);
     let magic = cursor.read_array::<8>()?;
     // DC-53 Stage 2 follow-up (bundle-v1-import-regression-v1.md): `PBNDL001` is accepted here, not
@@ -828,16 +1020,22 @@ fn decode_bundle(
     // with an old prikk build and `bundle export` from it -- that build only ever emits `PBNDL001`,
     // and a current build refusing to import it severed the one migration path those messages
     // promise, in both directions at once. Export still only ever emits `BUNDLE_MAGIC`
-    // (`PBNDL002`) -- this is read compatibility only, the same asymmetry every repository-format
+    // (`PBNDL003`) -- this is read compatibility only, the same asymmetry every repository-format
     // transition in this project already has (read what the past wrote, write only the present).
-    // A `PBNDL001` bundle is a `PBNDL002` bundle without the author-key section: not a special case,
-    // since DC-53 already defines "no recorded material" as `Unverifiable` (vector 7), so decoding
-    // one simply treats the author-key set as empty rather than reading a section that was never
-    // written.
-    let has_author_key_section = if &magic == BUNDLE_MAGIC {
-        true
+    // A `PBNDL001` bundle is a `PBNDL002`/`PBNDL003` bundle without the author-key section (and, for
+    // `PBNDL001`/`PBNDL002` alike, without the manifest section either): not a special case, since
+    // DC-53 already defines "no recorded material" as `Unverifiable` (vector 7), so decoding one
+    // simply treats the author-key set as empty and the manifest as absent rather than reading
+    // sections that were never written. **`PBNDL002`'s own decode path below is byte-for-byte
+    // unchanged by this bump** (DC-44 increment 3 handoff §4.2): `has_author_key_section` still
+    // reads exactly the same way for it as before, and the only new code this magic can ever reach
+    // is `has_manifest_section == false`, i.e. none.
+    let (has_author_key_section, has_manifest_section) = if &magic == BUNDLE_MAGIC {
+        (true, true)
+    } else if &magic == RETIRED_BUNDLE_MAGIC_V2 {
+        (true, false)
     } else if &magic == RETIRED_BUNDLE_MAGIC_V1 {
-        false
+        (false, false)
     } else {
         return Err(PrikkError::MalformedData(
             "invalid bundle magic".to_string(),
@@ -888,15 +1086,47 @@ fn decode_bundle(
             author_keys.push(AuthorKeyEntry { key_id, public_key });
         }
     }
-    // A `PBNDL001` bundle's bytes end right after the object list -- no author-key section was ever
-    // written, so there is nothing further to consume and this check still catches genuine trailing
-    // garbage on either format.
+    // DC-44 increment 3: the manifest section, `PBNDL003` only. `declared_ref_name` and
+    // `declared_object_count` are read here and checked in `validate_bundle_contents`, once the
+    // rest of the payload it must agree with is also decoded (§4.2 -- this branch is unreachable
+    // for `PBNDL001`/`PBNDL002`, so their own decode path above is untouched).
+    let manifest = if has_manifest_section {
+        let repository_format = u32::try_from(cursor.read_u64()?).map_err(|_| {
+            PrikkError::MalformedData(
+                "bundle manifest declares a repository format number that does not fit in u32"
+                    .to_string(),
+            )
+        })?;
+        let tool_version_bytes = cursor.read_bytes_u64()?;
+        let tool_version = String::from_utf8(tool_version_bytes).map_err(|err| {
+            PrikkError::MalformedData(format!("invalid bundle manifest tool version utf-8: {err}"))
+        })?;
+        let declared_ref_name_bytes = cursor.read_bytes_u64()?;
+        let declared_ref_name = String::from_utf8(declared_ref_name_bytes).map_err(|err| {
+            PrikkError::MalformedData(format!("invalid bundle manifest ref name utf-8: {err}"))
+        })?;
+        let declared_object_count = cursor.read_u64()?;
+        let scope = BundleScope::from_wire_tag(cursor.read_u64()?)?;
+        Some(DecodedManifest {
+            repository_format,
+            tool_version,
+            scope,
+            declared_ref_name,
+            declared_object_count,
+        })
+    } else {
+        None
+    };
+    // A `PBNDL001`/`PBNDL002` bundle's bytes end right after the last section it actually has --
+    // no manifest (either format) or author-key section (`PBNDL001` only) was ever written, so
+    // there is nothing further to consume and this check still catches genuine trailing garbage on
+    // any format.
     if !cursor.is_finished() {
         return Err(PrikkError::MalformedData(
             "trailing bytes in bundle".to_string(),
         ));
     }
-    Ok((ref_name, objects, author_keys))
+    Ok((ref_name, objects, author_keys, manifest))
 }
 
 #[cfg(all(test, target_os = "linux"))]
