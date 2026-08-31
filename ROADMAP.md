@@ -65,7 +65,7 @@ instead: it reaches users who will never run a script, and the channel supplies 
 **Uninstall is the easy half and should not be an afterthought** — whatever installs must remove
 cleanly, including any `PATH` edits it made.
 
-### Beginner's help — selected 2026-08-28
+### Beginner's help — selected 2026-08-28; **delivered 2026-08-31 (`9121819`)**
 
 **Owner's, 2026-08-28:** starting a project with Prikk is hard for newcomers; guides, tutorials, FAQs
 and troubleshooting are needed.
@@ -79,10 +79,18 @@ is *Security and Signing Setup*, which a reader meets before they have created a
 refuse? What is sealing and must I do it? Why does this need keys at all?* Those are answered today
 only by reading several reference pages and inferring.
 
-**No blocker — this is writable now.** **The
-`Post-0.16.1 Documentation Reference Backlog` table below already carries `TASK-15` (roles and
-user-classes orientation), which overlaps the audience half of this theme**; whoever takes this should
-reconcile the two rather than start a third parallel effort.
+**Delivered at `9121819`:** `docs/src/guide/tutorial.md`, `troubleshooting.md` and `faq.md`, placed
+**Install → Tutorial → Troubleshooting → FAQ → Security and Signing Setup**, with `index.md` pointing a
+newcomer at the Tutorial first.
+
+**The tutorial is anchored against drift, not merely written.**
+`crates/prikk-cli/tests/beginners_tutorial.rs` runs every command the page shows, in order, through the
+compiled binary, asserting the exact output lines the page quotes — so a CLI change that breaks the
+tutorial fails a test. **Stated limit:** the prose *between* those quoted lines is not covered, and that
+is recorded rather than implied.
+
+**`TASK-15` is narrowed by this, not closed** — see its row below. The index update it names was made,
+but it serves first-time users; the contributor and security-reviewer entry points remain.
 
 ## Future Themes
 
@@ -309,7 +317,7 @@ references. The durable homes below are authoritative `docs/src/reference/` or `
 | TASK-12 concurrency & locking model | 2 | Architect + maintainer | Released in 0.17.7 | Complete; use the reference as the current public concurrency/locking baseline. | Reviewed locking/concurrency docs are committed and describe manual stale-lock limits. | `docs/src/reference/concurrency-locking.md` |
 | TASK-13 release, versioning & compatibility policy | 2 | Maintainer | DC-35 policy implementation and DC-45 Rust authority cutover committed; signer set empty | Bootstrap the first signer only through its separate reviewed governance transaction, observe the public 72-hour hold, and obtain an explicit hold-lift ruling before the 0.18.0 release candidate. | Reviewed release/compatibility policy and Rust authority gate are committed; signer bootstrap evidence, elapsed hold, and hold-lift ruling are recorded before RC preparation. | `docs/src/reference/release-compatibility.md` |
 | TASK-14 consolidated non-goals / deferred features | 3 | Maintainer/architect | Complete, committed `7babdb4` | Complete; use the page as the current public refused-vs-deferred baseline. | Reviewed non-goals page is committed and links ROADMAP as the planning authority. | `docs/src/reference/non-goals.md` |
-| TASK-15 roles & user-classes orientation | 3 | Designer | Open | Start when the docs need a clearer audience map after the Reference section settles. | Reviewed orientation page or index update is committed. | `docs/src/index.md` or `docs/src/guide/audience.md` |
+| TASK-15 roles & user-classes orientation | 3 | Designer | Open — **narrowed 2026-08-31**, not closed | The beginner's on-ramp (`9121819`) took the "index update" half: `docs/src/index.md` now points a newcomer at the Tutorial ahead of the reference links. **That serves first-time users only.** What remains is the roles map this row is actually sized for — a contributor's and a security-reviewer's entry point, distinct from a newcomer's. Start when the docs need that audience map. | Reviewed orientation page covering the remaining audiences is committed. | `docs/src/index.md` or `docs/src/guide/audience.md` |
 | TASK-16 error taxonomy & diagnostics | 3 | Implementer/architect | Open | Start with TASK-07 or when diagnostics need user-facing interpretation. | Reviewed diagnostics reference is committed and grounded in `crates/prikk-error`. | `docs/src/reference/errors.md` |
 
 Scratch detail may exist locally until each task graduates; update the **Status**, **Trigger / next
