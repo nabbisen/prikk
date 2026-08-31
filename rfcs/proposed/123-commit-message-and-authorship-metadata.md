@@ -75,10 +75,16 @@ A new optional field, mirroring `TagPayload.message` exactly.
   and verified by every existing check with no new path. It is what a reader of this codebase would
   expect given §3.2. Schema evolution is a solved problem here — the admitted-schema table, the
   retirement precedent (`PATCH_PARENT_IDS_RETIRED_SCHEMA`), and format-refusal tests all exist.
-- **Against:** the message is then permanent and unrewritable by construction (there is no GC and no
-  history rewrite), so a mistyped or sensitive message is in the history forever. Every existing
-  patch's id was computed without the field, so old and new patches differ in shape — handled by
-  schema versioning, but it is a real bump with a real compatibility statement to write.
+- **Against:** every existing patch's id was computed without the field, so old and new patches
+  differ in shape — handled by schema versioning, but it is a real bump with a real compatibility
+  statement to write.
+- **The permanence objection does not survive examination**, and it was the strongest thing on this
+  side. A message under Option A is permanent and unrewritable — but so is every path, every blob,
+  and every `old_span_text` preimage already in the patch. **A secret typed into a file is exactly as
+  permanent as a secret typed into a message**, and this product's answer to that is that the history
+  is append-only and that is the point. Treating the message as needing an escape hatch the file
+  content does not get would be incoherent, and would quietly imply a rewrite capability that does not
+  and will not exist.
 
 ### Option B — non-identity sidecar object keyed by patch id
 
@@ -89,7 +95,12 @@ A separate object type carrying `patch_id → message`, outside the `Patch` prei
 - **Against:** the message is then **not evidence** — unsigned, or signed separately, and detachable
   from the thing it describes. It introduces the first "true but unverified" surface into a product
   whose distinguishing property is that it has none. It also needs its own transport story in bundle
-  and sync, its own verify stage, and its own answer for what a missing sidecar means.
+  and sync, its own verify stage, and its own answer for what a missing sidecar means — so it is
+  **more** work than Option A, not less.
+- **Its own headline advantage is its worst property.** A correctable message means a message read out
+  of history is not evidence of what the author said; it is evidence of what someone last said.
+  **Mutable annotations bolted onto immutable history is the one combination this project should never
+  ship**, because it makes a message that is *wrong* possible where today only *absent* is possible.
 
 ### Option C — make `-m` optional and say plainly that messages are not stored
 
@@ -98,9 +109,21 @@ A separate object type carrying `patch_id → message`, outside the `Patch` prei
 - **Against:** it is not a solution, and it removes the prompt that would make the eventual message
   field feel natural.
 
-**These are not exclusive. C is available now and compatible with either A or B later** — and the
-architect's recommendation is to take C immediately regardless of the A/B ruling, because A and B are
-both weeks of format work while users are losing messages every day.
+### Option C, revised — say it in the output, do not weaken the interface
+
+**The first draft of this RFC recommended making `-m` optional. That was wrong, and a better interim
+already exists in this CLI's own idiom.** Making a required flag optional is a user-facing interface
+change that Option A would then want to reverse, and it removes the prompt that makes a message field
+feel natural later.
+
+**Instead: keep `-m` required and print a `note:` line saying the message is not yet stored.** The CLI
+already speaks this way about every unimplemented area — `output.rs:48,51,60,78,120`, and `commit`'s own
+output already carries *"note: multi-operation text diff minimization, patch algebra, rename detection,
+and audit plugins remain later increments"*. One more clause in that register is honest immediately,
+costs one line, churns no interface, and is exactly the house style.
+
+**C-revised is compatible with either A or B and should be taken immediately regardless of the ruling**,
+because A and B are both weeks of format work while users are losing messages today.
 
 ## 5. The separate question of an author display name
 
@@ -112,14 +135,25 @@ and later.** Nothing in the message decision depends on it.
 
 ## 6. The ruling this RFC needs
 
-1. **A, B, or A-later:** is the message evidence (inside identity) or annotation (outside it)?
-2. **Take C now, or wait?** Making `-m` optional and documenting the gap is a one-increment change.
+1. **A or B:** is the message evidence (inside identity) or annotation (outside it)?
+2. **Take C-revised now, or wait?**
 3. **Author display name:** defer, or scope it with the message?
 
-**The architect's recommendation: C immediately, then A.** §3.2 is the decisive argument — this
-project already stores user text inside a signed object for tags, and the reasons that made it right
-there apply unchanged to patches. Option B's cost is not the code; it is admitting one unverified
-surface into a product whose whole claim is that it has none.
+**The architect's recommendation: C-revised immediately, then A.** Three arguments converge and none
+of them is about effort:
+
+- **§3.2.** This project already stores optional user text inside a signed, identity-bearing object —
+  `TagPayload.message`. No principle distinguishes a tag's message from a patch's, and shipping one
+  as evidence and the other as annotation would be a distinction the codebase cannot justify.
+- **B's advantage is a liability here** (§4, Option B). Correctable annotations on immutable history
+  is the one combination that lets a message be wrong rather than merely absent.
+- **B is also the more expensive option**, once its transport, verification, and missing-sidecar
+  semantics are counted — so the usual reason to prefer a sidecar does not apply.
+
+**And the format machinery is why this is cheap for prikk specifically**: the admitted-schema table,
+the `PATCH_PARENT_IDS_RETIRED_SCHEMA` retirement precedent, and format-refusal tests against real
+committed fixtures all exist. A schema-3 `Patch` field is a well-trodden path here in a way it would
+not be in most projects.
 
 ## 7. Non-goals
 

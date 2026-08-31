@@ -292,7 +292,10 @@ audit's baseline), "DC-44 is in progress" (closed at `3a8d730`), and the test co
 
 **Eight RFCs carry the substantive work** and are named in the Open-Work Index above. **Three of them
 cannot start without an owner ruling** — RFC 123 (is a commit message evidence or annotation?),
-RFC 126 (criterion as a dev-dependency), RFC 128 (the vulnerability-disclosure channel).
+RFC 126 (criterion, and where it is placed), RFC 128 (the vulnerability-disclosure channel). Each
+RFC's own §6 (§2 for 128) carries the architect's recommendation and the reasoning behind it;
+**RFC 123's and RFC 126's recommendations were both revised after the owner questioned them**, and
+RFC 126's revision reversed the original answer.
 
 ### Proposed ordering — the architect's proposal; sequencing is the owner's to authorize
 

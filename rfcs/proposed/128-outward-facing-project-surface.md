@@ -35,10 +35,30 @@ options are a public issue or silence, and both are bad.
    the owner is willing to publish and monitor.
 3. **Both**, advisories preferred, email as fallback.
 
-**Recommendation: 3.** The file must also state what it does *not* promise — no CVE assignment
-process, no fixed response-time SLA, pre-1.0 software — because a security policy that overpromises
-is worse than none, and this project's house style already refuses to overclaim everywhere else.
-**The channel itself is the owner's to choose; nothing else in this RFC waits on it.**
+**Recommendation: 3, and the two are not redundancy — they answer different requirements.**
+
+- **Security argues for advisories.** A GitHub private advisory is a channel a security researcher
+  already trusts and already knows how to use, it is private by construction rather than by the
+  owner's inbox discipline, and it connects to the ecosystem's own machinery — CVE assignment, and
+  downstream alerting for anyone depending on the published crates.
+- **Longevity argues for the email address.** **An advisory channel lives exactly as long as this
+  project stays on that forge.** A published address at a domain the owner controls survives a move,
+  an outage, or an account problem, and it is the only option that works for a reporter with no
+  account at all. For a project whose repositories are meant to outlive the tooling around them, a
+  disclosure channel that cannot outlive its host is the wrong single choice.
+
+**Two constraints on the file's content, both of which matter more than the channel:**
+
+1. **State what is not promised** — no CVE assignment process, no response-time commitment, pre-1.0
+   software. A security policy that overpromises is worse than none, and this project's house style
+   refuses to overclaim everywhere else.
+2. **Do not describe release-artifact signature verification as available.** `release-signers.toml`
+   still reads `authorized_primary_fingerprints = []`, and the signer bootstrap is the outstanding
+   badge criterion. A `SECURITY.md` that implies a reader can verify who built their binary would be
+   the single most damaging overclaim this project could publish, because it is the exact thing the
+   file's readers came to check.
+
+**The channel is the owner's to choose; nothing else in this RFC waits on it.**
 
 ## 3. `CONTRIBUTING.md`
 

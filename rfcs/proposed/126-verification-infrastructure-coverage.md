@@ -88,19 +88,40 @@ protects."* `proptest` already lives there in `prikk-object` and `prikk-store`.
 than its gate: exactly one third-party dev-dependency exists today, and criterion brings a
 substantial tree into `cargo test` builds for developers and CI alike.
 
-Three shapes:
+Four shapes:
 
-1. **Adopt criterion** as a dev-dependency. Statistical rigor, standard tooling, regression detection
-   built in. Costs a large dev-only dependency tree.
+1. **Criterion in a product crate's `[dev-dependencies]`.** Standard tooling, statistical rigor,
+   baseline-relative regression detection. Puts a large tree into `prikk-store`'s own manifest.
 2. **A fixed-threshold smoke job** on the existing harnesses in a scheduled workflow. Zero new
-   dependencies; catches order-of-magnitude regressions only; the thresholds are hand-maintained and
-   will drift.
+   dependencies; catches order-of-magnitude regressions only; thresholds are hand-maintained.
 3. **Neither — record that performance is unmeasured** and stop implying otherwise.
+4. **Criterion in a separate workspace member, outside `default-members`** — the shape
+   `tools/release-policy` already established.
 
-**The architect's recommendation is 2.** The regressions worth catching here are asymptotic (an O(n²)
-lookup reappearing), not the few-percent changes criterion exists to resolve, and option 2 keeps the
-one property this workspace has that almost nothing else does: a dependency tree small enough that a
-person can read it. **The owner's call, because it trades a project value against a standard tool.**
+**The architect's recommendation is 4. An earlier draft of this RFC recommended 2, and that was
+optimizing for the wrong thing.** Two properties decide it, and both were raised by the owner:
+
+- **Accessibility.** Criterion is what a Rust contributor already knows: `cargo bench`, a standard
+  report, a familiar statistical model. A bespoke threshold harness is one more thing that must be
+  learned before anyone outside this project can evaluate a performance claim — and this project has
+  to earn contributors against a novel model as it is. **On this axis option 2 is clearly worse, not
+  marginally worse.**
+- **Stability over a long-lived project.** Hand-maintained thresholds drift, and a threshold nobody
+  recalibrates becomes a gate that passes vacuously — **the exact failure shape RFC 127 exists to
+  correct**, reintroduced deliberately. Criterion compares against a stored baseline, so the
+  maintenance is a by-product of running it rather than a separate discipline nobody owns.
+
+**The dependency objection dissolves once placement is right, and that is why option 4 exists.**
+`tools/release-policy` already carries 133 dependencies inside this workspace, excluded from
+`default-members`, never shipped, with 13 duplicate-version crates confined there. **The project has
+already solved "heavy infrastructure tooling without contaminating the product", and criterion is the
+same problem.** A separate member keeps criterion out of every product crate's manifest and out of the
+shipped dependency graph — the property `placement.rs` exists to protect. **Stated honestly: it does
+not keep it out of build time**, since `cargo test --workspace` builds every member, exactly as it
+already builds `tools/release-policy`.
+
+**The owner's call remains**, because it accepts a real dependency tree into the workspace. But the
+cost is one the project has already priced once and judged worth paying.
 
 ## 7. Scope
 
