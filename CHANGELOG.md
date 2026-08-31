@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.27.1 — 2026-08-31
+
+**A one-command install, and a beginner's path through the docs.** No library or command behaviour
+changed in this release — `prikk` itself is byte-for-byte the same tool as `0.27.0`. This cut exists
+so the installer has a release to attach to.
+
+### Added
+
+- **A shell installer and uninstaller**, attached to this release as `install.sh` and `uninstall.sh`
+  with their own checksums:
+
+  ```sh
+  curl -fsSL https://github.com/nabbisen/prikk/releases/latest/download/install.sh | sh
+  ```
+
+  It detects the platform, downloads the matching archive, **verifies its SHA-256 and refuses to
+  install if verification fails or if no checksum tool is present**, and puts the binary on `PATH`.
+  `--version X.Y.Z` pins a release; `--prefix DIR` chooses the location. The download-then-inspect
+  form is documented beside the pipe form. `uninstall.sh` removes the binary and the one marked
+  `PATH` block it added, and nothing else. Linux (`x86_64`/`aarch64`) and macOS (Apple Silicon);
+  Windows is refused with a message pointing at `cargo install` or the `.zip`.
+
+  **What a passing checksum proves is integrity of transport, not authority of origin** —
+  `release-signers.toml` is still empty and fail-closed, so no release yet satisfies the DC-35
+  signer-authority audit. The installer says so itself when it finishes.
+
+- **A beginner's on-ramp in the documentation** — a [tutorial](https://nabbisen.github.io/prikk/guide/tutorial.html),
+  a [troubleshooting page](https://nabbisen.github.io/prikk/guide/troubleshooting.html), and an
+  [FAQ](https://nabbisen.github.io/prikk/guide/faq.html), placed before the signing setup a reader
+  previously met first. **The tutorial's commands are run by a test on every change**, so a release
+  that breaks them fails CI rather than the reader.
+
+- **Build-from-source guidance for platforms without a prebuilt binary** — other Linux architectures
+  build with no reduction in capability; the BSDs compile but are read-only, since repository
+  mutation is refused off Linux, macOS, and Windows.
+
+### Fixed
+
+Nothing — no behaviour changed.
+
 ## 0.27.0 — 2026-08-28
 
 **`prikk unlock` no longer fails on the repository it exists to recover.** On `0.26.0`, a repository
