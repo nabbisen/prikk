@@ -9,8 +9,8 @@ before sealing or adopting anything sync brings in.
 prikk sync summary   --output <file>
 prikk sync compare   --summary <file>
 prikk sync have      <ref> --output <file>
-prikk sync build     <ref> --have <file> --output <file>
-prikk sync accept    <file> [--claims-out <file>]
+prikk sync build     <ref> --have <file> --output <file> [--force]
+prikk sync accept    <file> [--claims-out <file>] [--force]
 prikk sync pending
 prikk sync seal      <ref> --claim <id>
 prikk sync seal      <ref> --claims <file>

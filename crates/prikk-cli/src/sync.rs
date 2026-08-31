@@ -28,6 +28,18 @@
 //! it fresh from the local object store every time (module doc there), so `sync tags`/
 //! `sync adopt-tag <name>` take no `--tags-out`/`--tags <file>` pair -- there is nothing to hand
 //! back and forth between two invocations on the *same* repository.
+//!
+//! **All four writes to a user-supplied output path go through `crate::durable_output`, not
+//! `std::fs::write`** (DC-44 increment 2's own report surfaced this; `sync-output-durability-
+//! handoff-v1.md`). Only two of the four also refuse an existing destination: `sync build`'s
+//! artifact and `sync accept --claims-out`'s claim-id file are each the one durable record of an
+//! otherwise-expensive or otherwise-unrecoverable step, so both take `--force` with `bundle
+//! export`'s own meaning (§3.1 there: proceed past a safety stop). `sync summary` and `sync have`
+//! write a derived, freely-regenerable view of local state that a normal loop iteration expects to
+//! overwrite on every run, so neither gates on `--force` at all -- gating them would make
+//! `--force` mean "do the ordinary thing" in two places and "override a real safety stop" in the
+//! other two, which is worse than a flag that simply does not exist for some commands. Both still
+//! get the atomic, durable write; only the collision policy differs.
 
 use std::path::PathBuf;
 
@@ -79,12 +91,7 @@ fn run_summary(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Stri
         DEFAULT_SYNC_SUMMARY_MAX_REF_COUNT,
     )
     .map_err(|err| err.to_string())?;
-    std::fs::write(&parsed.output, &bytes).map_err(|err| {
-        format!(
-            "failed to write sync summary to {}: {err}",
-            parsed.output.display()
-        )
-    })?;
+    crate::durable_output::write_new_file_durably(&parsed.output, &bytes)?;
     println!("refs: {}", entries.len());
     println!("wrote {}", parsed.output.display());
     Ok(())
@@ -114,12 +121,7 @@ fn run_have(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String>
     let parsed = parse_ref_and_output_args(args, "sync have")?;
     let layout = crate::open_repository(root)?;
     let bytes = build_have_list(&layout, &parsed.ref_name).map_err(|err| err.to_string())?;
-    std::fs::write(&parsed.output, &bytes).map_err(|err| {
-        format!(
-            "failed to write have-list to {}: {err}",
-            parsed.output.display()
-        )
-    })?;
+    crate::durable_output::write_new_file_durably(&parsed.output, &bytes)?;
     println!("have-list for {}", parsed.ref_name);
     println!("wrote {}", parsed.output.display());
     Ok(())
@@ -142,12 +144,18 @@ fn run_build(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
             println!("{ref_name} is already in sync -- no artifact written");
         }
         SyncArtifactOutcome::Artifact { report, bytes } => {
-            std::fs::write(&parsed.output, &bytes).map_err(|err| {
-                format!(
-                    "failed to write sync artifact to {}: {err}",
+            // The collision check sits here, not before `open_repository` like `bundle export`'s
+            // own (handoff §3.3): whether this call writes anything at all depends on `outcome`,
+            // which is only known after the delta is computed. Checking any earlier would refuse
+            // an `AlreadyInSync` run over a pre-existing file it was never going to touch.
+            if !parsed.force && crate::durable_output::destination_exists(&parsed.output) {
+                return Err(format!(
+                    "refusing to overwrite existing file at {} (pass --force to overwrite it \
+                     intentionally)",
                     parsed.output.display()
-                )
-            })?;
+                ));
+            }
+            crate::durable_output::write_new_file_durably(&parsed.output, &bytes)?;
             println!("built sync artifact for {}", report.ref_name);
             println!("delta patches: {}", report.delta_patch_count);
             println!("claims: {}", report.claim_count);
@@ -172,6 +180,18 @@ fn run_build(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
 
 fn run_accept(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
     let parsed = parse_accept_args(args)?;
+    // Checked before `open_repository`, and therefore before `accept_exchange_artifact` writes
+    // any object -- unlike `sync build`, accepting is a real repository mutation (handoff §3.3),
+    // so refusing here means a doomed `--claims-out` write never lets that mutation happen at all.
+    if let Some(claims_out) = &parsed.claims_out {
+        if !parsed.force && crate::durable_output::destination_exists(claims_out) {
+            return Err(format!(
+                "refusing to overwrite existing file at {} (pass --force to overwrite it \
+                 intentionally)",
+                claims_out.display()
+            ));
+        }
+    }
     let layout = crate::open_repository(root)?;
     let bytes = std::fs::read(&parsed.input).map_err(|err| {
         format!(
@@ -229,12 +249,7 @@ fn run_accept(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
             content.push_str(&claim_id.to_string());
             content.push('\n');
         }
-        std::fs::write(claims_out, content).map_err(|err| {
-            format!(
-                "failed to write claim ids to {}: {err}",
-                claims_out.display()
-            )
-        })?;
+        crate::durable_output::write_new_file_durably(claims_out, content.as_bytes())?;
         println!("wrote claim ids to {}", claims_out.display());
     }
     Ok(())
@@ -491,6 +506,7 @@ fn parse_summary_input_args(
 struct AcceptArgs {
     input: PathBuf,
     claims_out: Option<PathBuf>,
+    force: bool,
 }
 
 fn parse_accept_args(args: Vec<String>) -> std::result::Result<AcceptArgs, String> {
@@ -502,6 +518,7 @@ fn parse_accept_args(args: Vec<String>) -> std::result::Result<AcceptArgs, Strin
         return Err("sync accept requires a file path before any flags".to_string());
     }
     let mut claims_out = None;
+    let mut force = false;
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--claims-out" => {
@@ -510,12 +527,14 @@ fn parse_accept_args(args: Vec<String>) -> std::result::Result<AcceptArgs, Strin
                 };
                 claims_out = Some(PathBuf::from(value));
             }
+            "--force" => force = true,
             other => return Err(format!("unknown sync accept argument: {other}")),
         }
     }
     Ok(AcceptArgs {
         input: PathBuf::from(input),
         claims_out,
+        force,
     })
 }
 
@@ -562,6 +581,7 @@ struct BuildArgs {
     ref_name: String,
     have: PathBuf,
     output: PathBuf,
+    force: bool,
 }
 
 fn parse_build_args(args: Vec<String>) -> std::result::Result<BuildArgs, String> {
@@ -574,6 +594,7 @@ fn parse_build_args(args: Vec<String>) -> std::result::Result<BuildArgs, String>
     }
     let mut have = None;
     let mut output = None;
+    let mut force = false;
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--have" => {
@@ -588,6 +609,7 @@ fn parse_build_args(args: Vec<String>) -> std::result::Result<BuildArgs, String>
                 };
                 output = Some(PathBuf::from(value));
             }
+            "--force" => force = true,
             other => return Err(format!("unknown sync build argument: {other}")),
         }
     }
@@ -597,6 +619,7 @@ fn parse_build_args(args: Vec<String>) -> std::result::Result<BuildArgs, String>
         ref_name,
         have,
         output,
+        force,
     })
 }
 
