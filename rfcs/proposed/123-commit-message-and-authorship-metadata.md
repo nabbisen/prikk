@@ -1,7 +1,16 @@
 # RFC 123 — The commit message is validated and then discarded
 
-**Status.** **Proposed. This RFC records a decision the owner must make; it deliberately does not
-make it.** Raised as **High** by the external architecture audit of 2026-08-31
+**Status.** **RULED by the project owner 2026-09-01: Option A — the message is evidence.** A new
+optional `message` field on `PatchPayload`, inside object identity, at `Patch` schema 3, mirroring
+`TagPayload.message`. **Option C-revised is taken immediately and independently**: `-m` stays required
+and `commit` prints a `note:` line saying the message is not yet stored, in the CLI's existing idiom
+for unimplemented areas. **The author display name stays deferred** (§5) and is not scoped with this.
+
+**Still open, and deliberately not ruled here:** the schema-3 design itself — length bound, encoding
+position, `verify` treatment, and the compatibility statement for schema-1/2 patches. Those are design
+work under this ruling, not further questions for the owner.
+
+Raised as **High** by the external architecture audit of 2026-08-31
 (`audit-2026-08-31-task-1a.md` §3); reproduced independently at `3a8d730`
 (`.git-exclude/reviewed/external-audit-20260831-review-v1.md` §1.2).
 

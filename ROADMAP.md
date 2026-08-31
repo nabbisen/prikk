@@ -290,12 +290,24 @@ sound: every checkable claim was true at its baseline.
 baseline: `sync`'s non-atomic artifact writes (fixed at `1c13ade`, the commit immediately after the
 audit's baseline), "DC-44 is in progress" (closed at `3a8d730`), and the test count.
 
-**Eight RFCs carry the substantive work** and are named in the Open-Work Index above. **Three of them
-cannot start without an owner ruling** — RFC 123 (is a commit message evidence or annotation?),
-RFC 126 (criterion, and where it is placed), RFC 128 (the vulnerability-disclosure channel). Each
-RFC's own §6 (§2 for 128) carries the architect's recommendation and the reasoning behind it;
-**RFC 123's and RFC 126's recommendations were both revised after the owner questioned them**, and
-RFC 126's revision reversed the original answer.
+**Eight RFCs carry the substantive work** and are named in the Open-Work Index above.
+
+**All three outstanding rulings were made by the project owner on 2026-09-01**, accepting the
+architect's recommendations in full:
+
+- **RFC 123 — the commit message is evidence.** An identity-bearing `message` field on `PatchPayload`
+  at `Patch` schema 3, mirroring `TagPayload.message`. Separately and immediately: `-m` stays required
+  and `commit` prints a `note:` line saying the message is not yet stored.
+- **RFC 126 — criterion, in its own member outside `default-members`**, the shape
+  `tools/release-policy` already established: present in no product crate's manifest and in no shipped
+  dependency graph.
+- **RFC 128 — both disclosure channels**, GitHub private advisories and a published address, with both
+  content constraints binding.
+
+**RFC 123's and RFC 126's recommendations were revised after the owner questioned them, and RFC 126's
+revision reversed the original answer** — the reasoning is in each RFC rather than summarized here.
+
+**One input remains outstanding and blocks only `SECURITY.md`:** which email address to publish.
 
 ### Proposed ordering — the architect's proposal; sequencing is the owner's to authorize
 
@@ -303,7 +315,7 @@ RFC 126's revision reversed the original answer.
 |---|---|---|
 | **Before the next cut** | RFC 127; RFC 121's EPIPE fix alone; RFC 122; RFC 128's `SECURITY.md` | 127 is a regression that has already shipped in a published artifact. EPIPE is a panic every user who pipes to `head` meets. 122 is the only High-severity broken command on the mainline. `SECURITY.md` is one page and its absence is disproportionate for a trust-centric product |
 | **Next** | RFC 125; RFC 126 §3–§4 (`cargo audit` in CI, doc gating); the rest of RFC 121 | 125 is latent security, cheap, and encode/decode-symmetric. 126's first half is a CI job and a lint flag — the two gates that stop everything else drifting silently |
-| **After a ruling** | RFC 123; RFC 124; RFC 126 §2/§5 | Each needs a decision before design, not more analysis |
+| **Unblocked by the 2026-09-01 rulings** | RFC 123's `note:` line (immediate, one line); then RFC 123's schema-3 design; RFC 124; RFC 126 §2/§5 | RFC 123's interim is a one-line change that stops active harm and should not wait behind its own format work. RFC 124 needs no ruling — only §3's design questions answered |
 | **Unscheduled** | the two performance walls and the pre-1.0 API debt below | Both are gated behind RFC 114's stability work rather than racing it |
 
 ### Tracked here rather than as RFCs — none needs a design decision

@@ -1,10 +1,13 @@
 # RFC 126 — Four flanks the verification culture never reached
 
-**Status.** **Proposed.** Raised by the external architecture audit of 2026-08-31
+**Status.** **Proposed; §6 ruled.** Raised by the external architecture audit of 2026-08-31
 (`audit-2026-08-31-task-2.md` §3 cross-cutting, `task-3.md` §2c/§2d, Top-10 #10). All four
 independently confirmed at `3a8d730`.
 
-**Ruling required (§6).** Whether criterion enters the workspace as a dev-dependency.
+**RULED by the project owner 2026-09-01: §6 option 4** — criterion enters the workspace in **its own
+member, outside `default-members`**, the shape `tools/release-policy` already established. It appears
+in no product crate's manifest and in no shipped dependency graph. The reversal of this RFC's first
+recommendation, and the accessibility and drift arguments behind it, stand recorded in §6.
 
 **Tracks.** Gates that do not exist. No product behaviour changes in this RFC.
 

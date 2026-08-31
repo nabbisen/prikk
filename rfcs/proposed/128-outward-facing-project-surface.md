@@ -1,9 +1,16 @@
 # RFC 128 — What an outsider finds before they read any code
 
-**Status.** **Proposed.** Raised by the external architecture audit of 2026-08-31
+**Status.** **Proposed; §2 ruled.** Raised by the external architecture audit of 2026-08-31
 (`audit-2026-08-31-task-2.md` §1, §3, §4). All items independently confirmed at `3a8d730`.
 
-**Ruling required (§2).** The vulnerability-disclosure channel.
+**RULED by the project owner 2026-09-01: §2 option 3** — GitHub private security advisories **and** a
+published email address, for the two different reasons §2 gives, with both content constraints binding:
+the file states what it does not promise, and it must not describe release-artifact signature
+verification as available while `release-signers.toml` carries an empty
+`authorized_primary_fingerprints`.
+
+**One input is still outstanding and blocks only `SECURITY.md`:** which address to publish. Nothing
+else in this RFC waits on it.
 
 **Tracks.** Root-level project files, crate metadata, and the one documentation page a newcomer needs
 most. No code.
