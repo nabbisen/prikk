@@ -1,6 +1,28 @@
 # RFC (proposed) - DC-44 Migration, Backup, and Restore Evidence
 
-**Status.** Proposed; scheduled beyond M2 and not current implementation authority.
+**Status.** Proposed; scheduled beyond M2 and not current implementation authority — **superseded by the 2026-09-01 update immediately below, which closes this RFC.**
+
+**Status update, 2026-09-01 — CLOSED. Every design goal is delivered or explicitly superseded.**
+The 2026-08-27 update below stands as the record of what was true then; this supersedes its
+"not full closure" conclusion.
+
+| Design goal | Disposition |
+|---|---|
+| Self-describing export manifest (format, scope, tool version, exclusions) | Delivered — `PBNDL003`, `c135dd0` |
+| Offline verification of the export file before restore | Delivered — `prikk bundle verify`, `d7c180c` |
+| Named failure modes: interrupted export, destination collision | Delivered — atomic write + `--force` guard, `fd2424d`; the same four sync output sites, `1c13ade` |
+| Format-1-to-current migration, or explicit supersession | Superseded — RFC 114's format-refusal ruling (see the 2026-08-27 update below) |
+| A page stating what backup/restore does and does not prove | Delivered — `docs/src/guide/backup-restore.md`, `a4d875b`, corrected `d487194` |
+
+**What is deliberately still open, and is named as such in the shipped documentation rather than
+here:** multi-ref bundle export does not exist, and no restore has been rehearsed across a
+repository-format change. Both are stated in `backup-restore.md`'s own Limits section and in the
+`Still deferred` list of `integrity-recovery.md`, `durability-recovery.md`,
+`concurrency-locking.md`, and `repository-layout.md` — not carried as unfinished DC-44 work.
+
+**This file stays in `rfcs/proposed/` pending the owner's disposition of the open-work board**;
+moving it to `rfcs/done/` and retiring its ROADMAP marker are coupled by RFC 120's index gate and
+are one decision, not mine to take alone.
 
 **Status update, 2026-08-27 (evidenced, not a verdict — reported with the confidence the evidence
 supports, not more).** Part of the gap this RFC exists to close has since been answered elsewhere,
