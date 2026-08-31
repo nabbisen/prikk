@@ -3,22 +3,45 @@
 **Status.** **Proposed; §2 ruled.** Raised by the external architecture audit of 2026-08-31
 (`audit-2026-08-31-task-2.md` §1, §3, §4). All items independently confirmed at `3a8d730`.
 
-**RULED by the project owner 2026-09-01: §2 option 3** — GitHub private security advisories **and** a
-published email address, for the two different reasons §2 gives, with both content constraints binding:
-the file states what it does not promise, and it must not describe release-artifact signature
-verification as available while `release-signers.toml` carries an empty
-`authorized_primary_fingerprints`.
+**RULED by the project owner 2026-09-01: §2 option 1 — advisories-only, as project policy.**
+The channel is `https://github.com/prikk-vcs/prikk/security/advisories/new`. **This supersedes the
+same day's earlier acceptance of option 3**; the owner was asked for the email address, declined to
+publish one, and stated the policy explicitly when the trade was named. It is recorded as a knowing
+trade, not an omission — see §2a.
 
-**The advisory channel is supplied** (owner, 2026-09-01):
-`https://github.com/prikk-vcs/prikk/security/advisories/new`. **The email half of the ruling is not
-yet supplied**, and the RFC does not assume one — publishing an address commits the owner to
-monitoring it. Until it is given or the ruling is narrowed to advisories-only, `SECURITY.md` is the
-one deliverable in this RFC that cannot be written; `CONTRIBUTING.md`, the metadata pass, and the
-Git→prikk mapping page do not wait on it.
+Both content constraints remain binding: the file states what it does not promise, and it must not
+describe release-artifact signature verification as available while `release-signers.toml` carries an
+empty `authorized_primary_fingerprints`.
 
-**`SECURITY.md` is additionally sequenced behind RFC 129** — the advisory URL above already names
-`prikk-vcs`, so no rework is needed, but nothing should be published pointing at repository
-infrastructure that is mid-move.
+### 2a. Advisories-only: what the trade costs, and what keeps it sound
+
+**Nothing in this RFC is blocked any more.** The recommendation was for both channels; the ruling is
+one; the file can be written. Recording the reasoning matters more than which way it went.
+
+**What the ruling buys.** A single channel is a single channel to monitor. A published address that
+nobody watches is worse than no address at all — it converts "we have no stated path" into "we have a
+stated path that fails silently", and a security policy that fails silently is the failure mode this
+project's house style refuses everywhere else. **An unmonitored fallback would have been a worse
+outcome than no fallback**, and only the owner can know which of those they were choosing between.
+
+**What it costs, stated plainly so nobody rediscovers it as a surprise.** Disclosure is now bound to
+the forge: a reporter with no GitHub account has no path, and **the channel moves whenever the
+repository moves.** That is not hypothetical here — the advisory URL above names `prikk-vcs` because
+the project is moving *right now* (RFC 129), and a `SECURITY.md` published a week ago would already
+be pointing at the wrong organization.
+
+**So the trade stays sound only if the disclosure path is treated as live infrastructure, not as
+prose.** Two obligations follow, and they are the substance of this ruling rather than commentary
+on it:
+
+1. **`SECURITY.md` joins RFC 129 §2's "live functional" class permanently.** Any future move of this
+   repository must update it in the same increment as `release.yml` and `installer.rs` — a stale
+   disclosure URL is a functional break, not a cosmetic one.
+2. **The README carries the disclosure pointer too**, so the path is discoverable from the front page
+   rather than only from a file whose placement GitHub happens to honour today.
+
+**`SECURITY.md` is sequenced behind RFC 129** — the advisory URL already names `prikk-vcs`, so no
+rework is needed, but nothing should be published pointing at repository infrastructure mid-move.
 
 **Tracks.** Root-level project files, crate metadata, and the one documentation page a newcomer needs
 most. No code.

@@ -302,13 +302,17 @@ architect's recommendations in full:
 - **RFC 126 — criterion, in its own member outside `default-members`**, the shape
   `tools/release-policy` already established: present in no product crate's manifest and in no shipped
   dependency graph.
-- **RFC 128 — both disclosure channels**, GitHub private advisories and a published address, with both
-  content constraints binding.
+- **RFC 128 — advisories-only, as project policy** (revised the same day from the initial acceptance
+  of both channels, after the owner was asked for an address and declined to publish one). The channel
+  is `https://github.com/prikk-vcs/prikk/security/advisories/new`. Both content constraints remain
+  binding, and RFC 128 §2a records what the single-channel trade costs and the two obligations that
+  keep it sound.
 
-**RFC 123's and RFC 126's recommendations were revised after the owner questioned them, and RFC 126's
-revision reversed the original answer** — the reasoning is in each RFC rather than summarized here.
+**RFC 123's and RFC 126's recommendations were revised after the owner questioned them; RFC 126's
+revision reversed the original answer, and RFC 128's ruling went against the recommendation** — the
+reasoning for each is in the RFC rather than summarized here.
 
-**One input remains outstanding and blocks only `SECURITY.md`:** which email address to publish.
+**No ruling now blocks any RFC in this program except RFC 121's exit-code contract.**
 
 ### Proposed ordering — the architect's proposal; sequencing is the owner's to authorize
 

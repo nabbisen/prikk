@@ -127,6 +127,12 @@ RFC 128's `SECURITY.md` must be written **after** the move, or written once agai
 no rework is needed — but a `SECURITY.md` shipped last week would now be pointing at the wrong
 organization, which is the clearest possible demonstration of RFC 128 §2's own longevity argument.
 
+**RFC 128 was ruled advisories-only on 2026-09-01, and that ruling adds a permanent entry to §2's
+first class.** With no email fallback, the advisory URL *is* the disclosure path, so once
+`SECURITY.md` exists it is **live functional infrastructure**: any future move of this repository
+must update it in the same increment as `release.yml` and `installer.rs`. A stale disclosure URL
+leaves a security reporter with nowhere to go, which is a functional break and not a broken link.
+
 ## 8. Non-goals
 
 No change to crate names, published crate ownership, the tag scheme, or the binary name. No

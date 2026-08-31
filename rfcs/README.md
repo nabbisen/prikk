@@ -61,7 +61,7 @@ These records are under design review. All proposed RFCs must respect the depend
 | 125 | [Format-boundary input hardening](./proposed/125-format-boundary-input-hardening.md) | Unscheduled. External audit 2026-08-31. Four decoders more permissive than their encoders (modes, path length, duplicate singular TLV fields, two `unreachable!`s); all guarded today only at a distance |
 | 126 | [Verification infrastructure coverage](./proposed/126-verification-infrastructure-coverage.md) | Unscheduled. External audit 2026-08-31. Zero property tests in the patch algebra despite a ready oracle; `cargo audit` absent from CI; docs ungated; benchmarks never run. **RULED 2026-09-01: criterion, in its own member outside `default-members`** — no product crate manifest, no shipped dependency graph |
 | 127 | [Release-notes history coverage](./proposed/127-release-notes-history-coverage.md) | Unscheduled. External audit 2026-08-31. `0.23.0`'s changelog heading was destroyed by `5964ad6`; the gate reads only the tag being cut, so history regressions pass forever |
-| 128 | [Outward-facing project surface](./proposed/128-outward-facing-project-surface.md) | Unscheduled. External audit 2026-08-31. No `SECURITY.md`, no `CONTRIBUTING.md`, 7 of 8 library crates publish with no categories/keywords/homepage, no Git→prikk mapping page. **RULED 2026-09-01: both channels** — GitHub private advisories and a published address; the advisory URL is supplied, the email address is still outstanding |
+| 128 | [Outward-facing project surface](./proposed/128-outward-facing-project-surface.md) | Unscheduled. External audit 2026-08-31. No `SECURITY.md`, no `CONTRIBUTING.md`, 7 of 8 library crates publish with no categories/keywords/homepage, no Git→prikk mapping page. **RULED 2026-09-01: advisories-only, as project policy** — `https://github.com/prikk-vcs/prikk/security/advisories/new`; revised the same day from an initial acceptance of both channels. §2a records the trade and the two obligations that keep it sound. `SECURITY.md` is sequenced behind RFC 129 |
 | 129 | [Repository migration to `prikk-vcs`](./proposed/129-repository-migration-to-prikk-vcs.md) | Owner direction 2026-09-01. 267 occurrences across 39 tracked files. **Blocks the next release cut**: `release.yml:193` hard-codes `--repo nabbisen/prikk` and `installer.rs:35` bakes the old slug into every shipped `install.sh`. The Pages URL does not redirect. Historical records and release fixtures are deliberately excluded from the sweep |
 
 **Blocked, not available:** **DC-43** waits on a release-lane event, and additionally
@@ -72,8 +72,9 @@ can begin. **DC-44 is no longer here** — closed 2026-09-01 and moved to `done/
 independent architecture audit of 0.27.1. The architect's review of that audit — every load-bearing claim
 re-derived against a freshly built binary — is at `.git-exclude/reviewed/external-audit-20260831-review-v1.md`,
 and the schedule is `ROADMAP.md`'s "Corrective Program After the 2026-08-31 External Audit". **123, 126 and
-128 were ruled by the owner on 2026-09-01**, accepting the architect's recommendations in full; RFC 121's
-exit-code question is the only ruling still open.
+128 were ruled by the owner on 2026-09-01** — 123 and 126 accepting the architect's recommendations, 128
+going against it to advisories-only as project policy. RFC 121's exit-code question is the only ruling
+still open.
 
 **Recorded, not scheduled:** **113** is the owner's migration direction of 2026-08-19, recorded with the
 architect's assessment before any importer exists to set precedent. **108, 109 and 110** are the project
