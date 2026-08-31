@@ -40,11 +40,14 @@ patch id: ...
 WAL sequence: 1
 operations: 1
 referenced blobs: 1
+...
   create-file readme.txt
+...
 sealed active WAL into block
 patches: 1
 block id: ...
 heads/main RefState: ...
+...
 ```
 
 ## Make a backup
@@ -65,7 +68,7 @@ tip block: ...
 objects: 4
 author key material: 1 included (continuity only, not a trust decision)
 repository format: 6
-tool version: 0.27.1
+tool version: ...
 note: this bundle contains one ref's closure only -- other refs in the source repository, if any, are not included, and this bundle makes no claim about them
 wrote ../backup.bundle
 ```
@@ -112,11 +115,12 @@ prikk status
 ```
 
 ```
-prikk repository: /path/to/repo/.prikk
+...
 active WAL records: 1
 trailing partial WAL bytes: 0
 heads/main RefState: ...
 queued patches: 1 targeting heads/main
+...
 ```
 
 `queued patches: 1` is the tell. Seal first, then export — now `backup.bundle` covers both
@@ -132,12 +136,13 @@ sealed active WAL into block
 patches: 1
 block id: ...
 heads/main RefState: ...
+...
 exported heads/main
 tip block: ...
 objects: 8
 author key material: 1 included (continuity only, not a trust decision)
 repository format: 6
-tool version: 0.27.1
+tool version: ...
 note: this bundle contains one ref's closure only -- other refs in the source repository, if any, are not included, and this bundle makes no claim about them
 wrote ../backup.bundle
 ```
@@ -169,7 +174,7 @@ tip block: ...
 objects: 8
 author key material: 1 present (continuity only, not a trust decision)
 repository format: 6
-tool version: 0.27.1
+tool version: ...
 note: this bundle contains one ref's closure only -- other refs in the source repository, if any, are not included, and this bundle makes no claim about them
 note: this checks structural and internal consistency only -- no signature is cryptographically verified (a standalone bundle carries no trust material to check one against), and this bundle's own author-key section is recorded here, never independently verified, the same as at import. A verified bundle is not yet a trusted one -- import it and run `prikk verify` for that.
 ```

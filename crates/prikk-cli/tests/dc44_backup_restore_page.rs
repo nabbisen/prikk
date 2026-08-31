@@ -89,6 +89,13 @@ fn backup_restore_page_sequence_runs_exactly_as_the_page_shows_it() {
         export_stdout.contains("this bundle contains one ref's closure only"),
         "page quotes the manifest's own single-ref note: {export_stdout}"
     );
+    // §7.4: the page elides this line (`tool version: ...`) precisely because it goes stale every
+    // release -- assert only that it is present, never its value, so this test does not itself go
+    // wrong at the next version bump.
+    assert!(
+        export_stdout.contains("tool version: "),
+        "page shows a tool version line (elided): {export_stdout}"
+    );
     let first_tip_block_line = export_stdout
         .lines()
         .find(|line| line.starts_with("tip block:"))
@@ -188,10 +195,14 @@ fn backup_restore_page_sequence_runs_exactly_as_the_page_shows_it() {
         .output()
         .unwrap();
     support::ok(&export_forced, "export --force after sealing everything");
+    let export_forced_stdout = String::from_utf8_lossy(&export_forced.stdout);
     assert!(
-        String::from_utf8_lossy(&export_forced.stdout).contains("objects: 8"),
-        "page quotes objects: 8 once both generations are sealed: {}",
-        String::from_utf8_lossy(&export_forced.stdout)
+        export_forced_stdout.contains("objects: 8"),
+        "page quotes objects: 8 once both generations are sealed: {export_forced_stdout}"
+    );
+    assert!(
+        export_forced_stdout.contains("tool version: "),
+        "page shows a tool version line (elided): {export_forced_stdout}"
     );
 
     // "Check a backup later, without restoring it" -- run from a directory with no repository.
@@ -205,6 +216,10 @@ fn backup_restore_page_sequence_runs_exactly_as_the_page_shows_it() {
     assert!(
         verify_stdout.contains("objects: 8"),
         "page quotes objects: 8 from verify too: {verify_stdout}"
+    );
+    assert!(
+        verify_stdout.contains("tool version: "),
+        "page shows a tool version line (elided): {verify_stdout}"
     );
     assert!(
         verify_stdout.contains("A verified bundle is not yet a trusted one"),

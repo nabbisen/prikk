@@ -314,14 +314,17 @@ persist across key removal, so it stays a single append-only file, never compact
 ## Deferred and Not Stable
 
 Prikk does not provide in-place or history-preserving migration between any two formats. The
-documented writable path is a newly initialized format-2 repository followed by deliberate worktree
-re-authoring, which creates new NodeIds, objects, signatures, and history. Copying `.prikk/` data or
-editing `FORMAT` is not migration. This explicit transition does not promise general format stability.
+documented writable path is a newly initialized repository, under whichever format is current (see
+the Authority Model table above), followed by deliberate worktree re-authoring, which creates new
+NodeIds, objects, signatures, and history. Copying `.prikk/` data or editing `FORMAT` is not
+migration. This explicit transition does not promise general format stability.
 
-**`prikk sync` (RFC 116, RFC 117) and `prikk merge` (DC-74) have since shipped** — see the
-[sync](../guide/sync.md) and [merge](../guide/merge.md) guides. Still deferred: garbage collection,
-cache rebuild semantics, quarantine enforcement, stable repository-format migration, backup/restore
-workflows, remote trust, hosted forge semantics, complete branch management, remote-tracking, and
+**`prikk sync` (RFC 116, RFC 117), `prikk merge` (DC-74), and single-ref `prikk bundle
+export`/`verify`/`import` (DC-44) have since shipped** — see the [sync](../guide/sync.md),
+[merge](../guide/merge.md), and [backup and restore](../guide/backup-restore.md) guides. Still
+deferred: garbage collection, cache rebuild semantics, quarantine enforcement, stable
+repository-format migration, multi-ref backup export, a rehearsed repository-format-migration
+restore, remote trust, hosted forge semantics, complete branch management, remote-tracking, and
 full cross-platform filesystem validation.
 
 ## Claim-to-Source Anchors

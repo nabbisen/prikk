@@ -28,10 +28,12 @@ use super::COMMANDS;
 /// `README.md` plus every `docs/src/` page found (by direct search, not glob) to mention a real
 /// `prikk <command>` — declared, not scanned by wildcard (§3), so a new `docs/` file cannot
 /// silently escape the gate and a deleted one fails loudly (`every_declared_document_exists`
-/// below). **32 files under `docs/src/`** (31 found in the original search, plus
+/// below). **33 files under `docs/src/`** (31 found in the original search, plus
 /// `docs/src/guide/status.md`, added along with the page itself to close the one gap this gate
-/// found — review v1 §1/§4).
+/// found — review v1 §1/§4; plus `docs/src/guide/backup-restore.md`, added along with the page
+/// itself for the same reason — DC-44 increment 4's own amendment §7.5).
 const DECLARED_DOCUMENTS: &[&str] = &[
+    "docs/src/guide/backup-restore.md",
     "docs/src/guide/checkout/checkout.md",
     "docs/src/guide/checkout/snapshot-checkout.md",
     "docs/src/guide/checkout/snapshot-materialization.md",

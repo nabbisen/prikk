@@ -172,10 +172,11 @@ boundary.
 Still deferred: broader repair policy, stale-lock policy, missing-object recovery, malformed-log
 repair, checksum-mismatch repair, object quarantine and garbage collection, repository-wide AUTHOR
 trust policy, key rotation, hardware signing, remote trust, hosted identity, JSON output, stable
-diagnostic schema, multi-ref backup export, a rehearsed repository-format-migration restore, and
-production readiness. (MAINTAINER key revocation is no longer deferred —
-`prikk trust maintainer remove`. Single-ref backup/restore tooling is no longer deferred either —
-`prikk bundle export`/`verify`/`import`, see [Backup and Restore](../guide/backup-restore.md).)
+diagnostic schema, stable repository-format migration, multi-ref backup export, a rehearsed
+repository-format-migration restore, and production readiness. (MAINTAINER key revocation is no
+longer deferred — `prikk trust maintainer remove`. Single-ref backup/restore tooling is no longer
+deferred either — `prikk bundle export`/`verify`/`import`, see
+[Backup and Restore](../guide/backup-restore.md).)
 
 ## Claim-to-Source Anchors
 
