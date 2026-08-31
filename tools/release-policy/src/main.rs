@@ -6,6 +6,7 @@ mod args;
 mod boundary;
 mod command_scan;
 mod error;
+mod installer;
 mod json;
 mod oracle;
 mod policy;

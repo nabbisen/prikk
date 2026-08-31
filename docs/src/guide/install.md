@@ -1,9 +1,72 @@
 # Install
 
-See the root [README](https://github.com/nabbisen/prikk#install) for what to run: `cargo binstall
-prikk`, a direct download from the [release page](https://github.com/nabbisen/prikk/releases), or
-`cargo install prikk` from crates.io. This page covers what comes after — the steps a new user
-usually gets stuck on.
+See the root [README](https://github.com/nabbisen/prikk#install) for what to run: the shell
+installer below, `cargo binstall prikk`, a direct download from the [release
+page](https://github.com/nabbisen/prikk/releases), or `cargo install prikk` from crates.io. This
+page covers what comes after — the steps a new user usually gets stuck on.
+
+## The shell installer
+
+```sh
+curl -fsSL https://github.com/nabbisen/prikk/releases/latest/download/install.sh | sh
+```
+
+**What it does, exactly**: detects your OS and CPU architecture (`uname -s`/`uname -m`); downloads
+that platform's release archive and its `.sha256` file from the same release page URLs the manual
+path uses; verifies the checksum with `sha256sum -c` (or `shasum -a 256 -c` on macOS, which has no
+`sha256sum` by default) and **installs nothing if verification fails**; extracts the `prikk` binary
+to `~/.local/bin` (`chmod +x`); and, if that directory is not already on `PATH`, appends one clearly
+marked block to your shell's startup file so a later uninstall can find and remove exactly that
+block, and nothing else.
+
+**Generated, not hand-maintained.** `install.sh`/`uninstall.sh` are produced by
+`prikk-release-policy generate-installer` and attached as release assets at publish time, the same
+way the tarballs and their checksums are — never committed to the repository as tracked files.
+Their source template lives in `tools/release-policy/templates/`, reviewed like any other change to
+this project.
+
+**What it claims, and what it does not.** A passing checksum proves the file you received matches
+what the release page published; it does not prove *who* published it.
+`release-signers.toml` is still empty and fail-closed, so no Prikk release — including its
+prebuilt binaries and this script itself — currently satisfies the DC-35 signer-authority audit. The
+script prints this same caveat when it finishes, rather than only stating it here.
+
+**Supported today**: Linux (`x86_64`, `aarch64`) and macOS (Apple Silicon only — there is no
+prebuilt binary for Intel Macs). **Not yet supported**: Windows — the script detects it and refuses
+with a pointer to the manual `.zip` download or `cargo install prikk`, rather than silently doing
+nothing or guessing. A PowerShell equivalent is a separate, later increment.
+
+**Version selection**: defaults to the latest release. Pin one with `sh install.sh --version X.Y.Z`
+or `PRIKK_INSTALL_VERSION=X.Y.Z` — the form a CI pipeline typically wants, so a workflow does not
+silently pick up a new release mid-pipeline. Override the install directory with `--prefix DIR` or
+`PRIKK_INSTALL_DIR`.
+
+**Read it before you run it, if you prefer**: `curl -fsSL <url> -o install.sh`, open it in an
+editor, then `sh install.sh`. It is a single self-contained file — nothing it does is hidden behind
+a second download.
+
+**Re-running is safe.** It overwrites the binary with the same (or a newly pinned) version and does
+not duplicate the marked `PATH` block if one already exists.
+
+**Uninstalling**:
+
+```sh
+curl -fsSL https://github.com/nabbisen/prikk/releases/latest/download/uninstall.sh | sh
+```
+
+Removes the binary from its install directory and the marked `PATH` block from whichever shell
+startup file has it, and nothing else — an unrelated file in the same directory, or unrelated lines
+in the same startup file, are left untouched. If you installed with a custom `PRIKK_INSTALL_DIR`,
+pass the same value to the uninstaller too, the same way: `PRIKK_INSTALL_DIR=/custom/path curl ...`.
+Neither script touches any repository's own `.prikk` directory — delete those yourself if you no
+longer want that history tracked.
+
+**One real caveat about the `PATH` edit**: macOS Terminal starts a login shell, which reads
+`~/.bash_profile`, not `~/.bashrc`, unless your own `~/.bash_profile` already sources it. The
+installer still writes to `~/.bashrc` (or `~/.zshrc` for zsh) — the file an interactive non-login
+shell reads on Linux, and the common case this script optimizes for — and says so when it runs; if
+your `~/.bash_profile` does not source `~/.bashrc`, add the `PATH` line manually, or add
+`. ~/.bashrc` to `~/.bash_profile` yourself.
 
 ## Verify the checksum
 

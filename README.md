@@ -108,6 +108,24 @@ Prikk is not yet the right tool if you need:
 
 ## Install
 
+The fastest path — no Rust toolchain, no `cargo binstall` — on Linux (`x86_64`/`aarch64`) and macOS
+(Apple Silicon):
+
+```sh
+curl -fsSL https://github.com/nabbisen/prikk/releases/latest/download/install.sh | sh
+```
+
+Downloads the release page's own prebuilt archive for your platform, verifies its checksum, and
+installs to `~/.local/bin` (override with `PRIKK_INSTALL_DIR`, or `--prefix`) — refusing to install
+anything if the checksum does not match. **A checksum proves integrity of transport, not authority of
+origin** — see **Release authority** below; the script states this itself when it finishes. Pin a
+version with `sh install.sh --version X.Y.Z` (or `PRIKK_INSTALL_VERSION`); prefer to read the script
+before running it? `curl -fsSL .../install.sh -o install.sh`, inspect it, then `sh install.sh`. To
+remove what it installed: `curl -fsSL .../uninstall.sh | sh` (same base URL). Windows is not
+supported by this script yet — use `cargo install prikk` below, or download the `.zip` from the
+release page by hand. See the [install guide](./docs/src/guide/install.md#the-shell-installer) for
+what it writes to disk, install-location details, and the uninstall guarantee.
+
 Prebuilt binary, no Rust toolchain required — Linux (`x86_64`/`aarch64`), macOS (`aarch64`), and
 Windows (`x86_64`):
 

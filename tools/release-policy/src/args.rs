@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crate::boundary;
 use crate::error::{Error, Result};
+use crate::installer;
 use crate::oracle;
 use crate::policy;
 use crate::reference;
@@ -16,6 +17,7 @@ pub(crate) fn run(arguments: Vec<String>) -> Result<()> {
         "boundary-check" => boundary_check(&root, rest),
         "reference-check" => reference_check(&root, rest),
         "release-notes" => release_notes_command(&root, rest),
+        "generate-installer" => generate_installer_command(rest),
         "-h" | "--help" | "help" if rest.is_empty() => {
             println!("{}", usage());
             Ok(())
@@ -66,6 +68,13 @@ fn release_notes_command(root: &std::path::Path, arguments: &[String]) -> Result
     Ok(())
 }
 
+fn generate_installer_command(arguments: &[String]) -> Result<()> {
+    let [dist_dir] = arguments else {
+        return Err(Error::new(usage()));
+    };
+    installer::generate(std::path::Path::new(dist_dir))
+}
+
 fn parse_json_mode(arguments: &[String], self_test_allowed: bool) -> Result<bool> {
     let mut self_test = false;
     let mut index = 0;
@@ -94,5 +103,5 @@ fn repository_root() -> Result<PathBuf> {
 }
 
 fn usage() -> &'static str {
-    "usage: prikk-release-policy <check|oracle-check|boundary-check|reference-check> [--format json] [--self-test]\n       prikk-release-policy release-notes <tag> <dist-dir>"
+    "usage: prikk-release-policy <check|oracle-check|boundary-check|reference-check> [--format json] [--self-test]\n       prikk-release-policy release-notes <tag> <dist-dir>\n       prikk-release-policy generate-installer <dist-dir>"
 }

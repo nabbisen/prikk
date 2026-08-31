@@ -9,6 +9,7 @@ pub(super) fn allowed(tokens: &[String], index: usize, head: &str) -> bool {
             rust_policy(tail)
                 || publication(tail).is_some()
                 || release_notes_procedure(tail)
+                || generate_installer_procedure(tail)
                 || tail
                     .split_first()
                     .is_some_and(|(command, arguments)| cargo(command, arguments))
@@ -211,6 +212,11 @@ fn gh_release_create(tail: &[String]) -> bool {
                 "dist/*.zip",
                 "dist/*.zip.sha256",
                 "dist/*.build-info.txt",
+                // Universal installer/uninstaller handoff v1 §4.1: install.sh/uninstall.sh and
+                // their checksums, generated the same way and by the same job as everything
+                // else in this glob list.
+                "dist/*.sh",
+                "dist/*.sh.sha256",
             ]
         && repo_flag == "--repo"
         && repo == "nabbisen/prikk"
@@ -239,6 +245,22 @@ fn release_notes_procedure(tail: &[String]) -> bool {
         "dist",
         ">",
         "release-notes.md",
+    ]
+}
+
+/// `cargo run -p prikk-release-policy --locked -- generate-installer dist`. Universal
+/// installer/uninstaller handoff v1 §4.1: no free-varying token here (unlike
+/// `release_notes_procedure`'s tag) -- the output directory is always the fixed `dist`, so this is
+/// a literal exact match rather than a shape match.
+fn generate_installer_procedure(tail: &[String]) -> bool {
+    tail == [
+        "run",
+        "-p",
+        "prikk-release-policy",
+        "--locked",
+        "--",
+        "generate-installer",
+        "dist",
     ]
 }
 

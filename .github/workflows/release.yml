@@ -52,8 +52,11 @@ jobs:
         if: matrix.target == 'x86_64-pc-windows-msvc'
         run: cargo build -p prikk --release --target x86_64-pc-windows-msvc --locked
 
-      # Repository mutation is Linux-only (DC-37); both matrix targets are Linux, so no
-      # download-surface mutation-limit statement is needed for these artifacts.
+      # Not because mutation is Linux-only -- that stopped being true at 0.21.0, when macOS and
+      # Windows became mutating platforms too (criterion 6). No per-artifact mutation-limit caveat
+      # is emitted anywhere in this workflow for any target; release_notes.rs derives whatever
+      # platform statement a release actually needs from dist/'s own contents at publish time
+      # instead (RFC 107 Stage 1), so nothing here needs to say so per target.
       - name: Package (x86_64-unknown-linux-gnu)
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
@@ -166,6 +169,18 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: cargo run -p prikk-release-policy --locked -- release-notes "$TAG" dist > release-notes.md
 
+      # Universal installer/uninstaller handoff v1 §4.1: generated here and attached as a release
+      # asset, never committed as a tracked .sh file -- installer.rs's own doc comment explains
+      # why (reference-check's shell-command scanner cannot parse real control-flow shell syntax,
+      # and the actual script text lives in templates/*.sh.txt, outside its scanned file set).
+      # Checksummed the same way every other asset in this job is.
+      - name: Generate installer scripts
+        run: cargo run -p prikk-release-policy --locked -- generate-installer dist
+      - name: Checksum installer scripts
+        run: |
+          ( cd dist && sha256sum install.sh > install.sh.sha256 )
+          ( cd dist && sha256sum uninstall.sh > uninstall.sh.sha256 )
+
       # $TAG and the repository slug are written out as the literal tokens the scanner sees
       # (procedure.rs's gh() match), not templated — the tag itself cannot be enumerated in
       # advance the way the two build targets above are, so the match is on shape: a fixed
@@ -175,4 +190,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.zip dist/*.zip.sha256 dist/*.build-info.txt --repo nabbisen/prikk --title "$TAG" --notes-file release-notes.md
+        run: gh release create "$TAG" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.zip dist/*.zip.sha256 dist/*.build-info.txt dist/*.sh dist/*.sh.sha256 --repo nabbisen/prikk --title "$TAG" --notes-file release-notes.md
