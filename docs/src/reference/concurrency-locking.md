@@ -252,8 +252,11 @@ remote synchronization, or race-free behavior under arbitrary concurrent filesys
 Still deferred: multi-active sessions, distributed locking, remote sync, hosted-forge lock semantics,
 branch transactions, lock expiry, **automatic** stale-lock recovery, broad active-session recovery,
 complete crash-matrix testing, filesystem fault injection, fuzzing for WAL/ref-log recovery, macOS and
-Windows filesystem validation, stable repository-format migration, backup/restore tooling, and
-production-readiness claims. A best-effort, advisory PID check now exists (`prikk unlock`, see
+Windows filesystem validation, stable repository-format migration, multi-ref backup export, a
+rehearsed repository-format-migration restore, and production-readiness claims. Single-ref
+backup/restore tooling is no longer deferred — `prikk bundle export`/`verify`/`import`, see
+[Backup and Restore](../guide/backup-restore.md). A best-effort, advisory PID check now exists
+(`prikk unlock`, see
 [Stale Locks and Manual Cleanup](#stale-locks-and-manual-cleanup) above) — what remains deferred is
 *automatic* recovery, not the check itself; the tool still requires an explicit operator decision for
 every lock it clears.

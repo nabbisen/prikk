@@ -173,8 +173,10 @@ automatic stale-lock repair. The current lock and compare-and-swap behavior is c
 
 Still deferred: the broad crash-matrix campaign, fuzzing for WAL/ref-log recovery,
 macOS and Windows filesystem validation, stale-lock policy, broad active-session recovery, ref-log
-repair, missing-object recovery, object quarantine or garbage collection, backup/restore tooling,
-stable repository-format migration, and production-readiness claims.
+repair, missing-object recovery, object quarantine or garbage collection, multi-ref backup export,
+a rehearsed repository-format-migration restore, stable repository-format migration, and
+production-readiness claims. Single-ref backup/restore tooling is no longer deferred —
+`prikk bundle export`/`verify`/`import`, see [Backup and Restore](../guide/backup-restore.md).
 
 ## Claim-to-Source Anchors
 

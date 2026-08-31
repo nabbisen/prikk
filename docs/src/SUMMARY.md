@@ -29,6 +29,7 @@
 - [Merge Plan](guide/merge-plan.md)
 - [Merge](guide/merge.md)
 - [Sync](guide/sync.md)
+- [Backup and Restore](guide/backup-restore.md)
 
 # Reference
 
