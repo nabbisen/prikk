@@ -9,8 +9,16 @@ the file states what it does not promise, and it must not describe release-artif
 verification as available while `release-signers.toml` carries an empty
 `authorized_primary_fingerprints`.
 
-**One input is still outstanding and blocks only `SECURITY.md`:** which address to publish. Nothing
-else in this RFC waits on it.
+**The advisory channel is supplied** (owner, 2026-09-01):
+`https://github.com/prikk-vcs/prikk/security/advisories/new`. **The email half of the ruling is not
+yet supplied**, and the RFC does not assume one — publishing an address commits the owner to
+monitoring it. Until it is given or the ruling is narrowed to advisories-only, `SECURITY.md` is the
+one deliverable in this RFC that cannot be written; `CONTRIBUTING.md`, the metadata pass, and the
+Git→prikk mapping page do not wait on it.
+
+**`SECURITY.md` is additionally sequenced behind RFC 129** — the advisory URL above already names
+`prikk-vcs`, so no rework is needed, but nothing should be published pointing at repository
+infrastructure that is mid-move.
 
 **Tracks.** Root-level project files, crate metadata, and the one documentation page a newcomer needs
 most. No code.

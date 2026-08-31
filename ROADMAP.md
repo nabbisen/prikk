@@ -247,6 +247,7 @@ item is open.
 - [`126-verification-infrastructure-coverage.md`](rfcs/proposed/126-verification-infrastructure-coverage.md) — RFC 126, Four flanks the verification culture never reached (external audit 2026-08-31; **owner ruling required** — criterion as a dev-dependency)
 - [`127-release-notes-history-coverage.md`](rfcs/proposed/127-release-notes-history-coverage.md) — RFC 127, A released version's changelog heading was destroyed and the gate cannot see it (external audit 2026-08-31)
 - [`128-outward-facing-project-surface.md`](rfcs/proposed/128-outward-facing-project-surface.md) — RFC 128, What an outsider finds before they read any code (external audit 2026-08-31; **owner ruling required** — disclosure channel)
+- [`129-repository-migration-to-prikk-vcs.md`](rfcs/proposed/129-repository-migration-to-prikk-vcs.md) — RFC 129, Moving to `prikk-vcs/prikk` is not a remote change (owner direction 2026-09-01; **blocks the next release cut** — the release workflow and the generated installer both name the old repository)
 <!-- open-work-index:end -->
 
 **Two backlog tables elsewhere in this file carry live open rows of their own, referenced here
