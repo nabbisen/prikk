@@ -15,7 +15,7 @@ those three platforms — `LinuxDurability`, `MacosDurability` (DC-81/DC-82; G3 
 `fcntl_fullfsync` in place of `fsync`, measured ~180x slower on the GitHub macOS runner and recorded
 in `FINDINGS.md`), and `WindowsDurability` (DC-87 Stage 2) — and no reviewed equivalent on any other
 platform yet
-([DC-37](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md),
+([DC-37](https://github.com/prikk-vcs/prikk/blob/main/rfcs/accepted/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md),
 superseded for Linux/macOS/Windows by DC-87).
 Every mutation function's *signature* compiles on every platform; only its *body* has a real
 implementor on Linux, macOS, and Windows, and a caller on any other platform receives a clean runtime
@@ -117,7 +117,7 @@ future increment needs a stronger per-filesystem guarantee, that is its own desi
 | `durable_truncate` / `durable_truncate_to_empty` | **Held.** |
 | `create_exclusive` | **Held at `init` only.** The new directory entry it creates is not itself durably confirmed — see the `init`-time exemption below. |
 | `ensure_directory` | **Held at `init` only**, same caveat. |
-| `remove_if_present` | **Held**, conditional on every open in the Windows backend requesting `FILE_SHARE_DELETE` — enforced in one place ([`open_no_follow`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/src/fsutil/anchored/windows.rs)), not per call site. |
+| `remove_if_present` | **Held**, conditional on every open in the Windows backend requesting `FILE_SHARE_DELETE` — enforced in one place ([`open_no_follow`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/fsutil/anchored/windows.rs)), not per call site. |
 | `atomic_replace` | **Weaker.** `std::fs::rename` over the destination, with no durability lever asserted for the rename itself (`MOVEFILE_WRITE_THROUGH`'s same-volume guarantee was investigated to three independent primary sources and found genuinely undeterminable). Acceptable only because its remaining callers are two rebuildable caches. |
 | `set_permission_bits` | **Vacuous — a documented no-op.** NTFS has no POSIX execute bit; prikk's own recorded mode is never derived from the filesystem, so a round-trip checkout on Linux restores the node's recorded mode faithfully regardless of what this method does on Windows. |
 | `durable_directory_entry` | **Vacuous — a documented no-op.** `FlushFileBuffers`'s own documentation covers file, communications-device, named-pipe, and volume handles and says nothing about a directory handle — there is no contract to implement against. Safe because both production callers sit inside the worktree unclean-shutdown marker's bracket (`worktree_marker.rs`): a crash between this call and the entry becoming durable leaves the marker dirty, and commit-authoring refuses to infer deletion until the worktree is re-verified. |
@@ -262,7 +262,7 @@ one where a different platform checks Windows' output.
 
 - **Prebuilt non-Linux binaries** are not published. Building from source (`cargo build`/
   `cargo install`) is the only non-Linux install path today; see the [README's install
-  section](https://github.com/nabbisen/prikk#install).
+  section](https://github.com/prikk-vcs/prikk#install).
 - **DC-76's negative controls are only partly demonstrated on Windows, for the eight guarantees
   that remain (G5 retired in DC-98)** — see "The nine `DurabilityContract` guarantees on Windows"
   above for the per-guarantee table and reasons. G1, G2, G3, G4, G8, and G9 are demonstrated; only

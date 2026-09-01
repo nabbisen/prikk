@@ -6,7 +6,7 @@ building something — as distinct from work that is merely **unscheduled**.
 **Refused** means a decision exists, and the answer is *no, not ever*: automation is not permitted
 to do it, the design deliberately does not create the thing that would be needed, or the project
 has scoped its supported surface to exclude it. **Deferred** means the opposite: the thing may be
-built, nobody has scheduled it, and it lives in [`ROADMAP.md`](https://github.com/nabbisen/prikk/blob/main/ROADMAP.md)
+built, nobody has scheduled it, and it lives in [`ROADMAP.md`](https://github.com/prikk-vcs/prikk/blob/main/ROADMAP.md)
 instead — the project's planning authority for everything that is open, not refused.
 
 **This page does not restate its sources.** Each entry below is a pointer to the page that carries
@@ -44,7 +44,7 @@ before `prikk` reaches 1.0.
 
 **Decision:** the published-crate-posture review (2026-08-26).
 **Full statement:** each crate's own README, e.g.
-[`prikk-store`](https://github.com/nabbisen/prikk/blob/main/crates/prikk-store/README.md).
+[`prikk-store`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/README.md).
 
 ## What is not on this page
 

@@ -3,7 +3,7 @@
   "entries": [
     {
       "entry_id": "release/oracle/vectors/signer-challenge/authority_revision_binding_mismatch/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
+      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/authority_revision_binding_mismatch/context.json",
@@ -11,7 +11,7 @@
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/canonical_golden_bytes/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
+      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/canonical_golden_bytes/context.json",
@@ -19,7 +19,7 @@
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/crlf_bytes/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\r\nrepository=https://github.com/nabbisen/prikk\r\nprimary_fingerprint=1111111111111111111111111111111111111111\r\nrole=official-release\r\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\r\nissued_at=2026-07-15T00:00:00Z\r\nexpires_at=2026-07-15T01:00:00Z\r\n"
+      "content": "prikk-release-signer-proof-v1\r\nrepository=https://github.com/prikk-vcs/prikk\r\nprimary_fingerprint=1111111111111111111111111111111111111111\r\nrole=official-release\r\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\r\nissued_at=2026-07-15T00:00:00Z\r\nexpires_at=2026-07-15T01:00:00Z\r\n"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/crlf_bytes/context.json",
@@ -27,7 +27,7 @@
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/duplicate_field/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
+      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/duplicate_field/context.json",
@@ -35,7 +35,7 @@
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/expired_challenge/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
+      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/expired_challenge/context.json",
@@ -43,7 +43,7 @@
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/expiry_instant_is_exclusive/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
+      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/expiry_instant_is_exclusive/context.json",
@@ -51,7 +51,7 @@
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/expiry_window_too_long/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-16T00:00:01Z\n"
+      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-16T00:00:01Z\n"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/expiry_window_too_long/context.json",
@@ -59,7 +59,7 @@
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/extra_space/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole= official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
+      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole= official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/extra_space/context.json",
@@ -67,7 +67,7 @@
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/issue_time_too_far_in_future/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:10:01Z\nexpires_at=2026-07-15T01:00:00Z\n"
+      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:10:01Z\nexpires_at=2026-07-15T01:00:00Z\n"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/issue_time_too_far_in_future/context.json",
@@ -75,7 +75,7 @@
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/missing_final_lf/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z"
+      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/missing_final_lf/context.json",
@@ -83,7 +83,7 @@
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/missing_verifier_result/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
+      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/missing_verifier_result/context.json",
@@ -91,7 +91,7 @@
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/non_ascii_bytes/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-releasé\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
+      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-releasé\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/non_ascii_bytes/context.json",
@@ -99,7 +99,7 @@
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/observed_fingerprint_mismatch/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
+      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/observed_fingerprint_mismatch/context.json",
@@ -107,7 +107,7 @@
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/reordered_fields/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\nprimary_fingerprint=1111111111111111111111111111111111111111\nrepository=https://github.com/nabbisen/prikk\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
+      "content": "prikk-release-signer-proof-v1\nprimary_fingerprint=1111111111111111111111111111111111111111\nrepository=https://github.com/prikk-vcs/prikk\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/reordered_fields/context.json",
@@ -115,7 +115,7 @@
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/wrong_nonce_length/challenge.txt",
-      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
+      "content": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n"
     },
     {
       "entry_id": "release/oracle/vectors/signer-challenge/wrong_nonce_length/context.json",

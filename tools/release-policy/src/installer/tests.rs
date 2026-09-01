@@ -12,8 +12,8 @@ fn writes_both_scripts_with_the_placeholder_substituted() {
 
     assert!(install.starts_with("#!/bin/sh"));
     assert!(uninstall.starts_with("#!/bin/sh"));
-    assert!(install.contains("nabbisen/prikk"));
-    assert!(uninstall.contains("nabbisen/prikk"));
+    assert!(install.contains("prikk-vcs/prikk"));
+    assert!(uninstall.contains("prikk-vcs/prikk"));
     assert!(
         !install.contains("REPO_SLUG"),
         "the placeholder must not survive substitution"

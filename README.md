@@ -1,8 +1,8 @@
-<h1><img src="https://raw.githubusercontent.com/nabbisen/prikk/main/assets/logo/prikk-header-520.png" alt="Prikk" width="360"></h1>
+<h1><img src="https://raw.githubusercontent.com/prikk-vcs/prikk/main/assets/logo/prikk-header-520.png" alt="Prikk" width="360"></h1>
 
 [![license](https://img.shields.io/crates/l/prikk.svg)](LICENSE)
-[![documentation](https://img.shields.io/badge/docs-github_pages-brightgreen)](https://nabbisen.github.io/prikk/)
-[![CI](https://github.com/nabbisen/prikk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nabbisen/prikk/actions/workflows/ci.yml)
+[![documentation](https://img.shields.io/badge/docs-github_pages-brightgreen)](https://prikk-vcs.github.io/prikk/)
+[![CI](https://github.com/prikk-vcs/prikk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/prikk-vcs/prikk/actions/workflows/ci.yml)
 
 **Prikk is a standalone distributed version control system built around block-oriented patch theory.**
 
@@ -28,7 +28,7 @@ CLI can be built from crates.io — **their APIs may change without notice befor
 
 | Crate | Purpose | Version | Docs | Dependencies |
 |---|---|---|---|---|
-| [`prikk`](https://crates.io/crates/prikk) | the command-line tool | [![crates.io](https://img.shields.io/crates/v/prikk.svg?label=%20)](https://crates.io/crates/prikk) | [![documentation](https://img.shields.io/badge/docs-github_pages-brightgreen)](https://nabbisen.github.io/prikk/) | [![Dependency Status](https://deps.rs/crate/prikk/latest/status.svg)](https://deps.rs/crate/prikk) |
+| [`prikk`](https://crates.io/crates/prikk) | the command-line tool | [![crates.io](https://img.shields.io/crates/v/prikk.svg?label=%20)](https://crates.io/crates/prikk) | [![documentation](https://img.shields.io/badge/docs-github_pages-brightgreen)](https://prikk-vcs.github.io/prikk/) | [![Dependency Status](https://deps.rs/crate/prikk/latest/status.svg)](https://deps.rs/crate/prikk) |
 | [`prikk-store`](https://crates.io/crates/prikk-store) | repository storage engine — layout, object storage, WAL durability, verification, patch replay | [![crates.io](https://img.shields.io/crates/v/prikk-store.svg?label=%20)](https://crates.io/crates/prikk-store) | [![docs.rs](https://img.shields.io/docsrs/prikk-store?version=latest&label=%20)](https://docs.rs/prikk-store) | [![Dependency Status](https://deps.rs/crate/prikk-store/latest/status.svg)](https://deps.rs/crate/prikk-store) |
 | [`prikk-object`](https://crates.io/crates/prikk-object) | object identity, canonical encoding, and payload types | [![crates.io](https://img.shields.io/crates/v/prikk-object.svg?label=%20)](https://crates.io/crates/prikk-object) | [![docs.rs](https://img.shields.io/docsrs/prikk-object?version=latest&label=%20)](https://docs.rs/prikk-object) | [![Dependency Status](https://deps.rs/crate/prikk-object/latest/status.svg)](https://deps.rs/crate/prikk-object) |
 | [`prikk-replay`](https://crates.io/crates/prikk-replay) | replay and lifecycle semantics | [![crates.io](https://img.shields.io/crates/v/prikk-replay.svg?label=%20)](https://crates.io/crates/prikk-replay) | [![docs.rs](https://img.shields.io/docsrs/prikk-replay?version=latest&label=%20)](https://docs.rs/prikk-replay) | [![Dependency Status](https://deps.rs/crate/prikk-replay/latest/status.svg)](https://deps.rs/crate/prikk-replay) |
@@ -112,7 +112,7 @@ The fastest path — no Rust toolchain, no `cargo binstall` — on Linux (`x86_6
 (Apple Silicon):
 
 ```sh
-curl -fsSL https://github.com/nabbisen/prikk/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/prikk-vcs/prikk/releases/latest/download/install.sh | sh
 ```
 
 Downloads the release page's own prebuilt archive for your platform, verifies its checksum, and
@@ -133,7 +133,7 @@ Windows (`x86_64`):
 cargo binstall prikk
 ```
 
-Or download directly from the [release page](https://github.com/nabbisen/prikk/releases), verify the
+Or download directly from the [release page](https://github.com/prikk-vcs/prikk/releases), verify the
 attached `.sha256` checksum, and extract. Every target archive contains the `prikk` binary, `LICENSE`,
 and a `.build-info.txt` recording the exact toolchain and command used to build it — reproducible from
 the tag with `cargo build -p prikk --release --target <triple> --locked`.
@@ -296,7 +296,7 @@ TMPDIR="$PWD/target/tmp" cargo test --workspace --locked
 
 The roadmap, RFCs, and mdBook docs are the best entry points for design details:
 
-- [Documentation](https://nabbisen.github.io/prikk/) 
+- [Documentation](https://prikk-vcs.github.io/prikk/)
 - [ROADMAP.md](./ROADMAP.md)
 - [rfcs/README.md](./rfcs/README.md)
 - [Current data model](./docs/src/reference/data-model.md)

@@ -5,7 +5,7 @@ language = "en"
 src = "src"
 
 [output.html]
-git-repository-url = "https://github.com/nabbisen/prikk"
+git-repository-url = "https://github.com/prikk-vcs/prikk"
 additional-js = ["mermaid.min.js", "mermaid-init.js"]
 
 [preprocessor]

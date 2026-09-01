@@ -3,7 +3,7 @@
   "cases": [
     {
       "id": "canonical_golden_bytes",
-      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
+      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
       "observed_at": "2026-07-15T00:05:00Z",
       "observed_primary_fingerprint": "1111111111111111111111111111111111111111",
       "verifier_result": "good signature; primary fingerprint matched",
@@ -12,7 +12,7 @@
     },
     {
       "id": "expired_challenge",
-      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
+      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
       "observed_at": "2026-07-15T01:00:01Z",
       "observed_primary_fingerprint": "1111111111111111111111111111111111111111",
       "verifier_result": "verified",
@@ -21,7 +21,7 @@
     },
     {
       "id": "expiry_window_too_long",
-      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-16T00:00:01Z\n",
+      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-16T00:00:01Z\n",
       "observed_at": "2026-07-15T00:05:00Z",
       "observed_primary_fingerprint": "1111111111111111111111111111111111111111",
       "verifier_result": "verified",
@@ -30,7 +30,7 @@
     },
     {
       "id": "issue_time_too_far_in_future",
-      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:10:01Z\nexpires_at=2026-07-15T01:00:00Z\n",
+      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:10:01Z\nexpires_at=2026-07-15T01:00:00Z\n",
       "observed_at": "2026-07-15T00:05:00Z",
       "observed_primary_fingerprint": "1111111111111111111111111111111111111111",
       "verifier_result": "verified",
@@ -39,7 +39,7 @@
     },
     {
       "id": "crlf_bytes",
-      "challenge": "prikk-release-signer-proof-v1\r\nrepository=https://github.com/nabbisen/prikk\r\nprimary_fingerprint=1111111111111111111111111111111111111111\r\nrole=official-release\r\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\r\nissued_at=2026-07-15T00:00:00Z\r\nexpires_at=2026-07-15T01:00:00Z\r\n",
+      "challenge": "prikk-release-signer-proof-v1\r\nrepository=https://github.com/prikk-vcs/prikk\r\nprimary_fingerprint=1111111111111111111111111111111111111111\r\nrole=official-release\r\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\r\nissued_at=2026-07-15T00:00:00Z\r\nexpires_at=2026-07-15T01:00:00Z\r\n",
       "observed_at": "2026-07-15T00:05:00Z",
       "observed_primary_fingerprint": "1111111111111111111111111111111111111111",
       "verifier_result": "verified",
@@ -48,7 +48,7 @@
     },
     {
       "id": "reordered_fields",
-      "challenge": "prikk-release-signer-proof-v1\nprimary_fingerprint=1111111111111111111111111111111111111111\nrepository=https://github.com/nabbisen/prikk\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
+      "challenge": "prikk-release-signer-proof-v1\nprimary_fingerprint=1111111111111111111111111111111111111111\nrepository=https://github.com/prikk-vcs/prikk\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
       "observed_at": "2026-07-15T00:05:00Z",
       "observed_primary_fingerprint": "1111111111111111111111111111111111111111",
       "verifier_result": "verified",
@@ -57,7 +57,7 @@
     },
     {
       "id": "duplicate_field",
-      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
+      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
       "observed_at": "2026-07-15T00:05:00Z",
       "observed_primary_fingerprint": "1111111111111111111111111111111111111111",
       "verifier_result": "verified",
@@ -66,7 +66,7 @@
     },
     {
       "id": "extra_space",
-      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole= official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
+      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole= official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
       "observed_at": "2026-07-15T00:05:00Z",
       "observed_primary_fingerprint": "1111111111111111111111111111111111111111",
       "verifier_result": "verified",
@@ -75,7 +75,7 @@
     },
     {
       "id": "missing_final_lf",
-      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z",
+      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z",
       "observed_at": "2026-07-15T00:05:00Z",
       "observed_primary_fingerprint": "1111111111111111111111111111111111111111",
       "verifier_result": "verified",
@@ -84,7 +84,7 @@
     },
     {
       "id": "non_ascii_bytes",
-      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-releasé\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
+      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-releasé\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
       "observed_at": "2026-07-15T00:05:00Z",
       "observed_primary_fingerprint": "1111111111111111111111111111111111111111",
       "verifier_result": "verified",
@@ -102,7 +102,7 @@
     },
     {
       "id": "wrong_nonce_length",
-      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
+      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
       "observed_at": "2026-07-15T00:05:00Z",
       "observed_primary_fingerprint": "1111111111111111111111111111111111111111",
       "verifier_result": "verified",
@@ -111,7 +111,7 @@
     },
     {
       "id": "observed_fingerprint_mismatch",
-      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
+      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
       "observed_at": "2026-07-15T00:05:00Z",
       "observed_primary_fingerprint": "2222222222222222222222222222222222222222",
       "verifier_result": "good signature for different primary fingerprint",
@@ -120,7 +120,7 @@
     },
     {
       "id": "missing_verifier_result",
-      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
+      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
       "observed_at": "2026-07-15T00:05:00Z",
       "observed_primary_fingerprint": "1111111111111111111111111111111111111111",
       "verifier_result": "",
@@ -129,7 +129,7 @@
     },
     {
       "id": "authority_revision_binding_mismatch",
-      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
+      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
       "observed_at": "2026-07-15T00:05:00Z",
       "observed_primary_fingerprint": "1111111111111111111111111111111111111111",
       "verifier_result": "good signature; primary fingerprint matched",
@@ -138,7 +138,7 @@
     },
     {
       "id": "expiry_instant_is_exclusive",
-      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/nabbisen/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
+      "challenge": "prikk-release-signer-proof-v1\nrepository=https://github.com/prikk-vcs/prikk\nprimary_fingerprint=1111111111111111111111111111111111111111\nrole=official-release\nauthority_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nnonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nissued_at=2026-07-15T00:00:00Z\nexpires_at=2026-07-15T01:00:00Z\n",
       "observed_at": "2026-07-15T01:00:00Z",
       "observed_primary_fingerprint": "1111111111111111111111111111111111111111",
       "verifier_result": "good signature; primary fingerprint matched",

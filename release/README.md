@@ -79,7 +79,7 @@ The signer creates an OpenPGP detached signature over these exact ASCII bytes, i
 
 ```text
 prikk-release-signer-proof-v1
-repository=https://github.com/nabbisen/prikk
+repository=https://github.com/prikk-vcs/prikk
 primary_fingerprint=<40-or-64-uppercase-hex>
 role=official-release
 authority_revision=<40-or-64-lowercase-git-object-id>

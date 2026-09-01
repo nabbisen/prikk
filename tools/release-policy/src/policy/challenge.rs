@@ -50,7 +50,7 @@ pub(super) fn validate(context: &Value, challenge: &[u8]) -> Option<&'static str
         };
         fields.insert(*name, value);
     }
-    if fields.get("repository") != Some(&"https://github.com/nabbisen/prikk")
+    if fields.get("repository") != Some(&"https://github.com/prikk-vcs/prikk")
         || fields.get("role") != Some(&"official-release")
         || !fields
             .get("primary_fingerprint")

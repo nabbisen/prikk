@@ -183,7 +183,7 @@ fn tar(tail: &[String]) -> bool {
         || tail == ["-xzf", "receiver-repo.tar.gz", "-C", "receiver-repo"]
 }
 
-/// `gh release create $TAG <assets...> --repo nabbisen/prikk --title $TAG --notes-file <path>`.
+/// `gh release create $TAG <assets...> --repo prikk-vcs/prikk --title $TAG --notes-file <path>`.
 /// The release tag cannot be enumerated in advance the way `cargo build`'s two targets are, so
 /// this matches on shape instead: every other token is a fixed literal, and the two `$TAG`
 /// positions (the release identifier and its title) must be the identical token, whatever it is.
@@ -219,7 +219,7 @@ fn gh_release_create(tail: &[String]) -> bool {
                 "dist/*.sh.sha256",
             ]
         && repo_flag == "--repo"
-        && repo == "nabbisen/prikk"
+        && repo == "prikk-vcs/prikk"
         && title_flag == "--title"
         && title == tag
         && notes_flag == "--notes-file"

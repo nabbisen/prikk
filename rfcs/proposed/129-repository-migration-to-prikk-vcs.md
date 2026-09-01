@@ -4,6 +4,12 @@
 https://github.com/nabbisen/prikk/ to https://github.com/prikk-vcs/prikk/. We will just have to
 modify local git config after I edit GitHub repository configuration."*
 
+**EXECUTED 2026-09-01.** Transfer confirmed (`gh repo view prikk-vcs/prikk`), remote repointed,
+scoped sweep landed: **31 files, 404 occurrences.** The generated `install.sh` was regenerated and
+carries `prikk-vcs/prikk` with no trace of the old slug. **§9 records four corrections this execution
+forced on the inventory below — including one where §3's recommendation was simply wrong, and the
+project's own gate is what caught it.**
+
 **This RFC exists because that last sentence is not true, and finding out at the next release would
 be expensive.** The remote is one line. **267 occurrences across 39 tracked files** carry the old
 identity, and three of them break something real rather than merely reading wrong.
@@ -137,3 +143,82 @@ leaves a security reporter with nowhere to go, which is a functional break and n
 
 No change to crate names, published crate ownership, the tag scheme, or the binary name. No
 retroactive edit of published crates.io metadata (impossible) or of released artifacts.
+
+---
+
+## 9. Corrections this execution forced — the inventory in §1–§6 was not complete
+
+**Written after doing the work, not before it.** Four things above are wrong or incomplete, and one
+of them would have damaged the release-evidence record if the gate had not refused it.
+
+### 9.1 §3 was wrong: the schema `$id`s must NOT change
+
+§3 argued that moving both JSON Schema `$id`s was safe because nothing resolves them by `$id`. **That
+half is true** — verified again here: the schemas load by repository-relative path, nothing in the
+workspace fetches a schema over the network, and `docs/src/schemas/` does not exist, so **neither the
+old nor the new URL ever resolved to anything.**
+
+**The conclusion drawn from it was wrong.** `release-policy check` refused the change:
+
+```
+input-identity:length:release/schemas/release-evidence-v1.schema.json
+```
+
+The normative schema's `byte_length` and `sha256` are pinned **per oracle case** — roughly **90
+pinned copies** across `release/oracle/oracle-manifest-v1.json` and
+`release/oracle/parked-cases-v1.json`. Each case records the schema identity it was evaluated
+against. **Changing one byte of `$id` would have required rewriting ~90 per-case provenance records
+so that every past case claimed it had been evaluated against a schema that did not exist when the
+case was recorded.**
+
+That is the same principle that keeps `CHANGELOG.md` and `rfcs/done/` out of this sweep (§4), and
+§3 failed to apply it because it looked for `$id` *resolution* and never asked whether the *file* was
+pinned. **Both `$id`s are therefore left exactly as they are**, naming a host that never served them,
+because the alternative is falsifying evidence records to fix a string nothing reads.
+
+**The gate found this, not the review.** A pinned normative input refusing a cosmetic edit is
+precisely what that pin is for.
+
+### 9.2 Three live surfaces §1 missed, one of them security-protocol
+
+| Site | What it does | Why §1 missed it |
+|---|---|---|
+| `tools/release-policy/src/policy/challenge.rs:53` | The release-signer challenge validator **hard-compares the repository URL**: a challenge naming the new repository would have been rejected outright | §1 searched for links and slugs in release plumbing; this is a protocol constant inside a security check. **It is criterion-4 (signer bootstrap) infrastructure** — free to change only because `release-signers.toml` is still empty and no challenge has ever been issued. After a bootstrap it would not have been free |
+| `tools/release-policy/src/command_scan/procedure.rs:222` | `gh_release_create` destructures the release command and requires `repo == "nabbisen/prikk"` — the workflow's slug is **gated**, not merely written | §1 read `release.yml` and stopped there |
+| `tools/release-policy/src/installer/tests.rs:15-16` | Asserts the generated installer contains the slug | §1 named `installer.rs` and not its tests |
+
+### 9.3 §4's "release fixtures are inert" is only half true
+
+`release/fixtures/release-evidence-*.json` and
+`release/oracle/parked-packs/release-evidence-governance-v1.json` are inert: every occurrence is a
+fake `…/issues/N` hold-record URL compared as an opaque string. **Correctly excluded.**
+
+`release/fixtures/signer-challenge-cases.json` and
+`release/oracle/parked-packs/signer-challenge-v1.json` are **not** inert. Their content is challenge
+text fed to §9.2's validator, so they are coupled to that constant and **had to change with it**.
+A sweep that trusted §4's sentence would have left the challenge oracle cases failing.
+
+### 9.4 §6 decision 2 reverses: keep `--repo`
+
+§6 recommended dropping `--repo` from `release.yml` so `gh` uses the ambient repository, on the
+grounds that a workflow hard-coding its own repository is a migration hazard. **§9.2 shows it is not
+a hazard here, because it is pinned by a gate**: `command_scan`'s matcher requires the flag *and* its
+exact value, so a move that forgets `release.yml` fails `reference-check` loudly. Dropping the flag
+would delete a pinned literal from the gate whose purpose is pinning literals, and would replace a
+loud failure with an implicit dependency on ambient state.
+
+**Recommendation withdrawn. Keep `--repo`.** §6 decision 1 (`authors = ["nabbisen"]` stays — a
+person, not a location) is unchanged and was applied: `Cargo.toml`, `docs/book.toml`, `LICENSE`, and
+`NOTICE` all keep the name.
+
+### 9.5 The headline count was lines, not occurrences
+
+"267 occurrences across 39 tracked files" counted **lines containing a match**. The executed sweep
+changed **404 occurrences across 31 files**, leaving 15 files deliberately untouched. The file count
+fell because §4's exclusions removed eight; the occurrence count rose because multi-match lines are
+common in the Claim-to-Source Anchor tables.
+
+### 9.6 One pre-existing defect fixed in passing
+
+`README.md:299` carried trailing whitespace that `git diff --check` flags only once the line is
+otherwise modified. Removed — the line is in this diff, so it is in scope.

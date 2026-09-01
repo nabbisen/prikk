@@ -283,7 +283,7 @@ missing outputs or supersede with a new version.
 
 ## Release Signer Governance
 
-[`release-signers.toml`](https://github.com/nabbisen/prikk/blob/main/release-signers.toml) is the strict
+[`release-signers.toml`](https://github.com/prikk-vcs/prikk/blob/main/release-signers.toml) is the strict
 commit-local allowlist. The current empty array authorizes nobody and blocks official release. The file
 supports multiple full uppercase OpenPGP primary fingerprints; two active operators are encouraged
 when available but are not required at the current project scale.
@@ -313,7 +313,7 @@ challenge. Proof applicability is derived from normalized old/new fingerprint se
 | Classification-only, unchanged authority | `not-applicable` with reason |
 
 Authority proof and later release-tag verification are distinct evidence. Strict signer grammar and
-positive/forbidden cases are defined in the [release policy data](https://github.com/nabbisen/prikk/tree/main/release).
+positive/forbidden cases are defined in the [release policy data](https://github.com/prikk-vcs/prikk/tree/main/release).
 
 ## Loss, Compromise, and Disputes
 
@@ -386,7 +386,7 @@ all signer/authority/verifier detail, and `failed` has authority and verifier de
 fingerprint when extraction was ambiguous.
 
 The strict structural schema is
-[`release-evidence-v1.schema.json`](https://github.com/nabbisen/prikk/blob/main/release/schemas/release-evidence-v1.schema.json).
+[`release-evidence-v1.schema.json`](https://github.com/prikk-vcs/prikk/blob/main/release/schemas/release-evidence-v1.schema.json).
 Semantic checks additionally enforce predecessor continuity, immutable identity, normalized signer-set
 effects, two-person approvals, proof applicability, cumulative attempt history, crate checksum equality,
 and exact completion outputs.
@@ -422,12 +422,12 @@ deployment as passed unless observed for that exact release.
 
 | Claim | Source anchor |
 |---|---|
-| Compatibility, state, signer-governance, and distribution rules | [DC-35](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-35-RELEASE-COMPATIBILITY-STATUS-CORRECTION.md) |
-| Identity changes require new explicit version/domain authority | [DC-34](https://github.com/nabbisen/prikk/blob/main/rfcs/accepted/DC-34-PUBLICATION-IDENTITY-AUTHORITY.md) |
-| Format-1/format-2 compatibility and refusal boundary | [DC-40](https://github.com/nabbisen/prikk/blob/main/rfcs/done/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md) |
-| RFC lifecycle and same-release transition | [RFC-000](https://github.com/nabbisen/prikk/blob/main/rfcs/done/000-rfc-lifecycle-policy.md) |
-| Strict signer/evidence policy data and fixtures | [release policy data](https://github.com/nabbisen/prikk/tree/main/release) |
-| Released change history | [CHANGELOG](https://github.com/nabbisen/prikk/blob/main/CHANGELOG.md) |
+| Compatibility, state, signer-governance, and distribution rules | [DC-35](https://github.com/prikk-vcs/prikk/blob/main/rfcs/accepted/DC-35-RELEASE-COMPATIBILITY-STATUS-CORRECTION.md) |
+| Identity changes require new explicit version/domain authority | [DC-34](https://github.com/prikk-vcs/prikk/blob/main/rfcs/accepted/DC-34-PUBLICATION-IDENTITY-AUTHORITY.md) |
+| Format-1/format-2 compatibility and refusal boundary | [DC-40](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/DC-40-STATE-MERKLE-FORMAT-TRANSITION.md) |
+| RFC lifecycle and same-release transition | [RFC-000](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/000-rfc-lifecycle-policy.md) |
+| Strict signer/evidence policy data and fixtures | [release policy data](https://github.com/prikk-vcs/prikk/tree/main/release) |
+| Released change history | [CHANGELOG](https://github.com/prikk-vcs/prikk/blob/main/CHANGELOG.md) |
 
 ## Provenance
 

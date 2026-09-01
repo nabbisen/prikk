@@ -32,7 +32,7 @@ use std::path::Path;
 
 use crate::error::Result;
 
-const REPO_SLUG: &str = "nabbisen/prikk";
+const REPO_SLUG: &str = "prikk-vcs/prikk";
 const INSTALL_TEMPLATE: &str = include_str!("../templates/install.sh.txt");
 const UNINSTALL_TEMPLATE: &str = include_str!("../templates/uninstall.sh.txt");
 

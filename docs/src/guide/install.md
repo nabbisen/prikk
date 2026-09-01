@@ -1,14 +1,14 @@
 # Install
 
-See the root [README](https://github.com/nabbisen/prikk#install) for what to run: the shell
+See the root [README](https://github.com/prikk-vcs/prikk#install) for what to run: the shell
 installer below, `cargo binstall prikk`, a direct download from the [release
-page](https://github.com/nabbisen/prikk/releases), or `cargo install prikk` from crates.io. This
+page](https://github.com/prikk-vcs/prikk/releases), or `cargo install prikk` from crates.io. This
 page covers what comes after — the steps a new user usually gets stuck on.
 
 ## The shell installer
 
 ```sh
-curl -fsSL https://github.com/nabbisen/prikk/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/prikk-vcs/prikk/releases/latest/download/install.sh | sh
 ```
 
 **What it does, exactly**: detects your OS and CPU architecture (`uname -s`/`uname -m`); downloads
@@ -51,7 +51,7 @@ not duplicate the marked `PATH` block if one already exists.
 **Uninstalling**:
 
 ```sh
-curl -fsSL https://github.com/nabbisen/prikk/releases/latest/download/uninstall.sh | sh
+curl -fsSL https://github.com/prikk-vcs/prikk/releases/latest/download/uninstall.sh | sh
 ```
 
 Removes the binary from its install directory and the marked `PATH` block from whichever shell
@@ -116,7 +116,7 @@ cargo install prikk            # from crates.io, and puts it on PATH for you
 or from a clone, which is also what you want when working on Prikk itself:
 
 ```sh
-git clone https://github.com/nabbisen/prikk
+git clone https://github.com/prikk-vcs/prikk
 cd prikk
 cargo build -p prikk --release --locked   # binary at target/release/prikk
 ```
@@ -143,7 +143,7 @@ So `init`, `commit`, and `seal` will not work. Reading an existing repository do
 Prikk's POSIX path uses; what it does not have is a durability implementation anyone has reviewed, or
 CI that exercises one. Prikk refuses rather than writing history through a path nobody has audited.
 Support is [recorded as a future
-theme](https://github.com/nabbisen/prikk/blob/main/ROADMAP.md#future-themes) and is not scheduled. [Platform Support](../reference/platform-support.md) states what each supported platform
+theme](https://github.com/prikk-vcs/prikk/blob/main/ROADMAP.md#future-themes) and is not scheduled. [Platform Support](../reference/platform-support.md) states what each supported platform
 guarantees, including two narrower guarantees on Windows.
 
 ## Put the binary on `PATH`

@@ -190,4 +190,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.zip dist/*.zip.sha256 dist/*.build-info.txt dist/*.sh dist/*.sh.sha256 --repo nabbisen/prikk --title "$TAG" --notes-file release-notes.md
+        run: gh release create "$TAG" dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.zip dist/*.zip.sha256 dist/*.build-info.txt dist/*.sh dist/*.sh.sha256 --repo prikk-vcs/prikk --title "$TAG" --notes-file release-notes.md
