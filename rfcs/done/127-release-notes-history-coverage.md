@@ -1,6 +1,18 @@
 # RFC 127 — A released version's changelog heading was destroyed, and the gate cannot see it
 
-**Status.** **Proposed.** Raised by the external architecture audit of 2026-08-31
+**Status.** **COMPLETE, 2026-09-01.** `0.23.0`'s heading restored and the gate landed (`1edde4c`),
+the pre-convention tags ruled to an exemption list (§3.3), and that exemption made self-guarding
+(`e8a10d5`). CI green on all 15 jobs — including the four that now fetch tags, which is what proves
+the gate actually runs in CI rather than passing vacuously there.
+
+**Two things worth carrying forward.** The gate's blind spot was **structural, not careless**:
+`release_notes::assemble` validated only the tag being cut, and every release edits the top of the
+file — so the check was blind exactly where the damaging edit happens. **A gate that validates only
+the thing being changed cannot detect damage to the things that are not.** And §3.3's exemption is
+self-guarding for the same reason the gate exists: an allowlist entry that has become untrue must
+break the build until someone deletes it.
+
+Raised by the external architecture audit of 2026-08-31
 (`audit-2026-08-31-task-2.md` V3). **Independently confirmed, including the destroying commit.**
 
 **Tracks.** Release integrity. Touches `CHANGELOG.md` and `tools/release-policy`.
