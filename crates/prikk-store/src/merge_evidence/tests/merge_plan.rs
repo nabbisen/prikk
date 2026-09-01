@@ -76,7 +76,7 @@ fn maps_conflict_evidence_to_blocked_conflict() -> Result<()> {
         OperationKind::ChangePerm(ChangePerm {
             node_id,
             old_mode: 0o100_644,
-            new_mode: 0o100_600,
+            new_mode: 0o100_755,
         }),
     )?;
 

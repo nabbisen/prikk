@@ -206,7 +206,17 @@ impl<R: ObjectReader> PatchAlgebraEvidence for StorePatchAlgebraEvidence<'_, R> 
                 expected,
                 actual,
             },
-            Evidence::WrongBlobKind { .. } => unreachable!("read_blob returns raw blob payload"),
+            Evidence::WrongBlobKind {
+                scope,
+                blob_id,
+                expected,
+                actual,
+            } => Evidence::WrongBlobKind {
+                scope,
+                blob_id,
+                expected,
+                actual,
+            },
             Evidence::Malformed {
                 scope,
                 fact,
@@ -279,7 +289,17 @@ fn map_blob_payload_evidence<T>(
             expected,
             actual,
         },
-        Evidence::WrongBlobKind { .. } => unreachable!("read_blob returns raw blob payload"),
+        Evidence::WrongBlobKind {
+            scope,
+            blob_id,
+            expected,
+            actual,
+        } => Evidence::WrongBlobKind {
+            scope,
+            blob_id,
+            expected,
+            actual,
+        },
         Evidence::Malformed {
             scope,
             fact,

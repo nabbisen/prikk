@@ -497,8 +497,8 @@ fn change_perm_old_mode_mismatch_is_inconsistent() {
             }),
             OperationKind::ChangePerm(ChangePerm {
                 node_id: nid(0x11),
-                old_mode: 0o100_600, // wrong
-                new_mode: 0o100_755,
+                old_mode: 0o100_755, // wrong -- the live node's mode is 0o100_644
+                new_mode: 0o100_644,
             }),
         ],
         Some((blob, BlobKind::Text)),
@@ -622,7 +622,7 @@ fn edit_text_preserves_mode_node_id_and_path() {
         text,
         nid(0x41),
         "f.txt",
-        0o100_600,
+        0o100_755,
         vec![OperationKind::EditText(edit)],
     );
     let state = state.expect("edit");
@@ -633,7 +633,7 @@ fn edit_text_preserves_mode_node_id_and_path() {
         Some(nid(0x41))
     );
     match &node.content {
-        NodeContent::File { mode, .. } => assert_eq!(*mode, 0o100_600),
+        NodeContent::File { mode, .. } => assert_eq!(*mode, 0o100_755),
         other => panic!("expected file, got {other:?}"),
     }
 }
@@ -1130,7 +1130,7 @@ fn delete_with_wrong_mode_is_inconsistent() {
     let err = create_then_delete(
         "a.txt",
         NodeKind::TextFile,
-        file_preimage(oid(20), 0o100_600),
+        file_preimage(oid(20), 0o100_755), // wrong -- the live node's mode is 0o100_644
     )
     .expect_err("wrong mode");
     assert!(

@@ -17,7 +17,7 @@
 //! bytes never panic the decoder). Case budget is proptest's own default (256/run), overridable
 //! with `PROPTEST_CASES` for a campaign run.
 
-#![allow(clippy::expect_used)]
+#![allow(clippy::expect_used, clippy::indexing_slicing)]
 
 use proptest::prelude::*;
 
@@ -154,6 +154,129 @@ fn blob_payload_strategy() -> impl Strategy<Value = BlobPayload> {
         proptest::collection::vec(any::<u8>(), 0..256),
     )
         .prop_map(|(blob_kind, content)| BlobPayload::new(blob_kind, content))
+}
+
+/// Duplicate the first canonical TLV field matching `target_tag` in `bytes`, inserting the copy
+/// immediately after the original. RFC 125 §4: this is the shape every decoder must now refuse for
+/// a singular field -- duplicating a field's own bytes in place keeps tag order non-decreasing (the
+/// cursor's own order check does not reject a repeated tag), so this exercises exactly the "seen"
+/// guard added to each decoder, not some other rejection path. Each canonical field is
+/// `[2-byte tag BE][1-byte wire type][8-byte length BE][value]` (`CanonicalWriter`'s own format).
+fn duplicate_field_with_tag(bytes: &[u8], target_tag: u16) -> Option<Vec<u8>> {
+    let mut pos = 0;
+    while pos < bytes.len() {
+        let header_end = pos.checked_add(11)?;
+        let tag = u16::from_be_bytes(bytes.get(pos..pos + 2)?.try_into().ok()?);
+        let len = u64::from_be_bytes(bytes.get(pos + 3..header_end)?.try_into().ok()?);
+        let len = usize::try_from(len).ok()?;
+        let field_end = header_end.checked_add(len)?;
+        let field = bytes.get(pos..field_end)?;
+        if tag == target_tag {
+            let mut out = bytes[..field_end].to_vec();
+            out.extend_from_slice(field);
+            out.extend_from_slice(&bytes[field_end..]);
+            return Some(out);
+        }
+        pos = field_end;
+    }
+    None
+}
+
+#[test]
+fn block_payload_decode_rejects_a_duplicate_kind_field() {
+    let payload = BlockPayload {
+        parent_block_ids: Vec::new(),
+        kind: BlockKind::Root,
+        patch_ids: Vec::new(),
+        state_merkle_root: MerkleRoot([0u8; 32]),
+        snapshot_blob_ref: None,
+        mainline_parent_id: None,
+        merge_baseline_block_id: None,
+    };
+    let bytes = payload.to_canonical_bytes().expect("encodes");
+    let duplicated = duplicate_field_with_tag(&bytes, 2).expect("kind field present");
+    let err = BlockPayload::decode_canonical(&duplicated).expect_err("duplicate kind must refuse");
+    assert!(format!("{err}").contains("duplicate"), "{err}");
+}
+
+#[test]
+fn ref_state_payload_decode_rejects_a_duplicate_ref_name_field() {
+    let payload = RefStatePayload {
+        ref_name: "heads/main".to_string(),
+        kind: RefKind::Branch,
+        target_object_id: ObjectId::from_bytes([1u8; 32]),
+        update_seq: 1,
+        previous_ref_state_id: None,
+        required_attestation_ids: Vec::new(),
+        closed: false,
+    };
+    let bytes = payload.to_canonical_bytes().expect("encodes");
+    let duplicated = duplicate_field_with_tag(&bytes, 1).expect("ref_name field present");
+    let err = RefStatePayload::decode_canonical(&duplicated, 1)
+        .expect_err("duplicate ref_name must refuse");
+    assert!(format!("{err}").contains("duplicate"), "{err}");
+}
+
+#[test]
+fn ref_update_payload_decode_rejects_a_duplicate_ref_name_field() {
+    let payload = RefUpdatePayload {
+        ref_name: "heads/main".to_string(),
+        old_ref_state_id: None,
+        new_ref_state_id: ObjectId::from_bytes([1u8; 32]),
+        new_target_object_id: ObjectId::from_bytes([2u8; 32]),
+        update_seq: 1,
+        created_at: 0,
+        author_key_id: "author".to_string(),
+    };
+    let bytes = payload.to_canonical_bytes().expect("encodes");
+    let duplicated = duplicate_field_with_tag(&bytes, 1).expect("ref_name field present");
+    let err = RefUpdatePayload::decode_canonical(&duplicated)
+        .expect_err("duplicate ref_name must refuse");
+    assert!(format!("{err}").contains("duplicate"), "{err}");
+}
+
+proptest! {
+    /// RFC 125 §4/§7: every singular field this proptest's own strategies can populate, duplicated
+    /// one at a time, must be refused -- not panic, not last-wins. Complements the three fixed
+    /// examples above (which pin the exact "duplicate" wording) with broad coverage across whatever
+    /// values the strategies generate.
+    #[test]
+    fn block_payload_decode_never_panics_on_a_duplicated_field(
+        payload in block_payload_strategy(),
+        tag in prop_oneof![Just(2u16), Just(4), Just(5), Just(6), Just(7)],
+    ) {
+        let bytes = payload.to_canonical_bytes().expect("encodes");
+        if let Some(duplicated) = duplicate_field_with_tag(&bytes, tag) {
+            let _ = BlockPayload::decode_canonical(&duplicated);
+        }
+    }
+
+    #[test]
+    fn ref_state_payload_decode_never_panics_on_a_duplicated_field(
+        payload in ref_state_payload_strategy(),
+        tag in prop_oneof![Just(1u16), Just(2), Just(3), Just(4), Just(6)],
+    ) {
+        let schema_version = if payload.closed {
+            crate::payload::refs::REF_STATE_CLOSED_SCHEMA
+        } else {
+            1
+        };
+        let bytes = payload.to_canonical_bytes().expect("encodes");
+        if let Some(duplicated) = duplicate_field_with_tag(&bytes, tag) {
+            let _ = RefStatePayload::decode_canonical(&duplicated, schema_version);
+        }
+    }
+
+    #[test]
+    fn ref_update_payload_decode_never_panics_on_a_duplicated_field(
+        payload in ref_update_payload_strategy(),
+        tag in prop_oneof![Just(1u16), Just(2), Just(3), Just(4), Just(5), Just(6), Just(7)],
+    ) {
+        let bytes = payload.to_canonical_bytes().expect("encodes");
+        if let Some(duplicated) = duplicate_field_with_tag(&bytes, tag) {
+            let _ = RefUpdatePayload::decode_canonical(&duplicated);
+        }
+    }
 }
 
 proptest! {

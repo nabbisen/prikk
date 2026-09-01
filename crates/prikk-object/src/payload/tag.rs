@@ -82,13 +82,62 @@ impl TagPayload {
         let mut patch_count = None;
         while let Some(field) = cursor.next_field()? {
             match field.tag {
-                1 => name = Some(field.read_string()?),
-                2 => target_block_id = Some(field.read_object_id()?),
-                3 => message = Some(field.read_string()?),
-                4 => created_at = Some(field.read_u64()?),
-                5 => author_key_id = Some(field.read_string()?),
-                6 => patch_set_digest = Some(PatchSetDigest(field.read_array::<32>()?)),
-                7 => patch_count = Some(field.read_u64()?),
+                1 => {
+                    if name.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Tag name field".to_string(),
+                        ));
+                    }
+                    name = Some(field.read_string()?);
+                }
+                2 => {
+                    if target_block_id.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Tag target_block_id field".to_string(),
+                        ));
+                    }
+                    target_block_id = Some(field.read_object_id()?);
+                }
+                3 => {
+                    if message.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Tag message field".to_string(),
+                        ));
+                    }
+                    message = Some(field.read_string()?);
+                }
+                4 => {
+                    if created_at.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Tag created_at field".to_string(),
+                        ));
+                    }
+                    created_at = Some(field.read_u64()?);
+                }
+                5 => {
+                    if author_key_id.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Tag author_key_id field".to_string(),
+                        ));
+                    }
+                    author_key_id = Some(field.read_string()?);
+                }
+                6 => {
+                    if patch_set_digest.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Tag patch_set_digest field".to_string(),
+                        ));
+                    }
+                    patch_set_digest = Some(PatchSetDigest(field.read_array::<32>()?));
+                }
+                7 => {
+                    if patch_count.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Tag patch_count field".to_string(),
+                        ));
+                    }
+                    patch_count = Some(field.read_u64()?);
+                }
                 other => {
                     return Err(PrikkError::MalformedData(format!(
                         "unknown Tag field tag: {other}"

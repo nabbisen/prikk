@@ -81,12 +81,47 @@ impl BlockPayload {
         while let Some(field) = cursor.next_field()? {
             match field.tag {
                 1 => parent_block_ids.push(field.read_object_id()?),
-                2 => kind = Some(BlockKind::from_code(u32::from(field.read_enum_u16()?))?),
+                2 => {
+                    if kind.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Block kind field".to_string(),
+                        ));
+                    }
+                    kind = Some(BlockKind::from_code(u32::from(field.read_enum_u16()?))?);
+                }
                 3 => patch_ids.push(field.read_object_id()?),
-                4 => state_merkle_root = Some(MerkleRoot(field.read_array::<32>()?)),
-                5 => snapshot_blob_ref = Some(field.read_object_id()?),
-                6 => mainline_parent_id = Some(field.read_object_id()?),
-                7 => merge_baseline_block_id = Some(field.read_object_id()?),
+                4 => {
+                    if state_merkle_root.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Block state_merkle_root field".to_string(),
+                        ));
+                    }
+                    state_merkle_root = Some(MerkleRoot(field.read_array::<32>()?));
+                }
+                5 => {
+                    if snapshot_blob_ref.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Block snapshot_blob_ref field".to_string(),
+                        ));
+                    }
+                    snapshot_blob_ref = Some(field.read_object_id()?);
+                }
+                6 => {
+                    if mainline_parent_id.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Block mainline_parent_id field".to_string(),
+                        ));
+                    }
+                    mainline_parent_id = Some(field.read_object_id()?);
+                }
+                7 => {
+                    if merge_baseline_block_id.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Block merge_baseline_block_id field".to_string(),
+                        ));
+                    }
+                    merge_baseline_block_id = Some(field.read_object_id()?);
+                }
                 other => {
                     return Err(PrikkError::MalformedData(format!(
                         "unknown Block field tag: {other}"

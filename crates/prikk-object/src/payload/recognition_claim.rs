@@ -92,7 +92,14 @@ impl RecognitionClaimPayload {
         let mut parent_block_ids = Vec::new();
         while let Some(field) = cursor.next_field()? {
             match field.tag {
-                1 => block_id = Some(field.read_object_id()?),
+                1 => {
+                    if block_id.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate RecognitionClaim block_id field".to_string(),
+                        ));
+                    }
+                    block_id = Some(field.read_object_id()?);
+                }
                 2 => {
                     if patch_ids.len() >= RECOGNITION_CLAIM_MAX_PATCH_IDS {
                         return Err(PrikkError::MalformedData(format!(

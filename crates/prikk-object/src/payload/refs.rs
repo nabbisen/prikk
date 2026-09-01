@@ -75,15 +75,57 @@ impl RefStatePayload {
         let mut previous_ref_state_id = None;
         let mut required_attestation_ids = Vec::new();
         let mut closed = false;
+        let mut seen_closed = false;
         while let Some(field) = cursor.next_field()? {
             match field.tag {
-                1 => ref_name = Some(field.read_string()?),
-                2 => target_object_id = Some(field.read_object_id()?),
-                3 => update_seq = Some(field.read_u64()?),
-                4 => previous_ref_state_id = Some(field.read_object_id()?),
+                1 => {
+                    if ref_name.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate RefState ref_name field".to_string(),
+                        ));
+                    }
+                    ref_name = Some(field.read_string()?);
+                }
+                2 => {
+                    if target_object_id.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate RefState target_object_id field".to_string(),
+                        ));
+                    }
+                    target_object_id = Some(field.read_object_id()?);
+                }
+                3 => {
+                    if update_seq.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate RefState update_seq field".to_string(),
+                        ));
+                    }
+                    update_seq = Some(field.read_u64()?);
+                }
+                4 => {
+                    if previous_ref_state_id.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate RefState previous_ref_state_id field".to_string(),
+                        ));
+                    }
+                    previous_ref_state_id = Some(field.read_object_id()?);
+                }
                 5 => required_attestation_ids.push(field.read_object_id()?),
-                6 => kind = Some(RefKind::from_code(u32::from(field.read_enum_u16()?))?),
+                6 => {
+                    if kind.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate RefState kind field".to_string(),
+                        ));
+                    }
+                    kind = Some(RefKind::from_code(u32::from(field.read_enum_u16()?))?);
+                }
                 7 => {
+                    if seen_closed {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate RefState closed field".to_string(),
+                        ));
+                    }
+                    seen_closed = true;
                     if schema_version < REF_STATE_CLOSED_SCHEMA {
                         return Err(PrikkError::MalformedData(format!(
                             "RefState schema {schema_version} must not carry a closed field; \
@@ -202,13 +244,62 @@ impl RefUpdatePayload {
         let mut author_key_id = None;
         while let Some(field) = cursor.next_field()? {
             match field.tag {
-                1 => ref_name = Some(field.read_string()?),
-                2 => old_ref_state_id = Some(field.read_object_id()?),
-                3 => new_ref_state_id = Some(field.read_object_id()?),
-                4 => new_target_object_id = Some(field.read_object_id()?),
-                5 => update_seq = Some(field.read_u64()?),
-                6 => created_at = Some(field.read_u64()?),
-                7 => author_key_id = Some(field.read_string()?),
+                1 => {
+                    if ref_name.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate RefUpdate ref_name field".to_string(),
+                        ));
+                    }
+                    ref_name = Some(field.read_string()?);
+                }
+                2 => {
+                    if old_ref_state_id.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate RefUpdate old_ref_state_id field".to_string(),
+                        ));
+                    }
+                    old_ref_state_id = Some(field.read_object_id()?);
+                }
+                3 => {
+                    if new_ref_state_id.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate RefUpdate new_ref_state_id field".to_string(),
+                        ));
+                    }
+                    new_ref_state_id = Some(field.read_object_id()?);
+                }
+                4 => {
+                    if new_target_object_id.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate RefUpdate new_target_object_id field".to_string(),
+                        ));
+                    }
+                    new_target_object_id = Some(field.read_object_id()?);
+                }
+                5 => {
+                    if update_seq.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate RefUpdate update_seq field".to_string(),
+                        ));
+                    }
+                    update_seq = Some(field.read_u64()?);
+                }
+                6 => {
+                    if created_at.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate RefUpdate created_at field".to_string(),
+                        ));
+                    }
+                    created_at = Some(field.read_u64()?);
+                }
+                7 => {
+                    if author_key_id.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate RefUpdate author_key_id field".to_string(),
+                        ));
+                    }
+                    author_key_id = Some(field.read_string()?);
+                }
                 other => {
                     return Err(PrikkError::MalformedData(format!(
                         "unknown RefUpdate field tag: {other}"

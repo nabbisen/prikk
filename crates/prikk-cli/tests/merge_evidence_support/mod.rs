@@ -22,7 +22,6 @@ pub(crate) type TestResult<T = ()> = std::result::Result<T, Box<dyn Error>>;
 
 const MODE_REGULAR: u32 = 0o100_644;
 const MODE_EXECUTABLE: u32 = 0o100_755;
-const MODE_PRIVATE: u32 = 0o100_600;
 
 pub(crate) fn prikk(repo: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_prikk"));
@@ -234,7 +233,13 @@ pub(crate) fn write_conflict_fixture(repo: &Path) -> TestResult<(String, String,
             kind: OperationKind::ChangePerm(ChangePerm {
                 node_id,
                 old_mode: MODE_REGULAR,
-                new_mode: MODE_PRIVATE,
+                // RFC 125 §2: only two file modes are canonical, so this can no longer target a
+                // third, distinct value the way it once did (`MODE_PRIVATE`, 0o100_600, retired).
+                // The conflict here comes from two `ChangePerm`s touching the same node
+                // concurrently at all (`classify_same_node`'s `_ => UnknownRelation` fallthrough,
+                // `patch_algebra/classify.rs`), not from the two sides disagreeing on the target
+                // value, so targeting the same canonical mode as `left` still conflicts.
+                new_mode: MODE_EXECUTABLE,
             }),
         }],
     )?;

@@ -204,7 +204,9 @@ fn verify_object_type_container(
         let locator = container_path.join(format!("#{}", outcome.offset));
         let ContainerRecordStatus::Evaluated { .. } = &outcome.status else {
             let ContainerRecordStatus::Failed { message } = &outcome.status else {
-                unreachable!("record_outcomes only ever holds Evaluated or Failed")
+                return Err(PrikkError::Integrity(
+                    "container record outcome is neither Evaluated nor Failed".to_string(),
+                ));
             };
             summary.item_outcomes.push(ObjectItemOutcome {
                 object_type,

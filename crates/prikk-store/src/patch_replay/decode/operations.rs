@@ -2,7 +2,7 @@
 //! behaviour change, all items moved verbatim.
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{NodeKind, text_span_hash};
+use prikk_object::{NodeKind, is_canonical_file_mode, text_span_hash};
 
 use crate::path::RepoPath;
 
@@ -37,6 +37,11 @@ pub(super) fn decode_create_file(bytes: &[u8]) -> Result<DecodedOperationKind> {
         .ok_or_else(|| PrikkError::MalformedData("CreateFile missing blob_id".to_string()))?;
     let mode =
         mode.ok_or_else(|| PrikkError::MalformedData("CreateFile missing mode".to_string()))?;
+    if !is_canonical_file_mode(mode) {
+        return Err(PrikkError::MalformedData(format!(
+            "CreateFile mode {mode:#o} is not one of prikk's canonical file modes"
+        )));
+    }
     Ok(DecodedOperationKind::CreateFile {
         path,
         node_id,
@@ -90,6 +95,11 @@ pub(super) fn decode_delete_node(bytes: &[u8]) -> Result<DecodedOperationKind> {
             let old_mode = old_mode.ok_or_else(|| {
                 PrikkError::MalformedData("DeleteNode file kind missing old_mode".to_string())
             })?;
+            if !is_canonical_file_mode(old_mode) {
+                return Err(PrikkError::MalformedData(format!(
+                    "DeleteNode old_mode {old_mode:#o} is not one of prikk's canonical file modes"
+                )));
+            }
             Ok(DecodedOperationKind::DeleteNode {
                 path,
                 node_id,
@@ -256,6 +266,16 @@ pub(super) fn decode_change_perm(bytes: &[u8]) -> Result<DecodedOperationKind> {
         .ok_or_else(|| PrikkError::MalformedData("ChangePerm missing old_mode".to_string()))?;
     let new_mode = new_mode
         .ok_or_else(|| PrikkError::MalformedData("ChangePerm missing new_mode".to_string()))?;
+    if !is_canonical_file_mode(old_mode) {
+        return Err(PrikkError::MalformedData(format!(
+            "ChangePerm old_mode {old_mode:#o} is not one of prikk's canonical file modes"
+        )));
+    }
+    if !is_canonical_file_mode(new_mode) {
+        return Err(PrikkError::MalformedData(format!(
+            "ChangePerm new_mode {new_mode:#o} is not one of prikk's canonical file modes"
+        )));
+    }
     Ok(DecodedOperationKind::ChangePerm {
         node_id,
         old_mode,

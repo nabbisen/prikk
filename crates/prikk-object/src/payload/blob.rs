@@ -72,16 +72,31 @@ impl BlobPayload {
         while let Some(field) = cursor.next_field()? {
             match field.tag {
                 1 => {
+                    if blob_kind.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Blob blob_kind field".to_string(),
+                        ));
+                    }
                     field.require_wire(crate::canonical::WireType::EnumU16)?;
                     blob_kind = Some(BlobKind::from_code(u16::from_be_bytes(
                         field.read_array::<2>()?,
                     ))?);
                 }
                 2 => {
+                    if content.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Blob content field".to_string(),
+                        ));
+                    }
                     field.require_wire(crate::canonical::WireType::Bytes)?;
                     content = Some(field.value.to_vec());
                 }
                 3 => {
+                    if declared_size.is_some() {
+                        return Err(PrikkError::MalformedData(
+                            "duplicate Blob declared_size field".to_string(),
+                        ));
+                    }
                     field.require_wire(crate::canonical::WireType::U64)?;
                     declared_size = Some(u64::from_be_bytes(field.read_array::<8>()?));
                 }

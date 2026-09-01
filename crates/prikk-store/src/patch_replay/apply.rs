@@ -143,10 +143,13 @@ pub(super) fn apply_decoded_operation(
         } => {
             apply_change_perm(live_nodes, node_id, old_mode, new_mode)?;
         }
-        _ => unreachable!(
-            "ensure_apply_supported admits only CreateFile, file-DeleteNode, EditText, \
-             ReplaceBinary, and ChangePerm for replay"
-        ),
+        _ => {
+            return Err(PrikkError::MalformedData(
+                "apply_decoded_operation received an operation kind ensure_apply_supported \
+                 should have refused"
+                    .to_string(),
+            ));
+        }
     }
     Ok(())
 }

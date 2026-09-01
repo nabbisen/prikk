@@ -246,7 +246,14 @@ fn decode_operation(bytes: &[u8], index: usize) -> Result<DecodedPatchOperation>
     let mut kind: Option<(u16, &[u8])> = None;
     while let Some(field) = cursor.next_field()? {
         match field.tag {
-            1 => op_seq = Some(field.read_u32()?),
+            1 => {
+                if op_seq.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate Operation op_seq field".to_string(),
+                    ));
+                }
+                op_seq = Some(field.read_u32()?);
+            }
             2 | 3 => {}
             10..=16 => {
                 if let Some((first, _)) = kind {
@@ -287,7 +294,11 @@ fn decode_operation(bytes: &[u8], index: usize) -> Result<DecodedPatchOperation>
         14 => decode_change_perm(value),
         15 => decode_create_symlink(value),
         16 => decode_replace_binary(value),
-        _ => unreachable!("kind tag is constrained to 10..=16 above"),
+        _ => {
+            return Err(PrikkError::MalformedData(format!(
+                "Operation kind tag {kind_tag} is outside the constrained 10..=16 range"
+            )));
+        }
     }?;
     Ok(DecodedPatchOperation { op_seq, kind })
 }

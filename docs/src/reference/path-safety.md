@@ -70,6 +70,8 @@ The current validator rejects:
 - non-ASCII bytes;
 - control bytes `0x00` through `0x1F` and `0x7F`;
 - empty path components;
+- a path component longer than 255 bytes;
+- a total path longer than 1024 bytes;
 - `.` and `..` components;
 - `.prikk` as the first component, case-insensitively;
 - components ending in a space or dot;
@@ -77,6 +79,26 @@ The current validator rejects:
   through `LPT9`;
 - duplicate paths in a path set; and
 - case-insensitive collisions in a path set.
+
+### Length Caps
+
+Added by RFC 125 §3: before this, `validate_repo_path` had no length check of any kind, so an
+over-long path entered signed history and only failed later — as a raw OS error, not a clean
+refusal — at checkout on a repository that had already verified clean.
+
+- **255 bytes per component** — POSIX `NAME_MAX`, the per-component ceiling shared by Linux, macOS,
+  and Windows' own NTFS component limit (255 UTF-16 code units, the same count as bytes here since
+  repository paths are ASCII-only). A component longer than this cannot exist on any of the three
+  platforms this project mutates on ([platform support](./platform-support.md)), regardless of
+  where in the tree it sits or how deep the worktree root is.
+- **1024 bytes total** — macOS's `PATH_MAX` (`sys/syslimits.h`), the strictest of the three
+  platforms' hard total-path limits: Linux's is 4096, and Windows' legacy default (`MAX_PATH`, 260)
+  is a separate, narrower gap that depends on the worktree root's own depth too and cannot be
+  bounded from a repository-relative length alone. Chosen as the floor so a path this validator
+  accepts is materializable on Linux and macOS unconditionally, regardless of worktree root depth.
+  **Not a guarantee against Windows' legacy `MAX_PATH`** — a sufficiently deep worktree root can
+  still exceed it even for a path this validator accepts; that residual gap is a property of where
+  a repository is checked out, not something a repository-relative length cap alone can close.
 
 The Windows reserved-name check is matched on the component basename before the first `.`. It is not a
 complete Windows path policy and does not include `COM0` or `LPT0`.

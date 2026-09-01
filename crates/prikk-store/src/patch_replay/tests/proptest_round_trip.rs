@@ -15,7 +15,7 @@
 //! Case budget is proptest's own default (256/run), overridable with `PROPTEST_CASES` for a
 //! campaign run.
 
-#![allow(clippy::expect_used)]
+#![allow(clippy::expect_used, clippy::indexing_slicing)]
 
 use proptest::prelude::*;
 
@@ -61,12 +61,30 @@ fn ascii_text_strategy() -> impl Strategy<Value = String> {
     "[a-z]{0,32}"
 }
 
+/// RFC 125 §2: only two `u32` values are canonical file modes, so `any::<u32>()` here would make
+/// `patch_operations_round_trip` skip on essentially every generated `CreateFile`/`ChangePerm`/
+/// file-`DeleteNode` case (2 valid values out of 2^32) rather than the occasional, tolerable skip
+/// rate `repo_path_strategy()`'s Windows-reserved-name rejection has. Narrowed here so the property
+/// keeps exercising real round-trips for these kinds; `non_canonical_mode_strategy` below covers the
+/// refusal itself.
+fn canonical_mode_strategy() -> impl Strategy<Value = u32> {
+    prop_oneof![Just(0o100_644_u32), Just(0o100_755_u32)]
+}
+
+/// The complement of [`canonical_mode_strategy`], for exercising the new refusal itself (RFC 125
+/// §2/§9's controls).
+fn non_canonical_mode_strategy() -> impl Strategy<Value = u32> {
+    any::<u32>().prop_filter("must not be one of the two canonical file modes", |mode| {
+        !matches!(*mode, 0o100_644 | 0o100_755)
+    })
+}
+
 fn create_file_strategy() -> impl Strategy<Value = CreateFile> {
     (
         repo_path_strategy(),
         node_id_strategy(),
         object_id_strategy(),
-        any::<u32>(),
+        canonical_mode_strategy(),
     )
         .prop_map(|(path, node_id, blob_id, mode)| CreateFile {
             path,
@@ -82,7 +100,7 @@ fn delete_node_strategy() -> impl Strategy<Value = DeleteNode> {
             repo_path_strategy(),
             node_id_strategy(),
             object_id_strategy(),
-            any::<u32>()
+            canonical_mode_strategy()
         )
             .prop_map(|(path, node_id, old_blob_id, old_mode)| DeleteNode {
                 path,
@@ -97,7 +115,7 @@ fn delete_node_strategy() -> impl Strategy<Value = DeleteNode> {
             repo_path_strategy(),
             node_id_strategy(),
             object_id_strategy(),
-            any::<u32>()
+            canonical_mode_strategy()
         )
             .prop_map(|(path, node_id, old_blob_id, old_mode)| DeleteNode {
                 path,
@@ -170,13 +188,16 @@ fn rename_path_strategy() -> impl Strategy<Value = RenamePath> {
 }
 
 fn change_perm_strategy() -> impl Strategy<Value = ChangePerm> {
-    (node_id_strategy(), any::<u32>(), any::<u32>()).prop_map(|(node_id, old_mode, new_mode)| {
-        ChangePerm {
+    (
+        node_id_strategy(),
+        canonical_mode_strategy(),
+        canonical_mode_strategy(),
+    )
+        .prop_map(|(node_id, old_mode, new_mode)| ChangePerm {
             node_id,
             old_mode,
             new_mode,
-        }
-    })
+        })
 }
 
 fn create_symlink_strategy() -> impl Strategy<Value = CreateSymlink> {
@@ -293,6 +314,129 @@ fn expected_decoded(op: &Operation) -> DecodedPatchOperation {
     DecodedPatchOperation {
         op_seq: op.op_seq,
         kind,
+    }
+}
+
+/// Find a canonical TLV field matching `target_tag` in `bytes` and return its value's byte range
+/// (not the whole field). Each canonical field is `[2-byte tag BE][1-byte wire type]
+/// [8-byte length BE][value]` (`CanonicalWriter`'s own format) -- shared with
+/// `payload::tests::proptest_decoders`'s own copy of this scan (kept separate per crate rather than
+/// a shared test-only dependency for two call sites).
+fn find_field_value_range(bytes: &[u8], target_tag: u16) -> Option<(usize, usize)> {
+    let mut pos = 0;
+    while pos < bytes.len() {
+        let header_end = pos.checked_add(11)?;
+        let tag = u16::from_be_bytes(bytes.get(pos..pos + 2)?.try_into().ok()?);
+        let len = u64::from_be_bytes(bytes.get(pos + 3..header_end)?.try_into().ok()?);
+        let len = usize::try_from(len).ok()?;
+        let field_end = header_end.checked_add(len)?;
+        if tag == target_tag {
+            return Some((header_end, field_end));
+        }
+        pos = field_end;
+    }
+    None
+}
+
+/// Overwrite a 4-byte `u32` field's value, found by following `path` through successively nested
+/// canonical records (e.g. `[1, 10, 4]`: `PatchPayload` tag 1's `Operation` record, its tag 10
+/// `CreateFile` sub-record, that sub-record's tag 4 `mode`). Used to hand-craft bytes a validating
+/// encoder can no longer produce (RFC 125 §2 closed that path at `CreateFile::validate` and
+/// friends), so the decoder's own independent refusal can still be exercised directly.
+fn overwrite_u32_at_path(bytes: &[u8], path: &[u16], new_value: u32) -> Option<Vec<u8>> {
+    let mut base = 0usize;
+    let mut current: &[u8] = bytes;
+    for (index, &tag) in path.iter().enumerate() {
+        let (value_start, value_end) = find_field_value_range(current, tag)?;
+        if index + 1 == path.len() {
+            if value_end - value_start != 4 {
+                return None;
+            }
+            let absolute_start = base + value_start;
+            let absolute_end = base + value_end;
+            let mut out = bytes.to_vec();
+            out[absolute_start..absolute_end].copy_from_slice(&new_value.to_be_bytes());
+            return Some(out);
+        }
+        base += value_start;
+        current = current.get(value_start..value_end)?;
+    }
+    None
+}
+
+/// RFC 125 §2, control 1: a crafted input the decoder accepted at base and refuses on this commit.
+/// Encoding a non-canonical mode is refused before this point ever exists in real bytes
+/// (`CreateFile::validate`), so this hand-crafts what the encoder can no longer produce, to prove
+/// the decoder holds the same line independently rather than relying only on encode's refusal.
+#[test]
+fn decode_patch_operations_rejects_a_hand_crafted_non_canonical_create_file_mode() {
+    let payload = PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::CreateFile(CreateFile {
+                path: "a.txt".to_string(),
+                node_id: NodeId::from_bytes([1u8; 32]),
+                blob_id: ObjectId::from_bytes([2u8; 32]),
+                mode: 0o100_644,
+            }),
+        }],
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+    };
+    let bytes = payload
+        .to_canonical_bytes()
+        .expect("a canonical mode encodes");
+    // PatchPayload tag 1 (this Operation record) -> Operation tag 10 (CreateFile) -> CreateFile
+    // tag 4 (mode).
+    let mutated = overwrite_u32_at_path(&bytes, &[1, 10, 4], 0o100_000)
+        .expect("mode field present at the expected path");
+    let err = decode_patch_operations(&mutated, prikk_object::PATCH_PARENT_IDS_RETIRED_SCHEMA)
+        .expect_err("a hand-crafted non-canonical mode must be refused at decode");
+    assert!(format!("{err}").contains("canonical"), "{err}");
+}
+
+proptest! {
+    /// RFC 125 §2/§9 control 1, broadened: an out-of-canonical-set mode is refused **at encode**,
+    /// for every operation kind that carries one, across whatever other field values the strategies
+    /// generate -- not only the one hand-crafted example above.
+    #[test]
+    fn create_file_with_a_non_canonical_mode_is_refused_at_encode(
+        path in repo_path_strategy(),
+        node_id in node_id_strategy(),
+        blob_id in object_id_strategy(),
+        mode in non_canonical_mode_strategy(),
+    ) {
+        let operation = CreateFile { path, node_id, blob_id, mode };
+        prop_assert!(operation.to_canonical_bytes().is_err());
+    }
+
+    #[test]
+    fn change_perm_with_a_non_canonical_mode_is_refused_at_encode(
+        node_id in node_id_strategy(),
+        old_mode in non_canonical_mode_strategy(),
+        new_mode in canonical_mode_strategy(),
+    ) {
+        let operation = ChangePerm { node_id, old_mode, new_mode };
+        prop_assert!(operation.to_canonical_bytes().is_err());
+    }
+
+    #[test]
+    fn delete_node_file_kind_with_a_non_canonical_old_mode_is_refused_at_encode(
+        path in repo_path_strategy(),
+        node_id in node_id_strategy(),
+        old_blob_id in object_id_strategy(),
+        old_mode in non_canonical_mode_strategy(),
+    ) {
+        let operation = DeleteNode {
+            path,
+            node_id,
+            old_node_kind: NodeKind::TextFile,
+            preimage: DeleteNodePreimage::File { old_blob_id, old_mode },
+        };
+        prop_assert!(operation.to_canonical_bytes().is_err());
     }
 }
 

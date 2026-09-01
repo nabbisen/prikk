@@ -11,6 +11,23 @@ use crate::{CanonicalEncode, CanonicalWriter, ObjectId};
 
 use super::{TEXT_SPAN_HASH_BYTES, text_span_hash};
 
+/// The only two mode values prikk ever authors for a file node (`prikk-store`'s
+/// `worktree_patch/node_authoring.rs::REGULAR_FILE_MODE`/`EXECUTABLE_FILE_MODE`, and
+/// `state_root.rs`'s own `REGULAR_MODE`/`EXECUTABLE_MODE` seal-time matcher -- all three must keep
+/// agreeing on these two values). RFC 125 §2: any other `u32` a decoder would accept -- including
+/// setuid/setgid/sticky bits `& 0o7777` admits at materialization
+/// (`fsutil/anchored/linux.rs::fchmod`) -- is a mode the encoder never wrote, so refusing it here
+/// closes the gap symmetrically rather than leaving decode more permissive than encode.
+const CANONICAL_FILE_MODES: [u32; 2] = [0o100_644, 0o100_755];
+
+/// Whether `mode` is one of the two values prikk ever authors for a file node. Exposed so
+/// `prikk-store`'s patch-replay decoder can refuse the same non-canonical modes at decode that
+/// this module's own `validate()` methods refuse at encode (RFC 125 §2, DC-54 symmetry).
+#[must_use]
+pub fn is_canonical_file_mode(mode: u32) -> bool {
+    CANONICAL_FILE_MODES.contains(&mode)
+}
+
 /// Create file payload (FDD-03 §9.3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateFile {
@@ -36,6 +53,12 @@ impl CreateFile {
             ));
         }
         validate_repo_path(&self.path)?;
+        if !is_canonical_file_mode(self.mode) {
+            return Err(PrikkError::CanonicalEncoding(format!(
+                "CreateFile mode {:#o} is not one of prikk's canonical file modes",
+                self.mode
+            )));
+        }
         Ok(())
     }
 }
@@ -105,6 +128,13 @@ impl DeleteNode {
             return Err(PrikkError::CanonicalEncoding(
                 "DeleteNode old_node_kind does not match preimage discriminator".to_string(),
             ));
+        }
+        if let DeleteNodePreimage::File { old_mode, .. } = &self.preimage {
+            if !is_canonical_file_mode(*old_mode) {
+                return Err(PrikkError::CanonicalEncoding(format!(
+                    "DeleteNode old_mode {old_mode:#o} is not one of prikk's canonical file modes"
+                )));
+            }
         }
         Ok(())
     }
@@ -261,6 +291,18 @@ impl ChangePerm {
             return Err(PrikkError::CanonicalEncoding(
                 "ChangePerm node_id must be nonzero".to_string(),
             ));
+        }
+        if !is_canonical_file_mode(self.old_mode) {
+            return Err(PrikkError::CanonicalEncoding(format!(
+                "ChangePerm old_mode {:#o} is not one of prikk's canonical file modes",
+                self.old_mode
+            )));
+        }
+        if !is_canonical_file_mode(self.new_mode) {
+            return Err(PrikkError::CanonicalEncoding(format!(
+                "ChangePerm new_mode {:#o} is not one of prikk's canonical file modes",
+                self.new_mode
+            )));
         }
         Ok(())
     }
