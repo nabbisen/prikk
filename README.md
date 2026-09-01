@@ -3,6 +3,7 @@
 [![documentation](https://img.shields.io/badge/docs-github_pages-brightgreen)](https://prikk-vcs.github.io/prikk/)
 [![license](https://img.shields.io/crates/l/prikk.svg)](LICENSE)
 [![CI](https://github.com/prikk-vcs/prikk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/prikk-vcs/prikk/actions/workflows/ci.yml)
+[Report a vulnerability](SECURITY.md)
 
 **Prikk is a standalone distributed version control system built around block-oriented patch theory.**
 
