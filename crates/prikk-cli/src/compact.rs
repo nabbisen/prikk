@@ -7,6 +7,8 @@
 
 use std::path::PathBuf;
 
+// RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::stdout::println;
 use prikk_store::{
     CompactionReport, compact_received_index, compact_ref_pointer_index, compact_trust_policy,
     plan_compact_received_index, plan_compact_ref_pointer_index, plan_compact_trust_policy,

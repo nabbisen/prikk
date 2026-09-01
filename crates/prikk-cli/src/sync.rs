@@ -54,6 +54,9 @@ use prikk_store::{
     list_received_tags, order_claims_for_sealing, seal_from_accepted_claim,
 };
 
+// RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::stdout::println;
+
 use crate::maintainer_signer_from_env;
 
 /// Dispatch `prikk sync [summary|compare|have|build|accept|pending|seal|tags|adopt-tag]`.

@@ -6,6 +6,9 @@
 //! meta-arm (`main.rs::run`'s own match still handles `--help`/`-h`/`--version`/`-V` directly), not
 //! a registry entry.
 
+// RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::stdout::println;
+
 /// Print top-level help.
 pub(crate) fn print_help(version: &str) {
     println!("prikk {version}");

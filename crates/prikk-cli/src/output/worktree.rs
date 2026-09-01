@@ -1,3 +1,5 @@
+// RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::stdout::println;
 use prikk_store::{RefHistory, RepositoryLayout, WorktreeChangeKind, WorktreeStatusReport};
 
 /// Print a worktree status report.

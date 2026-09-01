@@ -15,6 +15,8 @@
 
 use std::path::PathBuf;
 
+// RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::stdout::println;
 use prikk_object::{ObjectId, ObjectType, RefKind, RefStatePayload, TagPayload};
 use prikk_store::{
     FileObjectStore, GatedOperation, ObjectReader, ObjectWriteSession, RefStore,

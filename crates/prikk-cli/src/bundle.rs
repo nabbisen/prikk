@@ -32,6 +32,8 @@
 
 use std::path::PathBuf;
 
+// RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::stdout::println;
 use prikk_store::{
     BundleImportOptions, BundleManifest, BundleScope, DEFAULT_BUNDLE_MAX_OBJECT_COUNT,
     DEFAULT_BUNDLE_MAX_TOTAL_BYTES, export_bundle, import_bundle, verify_bundle,

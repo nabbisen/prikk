@@ -10,6 +10,8 @@
 use std::io::Write as _;
 use std::path::PathBuf;
 
+// RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::stdout::{print, println};
 use prikk_store::{HeldLock, PidLiveness, clear_lock, find_held_lock, list_held_locks};
 
 pub(crate) fn run_unlock(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {

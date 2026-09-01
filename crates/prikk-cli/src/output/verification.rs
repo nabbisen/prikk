@@ -1,3 +1,5 @@
+// RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::stdout::println;
 use prikk_store::{
     ActiveSessionRepairOutcome, ActiveSessionRepairStatus, ActiveWalMetadataStatus,
     AuthorSignatureVerification, BlockStateStatus, DoctorSeverity, ObjectItemStatus, RefFileStatus,

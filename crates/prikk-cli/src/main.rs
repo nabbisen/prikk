@@ -16,6 +16,10 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+// RFC 121 §2.1: shadows the prelude's `println!`/`print!` with the closed-pipe-safe versions in
+// `stdout.rs` -- see that module's own doc comment.
+use stdout::println;
+
 mod args;
 mod branch;
 mod bundle;
@@ -25,6 +29,7 @@ mod durable_output;
 mod merge;
 mod output;
 mod seal;
+mod stdout;
 mod sync;
 mod tag;
 mod unlock;

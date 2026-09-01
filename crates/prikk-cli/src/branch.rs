@@ -32,6 +32,8 @@
 
 use std::path::PathBuf;
 
+// RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::stdout::println;
 use prikk_error::PrikkError;
 use prikk_object::{
     CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, RefKind, RefStatePayload,

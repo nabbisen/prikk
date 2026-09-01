@@ -1,5 +1,7 @@
 //! CLI output helpers.
 
+// RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::stdout::println;
 use prikk_store::{
     CheckoutMaterialization, CheckoutPlan, PatchDeletionPlan, PatchInversePlan,
     PatchMaterializationReport, PatchReplayPlan, RepositoryLayout, RollbackDraftReport,

@@ -1,5 +1,7 @@
 //! Output for read-only merge evidence reports.
 
+// RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::stdout::{print, println};
 use prikk_store::{MergeEvidenceDisplay, MergeEvidenceDisplayOperation, MergePlanDisplay};
 
 /// Print a read-only merge evidence report.
