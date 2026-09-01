@@ -1,6 +1,27 @@
 # RFC 125 — Four places the decoder accepts what the encoder would never write
 
-**Status.** **Proposed.** Raised by the external architecture audit of 2026-08-31
+**Status.** **COMPLETE, 2026-09-02.** Mode canonicality, path length caps, duplicate singular
+fields and the byte-fed `unreachable!` sites landed at `7bf1279`; the duplicate-field class was
+extended to the operation-payload decoders at `c6fc625`. CI green on all 15 jobs.
+
+**§6's compatibility question was answered with evidence, not argument** — the whole point of asking
+it. `release_compatibility_gate::` (5/5, against a repository written by 0.27.0's own encoder) and
+`format_transition` (3/3) both pass against the tightened decoders, twice: after each round.
+**No existing history is refused.**
+
+**The class was larger than this RFC said, in two directions.** §2.3 named two files; the
+implementation found seven, plus a second decoder inside one of them. Then the amendment found the
+class had also been applied one level too **shallow** — the operation-*payload* decoders in
+`prikk-store` were untouched, 29 unguarded fields, in the very file the mode work had just edited.
+**A site list can be short; a class can also be shallow.** Enumerate by mechanism — every TLV decode
+loop, wherever it lives — not by crate.
+
+**One caveat on that mechanism, recorded for the next enumeration:** `next_field()` is narrower than
+the defect class. `lifecycle_cache/cache_ladder.rs` and `lifecycle_cache/incremental.rs` decode TLV
+without it. Both were already strict, so the narrower grep was sufficient here **by luck, not by
+construction.**
+
+Raised by the external architecture audit of 2026-08-31
 (`audit-2026-08-31-task-1a.md` §1.1/§1.2, `task-1b.md` §3); all four independently confirmed at
 `3a8d730`.
 
