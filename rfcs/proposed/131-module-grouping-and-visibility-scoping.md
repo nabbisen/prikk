@@ -1,6 +1,14 @@
 # RFC 131 — Grouping `prikk-store`'s 123 top-level entries, and scoping what may reach what
 
-**Status.** **Proposed.** Same origin as RFC 130 (owner question 2026-09-01; external architect
+**Status.** **ACCEPTED by the project owner 2026-09-01**, together with RFC 130 — including §6's
+sequencing: **after RFC 130's gate, and between feature arcs rather than during one.** Acceptance is
+of the direction and the constraints; §2's central design question (role-based versus name-based
+grouping, and what to do with the 38 singletons) is explicitly still open and is the implementing
+increment's work.
+
+**Kept in `rfcs/proposed/` until implemented** — see RFC 130's status note for why.
+
+Same origin as RFC 130 (owner question 2026-09-01; external architect
 review; architect review of it). **RFC 130 carries the shared evidence and should land first — see
 that RFC's §7 and this one's §6.**
 

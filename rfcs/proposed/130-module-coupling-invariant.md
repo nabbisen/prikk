@@ -1,6 +1,16 @@
 # RFC 130 — A coupling invariant for `prikk-store`, and the gate that holds it
 
-**Status.** **Proposed.** Originated by the project owner 2026-09-01, asking whether `prikk-store`
+**Status.** **ACCEPTED by the project owner 2026-09-01**, together with RFC 131. Accepted at the
+scope written here, including §4's amendment (the hub bound is an allowlist-with-reasons, not a bare
+degree threshold), §5 (line and module counts are not gated), §6 (no crate split, `fsutil` included),
+and §7's ordering (this lands before RFC 131).
+
+**Kept in `rfcs/proposed/` until implemented, deliberately.** RFC 120's Open-Work Index gates
+`rfcs/proposed/*.md` only and §6 Q3 excludes `rfcs/accepted/`; moving an accepted-but-unbuilt RFC out
+of `proposed/` would drop open work off the owner's board. Same reasoning that kept DC-44 in
+`proposed/` until it closed.
+
+Originated by the project owner 2026-09-01, asking whether `prikk-store`
 should be restructured because *"it is continuously growing now and also perhaps in the future as
 well"*. Answered by an independent external architect review, reviewed and amended by the project
 architect.

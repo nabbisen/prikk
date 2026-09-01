@@ -249,8 +249,8 @@ item is open.
 - [`127-release-notes-history-coverage.md`](rfcs/proposed/127-release-notes-history-coverage.md) — RFC 127, A released version's changelog heading was destroyed and the gate cannot see it (external audit 2026-08-31)
 - [`128-outward-facing-project-surface.md`](rfcs/proposed/128-outward-facing-project-surface.md) — RFC 128, What an outsider finds before they read any code (external audit 2026-08-31; **owner ruling required** — disclosure channel)
 - [`129-repository-migration-to-prikk-vcs.md`](rfcs/proposed/129-repository-migration-to-prikk-vcs.md) — RFC 129, Moving to `prikk-vcs/prikk` is not a remote change (**executed 2026-09-01**; the release lane is verified and the cut is no longer blocked; §9 records the four inventory corrections the execution forced)
-- [`130-module-coupling-invariant.md`](rfcs/proposed/130-module-coupling-invariant.md) — RFC 130, A coupling invariant for `prikk-store` and the gate that holds it (owner question 2026-09-01, answered by an external architect review; touches no files and conflicts with nothing in flight)
-- [`131-module-grouping-and-visibility-scoping.md`](rfcs/proposed/131-module-grouping-and-visibility-scoping.md) — RFC 131, Grouping the 123 top-level entries and scoping reach with `pub(in ...)` (large file move; must land between feature arcs, after RFC 130)
+- [`130-module-coupling-invariant.md`](rfcs/proposed/130-module-coupling-invariant.md) — RFC 130, A coupling invariant for `prikk-store` and the gate that holds it (**ACCEPTED by the owner 2026-09-01**; touches no files and conflicts with nothing in flight, so it can land during band 1)
+- [`131-module-grouping-and-visibility-scoping.md`](rfcs/proposed/131-module-grouping-and-visibility-scoping.md) — RFC 131, Grouping the 123 top-level entries and scoping reach with `pub(in ...)` (**ACCEPTED by the owner 2026-09-01**; large file move — after RFC 130 and between feature arcs, not during one)
 <!-- open-work-index:end -->
 
 **Two backlog tables elsewhere in this file carry live open rows of their own, referenced here
