@@ -312,14 +312,20 @@ architect's recommendations in full:
 revision reversed the original answer, and RFC 128's ruling went against the recommendation** — the
 reasoning for each is in the RFC rather than summarized here.
 
-**No ruling now blocks any RFC in this program except RFC 121's exit-code contract.**
+**RFC 121's exit-code contract was ruled by the architect on 2026-09-01: `0` ok / `1` operational
+failure / `2` usage error.** The RFC had escalated it to the owner; that was wrong, and RFC 121 §6a
+records why — `release-compatibility.md:53` already names exit behavior as a compatibility surface and
+already states the pre-1.0 change policy, so the policy question was settled and only the shape
+remained. Whether the contract is ever promoted into a stability *promise* stays the owner's.
+
+**No ruling is now outstanding on any RFC in this program.**
 
 ### Proposed ordering — the architect's proposal; sequencing is the owner's to authorize
 
 | Band | Items | Why here |
 |---|---|---|
 | **Before the next cut** | RFC 127; RFC 121's EPIPE fix alone; RFC 122; RFC 128's `SECURITY.md` | 127 is a regression that has already shipped in a published artifact. EPIPE is a panic every user who pipes to `head` meets. 122 is the only High-severity broken command on the mainline. `SECURITY.md` is one page and its absence is disproportionate for a trust-centric product |
-| **Next** | RFC 125; RFC 126 §3–§4 (`cargo audit` in CI, doc gating); the rest of RFC 121 | 125 is latent security, cheap, and encode/decode-symmetric. 126's first half is a CI job and a lint flag — the two gates that stop everything else drifting silently |
+| **Next** | RFC 125; RFC 126 §3–§4 (`cargo audit` in CI, doc gating); the rest of RFC 121, now that its exit-code contract is ruled | 125 is latent security, cheap, and encode/decode-symmetric. 126's first half is a CI job and a lint flag — the two gates that stop everything else drifting silently |
 | **Unblocked by the 2026-09-01 rulings** | RFC 123's `note:` line (immediate, one line); then RFC 123's schema-3 design; RFC 124; RFC 126 §2/§5 | RFC 123's interim is a one-line change that stops active harm and should not wait behind its own format work. RFC 124 needs no ruling — only §3's design questions answered |
 | **Unscheduled** | the two performance walls and the pre-1.0 API debt below | Both are gated behind RFC 114's stability work rather than racing it |
 

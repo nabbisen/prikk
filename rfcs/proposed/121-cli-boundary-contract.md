@@ -8,7 +8,9 @@ reproduced independently before this file was written.
 **Tracks.** The boundary between the CLI and its caller — pipes, exit codes, flags, help. Nothing in
 this RFC touches the store, the object format, signing, or trust.
 
-**Ruling required (§6).** The exit-code contract's shape.
+**RULED BY THE ARCHITECT 2026-09-01 (§6): option 3 — `0` / `1` / `2`.** §6 originally called this
+the owner's call; **that escalation was wrong and §6a says why.** What remains the owner's is
+untouched and already settled elsewhere.
 
 ---
 
@@ -120,10 +122,64 @@ scripts will encode it:
 3. **`0` ok / `1` any failure / `2` usage error.** The minimal split that fixes the worst confusion
    (a typo reading as corruption) without asking every error site to self-classify.
 
-**The architect's recommendation is 3, then 2 if experience justifies it** — the usage/failure split
-is the one a caller cannot reconstruct from output, while findings-vs-integrity is already available
-in `verify`'s JSON. Committing to fewer codes now is cheaper to widen later than a four-code contract
-is to correct. **This is the owner's call: it is an interface promise, not an implementation detail.**
+### 6a. The ruling, and why it is the architect's to make
+
+**Ruled: option 3.**
+
+```
+0  the operation succeeded and did what was asked
+1  operational failure — verification findings, integrity failure, refusal,
+   a dirty worktree, or any refusal to carry out the request
+2  usage error — unknown argument, missing required flag, malformed flag value,
+   duplicate flag; detected before any repository work begins
+```
+
+**Why this and not option 2 (a separate integrity code).** The split a caller genuinely cannot make
+for itself is **usage error versus operational failure** — reconstructing it from output means
+parsing English error strings. **Findings versus integrity failure is already available, structured
+and three-valued, in `verify --format json`.** Encoding a lossy subset of that verdict into an
+integer would create a second source of truth for the same question, and the two would drift. **This
+project has an RFC about exactly that: RFC 118, "derive, never transcribe."** Option 2 asks every
+error site in the workspace to self-classify into a grading that a schema'd output already carries
+better.
+
+Widening later is additive and cheap; narrowing is a break. Three codes now, and a fourth only if
+evidence demands one.
+
+**Why the architect rules this, correcting §6's own framing.** §6 called it the owner's because
+it is "an interface promise". By that reasoning every error-message string and every `note:` line
+would be the owner's too, and they are not. More concretely:
+**`docs/src/reference/release-compatibility.md:53` already names "command names, arguments, exit
+behavior, and human-readable output" as a compatibility surface, and already states the pre-1.0
+policy for changing it** — *"a minor release may intentionally change documented Cargo or CLI
+surfaces when release notes identify the change."* **The owner has already ruled the policy question.
+What was left was the shape of a contract the policy anticipates, and that is design work.**
+
+**What remains the owner's, and is not being taken here:** whether this contract is ever promoted
+into a *stability commitment* — a promise not to change it — which is a release-compatibility
+decision, not a design one.
+
+### 6b. Two consequences that fall out of the ruling
+
+**The invariant, stated once so each site derives from it rather than deciding for itself:
+no command may exit `0` while refusing to do what it was asked.**
+
+**`prikk unlock`'s abort path must become non-zero — and the audit's stated reason was not the real
+one.** The audit and this RFC's first draft both recorded it as *"`unlock` declining exits 0"*. What
+`unlock.rs:66-69` actually does is return `Ok(())` when **the operator** declines at the interactive
+prompt, which on its own is defensible: a human answered "no" and got exactly that.
+
+**The real hazard is one step further in, and it is worse.** `confirm_interactively`
+(`unlock.rs:109-123`) returns `false` when `stdin` yields no `yes` — including EOF. **In a
+non-interactive context the prompt can never succeed, so it resolves to "no", prints
+`aborted: lock not cleared`, and exits `0`.** A CI script running `prikk unlock && proceed` therefore
+proceeds with the lock still held, having been told everything is fine. Under the invariant above it
+exits `1`, interactive refusal included — uniform, rather than special-casing whether a human was
+watching.
+
+**This is a behaviour change and must be named as one** in the release notes, per
+`release-compatibility.md`'s own pre-1.0 policy. It does not need a separate ruling; that policy
+already covers it.
 
 ## 7. Non-goals
 
