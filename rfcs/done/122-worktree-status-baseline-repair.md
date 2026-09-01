@@ -1,6 +1,23 @@
 # RFC 122 — `worktree-status` runs on no repository this CLI produces
 
-**Status.** **Proposed.** Raised as **High** by the external architecture audit of 2026-08-31
+**Status.** **COMPLETE, 2026-09-01.** Rewired onto the replay baseline `commit` shares (`7a01168`),
+CI conformance repaired (`e6882c7`), and the two stale claims the fix itself created corrected
+(`bc443e8`). CI green on all 15 jobs, including both non-Linux read-only conformance runners.
+
+**What shipped beyond the original scope**, both found in review rather than named in the RFC:
+`main.rs`'s user-facing dirty-worktree message still said *"snapshot-baseline"* (the sweep had been
+scoped to `docs/`, and the stale wording also lived in code), and `README.md` still advertised the
+"one capability-gap caveat" that this work had just deleted. **And a queue owned by a different ref is
+now surfaced** — a `queued_elsewhere` field and an output note warning that an "untracked" file may be
+committed-but-unsealed work belonging to another ref, so a reader does not delete it. No verdict was
+reclassified: `Untracked` is accurate relative to the ref being checked; the note adds the context.
+
+**One reason it survived so long, recorded because it generalises:** the defect was known and written
+down in three places (`ROADMAP.md:177`, the CI exclusion comment, `platform-support.md`) and fixed in
+none — while `README.md` advertised the command with no caveat at all. Being recorded is not being
+tracked.
+
+Raised as **High** by the external architecture audit of 2026-08-31
 (`audit-2026-08-31-task-1a.md` §3, task-2 V1); reproduced independently at `3a8d730`
 (`.git-exclude/reviewed/external-audit-20260831-review-v1.md` §1.1).
 
