@@ -169,7 +169,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         name: "worktree-status",
         run: crate::run_worktree_status,
         help_lines: &[
-            "  prikk worktree-status [path] [--ref REF]  Report changes against snapshot baseline",
+            "  prikk worktree-status [path] [--ref REF]  Report changes against the replay baseline",
         ],
     },
     Command {

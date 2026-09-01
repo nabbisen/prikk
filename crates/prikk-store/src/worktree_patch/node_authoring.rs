@@ -30,12 +30,11 @@ use crate::author_signing::AuthorSigner;
 use crate::commit_index::{self, CommitIndex, CommitIndexEntry};
 use crate::fsutil::{RootFileStat, read_file_if_exists};
 use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryLayout};
-use crate::lifecycle_cache::incremental::resolve_baseline_state;
 use crate::lock::ActiveLock;
 use crate::node_id_gen::{NodeIdEntropySource, NodeIdGenerator};
 use crate::node_lifecycle::{LiveNode, NodeContent, NodeLifecycleState};
 use crate::object_store::{ObjectReader, ObjectWriteSession, ObjectWriter};
-use crate::patch_replay::{WorktreeBaseline, resolve_worktree_baseline};
+use crate::patch_replay::resolve_folded_worktree_baseline;
 use crate::path::RepoPath;
 use crate::text_span;
 use crate::wal::Wal;
@@ -265,53 +264,29 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     // ref-publication threading, only the plain object-write-session swap.
     let mut object_store = ObjectWriteSession::open(layout).map_err(AuthorError::Store)?;
 
-    // Baseline node lifecycle state from authoritative replay only (E3), or an empty genesis
-    // baseline (4.4b) when the target ref has never been published. DC-64: `resolve_baseline_state`
-    // applies an incremental step from a cached predecessor when eligible, falling back to an
-    // unmodified full replay otherwise — see
-    // `rfcs/handoffs/DC-64-baseline-reconstruction-cost/incremental-baseline-cache-design-v1.md`.
-    let baseline = resolve_worktree_baseline(layout, ref_name)?;
+    // Baseline node lifecycle state from authoritative replay only (E3), with any already-queued
+    // (unsealed) patches folded on top (DC-66) -- the single derivation `worktree-status` now
+    // shares (RFC 122, `replay-baseline-handoff-v1.md` §3). DC-64's incremental cache and DC-65's
+    // text-materialization fallback are both inside this call, unchanged. `queue_text_cache` is
+    // declared here, not inside the shared call, because `plan_edit_text` below reuses whatever
+    // folding already materialized into it.
+    let mut queue_text_cache = crate::lifecycle_cache::replay::TextCache::new();
+    let resolved = resolve_folded_worktree_baseline(
+        layout,
+        &object_store,
+        ref_name,
+        &active_replay,
+        &mut queue_text_cache,
+    )?;
     // DC-65: `plan_edit_text` needs these to materialize a text node's current bytes when its
     // baseline `blob_id` is a content identity rather than a stored object (any node whose most
     // recent operation was an `EditText`). Only ever consulted when `baseline_files` is non-empty,
     // which implies `Published` — see `plan_edit_text`'s own fail-closed check on the `None` case.
-    let (lineage_baseline_block_id, lineage_horizon_id) = match &baseline {
-        WorktreeBaseline::Published {
-            baseline_block,
-            horizon,
-        } => (Some(*baseline_block), Some(*horizon)),
-        WorktreeBaseline::Genesis => (None, None),
+    let (lineage_baseline_block_id, lineage_horizon_id) = match resolved.lineage {
+        Some((baseline_block, horizon)) => (Some(baseline_block), Some(horizon)),
+        None => (None, None),
     };
-    let mut baseline_state: NodeLifecycleState = match &baseline {
-        WorktreeBaseline::Published {
-            baseline_block,
-            horizon,
-        } => resolve_baseline_state(layout, &object_store, *baseline_block, *horizon)?
-            .state()
-            .clone(),
-        WorktreeBaseline::Genesis => NodeLifecycleState::new(),
-    };
-    // DC-66: queuing is a chain — fold any already-queued (unsealed) patches on top of the sealed
-    // baseline before this commit authors against it, so a path created or edited earlier in the same
-    // queue is seen as existing rather than minted again. `resolve_baseline_state` above is entirely
-    // unmodified; folding only happens when a queue actually exists. See
-    // `rfcs/handoffs/DC-66-multi-commit-queuing/queuing-baseline-design-v1.md`.
-    let mut queue_text_cache = crate::lifecycle_cache::replay::TextCache::new();
-    if !active_replay.records.is_empty() {
-        crate::lifecycle_cache::replay::apply_queued_patch_envelopes(
-            &object_store,
-            &active_replay.records,
-            &mut baseline_state,
-            &mut queue_text_cache,
-            match &baseline {
-                WorktreeBaseline::Published {
-                    baseline_block,
-                    horizon,
-                } => Some((*baseline_block, *horizon)),
-                WorktreeBaseline::Genesis => None,
-            },
-        )?;
-    }
+    let baseline_state: NodeLifecycleState = resolved.state;
 
     // Baseline file view: path -> (node_id, kind, blob_id, mode). Symlink nodes are tracked so a
     // change touching one can fail closed.
@@ -341,10 +316,10 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     // authority available is the path-keyed snapshot manifest, which Option A excludes — fail closed
     // rather than treat every snapshot-tracked file as untracked and mint fresh ids for it. This can
     // only arise for a published baseline; a genesis baseline has no block and no snapshot.
-    if let WorktreeBaseline::Published { baseline_block, .. } = &baseline {
+    if let Some((baseline_block, _horizon)) = resolved.lineage {
         if baseline_files.is_empty()
             && baseline_symlinks.is_empty()
-            && baseline_block_has_snapshot_ref(&object_store, *baseline_block)?
+            && baseline_block_has_snapshot_ref(&object_store, baseline_block)?
         {
             return Err(AuthorError::NodeIdentityUnavailable(
                 "baseline is snapshot-derived and carries no node identity; \

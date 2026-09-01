@@ -20,6 +20,6 @@ For each invocation, the CLI reports:
   [`prikk commit`](patches/worktree-patch.md) enforces on the write path.
 
 `status` does not run [`verify`](../reference/integrity-recovery.md)'s integrity checks, and does not
-report the worktree's own divergence from a snapshot baseline — that is
+report the worktree's own divergence from the replay baseline — that is
 [`worktree-status`](worktree-status.md). Multi-operation text diff minimization and audit plugins are
 not yet implemented; the command's own trailing line notes this.

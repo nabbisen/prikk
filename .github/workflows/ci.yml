@@ -225,11 +225,6 @@ jobs:
         run: |
           mkdir -p fixture-repo
           tar -xzf fixture-repo.tar.gz -C fixture-repo
-      # worktree-status is excluded here, not because it mutates, but because it currently
-      # requires snapshot-block state that no CLI command can produce against an ordinary
-      # patch/WAL-authored repository (see docs/src/reference/platform-support.md) — the fixture
-      # below is genesis-and-seal, exactly what `prikk commit`/`prikk seal` actually produce.
-      #
       # DC-71 B2: each command is echoed and separately checked (rather than one bash -e block)
       # so a failure names the exact command that failed, not just "something in this sequence" —
       # the ambiguity that made the first B2 report unable to isolate which of these three failed.
@@ -251,6 +246,8 @@ jobs:
           ../target/debug/prikk tag list
           echo "=== prikk checkout --plan-only ==="
           ../target/debug/prikk checkout --plan-only
+          echo "=== prikk worktree-status ==="
+          ../target/debug/prikk worktree-status
           echo "=== all read-only commands succeeded ==="
 
   # DC-87 Stage 2 review, criterion 7: "the criterion that proves the port rather than the code."

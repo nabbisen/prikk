@@ -1,27 +1,35 @@
-//! Read-only worktree status against a snapshot baseline.
+//! Read-only worktree status against the replay baseline.
 //!
-//! PR-019 compares the current worktree with the snapshot manifest referenced by a published block.
-//! It is intentionally read-only and does not create patch operations yet.
+//! RFC 122 (`replay-baseline-handoff-v1.md`) rewired this off the pre-node snapshot-blob baseline
+//! `commit` left behind at the patch-replay migration (`patch_replay.rs`): every real repository
+//! this CLI can create is authored against node-addressed replay state, never a stored snapshot
+//! Blob, so requiring one here (as this module did before) refused on every such repository. This
+//! module now shares `commit`'s own baseline derivation
+//! (`patch_replay::resolve_folded_worktree_baseline`) rather than reconstructing it a second way —
+//! see that function's own doc comment for why a second implementation that merely agrees today is
+//! itself the defect class being fixed.
 
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::ObjectType;
 
-use crate::checkout::prepare_snapshot_checkout_plan;
-use crate::layout::RepositoryLayout;
-use crate::object_store::{FileObjectStore, ObjectReader};
+use crate::blob_access::ensure_blob_matches_node_kind;
+use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryLayout};
+use crate::lifecycle_cache::replay::TextCache;
+use crate::node_lifecycle::NodeContent;
+use crate::object_store::ObjectReadSnapshot;
+use crate::patch_replay::resolve_folded_worktree_baseline;
 use crate::path::{RepoPath, join_repo_path_to_root};
-use crate::snapshot::SnapshotManifest;
+use crate::wal::Wal;
 
-/// Read-only worktree status report against a snapshot baseline.
+/// Read-only worktree status report against the replay baseline.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorktreeStatusReport {
     /// Human-readable ref name used as the baseline.
     pub ref_name: String,
-    /// Number of tracked files in the snapshot baseline.
+    /// Number of tracked files in the baseline.
     pub tracked_files: usize,
     /// Number of tracked files that match the baseline bytes.
     pub unchanged_files: usize,
@@ -60,11 +68,11 @@ pub struct WorktreeChange {
 /// Worktree change kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorktreeChangeKind {
-    /// A tracked snapshot file is missing from the worktree.
+    /// A tracked file is missing from the worktree.
     Missing,
-    /// A tracked snapshot file exists but differs from the baseline bytes.
+    /// A tracked file exists but differs from the baseline bytes.
     Modified,
-    /// A worktree file is not present in the snapshot baseline.
+    /// A worktree file is not present in the baseline.
     Untracked,
     /// A worktree path could not be safely represented as a Prikk repo path.
     UnsupportedPath,
@@ -83,28 +91,62 @@ impl WorktreeChangeKind {
     }
 }
 
-/// Compute read-only worktree status against the snapshot referenced by a ref.
+/// Compute read-only worktree status against the replay baseline for `ref_name` — the same
+/// baseline `commit` would author against, already-queued (unsealed) patches folded on top
+/// (`resolve_folded_worktree_baseline`'s own doc comment explains why folding is the right choice
+/// here: it answers "what would the next commit author?", which is the question this command's own
+/// caller is actually asking, and it agrees with `commit` by construction rather than by
+/// coincidence).
 pub fn worktree_status(layout: &RepositoryLayout, ref_name: &str) -> Result<WorktreeStatusReport> {
-    let plan = prepare_snapshot_checkout_plan(layout, ref_name)?;
-    let manifest = load_snapshot_manifest(layout, plan.snapshot_blob_id)?;
-    let baseline_paths: BTreeSet<String> = manifest
-        .files
-        .iter()
-        .map(|entry| entry.path.as_str().to_string())
-        .collect();
+    let object_store = ObjectReadSnapshot::open(layout)?;
+    let wal = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME);
+    let active_replay = wal.replay()?;
+    if active_replay.trailing_partial_bytes != 0 {
+        return Err(PrikkError::Integrity(format!(
+            "active WAL has {} trailing partial bytes; run `prikk doctor --repair-wal-tail` \
+             before checking worktree status",
+            active_replay.trailing_partial_bytes
+        )));
+    }
+    if active_replay.has_item_failure() {
+        return Err(PrikkError::Integrity(
+            "active WAL has a damaged record; run doctor before checking worktree status"
+                .to_string(),
+        ));
+    }
+    let mut text_cache = TextCache::new();
+    let resolved = resolve_folded_worktree_baseline(
+        layout,
+        &object_store,
+        ref_name,
+        &active_replay,
+        &mut text_cache,
+    )?;
+
+    let mut baseline_paths = BTreeSet::new();
     let mut seen_paths = BTreeSet::new();
     let mut changes = Vec::new();
     let mut unchanged_files = 0_usize;
+    let mut tracked_files = 0_usize;
 
-    for entry in &manifest.files {
-        let path_text = entry.path.as_str().to_string();
-        let target = join_repo_path_to_root(&entry.path, layout.root());
+    for (_, node) in resolved.state.live_nodes() {
+        // Symlink nodes carry no file-content blob to compare (`ensure_blob_matches_node_kind`
+        // refuses one outright) — no current authoring path creates one anyway (module doc: "symlink
+        // authoring fails closed"), and the snapshot-manifest baseline this replaced never carried
+        // symlinks either, so this is the same, pre-existing blind spot, not a new one.
+        let NodeContent::File { blob_id, .. } = &node.content else {
+            continue;
+        };
+        tracked_files += 1;
+        let path_text = node.path.as_str().to_string();
+        baseline_paths.insert(path_text.clone());
         seen_paths.insert(path_text.clone());
+        let target = join_repo_path_to_root(&node.path, layout.root());
         if !target.exists() {
             changes.push(WorktreeChange {
                 path: path_text,
                 kind: WorktreeChangeKind::Missing,
-                detail: "tracked snapshot file is absent from the worktree".to_string(),
+                detail: "tracked file is absent from the worktree".to_string(),
             });
             continue;
         }
@@ -118,13 +160,13 @@ pub fn worktree_status(layout: &RepositoryLayout, ref_name: &str) -> Result<Work
             continue;
         }
         let bytes = fs::read(&target)?;
-        if bytes == entry.bytes {
+        if ensure_blob_matches_node_kind(&bytes, *blob_id, node.kind).is_ok() {
             unchanged_files += 1;
         } else {
             changes.push(WorktreeChange {
                 path: path_text,
                 kind: WorktreeChangeKind::Modified,
-                detail: "tracked file bytes differ from the snapshot baseline".to_string(),
+                detail: "tracked file bytes differ from the baseline".to_string(),
             });
         }
     }
@@ -144,30 +186,10 @@ pub fn worktree_status(layout: &RepositoryLayout, ref_name: &str) -> Result<Work
 
     Ok(WorktreeStatusReport {
         ref_name: ref_name.to_string(),
-        tracked_files: manifest.files.len(),
+        tracked_files,
         unchanged_files,
         changes,
     })
-}
-
-fn load_snapshot_manifest(
-    layout: &RepositoryLayout,
-    snapshot_blob_id: prikk_object::ObjectId,
-) -> Result<SnapshotManifest> {
-    let object_store = FileObjectStore::new(layout.clone());
-    let Some(envelope) = object_store.read_object(snapshot_blob_id)? else {
-        return Err(PrikkError::Integrity(format!(
-            "snapshot Blob {snapshot_blob_id} is missing"
-        )));
-    };
-    if envelope.object_type != ObjectType::Blob {
-        return Err(PrikkError::ObjectTypeMismatch {
-            expected: ObjectType::Blob.to_string(),
-            actual: envelope.object_type.to_string(),
-        });
-    }
-    let snapshot_content = crate::blob_access::decode_snapshot_blob(&envelope.canonical_payload)?;
-    SnapshotManifest::decode(&snapshot_content)
 }
 
 fn scan_untracked(
@@ -199,7 +221,7 @@ fn scan_untracked(
                     changes.push(WorktreeChange {
                         path: text,
                         kind: WorktreeChangeKind::Untracked,
-                        detail: "worktree file is not in the snapshot baseline".to_string(),
+                        detail: "worktree file is not in the baseline".to_string(),
                     });
                 }
             }

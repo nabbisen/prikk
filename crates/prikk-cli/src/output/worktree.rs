@@ -26,9 +26,9 @@ pub(crate) fn print_worktree_status(layout: &RepositoryLayout, report: &Worktree
         report.count_kind(WorktreeChangeKind::UnsupportedPath)
     );
     if report.is_clean() {
-        println!("worktree: clean against snapshot baseline");
+        println!("worktree: clean against baseline");
     } else {
-        println!("worktree: changed against snapshot baseline");
+        println!("worktree: changed against baseline");
         for change in &report.changes {
             println!(
                 "  {} {} — {}",

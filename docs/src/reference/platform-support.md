@@ -211,7 +211,7 @@ tracing every command's call graph to `crates/prikk-store/src/fsutil`'s mutation
 | `rollback-preview` | Read-only |
 | `rollback-draft` | **Mutation** (appends to the active WAL) |
 | `rollback-draft-verify` | Read-only |
-| `worktree-status` | Read-only, but see the note below — currently unreachable against an ordinarily-authored repository |
+| `worktree-status` | Read-only |
 | `branch` / `branch list` | Read-only |
 | `branch create` / `branch close` | **Mutation** |
 | `tag` / `tag list` | Read-only |
@@ -226,23 +226,15 @@ functions above it does or does not reach, including transitively — `rollback-
 calls no mutation primitive directly in its own file, but reaches one through `Wal::append_patch`.
 A name suggesting "plan" or "preview" is a hint, not proof; every row above was traced, not assumed.
 
-**`worktree-status`** is read-only by the same trace, but no CLI command produces the state it
-requires: `worktree_status` (`crates/prikk-store/src/worktree_status.rs:88`) calls
-`prepare_snapshot_checkout_plan`, which errors unless the target block carries a snapshot blob
-(`checkout.rs:94-97`). Nothing in the CLI's `commit`/`seal` path — the only way an ordinary
-repository is built — ever sets one; only a test-internal helper does
-(`worktree_status/tests.rs:94`, `publish_snapshot_block`). This is a capability gap, not a
-mutation/read-only classification error, recorded in `MILESTONES.md` and out of DC-71's scope to fix.
-
 ## Non-Linux CI conformance
 
 `.github/workflows/ci.yml`'s `non-linux-build` and `non-linux-verify` jobs run on GitHub's native
 `windows-latest` and `macos-latest` runners on every push and pull request, so a regression in this
 boundary — the exact defect DC-71 fixed, which shipped undetected because nothing built a non-Linux
 target — fails CI immediately rather than being found by a user or the next trial build.
-`non-linux-verify` additionally runs the read-only command set (minus `worktree-status`, per the note
-above) against a fixture repository authored on Linux, so this is a demonstrated property, not merely
-a successful compile.
+`non-linux-verify` additionally runs the full read-only command set, including `worktree-status`
+(RFC 122), against a fixture repository authored on Linux, so this is a demonstrated property, not
+merely a successful compile.
 
 **`macos-mutation` and `windows-mutation`** (DC-81, DC-87 Stage 2) run the full workspace test suite
 natively on `macos-latest` and `windows-latest`, since neither developer nor architect can run either

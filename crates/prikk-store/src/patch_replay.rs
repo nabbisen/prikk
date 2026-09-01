@@ -23,11 +23,13 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::ObjectId;
 
 use crate::layout::RepositoryLayout;
-use crate::object_store::ObjectReadSnapshot;
+use crate::node_lifecycle::NodeLifecycleState;
+use crate::object_store::{ObjectReadSnapshot, ObjectReader};
 use crate::path::RepoPath;
 use crate::refs::RefStore;
 use crate::snapshot::SnapshotManifest;
 use crate::validate_local_branch_ref;
+use crate::wal::WalReplay;
 
 use apply::apply_decoded_operation;
 use decode::decode_patch_operations;
@@ -299,6 +301,100 @@ pub(crate) fn resolve_worktree_baseline(
         )));
     }
     Ok(WorktreeBaseline::Genesis)
+}
+
+/// The baseline lifecycle state a worktree operation should compare or author against: the sealed
+/// baseline (or an empty genesis state), with any already-queued (unsealed) patches for this ref
+/// folded on top (DC-66) exactly as `commit` folds them.
+pub(crate) struct FoldedWorktreeBaseline {
+    /// Baseline lifecycle state, with the active queue folded on top when it belongs to this ref.
+    pub(crate) state: NodeLifecycleState,
+    /// `Some((baseline_block, horizon))` when the ref is published; `None` for a genesis baseline.
+    pub(crate) lineage: Option<(ObjectId, ObjectId)>,
+}
+
+/// **The single derivation every worktree-comparing command uses** (RFC 122 §3,
+/// `replay-baseline-handoff-v1.md`): `commit` (`node_authoring.rs`) and `worktree-status`
+/// (`worktree_status.rs`) both call this rather than each reconstructing baseline state their own
+/// way — a second implementation that happens to agree today is the defect RFC 122 fixes, one
+/// release later. `active_replay` is a parameter, not read here, because `commit` already has its
+/// own copy in scope for its own, authoring-specific checks (WAL tail/damage/patch-limit) and
+/// reading it twice would cost a second WAL replay for no reason; `worktree-status` has no such
+/// copy yet and reads one itself before calling this.
+///
+/// **Folding decision, deliberately not `require_active_ref_for_non_empty_wal`'s own decision**:
+/// that function refuses outright when the active WAL belongs to a different ref, which is correct
+/// for `commit` (it is about to append to that WAL and single-active-session ownership must be
+/// unambiguous before it does) but wrong for a read-only query about one specific ref — a queue
+/// that belongs to some *other* ref is simply irrelevant to this ref's status, not an error. Only
+/// genuinely ambiguous ownership (non-empty WAL, no readable owner) is refused here, with the same
+/// classification and wording `require_active_ref_for_non_empty_wal` already uses for that case —
+/// by the time `commit` reaches this function it has already called that stricter check itself
+/// (`author_inner`, before baseline resolution begins), so a non-empty queue there is always
+/// already known to belong to this ref, and this function's own ownership check is a harmless,
+/// always-true re-confirmation for that caller, not a behavior change.
+///
+/// `text_cache` is a parameter, not created here, because `commit` (`node_authoring.rs`) reuses its
+/// own cache afterward for `plan_edit_text`'s own text materialization — folding into a cache the
+/// caller keeps, not a throwaway internal to this call, so that later reuse still sees what folding
+/// already materialized. `worktree-status` has no further use for it and passes a fresh, empty one.
+pub(crate) fn resolve_folded_worktree_baseline(
+    layout: &RepositoryLayout,
+    object_store: &impl ObjectReader,
+    ref_name: &str,
+    active_replay: &WalReplay,
+    text_cache: &mut crate::lifecycle_cache::replay::TextCache,
+) -> Result<FoldedWorktreeBaseline> {
+    let canonical_ref = validate_local_branch_ref(ref_name)?;
+    let baseline = resolve_worktree_baseline(layout, &canonical_ref)?;
+    let lineage = match &baseline {
+        WorktreeBaseline::Published {
+            baseline_block,
+            horizon,
+        } => Some((*baseline_block, *horizon)),
+        WorktreeBaseline::Genesis => None,
+    };
+    let mut state = match &baseline {
+        WorktreeBaseline::Published {
+            baseline_block,
+            horizon,
+        } => crate::lifecycle_cache::incremental::resolve_baseline_state(
+            layout,
+            object_store,
+            *baseline_block,
+            *horizon,
+        )?
+        .state()
+        .clone(),
+        WorktreeBaseline::Genesis => NodeLifecycleState::new(),
+    };
+
+    if !active_replay.records.is_empty() {
+        let owns_queue = match crate::read_active_ref_metadata(layout)? {
+            crate::ActiveRefMetadata::Valid(actual) => actual == canonical_ref,
+            crate::ActiveRefMetadata::Missing => {
+                return Err(PrikkError::Integrity(
+                    "active WAL has records but active ref metadata is missing".to_string(),
+                ));
+            }
+            crate::ActiveRefMetadata::Invalid(reason) => {
+                return Err(PrikkError::Integrity(format!(
+                    "active WAL has records but active ref metadata is malformed: {reason}"
+                )));
+            }
+        };
+        if owns_queue {
+            crate::lifecycle_cache::replay::apply_queued_patch_envelopes(
+                object_store,
+                &active_replay.records,
+                &mut state,
+                text_cache,
+                lineage,
+            )?;
+        }
+    }
+
+    Ok(FoldedWorktreeBaseline { state, lineage })
 }
 
 #[cfg(test)]

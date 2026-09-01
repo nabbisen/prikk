@@ -174,9 +174,10 @@ one), and semantic merge remains out of scope (a stated non-goal since DC-16).
 ### Editor, IDE, and file-manager integration — blocked on model gaps, not on API work
 
 Deferred, and the reasons are the point: **no current-branch pointer** (an IDE status bar has nothing to
-show — every command resolves `--ref` explicitly), **`worktree-status` cannot run** against any repository
-the CLI produces, and **there is no `diff` command**. An integration API today would expose those gaps as
-the product.
+show — every command resolves `--ref` explicitly), and **there is no `diff` command**. A third reason
+this row once named — `worktree-status` could not run against any repository the CLI produces — is
+fixed (RFC 122) and is removed here; that does not unblock this theme, since the two reasons above are
+unchanged. An integration API today would expose those gaps as the product.
 
 `diff` itself, when scheduled: **first-party, reusing `text_span`'s authoring computation** — not a
 display-only crate. The spans `plan_authored_text_span` produces are identity-bearing and signed; a

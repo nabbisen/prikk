@@ -155,8 +155,8 @@ narrower guarantees — see the platform support reference below). **Read-only c
 all three**
 (`verify`, `log`, `status`, `doctor`, `checkout --plan-only`/`--snapshot-plan`/`--patch-plan`/
 `--patch-delete-plan`, `merge-evidence`, `merge-plan`, `inverse-plan`, `rollback-preview`,
-`rollback-draft-verify`, `branch [list]`, `tag [list]` — the full, durable list, including one
-capability-gap caveat, is in the [platform support
+`rollback-draft-verify`, `branch [list]`, `tag [list]`, `worktree-status` — the full, durable list,
+including one capability-gap caveat, is in the [platform support
 reference](./docs/src/reference/platform-support.md)). This closes a defect fixed by DC-71:
 `prikk-store` previously failed to compile at all off Linux due to inconsistently
 `#[cfg(target_os = "linux")]`-gated imports; CI now builds and actually *runs* the read-only command
