@@ -63,10 +63,19 @@ These records are under design review. All proposed RFCs must respect the depend
 | 127 | [Release-notes history coverage](./proposed/127-release-notes-history-coverage.md) | Unscheduled. External audit 2026-08-31. `0.23.0`'s changelog heading was destroyed by `5964ad6`; the gate reads only the tag being cut, so history regressions pass forever |
 | 128 | [Outward-facing project surface](./proposed/128-outward-facing-project-surface.md) | Unscheduled. External audit 2026-08-31. No `SECURITY.md`, no `CONTRIBUTING.md`, 7 of 8 library crates publish with no categories/keywords/homepage, no Git→prikk mapping page. **RULED 2026-09-01: advisories-only, as project policy** — `https://github.com/prikk-vcs/prikk/security/advisories/new`; revised the same day from an initial acceptance of both channels. §2a records the trade and the two obligations that keep it sound. `SECURITY.md` is sequenced behind RFC 129 |
 | 129 | [Repository migration to `prikk-vcs`](./proposed/129-repository-migration-to-prikk-vcs.md) | **EXECUTED 2026-09-01** — transfer confirmed, remote repointed, scoped sweep of 404 occurrences across 31 files, generated `install.sh` verified. §9 records four corrections the execution forced on the RFC's own inventory, including §3's schema-`$id` recommendation being **wrong**: the normative schema is identity-pinned per oracle case in ~90 places, and `release-policy check` refused the edit. Release cut no longer blocked |
+| 130 | [Module coupling invariant](./proposed/130-module-coupling-invariant.md) | Unscheduled. Owner question 2026-09-01 (`prikk-store`'s growth), answered by an independent external architect review and amended by the architect. Two derivations agree: the crate is a layered DAG **spoiled by one cycle (`active ↔ refs`) and four middle-hubs**; size and compile time are not the problem. Gates acyclicity absolutely and new hubs via an allowlist-with-reasons — **a bare degree bound would have rejected RFC 122's own fix**. Touches no files |
+| 131 | [Module grouping and visibility scoping](./proposed/131-module-grouping-and-visibility-scoping.md) | Unscheduled, **after RFC 130 and between feature arcs**. Groups the 123 top-level entries (name prefixes cover only 31 of 69 modules; 38 singletons need deliberate groups) and introduces `pub(in crate::<group>)` — the crate has **0 today against 641 `pub(crate)`**. Grouping alone changes nothing about side-effect predictability; the visibility half is the one that does |
 
 **Blocked, not available:** **DC-43** waits on a release-lane event, and additionally
 inherits DC-35's unamended key lifecycle and criterion 4's signer bootstrap, which only the project owner
 can begin. **DC-44 is no longer here** — closed 2026-09-01 and moved to `done/`.
+
+**From the `prikk-store` structure review of 2026-09-01:** **130** and **131** answer the owner's question
+about the crate's growth. An independent external architect measured the coupling graph, and the architect
+re-derived it: the finding is that **line count is the least diagnostic metric available** and the cost the
+owner named lives in one dependency cycle and four middle-hubs. **A crate split is ruled out on evidence**,
+including `fsutil`, the one clean seam — see RFC 130 §6. Both source reviews live under `.git-exclude/` and
+are invisible to a fresh clone, so RFC 130 §2 restates the measurements rather than citing them.
 
 **From the external audit of 2026-08-31:** **121** through **128** carry the substantive findings of an
 independent architecture audit of 0.27.1. The architect's review of that audit — every load-bearing claim
