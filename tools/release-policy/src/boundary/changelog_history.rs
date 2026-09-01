@@ -21,22 +21,18 @@ use std::process::Command;
 use super::{BoundaryError, push};
 use crate::error::Result;
 
-/// **Provisional, not architect-ruled** -- see the changelog-history-gate report for this
-/// increment. RFC 127 and its handoff both state "every [released tag] has exactly one [heading]"
-/// after checking only the 8 most recent tags (0.22.0..0.27.1). Checking the full tag history
-/// (44 tags back to 0.0.1) surfaces two that predate the `## X.Y.Z — DATE` convention, which first
-/// appears in earnest around 0.1.2/0.1.3/0.2.0:
-/// - `0.0.1` has no heading of any shape anywhere in `CHANGELOG.md`.
-/// - `0.1.1`'s heading exists but is `## 0.1.1 Housekeeping` -- no ` — DATE` suffix at all.
+/// **Ruled by the architect, RFC 127 §3.3, 2026-09-01: keep this list.** `0.0.1` (no heading of any
+/// shape) and `0.1.1` (`## 0.1.1 Housekeeping` -- no ` — DATE` suffix) predate the
+/// `## X.Y.Z — DATE` convention, which begins holding at `0.1.2`. The gate exists to catch a
+/// regression *against* that convention; these two tags were never in its shape, so there is
+/// nothing for the gate to regress on. This is this project's own idiom for exactly this shape
+/// (`UNSAFE_EXEMPT_CRATES`, `DECLARED_UNDOCUMENTED`, `RFC114_ADMITTED_BUT_UNWRITTEN`), and entries
+/// here are pre-convention tags only -- never a version range, never "everything before X".
 ///
-/// Wiring the gate in without an exemption breaks `boundary::tests::
-/// workspace_and_product_boundaries_hold` against this repository's own real history, which would
-/// make this increment unshippable while the scope question sits open. Excluding exactly these two
-/// named tags (never a version range, never "everything before X") keeps the gate honest for every
-/// tag from `0.1.2` onward, including every future one, while flagging the pre-convention gap
-/// instead of silently working around it. The alternatives (backfill the two legacy headings in
-/// `CHANGELOG.md`, or bound the gate to a version cutoff) are laid out in the report for a ruling;
-/// this list should be emptied once one is chosen.
+/// **Self-guarding, per the ruling:** [`check`] verifies each entry here still genuinely lacks a
+/// conforming heading, and fails if one does not -- an exemption that has become untrue must break
+/// the build until someone deletes it, per `unsafe_boundary.rs`'s own standard: "a control the
+/// controlled party can silently remove is a convention, not a control."
 const LEGACY_TAGS_WITHOUT_DATED_HEADINGS: &[&str] = &["0.0.1", "0.1.1"];
 
 /// A released tag's own shape (`prikk-release-tag-convention`): unprefixed `X.Y.Z`, three
@@ -115,6 +111,25 @@ pub(super) fn check(root: &Path, errors: &mut Vec<BoundaryError>) -> Result<()> 
 
     let changelog = std::fs::read_to_string(root.join("CHANGELOG.md"))?;
     let headings = changelog_headings(&changelog);
+
+    for exempt_tag in LEGACY_TAGS_WITHOUT_DATED_HEADINGS {
+        let count = headings
+            .iter()
+            .filter(|heading| **heading == *exempt_tag)
+            .count();
+        if count != 0 {
+            push(
+                errors,
+                "changelog-history",
+                format!(
+                    "{exempt_tag}: exemption in LEGACY_TAGS_WITHOUT_DATED_HEADINGS is stale -- \
+                     CHANGELOG.md now has {count} `## {exempt_tag} — DATE` heading(s); remove this \
+                     tag from the exemption list"
+                ),
+            );
+        }
+    }
+
     for tag in &tags {
         let count = headings.iter().filter(|heading| **heading == *tag).count();
         if count != 1 {

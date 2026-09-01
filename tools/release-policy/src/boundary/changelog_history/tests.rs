@@ -166,6 +166,44 @@ fn check_does_not_report_a_tag_on_the_legacy_exemption_list() {
     assert!(errors.is_empty(), "{errors:?}");
 }
 
+/// The self-guard (RFC 127 §3.3): an exemption must stay true, or the gate must refuse and name
+/// the stale entry, rather than keep silently skipping a tag that has since gained a conforming
+/// heading. Shown red (heading present) then green (heading removed) -- the amendment's own
+/// control 1.
+#[test]
+fn check_fails_when_a_legacy_exemption_gains_a_conforming_heading() {
+    let exempt_tag = LEGACY_TAGS_WITHOUT_DATED_HEADINGS
+        .first()
+        .expect("exemption list is non-empty");
+    let temporary = scratch_repo(&["0.2.0", exempt_tag]);
+
+    // Red: the exempt tag now has a conforming heading -- its exemption is stale.
+    std::fs::write(
+        temporary.path().join("CHANGELOG.md"),
+        format!(
+            "# Changelog\n\n## 0.2.0 — 2026-01-02\n\nSecond release.\n\n\
+             ## {exempt_tag} — 2026-01-01\n\nNow dated.\n"
+        ),
+    )
+    .unwrap();
+    let mut errors: Vec<BoundaryError> = Vec::new();
+    check(temporary.path(), &mut errors).unwrap();
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    let detail = format!("{errors:?}");
+    assert!(detail.contains(exempt_tag), "{detail}");
+    assert!(detail.contains("stale"), "{detail}");
+
+    // Green: heading removed again, self-guard clears.
+    std::fs::write(
+        temporary.path().join("CHANGELOG.md"),
+        "# Changelog\n\n## 0.2.0 — 2026-01-02\n\nSecond release.\n",
+    )
+    .unwrap();
+    let mut errors: Vec<BoundaryError> = Vec::new();
+    check(temporary.path(), &mut errors).unwrap();
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
 #[test]
 fn check_passes_when_every_tagged_version_has_exactly_one_heading() {
     let temporary = scratch_repo(&["0.1.0", "0.2.0"]);
