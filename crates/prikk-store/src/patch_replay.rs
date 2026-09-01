@@ -311,6 +311,12 @@ pub(crate) struct FoldedWorktreeBaseline {
     pub(crate) state: NodeLifecycleState,
     /// `Some((baseline_block, horizon))` when the ref is published; `None` for a genesis baseline.
     pub(crate) lineage: Option<(ObjectId, ObjectId)>,
+    /// `Some(other_ref)` when the active WAL is non-empty but owned by a ref other than the one
+    /// requested — correctly *not* folded into `state` (another ref's queue is not part of this
+    /// ref's baseline), but a caller may still want to say so: that queue is real, committed work,
+    /// not a stray file, even though it plays no part in this baseline (RFC 122
+    /// `replay-baseline-handoff-v2-amendment.md` §4).
+    pub(crate) queued_on_other_ref: Option<String>,
 }
 
 /// **The single derivation every worktree-comparing command uses** (RFC 122 §3,
@@ -369,9 +375,21 @@ pub(crate) fn resolve_folded_worktree_baseline(
         WorktreeBaseline::Genesis => NodeLifecycleState::new(),
     };
 
+    let mut queued_on_other_ref = None;
     if !active_replay.records.is_empty() {
-        let owns_queue = match crate::read_active_ref_metadata(layout)? {
-            crate::ActiveRefMetadata::Valid(actual) => actual == canonical_ref,
+        match crate::read_active_ref_metadata(layout)? {
+            crate::ActiveRefMetadata::Valid(actual) if actual == canonical_ref => {
+                crate::lifecycle_cache::replay::apply_queued_patch_envelopes(
+                    object_store,
+                    &active_replay.records,
+                    &mut state,
+                    text_cache,
+                    lineage,
+                )?;
+            }
+            crate::ActiveRefMetadata::Valid(other) => {
+                queued_on_other_ref = Some(other);
+            }
             crate::ActiveRefMetadata::Missing => {
                 return Err(PrikkError::Integrity(
                     "active WAL has records but active ref metadata is missing".to_string(),
@@ -383,18 +401,13 @@ pub(crate) fn resolve_folded_worktree_baseline(
                 )));
             }
         };
-        if owns_queue {
-            crate::lifecycle_cache::replay::apply_queued_patch_envelopes(
-                object_store,
-                &active_replay.records,
-                &mut state,
-                text_cache,
-                lineage,
-            )?;
-        }
     }
 
-    Ok(FoldedWorktreeBaseline { state, lineage })
+    Ok(FoldedWorktreeBaseline {
+        state,
+        lineage,
+        queued_on_other_ref,
+    })
 }
 
 #[cfg(test)]

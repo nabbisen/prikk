@@ -144,6 +144,50 @@ fn worktree_status_folds_an_already_queued_unsealed_patch() {
          {report:?}"
     );
     assert_eq!(report.unchanged_files, 2);
+    assert_eq!(
+        report.queued_elsewhere, None,
+        "the queue belongs to this same ref, so there is nothing 'elsewhere' to report: {report:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// RFC 122 amendment §4: a non-empty active WAL owned by a *different* ref is correctly not
+/// folded into this ref's baseline (it is not part of it), but `worktree-status` must still say
+/// so — the queued file is real, committed work, not a stray file, even though it plays no part
+/// in the ref actually being checked here. `heads/other` has never been published (a Genesis
+/// baseline), so this needs no second branch: an unpublished ref's own baseline is legitimately
+/// empty, independent of what any other ref's active queue holds.
+#[test]
+fn worktree_status_reports_a_queue_owned_by_a_different_ref() {
+    let root = unique_temp_dir("worktree-status-queue-elsewhere");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    trust_maintainer(&layout, &maintainer_signer());
+    generation(&layout, "a.txt", b"first\n", "first");
+
+    // Second commit on heads/main, deliberately not sealed -- the active WAL now belongs to
+    // heads/main, not heads/other.
+    std::fs::write(root.join("b.txt"), b"second\n").unwrap();
+    commit_worktree_changes_signed(
+        &layout,
+        "heads/main",
+        "second, unsealed",
+        WorktreePatchCommitOptions::default(),
+        &author_signer(),
+    )
+    .unwrap();
+
+    let report = worktree_status(&layout, "heads/other").unwrap();
+    assert_eq!(
+        report.queued_elsewhere,
+        Some("heads/main".to_string()),
+        "the queue belongs to heads/main, not the ref being checked: {report:?}"
+    );
+    // `b.txt` is real, committed-but-unsealed work on heads/main -- correctly still reported as
+    // untracked *relative to heads/other's own (empty) baseline*, which has never heard of it.
+    // `queued_elsewhere` adds context; it must not reclassify this.
+    assert_eq!(report.tracked_files, 0);
+    assert_eq!(report.count_kind(WorktreeChangeKind::Untracked), 2);
 
     let _ = std::fs::remove_dir_all(root);
 }

@@ -35,6 +35,13 @@ pub struct WorktreeStatusReport {
     pub unchanged_files: usize,
     /// Worktree changes detected against the baseline.
     pub changes: Vec<WorktreeChange>,
+    /// `Some(other_ref)` when the active WAL is non-empty but owned by a ref other than
+    /// `ref_name` — real, committed-but-unsealed work, not part of this ref's baseline (RFC 122
+    /// `replay-baseline-handoff-v2-amendment.md` §4). Any `Untracked` changes above are reported
+    /// relative to `ref_name`'s own baseline regardless — this field adds context, it does not
+    /// reclassify them: a queued file for a *different* ref is not part of that other ref's
+    /// baseline either, so it correctly still shows as untracked here.
+    pub queued_elsewhere: Option<String>,
 }
 
 impl WorktreeStatusReport {
@@ -189,6 +196,7 @@ pub fn worktree_status(layout: &RepositoryLayout, ref_name: &str) -> Result<Work
         tracked_files,
         unchanged_files,
         changes,
+        queued_elsewhere: resolved.queued_on_other_ref,
     })
 }
 

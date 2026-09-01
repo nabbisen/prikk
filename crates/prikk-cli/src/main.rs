@@ -542,7 +542,7 @@ fn run_worktree_status(args: Vec<String>) -> std::result::Result<(), String> {
     if report.is_clean() {
         Ok(())
     } else {
-        Err("worktree has snapshot-baseline changes".to_string())
+        Err("worktree has changes against the baseline".to_string())
     }
 }
 

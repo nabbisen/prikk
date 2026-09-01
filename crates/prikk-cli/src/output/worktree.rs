@@ -38,6 +38,15 @@ pub(crate) fn print_worktree_status(layout: &RepositoryLayout, report: &Worktree
             );
         }
     }
+    if let Some(other_ref) = &report.queued_elsewhere {
+        println!(
+            "note: the active WAL has queued (unsealed) patches for {other_ref}, not {} -- that \
+             is real, committed work, not shown above; any \"untracked\" file here may be exactly \
+             that work seen from this ref's own baseline, so do not delete based on this report \
+             alone (see `prikk status`)",
+            report.ref_name
+        );
+    }
     println!(
         "note: use `prikk commit -m <message>` to author node-addressed worktree changes; \
          text nodes use deterministic arbitrary-span EditText"
