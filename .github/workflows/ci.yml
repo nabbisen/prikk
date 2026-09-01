@@ -9,7 +9,17 @@ jobs:
     name: stable
     runs-on: ubuntu-latest
     steps:
+      # RFC 127: `boundary::tests::workspace_and_product_boundaries_hold` (exercised by `cargo test
+      # --workspace` below) now asserts every released tag has exactly one CHANGELOG.md heading --
+      # the gate that would have caught `0.23.0`'s heading being overwritten instead of preceded.
+      # `actions/checkout`'s own default fetches no tags at all, so without `fetch-tags: true` this
+      # job's own checkout would hand the gate an empty tag list -- RFC 127 §3 rules that this must
+      # fail loudly, not pass vacuously, so every job below that runs `cargo test --workspace` needs
+      # this. `fetch-tags: true` alone (not `fetch-depth: 0`) is the cheaper fix: the gate only
+      # needs the tag *names*, not the full commit history a depth-0 clone would also fetch.
       - uses: actions/checkout@v7
+        with:
+          fetch-tags: true
       - uses: dtolnay/rust-toolchain@stable
       - name: Fetch dependencies for every target
         # release-policy's boundary check runs `cargo metadata --locked --offline`, which resolves
@@ -29,7 +39,10 @@ jobs:
     name: msrv-1.85.0
     runs-on: ubuntu-latest
     steps:
+      # RFC 127's tag-fetch finding (see `stable`'s own comment above) applies identically here.
       - uses: actions/checkout@v7
+        with:
+          fetch-tags: true
       - uses: dtolnay/rust-toolchain@1.85.0
       - name: Fetch dependencies for every target
         # release-policy's boundary check runs `cargo metadata --locked --offline`, which resolves
@@ -74,7 +87,11 @@ jobs:
     name: macOS mutation test suite
     runs-on: macos-latest
     steps:
+      # RFC 127's tag-fetch finding (see `stable`'s own comment near the top of this file) applies
+      # identically here.
       - uses: actions/checkout@v7
+        with:
+          fetch-tags: true
       - uses: dtolnay/rust-toolchain@stable
       - name: Fetch dependencies for every target
         # DC-81 addendum-2 B1: without this, boundary::tests::workspace_and_product_boundaries_hold
@@ -103,7 +120,11 @@ jobs:
     name: Windows mutation test suite
     runs-on: windows-latest
     steps:
+      # RFC 127's tag-fetch finding (see `stable`'s own comment near the top of this file) applies
+      # identically here.
       - uses: actions/checkout@v7
+        with:
+          fetch-tags: true
       - uses: dtolnay/rust-toolchain@stable
       - name: Fetch dependencies for every target
         # DC-81 addendum-2 B1's finding, confirmed to apply identically here (see lines 20/40/83):

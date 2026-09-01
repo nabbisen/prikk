@@ -252,6 +252,8 @@ in this release.
   has no matching documentation, and fails if documentation describes a command that does not
   exist.
 
+## 0.23.0 — 2026-08-23
+
 **History moves between repositories.** `prikk sync` negotiates what one repository has that another
 doesn't, moves it as an artifact file over whatever channel the operator already has, and the receiver
 verifies every byte on arrival. Tags travel in that artifact and are adopted under the receiver's own
