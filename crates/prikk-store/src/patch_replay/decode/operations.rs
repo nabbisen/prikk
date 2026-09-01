@@ -17,10 +17,38 @@ pub(super) fn decode_create_file(bytes: &[u8]) -> Result<DecodedOperationKind> {
     let mut mode = None;
     while let Some(field) = cursor.next_field()? {
         match field.tag {
-            1 => path = Some(field.read_repo_path()?),
-            2 => node_id = Some(field.read_node_id()?),
-            3 => blob_id = Some(field.read_object_id_typed()?),
-            4 => mode = Some(field.read_u32()?),
+            1 => {
+                if path.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate CreateFile path field".to_string(),
+                    ));
+                }
+                path = Some(field.read_repo_path()?);
+            }
+            2 => {
+                if node_id.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate CreateFile node_id field".to_string(),
+                    ));
+                }
+                node_id = Some(field.read_node_id()?);
+            }
+            3 => {
+                if blob_id.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate CreateFile blob_id field".to_string(),
+                    ));
+                }
+                blob_id = Some(field.read_object_id_typed()?);
+            }
+            4 => {
+                if mode.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate CreateFile mode field".to_string(),
+                    ));
+                }
+                mode = Some(field.read_u32()?);
+            }
             other => {
                 return Err(PrikkError::MalformedData(format!(
                     "unknown CreateFile field tag: {other}"
@@ -60,12 +88,54 @@ pub(super) fn decode_delete_node(bytes: &[u8]) -> Result<DecodedOperationKind> {
     let mut old_mode = None;
     while let Some(field) = cursor.next_field()? {
         match field.tag {
-            1 => path = Some(field.read_repo_path()?),
-            2 => node_id = Some(field.read_node_id()?),
-            3 => old_node_kind = Some(field.read_node_kind()?),
-            4 => old_blob_id = Some(field.read_object_id_typed()?),
-            5 => old_target = Some(field.read_string()?),
-            6 => old_mode = Some(field.read_u32()?),
+            1 => {
+                if path.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate DeleteNode path field".to_string(),
+                    ));
+                }
+                path = Some(field.read_repo_path()?);
+            }
+            2 => {
+                if node_id.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate DeleteNode node_id field".to_string(),
+                    ));
+                }
+                node_id = Some(field.read_node_id()?);
+            }
+            3 => {
+                if old_node_kind.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate DeleteNode old_node_kind field".to_string(),
+                    ));
+                }
+                old_node_kind = Some(field.read_node_kind()?);
+            }
+            4 => {
+                if old_blob_id.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate DeleteNode old_blob_id field".to_string(),
+                    ));
+                }
+                old_blob_id = Some(field.read_object_id_typed()?);
+            }
+            5 => {
+                if old_target.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate DeleteNode old_target field".to_string(),
+                    ));
+                }
+                old_target = Some(field.read_string()?);
+            }
+            6 => {
+                if old_mode.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate DeleteNode old_mode field".to_string(),
+                    ));
+                }
+                old_mode = Some(field.read_u32()?);
+            }
             other => {
                 return Err(PrikkError::MalformedData(format!(
                     "unknown DeleteNode field tag: {other}"
@@ -144,16 +214,67 @@ pub(super) fn decode_edit_text(bytes: &[u8]) -> Result<DecodedOperationKind> {
     let mut old_span_text = None;
     while let Some(field) = cursor.next_field()? {
         match field.tag {
-            1 => node_id = Some(field.read_node_id()?),
-            2 => span_id = Some(field.read_span_hash()?),
-            3 => old_span_hash = Some(field.read_span_hash()?),
-            4 => left_anchor_hash = Some(field.read_span_hash()?),
-            5 => right_anchor_hash = Some(field.read_span_hash()?),
-            6 => replacement_text = Some(field.read_bytes_vec()?),
-            7 | 8 => {
-                let _ = field.read_u32()?; // presentation hints; not algebraic
+            1 => {
+                if node_id.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate EditText node_id field".to_string(),
+                    ));
+                }
+                node_id = Some(field.read_node_id()?);
             }
-            9 => old_span_text = Some(field.read_bytes_vec()?),
+            2 => {
+                if span_id.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate EditText span_id field".to_string(),
+                    ));
+                }
+                span_id = Some(field.read_span_hash()?);
+            }
+            3 => {
+                if old_span_hash.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate EditText old_span_hash field".to_string(),
+                    ));
+                }
+                old_span_hash = Some(field.read_span_hash()?);
+            }
+            4 => {
+                if left_anchor_hash.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate EditText left_anchor_hash field".to_string(),
+                    ));
+                }
+                left_anchor_hash = Some(field.read_span_hash()?);
+            }
+            5 => {
+                if right_anchor_hash.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate EditText right_anchor_hash field".to_string(),
+                    ));
+                }
+                right_anchor_hash = Some(field.read_span_hash()?);
+            }
+            6 => {
+                if replacement_text.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate EditText replacement_text field".to_string(),
+                    ));
+                }
+                replacement_text = Some(field.read_bytes_vec()?);
+            }
+            7 | 8 => {
+                // Presentation hints (line/column); not algebraic, deliberately not stored, so
+                // there is nothing here for a duplicate to overwrite.
+                let _ = field.read_u32()?;
+            }
+            9 => {
+                if old_span_text.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate EditText old_span_text field".to_string(),
+                    ));
+                }
+                old_span_text = Some(field.read_bytes_vec()?);
+            }
             other => {
                 return Err(PrikkError::MalformedData(format!(
                     "unknown EditText field tag: {other}"
@@ -216,9 +337,30 @@ pub(super) fn decode_rename_path(bytes: &[u8]) -> Result<DecodedOperationKind> {
     let mut new_path = None;
     while let Some(field) = cursor.next_field()? {
         match field.tag {
-            1 => node_id = Some(field.read_node_id()?),
-            2 => old_path = Some(field.read_repo_path()?),
-            3 => new_path = Some(field.read_repo_path()?),
+            1 => {
+                if node_id.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate RenamePath node_id field".to_string(),
+                    ));
+                }
+                node_id = Some(field.read_node_id()?);
+            }
+            2 => {
+                if old_path.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate RenamePath old_path field".to_string(),
+                    ));
+                }
+                old_path = Some(field.read_repo_path()?);
+            }
+            3 => {
+                if new_path.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate RenamePath new_path field".to_string(),
+                    ));
+                }
+                new_path = Some(field.read_repo_path()?);
+            }
             other => {
                 return Err(PrikkError::MalformedData(format!(
                     "unknown RenamePath field tag: {other}"
@@ -250,9 +392,30 @@ pub(super) fn decode_change_perm(bytes: &[u8]) -> Result<DecodedOperationKind> {
     let mut new_mode = None;
     while let Some(field) = cursor.next_field()? {
         match field.tag {
-            1 => node_id = Some(field.read_node_id()?),
-            2 => old_mode = Some(field.read_u32()?),
-            3 => new_mode = Some(field.read_u32()?),
+            1 => {
+                if node_id.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate ChangePerm node_id field".to_string(),
+                    ));
+                }
+                node_id = Some(field.read_node_id()?);
+            }
+            2 => {
+                if old_mode.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate ChangePerm old_mode field".to_string(),
+                    ));
+                }
+                old_mode = Some(field.read_u32()?);
+            }
+            3 => {
+                if new_mode.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate ChangePerm new_mode field".to_string(),
+                    ));
+                }
+                new_mode = Some(field.read_u32()?);
+            }
             other => {
                 return Err(PrikkError::MalformedData(format!(
                     "unknown ChangePerm field tag: {other}"
@@ -294,9 +457,30 @@ pub(super) fn decode_create_symlink(bytes: &[u8]) -> Result<DecodedOperationKind
     let mut target = None;
     while let Some(field) = cursor.next_field()? {
         match field.tag {
-            1 => path = Some(field.read_repo_path()?),
-            2 => node_id = Some(field.read_node_id()?),
-            3 => target = Some(field.read_string()?),
+            1 => {
+                if path.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate CreateSymlink path field".to_string(),
+                    ));
+                }
+                path = Some(field.read_repo_path()?);
+            }
+            2 => {
+                if node_id.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate CreateSymlink node_id field".to_string(),
+                    ));
+                }
+                node_id = Some(field.read_node_id()?);
+            }
+            3 => {
+                if target.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate CreateSymlink target field".to_string(),
+                    ));
+                }
+                target = Some(field.read_string()?);
+            }
             other => {
                 return Err(PrikkError::MalformedData(format!(
                     "unknown CreateSymlink field tag: {other}"
@@ -332,9 +516,30 @@ pub(super) fn decode_replace_binary(bytes: &[u8]) -> Result<DecodedOperationKind
     let mut new_blob_id = None;
     while let Some(field) = cursor.next_field()? {
         match field.tag {
-            1 => node_id = Some(field.read_node_id()?),
-            2 => old_blob_id = Some(field.read_object_id_typed()?),
-            3 => new_blob_id = Some(field.read_object_id_typed()?),
+            1 => {
+                if node_id.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate ReplaceBinary node_id field".to_string(),
+                    ));
+                }
+                node_id = Some(field.read_node_id()?);
+            }
+            2 => {
+                if old_blob_id.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate ReplaceBinary old_blob_id field".to_string(),
+                    ));
+                }
+                old_blob_id = Some(field.read_object_id_typed()?);
+            }
+            3 => {
+                if new_blob_id.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate ReplaceBinary new_blob_id field".to_string(),
+                    ));
+                }
+                new_blob_id = Some(field.read_object_id_typed()?);
+            }
             other => {
                 return Err(PrikkError::MalformedData(format!(
                     "unknown ReplaceBinary field tag: {other}"

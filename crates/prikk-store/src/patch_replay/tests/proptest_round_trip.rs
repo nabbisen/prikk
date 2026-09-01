@@ -398,6 +398,272 @@ fn decode_patch_operations_rejects_a_hand_crafted_non_canonical_create_file_mode
     assert!(format!("{err}").contains("canonical"), "{err}");
 }
 
+/// Replace a field's value with `new_value`, rebuilding its length prefix -- unlike
+/// [`overwrite_u32_at_path`], the replacement need not be the same length as the original, so this
+/// also works one level up, to splice a longer/shorter nested sub-record back into its own wrapper.
+fn replace_field_value(bytes: &[u8], target_tag: u16, new_value: &[u8]) -> Option<Vec<u8>> {
+    let mut pos = 0;
+    while pos < bytes.len() {
+        let header_end = pos.checked_add(11)?;
+        let tag = u16::from_be_bytes(bytes.get(pos..pos + 2)?.try_into().ok()?);
+        let wire = *bytes.get(pos + 2)?;
+        let len = u64::from_be_bytes(bytes.get(pos + 3..header_end)?.try_into().ok()?);
+        let len = usize::try_from(len).ok()?;
+        let field_end = header_end.checked_add(len)?;
+        if tag == target_tag {
+            let mut out = bytes.get(..pos)?.to_vec();
+            out.extend_from_slice(&tag.to_be_bytes());
+            out.push(wire);
+            out.extend_from_slice(&u64::try_from(new_value.len()).ok()?.to_be_bytes());
+            out.extend_from_slice(new_value);
+            out.extend_from_slice(bytes.get(field_end..)?);
+            return Some(out);
+        }
+        pos = field_end;
+    }
+    None
+}
+
+/// Duplicate a field, keeping the original and appending a second copy carrying `new_value` --
+/// RFC 125 §4's amendment control 2 shape: "which value wins" is only a demonstrated fact, not a
+/// reading, when the two copies carry different values and the test asserts which one survives.
+fn duplicate_field_with_new_value(
+    bytes: &[u8],
+    target_tag: u16,
+    new_value: &[u8],
+) -> Option<Vec<u8>> {
+    let mut pos = 0;
+    while pos < bytes.len() {
+        let header_end = pos.checked_add(11)?;
+        let tag = u16::from_be_bytes(bytes.get(pos..pos + 2)?.try_into().ok()?);
+        let wire = *bytes.get(pos + 2)?;
+        let len = u64::from_be_bytes(bytes.get(pos + 3..header_end)?.try_into().ok()?);
+        let len = usize::try_from(len).ok()?;
+        let field_end = header_end.checked_add(len)?;
+        if tag == target_tag {
+            let mut out = bytes.get(..field_end)?.to_vec();
+            out.extend_from_slice(&tag.to_be_bytes());
+            out.push(wire);
+            out.extend_from_slice(&u64::try_from(new_value.len()).ok()?.to_be_bytes());
+            out.extend_from_slice(new_value);
+            out.extend_from_slice(bytes.get(field_end..)?);
+            return Some(out);
+        }
+        pos = field_end;
+    }
+    None
+}
+
+/// Duplicate one field inside the single operation of a single-operation `PatchPayload`'s encoded
+/// bytes: descends `PatchPayload` tag 1 (the `Operation` record) -> `wrapper_tag` (the
+/// operation-kind sub-record, 10..=16) -> `field_tag` within it, appends a second copy of
+/// `field_tag` carrying `new_value`, and splices the result back out through both wrapping length
+/// prefixes.
+fn duplicate_operation_field(
+    bytes: &[u8],
+    wrapper_tag: u16,
+    field_tag: u16,
+    new_value: &[u8],
+) -> Option<Vec<u8>> {
+    let (op_start, op_end) = find_field_value_range(bytes, 1)?;
+    let op_bytes = bytes.get(op_start..op_end)?;
+    let (inner_start, inner_end) = find_field_value_range(op_bytes, wrapper_tag)?;
+    let inner_bytes = op_bytes.get(inner_start..inner_end)?;
+    let new_inner_bytes = duplicate_field_with_new_value(inner_bytes, field_tag, new_value)?;
+    let new_op_bytes = replace_field_value(op_bytes, wrapper_tag, &new_inner_bytes)?;
+    replace_field_value(bytes, 1, &new_op_bytes)
+}
+
+fn single_operation_payload(kind: OperationKind) -> PatchPayload {
+    PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind,
+        }],
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+    }
+}
+
+/// RFC 125 §4 amendment control 2: for each of the seven operation-kind decoders in
+/// `decode/operations.rs` (the class the amendment found `seen`-guards missing from entirely, all
+/// 29 singular fields), a duplicated field is refused, demonstrated with a real byte-level
+/// duplicate rather than only reasoned about. One field per decoder, chosen for a wire type
+/// (`bytes`, `u32`, `repo_path`) representative of the class, not exhaustive of every field --
+/// `payload::tests::proptest_decoders`'s own equivalent coverage plus the totality sweep below
+/// cover the remaining 22 without hand-writing 29 near-identical examples.
+mod duplicate_field_is_refused {
+    use super::{
+        ChangePerm, CreateFile, CreateSymlink, DeleteNode, DeleteNodePreimage, EditText, NodeId,
+        NodeKind, ObjectId, OperationKind, RenamePath, ReplaceBinary, decode_patch_operations,
+        duplicate_operation_field, single_operation_payload, text_span_hash,
+    };
+    use prikk_object::CanonicalEncode;
+
+    fn assert_duplicate_refused(
+        kind: OperationKind,
+        wrapper_tag: u16,
+        field_tag: u16,
+        new_value: &[u8],
+    ) {
+        let bytes = single_operation_payload(kind)
+            .to_canonical_bytes()
+            .expect("a valid operation encodes");
+        let mutated = duplicate_operation_field(&bytes, wrapper_tag, field_tag, new_value)
+            .expect("field present at the expected path");
+        let err = decode_patch_operations(&mutated, prikk_object::PATCH_PARENT_IDS_RETIRED_SCHEMA)
+            .expect_err("a duplicated field must be refused at decode");
+        assert!(format!("{err}").contains("duplicate"), "{err}");
+    }
+
+    #[test]
+    fn create_file_mode() {
+        assert_duplicate_refused(
+            OperationKind::CreateFile(CreateFile {
+                path: "a.txt".to_string(),
+                node_id: NodeId::from_bytes([1u8; 32]),
+                blob_id: ObjectId::from_bytes([2u8; 32]),
+                mode: 0o100_644,
+            }),
+            10,
+            4,
+            &0o100_755u32.to_be_bytes(),
+        );
+    }
+
+    #[test]
+    fn delete_node_file_kind_old_mode() {
+        assert_duplicate_refused(
+            OperationKind::DeleteNode(DeleteNode {
+                path: "a.txt".to_string(),
+                node_id: NodeId::from_bytes([1u8; 32]),
+                old_node_kind: NodeKind::TextFile,
+                preimage: DeleteNodePreimage::File {
+                    old_blob_id: ObjectId::from_bytes([2u8; 32]),
+                    old_mode: 0o100_644,
+                },
+            }),
+            11,
+            6,
+            &0o100_755u32.to_be_bytes(),
+        );
+    }
+
+    #[test]
+    fn edit_text_node_id() {
+        let old_span_text = b"old".to_vec();
+        assert_duplicate_refused(
+            OperationKind::EditText(EditText {
+                node_id: NodeId::from_bytes([1u8; 32]),
+                span_id: [0x10; 32],
+                old_span_hash: text_span_hash(&old_span_text),
+                left_anchor_hash: [0x11; 32],
+                right_anchor_hash: [0x12; 32],
+                replacement_text: b"new".to_vec(),
+                presentation_hint_line: None,
+                presentation_hint_column: None,
+                old_span_text,
+            }),
+            12,
+            1,
+            &[9u8; 32],
+        );
+    }
+
+    #[test]
+    fn rename_path_node_id() {
+        assert_duplicate_refused(
+            OperationKind::RenamePath(RenamePath {
+                node_id: NodeId::from_bytes([1u8; 32]),
+                old_path: "a.txt".to_string(),
+                new_path: "b.txt".to_string(),
+            }),
+            13,
+            1,
+            &[9u8; 32],
+        );
+    }
+
+    #[test]
+    fn change_perm_old_mode() {
+        assert_duplicate_refused(
+            OperationKind::ChangePerm(ChangePerm {
+                node_id: NodeId::from_bytes([1u8; 32]),
+                old_mode: 0o100_644,
+                new_mode: 0o100_755,
+            }),
+            14,
+            2,
+            &0o100_755u32.to_be_bytes(),
+        );
+    }
+
+    #[test]
+    fn create_symlink_node_id() {
+        assert_duplicate_refused(
+            OperationKind::CreateSymlink(CreateSymlink {
+                path: "link".to_string(),
+                node_id: NodeId::from_bytes([1u8; 32]),
+                target: "dest".to_string(),
+            }),
+            15,
+            2,
+            &[9u8; 32],
+        );
+    }
+
+    #[test]
+    fn replace_binary_node_id() {
+        assert_duplicate_refused(
+            OperationKind::ReplaceBinary(ReplaceBinary {
+                node_id: NodeId::from_bytes([1u8; 32]),
+                old_blob_id: ObjectId::from_bytes([2u8; 32]),
+                new_blob_id: ObjectId::from_bytes([3u8; 32]),
+            }),
+            16,
+            1,
+            &[9u8; 32],
+        );
+    }
+}
+
+proptest! {
+    /// RFC 125 §4 amendment control 3: totality across the operation decoders -- an arbitrary
+    /// generated operation, with one of its own fields duplicated, must never panic, only ever
+    /// return an error (or, on rare structural luck, still decode -- e.g. a duplicated `EditText`
+    /// hash pair that happens to still satisfy the hash-binding check -- which is a decode success,
+    /// not a panic, and still proves totality).
+    #[test]
+    fn operation_decode_never_panics_on_a_duplicated_field(
+        kind in operation_kind_strategy(),
+        field_index in 0_usize..9,
+    ) {
+        let wrapper_tag: u16 = match &kind {
+            OperationKind::CreateFile(_) => 10,
+            OperationKind::DeleteNode(_) => 11,
+            OperationKind::EditText(_) => 12,
+            OperationKind::RenamePath(_) => 13,
+            OperationKind::ChangePerm(_) => 14,
+            OperationKind::CreateSymlink(_) => 15,
+            OperationKind::ReplaceBinary(_) => 16,
+        };
+        // Tag 1..=9 covers every field tag any of the seven kinds uses; a tag absent from the
+        // generated kind simply finds nothing to duplicate (`duplicate_operation_field` returns
+        // `None`), which this skips rather than treats as a failure.
+        let field_tag = u16::try_from(field_index + 1).expect("field_index is 0..9");
+        let payload = single_operation_payload(kind);
+        let Ok(bytes) = payload.to_canonical_bytes() else {
+            return Ok(());
+        };
+        if let Some(mutated) = duplicate_operation_field(&bytes, wrapper_tag, field_tag, &[0u8; 32]) {
+            let _ = decode_patch_operations(&mutated, prikk_object::PATCH_PARENT_IDS_RETIRED_SCHEMA);
+        }
+    }
+}
+
 proptest! {
     /// RFC 125 §2/§9 control 1, broadened: an out-of-canonical-set mode is refused **at encode**,
     /// for every operation kind that carries one, across whatever other field values the strategies
