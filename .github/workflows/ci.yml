@@ -246,8 +246,19 @@ jobs:
           ../target/debug/prikk tag list
           echo "=== prikk checkout --plan-only ==="
           ../target/debug/prikk checkout --plan-only
-          echo "=== prikk worktree-status ==="
-          ../target/debug/prikk worktree-status
+          # `--ref heads/docs`, deliberately, and it must not be "simplified" to the bare form.
+          # Two facts force it. (1) This fixture's worktree is AHEAD of heads/main: the heads/docs
+          # commit above appends a third line to readme.txt and is never merged back, so the bare
+          # invocation correctly reports one modified file and exits 1 -- RFC 121's ruled contract
+          # gives findings exit 1, not only failures -- which fails this `bash -e` job for working
+          # as designed. (2) The tolerant shell form that would accept 0-or-1 cannot be written
+          # here: `command_scan`'s procedure lexer has no shell-keyword awareness, so `if`, `$( )`
+          # and `||` are unclassifiable and `reference-check` rejects them. heads/docs's sealed tip
+          # is exactly what the worktree holds, so this exercises the full baseline derivation and
+          # worktree comparison end to end, exits 0, and stays a bare command. It also proves a
+          # closed ref is still readable.
+          echo "=== prikk worktree-status --ref heads/docs ==="
+          ../target/debug/prikk worktree-status --ref heads/docs
           echo "=== all read-only commands succeeded ==="
 
   # DC-87 Stage 2 review, criterion 7: "the criterion that proves the port rather than the code."

@@ -153,3 +153,65 @@ invocation per target with the exit code captured explicitly**, plus `mdbook bui
 clippy judged from your own diff.
 
 One commit on `main`, local, **no push, no tag**. **RFC 122 closes when this lands.**
+
+---
+
+## 7. Added after CI went red — the §5 CI step failed on both non-Linux runners
+
+**`15ecd2f` failed CI**: `non-linux read-only conformance` red on **macos-latest and
+windows-latest**. I have restored `main` to green myself rather than leave it broken; the diagnosis
+below is the part you need.
+
+### 7.1 `worktree-status` is right; the CI step was wrong
+
+```
+=== prikk worktree-status ===
+error: worktree has snapshot-baseline changes
+  modified readme.txt — tracked file bytes differ from the baseline
+##[error]Process completed with exit code 1.
+```
+
+**Reproduced locally by rebuilding the fixture from `ci.yml`'s own authoring script.** The fixture's
+worktree is **deliberately ahead of `heads/main`**: the `heads/docs` commit appends a third line to
+`readme.txt` and is never merged back. `heads/main` has two lines, the worktree has three. So
+`worktree-status` reports one modified file **correctly** — this is not a defect in the rewire.
+
+**The step was the defect.** Every other command in that set exits 0 on success;
+`worktree-status` signals **findings** with exit 1 — RFC 121's ruled contract makes 1 cover findings,
+not only failure. Running it bare under `bash -e` fails the job for working exactly as designed.
+
+**This generalises, and it is the part worth carrying forward: a conformance harness that treats
+every non-zero exit as breakage cannot contain a command that reports findings by exit code.** RFC
+121 ruled the contract without anyone noticing this consequence, and v1 §5 told you to add the
+command to that job without saying how. **Both omissions are mine, not yours.**
+
+### 7.2 The tolerant shell form is not available here — I tried it and a gate refused
+
+I first wrote the obvious fix: capture the exit code, accept 0 or 1, reject anything else, and still
+require a real report on stdout. It works (verified against the rebuilt fixture, including a negative
+control). **`reference-check` then rejected the workflow** with ten
+`unclassified-procedure-command` / `unsupported-dynamic-command-head` errors: `command_scan`'s
+procedure lexer has no shell-keyword awareness, so `if`, `$( )` and `||` are unclassifiable in a
+scanned file. **The gate was right and I had forgotten its own documented limitation.**
+
+### 7.3 What is on `main` now
+
+```
+../target/debug/prikk worktree-status --ref heads/docs
+```
+
+`heads/docs`'s sealed tip is exactly what the worktree holds, so this exits **0**, stays a bare
+command the scanner accepts, exercises the full baseline derivation and worktree comparison end to
+end, and additionally proves a closed ref is still readable. A comment at the site records both
+constraints so nobody "simplifies" it back and breaks CI again.
+
+**This is a workaround shaped by a lexer limitation, and you may have a better idea.** If you do,
+propose it in your report rather than changing it silently — and note that widening `command_scan`
+to understand shell keywords is its own increment, not this one.
+
+### 7.4 What this adds to your controls
+
+**Control 6, new and non-negotiable: report per-job CI status for your final commit**, naming the
+two non-Linux conformance jobs explicitly. v1's controls asked for the CI *change* and not for
+evidence that it passes, which is exactly how this reached `main` red.
+
