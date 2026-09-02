@@ -251,8 +251,9 @@ item is open.
 rather than absorbed** — the richer `Trigger / next action`/`Completion condition` columns are
 what make those rows actionable, not a nag, and flattening them into this thin index would lose
 that (RFC 120 §6 Q1). The `0.16.0 Release Task Management` table and the `Post-0.16.1
-Documentation Reference Backlog` table both appear later in this file; the latter's `TASK-14`,
-`TASK-15`, and `TASK-16` rows are still `Open`.
+Documentation Reference Backlog` table both appear later in this file; the latter's `TASK-15`,
+`TASK-16`, and `TASK-17` rows are still `Open` — **`TASK-17` is the prioritized one** (2026-09-03
+owner instruction). `TASK-14` closed at `7babdb4`, which this sentence went on calling open.
 
 **Deliberately excluded, by ruling, not oversight** (RFC 120 §6 Q2/Q3): `MILESTONES.md`'s
 milestone rows — free prose, no marker a gate can read without interpreting it — and
@@ -272,12 +273,7 @@ exist, only that none were written down here.
 2. No local reproduction path exists for the cross-host CI jobs (`.github/workflows/ci.yml`'s
    `receiver-prepare`/`sender-build`/`receiver-accept`) — verifying the flow before writing the
    jobs required a hand-built, role-by-role proxy that exists in no tracked file.
-3. **`.prikkignore` shipped in `0.29.0` with no documentation.** There is no page under
-   `docs/src/`, no mention in any command's `--help`, and the only prose describing the syntax
-   and its discovery-only binding is the module doc in `crates/prikk-store/src/ignore.rs`. The
-   `CHANGELOG.md` entry and one `README.md` bullet are currently the whole user-facing
-   description of a user-facing feature.
-4. 3. `MILESTONES.md:334`'s `M5` row still reads `| M5 | Sync and Quarantine | no | — |`, while
+3. `MILESTONES.md:334`'s `M5` row still reads `| M5 | Sync and Quarantine | no | — |`, while
    criterion 1 (line 159) records sync **MET** and quarantine was dissolved this session.
 
 ## Corrective Program After the 2026-08-31 External Audit
@@ -485,6 +481,7 @@ references. The durable homes below are authoritative `docs/src/reference/` or `
 | TASK-13 release, versioning & compatibility policy | 2 | Maintainer | DC-35 policy implementation and DC-45 Rust authority cutover committed; signer set empty | Bootstrap the first signer only through its separate reviewed governance transaction, observe the public 72-hour hold, and obtain an explicit hold-lift ruling before the 0.18.0 release candidate. | Reviewed release/compatibility policy and Rust authority gate are committed; signer bootstrap evidence, elapsed hold, and hold-lift ruling are recorded before RC preparation. | `docs/src/reference/release-compatibility.md` |
 | TASK-14 consolidated non-goals / deferred features | 3 | Maintainer/architect | Complete, committed `7babdb4` | Complete; use the page as the current public refused-vs-deferred baseline. | Reviewed non-goals page is committed and links ROADMAP as the planning authority. | `docs/src/reference/non-goals.md` |
 | TASK-15 roles & user-classes orientation | 3 | Designer | Open — **narrowed 2026-08-31**, not closed | The beginner's on-ramp (`9121819`) took the "index update" half: `docs/src/index.md` now points a newcomer at the Tutorial ahead of the reference links. **That serves first-time users only.** What remains is the roles map this row is actually sized for — a contributor's and a security-reviewer's entry point, distinct from a newcomer's. Start when the docs need that audience map. | Reviewed orientation page covering the remaining audiences is committed. | `docs/src/index.md` or `docs/src/guide/audience.md` |
+| TASK-17 `.prikkignore` worktree ignore guide | 1 | Architect + maintainer | **Open — prioritized 2026-09-03 by the owner** | Shipped in `0.29.0` with no documentation: no `docs/src/` page, no `--help` mention, and the module doc in `crates/prikk-store/src/ignore.rs` is the only prose on its syntax and discovery-only binding. Handoff at `rfcs/handoffs/124-worktree-ignore-mechanism/ignore-documentation-handoff-v1.md`. | Reviewed guide page committed and listed in `SUMMARY.md`, stating the syntax, the two walks it binds, the surfaces it deliberately does not bind and why, and its honest limits (no globbing or negation; no removal from history). `commit` and `worktree-status` name the file in their own help. | `docs/src/guide/ignore.md` |
 | TASK-16 error taxonomy & diagnostics | 3 | Implementer/architect | Open | Start with TASK-07 or when diagnostics need user-facing interpretation. | Reviewed diagnostics reference is committed and grounded in `crates/prikk-error`. | `docs/src/reference/errors.md` |
 
 Scratch detail may exist locally until each task graduates; update the **Status**, **Trigger / next
