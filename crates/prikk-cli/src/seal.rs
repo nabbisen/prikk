@@ -41,18 +41,21 @@ pub struct SealCommandResult {
     pub ref_state_id: prikk_object::ObjectId,
 }
 
-/// Parse and run the local seal scaffold.
+/// Run the local seal scaffold against an already-parsed ref name. AUD-10: parsing is the caller's
+/// job now (`parse_seal_args`, called from `main.rs` before the signer is built), so that a bad
+/// argument is refused before an unrelated missing-signer environment is ever consulted.
 pub fn run_seal(
     root: PathBuf,
-    args: Vec<String>,
+    ref_name: String,
     signer: &impl MaintainerSigner,
 ) -> std::result::Result<SealCommandResult, CliError> {
-    let ref_name = parse_seal_args(args)?;
     let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
     seal_active_no_audit(layout, &ref_name, signer).map_err(CliError::from)
 }
 
-fn parse_seal_args(args: Vec<String>) -> std::result::Result<String, CliError> {
+/// Parse `prikk seal`'s own arguments. `pub(crate)` so `main.rs` can call it before building the
+/// maintainer signer -- see [`run_seal`]'s doc comment.
+pub(crate) fn parse_seal_args(args: Vec<String>) -> std::result::Result<String, CliError> {
     let mut allow_no_audit = false;
     let mut ref_name = None;
     let mut iter = args.into_iter();

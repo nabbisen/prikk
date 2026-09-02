@@ -235,10 +235,11 @@ fn compact_refuses_all_combined_with_a_named_target() {
 /// A boolean flag repeated is refused too, not only value-carrying flags -- the ruled contract
 /// (RFC 121 §1) lists "duplicate flag" as its own class with no carve-out for booleans.
 ///
-/// `main.rs::run_seal` builds the MAINTAINER signer from the environment *before* calling into
-/// `seal::run_seal` (and therefore before `parse_seal_args` ever runs) -- an unrelated env-var
-/// failure there would otherwise mask this refusal, so the fixed maintainer key material is
-/// supplied even though sealing itself is never reached.
+/// AUD-10 fixed `main.rs::run_seal` to parse before building the MAINTAINER signer, so this test
+/// no longer depends on it -- valid key material is supplied anyway, so a regression back to the
+/// old signer-before-parse order would still hit this refusal rather than silently pass on a
+/// masked "maintainer signing is required" instead. See `rfc121_aud10_signer_ordering.rs` for the
+/// direct control (no key material supplied at all).
 #[test]
 fn seal_refuses_a_duplicate_allow_no_audit_flag() {
     let repo = support::unique_repo("rfc121-hygiene-seal-dup-bool");

@@ -182,9 +182,12 @@ fn run_commit(args: Vec<String>) -> std::result::Result<(), CliError> {
 }
 
 fn run_seal(args: Vec<String>) -> std::result::Result<(), CliError> {
+    // AUD-10: parse before building the signer, so a bad argument is refused before an unrelated
+    // missing-signer environment is ever consulted.
+    let ref_name = seal::parse_seal_args(args)?;
     let root = current_dir()?;
     let signer = maintainer_signer_from_env()?;
-    let result = seal::run_seal(root, args, &signer)?;
+    let result = seal::run_seal(root, ref_name, &signer)?;
     println!("sealed active WAL into block");
     println!("patches: {}", result.patch_count);
     println!("block id: {}", result.block_id);
@@ -194,6 +197,9 @@ fn run_seal(args: Vec<String>) -> std::result::Result<(), CliError> {
 }
 
 fn run_merge(args: Vec<String>) -> std::result::Result<(), CliError> {
+    // AUD-10: parse before building the signer, so a bad argument is refused before an unrelated
+    // missing-signer environment is ever consulted.
+    let args = crate::args::parse_merge_execute_args(args)?;
     let signer = maintainer_signer_from_env()?;
     let report = merge::run_merge(args, &signer)?;
     println!("merged {} into {}", report.from_ref, report.into_ref);
