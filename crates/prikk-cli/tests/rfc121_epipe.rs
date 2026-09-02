@@ -134,3 +134,33 @@ fn a_write_failure_exits_one_with_a_message_not_a_panic() {
         "must not panic, got: {stderr}"
     );
 }
+
+/// AUD-09: when *both* stdout and stderr fail on the same write attempt (sharing a cause, not
+/// independent), the previous arm's `eprintln!` panicked on its own stderr write, exiting `101` --
+/// outside the ruled 0/1/2 vocabulary. Asserts only the exit code: the message is precisely what
+/// cannot be delivered in this case, so asserting on stderr content would pass for the wrong reason.
+/// Linux-only, same as the test above.
+#[test]
+fn a_write_failure_on_both_streams_exits_one_not_a_panic() {
+    if !std::path::Path::new("/dev/full").exists() {
+        eprintln!("skipping: /dev/full is not available on this platform");
+        return;
+    }
+    let repo = fixture_repo("rfc121-write-failure-both-streams");
+    let stdout_full = std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/full")
+        .expect("open /dev/full for stdout");
+    let stderr_full = std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/full")
+        .expect("open /dev/full for stderr");
+    let output = Command::new(env!("CARGO_BIN_EXE_prikk"))
+        .current_dir(&repo)
+        .arg("verify")
+        .stdout(stdout_full)
+        .stderr(stderr_full)
+        .output()
+        .expect("spawn prikk");
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+}
