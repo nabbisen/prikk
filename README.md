@@ -90,7 +90,10 @@ Prikk is not yet the right tool if you need:
 - hosted forge workflows, or remotes;
 - complete branch management, or semantic merge;
 - plugin/audit execution, attestations, or automated publication controls;
-- mature key lifecycle features such as revocation, rotation, hardware signing, or thresholds.
+- mature key lifecycle features such as revocation, rotation, hardware signing, or thresholds;
+- a way to exclude generated files (build output, dependency directories, editor swap files) from a
+  commit — there is no ignore mechanism at any layer yet, `commit` scans and signs everything it
+  finds, and a file swept into history by mistake cannot be removed later.
 
 ## Core Ideas
 
