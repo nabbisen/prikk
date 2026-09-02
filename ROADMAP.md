@@ -240,9 +240,9 @@ item is open.
 - [`110-agent-safety-and-provenance.md`](rfcs/proposed/110-agent-safety-and-provenance.md) — RFC 110, Agent safety and code provenance
 - [`113-history-import-foundations.md`](rfcs/proposed/113-history-import-foundations.md) — RFC 113, History import foundations (Git, Subversion, CVS)
 - [`DC-43-RELEASE-SECURITY-CONTROLS.md`](rfcs/proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) — DC-43, Release Security and Distribution Controls (schedule position stale — cited predecessor superseded and implemented; see the RFC's own status update)
-- [`123-commit-message-and-authorship-metadata.md`](rfcs/proposed/123-commit-message-and-authorship-metadata.md) — RFC 123, The commit message is validated and then discarded (external audit 2026-08-31, High; **owner ruling required** — format decision)
-- [`126-verification-infrastructure-coverage.md`](rfcs/proposed/126-verification-infrastructure-coverage.md) — RFC 126, Four flanks the verification culture never reached (external audit 2026-08-31; §6 **ruled 2026-09-01** — criterion in its own member; §2/§3/§4 delivered, §5/§6a/§6b open)
-- [`128-outward-facing-project-surface.md`](rfcs/proposed/128-outward-facing-project-surface.md) — RFC 128, What an outsider finds before they read any code (external audit 2026-08-31; **owner ruling required** — disclosure channel)
+- [`123-commit-message-and-authorship-metadata.md`](rfcs/proposed/123-commit-message-and-authorship-metadata.md) — RFC 123, The commit message is validated and then discarded (external audit 2026-08-31, High; **ruled 2026-09-01** — the message is evidence; the `note:` interim shipped, the schema-3 design itself is open)
+- [`126-verification-infrastructure-coverage.md`](rfcs/proposed/126-verification-infrastructure-coverage.md) — RFC 126, Four flanks the verification culture never reached (external audit 2026-08-31; §6 **ruled 2026-09-01** — criterion in its own member; §2/§3/§4/§6a/§6b delivered, §5 and the kernel doctests open)
+- [`128-outward-facing-project-surface.md`](rfcs/proposed/128-outward-facing-project-surface.md) — RFC 128, What an outsider finds before they read any code (external audit 2026-08-31; §2 **ruled 2026-09-01** — advisories-only; `SECURITY.md` shipped, three items open: `CONTRIBUTING.md`, the Cargo metadata pass, the Git→prikk mapping page)
 - [`130-module-coupling-invariant.md`](rfcs/proposed/130-module-coupling-invariant.md) — RFC 130, A coupling invariant for `prikk-store` and the gate that holds it (**ACCEPTED by the owner 2026-09-01**; touches no files and conflicts with nothing in flight, so it can land during band 1)
 - [`131-module-grouping-and-visibility-scoping.md`](rfcs/proposed/131-module-grouping-and-visibility-scoping.md) — RFC 131, Grouping the 123 top-level entries and scoping reach with `pub(in ...)` (**ACCEPTED by the owner 2026-09-01**; large file move — after RFC 130 and between feature arcs, not during one)
 <!-- open-work-index:end -->
@@ -323,20 +323,44 @@ remained. Whether the contract is ever promoted into a stability *promise* stays
 |---|---|---|
 | **Before the next cut** | ~~RFC 127~~ **delivered 2026-09-01 (`e8a10d5`)**; RFC 121's EPIPE fix alone; ~~RFC 122~~ **delivered 2026-09-01 (`bc443e8`)**; RFC 128's `SECURITY.md` | 127 is a regression that has already shipped in a published artifact. EPIPE is a panic every user who pipes to `head` meets. 122 is the only High-severity broken command on the mainline. `SECURITY.md` is one page and its absence is disproportionate for a trust-centric product |
 | **Next** | ~~RFC 125~~ **delivered 2026-09-02 (`c6fc625`)**; ~~RFC 126 §3–§4~~ **delivered 2026-09-02 (`1d324a5`)**; ~~the rest of RFC 121~~ **delivered 2026-09-02 (`a4aea59`) — RFC 121 complete** | 125 is latent security, cheap, and encode/decode-symmetric. 126's first half is a CI job and a lint flag — the two gates that stop everything else drifting silently |
-| **Unblocked by the 2026-09-01 rulings** | ~~RFC 123's `note:` line~~ **delivered 2026-09-02 (`c1335ad`)**; ~~RFC 124~~ **delivered 2026-09-02 (`7f62503`)**; RFC 126 §2/§5 | RFC 123's interim stopped the active harm. RFC 124 needs no ruling — only §3's design questions answered |
+| **Unblocked by the 2026-09-01 rulings** | ~~RFC 123's `note:` line~~ **delivered 2026-09-02 (`c1335ad`)**; ~~RFC 124~~ **delivered 2026-09-02 (`9491bf0`)**; ~~RFC 126 §2~~ **delivered 2026-09-03 (`8608db0`)**; RFC 126 §5 | RFC 123's interim stopped the active harm. RFC 124 needs no ruling — only §3's design questions answered |
 | **Unscheduled** | RFC 123's schema-3 design; the two performance walls; the pre-1.0 API debt below | The schema-3 field and the API debt are both gated behind RFC 114's stability work rather than racing it |
 
 **Bands 1 and 2 are complete.** Every item in "Before the next cut" and "Next" landed between
 2026-09-01 and 2026-09-02, with RFCs 121, 122, 125 and 127 closed and moved to `rfcs/done/`.
 
-### Release position — 0.28.0 is due, and one thing must be verified before it is cut
+**Band 3 is complete except RFC 126 §5.** RFC 123's interim, RFC 124, and RFC 126 §2 all landed;
+§6a and §6b followed on 2026-09-03. **`AUD-05` through `AUD-10` are all delivered** — the whole
+no-design-decision half of this program — leaving `AUD-01` through `AUD-04`, which are design work.
 
-**58 commits have landed since `0.27.1` and `CHANGELOG.md`'s newest entry is still `0.27.1`.**
-Everything below is currently unrecorded for users.
+### Release position — 0.28.0 shipped; a 0.29.0 is now due
 
-**Nine user-visible behaviour changes**, each of which `release-compatibility.md`'s own pre-1.0
-policy requires be named in release notes ("a minor release may intentionally change documented
-CLI surfaces when release notes identify the change"):
+**`0.28.0` was cut on 2026-09-02 at `9389b88`** and `release.yml` ran green against
+`prikk-vcs/prikk`, retiring the blocker this section used to carry: the release lane had never
+executed since the RFC 129 migration, and now it has.
+
+**Twenty commits have landed since the `0.28.0` tag, and `CHANGELOG.md`'s newest entry is
+`0.28.0`.** Unrecorded for users, in order of weight:
+
+- **RFC 124's `.prikkignore` mechanism** — a new user-facing feature. `commit` and
+  `worktree-status` both honour ignore rules through one shared worktree walk. **A feature
+  addition makes the next cut a minor bump, `0.29.0`, not a patch.**
+- **A full-disk stdout *and* stderr together** (AUD-09) now exits `1`, not `101`. **`0.28.0`'s own
+  notes claim this was fixed; it was half fixed** — the single-stream case only.
+- **`seal`/`merge` with a bad flag and no signing key configured** (AUD-10) now exits `2` with the
+  usage error instead of `1` with "maintainer signing is required".
+- RFC 124 also reclassified a non-UTF-8 worktree path as `InvalidName` rather than an integrity
+  failure.
+
+Internal and not notes-bearing: RFC 126 §2's property tests, §6a's workflow permissions, and
+`AUD-05`..`AUD-08`.
+
+**`release-compatibility.md`'s pre-1.0 policy — "a minor release may intentionally change
+documented CLI surfaces when release notes identify the change" — binds the first three.**
+
+---
+
+**What `0.28.0` itself carried**, kept as the record of that cut:
 
 | Change | Before | After |
 |---|---|---|
@@ -357,17 +381,30 @@ but it is a change in what the tool accepts and belongs in the notes.
 **Version: `0.28.0`, not `0.27.2`.** Behaviour changes plus one public library addition —
 `WorktreeStatusReport` gained a `queued_elsewhere` field.
 
-**The blocker is not the code. `release.yml` has never run against `prikk-vcs/prikk`.** Its last
-execution was `0.27.1` on 2026-08-31; the migration landed 2026-09-01. RFC 129 §5 step 4 required
-verifying the release lane before any cut — the *generated installer* was verified then, the
-*workflow* was not, because nothing has triggered it since. **`release.yml:193` now reads
-`--repo prikk-vcs/prikk`, and that line has never executed.** Establish that before tagging, not
-during.
+**The blocker this section carried is retired.** RFC 129 §5 step 4 required verifying the release
+lane before any cut, and at `0.27.1` the *generated installer* had been checked but the *workflow* had
+not, because nothing had triggered it since the migration. **`release.yml` ran green for `0.28.0` on
+2026-09-02**, so `release.yml:193`'s `--repo prikk-vcs/prikk` is now executed rather than asserted.
 
 ### Tracked here rather than as RFCs — none needs a design decision
 
-**AUD-05 through AUD-08 were adopted into RFC 126 §6b on 2026-09-02** — not because they acquired a design decision, but because `rfcs/handoffs/` directory names are gated to `NNN-slug` and ROADMAP-tracked work had no conforming home. The rows stay here; §6b records which two fit that RFC on the merits and which two are filed there out of that necessity.
-**AUD-09 and AUD-10** are handed over under `rfcs/handoffs/121-cli-boundary-contract/`, whose §6c and §6d their completion conditions already cite.
+**`AUD-05` through `AUD-10` are complete and their rows have been retired from the table below**
+(2026-09-03). `AUD-09`/`AUD-10` landed at `9588e59`/`349e123` under
+`rfcs/handoffs/121-cli-boundary-contract/`, whose §6c and §6d their completion conditions already
+cited. `AUD-05`..`AUD-08` landed at `0fdde9a`/`e8d0cc5`/`b4bb0bd`/`d31071f` under RFC 126 §6b, which
+adopted them on 2026-09-02 — not because they acquired a design decision, but because
+`rfcs/handoffs/` directory names are gated to `NNN-slug` and ROADMAP-tracked work had no conforming
+home. **RFC 126 §6b keeps the design record; the reviews are at
+`.git-exclude/reviewed/aud-09-aud-10-review-v1.md` and `rfc126-hygiene-sweep-review-v1.md`.**
+
+**Two of the six turned out not to be what this table said**, which is why the rows are retired rather
+than ticked: `AUD-08`'s single named site was three, and `AUD-09` was **half** closed by RFC 121 —
+the single-stream case was fixed and the both-streams case that the row was written about was not.
+
+**The four below are the remainder.** None needs an owner ruling either — the heading still holds —
+but each is substantially larger than the six retired above, carrying real implementation design
+inside an already-decided completion condition. `AUD-04` also carries a sequencing constraint the
+others do not: **before any stability promise.**
 
 | ID | Item | Completion condition |
 |---|---|---|
@@ -375,12 +412,6 @@ during.
 | AUD-02 | `wal.rs:171` replays the whole WAL on every append — O(N²) over a queue of N commits | Per-invocation replay cache, or `(last_seq, clean-tail offset)` tracking with tail-only re-verification |
 | AUD-03 | Four-plus hand-copied TLV cursors; the duplicate-field strictness split in RFC 125 §2.3 exists because each copy evolved separately | One canonical cursor in `prikk-object::canonical`, decoders migrated incrementally |
 | AUD-04 | `PrikkError` discards `io::ErrorKind`, implements no `source()`, and is not `#[non_exhaustive]` | A structured `Io { kind, context }` variant, `source()`, and `#[non_exhaustive]` — **before any stability promise**, no new dependency |
-| AUD-05 | `prikk-crypto` is the only non-exempt crate without source-level `#![forbid(unsafe_code)]` | The attribute added (manifest inheritance already forbids it; this is belt-and-braces uniformity) |
-| AUD-06 | `unwrap_used`/`expect_used`/`indexing_slicing` are `warn`; the verified **zero** production occurrences is held by review, not by the build | Raised to `deny` at the workspace root, tests keeping their scoped `#![allow]`s |
-| AUD-07 | `refs.rs:504-511` states `tags/V1` and `tags/v1` "coexist as distinct refs"; `validate_no_ref_name_collision` (`publication.rs:164-175`) refuses exactly that on creation | Comment corrected, with the residual gap (pre-existing collisions, NFC/NFD) named rather than dropped |
-| AUD-08 | `merge_execute.rs:187` increments `update_seq` unchecked where the WAL uses `checked_add` for the same shape | `checked_add`, for consistency rather than for reachability |
-| AUD-09 | `stdout.rs`'s write-failure arm reports with `eprintln!`, which panics if stderr is also unwritable — `prikk verify >/dev/full 2>/dev/full` exits `101`, outside RFC 121 §6a's ruled `0`/`1`/`2` vocabulary | `writeln!(io::stderr(), …)` ignoring its result, then exit `1`, so the code stays inside the contract even when the message cannot be delivered (RFC 121 §6c) |
-| AUD-10 | `main.rs::run_seal` and `run_merge` acquire the maintainer signer **before** parsing arguments, so an argument error with no key configured reports "maintainer signing is required" instead. `run_commit`/`run_rollback_draft` parse first — two sites against two, not a house style | Parse first in both, per §6a's own "detected before any repository work begins" (RFC 121 §6d) |
 
 ### Recorded, and deliberately not corrective work
 

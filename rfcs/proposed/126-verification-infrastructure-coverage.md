@@ -178,8 +178,10 @@ which is which, rather than inventing a common rationale:**
 | **AUD-07** — `refs.rs:508-509` says `tags/V1` and `tags/v1` "coexist as distinct refs"; publication refuses exactly that | **Filed here.** A false comment about a safety property, not a gate. |
 | **AUD-08** — `merge_execute.rs:187` increments `update_seq` unchecked | **Filed here.** Arithmetic hygiene, not a gate, and the one behaviour change this RFC carries. |
 
-**The ROADMAP rows stay where they are.** They are the tracker; this section is the design home. Per
-the owner's standing ruling on duplication, a reader arriving from either document reaches the work.
+**Delivered 2026-09-03** at `0fdde9a` (AUD-05), `b4bb0bd` (AUD-07), `d31071f` (AUD-08) and `e8d0cc5`
+(AUD-06), alongside §6a at `c92c84e`. **`ROADMAP.md`'s four rows were retired on the owner's
+instruction once the work landed**, so this section is now the design record for all four rather than
+a second copy of a live tracker entry.
 
 **What changed since the rows were written, and must not be transcribed from them:**
 
