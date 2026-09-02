@@ -11,6 +11,12 @@ Prikk uses a native `.prikk/` repository format. It is not a Git wrapper and doe
 storage backend. The project aims to combine patch-based semantic precision with practical performance
 by sealing history into immutable blocks and keeping expensive patch reasoning bounded to active work.
 
+> **Prikk is an early implementation.** It suits architecture review, experimentation, and
+> contribution. **Do not use Prikk as the sole store for important project history yet** — the
+> repository format and command surface are still evolving, and future releases may require
+> migration. See the [release, versioning, and compatibility
+> reference](./docs/src/reference/release-compatibility.md) for the pre-1.0 boundary.
+
 ## Project Goals
 
 Prikk is designed to be:
@@ -22,53 +28,20 @@ Prikk is designed to be:
 - fast for long-lived repositories by separating active patch reasoning from sealed block history;
 - explainable when patch reasoning cannot prove a safe result.
 
-## Crates
+## Core Ideas
 
-`prikk` is the command-line tool. The others are the libraries it is built from, published so the
-CLI can be built from crates.io — **their APIs may change without notice before 1.0.**
-
-| Crate | Purpose | Version | Docs | Dependencies |
-|---|---|---|---|---|
-| [`prikk`](https://crates.io/crates/prikk) | the command-line tool | [![crates.io](https://img.shields.io/crates/v/prikk.svg?label=%20)](https://crates.io/crates/prikk) | [![documentation](https://img.shields.io/badge/docs-github_pages-brightgreen)](https://prikk-vcs.github.io/prikk/) | [![Dependency Status](https://deps.rs/crate/prikk/latest/status.svg)](https://deps.rs/crate/prikk) |
-| [`prikk-store`](https://crates.io/crates/prikk-store) | repository storage engine — layout, object storage, WAL durability, verification, patch replay | [![crates.io](https://img.shields.io/crates/v/prikk-store.svg?label=%20)](https://crates.io/crates/prikk-store) | [![docs.rs](https://img.shields.io/docsrs/prikk-store?version=latest&label=%20)](https://docs.rs/prikk-store) | [![Dependency Status](https://deps.rs/crate/prikk-store/latest/status.svg)](https://deps.rs/crate/prikk-store) |
-| [`prikk-object`](https://crates.io/crates/prikk-object) | object identity, canonical encoding, and payload types | [![crates.io](https://img.shields.io/crates/v/prikk-object.svg?label=%20)](https://crates.io/crates/prikk-object) | [![docs.rs](https://img.shields.io/docsrs/prikk-object?version=latest&label=%20)](https://docs.rs/prikk-object) | [![Dependency Status](https://deps.rs/crate/prikk-object/latest/status.svg)](https://deps.rs/crate/prikk-object) |
-| [`prikk-replay`](https://crates.io/crates/prikk-replay) | replay and lifecycle semantics | [![crates.io](https://img.shields.io/crates/v/prikk-replay.svg?label=%20)](https://crates.io/crates/prikk-replay) | [![docs.rs](https://img.shields.io/docsrs/prikk-replay?version=latest&label=%20)](https://docs.rs/prikk-replay) | [![Dependency Status](https://deps.rs/crate/prikk-replay/latest/status.svg)](https://deps.rs/crate/prikk-replay) |
-| [`prikk-crypto`](https://crates.io/crates/prikk-crypto) | Ed25519 signing and verification | [![crates.io](https://img.shields.io/crates/v/prikk-crypto.svg?label=%20)](https://crates.io/crates/prikk-crypto) | [![docs.rs](https://img.shields.io/docsrs/prikk-crypto?version=latest&label=%20)](https://docs.rs/prikk-crypto) | [![Dependency Status](https://deps.rs/crate/prikk-crypto/latest/status.svg)](https://deps.rs/crate/prikk-crypto) |
-| [`prikk-hash`](https://crates.io/crates/prikk-hash) | SHA-256 primitives | [![crates.io](https://img.shields.io/crates/v/prikk-hash.svg?label=%20)](https://crates.io/crates/prikk-hash) | [![docs.rs](https://img.shields.io/docsrs/prikk-hash?version=latest&label=%20)](https://docs.rs/prikk-hash) | [![Dependency Status](https://deps.rs/crate/prikk-hash/latest/status.svg)](https://deps.rs/crate/prikk-hash) |
-| [`prikk-error`](https://crates.io/crates/prikk-error) | shared error taxonomy | [![crates.io](https://img.shields.io/crates/v/prikk-error.svg?label=%20)](https://crates.io/crates/prikk-error) | [![docs.rs](https://img.shields.io/docsrs/prikk-error?version=latest&label=%20)](https://docs.rs/prikk-error) | [![Dependency Status](https://deps.rs/crate/prikk-error/latest/status.svg)](https://deps.rs/crate/prikk-error) |
-| [`prikk-ffi`](https://crates.io/crates/prikk-ffi) | Windows filesystem-identity FFI bindings | [![crates.io](https://img.shields.io/crates/v/prikk-ffi.svg?label=%20)](https://crates.io/crates/prikk-ffi) | [![docs.rs](https://img.shields.io/docsrs/prikk-ffi?version=latest&label=%20)](https://docs.rs/prikk-ffi) | [![Dependency Status](https://deps.rs/crate/prikk-ffi/latest/status.svg)](https://deps.rs/crate/prikk-ffi) |
-
-## Current Status
-
-Latest released implementation: **0.27.1**. Windows became a mutating platform in 0.21.0: Prikk now authors, commits, and checks out on Linux, macOS, and Windows, and CI requires a repository authored on Linux, mutated on Windows, and verified back on Linux to produce byte-identical object ids — so the claim that anyone can verify anyone's history is tested across platforms rather than assumed.
-
-Next increment candidates are tracked in `ROADMAP.md`.
-
-This is an early implementation suitable for architecture review, experimentation, and contribution.
-Do not use Prikk as the sole store for important project history yet. The repository format and command
-surface are still evolving, and future releases may require migration.
-See the [release, versioning, and compatibility reference](./docs/src/reference/release-compatibility.md)
-for the pre-1.0 compatibility and official-release boundary.
-
-The local core can initialize a repository, author signed patches, seal them into blocks, inspect
-history, verify integrity, diagnose common repository issues, perform safe checkout planning and
-materialization for the supported subset, display merge evidence and merge plans for explicit sealed
-candidates, and **execute a merge** when the two sides are proven confluent — refusing cleanly, with no
-object, WAL, or ref write, when they are not.
-
-Known limits worth stating up front: merge-base discovery is manual; conflicts are detected and refused
-but never resolved; sync exists between repositories, but **prikk does not move the bytes itself** —
-confidentiality is the user's channel's property, not prikk's — negotiation is branch-scoped (tags
-travel and are adopted separately, under the receiver's own key), and there is no discovery or
-remote-tracking; `verify` cost is linear in history length; `verify` checks author signatures
-repository-wide, but only as trust-on-first-use continuity — it proves the same author signed as last
-time, not who that author is on first contact; and `verify` checks a locally-published tag's
-maintainer signature against this repository's own trust policy, but a received, not-yet-adopted tag
-is deliberately exempt — its signature is the sender's, under a key this repository has not adopted.
-
-**Mutation runs on Linux, macOS, and Windows** as of 0.21.0. Windows has narrower guarantees in two
-named places — see the [platform support
-reference](./docs/src/reference/platform-support.md).
+- **Patch**: an atomic logical change with ordered operations and an AUTHOR signature.
+- **Block**: an immutable sealed collection of patches; blocks are the scalability boundary.
+- **Ref state**: signed reference state; ref files are pointers, not the root of trust.
+- **Ref update**: append-only publication evidence for a ref transition.
+- **WAL**: active signed patch envelopes before sealing.
+- **Repository layout**: `.prikk/` stores native Prikk objects, refs, active WAL state, and local trust
+  data; see the [repository layout reference](./docs/src/reference/repository-layout.md).
+- **Concurrency and locking**: local lock files guard active-session and ref publication writes; see the
+  [concurrency and locking reference](./docs/src/reference/concurrency-locking.md).
+- **Path safety**: repository paths use a conservative validated subset; see the
+  [path and worktree safety reference](./docs/src/reference/path-safety.md).
+- **Attestation**: future audit/policy evidence targeting blocks without defining block identity.
 
 ## Good Fit
 
@@ -94,21 +67,6 @@ Prikk is not yet the right tool if you need:
 - a way to exclude generated files (build output, dependency directories, editor swap files) from a
   commit — there is no ignore mechanism at any layer yet, `commit` scans and signs everything it
   finds, and a file swept into history by mistake cannot be removed later.
-
-## Core Ideas
-
-- **Patch**: an atomic logical change with ordered operations and an AUTHOR signature.
-- **Block**: an immutable sealed collection of patches; blocks are the scalability boundary.
-- **Ref state**: signed reference state; ref files are pointers, not the root of trust.
-- **Ref update**: append-only publication evidence for a ref transition.
-- **WAL**: active signed patch envelopes before sealing.
-- **Repository layout**: `.prikk/` stores native Prikk objects, refs, active WAL state, and local trust
-  data; see the [repository layout reference](./docs/src/reference/repository-layout.md).
-- **Concurrency and locking**: local lock files guard active-session and ref publication writes; see the
-  [concurrency and locking reference](./docs/src/reference/concurrency-locking.md).
-- **Path safety**: repository paths use a conservative validated subset; see the
-  [path and worktree safety reference](./docs/src/reference/path-safety.md).
-- **Attestation**: future audit/policy evidence targeting blocks without defining block identity.
 
 ## Install
 
@@ -218,6 +176,12 @@ before one `seal`.
 
 ## Useful Commands
 
+Every command accepts `--help` for its own usage:
+
+```text
+prikk <command> --help
+```
+
 ```text
 prikk init [path]
 prikk trust maintainer add --key-id ID --public-key HEX
@@ -266,6 +230,49 @@ prikk unlock --lock <path> [--yes]
 prikk compact --pointer-index|--received-index|--trust-policy|--all [--plan-only]
 ```
 
+**Exit codes.** `0` — the operation succeeded and did what was asked. `1` — operational failure:
+verification findings, an integrity failure, a refusal, a dirty worktree. `2` — usage error: an
+unknown argument, a missing required flag, a duplicate flag. Graded verification results are in
+`prikk verify --format json`, not in the exit code.
+
+## Current Status
+
+The local core can initialize a repository, author signed patches, seal them into blocks, inspect
+history, verify integrity, diagnose common repository issues, perform safe checkout planning and
+materialization for the supported subset, display merge evidence and merge plans for explicit sealed
+candidates, and **execute a merge** when the two sides are proven confluent — refusing cleanly, with no
+object, WAL, or ref write, when they are not.
+
+**Cross-platform history identity is tested, not assumed.** Prikk authors, commits, and checks out on Linux, macOS, and Windows, and CI requires a repository authored on Linux, mutated on Windows, and verified back on Linux to produce byte-identical object ids — so the claim that anyone can verify anyone's history holds across the three.
+
+Known limits worth stating up front: merge-base discovery is manual; conflicts are detected and refused
+but never resolved; sync exists between repositories, but **prikk does not move the bytes itself** —
+confidentiality is the user's channel's property, not prikk's — negotiation is branch-scoped (tags
+travel and are adopted separately, under the receiver's own key), and there is no discovery or
+remote-tracking; `verify` cost is linear in history length; `verify` checks author signatures
+repository-wide, but only as trust-on-first-use continuity — it proves the same author signed as last
+time, not who that author is on first contact; and `verify` checks a locally-published tag's
+maintainer signature against this repository's own trust policy, but a received, not-yet-adopted tag
+is deliberately exempt — its signature is the sender's, under a key this repository has not adopted.
+
+Next increment candidates are tracked in `ROADMAP.md`.
+
+## Crates
+
+`prikk` is the command-line tool. The others are the libraries it is built from, published so the
+CLI can be built from crates.io — **their APIs may change without notice before 1.0.**
+
+| Crate | Purpose | Version | Docs | Dependencies |
+|---|---|---|---|---|
+| [`prikk`](https://crates.io/crates/prikk) | the command-line tool | [![crates.io](https://img.shields.io/crates/v/prikk.svg?label=%20)](https://crates.io/crates/prikk) | [![documentation](https://img.shields.io/badge/docs-github_pages-brightgreen)](https://prikk-vcs.github.io/prikk/) | [![Dependency Status](https://deps.rs/crate/prikk/latest/status.svg)](https://deps.rs/crate/prikk) |
+| [`prikk-store`](https://crates.io/crates/prikk-store) | repository storage engine — layout, object storage, WAL durability, verification, patch replay | [![crates.io](https://img.shields.io/crates/v/prikk-store.svg?label=%20)](https://crates.io/crates/prikk-store) | [![docs.rs](https://img.shields.io/docsrs/prikk-store?version=latest&label=%20)](https://docs.rs/prikk-store) | [![Dependency Status](https://deps.rs/crate/prikk-store/latest/status.svg)](https://deps.rs/crate/prikk-store) |
+| [`prikk-object`](https://crates.io/crates/prikk-object) | object identity, canonical encoding, and payload types | [![crates.io](https://img.shields.io/crates/v/prikk-object.svg?label=%20)](https://crates.io/crates/prikk-object) | [![docs.rs](https://img.shields.io/docsrs/prikk-object?version=latest&label=%20)](https://docs.rs/prikk-object) | [![Dependency Status](https://deps.rs/crate/prikk-object/latest/status.svg)](https://deps.rs/crate/prikk-object) |
+| [`prikk-replay`](https://crates.io/crates/prikk-replay) | replay and lifecycle semantics | [![crates.io](https://img.shields.io/crates/v/prikk-replay.svg?label=%20)](https://crates.io/crates/prikk-replay) | [![docs.rs](https://img.shields.io/docsrs/prikk-replay?version=latest&label=%20)](https://docs.rs/prikk-replay) | [![Dependency Status](https://deps.rs/crate/prikk-replay/latest/status.svg)](https://deps.rs/crate/prikk-replay) |
+| [`prikk-crypto`](https://crates.io/crates/prikk-crypto) | Ed25519 signing and verification | [![crates.io](https://img.shields.io/crates/v/prikk-crypto.svg?label=%20)](https://crates.io/crates/prikk-crypto) | [![docs.rs](https://img.shields.io/docsrs/prikk-crypto?version=latest&label=%20)](https://docs.rs/prikk-crypto) | [![Dependency Status](https://deps.rs/crate/prikk-crypto/latest/status.svg)](https://deps.rs/crate/prikk-crypto) |
+| [`prikk-hash`](https://crates.io/crates/prikk-hash) | SHA-256 primitives | [![crates.io](https://img.shields.io/crates/v/prikk-hash.svg?label=%20)](https://crates.io/crates/prikk-hash) | [![docs.rs](https://img.shields.io/docsrs/prikk-hash?version=latest&label=%20)](https://docs.rs/prikk-hash) | [![Dependency Status](https://deps.rs/crate/prikk-hash/latest/status.svg)](https://deps.rs/crate/prikk-hash) |
+| [`prikk-error`](https://crates.io/crates/prikk-error) | shared error taxonomy | [![crates.io](https://img.shields.io/crates/v/prikk-error.svg?label=%20)](https://crates.io/crates/prikk-error) | [![docs.rs](https://img.shields.io/docsrs/prikk-error?version=latest&label=%20)](https://docs.rs/prikk-error) | [![Dependency Status](https://deps.rs/crate/prikk-error/latest/status.svg)](https://deps.rs/crate/prikk-error) |
+| [`prikk-ffi`](https://crates.io/crates/prikk-ffi) | Windows filesystem-identity FFI bindings | [![crates.io](https://img.shields.io/crates/v/prikk-ffi.svg?label=%20)](https://crates.io/crates/prikk-ffi) | [![docs.rs](https://img.shields.io/docsrs/prikk-ffi?version=latest&label=%20)](https://docs.rs/prikk-ffi) | [![Dependency Status](https://deps.rs/crate/prikk-ffi/latest/status.svg)](https://deps.rs/crate/prikk-ffi) |
+
 ## Project Structure
 
 - `crates/` — Rust workspace crates for the CLI, object model, crypto, repository store, replay
@@ -280,13 +287,18 @@ prikk compact --pointer-index|--received-index|--trust-policy|--all [--plan-only
 
 ## Development Gates
 
-Before proposing changes, run the relevant subset of:
+The three commands below are the ones worth running constantly while working:
 
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --locked
 ```
+
+**They are not the full gate set.** Every change this project accepts passes the complete list in
+[`rfcs/EXECUTION-ORDER.md`](./rfcs/EXECUTION-ORDER.md) §6 rule 9 — which also covers the MSRV test
+run, `git diff --check`, `cargo audit`, a rustdoc lint, and the three `release-policy` checks. That
+document is the authority; this section is a convenience, and deliberately does not restate it.
 
 In restricted environments where the default temporary directory is read-only, use a workspace-local
 temporary directory for integration tests:
