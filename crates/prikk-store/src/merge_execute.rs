@@ -184,7 +184,11 @@ pub fn execute_merge(
     )?;
     let block_id = object_store.write_object(&block_envelope)?;
 
-    let update_seq = into_ref_state.update_seq + 1;
+    let update_seq = into_ref_state.update_seq.checked_add(1).ok_or_else(|| {
+        PrikkError::Integrity(format!(
+            "merge into {into_ref}: ref-state update_seq overflow"
+        ))
+    })?;
     let ref_state_payload = RefStatePayload {
         ref_name: into_ref.clone(),
         kind: RefKind::Branch,

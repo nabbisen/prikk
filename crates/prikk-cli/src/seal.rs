@@ -186,10 +186,13 @@ fn seal_active_no_audit(
     let block_id = object_store
         .write_object(&block_envelope)
         .map_err(|err| err.to_string())?;
-    let update_seq = current
-        .as_ref()
-        .map(|state| state.update_seq + 1)
-        .unwrap_or(1);
+    let update_seq = match current.as_ref() {
+        Some(state) => state
+            .update_seq
+            .checked_add(1)
+            .ok_or_else(|| format!("seal {ref_name}: ref-state update_seq overflow"))?,
+        None => 1,
+    };
     let previous_ref_state_id = current.as_ref().map(|state| state.ref_state_id);
     let ref_state_payload = RefStatePayload {
         ref_name: ref_name.to_string(),

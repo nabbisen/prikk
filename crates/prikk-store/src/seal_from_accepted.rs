@@ -236,7 +236,21 @@ pub fn seal_from_accepted_claim(
     let mut object_store = ObjectWriteSession::open(layout)?;
     object_store.write_object(&block_envelope)?;
 
-    let update_seq = current.as_ref().map_or(1, |tip| tip.update_seq + 1);
+    // AUD-08: untested here, deliberately -- unlike `seal`/`execute_merge`, this function's own
+    // `ensure_no_incomplete_publication(layout)` call above (line 108) already refuses the only way
+    // to make `current.update_seq` reach `u64::MAX` (repointing `canonical_ref` at a RefState the
+    // real ref-log cannot support), so a test proving this arm would have to route around that
+    // pre-existing, unrelated check -- exactly the "controls that pass for the wrong reason" shape
+    // this project has been burned by before. The three sites share one fix for one reason
+    // (`update_seq + 1` should never silently wrap), not one reachability story.
+    let update_seq = match current.as_ref() {
+        Some(tip) => tip.update_seq.checked_add(1).ok_or_else(|| {
+            PrikkError::Integrity(format!(
+                "seal-from-accepted-claim {canonical_ref}: ref-state update_seq overflow"
+            ))
+        })?,
+        None => 1,
+    };
     let previous_ref_state_id = current.as_ref().map(|tip| tip.ref_state_id);
     let ref_state_payload = RefStatePayload {
         ref_name: canonical_ref.clone(),
