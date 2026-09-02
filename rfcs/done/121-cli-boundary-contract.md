@@ -1,6 +1,24 @@
 # RFC 121 — The CLI's boundary contract: what a script may rely on
 
-**Status.** **Proposed.** Raised by the external architecture audit of 2026-08-31
+**Status.** **COMPLETE, 2026-09-02.** Five increments: EPIPE (`0c96b06`), the `CliError` type and the
+`0`/`1`/`2` mapping plus the JSON-printer `panic!` (`215b497`), `unlock`'s abort and the stdout
+write-failure code (`44c9d2a`), argument hygiene across 26 parser functions and every inline loop
+(`832c40a`), and per-command `--help` with seven previously-undocumented flags (`a4aea59`). CI green
+on all 15 jobs throughout.
+
+**§6c and §6d are carried forward, not closed** — both are one-line residuals the contract made
+visible, and both are now tracked as **AUD-09 and AUD-10** in `ROADMAP.md`'s corrective program,
+where items needing no design decision live. Closing this RFC while they sit unfixed is deliberate:
+keeping an RFC open for two reorders would make the Open-Work Index less informative, not more.
+
+**What the arc found that the RFC did not say.** §3 framed these as "one absence, not five bugs", and
+that held better than expected: **almost every value-carrying flag in the crate had
+`bundle export --ref`'s exact shape** — last write silently wins — so the shared mechanism replaced a
+crate-wide defect rather than five named ones. The scale was understated twice in my own handoffs
+(nine files where the unit was 26 functions; four undocumented flags where there were seven), and
+found correctly both times by the implementing increment.
+
+Raised by the external architecture audit of 2026-08-31
 (`audit-2026-08-31-task-{1b,3}.md`; review at
 `.git-exclude/reviewed/external-audit-20260831-review-v1.md` §1.3, §3.4, §4). Every finding here was
 reproduced independently before this file was written.

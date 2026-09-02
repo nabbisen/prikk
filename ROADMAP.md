@@ -240,7 +240,6 @@ item is open.
 - [`110-agent-safety-and-provenance.md`](rfcs/proposed/110-agent-safety-and-provenance.md) — RFC 110, Agent safety and code provenance
 - [`113-history-import-foundations.md`](rfcs/proposed/113-history-import-foundations.md) — RFC 113, History import foundations (Git, Subversion, CVS)
 - [`DC-43-RELEASE-SECURITY-CONTROLS.md`](rfcs/proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) — DC-43, Release Security and Distribution Controls (schedule position stale — cited predecessor superseded and implemented; see the RFC's own status update)
-- [`121-cli-boundary-contract.md`](rfcs/proposed/121-cli-boundary-contract.md) — RFC 121, The CLI's boundary contract: EPIPE panic, exit codes, per-command help, arg-parser hygiene (external audit 2026-08-31)
 - [`123-commit-message-and-authorship-metadata.md`](rfcs/proposed/123-commit-message-and-authorship-metadata.md) — RFC 123, The commit message is validated and then discarded (external audit 2026-08-31, High; **owner ruling required** — format decision)
 - [`124-worktree-ignore-mechanism.md`](rfcs/proposed/124-worktree-ignore-mechanism.md) — RFC 124, No ignore mechanism exists at any layer (external audit 2026-08-31)
 - [`126-verification-infrastructure-coverage.md`](rfcs/proposed/126-verification-infrastructure-coverage.md) — RFC 126, Four flanks the verification culture never reached (external audit 2026-08-31; **owner ruling required** — criterion as a dev-dependency)
@@ -325,7 +324,7 @@ remained. Whether the contract is ever promoted into a stability *promise* stays
 | Band | Items | Why here |
 |---|---|---|
 | **Before the next cut** | ~~RFC 127~~ **delivered 2026-09-01 (`e8a10d5`)**; RFC 121's EPIPE fix alone; ~~RFC 122~~ **delivered 2026-09-01 (`bc443e8`)**; RFC 128's `SECURITY.md` | 127 is a regression that has already shipped in a published artifact. EPIPE is a panic every user who pipes to `head` meets. 122 is the only High-severity broken command on the mainline. `SECURITY.md` is one page and its absence is disproportionate for a trust-centric product |
-| **Next** | ~~RFC 125~~ **delivered 2026-09-02 (`c6fc625`)**; RFC 126 §3–§4 (`cargo audit` in CI, doc gating); the rest of RFC 121, now that its exit-code contract is ruled | 125 is latent security, cheap, and encode/decode-symmetric. 126's first half is a CI job and a lint flag — the two gates that stop everything else drifting silently |
+| **Next** | ~~RFC 125~~ **delivered 2026-09-02 (`c6fc625`)**; ~~RFC 126 §3–§4~~ **delivered 2026-09-02 (`1d324a5`)**; ~~the rest of RFC 121~~ **delivered 2026-09-02 (`a4aea59`) — RFC 121 complete** | 125 is latent security, cheap, and encode/decode-symmetric. 126's first half is a CI job and a lint flag — the two gates that stop everything else drifting silently |
 | **Unblocked by the 2026-09-01 rulings** | RFC 123's `note:` line (immediate, one line); then RFC 123's schema-3 design; RFC 124; RFC 126 §2/§5 | RFC 123's interim is a one-line change that stops active harm and should not wait behind its own format work. RFC 124 needs no ruling — only §3's design questions answered |
 | **Unscheduled** | the two performance walls and the pre-1.0 API debt below | Both are gated behind RFC 114's stability work rather than racing it |
 
@@ -341,6 +340,8 @@ remained. Whether the contract is ever promoted into a stability *promise* stays
 | AUD-06 | `unwrap_used`/`expect_used`/`indexing_slicing` are `warn`; the verified **zero** production occurrences is held by review, not by the build | Raised to `deny` at the workspace root, tests keeping their scoped `#![allow]`s |
 | AUD-07 | `refs.rs:504-511` states `tags/V1` and `tags/v1` "coexist as distinct refs"; `validate_no_ref_name_collision` (`publication.rs:164-175`) refuses exactly that on creation | Comment corrected, with the residual gap (pre-existing collisions, NFC/NFD) named rather than dropped |
 | AUD-08 | `merge_execute.rs:187` increments `update_seq` unchecked where the WAL uses `checked_add` for the same shape | `checked_add`, for consistency rather than for reachability |
+| AUD-09 | `stdout.rs`'s write-failure arm reports with `eprintln!`, which panics if stderr is also unwritable — `prikk verify >/dev/full 2>/dev/full` exits `101`, outside RFC 121 §6a's ruled `0`/`1`/`2` vocabulary | `writeln!(io::stderr(), …)` ignoring its result, then exit `1`, so the code stays inside the contract even when the message cannot be delivered (RFC 121 §6c) |
+| AUD-10 | `main.rs::run_seal` and `run_merge` acquire the maintainer signer **before** parsing arguments, so an argument error with no key configured reports "maintainer signing is required" instead. `run_commit`/`run_rollback_draft` parse first — two sites against two, not a house style | Parse first in both, per §6a's own "detected before any repository work begins" (RFC 121 §6d) |
 
 ### Recorded, and deliberately not corrective work
 
