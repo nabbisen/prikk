@@ -60,9 +60,9 @@ unsafe_code         = "forbid"
 missing_docs        = "warn"
 
 [workspace.lints.clippy]
-unwrap_used         = "warn"
-expect_used         = "warn"
-indexing_slicing    = "warn"
+unwrap_used         = "deny"
+expect_used         = "deny"
+indexing_slicing    = "deny"
 # DC-90: goes here, at the workspace root, and not in any individual crate's manifest --
 # see tools/release-policy/src/boundary/unsafe_boundary.rs's module doc for why. "forbid", not
 # "deny": deny can be locally overridden by an inner #[allow], which the crate this lint exists

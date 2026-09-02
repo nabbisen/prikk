@@ -23,7 +23,7 @@ windows-sys = { workspace = true }
 missing_docs = "warn"
 
 [lints.clippy]
-unwrap_used = "warn"
-expect_used = "warn"
-indexing_slicing = "warn"
+unwrap_used = "deny"
+expect_used = "deny"
+indexing_slicing = "deny"
 undocumented_unsafe_blocks = "forbid"
