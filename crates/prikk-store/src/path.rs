@@ -27,12 +27,26 @@ pub(crate) fn join_repo_path_to_root(path: &RepoPath, root: &Path) -> PathBuf {
 pub(crate) fn pathbuf_to_slash_string(path: &Path) -> Result<String> {
     let mut components = Vec::new();
     for component in path.components() {
+        // `InvalidName`, not `Integrity` (RFC 124 re-land, round 3 — the same misclassification
+        // RFC 122 §4 ruled on in the same words): a worktree file whose name prikk cannot represent
+        // is a name outside the supported subset, not evidence the repository is damaged.
+        // `integrity error` is reserved for the latter, and a user who sees it for an ordinary
+        // unsupported filename would reach for `doctor`/backups/recovery for nothing.
         let text = component.as_os_str().to_str().ok_or_else(|| {
-            PrikkError::Integrity(format!("worktree path is not UTF-8: {}", path.display()))
+            PrikkError::InvalidName(format!(
+                "worktree path is not valid UTF-8: {}",
+                path.display()
+            ))
         })?;
         components.push(text.to_string());
     }
     if components.is_empty() {
+        // Kept as `Integrity`, unlike the arm above: an empty path can only come from
+        // `Path::components()` yielding nothing for a path a worktree walk itself constructed (a
+        // directory entry always has a non-empty name, and every call site here builds `path` from
+        // one) -- so reaching this means the walk's own invariant broke, not that a user chose an
+        // unusual file name. That is a fact about repository/walk state, which is exactly what
+        // `Integrity` is for.
         return Err(PrikkError::Integrity("empty worktree path".to_string()));
     }
     Ok(components.join("/"))

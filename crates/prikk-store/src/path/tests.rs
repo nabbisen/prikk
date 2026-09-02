@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 use std::path::{Path, PathBuf};
 
 use super::{RepoPath, join_repo_path_to_root, pathbuf_to_slash_string};
@@ -40,15 +42,37 @@ fn pathbuf_to_slash_string_matches_a_forward_slash_joined_string() -> prikk_erro
     Ok(())
 }
 
+/// A non-UTF-8 worktree file name is `InvalidName`, not `Integrity` (v4 amendment: the same
+/// misclassification RFC 122 §4 ruled on, in the same words -- a name outside the supported subset
+/// is not evidence the repository is damaged, and `integrity error` is reserved for the latter).
 #[test]
-fn pathbuf_to_slash_string_rejects_a_non_utf8_component() {
+fn pathbuf_to_slash_string_rejects_a_non_utf8_component_as_an_invalid_name_not_an_integrity_error()
+{
     #[cfg(unix)]
     {
         use std::ffi::OsStr;
         use std::os::unix::ffi::OsStrExt;
 
+        use prikk_error::PrikkError;
+
         let non_utf8 = OsStr::from_bytes(&[0x66, 0x6f, 0x80, 0x6f]); // "fo\x80o"
         let path = Path::new("dir").join(non_utf8);
-        assert!(pathbuf_to_slash_string(&path).is_err());
+        let err = pathbuf_to_slash_string(&path).unwrap_err();
+        assert!(
+            matches!(err, PrikkError::InvalidName(_)),
+            "expected InvalidName, got: {err:?}"
+        );
     }
+}
+
+/// The other failure arm is the opposite call: an empty decomposition can only mean the walk that
+/// built `path` violated its own invariant (every entry name is non-empty), not that a user chose an
+/// unusual file name -- so this one *is* `Integrity`, deliberately left as the v4 amendment asked.
+#[test]
+fn pathbuf_to_slash_string_rejects_an_empty_path_as_an_integrity_error() {
+    let err = pathbuf_to_slash_string(Path::new("")).unwrap_err();
+    assert!(
+        matches!(err, prikk_error::PrikkError::Integrity(_)),
+        "expected Integrity, got: {err:?}"
+    );
 }
