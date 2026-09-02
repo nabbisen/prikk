@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.29.0 — 2026-09-03
+
+**Generated files can be kept out of a commit.** Until now `commit` scanned and signed everything in
+the worktree — a limitation this project's own README named as a reason not to use it. `.prikkignore`
+closes that gap. The rest of this release finishes the corrective program for the 2026-08-31 external
+audit, **including a correction to something `0.28.0`'s own notes claimed and only half delivered.**
+
+### Added
+
+- **`.prikkignore` — a worktree ignore mechanism.** A file at the repository root, one rule per line,
+  each a literal repo-relative path prefix. `target` matches `target` and everything under it, never
+  `target2` or `targetfoo` — whole path components, so a rule cannot over-match a differently-named
+  sibling. **There is no globbing, no negation, no comments, and no per-directory files**, and that
+  is a stated limit rather than a first step: an ignore syntax that nearly matched gitignore's
+  semantics would be worse than one that plainly does not attempt to.
+
+  It binds at **discovery only** — `commit`'s worktree walk and `worktree-status`'s, and nothing
+  else. Applying, replaying, verifying, and materializing history ignore it entirely, so two
+  repositories with different ignore files can never disagree about the same signed history.
+
+  **A rule can never hide a path that is already tracked**, or one under an already-tracked path, so
+  adding a line cannot make `commit` see an existing file as deleted. **A malformed `.prikkignore` is
+  refused rather than treated as empty.** No file at all means no rules: every existing repository
+  behaves exactly as it did before.
+
+  `.prikkignore` is an ordinary tracked file, not configuration — it is committed, signed, and
+  travels through `bundle` and `sync` like anything else.
+
+### Fixed
+
+- **A full-disk stdout *and* stderr together no longer exits `101`.** `0.28.0`'s notes announced this
+  fix and delivered half of it: the single-stream case was corrected, while
+  `prikk verify >/dev/full 2>/dev/full` still panicked, because the error report itself panicked on
+  its own failed write. The exit code now stays inside the ruled `0`/`1`/`2` vocabulary even when the
+  message cannot be delivered anywhere.
+- **`seal` and `merge` now report a bad flag as the usage error it is.** Both acquired the maintainer
+  signing key before parsing their arguments, so `prikk seal --nonsense` with no key configured
+  reported "maintainer signing is required" and exited `1`. It now exits `2` with the argument error,
+  matching `commit` and `rollback-draft`.
+
+### Changed
+
+- A worktree path that is not valid UTF-8 is now reported as an invalid name rather than as a
+  repository integrity failure. An empty path remains an integrity failure.
+- Three internal `update_seq` increments now refuse rather than wrap on overflow — unreachable in
+  ordinary use, changed for consistency with the ref-log's existing checked arithmetic.
+- The workspace now denies `unwrap`, `expect`, and direct indexing in product code at build time
+  rather than warning, the patch algebra gained oracle-backed property tests, and the three
+  check-only CI workflows declare `contents: read` explicitly.
+
 ## 0.28.0 — 2026-09-02
 
 **The command line now behaves the way a script expects.** An independent external architect audited

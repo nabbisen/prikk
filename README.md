@@ -64,9 +64,10 @@ Prikk is not yet the right tool if you need:
 - complete branch management, or semantic merge;
 - plugin/audit execution, attestations, or automated publication controls;
 - mature key lifecycle features such as revocation, rotation, hardware signing, or thresholds;
-- a way to exclude generated files (build output, dependency directories, editor swap files) from a
-  commit — there is no ignore mechanism at any layer yet, `commit` scans and signs everything it
-  finds, and a file swept into history by mistake cannot be removed later.
+- flexible exclusion of generated files — `.prikkignore` (since 0.29.0) takes literal repo-relative
+  path prefixes, one per line, with no globbing, no negation, and no per-directory files, so
+  patterns like `*.log` do not work; and a file swept into history by mistake still cannot be
+  removed later.
 
 ## Install
 
