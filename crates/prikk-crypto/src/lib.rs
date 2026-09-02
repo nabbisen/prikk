@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! Prikk cryptographic primitives.
 //!
 //! v1 scope is intentionally minimal: Ed25519 keypair construction, detached signing, and detached
