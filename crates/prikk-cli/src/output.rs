@@ -14,7 +14,7 @@ mod merge_evidence;
 mod verification;
 mod worktree;
 
-pub(crate) use help::print_help;
+pub(crate) use help::{print_command_help, print_help};
 pub(crate) use merge_evidence::{print_merge_evidence, print_merge_plan};
 pub(crate) use verification::{
     print_active_session_repairs, print_doctor_report, print_verify_report,

@@ -21,3 +21,15 @@ pub(crate) fn print_help(version: &str) {
     }
     println!("  prikk --version                           Print version");
 }
+
+/// Print one command's own `--help`/`-h` output (RFC 121 §2.5) -- its `help_lines` verbatim, the
+/// same text [`print_help`] already renders inline for every command. `COMMANDS` is a flat table of
+/// top-level dispatchable names, not a per-subcommand tree, so `prikk bundle --help` and
+/// `prikk bundle export --help` print the same thing: `bundle`'s full `help_lines`, covering
+/// export/import/verify together -- there is no finer-grained table to route a subcommand to, and
+/// adding one would be the second table RFC 118 forbids.
+pub(crate) fn print_command_help(command: &crate::commands::Command) {
+    for line in command.help_lines {
+        println!("{line}");
+    }
+}

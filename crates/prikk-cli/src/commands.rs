@@ -105,7 +105,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         name: "commit",
         run: crate::run_commit,
         help_lines: &[
-            "  prikk commit --from-worktree [--text-edits] [--ref REF] -m <message> Append worktree changes",
+            "  prikk commit --from-worktree [--text-edits] [--ref REF] -m|--message <message>  Append worktree changes",
         ],
     },
     Command {
@@ -137,7 +137,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         run: crate::run_tag,
         help_lines: &[
             "  prikk tag [list]                          List tags deterministically (name, target block)",
-            "  prikk tag create <name> --target <ref|block> [-m <message>]  Publish a tag at a block",
+            "  prikk tag create <name> --target <ref|block> [-m|--message <message>]  Publish a tag at a block",
         ],
     },
     Command {
@@ -204,7 +204,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         name: "rollback-draft",
         run: crate::run_rollback_draft,
         help_lines: &[
-            "  prikk rollback-draft --append-inverse [path] [--ref REF] -m <message> Append inverse Patch",
+            "  prikk rollback-draft --append-inverse [path] [--ref REF] -m|--message <message>  Append inverse Patch",
         ],
     },
     Command {
@@ -225,7 +225,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         name: "verify",
         run: crate::run_verify,
         help_lines: &[
-            "  prikk verify [path]                       Verify objects, WAL, refs, and publication trust",
+            "  prikk verify [path] [--stop-on-first-error] [--format json]  Verify objects, WAL, refs, and publication trust",
         ],
     },
     Command {
@@ -234,6 +234,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         help_lines: &[
             "  prikk doctor [path]                       Run health diagnostics",
             "  prikk doctor [path] --repair-wal-tail     Truncate incomplete trailing WAL bytes",
+            "  prikk doctor [path] --repair-main-ref     Recognized, always refused: no repair is implemented",
         ],
     },
     Command {
@@ -241,7 +242,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         run: crate::run_unlock,
         help_lines: &[
             "  prikk unlock                              List every currently held lock",
-            "  prikk unlock --lock <path> [--yes]        Clear one stale lock (asks to confirm unless --yes)",
+            "  prikk unlock --lock <path> [--yes|--force]  Clear one stale lock (asks to confirm unless --yes/--force)",
         ],
     },
     Command {
@@ -281,3 +282,6 @@ mod tests;
 
 #[cfg(test)]
 mod exit_code_tests;
+
+#[cfg(test)]
+mod help_tests;

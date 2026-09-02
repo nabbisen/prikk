@@ -46,8 +46,8 @@ use args::{
 };
 use commands::CliError;
 use output::{
-    print_active_session_repairs, print_checkout_plan, print_doctor_report, print_help,
-    print_history, print_merge_evidence, print_merge_plan, print_patch_deletion_plan,
+    print_active_session_repairs, print_checkout_plan, print_command_help, print_doctor_report,
+    print_help, print_history, print_merge_evidence, print_merge_plan, print_patch_deletion_plan,
     print_patch_inverse_plan, print_patch_materialization_report, print_patch_replay_plan,
     print_rollback_draft_report, print_rollback_draft_verification, print_rollback_preview_plan,
     print_snapshot_checkout_plan, print_snapshot_materialization_report, print_verify_report,
@@ -97,7 +97,24 @@ fn run() -> std::result::Result<(), CliError> {
             Ok(())
         }
         Some(name) => match commands::find(name) {
-            Some(command) => (command.run)(args.collect()),
+            Some(command) => {
+                let args: Vec<String> = args.collect();
+                // RFC 121 §2.5 v2 amendment §2: round 3's argument hygiene made every parser refuse
+                // an unrecognized flag, which now includes `--help`/`-h` -- so this must be
+                // recognized *before* the command's own parser ever sees it, not added as a 27th
+                // arm to those parsers (the same "one absence, not many places" reasoning round 3
+                // itself was built on). Recognized anywhere in the argument list, not only as the
+                // first token (matching `git`/`cargo`'s own convention) -- `COMMANDS` is a flat
+                // table of top-level names, so this does not distinguish `bundle --help` from
+                // `bundle export --help`; both print `bundle`'s full help text (`print_command_help`'s
+                // own doc comment).
+                if args.iter().any(|arg| arg == "--help" || arg == "-h") {
+                    print_command_help(command);
+                    Ok(())
+                } else {
+                    (command.run)(args)
+                }
+            }
             // RFC 121 §6a: an unrecognized command name is detected before any repository work
             // begins, the exact shape §1's `Usage` variant exists for -- not `.into()`'s default
             // `Failure`, which every other bare error in this file still gets until the argument-
