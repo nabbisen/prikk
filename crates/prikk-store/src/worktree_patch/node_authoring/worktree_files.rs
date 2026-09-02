@@ -4,13 +4,15 @@
 //! mode) but never opens or reads their content. `author_inner` consults the commit-index cache
 //! against this metadata to decide, per path, whether a content read can be skipped entirely.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use prikk_error::PrikkError;
 
 use super::{AuthorError, EXECUTABLE_FILE_MODE, REGULAR_FILE_MODE, RepoPath, RepositoryLayout};
 use crate::fsutil::{EntryKind, RootFileStat, list_directory, stat_file_state_if_exists};
+use crate::ignore::{IgnoreRules, should_skip_discovery};
+use crate::path::pathbuf_to_slash_string;
 
 /// A worktree regular file's metadata, gathered without reading its content.
 ///
@@ -24,17 +26,25 @@ pub(super) struct WorktreeFileMeta {
     pub(super) mode: Option<u32>,
 }
 
+/// `tracked` is every path the baseline already has a node for (files and symlinks together) —
+/// RFC 124 §4.4: an ignore rule must never make an already-tracked path disappear from this map, or
+/// `node_authoring.rs`'s own deletion-inference loop (`baseline_files` minus this map) would read a
+/// still-present, merely-now-ignored file as deleted and author a `DeleteNode` for it.
 pub(super) fn enumerate_worktree_files(
     layout: &RepositoryLayout,
+    tracked: &BTreeSet<String>,
 ) -> std::result::Result<BTreeMap<String, WorktreeFileMeta>, AuthorError> {
+    let rules = IgnoreRules::load(layout).map_err(AuthorError::Store)?;
     let mut out = BTreeMap::new();
-    walk_dir(layout, Path::new(""), &mut out)?;
+    walk_dir(layout, Path::new(""), &rules, tracked, &mut out)?;
     Ok(out)
 }
 
 fn walk_dir(
     layout: &RepositoryLayout,
     dir: &Path,
+    rules: &IgnoreRules,
+    tracked: &BTreeSet<String>,
     out: &mut BTreeMap<String, WorktreeFileMeta>,
 ) -> std::result::Result<(), AuthorError> {
     let entries =
@@ -45,6 +55,24 @@ fn walk_dir(
             continue;
         }
         let path = join_relative(dir, &file_name);
+        // RFC 124: checked once per entry, before dispatching on kind, so an ignored directory is
+        // skipped without ever being opened -- essential, not only faster, since a real
+        // `node_modules/`-shaped directory is typically full of symlinks and other entry kinds this
+        // walk would otherwise fail closed on below.
+        //
+        // Built through the shared, separator-safe `pathbuf_to_slash_string` -- **never**
+        // `Path::to_str()`/`Path::to_string_lossy()` directly on a `Path::join`-built path. `join`
+        // inserts the platform separator, so on Windows that string is backslash-joined and neither
+        // matches a forward-slash ignore rule nor a `tracked` entry (both always `/`-joined) — the
+        // exact defect this mechanism's first landing had (reverted at `2235af3`; see the amendment
+        // in `rfcs/handoffs/124-worktree-ignore-mechanism/`). A conversion failure here (non-UTF-8)
+        // is not swallowed: it falls through to the ordinary dispatch below, where `insert_regular_file`
+        // performs the identical conversion and fails closed on it as it always has.
+        if let Ok(rel) = pathbuf_to_slash_string(&path) {
+            if should_skip_discovery(rules, tracked, &rel) {
+                continue;
+            }
+        }
         match entry.kind {
             EntryKind::Symlink => {
                 return Err(AuthorError::UnsupportedSymlinkAuthoring(format!(
@@ -53,7 +81,7 @@ fn walk_dir(
                 )));
             }
             EntryKind::Directory => {
-                walk_dir(layout, &path, out)?;
+                walk_dir(layout, &path, rules, tracked, out)?;
                 continue;
             }
             EntryKind::Regular => {}
@@ -74,13 +102,12 @@ fn insert_regular_file(
     path: &Path,
     out: &mut BTreeMap<String, WorktreeFileMeta>,
 ) -> std::result::Result<(), AuthorError> {
-    let rel = path.to_str().ok_or_else(|| {
-        AuthorError::Store(PrikkError::InvalidName(format!(
-            "worktree path is not valid UTF-8: {}",
-            path.to_string_lossy()
-        )))
-    })?;
-    let repo_path = RepoPath::parse(rel).map_err(AuthorError::Store)?;
+    // Same shared, separator-safe conversion as the ignore check above -- this call pre-dates RFC
+    // 124 and used `path.to_str()` directly (fine on the separator this crate has always been
+    // exercised on, but the same latent defect the ignore mechanism's own bug surfaced); routed
+    // through the one converter now, not left as a second, differently-correct copy of the fix.
+    let rel = pathbuf_to_slash_string(path).map_err(AuthorError::Store)?;
+    let repo_path = RepoPath::parse(&rel).map_err(AuthorError::Store)?;
     let stat: RootFileStat = stat_file_state_if_exists(layout.worktree_mutation_root(), path)
         .map_err(AuthorError::Store)?
         .ok_or_else(|| {

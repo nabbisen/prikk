@@ -1512,8 +1512,12 @@ fn non_utf8_worktree_path_fails_closed() {
     );
     assert!(report.is_err());
     let message = report.err().unwrap().to_string();
+    // RFC 124's re-land routed this conversion through the shared, separator-safe
+    // `crate::path::pathbuf_to_slash_string` (both live-worktree walks now share one converter,
+    // rather than `insert_regular_file` keeping its own `Path::to_str()` copy) -- same fail-closed
+    // behavior on non-UTF-8, worded the way that shared function already was.
     assert!(
-        message.contains("not valid UTF-8"),
+        message.contains("not UTF-8"),
         "expected utf-8 rejection, got: {message}"
     );
     let _ = std::fs::remove_dir_all(root);
