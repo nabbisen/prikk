@@ -16,6 +16,7 @@ use std::path::Path;
 use prikk_error::{PrikkError, Result};
 
 use crate::blob_access::ensure_blob_matches_node_kind;
+use crate::ignore::{IgnoreRules, should_skip_discovery};
 use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryLayout};
 use crate::lifecycle_cache::replay::TextCache;
 use crate::node_lifecycle::NodeContent;
@@ -178,11 +179,18 @@ pub fn worktree_status(layout: &RepositoryLayout, ref_name: &str) -> Result<Work
         }
     }
 
+    // RFC 124: the same derivation `commit`'s own worktree walk consults (`ignore.rs`'s own module
+    // doc explains why one shared function, not two independently-written checks). Loaded once per
+    // call, from the same `.prikkignore` `commit` reads -- both commands otherwise agree, so
+    // disagreeing about which paths are ignored would recreate exactly the defect shape RFC 122
+    // fixed for the baseline itself.
+    let rules = IgnoreRules::load(layout)?;
     scan_untracked(
         layout.root(),
         layout.root(),
         &baseline_paths,
         &seen_paths,
+        &rules,
         &mut changes,
     )?;
     changes.sort_by(|left, right| {
@@ -205,6 +213,7 @@ fn scan_untracked(
     current: &Path,
     baseline_paths: &BTreeSet<String>,
     seen_paths: &BTreeSet<String>,
+    rules: &IgnoreRules,
     changes: &mut Vec<WorktreeChange>,
 ) -> Result<()> {
     let entries = match fs::read_dir(current) {
@@ -217,9 +226,18 @@ fn scan_untracked(
         if is_prikk_metadata_path(root, &path) {
             continue;
         }
+        // RFC 124: an ignored path with no tracked descendant is invisible to this scan -- checked
+        // before dispatching on directory/file, so an ignored directory is never descended into at
+        // all, the same pruning `commit`'s own walk applies for the same reason (its own module doc
+        // in `ignore.rs`).
+        if let Ok(rel) = path_to_repo_string(root, &path) {
+            if should_skip_discovery(rules, baseline_paths, &rel) {
+                continue;
+            }
+        }
         let metadata = fs::symlink_metadata(&path)?;
         if metadata.is_dir() && !metadata.file_type().is_symlink() {
-            scan_untracked(root, &path, baseline_paths, seen_paths, changes)?;
+            scan_untracked(root, &path, baseline_paths, seen_paths, rules, changes)?;
             continue;
         }
         let repo_path = path_to_repo_string(root, &path);
