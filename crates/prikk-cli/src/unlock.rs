@@ -65,9 +65,13 @@ pub(crate) fn run_unlock(root: PathBuf, args: Vec<String>) -> std::result::Resul
     };
 
     print_locks(std::slice::from_ref(lock));
+    // RFC 121 §6a: declining -- interactively, or via EOF on a non-interactive stdin, which
+    // `confirm_interactively` cannot tell apart from a "no" -- must not exit `0`. A script running
+    // `prikk unlock --lock X && proceed` with no input attached would otherwise be told the lock is
+    // gone when it is not: uniform across both paths, not special-cased on whether a human was
+    // watching.
     if !skip_confirmation && !confirm_interactively(lock) {
-        println!("aborted: lock not cleared");
-        return Ok(());
+        return Err("lock not cleared: confirmation was not given".to_string());
     }
 
     clear_lock(&layout, &lock.path).map_err(|err| err.to_string())?;

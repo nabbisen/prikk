@@ -73,8 +73,19 @@ fn write_and_handle(write: impl FnOnce(&mut io::StdoutLock<'_>) -> io::Result<()
         // had been produced in full and the process ended normally.
         WriteOutcome::ClosedPipe => std::process::exit(0),
         // Anything else (e.g. `ENOSPC` on a redirected stdout) is a genuine failure and must not be
-        // swallowed by the same arm that swallows `BrokenPipe`.
-        WriteOutcome::Failed(err) => panic!("failed printing to stdout: {err}"),
+        // swallowed by the same arm that swallows `BrokenPipe`. RFC 121 §6a's exit-code contract
+        // rules 0/1/2 as the whole vocabulary -- a panic's exit 101 fell outside it, so this now
+        // reports and exits 1 like every other operational failure, instead of a panic banner and a
+        // backtrace hint. `eprintln!` (not the shadowed `println!` above) matches `main()`'s own
+        // `"error: {msg}"` wording for every other `CliError::Failure`, and is never itself
+        // BrokenPipe-fed here: a write failure on stdout says nothing about whether stderr is still
+        // open. Deliberately `std::process::exit`, not a threaded `Result` -- this runs from macro
+        // expansions at ~400 call sites, exactly why `ClosedPipe` already exits in place instead of
+        // propagating.
+        WriteOutcome::Failed(err) => {
+            eprintln!("error: failed printing to stdout: {err}");
+            std::process::exit(1);
+        }
     }
 }
 

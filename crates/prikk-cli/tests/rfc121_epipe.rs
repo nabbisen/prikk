@@ -97,3 +97,40 @@ fn log_through_a_closed_pipe_exits_zero_with_empty_stderr() {
     assert_eq!(output.status.code(), Some(0));
     assert_closed_pipe_is_silent_success(&output, "prikk log");
 }
+
+/// RFC 121 §6a amendment control 8: a non-`BrokenPipe` stdout write failure exits `1` with a
+/// message on stderr, not a panic banner outside the ruled 0/1/2 vocabulary (it used to exit
+/// `101`). `/dev/full` is a genuine full device, not a simulation -- the same control the original
+/// EPIPE increment used to prove this fix is narrow, re-run here to prove the *other* arm changed
+/// only the way it was supposed to. Linux-only (`/dev/full` does not exist on macOS or Windows);
+/// skips rather than fails where it is absent, since the underlying `classify`/`WriteOutcome` logic
+/// this exercises is platform-independent and already covered by `stdout::tests`'s own unit tests
+/// on every platform.
+#[test]
+fn a_write_failure_exits_one_with_a_message_not_a_panic() {
+    if !std::path::Path::new("/dev/full").exists() {
+        eprintln!("skipping: /dev/full is not available on this platform");
+        return;
+    }
+    let repo = fixture_repo("rfc121-write-failure");
+    let full = std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/full")
+        .expect("open /dev/full");
+    let output = Command::new(env!("CARGO_BIN_EXE_prikk"))
+        .current_dir(&repo)
+        .arg("verify")
+        .stdout(full)
+        .output()
+        .expect("spawn prikk");
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("failed printing to stdout"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        !stderr.contains("panicked"),
+        "must not panic, got: {stderr}"
+    );
+}

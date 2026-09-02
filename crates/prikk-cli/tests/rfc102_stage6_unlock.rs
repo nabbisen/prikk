@@ -77,7 +77,9 @@ fn listing_a_stale_lock_shows_its_recorded_pid_and_advisory_liveness() {
     );
 }
 
-/// The whole safety property: declining the interactive prompt leaves the lock in place.
+/// The whole safety property: declining the interactive prompt leaves the lock in place. RFC 121
+/// §6a: declining is also an operational failure now, not a silent success -- a script chaining
+/// `prikk unlock && proceed` must not continue past a lock that is still held.
 #[test]
 fn declining_the_interactive_prompt_does_not_clear_the_lock() {
     let repo = unique_repo("unlock-decline");
@@ -86,15 +88,50 @@ fn declining_the_interactive_prompt_does_not_clear_the_lock() {
     let path = active_lock_path(&repo);
 
     let output = unlock_with_stdin(&repo, &["--lock", path.to_str().unwrap()], "no\n");
-    ok(&output, "unlock --lock (declined)");
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "declining must exit 1, not 0: {output:?}"
+    );
     assert!(
-        String::from_utf8_lossy(&output.stdout).contains("aborted: lock not cleared"),
-        "stdout: {}",
-        String::from_utf8_lossy(&output.stdout)
+        String::from_utf8_lossy(&output.stderr).contains("lock not cleared"),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
     );
     assert!(
         path.is_file(),
         "the lock must still be present after a declined confirmation"
+    );
+}
+
+/// RFC 121 §6a's actual named victim: EOF on stdin (a non-interactive context with nothing
+/// attached) resolves to "no" exactly like an explicit decline, and must exit `1` for the same
+/// reason -- this is the path a CI script actually hits, not the interactive one.
+#[test]
+fn eof_on_stdin_does_not_clear_the_lock_either() {
+    let repo = unique_repo("unlock-eof");
+    init(&repo);
+    plant_stale_active_lock(&repo);
+    let path = active_lock_path(&repo);
+
+    let output = prikk(&repo)
+        .args(["unlock", "--lock", path.to_str().unwrap()])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "EOF on stdin must exit 1, not 0: {output:?}"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("lock not cleared"),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        path.is_file(),
+        "the lock must still be present after EOF on stdin"
     );
 }
 
