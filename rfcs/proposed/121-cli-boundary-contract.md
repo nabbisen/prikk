@@ -159,6 +159,28 @@ What was left was the shape of a contract the policy anticipates, and that is de
 into a *stability commitment* — a promise not to change it — which is a release-compatibility
 decision, not a design one.
 
+### 6c. One exit path still outside the vocabulary — recorded 2026-09-02, unscheduled
+
+Found by the architect while reviewing the round-2 increment that fixed the other two.
+
+`stdout.rs`'s write-failure arm now reports and exits `1` for a genuine stdout failure, as the
+contract requires. **But it reports with `eprintln!`, which panics if stderr is also unwritable:**
+
+```
+$ prikk verify >/dev/full 2>/dev/full
+exit=101
+```
+
+**Reachable only when both streams are unwritable**, where there is by definition nothing useful to
+report — so this is recorded rather than scheduled. It is noted because §6a states `0`/`1`/`2` as
+*the whole vocabulary*, and a promise with a reachable exception is worth writing down rather than
+discovering later.
+
+**The fix, whenever it is taken, is one line**: write to stderr with `writeln!(io::stderr(), …)` and
+ignore its result, then exit `1` — so the exit code stays inside the contract even when the message
+cannot be delivered. **It belongs with whoever next touches `stdout.rs`**, not with the argument
+hygiene work, which does not go near it.
+
 ### 6b. Two consequences that fall out of the ruling
 
 **The invariant, stated once so each site derives from it rather than deciding for itself:
