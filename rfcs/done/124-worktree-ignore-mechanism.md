@@ -1,6 +1,35 @@
 # RFC 124 — No ignore mechanism exists at any layer
 
-**Status.** **Proposed.** Raised by the external architecture audit of 2026-08-31
+**Status.** **COMPLETE, 2026-09-02.** Disclosure `de5a8c1`, mechanism `46ecf01` (after a revert —
+see below), error classification `7f62503`. CI green on all 15 jobs including the Windows mutation
+suite, which is what this increment had to prove.
+
+**`.prikkignore`: literal repo-relative path prefixes, whole-component matching, bound at the two
+worktree walks and nowhere else.** Discovery only — a rule can never author a `DeleteNode` for an
+already-tracked path. A malformed file refuses on both commands at exit `1`.
+
+**Two findings outlived the increment.**
+
+**One: directory-level pruning is functional, not an optimization.** `commit`'s walk fails closed on
+symlinks and unsupported entry kinds, and a real `node_modules/` is full of both — so a per-file
+ignore check that still descended into an ignored directory would pass every test here and fail on
+first contact with a real project. The mechanism prunes without opening.
+
+**Two: this project's test suite had never committed a file in a subdirectory, on any platform.**
+Every pre-existing test commits only top-level files. That is why a latent separator defect in
+`insert_regular_file` — `Path::to_str()` on a `join`-built path, backslash-rendered on Windows —
+had sat in the core commit path unseen. The implementation found and fixed it while auditing its own
+bug, and the new deep-nesting test closes the coverage hole. **For a version control system, "no
+test ever committed a nested file" is the more important of the two findings.**
+
+**Process record, kept because the cost was real.** The architect pushed the first landing to `main`
+without reviewing it — a pre-push check that asked "am I behind?" instead of "what am I pushing?" —
+so a Windows CI failure landed on `main` rather than being caught in review. The mechanism was
+reverted (`2235af3`), the disclosure kept, and the work re-landed correctly. **Four amendments for an
+increment that needed two corrections**; the excess is entirely attributable to reviewing out of
+order.
+
+Raised by the external architecture audit of 2026-08-31
 (`audit-2026-08-31-task-1a.md` §3, Top-10 #4). Confirmed: `worktree_status.rs:185,216-227` skips
 exactly one path, `.prikk`, and nothing else.
 
