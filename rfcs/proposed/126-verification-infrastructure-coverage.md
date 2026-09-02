@@ -9,7 +9,9 @@ member, outside `default-members`**, the shape `tools/release-policy` already es
 in no product crate's manifest and in no shipped dependency graph. The reversal of this RFC's first
 recommendation, and the accessibility and drift arguments behind it, stand recorded in §6.
 
-**Tracks.** Gates that do not exist. No product behaviour changes in this RFC.
+**Tracks.** Gates that do not exist. **One product behaviour change**, added by §6b: AUD-08's
+`checked_add`, which turns a `u64` overflow from a wrap or debug panic into an `Integrity` error.
+Every other item changes gates, attributes, or comments only.
 
 ---
 
@@ -123,8 +125,9 @@ shipped dependency graph — the property `placement.rs` exists to protect. **St
 not keep it out of build time**, since `cargo test --workspace` builds every member, exactly as it
 already builds `tools/release-policy`.
 
-**The owner's call remains**, because it accepts a real dependency tree into the workspace. But the
-cost is one the project has already priced once and judged worth paying.
+**RULED 2026-09-01: option 4** (recorded in this RFC's Status). The paragraphs above are preserved as
+the argument that was ruled on, not as an open question. The cost is one the project had already
+priced once, in `tools/release-policy`, and judged worth paying.
 
 ## 6a. Recorded 2026-09-02 — workflow permissions are not declared least-privilege
 
@@ -156,12 +159,45 @@ three files, not a correction to §3/§4. `permissions: contents: read` on each 
 **Whoever takes it should check the repository's actual default first**, since if it is already
 read-only the change is documentation of an existing property rather than a hardening.
 
+## 6b. Adopted 2026-09-02 — four `ROADMAP.md` corrective rows with no RFC of their own
+
+`ROADMAP.md`'s post-audit corrective program tracks **AUD-05 through AUD-08** under the heading
+*"Tracked here rather than as RFCs — none needs a design decision"*, which was and remains true.
+**But work reaches the dev team through `rfcs/handoffs/<dir>/`, and RFC 105's naming gate restricts
+those directories to `^[0-9]{3}-[a-z0-9]+(-[a-z0-9]+)*$`** — so ROADMAP-tracked work with no RFC has
+no conforming home, and the only way to give it one is a legacy-allowlist entry, which is exactly the
+bypass that gate exists to prevent.
+
+**Two of the four belong here on the merits and two are filed here out of that necessity. Stating
+which is which, rather than inventing a common rationale:**
+
+| Row | Fit |
+|---|---|
+| **AUD-05** — `prikk-crypto` is the only non-exempt crate without source-level `#![forbid(unsafe_code)]` | **On the merits.** A uniformity property that is currently held by review rather than by anything checkable. |
+| **AUD-06** — `unwrap_used`/`expect_used`/`indexing_slicing` are `warn`, not `deny` | **On the merits.** This RFC's whole subject is verification the build does not enforce. |
+| **AUD-07** — `refs.rs:508-509` says `tags/V1` and `tags/v1` "coexist as distinct refs"; publication refuses exactly that | **Filed here.** A false comment about a safety property, not a gate. |
+| **AUD-08** — `merge_execute.rs:187` increments `update_seq` unchecked | **Filed here.** Arithmetic hygiene, not a gate, and the one behaviour change this RFC carries. |
+
+**The ROADMAP rows stay where they are.** They are the tracker; this section is the design home. Per
+the owner's standing ruling on duplication, a reader arriving from either document reaches the work.
+
+**What changed since the rows were written, and must not be transcribed from them:**
+
+- **AUD-07's residual gap is narrower than the row implies.** `validate_no_ref_name_collision`
+  (`refs/publication.rs:164-175`) folds through `prikk_object::ascii_fold`, so the ASCII case
+  collision is genuinely refused at publication. What survives is (a) collisions that predate the
+  validator or arrive by a path that does not publish, and (b) **NFC/NFD and non-ASCII case pairs**,
+  which `ascii_fold` by construction does not see — a limitation DC-72 §3.5 already recorded. The
+  corrected comment must name both, or it replaces one wrong sentence with another.
+- **AUD-08 is not one site.** `merge_execute.rs:187` is the row's example, not the population.
+
 ## 7. Scope
 
 **In:** the oracle-backed property tests (§2); a scheduled fetching `cargo audit` CI job (§3);
 `cargo doc -D rustdoc::private_intra_doc_links` in CI plus the 7 existing fixes, and `mdbook build`
-on PRs touching `docs/**` or the CLI (§4); doctests for the ten kernel entry points (§4); whichever
-benchmark shape §6 rules (§5).
+on PRs touching `docs/**` or the CLI (§4); doctests for the ten kernel entry points (§4); criterion in its own
+member (§5, per §6's ruling); `permissions: contents: read` on the three check-only workflows (§6a);
+AUD-05 through AUD-08 (§6b).
 
 **Out:** coverage measurement, mutation testing, sanitizers, Miri (moot — no unsafe outside the
 Windows FFI crate, which CI already builds and tests on Windows). Differential testing against Git —

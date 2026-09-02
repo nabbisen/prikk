@@ -241,7 +241,7 @@ item is open.
 - [`113-history-import-foundations.md`](rfcs/proposed/113-history-import-foundations.md) — RFC 113, History import foundations (Git, Subversion, CVS)
 - [`DC-43-RELEASE-SECURITY-CONTROLS.md`](rfcs/proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) — DC-43, Release Security and Distribution Controls (schedule position stale — cited predecessor superseded and implemented; see the RFC's own status update)
 - [`123-commit-message-and-authorship-metadata.md`](rfcs/proposed/123-commit-message-and-authorship-metadata.md) — RFC 123, The commit message is validated and then discarded (external audit 2026-08-31, High; **owner ruling required** — format decision)
-- [`126-verification-infrastructure-coverage.md`](rfcs/proposed/126-verification-infrastructure-coverage.md) — RFC 126, Four flanks the verification culture never reached (external audit 2026-08-31; **owner ruling required** — criterion as a dev-dependency)
+- [`126-verification-infrastructure-coverage.md`](rfcs/proposed/126-verification-infrastructure-coverage.md) — RFC 126, Four flanks the verification culture never reached (external audit 2026-08-31; §6 **ruled 2026-09-01** — criterion in its own member; §2/§3/§4 delivered, §5/§6a/§6b open)
 - [`128-outward-facing-project-surface.md`](rfcs/proposed/128-outward-facing-project-surface.md) — RFC 128, What an outsider finds before they read any code (external audit 2026-08-31; **owner ruling required** — disclosure channel)
 - [`130-module-coupling-invariant.md`](rfcs/proposed/130-module-coupling-invariant.md) — RFC 130, A coupling invariant for `prikk-store` and the gate that holds it (**ACCEPTED by the owner 2026-09-01**; touches no files and conflicts with nothing in flight, so it can land during band 1)
 - [`131-module-grouping-and-visibility-scoping.md`](rfcs/proposed/131-module-grouping-and-visibility-scoping.md) — RFC 131, Grouping the 123 top-level entries and scoping reach with `pub(in ...)` (**ACCEPTED by the owner 2026-09-01**; large file move — after RFC 130 and between feature arcs, not during one)
@@ -365,6 +365,9 @@ verifying the release lane before any cut — the *generated installer* was veri
 during.
 
 ### Tracked here rather than as RFCs — none needs a design decision
+
+**AUD-05 through AUD-08 were adopted into RFC 126 §6b on 2026-09-02** — not because they acquired a design decision, but because `rfcs/handoffs/` directory names are gated to `NNN-slug` and ROADMAP-tracked work had no conforming home. The rows stay here; §6b records which two fit that RFC on the merits and which two are filed there out of that necessity.
+**AUD-09 and AUD-10** are handed over under `rfcs/handoffs/121-cli-boundary-contract/`, whose §6c and §6d their completion conditions already cite.
 
 | ID | Item | Completion condition |
 |---|---|---|
