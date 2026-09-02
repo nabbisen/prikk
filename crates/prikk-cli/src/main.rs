@@ -42,6 +42,7 @@ use args::{
     parse_rollback_draft_verify_args, parse_rollback_preview_args, parse_verify_args,
     parse_worktree_status_args,
 };
+use commands::CliError;
 use output::{
     print_active_session_repairs, print_checkout_plan, print_doctor_report, print_help,
     print_history, print_merge_evidence, print_merge_plan, print_patch_deletion_plan,
@@ -75,14 +76,14 @@ pub(crate) fn open_repository(
 fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
-        Err(msg) => {
-            eprintln!("error: {msg}");
-            ExitCode::from(1)
+        Err(err) => {
+            eprintln!("error: {}", err.message());
+            ExitCode::from(err.exit_code())
         }
     }
 }
 
-fn run() -> std::result::Result<(), String> {
+fn run() -> std::result::Result<(), CliError> {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
         None | Some("--help") | Some("-h") => {
@@ -95,12 +96,16 @@ fn run() -> std::result::Result<(), String> {
         }
         Some(name) => match commands::find(name) {
             Some(command) => (command.run)(args.collect()),
-            None => Err(format!("unknown command: {name}")),
+            // RFC 121 §6a: an unrecognized command name is detected before any repository work
+            // begins, the exact shape §1's `Usage` variant exists for -- not `.into()`'s default
+            // `Failure`, which every other bare error in this file still gets until the argument-
+            // hygiene increment (`command-discovery-handoff-v1.md`'s sibling) adds the rest.
+            None => Err(CliError::Usage(format!("unknown command: {name}"))),
         },
     }
 }
 
-fn run_init(path: Option<String>) -> std::result::Result<(), String> {
+fn run_init(path: Option<String>) -> std::result::Result<(), CliError> {
     let root = match path {
         Some(path) => PathBuf::from(path),
         None => current_dir()?,
@@ -113,7 +118,7 @@ fn run_init(path: Option<String>) -> std::result::Result<(), String> {
     Ok(())
 }
 
-fn run_commit(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_commit(args: Vec<String>) -> std::result::Result<(), CliError> {
     let args = parse_commit_args(args)?;
     let root = current_dir()?;
     let layout = open_repository(root)?;
@@ -148,7 +153,7 @@ fn run_commit(args: Vec<String>) -> std::result::Result<(), String> {
     Ok(())
 }
 
-fn run_seal(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_seal(args: Vec<String>) -> std::result::Result<(), CliError> {
     let root = current_dir()?;
     let signer = maintainer_signer_from_env()?;
     let result = seal::run_seal(root, args, &signer)?;
@@ -160,7 +165,7 @@ fn run_seal(args: Vec<String>) -> std::result::Result<(), String> {
     Ok(())
 }
 
-fn run_merge(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_merge(args: Vec<String>) -> std::result::Result<(), CliError> {
     let signer = maintainer_signer_from_env()?;
     let report = merge::run_merge(args, &signer)?;
     println!("merged {} into {}", report.from_ref, report.into_ref);
@@ -176,37 +181,43 @@ fn run_merge(args: Vec<String>) -> std::result::Result<(), String> {
     Ok(())
 }
 
-fn run_branch(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_branch(args: Vec<String>) -> std::result::Result<(), CliError> {
     let root = current_dir()?;
-    branch::run_branch(root, args)
+    branch::run_branch(root, args)?;
+    Ok(())
 }
 
-fn run_tag(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_tag(args: Vec<String>) -> std::result::Result<(), CliError> {
     let root = current_dir()?;
-    tag::run_tag(root, args)
+    tag::run_tag(root, args)?;
+    Ok(())
 }
 
-fn run_bundle(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_bundle(args: Vec<String>) -> std::result::Result<(), CliError> {
     let root = current_dir()?;
-    bundle::run_bundle(root, args)
+    bundle::run_bundle(root, args)?;
+    Ok(())
 }
 
-fn run_sync(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_sync(args: Vec<String>) -> std::result::Result<(), CliError> {
     let root = current_dir()?;
-    sync::run_sync(root, args)
+    sync::run_sync(root, args)?;
+    Ok(())
 }
 
-fn run_unlock(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_unlock(args: Vec<String>) -> std::result::Result<(), CliError> {
     let root = current_dir()?;
-    unlock::run_unlock(root, args)
+    unlock::run_unlock(root, args)?;
+    Ok(())
 }
 
-fn run_compact(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_compact(args: Vec<String>) -> std::result::Result<(), CliError> {
     let root = current_dir()?;
-    compact::run_compact(root, args)
+    compact::run_compact(root, args)?;
+    Ok(())
 }
 
-fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_trust(args: Vec<String>) -> std::result::Result<(), CliError> {
     let mut args = args.into_iter();
     match (args.next().as_deref(), args.next().as_deref()) {
         (Some("maintainer"), Some("add")) => {
@@ -226,7 +237,11 @@ fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {
                                 .ok_or_else(|| "--public-key requires a value".to_string())?,
                         );
                     }
-                    other => return Err(format!("unknown trust maintainer add argument: {other}")),
+                    other => {
+                        return Err(
+                            format!("unknown trust maintainer add argument: {other}").into()
+                        );
+                    }
                 }
             }
             let key_id =
@@ -260,7 +275,9 @@ fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {
                         );
                     }
                     other => {
-                        return Err(format!("unknown trust maintainer remove argument: {other}"));
+                        return Err(
+                            format!("unknown trust maintainer remove argument: {other}").into()
+                        );
                     }
                 }
             }
@@ -280,12 +297,13 @@ fn run_trust(args: Vec<String>) -> std::result::Result<(), String> {
         _ => Err(
             "usage: prikk trust maintainer add --key-id <key-id> --public-key <64-hex>\n       \
              prikk trust maintainer remove --key-id <key-id>"
-                .to_string(),
+                .to_string()
+                .into(),
         ),
     }
 }
 
-fn run_status() -> std::result::Result<(), String> {
+fn run_status() -> std::result::Result<(), CliError> {
     let root = current_dir()?;
     let layout = open_repository(root)?;
     let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
@@ -395,7 +413,7 @@ fn parse_active_patch_threshold_env(
     Ok(value)
 }
 
-fn run_log(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_log(args: Vec<String>) -> std::result::Result<(), CliError> {
     let args = parse_log_args(args)?;
     let layout = open_repository(args.root)?;
     // Received refs (DC-78 ruling 4) live in their own container (RFC 102 Stage 5:
@@ -412,7 +430,7 @@ fn run_log(args: Vec<String>) -> std::result::Result<(), String> {
     Ok(())
 }
 
-fn run_checkout(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_checkout(args: Vec<String>) -> std::result::Result<(), CliError> {
     let args = parse_checkout_args(args)?;
     let layout = open_repository(args.root)?;
     match args.mode {
@@ -446,7 +464,9 @@ fn run_checkout(args: Vec<String>) -> std::result::Result<(), String> {
                 .map_err(|err| err.to_string())?;
             print_patch_deletion_plan(&layout, &plan);
             if !plan.is_safe_to_apply() {
-                return Err("patch deletion plan has unsafe candidates".to_string());
+                return Err("patch deletion plan has unsafe candidates"
+                    .to_string()
+                    .into());
             }
         }
         CheckoutMode::PatchMaterializeDelete => {
@@ -458,7 +478,7 @@ fn run_checkout(args: Vec<String>) -> std::result::Result<(), String> {
     Ok(())
 }
 
-fn run_merge_evidence(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_merge_evidence(args: Vec<String>) -> std::result::Result<(), CliError> {
     let args = parse_merge_evidence_args(args)?;
     let layout = open_repository(args.root)?;
     let report = prepare_merge_evidence(
@@ -472,7 +492,7 @@ fn run_merge_evidence(args: Vec<String>) -> std::result::Result<(), String> {
     Ok(())
 }
 
-fn run_merge_plan(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_merge_plan(args: Vec<String>) -> std::result::Result<(), CliError> {
     let args = parse_merge_plan_args(args)?;
     let layout = open_repository(args.root)?;
     let plan = prepare_merge_plan(
@@ -500,7 +520,7 @@ fn merge_target_from_arg(target: MergeEvidenceTargetArg) -> MergeEvidenceTarget 
     }
 }
 
-fn run_inverse_plan(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_inverse_plan(args: Vec<String>) -> std::result::Result<(), CliError> {
     let args = parse_inverse_plan_args(args)?;
     let layout = open_repository(args.root)?;
     let plan =
@@ -509,7 +529,7 @@ fn run_inverse_plan(args: Vec<String>) -> std::result::Result<(), String> {
     Ok(())
 }
 
-fn run_rollback_preview(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_rollback_preview(args: Vec<String>) -> std::result::Result<(), CliError> {
     let args = parse_rollback_preview_args(args)?;
     let layout = open_repository(args.root)?;
     let plan = prepare_rollback_preview(&layout, &args.ref_name).map_err(|err| err.to_string())?;
@@ -517,7 +537,7 @@ fn run_rollback_preview(args: Vec<String>) -> std::result::Result<(), String> {
     Ok(())
 }
 
-fn run_rollback_draft(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_rollback_draft(args: Vec<String>) -> std::result::Result<(), CliError> {
     let args = parse_rollback_draft_args(args)?;
     let layout = open_repository(args.root)?;
     layout
@@ -530,7 +550,7 @@ fn run_rollback_draft(args: Vec<String>) -> std::result::Result<(), String> {
     Ok(())
 }
 
-fn run_rollback_draft_verify(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_rollback_draft_verify(args: Vec<String>) -> std::result::Result<(), CliError> {
     let args = parse_rollback_draft_verify_args(args)?;
     let layout = open_repository(args.root)?;
     let report =
@@ -539,7 +559,7 @@ fn run_rollback_draft_verify(args: Vec<String>) -> std::result::Result<(), Strin
     Ok(())
 }
 
-fn run_worktree_status(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_worktree_status(args: Vec<String>) -> std::result::Result<(), CliError> {
     let args = parse_worktree_status_args(args)?;
     let layout = open_repository(args.root)?;
     let report = worktree_status(&layout, &args.ref_name).map_err(|err| err.to_string())?;
@@ -547,11 +567,13 @@ fn run_worktree_status(args: Vec<String>) -> std::result::Result<(), String> {
     if report.is_clean() {
         Ok(())
     } else {
-        Err("worktree has changes against the baseline".to_string())
+        Err("worktree has changes against the baseline"
+            .to_string()
+            .into())
     }
 }
 
-fn run_verify(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_verify(args: Vec<String>) -> std::result::Result<(), CliError> {
     let verify_args = parse_verify_args(args)?;
     let layout = open_repository(verify_args.root)?;
     let options = VerifyOptions {
@@ -563,7 +585,7 @@ fn run_verify(args: Vec<String>) -> std::result::Result<(), String> {
     // schema, and would corrupt a JSON stream if interleaved with it, so this branch replaces the
     // whole default body rather than adding to it.
     if verify_args.format == VerifyOutputFormat::Json {
-        print_verify_report_json(&report);
+        print_verify_report_json(&report)?;
     } else {
         print_verify_report(&layout, &report);
         // Received refs (DC-78 ruling 4) are never read by verify_repository itself — every object
@@ -583,12 +605,12 @@ fn run_verify(args: Vec<String>) -> std::result::Result<(), String> {
     // so the exit code and the JSON verdict cannot silently diverge. First-match-wins order and
     // every message are unchanged from the prior chain.
     match verify_verdict::first_true_condition(&report) {
-        Some(condition) => Err(condition.message.to_string()),
+        Some(condition) => Err(condition.message.to_string().into()),
         None => Ok(()),
     }
 }
 
-fn run_doctor(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_doctor(args: Vec<String>) -> std::result::Result<(), CliError> {
     let doctor_args = parse_doctor_args(args)?;
     let layout = open_repository(doctor_args.root)?;
     if doctor_args.repair_wal_tail || doctor_args.repair_main_ref {
@@ -624,12 +646,15 @@ fn run_doctor(args: Vec<String>) -> std::result::Result<(), String> {
             Err(
                 "doctor repair skipped one or more active sessions; see the per-active outcomes \
                  above for which and why"
-                    .to_string(),
+                    .to_string()
+                    .into(),
             )
         } else if repair.after.is_healthy() {
             Ok(())
         } else {
-            Err("doctor repair finished but repository health errors remain".to_string())
+            Err("doctor repair finished but repository health errors remain"
+                .to_string()
+                .into())
         }
     } else {
         let report = doctor_repository(&layout);
@@ -638,7 +663,7 @@ fn run_doctor(args: Vec<String>) -> std::result::Result<(), String> {
         if report.is_healthy() {
             Ok(())
         } else {
-            Err("doctor found repository health errors".to_string())
+            Err("doctor found repository health errors".to_string().into())
         }
     }
 }

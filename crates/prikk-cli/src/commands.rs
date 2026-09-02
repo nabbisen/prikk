@@ -15,21 +15,59 @@
 //! requirement the handoff actually states, even though the shape differs from its suggested
 //! `Usage { form, summary }` split.
 
+/// RFC 121 §6a's ruled exit-code contract: `Usage` maps to `2` (detected before any repository
+/// work begins -- unknown argument, missing required flag, malformed flag value, duplicate flag,
+/// or an unrecognized command name), `Failure` maps to `1` (everything else a command refuses to
+/// do). **No fourth variant** -- `verify --format json` already carries a structured,
+/// three-valued verdict; collapsing it further into an exit code is what RFC 118 exists to
+/// prevent.
+///
+/// `From<String>` defaults to `Failure`, matching every error this crate already produces today
+/// (all exit `1` before this contract existed) -- so changing `Command.run`'s return type to this
+/// enum is a pure plumbing change here: no command's *behaviour* changes until a call site
+/// deliberately constructs `Usage` instead of relying on this default.
+#[derive(Debug)]
+pub(crate) enum CliError {
+    Usage(String),
+    Failure(String),
+}
+
+impl CliError {
+    pub(crate) fn message(&self) -> &str {
+        match self {
+            CliError::Usage(message) | CliError::Failure(message) => message,
+        }
+    }
+
+    pub(crate) fn exit_code(&self) -> u8 {
+        match self {
+            CliError::Usage(_) => 2,
+            CliError::Failure(_) => 1,
+        }
+    }
+}
+
+impl From<String> for CliError {
+    fn from(message: String) -> Self {
+        CliError::Failure(message)
+    }
+}
+
 pub(crate) struct Command {
     pub(crate) name: &'static str,
-    pub(crate) run: fn(Vec<String>) -> std::result::Result<(), String>,
+    pub(crate) run: fn(Vec<String>) -> std::result::Result<(), CliError>,
     pub(crate) help_lines: &'static [&'static str],
 }
 
 /// `init` is the one dispatch arm with a non-`Vec<String>` signature ([`Option<String>`], a single
 /// optional path) -- adapted here so the table's `run` field stays uniform, per the prerequisite
 /// ruling's "one adapter closure each."
-fn run_init_adapter(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_init_adapter(args: Vec<String>) -> std::result::Result<(), CliError> {
     crate::run_init(args.into_iter().next())
 }
 
 /// `status` is the other non-uniform arm: no arguments at all.
-fn run_status_adapter(_args: Vec<String>) -> std::result::Result<(), String> {
+fn run_status_adapter(_args: Vec<String>) -> std::result::Result<(), CliError> {
     crate::run_status()
 }
 
@@ -229,3 +267,6 @@ pub(crate) fn find(name: &str) -> Option<&'static Command> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod exit_code_tests;

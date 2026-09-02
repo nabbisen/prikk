@@ -83,7 +83,15 @@ fn escape_json_string(input: &str) -> String {
 /// before the single `println!` below, a violated invariant here means no document is emitted at
 /// all, never a malformed or incomplete one. `emit valid JSON or do not emit` (handoff §3) extends
 /// to `emit a complete document or do not emit`.
-pub(crate) fn print_verify_report_json(report: &prikk_store::RepositoryVerification) {
+/// RFC 121 §5: `RepositoryVerification` missing an outcome for a declared stage is a broken
+/// invariant in `verify_repository`, not in this emitter -- a reason to refuse emitting an
+/// incomplete `verify-report-v1` document, not to abort the whole process. Returns `Err` instead
+/// of panicking, since this runs on a user-reachable path (`prikk verify --format json`) and
+/// external input must never panic, even indirectly through a library invariant this crate does
+/// not control.
+pub(crate) fn print_verify_report_json(
+    report: &prikk_store::RepositoryVerification,
+) -> std::result::Result<(), String> {
     let conditions = crate::verify_verdict::all_true_conditions(report);
     let mut json = String::new();
     json.push_str("{\n");
@@ -115,14 +123,14 @@ pub(crate) fn print_verify_report_json(report: &prikk_store::RepositoryVerificat
             .stage_outcomes
             .iter()
             .find(|outcome| outcome.stage == *stage)
-            .unwrap_or_else(|| {
-                panic!(
+            .ok_or_else(|| {
+                format!(
                     "RepositoryVerification is missing an outcome for stage {:?} \
                      (VerificationStage::ALL); this is a bug in verify_repository, not in the \
                      JSON emitter -- refusing to emit an incomplete verify-report-v1 document",
                     stage.label()
                 )
-            });
+            })?;
         if index > 0 {
             json.push(',');
         }
@@ -152,6 +160,7 @@ pub(crate) fn print_verify_report_json(report: &prikk_store::RepositoryVerificat
     }
     json.push_str("]\n}");
     println!("{json}");
+    Ok(())
 }
 
 /// Print each active session's own repair outcome (RFC 108 increment 3d review v1 §1's condition):
