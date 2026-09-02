@@ -504,11 +504,17 @@ pub fn validate_local_branch_ref(ref_name: &str) -> Result<String> {
 /// Validate a local tag ref name and return its canonical identity string.
 ///
 /// Mirrors `validate_local_branch_ref` with the prefix requirement inverted: `tags/` required,
-/// `heads/`/`remotes/`/`rollback/` reserved. Deliberately carries no case-collision rule —
-/// `validate_local_branch_ref` does not have one either (`tags/V1` and `tags/v1` both pass and
-/// coexist as distinct refs, same as branches), and a stricter rule for tags alone than branches
-/// would be arbitrary. That gap is real but is NFR-SEC-03's, unmet for both namespaces, and tracked
-/// separately rather than closed asymmetrically here.
+/// `heads/`/`remotes/`/`rollback/` reserved. Deliberately carries no case-collision rule itself —
+/// `validate_local_branch_ref` does not have one either — **but that does not mean `tags/V1` and
+/// `tags/v1` coexist as distinct refs.** `validate_no_ref_name_collision` (`refs/publication.rs`)
+/// folds every ref name through `ascii_fold` at publication time and refuses a new ref whose folded
+/// name collides with an existing one, so an ordinary case-only pair is rejected there, not here.
+/// What survives this pair of validators is narrower: a collision that predates the publication
+/// check, or one that arrives by a path that never goes through publication; and NFC/NFD or
+/// non-ASCII case pairs, which `ascii_fold` cannot see by construction (`refs/publication.rs`'s own
+/// doc comment on `validate_no_ref_name_collision` already records this). That residual gap is real
+/// but is NFR-SEC-03's, unmet for both namespaces, and tracked separately rather than closed
+/// asymmetrically here.
 pub fn validate_local_tag_ref(ref_name: &str) -> Result<String> {
     if ref_name.is_empty() {
         return Err(PrikkError::InvalidName(
