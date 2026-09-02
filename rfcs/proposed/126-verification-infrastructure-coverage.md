@@ -126,6 +126,36 @@ already builds `tools/release-policy`.
 **The owner's call remains**, because it accepts a real dependency tree into the workspace. But the
 cost is one the project has already priced once and judged worth paying.
 
+## 6a. Recorded 2026-09-02 — workflow permissions are not declared least-privilege
+
+Found by the architect while reviewing §3/§4's increment. **Not introduced by it, and not a defect
+in it** — recorded here because this RFC owns the CI surface and the observation would otherwise
+live only in a git-excluded review.
+
+Of five workflows, **two declare `permissions:` and three do not**:
+
+| Workflow | trigger | `permissions:` |
+|---|---|---|
+| `docs.yml` | push to `main` | declared (`pages: write`, `id-token: write` — it deploys) |
+| `release.yml` | release | declared |
+| `ci.yml` | push, pull request | **absent** |
+| `docs-pr.yml` | pull request | **absent** |
+| `security-audit.yml` | schedule | **absent** |
+
+A workflow with no `permissions:` block inherits the repository or organisation default, which may
+be read-write. **The three that omit it are all check-only workflows that need nothing beyond
+`contents: read`** — and two of them run `cargo install` from crates.io, one of those on a schedule
+with no human watching.
+
+**`security-audit.yml` is the sharpest case**: it is the workflow whose entire purpose is telling
+the project whether its dependencies are trustworthy, and it runs third-party build scripts with
+whatever the default grants.
+
+**This predates the increment** — `ci.yml` has always been in this shape — so it is one item across
+three files, not a correction to §3/§4. `permissions: contents: read` on each is the whole change.
+**Whoever takes it should check the repository's actual default first**, since if it is already
+read-only the change is documentation of an existing property rather than a hardening.
+
 ## 7. Scope
 
 **In:** the oracle-backed property tests (§2); a scheduled fetching `cargo audit` CI job (§3);
