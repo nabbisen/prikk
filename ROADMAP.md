@@ -244,7 +244,6 @@ item is open.
 - [`124-worktree-ignore-mechanism.md`](rfcs/proposed/124-worktree-ignore-mechanism.md) — RFC 124, No ignore mechanism exists at any layer (external audit 2026-08-31)
 - [`126-verification-infrastructure-coverage.md`](rfcs/proposed/126-verification-infrastructure-coverage.md) — RFC 126, Four flanks the verification culture never reached (external audit 2026-08-31; **owner ruling required** — criterion as a dev-dependency)
 - [`128-outward-facing-project-surface.md`](rfcs/proposed/128-outward-facing-project-surface.md) — RFC 128, What an outsider finds before they read any code (external audit 2026-08-31; **owner ruling required** — disclosure channel)
-- [`129-repository-migration-to-prikk-vcs.md`](rfcs/proposed/129-repository-migration-to-prikk-vcs.md) — RFC 129, Moving to `prikk-vcs/prikk` is not a remote change (**executed 2026-09-01**; the release lane is verified and the cut is no longer blocked; §9 records the four inventory corrections the execution forced)
 - [`130-module-coupling-invariant.md`](rfcs/proposed/130-module-coupling-invariant.md) — RFC 130, A coupling invariant for `prikk-store` and the gate that holds it (**ACCEPTED by the owner 2026-09-01**; touches no files and conflicts with nothing in flight, so it can land during band 1)
 - [`131-module-grouping-and-visibility-scoping.md`](rfcs/proposed/131-module-grouping-and-visibility-scoping.md) — RFC 131, Grouping the 123 top-level entries and scoping reach with `pub(in ...)` (**ACCEPTED by the owner 2026-09-01**; large file move — after RFC 130 and between feature arcs, not during one)
 <!-- open-work-index:end -->
@@ -325,8 +324,46 @@ remained. Whether the contract is ever promoted into a stability *promise* stays
 |---|---|---|
 | **Before the next cut** | ~~RFC 127~~ **delivered 2026-09-01 (`e8a10d5`)**; RFC 121's EPIPE fix alone; ~~RFC 122~~ **delivered 2026-09-01 (`bc443e8`)**; RFC 128's `SECURITY.md` | 127 is a regression that has already shipped in a published artifact. EPIPE is a panic every user who pipes to `head` meets. 122 is the only High-severity broken command on the mainline. `SECURITY.md` is one page and its absence is disproportionate for a trust-centric product |
 | **Next** | ~~RFC 125~~ **delivered 2026-09-02 (`c6fc625`)**; ~~RFC 126 §3–§4~~ **delivered 2026-09-02 (`1d324a5`)**; ~~the rest of RFC 121~~ **delivered 2026-09-02 (`a4aea59`) — RFC 121 complete** | 125 is latent security, cheap, and encode/decode-symmetric. 126's first half is a CI job and a lint flag — the two gates that stop everything else drifting silently |
-| **Unblocked by the 2026-09-01 rulings** | RFC 123's `note:` line (immediate, one line); then RFC 123's schema-3 design; RFC 124; RFC 126 §2/§5 | RFC 123's interim is a one-line change that stops active harm and should not wait behind its own format work. RFC 124 needs no ruling — only §3's design questions answered |
-| **Unscheduled** | the two performance walls and the pre-1.0 API debt below | Both are gated behind RFC 114's stability work rather than racing it |
+| **Unblocked by the 2026-09-01 rulings** | ~~RFC 123's `note:` line~~ **delivered 2026-09-02 (`c1335ad`)**; RFC 124 (handoff issued, untouched); RFC 126 §2/§5 | RFC 123's interim stopped the active harm. RFC 124 needs no ruling — only §3's design questions answered |
+| **Unscheduled** | RFC 123's schema-3 design; the two performance walls; the pre-1.0 API debt below | The schema-3 field and the API debt are both gated behind RFC 114's stability work rather than racing it |
+
+**Bands 1 and 2 are complete.** Every item in "Before the next cut" and "Next" landed between
+2026-09-01 and 2026-09-02, with RFCs 121, 122, 125 and 127 closed and moved to `rfcs/done/`.
+
+### Release position — 0.28.0 is due, and one thing must be verified before it is cut
+
+**58 commits have landed since `0.27.1` and `CHANGELOG.md`'s newest entry is still `0.27.1`.**
+Everything below is currently unrecorded for users.
+
+**Nine user-visible behaviour changes**, each of which `release-compatibility.md`'s own pre-1.0
+policy requires be named in release notes ("a minor release may intentionally change documented
+CLI surfaces when release notes identify the change"):
+
+| Change | Before | After |
+|---|---|---|
+| Exit-code contract (RFC 121 §6a) | `0`/`1` only | `0` ok / `1` operational / `2` usage |
+| A closed stdout (`\| head`) | panic, exit `101` | silent, exit `0` |
+| A full-disk stdout | panic, exit `101` | `error: …`, exit `1` |
+| `unlock` declining | exit `0`, lock still held | exit `1` |
+| Unknown arguments (`status --nonsense`) | silently ignored, exit `0` | refused, exit `2` |
+| Duplicate flags (`bundle export --ref X --ref Y`) | last silently wins | refused, exit `2` |
+| `worktree-status` | failed on every repository | works |
+| `commit` | discarded the message silently | says so in its output |
+| Per-command `--help` | did not exist (and after RFC 121 round 3, briefly errored) | prints that command's help |
+
+Plus **decoder tightening** (RFC 125): non-canonical file modes and over-length paths are now refused
+at the format boundary. Verified against real committed fixtures — no existing history is refused —
+but it is a change in what the tool accepts and belongs in the notes.
+
+**Version: `0.28.0`, not `0.27.2`.** Behaviour changes plus one public library addition —
+`WorktreeStatusReport` gained a `queued_elsewhere` field.
+
+**The blocker is not the code. `release.yml` has never run against `prikk-vcs/prikk`.** Its last
+execution was `0.27.1` on 2026-08-31; the migration landed 2026-09-01. RFC 129 §5 step 4 required
+verifying the release lane before any cut — the *generated installer* was verified then, the
+*workflow* was not, because nothing has triggered it since. **`release.yml:193` now reads
+`--repo prikk-vcs/prikk`, and that line has never executed.** Establish that before tagging, not
+during.
 
 ### Tracked here rather than as RFCs — none needs a design decision
 

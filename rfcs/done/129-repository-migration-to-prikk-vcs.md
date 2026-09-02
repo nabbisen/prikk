@@ -1,6 +1,14 @@
 # RFC 129 — Moving to `prikk-vcs/prikk` is not a remote change
 
-**Status.** **Proposed.** Owner direction 2026-09-01: *"we are migrating from
+**Status.** **COMPLETE, 2026-09-01** (`c69f5a9`), retired 2026-09-02. Transfer confirmed, remote
+repointed, 404 occurrences swept across 31 files, generated `install.sh` verified, CI green.
+
+**One step of §5 remains unproven and is tracked in `ROADMAP.md`'s release position, not here:**
+`release.yml` has never executed since the migration, so its `--repo prikk-vcs/prikk` line is
+verified only by reading. §5 step 4 asked for the release lane to be verified before any cut; that
+belongs to the cut, not to this RFC.
+
+Owner direction 2026-09-01: *"we are migrating from
 https://github.com/nabbisen/prikk/ to https://github.com/prikk-vcs/prikk/. We will just have to
 modify local git config after I edit GitHub repository configuration."*
 
