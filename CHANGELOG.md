@@ -1,5 +1,102 @@
 # Changelog
 
+## 0.28.0 — 2026-09-02
+
+**The command line now behaves the way a script expects.** An independent external architect audited
+this project at `0.27.1` and found, among other things, that `prikk verify | head` panicked, that
+`worktree-status` failed on every repository this tool can create, that a repeated flag silently took
+the last value, and that a required commit message was validated and then discarded. This release is
+the corrective program for that audit's first two bands. **Almost everything below is a behaviour
+change, and each one is named here because `prikk` is pre-1.0 and this file is where such changes are
+declared.**
+
+### Breaking change — exit codes
+
+`prikk` previously exited `0` or `1` and nothing else, so a flag typo, a dirty worktree, and a
+corrupt repository were indistinguishable to a caller. The contract is now:
+
+- **`0`** — the operation succeeded and did what was asked.
+- **`1`** — operational failure: verification findings, integrity failure, a refusal, a dirty
+  worktree.
+- **`2`** — usage error: unknown argument, missing required flag, malformed value, duplicate flag,
+  detected before any repository work begins.
+
+A separate code for "findings" was considered and refused: `verify --format json` already carries
+that verdict, structured and three-valued, and duplicating a lossy subset of it into an integer would
+give two sources of truth for one question.
+
+**Scripts that branch on the old two-code behaviour need review.** Specific movements:
+
+- `prikk unlock` **declining to clear a lock now exits `1`, not `0`.** It previously reported success
+  while the lock was still held — and because its confirmation prompt reads "no" from an empty
+  stdin, a non-interactive `prikk unlock … && proceed` was told everything was fine when nothing had
+  happened.
+- **An unrecognized argument is now refused with `2` instead of being ignored.** `prikk status
+  --nonsense` previously printed a normal report and exited `0`; `prikk init a b` silently discarded
+  `b`.
+- **A repeated flag is now refused with `2` instead of silently taking the last value.**
+  `prikk bundle export --ref heads/main --ref heads/other` previously exported `heads/other` with no
+  indication which ref it had chosen. Nearly every value-carrying flag in the tool had this shape.
+
+### Breaking change — the format boundary refuses more
+
+Two classes of input that the encoder would never produce are now rejected at decode as well as at
+encode, so a hostile or corrupt artifact cannot enter through a path authoring would have refused:
+
+- **File modes must be `0o100644` or `0o100755`.** Materialization applies recorded modes through
+  `fchmod`, which would otherwise honour setuid, setgid and sticky bits; the only guard was a check
+  in a different subsystem at seal time.
+- **Repository paths are length-capped** — 255 bytes per component (`NAME_MAX`) and 1024 bytes total
+  (macOS `PATH_MAX`, the strictest total the tool can guarantee). Longer paths previously entered
+  signed history and then failed to materialize with a raw OS error. Windows' legacy 260-character
+  limit is *not* claimed: it depends on where the worktree root sits and cannot be bounded from a
+  repository-relative length.
+
+Repeated singular fields in a decoded record are also refused now rather than silently taking the
+last one. **Verified against real committed repository fixtures, including one written by `0.27.0`'s
+own encoder: no existing history is refused by any of this.**
+
+### Fixed
+
+- **`prikk verify | head` no longer panics.** A closed reader is not a failure — the tool now exits
+  `0` silently, on every platform rather than only where `SIGPIPE` exists. A genuine write failure
+  (a full disk on a redirected stdout) still reports, and now exits `1` instead of aborting.
+- **`prikk worktree-status` works.** It had been comparing against a snapshot baseline that no
+  command has produced since the patch-replay migration, so it failed on *every* repository this CLI
+  can create. It now shares `commit`'s own baseline derivation — one computation backing both, so
+  they cannot drift apart again — and it says when the active queue belongs to a different ref, since
+  an "untracked" file there may be committed-but-unsealed work.
+- **`0.23.0`'s changelog entry is restored.** The `0.24.0` version bump replaced its heading instead
+  of inserting above it, which attributed the entire `prikk sync` release to `0.24.0`. A gate now
+  checks that *every* released tag still has exactly one entry, not just the tag being cut.
+
+### Added
+
+- **Per-command help.** `prikk <command> --help` prints that command's own usage, derived from the
+  same table the top-level help renders from. It works before a repository is opened, and anywhere in
+  the argument list.
+- **Seven flags the help never mentioned** are now documented: `verify --format json`,
+  `verify --stop-on-first-error`, `unlock --force` (an alias of `--yes`), `doctor --repair-main-ref`
+  (recognized, and always refused, with the reason), and `--message` as the long form of `-m` in
+  `commit`, `rollback-draft` and `tag create`.
+- **`prikk commit` now says that it discards your message.** The message is still required and still
+  validated; it is not stored, it does not appear in `prikk log`, and persisting it is a later
+  increment. It was silently dropped before.
+- **A security policy.** `SECURITY.md` states where to report a vulnerability privately, what this
+  project does and does not promise, and — plainly — that release-signer verification of a `prikk`
+  binary is not yet available.
+- **Backup and restore documentation**, plus a self-describing bundle manifest, offline
+  `bundle verify`, and atomic collision-safe writes on the `bundle export` and `sync` output
+  surfaces.
+
+### Changed
+
+- **The project moved to `https://github.com/prikk-vcs/prikk`.** Documentation now lives at
+  `https://prikk-vcs.github.io/prikk/`, and the installer downloads from the new location. The old
+  repository URL redirects; the old documentation URL does not.
+- CI gained a scheduled advisory-database audit, a rustdoc lint gate, and a book build on pull
+  requests.
+
 ## 0.27.1 — 2026-08-31
 
 **A one-command install, and a beginner's path through the docs.** No library or command behaviour
