@@ -150,6 +150,15 @@ fn run_commit(args: Vec<String>) -> std::result::Result<(), CliError> {
         "note: multi-operation text diff minimization, patch algebra, rename detection, and audit \
          plugins remain later increments"
     );
+    // RFC 123 §4 Option C-revised: `-m`'s message is validated (required, non-empty) and then
+    // discarded -- `node_authoring.rs` binds it as `_message` and goes no further. Silently
+    // discarding required user input is worse than saying so; this is the interim mitigation while
+    // Option A (a schema-3 `message` field) is built. Printed every commit, not once, matching the
+    // existing note above.
+    println!(
+        "note: the message is validated but not stored -- it will not appear in `prikk log`; \
+         persisting it is a later increment"
+    );
     Ok(())
 }
 
