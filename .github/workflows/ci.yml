@@ -4,6 +4,16 @@ on:
   push:
   pull_request:
 
+# RFC 126 §6a: declares a property already held by the repository's own default
+# (`default_workflow_permissions: read`) in the files themselves, so it is reviewable in a diff and
+# does not depend on a repository setting an admin or organisation policy could change invisibly.
+# Every job here only checks out, builds, tests, and uploads/downloads artifacts (the artifact
+# actions authenticate via their own runtime token, not GITHUB_TOKEN, so they need no entry here) --
+# none writes to the repository, comments on a PR, or creates a check run, so `contents: read` for
+# the whole workflow is sufficient at every job.
+permissions:
+  contents: read
+
 jobs:
   stable:
     name: stable

@@ -20,6 +20,13 @@ on:
     - cron: "0 6 * * 1"
   workflow_dispatch:
 
+# RFC 126 §6a: declares a property already held by the repository's own default
+# (`default_workflow_permissions: read`) in the files themselves. The one job here only checks out
+# and runs `cargo audit` -- it writes nothing back to the repository -- so `contents: read` is
+# sufficient.
+permissions:
+  contents: read
+
 jobs:
   cargo-audit:
     name: cargo audit (fresh advisory database)
