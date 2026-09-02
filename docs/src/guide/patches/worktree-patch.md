@@ -47,7 +47,9 @@ Existing-node kind is authoritative:
 
 Path handling is strict: non-UTF-8 worktree paths fail closed, and traversal/reserved-name/collision
 rules apply as elsewhere. For the exact repository path and worktree scanner boundary, see
-[path and worktree safety](../../reference/path-safety.md).
+[path and worktree safety](../../reference/path-safety.md). A path matched by a `.prikkignore` rule
+at the repository root is skipped by this scan entirely — never authored, never reported — see
+[Ignoring Worktree Paths](../ignore.md).
 
 ## Out of scope (this stage)
 

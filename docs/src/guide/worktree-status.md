@@ -20,7 +20,9 @@ The scanner is intentionally conservative:
 - no writes are performed.
 
 For the exact repository path validator rules, see
-[path and worktree safety](../reference/path-safety.md).
+[path and worktree safety](../reference/path-safety.md). A path matched by a `.prikkignore` rule at
+the repository root never appears in the untracked list at all — see
+[Ignoring Worktree Paths](ignore.md).
 
 ## Claim-to-Source Anchors
 

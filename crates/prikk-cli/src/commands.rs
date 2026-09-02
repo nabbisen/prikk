@@ -106,6 +106,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         run: crate::run_commit,
         help_lines: &[
             "  prikk commit --from-worktree [--text-edits] [--ref REF] -m|--message <message>  Append worktree changes",
+            "  note: .prikkignore at the repository root excludes matching worktree paths from being authored",
         ],
     },
     Command {
@@ -219,6 +220,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         run: crate::run_worktree_status,
         help_lines: &[
             "  prikk worktree-status [path] [--ref REF]  Report changes against the replay baseline",
+            "  note: .prikkignore at the repository root excludes matching paths from the untracked list",
         ],
     },
     Command {
