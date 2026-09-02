@@ -303,6 +303,16 @@ fn cargo(command: &str, arguments: &[String]) -> bool {
         // `cargo metadata --locked --offline`. `fetch` downloads only; it cannot publish.
         "fetch" => arguments == ["--locked"],
         "check" => arguments == ["--workspace", "--all-targets", "--locked"],
+        // RFC 126 §4: `ci.yml`'s doc-lint gate. The `-D rustdoc::private_intra_doc_links` lint
+        // travels via the step's own `RUSTDOCFLAGS` env var, not a `--` passthrough on this line
+        // (`cargo doc` has no such passthrough, unlike `clippy`/`test`) -- so the scanned command
+        // itself stays exactly this, with no trailing flags to spell out here.
+        "doc" => arguments == ["--workspace", "--no-deps"],
+        // RFC 126 §3: `security-audit.yml`'s scheduled job. Deliberately bare -- no `--no-fetch`,
+        // since fetching a current advisory database is this job's entire reason to run on a
+        // schedule rather than relying on whatever the standing local gate's own `--no-fetch`
+        // invocation last saw.
+        "audit" => arguments.is_empty(),
         "build" => {
             arguments == ["--workspace", "--locked"]
                 // DC-70: release.yml's two per-target release-binary builds, spelled out in
@@ -363,6 +373,10 @@ fn cargo(command: &str, arguments: &[String]) -> bool {
                 // pictures rather than code blocks. Exact match only — this arm accepts exactly
                 // this vector, not `mdbook-mermaid` with any arguments (DC-70 B1 precedent).
                 || arguments == ["mdbook-mermaid", "--vers", "^0.17", "--locked"]
+                // RFC 126 §3: security-audit.yml's own install step. `cargo-audit` is not
+                // preinstalled on GitHub runners; installing the tool directly (rather than a
+                // third-party `audit-check`-style action) was the handoff's own explicit ruling.
+                || arguments == ["cargo-audit", "--locked"]
         }
         _ => false,
     }

@@ -132,8 +132,8 @@ impl LineageStateMemo {
 /// Derive the state root for a proposed format-2 Block from its parent and ordered Patches.
 ///
 /// Convenience entry point for callers that only need one derivation and do not track a
-/// [`LineageStateMemo`] of their own — every current caller except `verify`'s own per-object loop.
-/// Constructs a fresh, call-scoped memo and delegates to [`derive_next_state_root_with_memo`]: this
+/// `LineageStateMemo` of their own — every current caller except `verify`'s own per-object loop.
+/// Constructs a fresh, call-scoped memo and delegates to `derive_next_state_root_with_memo`: this
 /// still gets the full benefit of DC-92's per-call fix (O(i²) → O(i) in lineage depth), just without
 /// sharing work across a *later*, separate call — which is exactly what a single `seal` or `merge`
 /// invocation is.
@@ -252,7 +252,7 @@ pub(crate) fn verify_block_v2_state(
 }
 
 /// Outcome of attempting to verify one `CurrentV6` Block's state root during
-/// [`verify_blocks_topological`]'s whole-batch pass (DC-95 Stage 2 Level 2). Distinct from
+/// `verify_blocks_topological`'s whole-batch pass (DC-95 Stage 2 Level 2). Distinct from
 /// `verify::StageOutcome`/`StageStatus` (Level 1): there is no operator-requested halt at block
 /// granularity, so there is no `Halted` analogue — a block's non-evaluation is always because its
 /// own state-derivation parent did not itself evaluate, never because an unrelated walk stopped.
@@ -266,7 +266,7 @@ pub enum BlockStateStatus {
         message: String,
     },
     /// This block's state-derivation parent did not itself evaluate (`Failed` or `NotEvaluated`), so
-    /// this block's own state is undefined by construction and [`verify_block_v2_state`] was never
+    /// this block's own state is undefined by construction and `verify_block_v2_state` was never
     /// attempted for it — attempting anyway would mean either trusting an unsound parent or
     /// re-deriving from genesis per descendant, defeating DC-92's whole memoization point.
     /// `blocked_by` names this block's *immediate* state-derivation parent, not the root cause
@@ -279,7 +279,7 @@ pub enum BlockStateStatus {
     },
 }
 
-/// One block's resolved outcome from [`verify_blocks_topological`].
+/// One block's resolved outcome from `verify_blocks_topological`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockStateOutcome {
     /// The block this outcome is for.

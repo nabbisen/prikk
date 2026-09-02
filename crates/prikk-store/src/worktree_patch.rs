@@ -161,7 +161,7 @@ impl Default for WorktreePatchCommitOptions {
 /// Author a node-addressed patch from worktree changes against the replay-derived baseline, sign it
 /// with a real role-bound Ed25519 AUTHOR signature from the injected `signer`, and append it to the
 /// active WAL (DC-09 Phase 4.4a, R1). Existing paths resolve to their persisted `node_id`; fresh
-/// nodes are minted through the production [`NodeIdGenerator`]; text edits go through the shared
+/// nodes are minted through the production `NodeIdGenerator`; text edits go through the shared
 /// `text_span` module. There is no placeholder signing path.
 pub fn commit_worktree_changes_signed(
     layout: &RepositoryLayout,

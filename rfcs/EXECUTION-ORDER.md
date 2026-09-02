@@ -367,8 +367,11 @@ These apply to all work above and are not restated in each handoff.
 9. **Gate set for every candidate.** `cargo fmt --all -- --check`;
    `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`;
    `cargo test --workspace --locked`; `cargo +1.85.0 test --workspace --locked`; `git diff --check`;
-   `cargo audit --no-fetch`; release-policy `check`, `boundary-check`, `reference-check`. Use a
-   repository-local `TMPDIR` (`.git-exclude/tmp`) where `/tmp` is read-only.
+   `cargo audit --no-fetch`; `RUSTDOCFLAGS="-D rustdoc::private_intra_doc_links" cargo doc
+   --workspace --no-deps` (RFC 126 §4 — added 2026-09-02 after this exact lint sat unchecked at 7
+   live warnings, since `cargo doc` had never run anywhere, local gate set or CI, before then);
+   release-policy `check`, `boundary-check`, `reference-check`. Use a repository-local `TMPDIR`
+   (`.git-exclude/tmp`) where `/tmp` is read-only.
 
    **Additionally, for any increment touching `#[cfg(target_os)]`-gated code** — added 2026-08-09 after
    DC-76 broke the non-Linux CI job while passing all nine gates above:

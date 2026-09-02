@@ -1,0 +1,38 @@
+name: Scheduled Security Audit
+
+# RFC 126 §3: `cargo audit --no-fetch` is one of the standing local gate commands
+# (`rfcs/EXECUTION-ORDER.md` §6 rule 9), but nothing in CI ever runs it, and `--no-fetch` means even
+# the local gate is only ever as current as whoever last updated their own advisory database. A new
+# advisory against a shipped dependency arrives on its own schedule, independent of any code change
+# -- this is the only check in the project that can find a problem with nobody touching the code, so
+# it needs its own schedule too, not a per-PR run (the dependency set rarely changes between runs,
+# so the per-PR value is near zero against the real cost of fetching the advisory database on every
+# push).
+#
+# Installs `cargo-audit` directly rather than a third-party action (`rustsec/audit-check` was
+# considered and rejected, per the handoff's own ruling): this job's entire purpose is telling this
+# project whether its dependencies are trustworthy, so it is exactly the wrong place to add a new
+# opaque third-party dependency for convenience -- a scheduled job can afford the slower install.
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  cargo-audit:
+    name: cargo audit (fresh advisory database)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      # Deliberately no `--no-fetch`: this job's whole reason to exist is a fresh advisory
+      # database, not whatever the runner's own cache happens to hold. `cargo audit` exits non-zero
+      # on a finding, which fails this step (and so this job, attributably -- its own name says
+      # what it checks) with the advisory id and affected crate already in `cargo audit`'s own
+      # output; nothing here further classifies or summarizes it.
+      - name: Run cargo audit
+        run: cargo audit

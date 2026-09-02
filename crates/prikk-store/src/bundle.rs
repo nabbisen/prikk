@@ -536,7 +536,7 @@ pub fn import_bundle(
 /// Read a bundle and report whether it is structurally sound and internally consistent, **without
 /// writing anything and without needing a repository** (DC-44 increment 1,
 /// `bundle-offline-verify-handoff-v1.md`). Runs the exact same decode and closure validation
-/// [`import_bundle`] runs before its first write, via [`validate_bundle_contents`] — §2's "reuse
+/// [`import_bundle`] runs before its first write, via `validate_bundle_contents` — §2's "reuse
 /// the decode path, do not re-implement it."
 ///
 /// **What this proves**: the bundle decodes under the same rules `import_bundle` would apply

@@ -1,0 +1,38 @@
+name: Docs (PR build check)
+
+# RFC 126 §4: `docs.yml`'s own build+deploy job triggers only on push to `main`, filtered to
+# `docs/**` -- so a code change that falsifies a documented claim triggers nothing, and the book is
+# never built before a merge. This adds a build-only check on pull requests touching `docs/**` or
+# the CLI (RFC 118 binds documentation to `COMMANDS`; a CLI change is exactly the kind of change
+# that can silently falsify a documented command surface even though it touches no file under
+# `docs/`). Deliberately a separate workflow file, not an added trigger on `docs.yml` itself: that
+# file's `deploy` job runs unconditionally after `build` succeeds, so adding `pull_request` to its
+# own triggers would also fire `deploy` from a PR -- the one thing this increment must not do.
+# `docs.yml`'s own push-to-`main` trigger and its `deploy` job are both untouched by this file.
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "crates/prikk-cli/**"
+
+jobs:
+  build:
+    name: build book
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install mdBook
+        run: cargo install mdbook --no-default-features --features search --vers "^0.5" --locked
+
+      - name: Install mdbook-mermaid
+        run: cargo install mdbook-mermaid --vers "^0.17" --locked
+
+      - name: Build book
+        run: mdbook build

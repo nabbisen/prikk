@@ -603,3 +603,55 @@ fn recognizes_dc81_macos_sync_benchmark_procedure_narrowly() {
         );
     }
 }
+
+#[test]
+fn recognizes_rfc126_doc_lint_procedure_narrowly() {
+    for command in ["cargo doc --workspace --no-deps"] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+            assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+
+    for command in [
+        "cargo doc",
+        "cargo doc --workspace",
+        "cargo doc --no-deps",
+        "cargo doc --workspace --no-deps --open",
+        "cargo doc --no-deps --workspace",
+        "cargo doc --workspace --document-private-items",
+    ] {
+        assert!(!scan_shell(command).errors.is_empty(), "{command}");
+        assert!(
+            !scan_yaml(&format!("- run: {command}")).errors.is_empty(),
+            "{command}"
+        );
+    }
+}
+
+#[test]
+fn recognizes_rfc126_scheduled_audit_procedure_narrowly() {
+    for command in ["cargo audit", "cargo install cargo-audit --locked"] {
+        for scan in [scan_shell(command), scan_yaml(&format!("- run: {command}"))] {
+            assert!(scan.errors.is_empty(), "{command}: {:?}", scan.errors);
+            assert!(scan.invocations.is_empty(), "{command}");
+        }
+    }
+
+    for command in [
+        "cargo audit --no-fetch",
+        "cargo audit --deny warnings",
+        "cargo install cargo-audit",
+        "cargo install cargo-audit --version 0.21.0",
+        "cargo install cargo-audit --locked --force",
+        "cargo install --locked cargo-audit",
+        "cargo install cargo-audit-fix --locked",
+        "cargo install some-other-crate --locked",
+    ] {
+        assert!(!scan_shell(command).errors.is_empty(), "{command}");
+        assert!(
+            !scan_yaml(&format!("- run: {command}")).errors.is_empty(),
+            "{command}"
+        );
+    }
+}

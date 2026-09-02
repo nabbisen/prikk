@@ -34,6 +34,16 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - name: Test
         run: cargo test --workspace --locked
+      # RFC 126 §4: documentation was never gated -- `cargo doc` never ran in CI at all, so a public
+      # doc item linking to a private one (rustdoc renders the link as literal `[`Name`]` text for a
+      # reader of the published API) could land and stay indefinitely. `RUSTDOCFLAGS` carries the
+      # lint rather than a `--` passthrough on the `cargo doc` line itself, so the `run:` command
+      # here stays a bare `cargo` invocation this repository's own command classifier already
+      # recognizes the shape of.
+      - name: Doc
+        env:
+          RUSTDOCFLAGS: -D rustdoc::private_intra_doc_links
+        run: cargo doc --workspace --no-deps
 
   msrv-1-85-0:
     name: msrv-1.85.0
