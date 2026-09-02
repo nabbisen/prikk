@@ -181,6 +181,38 @@ ignore its result, then exit `1` — so the exit code stays inside the contract 
 cannot be delivered. **It belongs with whoever next touches `stdout.rs`**, not with the argument
 hygiene work, which does not go near it.
 
+### 6d. Two commands acquire credentials before validating arguments — recorded 2026-09-02, unscheduled
+
+**§1's own wording is the standard this misses**: a usage error is *"detected before any repository
+work begins."* Building a signer from the environment is work.
+
+`main.rs::run_seal` (`:169`) and `main.rs::run_merge` (`:180`) both call
+`maintainer_signer_from_env()?` **before** parsing their arguments. So an operator who mistypes an
+argument *and* has no maintainer key configured is told the wrong thing:
+
+```
+$ prikk seal  --ref heads/main --ref heads/main      # no PRIKK_MAINTAINER_* set
+error: maintainer signing is required: set PRIKK_MAINTAINER_KEY_ID (no signing key configured)   exit 1
+$ prikk merge --into heads/main --into heads/x --from heads/y
+error: maintainer signing is required: set PRIKK_MAINTAINER_KEY_ID (no signing key configured)   exit 1
+```
+
+With the key configured, both correctly report `duplicate --ref flag` / `duplicate --into flag` at
+exit `2`. **The exit code is right for the error that happened; the wrong error happened.**
+
+**`run_commit` and `run_rollback_draft` get the ordering right** — they parse first, so
+`prikk commit -m a -m b` reports `duplicate -m/--message flag` at exit `2` even with no author key
+configured. So this is two sites against two, not a house style.
+
+**Found in two stages, which is worth recording as much as the defect.** The round-3 increment found
+`seal` and named it rather than working around it silently in the test that had to set the env vars
+to reach the refusal it was testing. The architect's review then found `merge` has the identical
+shape. **A site list is a floor even when it appears in a report rather than a handoff.**
+
+**Correctly out of scope for round 3** ("v1 §3 and nothing else"). The fix is a reorder of two
+functions. **It belongs with §6c** — both are small residuals of the contract work, and both are for
+whoever next has `main.rs` open.
+
 ### 6b. Two consequences that fall out of the ruling
 
 **The invariant, stated once so each site derives from it rather than deciding for itself:
