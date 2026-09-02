@@ -272,7 +272,12 @@ exist, only that none were written down here.
 2. No local reproduction path exists for the cross-host CI jobs (`.github/workflows/ci.yml`'s
    `receiver-prepare`/`sender-build`/`receiver-accept`) — verifying the flow before writing the
    jobs required a hand-built, role-by-role proxy that exists in no tracked file.
-3. `MILESTONES.md:334`'s `M5` row still reads `| M5 | Sync and Quarantine | no | — |`, while
+3. **`.prikkignore` shipped in `0.29.0` with no documentation.** There is no page under
+   `docs/src/`, no mention in any command's `--help`, and the only prose describing the syntax
+   and its discovery-only binding is the module doc in `crates/prikk-store/src/ignore.rs`. The
+   `CHANGELOG.md` entry and one `README.md` bullet are currently the whole user-facing
+   description of a user-facing feature.
+4. 3. `MILESTONES.md:334`'s `M5` row still reads `| M5 | Sync and Quarantine | no | — |`, while
    criterion 1 (line 159) records sync **MET** and quarantine was dissolved this session.
 
 ## Corrective Program After the 2026-08-31 External Audit
@@ -333,34 +338,35 @@ remained. Whether the contract is ever promoted into a stability *promise* stays
 §6a and §6b followed on 2026-09-03. **`AUD-05` through `AUD-10` are all delivered** — the whole
 no-design-decision half of this program — leaving `AUD-01` through `AUD-04`, which are design work.
 
-### Release position — 0.28.0 shipped; a 0.29.0 is now due
+### Release position — 0.29.0 shipped 2026-09-03
 
-**`0.28.0` was cut on 2026-09-02 at `9389b88`** and `release.yml` ran green against
-`prikk-vcs/prikk`, retiring the blocker this section used to carry: the release lane had never
-executed since the RFC 129 migration, and now it has.
+**`0.29.0` was cut at `5ee307a`**: CI 15/15, `release.yml` green across four build targets, sixteen
+assets published, and all eight crates live on crates.io at `0.29.0`. `0.28.0` (2026-09-02, `9389b88`)
+is the release before it.
 
-**Twenty commits have landed since the `0.28.0` tag, and `CHANGELOG.md`'s newest entry is
-`0.28.0`.** Unrecorded for users, in order of weight:
+**What `0.29.0` carried**, all of it previously unrecorded for users:
 
-- **RFC 124's `.prikkignore` mechanism** — a new user-facing feature. `commit` and
-  `worktree-status` both honour ignore rules through one shared worktree walk. **A feature
-  addition makes the next cut a minor bump, `0.29.0`, not a patch.**
-- **A full-disk stdout *and* stderr together** (AUD-09) now exits `1`, not `101`. **`0.28.0`'s own
-  notes claim this was fixed; it was half fixed** — the single-stream case only.
-- **`seal`/`merge` with a bad flag and no signing key configured** (AUD-10) now exits `2` with the
+- **RFC 124's `.prikkignore` mechanism** — a new user-facing feature, which is why this was a minor
+  bump rather than a patch. Literal repo-relative path prefixes, binding at `commit`'s and
+  `worktree-status`'s worktree walks only.
+- **AUD-09** — a full-disk stdout *and* stderr together now exits `1`, not `101`. **`0.28.0`'s own
+  notes announced this fix and delivered half of it**; the correction is named as such in the
+  `0.29.0` entry rather than quietly folded in.
+- **AUD-10** — `seal`/`merge` with a bad flag and no signing key configured now exit `2` with the
   usage error instead of `1` with "maintainer signing is required".
-- RFC 124 also reclassified a non-UTF-8 worktree path as `InvalidName` rather than an integrity
-  failure.
+- A non-UTF-8 worktree path is now an invalid name rather than an integrity failure.
 
-Internal and not notes-bearing: RFC 126 §2's property tests, §6a's workflow permissions, and
-`AUD-05`..`AUD-08`.
+**One thing was corrected in the cut itself rather than shipped wrong.** `README.md` still listed
+*"there is no ignore mechanism at any layer yet"* among the reasons not to use this tool — false since
+`46ecf01`, and it would have shipped in the release that added the mechanism. The bullet now names
+the real residual limits: no globbing, no negation, and no way to remove a file from history after the
+fact.
 
-**`release-compatibility.md`'s pre-1.0 policy — "a minor release may intentionally change
-documented CLI surfaces when release notes identify the change" — binds the first three.**
+**Nothing is pending for the next cut** as of this release.
 
 ---
 
-**What `0.28.0` itself carried**, kept as the record of that cut:
+**What `0.28.0` carried**, kept as the record of the previous cut:
 
 | Change | Before | After |
 |---|---|---|
