@@ -29,13 +29,18 @@ use crate::patch_replay::decode::{
     DecodedDeletePreimage, DecodedOperationKind, DecodedPatchOperation, decode_patch_operations,
 };
 
-fn node_id_strategy() -> impl Strategy<Value = NodeId> {
+/// RFC 126 §2 (`algebra-property-tests-handoff-v1.md` §4): reused as a leaf strategy by the patch
+/// algebra's own property tests, which build their operations from a real generated lifecycle
+/// state rather than unmoored from one -- widened to `pub(crate)` for exactly that reuse, so both
+/// property suites draw ids from the identical shape rather than two independently-maintained
+/// copies.
+pub(crate) fn node_id_strategy() -> impl Strategy<Value = NodeId> {
     // Every byte drawn from 1..=255 so the 32-byte value can never be the reserved all-zero id,
     // without needing a reject/retry loop.
     proptest::array::uniform32(1_u8..=255).prop_map(NodeId::from_bytes)
 }
 
-fn object_id_strategy() -> impl Strategy<Value = ObjectId> {
+pub(crate) fn object_id_strategy() -> impl Strategy<Value = ObjectId> {
     proptest::array::uniform32(any::<u8>()).prop_map(ObjectId::from_bytes)
 }
 
@@ -52,12 +57,12 @@ fn path_segment_strategy() -> impl Strategy<Value = String> {
     "[a-z0-9]{1,8}"
 }
 
-fn repo_path_strategy() -> impl Strategy<Value = String> {
+pub(crate) fn repo_path_strategy() -> impl Strategy<Value = String> {
     proptest::collection::vec(path_segment_strategy(), 1..=3)
         .prop_map(|segments| segments.join("/"))
 }
 
-fn ascii_text_strategy() -> impl Strategy<Value = String> {
+pub(crate) fn ascii_text_strategy() -> impl Strategy<Value = String> {
     "[a-z]{0,32}"
 }
 
@@ -67,7 +72,7 @@ fn ascii_text_strategy() -> impl Strategy<Value = String> {
 /// rate `repo_path_strategy()`'s Windows-reserved-name rejection has. Narrowed here so the property
 /// keeps exercising real round-trips for these kinds; `non_canonical_mode_strategy` below covers the
 /// refusal itself.
-fn canonical_mode_strategy() -> impl Strategy<Value = u32> {
+pub(crate) fn canonical_mode_strategy() -> impl Strategy<Value = u32> {
     prop_oneof![Just(0o100_644_u32), Just(0o100_755_u32)]
 }
 

@@ -411,4 +411,4 @@ pub(crate) fn resolve_folded_worktree_baseline(
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

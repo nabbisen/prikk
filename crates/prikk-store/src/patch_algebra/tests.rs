@@ -1,5 +1,6 @@
 #![allow(clippy::expect_used)]
 
+mod algebra_properties;
 mod assertions;
 mod commutation;
 mod confluence;
