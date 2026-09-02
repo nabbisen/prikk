@@ -8,6 +8,8 @@
 use std::path::PathBuf;
 
 // RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::arg_scan::unknown_argument;
+use crate::commands::CliError;
 use crate::stdout::println;
 use prikk_store::{
     CompactionReport, compact_received_index, compact_ref_pointer_index, compact_trust_policy,
@@ -27,27 +29,49 @@ const ALL_TARGETS: [Target; 3] = [
     Target::TrustPolicy,
 ];
 
-pub(crate) fn run_compact(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+pub(crate) fn run_compact(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let mut targets: Vec<Target> = Vec::new();
     let mut plan_only = false;
+    let push_target = |targets: &mut Vec<Target>, flag: &str, target: Target| {
+        if targets.contains(&target) {
+            return Err(CliError::Usage(format!("duplicate {flag} flag")));
+        }
+        targets.push(target);
+        Ok(())
+    };
     for arg in args {
         match arg.as_str() {
-            "--pointer-index" => targets.push(Target::PointerIndex),
-            "--received-index" => targets.push(Target::ReceivedIndex),
-            "--trust-policy" => targets.push(Target::TrustPolicy),
-            "--all" => targets.extend(ALL_TARGETS),
-            "--plan-only" => plan_only = true,
-            other => return Err(format!("unknown compact argument: {other}")),
+            "--pointer-index" => {
+                push_target(&mut targets, "--pointer-index", Target::PointerIndex)?
+            }
+            "--received-index" => {
+                push_target(&mut targets, "--received-index", Target::ReceivedIndex)?
+            }
+            "--trust-policy" => push_target(&mut targets, "--trust-policy", Target::TrustPolicy)?,
+            "--all" => {
+                if !targets.is_empty() {
+                    return Err(CliError::Usage(
+                        "compact --all cannot be combined with another target flag".to_string(),
+                    ));
+                }
+                targets.extend(ALL_TARGETS);
+            }
+            "--plan-only" => {
+                if plan_only {
+                    return Err(CliError::Usage("duplicate --plan-only flag".to_string()));
+                }
+                plan_only = true;
+            }
+            other => return Err(unknown_argument("compact", other)),
         }
     }
     if targets.is_empty() {
-        return Err(
+        return Err(CliError::Usage(
             "compact requires a target: --pointer-index, --received-index, --trust-policy, or \
              --all (add --plan-only to preview without writing)"
                 .to_string(),
-        );
+        ));
     }
-    targets.dedup();
 
     let layout = crate::open_repository(root)?;
     for target in targets {

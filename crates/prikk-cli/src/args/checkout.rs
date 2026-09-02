@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use prikk_store::DEFAULT_CHECKOUT_REF;
 
 use super::optional_path_or_current;
+use crate::arg_scan::{SetOnce, flag_value, unknown_argument};
+use crate::commands::CliError;
 
 /// Parsed checkout command arguments.
 pub(crate) struct CheckoutArgs {
@@ -36,10 +38,12 @@ pub(crate) enum CheckoutMode {
 }
 
 /// Parse `prikk checkout` arguments.
-pub(crate) fn parse_checkout_args(args: Vec<String>) -> std::result::Result<CheckoutArgs, String> {
+pub(crate) fn parse_checkout_args(
+    args: Vec<String>,
+) -> std::result::Result<CheckoutArgs, CliError> {
     let mut mode = None;
     let mut path = None;
-    let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
+    let mut ref_name = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
@@ -55,36 +59,38 @@ pub(crate) fn parse_checkout_args(args: Vec<String>) -> std::result::Result<Chec
                 set_checkout_mode(&mut mode, CheckoutMode::PatchMaterializeDelete)?
             }
             "--ref" => {
-                let Some(value) = iter.next() else {
-                    return Err("checkout --ref requires a value".to_string());
-                };
+                let value = flag_value(&mut iter, "checkout --ref")?;
                 if value.trim().is_empty() {
-                    return Err("checkout --ref must not be empty".to_string());
+                    return Err(CliError::Usage(
+                        "checkout --ref must not be empty".to_string(),
+                    ));
                 }
-                ref_name = value;
+                ref_name.set_once("--ref", value)?;
             }
-            other if other.starts_with('-') => {
-                return Err(format!("unknown checkout argument: {other}"));
-            }
+            other if other.starts_with('-') => return Err(unknown_argument("checkout", other)),
             _ => {
                 if path.is_some() {
-                    return Err("checkout accepts at most one path".to_string());
+                    return Err(CliError::Usage(
+                        "checkout accepts at most one path".to_string(),
+                    ));
                 }
                 path = Some(arg);
             }
         }
     }
     let Some(mode) = mode else {
-        return Err(concat!(
-            "checkout requires one mode flag: `--plan-only`, `--snapshot-plan`, ",
-            "`--snapshot-materialize`, `--patch-plan`, `--patch-materialize`, ",
-            "`--patch-delete-plan`, or `--patch-materialize-delete`",
-        )
-        .to_string());
+        return Err(CliError::Usage(
+            concat!(
+                "checkout requires one mode flag: `--plan-only`, `--snapshot-plan`, ",
+                "`--snapshot-materialize`, `--patch-plan`, `--patch-materialize`, ",
+                "`--patch-delete-plan`, or `--patch-materialize-delete`",
+            )
+            .to_string(),
+        ));
     };
     Ok(CheckoutArgs {
         root: optional_path_or_current(path)?,
-        ref_name,
+        ref_name: ref_name.unwrap_or_else(|| DEFAULT_CHECKOUT_REF.to_string()),
         mode,
     })
 }
@@ -92,9 +98,11 @@ pub(crate) fn parse_checkout_args(args: Vec<String>) -> std::result::Result<Chec
 fn set_checkout_mode(
     mode: &mut Option<CheckoutMode>,
     next: CheckoutMode,
-) -> std::result::Result<(), String> {
+) -> std::result::Result<(), CliError> {
     if mode.is_some() {
-        return Err("checkout accepts only one mode flag".to_string());
+        return Err(CliError::Usage(
+            "checkout accepts only one mode flag".to_string(),
+        ));
     }
     *mode = Some(next);
     Ok(())

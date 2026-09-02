@@ -61,13 +61,24 @@ pub(crate) struct Command {
 
 /// `init` is the one dispatch arm with a non-`Vec<String>` signature ([`Option<String>`], a single
 /// optional path) -- adapted here so the table's `run` field stays uniform, per the prerequisite
-/// ruling's "one adapter closure each."
+/// ruling's "one adapter closure each." RFC 121 §3: this used to silently discard everything past
+/// the first positional (`prikk init a b c` created a repo at `a` with no complaint); now anything
+/// beyond that one optional path is refused.
 fn run_init_adapter(args: Vec<String>) -> std::result::Result<(), CliError> {
-    crate::run_init(args.into_iter().next())
+    let mut iter = args.into_iter();
+    let path = iter.next();
+    if let Some(extra) = iter.next() {
+        return Err(CliError::Usage(format!("unknown init argument: {extra}")));
+    }
+    crate::run_init(path)
 }
 
-/// `status` is the other non-uniform arm: no arguments at all.
-fn run_status_adapter(_args: Vec<String>) -> std::result::Result<(), CliError> {
+/// `status` is the other non-uniform arm: no arguments at all. RFC 121 §3: this used to accept and
+/// silently ignore any argument (`prikk status --nonsense` exited `0`); now any argument is refused.
+fn run_status_adapter(args: Vec<String>) -> std::result::Result<(), CliError> {
+    if let Some(extra) = args.into_iter().next() {
+        return Err(CliError::Usage(format!("unknown status argument: {extra}")));
+    }
     crate::run_status()
 }
 

@@ -11,23 +11,23 @@ use std::io::Write as _;
 use std::path::PathBuf;
 
 // RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::arg_scan::{SetOnce, flag_value, mark_seen, unknown_argument};
+use crate::commands::CliError;
 use crate::stdout::{print, println};
 use prikk_store::{HeldLock, PidLiveness, clear_lock, find_held_lock, list_held_locks};
 
-pub(crate) fn run_unlock(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+pub(crate) fn run_unlock(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let mut args = args.into_iter();
     let mut target: Option<String> = None;
     let mut skip_confirmation = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--lock" => {
-                target = Some(
-                    args.next()
-                        .ok_or_else(|| "--lock requires a path".to_string())?,
-                );
+                let value = flag_value(&mut args, "--lock")?;
+                target.set_once("--lock", value)?;
             }
-            "--yes" | "--force" => skip_confirmation = true,
-            other => return Err(format!("unknown unlock argument: {other}")),
+            "--yes" | "--force" => mark_seen(&mut skip_confirmation, "--yes/--force")?,
+            other => return Err(unknown_argument("unlock", other)),
         }
     }
 
@@ -61,7 +61,8 @@ pub(crate) fn run_unlock(root: PathBuf, args: Vec<String>) -> std::result::Resul
         return Err(format!(
             "no held lock at {target}{resolved_note} -- run `prikk unlock` with no arguments to list \
              what is currently held"
-        ));
+        )
+        .into());
     };
 
     print_locks(std::slice::from_ref(lock));
@@ -71,7 +72,9 @@ pub(crate) fn run_unlock(root: PathBuf, args: Vec<String>) -> std::result::Resul
     // gone when it is not: uniform across both paths, not special-cased on whether a human was
     // watching.
     if !skip_confirmation && !confirm_interactively(lock) {
-        return Err("lock not cleared: confirmation was not given".to_string());
+        return Err("lock not cleared: confirmation was not given"
+            .to_string()
+            .into());
     }
 
     clear_lock(&layout, &lock.path).map_err(|err| err.to_string())?;

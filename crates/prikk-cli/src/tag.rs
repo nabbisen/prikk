@@ -16,6 +16,8 @@
 use std::path::PathBuf;
 
 // RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::arg_scan::{SetOnce, flag_value, unknown_argument};
+use crate::commands::CliError;
 use crate::stdout::println;
 use prikk_object::{ObjectId, ObjectType, RefKind, RefStatePayload, TagPayload};
 use prikk_store::{
@@ -25,20 +27,20 @@ use prikk_store::{
 };
 
 /// Dispatch `prikk tag [list|create]`.
-pub fn run_tag(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+pub fn run_tag(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let mut iter = args.into_iter();
     match iter.next().as_deref() {
         None | Some("list") => run_list(root, iter.collect()),
         Some("create") => run_create(root, iter.collect()),
-        Some(other) => Err(format!(
+        Some(other) => Err(CliError::Usage(format!(
             "unknown tag subcommand: {other} (expected list or create)"
-        )),
+        ))),
     }
 }
 
-fn run_list(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_list(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     if let Some(arg) = args.into_iter().next() {
-        return Err(format!("unknown tag list argument: {arg}"));
+        return Err(unknown_argument("tag list", &arg));
     }
     let layout = crate::open_repository(root)?;
     let ref_store = RefStore::new(layout.clone());
@@ -85,7 +87,7 @@ fn run_list(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String>
     Ok(())
 }
 
-fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let parsed = parse_create_args(args)?;
     let layout = crate::open_repository(root)?;
     let ref_store = RefStore::new(layout.clone());
@@ -181,7 +183,7 @@ struct CreateArgs {
     message: Option<String>,
 }
 
-fn parse_create_args(args: Vec<String>) -> std::result::Result<CreateArgs, String> {
+fn parse_create_args(args: Vec<String>) -> std::result::Result<CreateArgs, CliError> {
     let mut name = None;
     let mut target = None;
     let mut message = None;
@@ -189,37 +191,37 @@ fn parse_create_args(args: Vec<String>) -> std::result::Result<CreateArgs, Strin
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--target" => {
-                let Some(value) = iter.next() else {
-                    return Err("tag create --target requires a value".to_string());
-                };
-                target = Some(value);
+                let value = flag_value(&mut iter, "tag create --target")?;
+                target.set_once("--target", value)?;
             }
             "-m" | "--message" => {
-                let Some(value) = iter.next() else {
-                    return Err("tag create message option requires a value".to_string());
-                };
-                message = Some(value);
+                let value = flag_value(&mut iter, "tag create message option")?;
+                message.set_once("-m/--message", value)?;
             }
             other if other.starts_with('-') => {
-                return Err(format!("unknown tag create argument: {other}"));
+                return Err(unknown_argument("tag create", other));
             }
             _ => {
                 if name.is_some() {
-                    return Err("tag create accepts at most one name".to_string());
+                    return Err(CliError::Usage(
+                        "tag create accepts at most one name".to_string(),
+                    ));
                 }
                 name = Some(arg);
             }
         }
     }
     let Some(name) = name else {
-        return Err("tag create requires <name>".to_string());
+        return Err(CliError::Usage("tag create requires <name>".to_string()));
     };
     let Some(target) = target else {
-        return Err("tag create requires --target <ref|block>".to_string());
+        return Err(CliError::Usage(
+            "tag create requires --target <ref|block>".to_string(),
+        ));
     };
     if let Some(msg) = &message {
         if msg.trim().is_empty() {
-            return Err("tag message must not be empty".to_string());
+            return Err(CliError::Usage("tag message must not be empty".to_string()));
         }
     }
     Ok(CreateArgs {

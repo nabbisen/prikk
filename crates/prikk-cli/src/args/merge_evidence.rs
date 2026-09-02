@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use prikk_object::ObjectId;
 
 use super::optional_path_or_current;
+use crate::arg_scan::{SetOnce, flag_value, unknown_argument};
+use crate::commands::CliError;
 
 /// Parsed merge-evidence command arguments.
 pub(crate) struct MergeEvidenceArgs {
@@ -32,21 +34,21 @@ pub(crate) enum MergeEvidenceTargetArg {
 /// Parse `prikk merge-evidence` arguments.
 pub(crate) fn parse_merge_evidence_args(
     args: Vec<String>,
-) -> std::result::Result<MergeEvidenceArgs, String> {
+) -> std::result::Result<MergeEvidenceArgs, CliError> {
     parse_merge_args(args, "merge-evidence")
 }
 
 /// Parse `prikk merge-plan` arguments.
 pub(crate) fn parse_merge_plan_args(
     args: Vec<String>,
-) -> std::result::Result<MergePlanArgs, String> {
+) -> std::result::Result<MergePlanArgs, CliError> {
     parse_merge_args(args, "merge-plan")
 }
 
 fn parse_merge_args(
     args: Vec<String>,
     command: &str,
-) -> std::result::Result<MergeEvidenceArgs, String> {
+) -> std::result::Result<MergeEvidenceArgs, CliError> {
     let mut path = None;
     let mut baseline_block_id = None;
     let mut left_target = None;
@@ -55,13 +57,11 @@ fn parse_merge_args(
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--baseline-block" => {
-                baseline_block_id = Some(parse_object_id_arg(
-                    iter.next(),
-                    &format!("{command} --baseline-block"),
-                )?);
+                let id = parse_object_id_arg(&mut iter, &format!("{command} --baseline-block"))?;
+                baseline_block_id.set_once("--baseline-block", id)?;
             }
             "--left-block" => {
-                let id = parse_object_id_arg(iter.next(), &format!("{command} --left-block"))?;
+                let id = parse_object_id_arg(&mut iter, &format!("{command} --left-block"))?;
                 set_merge_target(
                     &mut left_target,
                     MergeEvidenceTargetArg::Block(id),
@@ -70,7 +70,7 @@ fn parse_merge_args(
                 )?;
             }
             "--right-block" => {
-                let id = parse_object_id_arg(iter.next(), &format!("{command} --right-block"))?;
+                let id = parse_object_id_arg(&mut iter, &format!("{command} --right-block"))?;
                 set_merge_target(
                     &mut right_target,
                     MergeEvidenceTargetArg::Block(id),
@@ -79,8 +79,7 @@ fn parse_merge_args(
                 )?;
             }
             "--left-ref" => {
-                let ref_name =
-                    parse_non_empty_value(iter.next(), &format!("{command} --left-ref"))?;
+                let ref_name = parse_non_empty_value(&mut iter, &format!("{command} --left-ref"))?;
                 set_merge_target(
                     &mut left_target,
                     MergeEvidenceTargetArg::Ref(ref_name),
@@ -89,8 +88,7 @@ fn parse_merge_args(
                 )?;
             }
             "--right-ref" => {
-                let ref_name =
-                    parse_non_empty_value(iter.next(), &format!("{command} --right-ref"))?;
+                let ref_name = parse_non_empty_value(&mut iter, &format!("{command} --right-ref"))?;
                 set_merge_target(
                     &mut right_target,
                     MergeEvidenceTargetArg::Ref(ref_name),
@@ -98,12 +96,12 @@ fn parse_merge_args(
                     command,
                 )?;
             }
-            other if other.starts_with('-') => {
-                return Err(format!("unknown {command} argument: {other}"));
-            }
+            other if other.starts_with('-') => return Err(unknown_argument(command, other)),
             _ => {
                 if path.is_some() {
-                    return Err(format!("{command} accepts at most one path"));
+                    return Err(CliError::Usage(format!(
+                        "{command} accepts at most one path"
+                    )));
                 }
                 path = Some(arg);
             }
@@ -112,11 +110,13 @@ fn parse_merge_args(
     Ok(MergeEvidenceArgs {
         root: optional_path_or_current(path)?,
         baseline_block_id: baseline_block_id
-            .ok_or_else(|| format!("{command} requires --baseline-block"))?,
-        left_target: left_target
-            .ok_or_else(|| format!("{command} requires --left-block or --left-ref"))?,
-        right_target: right_target
-            .ok_or_else(|| format!("{command} requires --right-block or --right-ref"))?,
+            .ok_or_else(|| CliError::Usage(format!("{command} requires --baseline-block")))?,
+        left_target: left_target.ok_or_else(|| {
+            CliError::Usage(format!("{command} requires --left-block or --left-ref"))
+        })?,
+        right_target: right_target.ok_or_else(|| {
+            CliError::Usage(format!("{command} requires --right-block or --right-ref"))
+        })?,
     })
 }
 
@@ -125,35 +125,35 @@ fn set_merge_target(
     value: MergeEvidenceTargetArg,
     side: &str,
     command: &str,
-) -> std::result::Result<(), String> {
+) -> std::result::Result<(), CliError> {
     if slot.is_some() {
-        return Err(format!(
+        return Err(CliError::Usage(format!(
             "{command} {side} side accepts exactly one selector"
-        ));
+        )));
     }
     *slot = Some(value);
     Ok(())
 }
 
 fn parse_object_id_arg(
-    value: Option<String>,
+    iter: &mut std::vec::IntoIter<String>,
     label: &str,
-) -> std::result::Result<ObjectId, String> {
-    let value = parse_non_empty_value(value, label)?;
-    value
-        .parse::<ObjectId>()
-        .map_err(|err| format!("{label} must be a lowercase 64-hex object id ({err})"))
+) -> std::result::Result<ObjectId, CliError> {
+    let value = parse_non_empty_value(iter, label)?;
+    value.parse::<ObjectId>().map_err(|err| {
+        CliError::Usage(format!(
+            "{label} must be a lowercase 64-hex object id ({err})"
+        ))
+    })
 }
 
 fn parse_non_empty_value(
-    value: Option<String>,
+    iter: &mut std::vec::IntoIter<String>,
     label: &str,
-) -> std::result::Result<String, String> {
-    let Some(value) = value else {
-        return Err(format!("{label} requires a value"));
-    };
+) -> std::result::Result<String, CliError> {
+    let value = flag_value(iter, label)?;
     if value.trim().is_empty() {
-        return Err(format!("{label} must not be empty"));
+        return Err(CliError::Usage(format!("{label} must not be empty")));
     }
     Ok(value)
 }

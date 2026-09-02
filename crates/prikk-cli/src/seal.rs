@@ -6,6 +6,8 @@
 
 use std::path::PathBuf;
 
+use crate::arg_scan::{SetOnce, flag_value, mark_seen, unknown_argument};
+use crate::commands::CliError;
 use prikk_object::{
     BlockKind, BlockPayload, CanonicalEncode, ObjectType, RefKind, RefStatePayload,
     RefUpdatePayload,
@@ -44,32 +46,33 @@ pub fn run_seal(
     root: PathBuf,
     args: Vec<String>,
     signer: &impl MaintainerSigner,
-) -> std::result::Result<SealCommandResult, String> {
+) -> std::result::Result<SealCommandResult, CliError> {
     let ref_name = parse_seal_args(args)?;
     let layout = RepositoryLayout::open(root).map_err(|err| err.to_string())?;
-    seal_active_no_audit(layout, &ref_name, signer)
+    seal_active_no_audit(layout, &ref_name, signer).map_err(CliError::from)
 }
 
-fn parse_seal_args(args: Vec<String>) -> std::result::Result<String, String> {
+fn parse_seal_args(args: Vec<String>) -> std::result::Result<String, CliError> {
     let mut allow_no_audit = false;
-    let mut ref_name = DEFAULT_BRANCH_REF.to_string();
+    let mut ref_name = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
-            "--allow-no-audit" => allow_no_audit = true,
+            "--allow-no-audit" => mark_seen(&mut allow_no_audit, "--allow-no-audit")?,
             "--ref" => {
-                let Some(value) = iter.next() else {
-                    return Err("seal --ref requires a value".to_string());
-                };
-                ref_name = value;
+                let value = flag_value(&mut iter, "seal --ref")?;
+                ref_name.set_once("--ref", value)?;
             }
-            other => return Err(format!("unknown seal argument: {other}")),
+            other => return Err(unknown_argument("seal", other)),
         }
     }
+    let ref_name = ref_name.unwrap_or_else(|| DEFAULT_BRANCH_REF.to_string());
     if !allow_no_audit {
-        return Err("seal scaffold requires --allow-no-audit".to_string());
+        return Err(CliError::Usage(
+            "seal scaffold requires --allow-no-audit".to_string(),
+        ));
     }
-    validate_local_branch_ref(&ref_name).map_err(|err| err.to_string())
+    validate_local_branch_ref(&ref_name).map_err(|err| CliError::from(err.to_string()))
 }
 
 fn seal_active_no_audit(

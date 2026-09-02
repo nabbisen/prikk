@@ -4,6 +4,9 @@ use std::path::PathBuf;
 
 use prikk_store::{DEFAULT_CHECKOUT_REF, DEFAULT_HISTORY_LIMIT};
 
+use crate::arg_scan::{SetOnce, flag_value, mark_seen, unknown_argument};
+use crate::commands::CliError;
+
 mod checkout;
 mod merge_evidence;
 mod merge_execute;
@@ -110,29 +113,34 @@ pub(crate) struct VerifyArgs {
 }
 
 /// Parse `prikk verify` arguments.
-pub(crate) fn parse_verify_args(args: Vec<String>) -> std::result::Result<VerifyArgs, String> {
+pub(crate) fn parse_verify_args(args: Vec<String>) -> std::result::Result<VerifyArgs, CliError> {
     let mut stop_on_first_error = false;
-    let mut format = VerifyOutputFormat::Prose;
+    let mut format = None;
     let mut path = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
-            "--stop-on-first-error" => stop_on_first_error = true,
+            "--stop-on-first-error" => {
+                mark_seen(&mut stop_on_first_error, "--stop-on-first-error")?
+            }
             "--format" => {
-                let Some(value) = iter.next() else {
-                    return Err("verify --format requires a value".to_string());
-                };
-                format = match value.as_str() {
+                let value = flag_value(&mut iter, "verify --format")?;
+                let resolved = match value.as_str() {
                     "json" => VerifyOutputFormat::Json,
-                    other => return Err(format!("verify --format does not support {other:?}")),
+                    other => {
+                        return Err(CliError::Usage(format!(
+                            "verify --format does not support {other:?}"
+                        )));
+                    }
                 };
+                format.set_once("--format", resolved)?;
             }
-            other if other.starts_with('-') => {
-                return Err(format!("unknown verify argument: {other}"));
-            }
+            other if other.starts_with('-') => return Err(unknown_argument("verify", other)),
             _ => {
                 if path.is_some() {
-                    return Err("verify accepts at most one path".to_string());
+                    return Err(CliError::Usage(
+                        "verify accepts at most one path".to_string(),
+                    ));
                 }
                 path = Some(arg);
             }
@@ -141,41 +149,36 @@ pub(crate) fn parse_verify_args(args: Vec<String>) -> std::result::Result<Verify
     Ok(VerifyArgs {
         root: optional_path_or_current(path)?,
         stop_on_first_error,
-        format,
+        format: format.unwrap_or(VerifyOutputFormat::Prose),
     })
 }
 
 /// Parse `prikk log` arguments.
-pub(crate) fn parse_log_args(args: Vec<String>) -> std::result::Result<LogArgs, String> {
+pub(crate) fn parse_log_args(args: Vec<String>) -> std::result::Result<LogArgs, CliError> {
     let mut path = None;
-    let mut ref_name = "heads/main".to_string();
-    let mut limit = DEFAULT_HISTORY_LIMIT;
+    let mut ref_name = None;
+    let mut limit = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--ref" => {
-                let Some(value) = iter.next() else {
-                    return Err("log --ref requires a value".to_string());
-                };
+                let value = flag_value(&mut iter, "log --ref")?;
                 if value.trim().is_empty() {
-                    return Err("log --ref must not be empty".to_string());
+                    return Err(CliError::Usage("log --ref must not be empty".to_string()));
                 }
-                ref_name = value;
+                ref_name.set_once("--ref", value)?;
             }
             "--limit" => {
-                let Some(value) = iter.next() else {
-                    return Err("log --limit requires a value".to_string());
-                };
-                limit = value
-                    .parse::<usize>()
-                    .map_err(|_| "log --limit must be a non-negative integer".to_string())?;
+                let value = flag_value(&mut iter, "log --limit")?;
+                let parsed = value.parse::<usize>().map_err(|_| {
+                    CliError::Usage("log --limit must be a non-negative integer".to_string())
+                })?;
+                limit.set_once("--limit", parsed)?;
             }
-            other if other.starts_with('-') => {
-                return Err(format!("unknown log argument: {other}"));
-            }
+            other if other.starts_with('-') => return Err(unknown_argument("log", other)),
             _ => {
                 if path.is_some() {
-                    return Err("log accepts at most one path".to_string());
+                    return Err(CliError::Usage("log accepts at most one path".to_string()));
                 }
                 path = Some(arg);
             }
@@ -183,35 +186,35 @@ pub(crate) fn parse_log_args(args: Vec<String>) -> std::result::Result<LogArgs, 
     }
     Ok(LogArgs {
         root: optional_path_or_current(path)?,
-        ref_name,
-        limit,
+        ref_name: ref_name.unwrap_or_else(|| "heads/main".to_string()),
+        limit: limit.unwrap_or(DEFAULT_HISTORY_LIMIT),
     })
 }
 
 /// Parse `prikk inverse-plan` arguments.
 pub(crate) fn parse_inverse_plan_args(
     args: Vec<String>,
-) -> std::result::Result<InversePlanArgs, String> {
+) -> std::result::Result<InversePlanArgs, CliError> {
     let mut path = None;
-    let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
+    let mut ref_name = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--ref" => {
-                let Some(value) = iter.next() else {
-                    return Err("inverse-plan --ref requires a value".to_string());
-                };
+                let value = flag_value(&mut iter, "inverse-plan --ref")?;
                 if value.trim().is_empty() {
-                    return Err("inverse-plan --ref must not be empty".to_string());
+                    return Err(CliError::Usage(
+                        "inverse-plan --ref must not be empty".to_string(),
+                    ));
                 }
-                ref_name = value;
+                ref_name.set_once("--ref", value)?;
             }
-            other if other.starts_with('-') => {
-                return Err(format!("unknown inverse-plan argument: {other}"));
-            }
+            other if other.starts_with('-') => return Err(unknown_argument("inverse-plan", other)),
             _ => {
                 if path.is_some() {
-                    return Err("inverse-plan accepts at most one path".to_string());
+                    return Err(CliError::Usage(
+                        "inverse-plan accepts at most one path".to_string(),
+                    ));
                 }
                 path = Some(arg);
             }
@@ -219,34 +222,36 @@ pub(crate) fn parse_inverse_plan_args(
     }
     Ok(InversePlanArgs {
         root: optional_path_or_current(path)?,
-        ref_name,
+        ref_name: ref_name.unwrap_or_else(|| DEFAULT_CHECKOUT_REF.to_string()),
     })
 }
 
 /// Parse `prikk rollback-preview` arguments.
 pub(crate) fn parse_rollback_preview_args(
     args: Vec<String>,
-) -> std::result::Result<RollbackPreviewArgs, String> {
+) -> std::result::Result<RollbackPreviewArgs, CliError> {
     let mut path = None;
-    let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
+    let mut ref_name = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--ref" => {
-                let Some(value) = iter.next() else {
-                    return Err("rollback-preview --ref requires a value".to_string());
-                };
+                let value = flag_value(&mut iter, "rollback-preview --ref")?;
                 if value.trim().is_empty() {
-                    return Err("rollback-preview --ref must not be empty".to_string());
+                    return Err(CliError::Usage(
+                        "rollback-preview --ref must not be empty".to_string(),
+                    ));
                 }
-                ref_name = value;
+                ref_name.set_once("--ref", value)?;
             }
             other if other.starts_with('-') => {
-                return Err(format!("unknown rollback-preview argument: {other}"));
+                return Err(unknown_argument("rollback-preview", other));
             }
             _ => {
                 if path.is_some() {
-                    return Err("rollback-preview accepts at most one path".to_string());
+                    return Err(CliError::Usage(
+                        "rollback-preview accepts at most one path".to_string(),
+                    ));
                 }
                 path = Some(arg);
             }
@@ -254,60 +259,66 @@ pub(crate) fn parse_rollback_preview_args(
     }
     Ok(RollbackPreviewArgs {
         root: optional_path_or_current(path)?,
-        ref_name,
+        ref_name: ref_name.unwrap_or_else(|| DEFAULT_CHECKOUT_REF.to_string()),
     })
 }
 
 /// Parse `prikk rollback-draft` arguments.
 pub(crate) fn parse_rollback_draft_args(
     args: Vec<String>,
-) -> std::result::Result<RollbackDraftArgs, String> {
+) -> std::result::Result<RollbackDraftArgs, CliError> {
     let mut path = None;
-    let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
+    let mut ref_name = None;
     let mut message = None;
     let mut append_inverse = false;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
-            "--append-inverse" => append_inverse = true,
+            "--append-inverse" => mark_seen(&mut append_inverse, "--append-inverse")?,
             "--ref" => {
-                let Some(value) = iter.next() else {
-                    return Err("rollback-draft --ref requires a value".to_string());
-                };
+                let value = flag_value(&mut iter, "rollback-draft --ref")?;
                 if value.trim().is_empty() {
-                    return Err("rollback-draft --ref must not be empty".to_string());
+                    return Err(CliError::Usage(
+                        "rollback-draft --ref must not be empty".to_string(),
+                    ));
                 }
-                ref_name = value;
+                ref_name.set_once("--ref", value)?;
             }
             "-m" | "--message" => {
-                let Some(value) = iter.next() else {
-                    return Err("rollback-draft message option requires a value".to_string());
-                };
-                message = Some(value);
+                let value = flag_value(&mut iter, "rollback-draft message option")?;
+                message.set_once("-m/--message", value)?;
             }
             other if other.starts_with('-') => {
-                return Err(format!("unknown rollback-draft argument: {other}"));
+                return Err(unknown_argument("rollback-draft", other));
             }
             _ => {
                 if path.is_some() {
-                    return Err("rollback-draft accepts at most one path".to_string());
+                    return Err(CliError::Usage(
+                        "rollback-draft accepts at most one path".to_string(),
+                    ));
                 }
                 path = Some(arg);
             }
         }
     }
     if !append_inverse {
-        return Err("rollback-draft requires --append-inverse".to_string());
+        return Err(CliError::Usage(
+            "rollback-draft requires --append-inverse".to_string(),
+        ));
     }
     let Some(message) = message else {
-        return Err("rollback-draft requires -m <message>".to_string());
+        return Err(CliError::Usage(
+            "rollback-draft requires -m <message>".to_string(),
+        ));
     };
     if message.trim().is_empty() {
-        return Err("rollback-draft message must not be empty".to_string());
+        return Err(CliError::Usage(
+            "rollback-draft message must not be empty".to_string(),
+        ));
     }
     Ok(RollbackDraftArgs {
         root: optional_path_or_current(path)?,
-        ref_name,
+        ref_name: ref_name.unwrap_or_else(|| DEFAULT_CHECKOUT_REF.to_string()),
         message,
     })
 }
@@ -315,27 +326,29 @@ pub(crate) fn parse_rollback_draft_args(
 /// Parse `prikk rollback-draft-verify` arguments.
 pub(crate) fn parse_rollback_draft_verify_args(
     args: Vec<String>,
-) -> std::result::Result<RollbackDraftVerifyArgs, String> {
+) -> std::result::Result<RollbackDraftVerifyArgs, CliError> {
     let mut path = None;
-    let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
+    let mut ref_name = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--ref" => {
-                let Some(value) = iter.next() else {
-                    return Err("rollback-draft-verify --ref requires a value".to_string());
-                };
+                let value = flag_value(&mut iter, "rollback-draft-verify --ref")?;
                 if value.trim().is_empty() {
-                    return Err("rollback-draft-verify --ref must not be empty".to_string());
+                    return Err(CliError::Usage(
+                        "rollback-draft-verify --ref must not be empty".to_string(),
+                    ));
                 }
-                ref_name = value;
+                ref_name.set_once("--ref", value)?;
             }
             other if other.starts_with('-') => {
-                return Err(format!("unknown rollback-draft-verify argument: {other}"));
+                return Err(unknown_argument("rollback-draft-verify", other));
             }
             _ => {
                 if path.is_some() {
-                    return Err("rollback-draft-verify accepts at most one path".to_string());
+                    return Err(CliError::Usage(
+                        "rollback-draft-verify accepts at most one path".to_string(),
+                    ));
                 }
                 path = Some(arg);
             }
@@ -343,34 +356,36 @@ pub(crate) fn parse_rollback_draft_verify_args(
     }
     Ok(RollbackDraftVerifyArgs {
         root: optional_path_or_current(path)?,
-        ref_name,
+        ref_name: ref_name.unwrap_or_else(|| DEFAULT_CHECKOUT_REF.to_string()),
     })
 }
 
 /// Parse `prikk worktree-status` arguments.
 pub(crate) fn parse_worktree_status_args(
     args: Vec<String>,
-) -> std::result::Result<WorktreeStatusArgs, String> {
+) -> std::result::Result<WorktreeStatusArgs, CliError> {
     let mut path = None;
-    let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
+    let mut ref_name = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--ref" => {
-                let Some(value) = iter.next() else {
-                    return Err("worktree-status --ref requires a value".to_string());
-                };
+                let value = flag_value(&mut iter, "worktree-status --ref")?;
                 if value.trim().is_empty() {
-                    return Err("worktree-status --ref must not be empty".to_string());
+                    return Err(CliError::Usage(
+                        "worktree-status --ref must not be empty".to_string(),
+                    ));
                 }
-                ref_name = value;
+                ref_name.set_once("--ref", value)?;
             }
             other if other.starts_with('-') => {
-                return Err(format!("unknown worktree-status argument: {other}"));
+                return Err(unknown_argument("worktree-status", other));
             }
             _ => {
                 if path.is_some() {
-                    return Err("worktree-status accepts at most one path".to_string());
+                    return Err(CliError::Usage(
+                        "worktree-status accepts at most one path".to_string(),
+                    ));
                 }
                 path = Some(arg);
             }
@@ -378,25 +393,25 @@ pub(crate) fn parse_worktree_status_args(
     }
     Ok(WorktreeStatusArgs {
         root: optional_path_or_current(path)?,
-        ref_name,
+        ref_name: ref_name.unwrap_or_else(|| DEFAULT_CHECKOUT_REF.to_string()),
     })
 }
 
 /// Parse `prikk doctor` arguments.
-pub(crate) fn parse_doctor_args(args: Vec<String>) -> std::result::Result<DoctorArgs, String> {
+pub(crate) fn parse_doctor_args(args: Vec<String>) -> std::result::Result<DoctorArgs, CliError> {
     let mut repair_wal_tail = false;
     let mut repair_main_ref = false;
     let mut path = None;
     for arg in args {
         match arg.as_str() {
-            "--repair-wal-tail" => repair_wal_tail = true,
-            "--repair-main-ref" => repair_main_ref = true,
-            other if other.starts_with('-') => {
-                return Err(format!("unknown doctor argument: {other}"));
-            }
+            "--repair-wal-tail" => mark_seen(&mut repair_wal_tail, "--repair-wal-tail")?,
+            "--repair-main-ref" => mark_seen(&mut repair_main_ref, "--repair-main-ref")?,
+            other if other.starts_with('-') => return Err(unknown_argument("doctor", other)),
             _ => {
                 if path.is_some() {
-                    return Err("doctor accepts at most one path".to_string());
+                    return Err(CliError::Usage(
+                        "doctor accepts at most one path".to_string(),
+                    ));
                 }
                 path = Some(arg);
             }
@@ -411,47 +426,48 @@ pub(crate) fn parse_doctor_args(args: Vec<String>) -> std::result::Result<Doctor
 
 /// Parse commit arguments. Commit always authors a node-addressed patch from the worktree against the
 /// baseline ref; `--from-worktree` is accepted for backward compatibility but is the only behavior.
-pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<CommitArgs, String> {
+pub(crate) fn parse_commit_args(args: Vec<String>) -> std::result::Result<CommitArgs, CliError> {
     let mut message = None;
-    let mut ref_name = DEFAULT_CHECKOUT_REF.to_string();
+    let mut ref_name = None;
     let mut text_edits = false;
+    let mut from_worktree_seen = false;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             // Accepted for compatibility; worktree authoring is the only commit behavior.
-            "--from-worktree" => {}
-            "--text-edits" => text_edits = true,
+            "--from-worktree" => mark_seen(&mut from_worktree_seen, "--from-worktree")?,
+            "--text-edits" => mark_seen(&mut text_edits, "--text-edits")?,
             "--ref" => {
-                let Some(value) = iter.next() else {
-                    return Err("commit --ref requires a value".to_string());
-                };
+                let value = flag_value(&mut iter, "commit --ref")?;
                 if value.trim().is_empty() {
-                    return Err("commit --ref must not be empty".to_string());
+                    return Err(CliError::Usage(
+                        "commit --ref must not be empty".to_string(),
+                    ));
                 }
-                ref_name = value;
+                ref_name.set_once("--ref", value)?;
             }
             "-m" | "--message" => {
-                let Some(value) = iter.next() else {
-                    return Err("commit message option requires a value".to_string());
-                };
-                message = Some(value);
+                let value = flag_value(&mut iter, "commit message option")?;
+                message.set_once("-m/--message", value)?;
             }
-            other => return Err(format!("unknown commit argument: {other}")),
+            other => return Err(unknown_argument("commit", other)),
         }
     }
     let Some(message) = message else {
-        return Err(
+        return Err(CliError::Usage(
             "commit requires -m <message> (usage: prikk commit [--from-worktree] [--text-edits] \
              [--ref <name>] -m <message>)"
                 .to_string(),
-        );
+        ));
     };
     if message.trim().is_empty() {
-        return Err("commit message must not be empty".to_string());
+        return Err(CliError::Usage(
+            "commit message must not be empty".to_string(),
+        ));
     }
     Ok(CommitArgs {
         message,
-        ref_name,
+        ref_name: ref_name.unwrap_or_else(|| DEFAULT_CHECKOUT_REF.to_string()),
         text_edits,
     })
 }

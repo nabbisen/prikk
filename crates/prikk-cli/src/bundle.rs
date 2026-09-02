@@ -33,6 +33,8 @@
 use std::path::PathBuf;
 
 // RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::arg_scan::{SetOnce, flag_value, mark_seen, unknown_argument};
+use crate::commands::CliError;
 use crate::stdout::println;
 use prikk_store::{
     BundleImportOptions, BundleManifest, BundleScope, DEFAULT_BUNDLE_MAX_OBJECT_COUNT,
@@ -40,20 +42,22 @@ use prikk_store::{
 };
 
 /// Dispatch `prikk bundle [export|import|verify]`.
-pub fn run_bundle(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+pub fn run_bundle(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let mut iter = args.into_iter();
     match iter.next().as_deref() {
         Some("export") => run_export(root, iter.collect()),
         Some("import") => run_import(root, iter.collect()),
         Some("verify") => run_verify(iter.collect()),
-        Some(other) => Err(format!(
+        Some(other) => Err(CliError::Usage(format!(
             "unknown bundle subcommand: {other} (expected export, import, or verify)"
+        ))),
+        None => Err(CliError::Usage(
+            "bundle requires a subcommand: export, import, or verify".to_string(),
         )),
-        None => Err("bundle requires a subcommand: export, import, or verify".to_string()),
     }
 }
 
-fn run_export(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_export(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let parsed = parse_export_args(args)?;
     // DC-44 increment 2 §3.1: checked before opening the repository at all, so the common
     // "there is already a backup at this path" case fails fast rather than after a read. Not
@@ -64,7 +68,8 @@ fn run_export(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
             "refusing to overwrite existing file at {} (pass --force to overwrite it \
              intentionally)",
             parsed.output.display()
-        ));
+        )
+        .into());
     }
     let layout = crate::open_repository(root)?;
     let (report, bytes) =
@@ -85,7 +90,7 @@ fn run_export(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
     Ok(())
 }
 
-fn run_import(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_import(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let parsed = parse_import_args(args)?;
     let layout = crate::open_repository(root)?;
     let bytes = std::fs::read(&parsed.input).map_err(|err| {
@@ -111,7 +116,7 @@ fn run_import(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
     Ok(())
 }
 
-fn run_verify(args: Vec<String>) -> std::result::Result<(), String> {
+fn run_verify(args: Vec<String>) -> std::result::Result<(), CliError> {
     let parsed = parse_verify_args(args)?;
     let bytes = std::fs::read(&parsed.input).map_err(|err| {
         format!(
@@ -165,21 +170,20 @@ struct VerifyArgs {
     input: PathBuf,
 }
 
-fn parse_verify_args(args: Vec<String>) -> std::result::Result<VerifyArgs, String> {
+fn parse_verify_args(args: Vec<String>) -> std::result::Result<VerifyArgs, CliError> {
     let mut input = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--input" => {
-                let Some(value) = iter.next() else {
-                    return Err("bundle verify --input requires a value".to_string());
-                };
-                input = Some(PathBuf::from(value));
+                let value = flag_value(&mut iter, "bundle verify --input")?;
+                input.set_once("--input", PathBuf::from(value))?;
             }
-            other => return Err(format!("unknown bundle verify argument: {other}")),
+            other => return Err(unknown_argument("bundle verify", other)),
         }
     }
-    let input = input.ok_or_else(|| "bundle verify requires --input".to_string())?;
+    let input =
+        input.ok_or_else(|| CliError::Usage("bundle verify requires --input".to_string()))?;
     Ok(VerifyArgs { input })
 }
 
@@ -216,7 +220,7 @@ struct ExportArgs {
     force: bool,
 }
 
-fn parse_export_args(args: Vec<String>) -> std::result::Result<ExportArgs, String> {
+fn parse_export_args(args: Vec<String>) -> std::result::Result<ExportArgs, CliError> {
     let mut ref_name = None;
     let mut output = None;
     let mut force = false;
@@ -224,26 +228,26 @@ fn parse_export_args(args: Vec<String>) -> std::result::Result<ExportArgs, Strin
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--ref" => {
-                let Some(value) = iter.next() else {
-                    return Err("bundle export --ref requires a value".to_string());
-                };
+                let value = flag_value(&mut iter, "bundle export --ref")?;
                 if value.trim().is_empty() {
-                    return Err("bundle export --ref must not be empty".to_string());
+                    return Err(CliError::Usage(
+                        "bundle export --ref must not be empty".to_string(),
+                    ));
                 }
-                ref_name = Some(value);
+                ref_name.set_once("--ref", value)?;
             }
             "--output" => {
-                let Some(value) = iter.next() else {
-                    return Err("bundle export --output requires a value".to_string());
-                };
-                output = Some(PathBuf::from(value));
+                let value = flag_value(&mut iter, "bundle export --output")?;
+                output.set_once("--output", PathBuf::from(value))?;
             }
-            "--force" => force = true,
-            other => return Err(format!("unknown bundle export argument: {other}")),
+            "--force" => mark_seen(&mut force, "--force")?,
+            other => return Err(unknown_argument("bundle export", other)),
         }
     }
-    let ref_name = ref_name.ok_or_else(|| "bundle export requires --ref".to_string())?;
-    let output = output.ok_or_else(|| "bundle export requires --output".to_string())?;
+    let ref_name =
+        ref_name.ok_or_else(|| CliError::Usage("bundle export requires --ref".to_string()))?;
+    let output =
+        output.ok_or_else(|| CliError::Usage("bundle export requires --output".to_string()))?;
     Ok(ExportArgs {
         ref_name,
         output,
@@ -255,20 +259,19 @@ struct ImportArgs {
     input: PathBuf,
 }
 
-fn parse_import_args(args: Vec<String>) -> std::result::Result<ImportArgs, String> {
+fn parse_import_args(args: Vec<String>) -> std::result::Result<ImportArgs, CliError> {
     let mut input = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--input" => {
-                let Some(value) = iter.next() else {
-                    return Err("bundle import --input requires a value".to_string());
-                };
-                input = Some(PathBuf::from(value));
+                let value = flag_value(&mut iter, "bundle import --input")?;
+                input.set_once("--input", PathBuf::from(value))?;
             }
-            other => return Err(format!("unknown bundle import argument: {other}")),
+            other => return Err(unknown_argument("bundle import", other)),
         }
     }
-    let input = input.ok_or_else(|| "bundle import requires --input".to_string())?;
+    let input =
+        input.ok_or_else(|| CliError::Usage("bundle import requires --input".to_string()))?;
     Ok(ImportArgs { input })
 }

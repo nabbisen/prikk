@@ -33,6 +33,8 @@
 use std::path::PathBuf;
 
 // RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
+use crate::arg_scan::{SetOnce, flag_value, mark_seen, unknown_argument};
+use crate::commands::CliError;
 use crate::stdout::println;
 use prikk_error::PrikkError;
 use prikk_object::{
@@ -52,7 +54,7 @@ const REF_STATE_SCHEMA_OPEN: u32 = 1;
 const REF_STATE_SCHEMA_CLOSED: u32 = 2;
 
 /// Dispatch `prikk branch [list|create|close]`.
-pub fn run_branch(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+pub fn run_branch(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let mut iter = args.into_iter();
     let first = iter.next();
     match first.as_deref() {
@@ -66,18 +68,18 @@ pub fn run_branch(root: PathBuf, args: Vec<String>) -> std::result::Result<(), S
             rest.extend(iter);
             run_list(root, rest)
         }
-        Some(other) => Err(format!(
+        Some(other) => Err(CliError::Usage(format!(
             "unknown branch subcommand: {other} (expected list, create, or close)"
-        )),
+        ))),
     }
 }
 
-fn run_list(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_list(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let mut show_all = false;
     for arg in args {
         match arg.as_str() {
-            "--all" => show_all = true,
-            other => return Err(format!("unknown branch list argument: {other}")),
+            "--all" => mark_seen(&mut show_all, "--all")?,
+            other => return Err(unknown_argument("branch list", other)),
         }
     }
     let layout = crate::open_repository(root)?;
@@ -124,7 +126,7 @@ fn run_list(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String>
     Ok(())
 }
 
-fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let parsed = parse_create_args(args)?;
     let layout = crate::open_repository(root)?;
     layout
@@ -139,7 +141,7 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
         .map_err(|err| err.to_string())?
         .is_some()
     {
-        return Err(format!("branch {canonical} already exists"));
+        return Err(format!("branch {canonical} already exists").into());
     }
 
     // A ref log can survive an interrupted publication with no live pointer. Creating over it
@@ -154,7 +156,8 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
         return Err(format!(
             "branch {canonical} has a surviving ref log with no live pointer; resuming it is not \
              yet supported (see DC-61), and creating over it would produce a corrupt state"
-        ));
+        )
+        .into());
     }
 
     let from_ref = parsed
@@ -219,18 +222,18 @@ fn run_create(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
     Ok(())
 }
 
-fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let mut name = None;
     for arg in args {
         if name.is_some() {
-            return Err(format!(
+            return Err(CliError::Usage(format!(
                 "branch close accepts at most one name, got extra: {arg}"
-            ));
+            )));
         }
         name = Some(arg);
     }
     let Some(name) = name else {
-        return Err("branch close requires <name>".to_string());
+        return Err(CliError::Usage("branch close requires <name>".to_string()));
     };
 
     let layout = crate::open_repository(root)?;
@@ -245,7 +248,7 @@ fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
         .read_current_ref_state_id(&canonical)
         .map_err(|err| err.to_string())?
     else {
-        return Err(format!("branch {canonical} does not exist"));
+        return Err(format!("branch {canonical} does not exist").into());
     };
     let current_envelope = object_store
         .read_typed(current_ref_state_id, ObjectType::RefState)
@@ -257,7 +260,7 @@ fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
     )
     .map_err(|err| err.to_string())?;
     if current_payload.closed {
-        return Err(format!("branch {canonical} is already closed"));
+        return Err(format!("branch {canonical} is already closed").into());
     }
 
     let replay = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME)
@@ -267,7 +270,9 @@ fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
     // `replay.records.is_empty()`, letting close proceed as if no active WAL owns anything here.
     if replay.has_item_failure() {
         return Err(
-            "active WAL has a damaged record; run doctor before closing a branch".to_string(),
+            "active WAL has a damaged record; run doctor before closing a branch"
+                .to_string()
+                .into(),
         );
     }
     if !replay.records.is_empty() {
@@ -275,7 +280,8 @@ fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
             Ok(_) => {
                 return Err(format!(
                     "cannot close {canonical}: it owns a non-empty active WAL; seal it before closing"
-                ));
+                )
+                .into());
             }
             // Owned by a different ref: this branch's own active WAL is not implicated, so closing
             // it may proceed.
@@ -284,7 +290,7 @@ fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
             // not evidence this branch is uninvolved — fail closed like every other publisher
             // (`node_authoring.rs` propagates the same error via `?`) rather than treat "unknown
             // owner" as "not this branch."
-            Err(err) => return Err(err.to_string()),
+            Err(err) => return Err(err.to_string().into()),
         }
     }
 
@@ -410,31 +416,31 @@ struct CreateArgs {
     from: Option<String>,
 }
 
-fn parse_create_args(args: Vec<String>) -> std::result::Result<CreateArgs, String> {
+fn parse_create_args(args: Vec<String>) -> std::result::Result<CreateArgs, CliError> {
     let mut name = None;
     let mut from = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--from" => {
-                let Some(value) = iter.next() else {
-                    return Err("branch create --from requires a value".to_string());
-                };
-                from = Some(value);
+                let value = flag_value(&mut iter, "branch create --from")?;
+                from.set_once("--from", value)?;
             }
             other if other.starts_with('-') => {
-                return Err(format!("unknown branch create argument: {other}"));
+                return Err(unknown_argument("branch create", other));
             }
             _ => {
                 if name.is_some() {
-                    return Err("branch create accepts at most one name".to_string());
+                    return Err(CliError::Usage(
+                        "branch create accepts at most one name".to_string(),
+                    ));
                 }
                 name = Some(arg);
             }
         }
     }
     let Some(name) = name else {
-        return Err("branch create requires <name>".to_string());
+        return Err(CliError::Usage("branch create requires <name>".to_string()));
     };
     Ok(CreateArgs { name, from })
 }

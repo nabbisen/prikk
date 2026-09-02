@@ -20,6 +20,7 @@ use std::process::ExitCode;
 // `stdout.rs` -- see that module's own doc comment.
 use stdout::println;
 
+mod arg_scan;
 mod args;
 mod branch;
 mod bundle;
@@ -35,6 +36,7 @@ mod tag;
 mod unlock;
 mod verify_verdict;
 
+use arg_scan::{SetOnce, flag_value, unknown_argument};
 use args::{
     CheckoutMode, MergeEvidenceTargetArg, VerifyOutputFormat, current_dir, parse_checkout_args,
     parse_commit_args, parse_doctor_args, parse_inverse_plan_args, parse_log_args,
@@ -235,28 +237,22 @@ fn run_trust(args: Vec<String>) -> std::result::Result<(), CliError> {
             while let Some(arg) = args.next() {
                 match arg.as_str() {
                     "--key-id" => {
-                        key_id = Some(
-                            args.next()
-                                .ok_or_else(|| "--key-id requires a value".to_string())?,
-                        );
+                        let value = flag_value(&mut args, "--key-id")?;
+                        key_id.set_once("--key-id", value)?;
                     }
                     "--public-key" => {
-                        public_key = Some(
-                            args.next()
-                                .ok_or_else(|| "--public-key requires a value".to_string())?,
-                        );
+                        let value = flag_value(&mut args, "--public-key")?;
+                        public_key.set_once("--public-key", value)?;
                     }
-                    other => {
-                        return Err(
-                            format!("unknown trust maintainer add argument: {other}").into()
-                        );
-                    }
+                    other => return Err(unknown_argument("trust maintainer add", other)),
                 }
             }
-            let key_id =
-                key_id.ok_or_else(|| "trust maintainer add requires --key-id".to_string())?;
-            let public_key = public_key
-                .ok_or_else(|| "trust maintainer add requires --public-key".to_string())?;
+            let key_id = key_id.ok_or_else(|| {
+                CliError::Usage("trust maintainer add requires --key-id".to_string())
+            })?;
+            let public_key = public_key.ok_or_else(|| {
+                CliError::Usage("trust maintainer add requires --public-key".to_string())
+            })?;
             let root = current_dir()?;
             let layout = open_repository(root)?;
             let (adopted, newly_added) = add_trusted_maintainer(&layout, &key_id, &public_key)
@@ -278,20 +274,15 @@ fn run_trust(args: Vec<String>) -> std::result::Result<(), CliError> {
             while let Some(arg) = args.next() {
                 match arg.as_str() {
                     "--key-id" => {
-                        key_id = Some(
-                            args.next()
-                                .ok_or_else(|| "--key-id requires a value".to_string())?,
-                        );
+                        let value = flag_value(&mut args, "--key-id")?;
+                        key_id.set_once("--key-id", value)?;
                     }
-                    other => {
-                        return Err(
-                            format!("unknown trust maintainer remove argument: {other}").into()
-                        );
-                    }
+                    other => return Err(unknown_argument("trust maintainer remove", other)),
                 }
             }
-            let key_id =
-                key_id.ok_or_else(|| "trust maintainer remove requires --key-id".to_string())?;
+            let key_id = key_id.ok_or_else(|| {
+                CliError::Usage("trust maintainer remove requires --key-id".to_string())
+            })?;
             let root = current_dir()?;
             let layout = open_repository(root)?;
             let removed =
@@ -303,12 +294,11 @@ fn run_trust(args: Vec<String>) -> std::result::Result<(), CliError> {
             }
             Ok(())
         }
-        _ => Err(
+        _ => Err(CliError::Usage(
             "usage: prikk trust maintainer add --key-id <key-id> --public-key <64-hex>\n       \
              prikk trust maintainer remove --key-id <key-id>"
-                .to_string()
-                .into(),
-        ),
+                .to_string(),
+        )),
     }
 }
 

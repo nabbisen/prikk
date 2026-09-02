@@ -3,13 +3,14 @@
 use prikk_store::{MaintainerSigner, MergeExecutionReport, execute_merge};
 
 use crate::args::parse_merge_execute_args;
+use crate::commands::CliError;
 use crate::open_repository;
 
 /// Parse and run `prikk merge`.
 pub(crate) fn run_merge(
     args: Vec<String>,
     signer: &impl MaintainerSigner,
-) -> std::result::Result<MergeExecutionReport, String> {
+) -> std::result::Result<MergeExecutionReport, CliError> {
     let args = parse_merge_execute_args(args)?;
     let layout = open_repository(args.root)?;
     execute_merge(
@@ -19,5 +20,5 @@ pub(crate) fn run_merge(
         &args.from_ref,
         signer,
     )
-    .map_err(|err| err.to_string())
+    .map_err(|err| CliError::from(err.to_string()))
 }

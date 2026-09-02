@@ -57,10 +57,12 @@ use prikk_store::{
 // RFC 121 §2.1: shadows the prelude's `println!`/`print!` -- see `crate::stdout`'s module doc.
 use crate::stdout::println;
 
+use crate::arg_scan::{SetOnce, flag_value, mark_seen, unknown_argument};
+use crate::commands::CliError;
 use crate::maintainer_signer_from_env;
 
 /// Dispatch `prikk sync [summary|compare|have|build|accept|pending|seal|tags|adopt-tag]`.
-pub fn run_sync(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+pub fn run_sync(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let mut iter = args.into_iter();
     match iter.next().as_deref() {
         Some("summary") => run_summary(root, iter.collect()),
@@ -72,19 +74,19 @@ pub fn run_sync(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Str
         Some("seal") => run_seal(root, iter.collect()),
         Some("tags") => run_tags(root, iter.collect()),
         Some("adopt-tag") => run_adopt_tag(root, iter.collect()),
-        Some(other) => Err(format!(
+        Some(other) => Err(CliError::Usage(format!(
             "unknown sync subcommand: {other} (expected summary, compare, have, build, accept, \
              pending, seal, tags, or adopt-tag)"
-        )),
-        None => Err(
+        ))),
+        None => Err(CliError::Usage(
             "sync requires a subcommand: summary, compare, have, build, accept, pending, seal, \
              tags, or adopt-tag"
                 .to_string(),
-        ),
+        )),
     }
 }
 
-fn run_summary(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_summary(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let parsed = parse_output_args(args, "sync summary")?;
     let layout = crate::open_repository(root)?;
     let bytes = build_sync_summary(&layout).map_err(|err| err.to_string())?;
@@ -100,7 +102,7 @@ fn run_summary(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Stri
     Ok(())
 }
 
-fn run_compare(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_compare(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let parsed = parse_summary_input_args(args, "sync compare")?;
     let layout = crate::open_repository(root)?;
     let bytes = std::fs::read(&parsed.summary).map_err(|err| {
@@ -120,7 +122,7 @@ fn run_compare(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Stri
     Ok(())
 }
 
-fn run_have(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_have(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let parsed = parse_ref_and_output_args(args, "sync have")?;
     let layout = crate::open_repository(root)?;
     let bytes = build_have_list(&layout, &parsed.ref_name).map_err(|err| err.to_string())?;
@@ -130,7 +132,7 @@ fn run_have(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String>
     Ok(())
 }
 
-fn run_build(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_build(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let parsed = parse_build_args(args)?;
     let layout = crate::open_repository(root)?;
     let have_list_bytes = std::fs::read(&parsed.have).map_err(|err| {
@@ -156,7 +158,8 @@ fn run_build(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
                     "refusing to overwrite existing file at {} (pass --force to overwrite it \
                      intentionally)",
                     parsed.output.display()
-                ));
+                )
+                .into());
             }
             crate::durable_output::write_new_file_durably(&parsed.output, &bytes)?;
             println!("built sync artifact for {}", report.ref_name);
@@ -181,7 +184,7 @@ fn run_build(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String
     Ok(())
 }
 
-fn run_accept(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_accept(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let parsed = parse_accept_args(args)?;
     // Checked before `open_repository`, and therefore before `accept_exchange_artifact` writes
     // any object -- unlike `sync build`, accepting is a real repository mutation (handoff §3.3),
@@ -192,7 +195,8 @@ fn run_accept(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
                 "refusing to overwrite existing file at {} (pass --force to overwrite it \
                  intentionally)",
                 claims_out.display()
-            ));
+            )
+            .into());
         }
     }
     let layout = crate::open_repository(root)?;
@@ -258,7 +262,7 @@ fn run_accept(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Strin
     Ok(())
 }
 
-fn run_pending(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_pending(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     require_no_args(args, "sync pending")?;
     let layout = crate::open_repository(root)?;
     let patch_ids = accepted_but_unsealed_patch_ids(&layout).map_err(|err| err.to_string())?;
@@ -271,7 +275,7 @@ fn run_pending(root: PathBuf, args: Vec<String>) -> std::result::Result<(), Stri
 
 /// `prikk sync tags` -- list received tags with their name, live signature outcome, and current
 /// resolution state (RFC 117 stage 3 §4). Purely observational; takes no input file (module doc).
-fn run_tags(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_tags(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     require_no_args(args, "sync tags")?;
     let layout = crate::open_repository(root)?;
     let summaries = list_received_tags(&layout).map_err(|err| err.to_string())?;
@@ -312,13 +316,17 @@ fn run_tags(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String>
 /// create a **local**, receiver-signed tag naming it (RFC 117 T4; `tag_travel::adopt_tag`). Refuses
 /// on `NotHeld`, on ambiguity (either T2's patch-set ambiguity or two received tags sharing a name),
 /// or if a local tag by that name already exists.
-fn run_adopt_tag(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_adopt_tag(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let mut iter = args.into_iter();
     let Some(name) = iter.next() else {
-        return Err("sync adopt-tag requires <name>".to_string());
+        return Err(CliError::Usage(
+            "sync adopt-tag requires <name>".to_string(),
+        ));
     };
     if name.starts_with("--") {
-        return Err("sync adopt-tag requires <name> before any flags".to_string());
+        return Err(CliError::Usage(
+            "sync adopt-tag requires <name> before any flags".to_string(),
+        ));
     }
     require_no_args(iter.collect(), "sync adopt-tag")?;
 
@@ -331,7 +339,7 @@ fn run_adopt_tag(root: PathBuf, args: Vec<String>) -> std::result::Result<(), St
     Ok(())
 }
 
-fn run_seal(root: PathBuf, args: Vec<String>) -> std::result::Result<(), String> {
+fn run_seal(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliError> {
     let parsed = parse_seal_args(args)?;
     let layout = crate::open_repository(root)?;
     let signer = maintainer_signer_from_env()?;
@@ -463,21 +471,22 @@ struct OutputArgs {
     output: PathBuf,
 }
 
-fn parse_output_args(args: Vec<String>, command: &str) -> std::result::Result<OutputArgs, String> {
+fn parse_output_args(
+    args: Vec<String>,
+    command: &str,
+) -> std::result::Result<OutputArgs, CliError> {
     let mut output = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--output" => {
-                let Some(value) = iter.next() else {
-                    return Err(format!("{command} --output requires a value"));
-                };
-                output = Some(PathBuf::from(value));
+                let value = flag_value(&mut iter, &format!("{command} --output"))?;
+                output.set_once("--output", PathBuf::from(value))?;
             }
-            other => return Err(format!("unknown {command} argument: {other}")),
+            other => return Err(unknown_argument(command, other)),
         }
     }
-    let output = output.ok_or_else(|| format!("{command} requires --output"))?;
+    let output = output.ok_or_else(|| CliError::Usage(format!("{command} requires --output")))?;
     Ok(OutputArgs { output })
 }
 
@@ -488,21 +497,20 @@ struct SummaryInputArgs {
 fn parse_summary_input_args(
     args: Vec<String>,
     command: &str,
-) -> std::result::Result<SummaryInputArgs, String> {
+) -> std::result::Result<SummaryInputArgs, CliError> {
     let mut summary = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--summary" => {
-                let Some(value) = iter.next() else {
-                    return Err(format!("{command} --summary requires a value"));
-                };
-                summary = Some(PathBuf::from(value));
+                let value = flag_value(&mut iter, &format!("{command} --summary"))?;
+                summary.set_once("--summary", PathBuf::from(value))?;
             }
-            other => return Err(format!("unknown {command} argument: {other}")),
+            other => return Err(unknown_argument(command, other)),
         }
     }
-    let summary = summary.ok_or_else(|| format!("{command} requires --summary"))?;
+    let summary =
+        summary.ok_or_else(|| CliError::Usage(format!("{command} requires --summary")))?;
     Ok(SummaryInputArgs { summary })
 }
 
@@ -512,26 +520,28 @@ struct AcceptArgs {
     force: bool,
 }
 
-fn parse_accept_args(args: Vec<String>) -> std::result::Result<AcceptArgs, String> {
+fn parse_accept_args(args: Vec<String>) -> std::result::Result<AcceptArgs, CliError> {
     let mut iter = args.into_iter();
     let Some(input) = iter.next() else {
-        return Err("sync accept requires a file path".to_string());
+        return Err(CliError::Usage(
+            "sync accept requires a file path".to_string(),
+        ));
     };
     if input.starts_with("--") {
-        return Err("sync accept requires a file path before any flags".to_string());
+        return Err(CliError::Usage(
+            "sync accept requires a file path before any flags".to_string(),
+        ));
     }
     let mut claims_out = None;
     let mut force = false;
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--claims-out" => {
-                let Some(value) = iter.next() else {
-                    return Err("sync accept --claims-out requires a value".to_string());
-                };
-                claims_out = Some(PathBuf::from(value));
+                let value = flag_value(&mut iter, "sync accept --claims-out")?;
+                claims_out.set_once("--claims-out", PathBuf::from(value))?;
             }
-            "--force" => force = true,
-            other => return Err(format!("unknown sync accept argument: {other}")),
+            "--force" => mark_seen(&mut force, "--force")?,
+            other => return Err(unknown_argument("sync accept", other)),
         }
     }
     Ok(AcceptArgs {
@@ -541,9 +551,9 @@ fn parse_accept_args(args: Vec<String>) -> std::result::Result<AcceptArgs, Strin
     })
 }
 
-fn require_no_args(args: Vec<String>, command: &str) -> std::result::Result<(), String> {
+fn require_no_args(args: Vec<String>, command: &str) -> std::result::Result<(), CliError> {
     if let Some(extra) = args.into_iter().next() {
-        return Err(format!("unknown {command} argument: {extra}"));
+        return Err(unknown_argument(command, &extra));
     }
     Ok(())
 }
@@ -556,27 +566,27 @@ struct RefAndOutputArgs {
 fn parse_ref_and_output_args(
     args: Vec<String>,
     command: &str,
-) -> std::result::Result<RefAndOutputArgs, String> {
+) -> std::result::Result<RefAndOutputArgs, CliError> {
     let mut iter = args.into_iter();
     let Some(ref_name) = iter.next() else {
-        return Err(format!("{command} requires a ref name"));
+        return Err(CliError::Usage(format!("{command} requires a ref name")));
     };
     if ref_name.starts_with("--") {
-        return Err(format!("{command} requires a ref name before any flags"));
+        return Err(CliError::Usage(format!(
+            "{command} requires a ref name before any flags"
+        )));
     }
     let mut output = None;
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--output" => {
-                let Some(value) = iter.next() else {
-                    return Err(format!("{command} --output requires a value"));
-                };
-                output = Some(PathBuf::from(value));
+                let value = flag_value(&mut iter, &format!("{command} --output"))?;
+                output.set_once("--output", PathBuf::from(value))?;
             }
-            other => return Err(format!("unknown {command} argument: {other}")),
+            other => return Err(unknown_argument(command, other)),
         }
     }
-    let output = output.ok_or_else(|| format!("{command} requires --output"))?;
+    let output = output.ok_or_else(|| CliError::Usage(format!("{command} requires --output")))?;
     Ok(RefAndOutputArgs { ref_name, output })
 }
 
@@ -587,13 +597,17 @@ struct BuildArgs {
     force: bool,
 }
 
-fn parse_build_args(args: Vec<String>) -> std::result::Result<BuildArgs, String> {
+fn parse_build_args(args: Vec<String>) -> std::result::Result<BuildArgs, CliError> {
     let mut iter = args.into_iter();
     let Some(ref_name) = iter.next() else {
-        return Err("sync build requires a ref name".to_string());
+        return Err(CliError::Usage(
+            "sync build requires a ref name".to_string(),
+        ));
     };
     if ref_name.starts_with("--") {
-        return Err("sync build requires a ref name before any flags".to_string());
+        return Err(CliError::Usage(
+            "sync build requires a ref name before any flags".to_string(),
+        ));
     }
     let mut have = None;
     let mut output = None;
@@ -601,23 +615,20 @@ fn parse_build_args(args: Vec<String>) -> std::result::Result<BuildArgs, String>
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--have" => {
-                let Some(value) = iter.next() else {
-                    return Err("sync build --have requires a value".to_string());
-                };
-                have = Some(PathBuf::from(value));
+                let value = flag_value(&mut iter, "sync build --have")?;
+                have.set_once("--have", PathBuf::from(value))?;
             }
             "--output" => {
-                let Some(value) = iter.next() else {
-                    return Err("sync build --output requires a value".to_string());
-                };
-                output = Some(PathBuf::from(value));
+                let value = flag_value(&mut iter, "sync build --output")?;
+                output.set_once("--output", PathBuf::from(value))?;
             }
-            "--force" => force = true,
-            other => return Err(format!("unknown sync build argument: {other}")),
+            "--force" => mark_seen(&mut force, "--force")?,
+            other => return Err(unknown_argument("sync build", other)),
         }
     }
-    let have = have.ok_or_else(|| "sync build requires --have".to_string())?;
-    let output = output.ok_or_else(|| "sync build requires --output".to_string())?;
+    let have = have.ok_or_else(|| CliError::Usage("sync build requires --have".to_string()))?;
+    let output =
+        output.ok_or_else(|| CliError::Usage("sync build requires --output".to_string()))?;
     Ok(BuildArgs {
         ref_name,
         have,
@@ -639,44 +650,46 @@ struct SealArgs {
     claims: SealClaims,
 }
 
-fn parse_seal_args(args: Vec<String>) -> std::result::Result<SealArgs, String> {
+fn parse_seal_args(args: Vec<String>) -> std::result::Result<SealArgs, CliError> {
     let mut iter = args.into_iter();
     let Some(ref_name) = iter.next() else {
-        return Err("sync seal requires a ref name".to_string());
+        return Err(CliError::Usage("sync seal requires a ref name".to_string()));
     };
     if ref_name.starts_with("--") {
-        return Err("sync seal requires a ref name before any flags".to_string());
+        return Err(CliError::Usage(
+            "sync seal requires a ref name before any flags".to_string(),
+        ));
     }
     let mut claim_id = None;
     let mut claims_file = None;
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--claim" => {
-                let Some(value) = iter.next() else {
-                    return Err("sync seal --claim requires a value".to_string());
-                };
-                claim_id =
-                    Some(value.parse::<ObjectId>().map_err(|err| {
-                        format!("--claim {value:?} is not a valid object id: {err}")
-                    })?);
+                let value = flag_value(&mut iter, "sync seal --claim")?;
+                let parsed = value.parse::<ObjectId>().map_err(|err| {
+                    CliError::Usage(format!("--claim {value:?} is not a valid object id: {err}"))
+                })?;
+                claim_id.set_once("--claim", parsed)?;
             }
             "--claims" => {
-                let Some(value) = iter.next() else {
-                    return Err("sync seal --claims requires a value".to_string());
-                };
-                claims_file = Some(PathBuf::from(value));
+                let value = flag_value(&mut iter, "sync seal --claims")?;
+                claims_file.set_once("--claims", PathBuf::from(value))?;
             }
-            other => return Err(format!("unknown sync seal argument: {other}")),
+            other => return Err(unknown_argument("sync seal", other)),
         }
     }
     let claims = match (claim_id, claims_file) {
         (Some(_), Some(_)) => {
-            return Err("sync seal accepts either --claim or --claims, not both".to_string());
+            return Err(CliError::Usage(
+                "sync seal accepts either --claim or --claims, not both".to_string(),
+            ));
         }
         (Some(claim_id), None) => SealClaims::Single(claim_id),
         (None, Some(claims_file)) => SealClaims::Batch(claims_file),
         (None, None) => {
-            return Err("sync seal requires --claim <id> or --claims <file>".to_string());
+            return Err(CliError::Usage(
+                "sync seal requires --claim <id> or --claims <file>".to_string(),
+            ));
         }
     };
     Ok(SealArgs { ref_name, claims })
