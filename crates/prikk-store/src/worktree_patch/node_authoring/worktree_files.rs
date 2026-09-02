@@ -4,14 +4,13 @@
 //! mode) but never opens or reads their content. `author_inner` consults the commit-index cache
 //! against this metadata to decide, per path, whether a content read can be skipped entirely.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use prikk_error::PrikkError;
 
 use super::{AuthorError, EXECUTABLE_FILE_MODE, REGULAR_FILE_MODE, RepoPath, RepositoryLayout};
 use crate::fsutil::{EntryKind, RootFileStat, list_directory, stat_file_state_if_exists};
-use crate::ignore::{IgnoreRules, should_skip_discovery};
 
 /// A worktree regular file's metadata, gathered without reading its content.
 ///
@@ -25,25 +24,17 @@ pub(super) struct WorktreeFileMeta {
     pub(super) mode: Option<u32>,
 }
 
-/// `tracked` is every path the baseline already has a node for (files and symlinks together) —
-/// RFC 124 §4.4: an ignore rule must never make an already-tracked path disappear from this map, or
-/// `node_authoring.rs`'s own deletion-inference loop (`baseline_files` minus this map) would read a
-/// still-present, merely-now-ignored file as deleted and author a `DeleteNode` for it.
 pub(super) fn enumerate_worktree_files(
     layout: &RepositoryLayout,
-    tracked: &BTreeSet<String>,
 ) -> std::result::Result<BTreeMap<String, WorktreeFileMeta>, AuthorError> {
-    let rules = IgnoreRules::load(layout).map_err(AuthorError::Store)?;
     let mut out = BTreeMap::new();
-    walk_dir(layout, Path::new(""), &rules, tracked, &mut out)?;
+    walk_dir(layout, Path::new(""), &mut out)?;
     Ok(out)
 }
 
 fn walk_dir(
     layout: &RepositoryLayout,
     dir: &Path,
-    rules: &IgnoreRules,
-    tracked: &BTreeSet<String>,
     out: &mut BTreeMap<String, WorktreeFileMeta>,
 ) -> std::result::Result<(), AuthorError> {
     let entries =
@@ -54,15 +45,6 @@ fn walk_dir(
             continue;
         }
         let path = join_relative(dir, &file_name);
-        // RFC 124: checked once per entry, before dispatching on kind, so an ignored directory is
-        // skipped without ever being opened -- essential, not only faster, since a real
-        // `node_modules/`-shaped directory is typically full of symlinks and other entry kinds this
-        // walk would otherwise fail closed on below.
-        if let Some(rel) = path.to_str() {
-            if should_skip_discovery(rules, tracked, rel) {
-                continue;
-            }
-        }
         match entry.kind {
             EntryKind::Symlink => {
                 return Err(AuthorError::UnsupportedSymlinkAuthoring(format!(
@@ -71,7 +53,7 @@ fn walk_dir(
                 )));
             }
             EntryKind::Directory => {
-                walk_dir(layout, &path, rules, tracked, out)?;
+                walk_dir(layout, &path, out)?;
                 continue;
             }
             EntryKind::Regular => {}

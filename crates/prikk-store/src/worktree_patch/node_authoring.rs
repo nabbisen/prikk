@@ -329,18 +329,9 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
         }
     }
 
-    // RFC 124 §4.4: every already-tracked path (files and symlinks together), so the ignore-aware
-    // walk below can never hide one of them from `worktree` -- doing so would make the
-    // deletion-inference loop further down read a still-present file as deleted.
-    let tracked_paths: BTreeSet<String> = baseline_files
-        .keys()
-        .cloned()
-        .chain(baseline_symlinks.keys().cloned())
-        .collect();
-
     // Worktree view: path -> metadata for regular files (symlinks/non-regular fail closed). Content
     // is read on demand (below) so an unchanged file is never opened — DC-56.
-    let worktree = enumerate_worktree_files(layout, &tracked_paths)?;
+    let worktree = enumerate_worktree_files(layout)?;
 
     // DC-56 changed-path index: per-path (size, mtime, mode) -> last-known content hash, so an
     // unchanged file's content read can be skipped. Rebuildable and never authoritative (NFR-PERF-04)

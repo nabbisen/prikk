@@ -33,7 +33,6 @@ mod frame_resync;
 mod fsutil;
 mod generation;
 mod history;
-mod ignore;
 mod index;
 mod layout;
 mod lifecycle_cache;
