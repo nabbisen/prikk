@@ -1,8 +1,14 @@
 # RFC 133 — What performance costs this project has, and what evidence holds them
 
-**Status.** **Proposed.** Extracted from RFC 126 §5/§5a on the project owner's instruction,
-2026-09-03: the measurement concern is *"an independent subject or theme"*, not a verification-culture
-gate. **One ruling is carried over unchanged and is still the owner's — §6.**
+**Status.** **ACCEPTED by the project owner 2026-09-03**, as the extraction they instructed: the
+measurement concern is *"an independent subject or theme"*, not a verification-culture gate.
+
+**Accepting this RFC did not rule §6.** §6 escalates a question rather than settling one, exactly as
+RFC 126 §5a did before it — **does peak RSS get any standing protection, and in what shape?** Until
+that is answered, §5's table stands as written: **time has two gates, memory has none.**
+
+**§7 holds: no increment is handed over from this RFC until §6 is ruled**, because the ruling decides
+whether a fix must arrive with a standing measurement or without one.
 
 **Tracks.** Cost and the evidence for it. **No behaviour change is proposed here.**
 
