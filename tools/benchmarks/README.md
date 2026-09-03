@@ -1,8 +1,8 @@
 # prikk-benchmarks
 
 Repository-internal performance benchmarks (RFC 126 §5, under the owner's §6 ruling: criterion in
-its own workspace member, outside `default-members`). Not part of the shipped product, not built by
-`cargo build`/`cargo build --workspace` without `-p`, and not published.
+its own workspace member, outside `default-members`). Not part of the shipped product, not published,
+and built only by a command that passes `--all-targets` — see the note at the end of Scope.
 
 ## Running
 
@@ -39,10 +39,25 @@ binary). It measures wall-clock time only -- it does not measure peak RSS, which
 unbuilt mechanism.
 
 This member exists to give criterion somewhere to live without adding it, or its dependency tree, to
-any product crate's manifest or to the shipped dependency graph. It is still in `[workspace]
-members`, so `cargo build --workspace --all-targets`, `cargo clippy --workspace --all-targets ...`,
-and `cargo +1.85.0 check --workspace --all-targets --locked` all build it; only `default-members`
-(and so a bare `cargo build`/`cargo build --workspace`) excludes it. **`cargo test --workspace`
-alone does not** -- it does not compile `[[bench]]` targets by default for a crate with no other
-target, which is why the standing gate set names the `--all-targets` commands above rather than
-relying on `cargo test` to have exercised this member at all.
+any product crate's manifest or to the shipped dependency graph.
+
+**What actually builds it is `--all-targets`, not workspace membership.** This package has no lib and
+no bin -- a single `[[bench]]` target is all there is -- and cargo does not build bench targets
+without `--all-targets` (or `cargo bench`). Measured by planting a syntax error in
+`benches/commit.rs` and running each command:
+
+| Command | Compiles the bench? |
+|---|---|
+| `cargo build` | no |
+| `cargo build --workspace` | no |
+| `cargo build -p prikk-benchmarks` | **no** -- naming the package does not help |
+| `cargo test --workspace --locked` | no |
+| `cargo build --workspace --all-targets` | yes |
+| `cargo clippy --workspace --all-targets ...` | yes |
+| `cargo +1.85.0 check --workspace --all-targets --locked` | yes |
+
+**`default-members` is not what excludes it** from `cargo build --workspace`: that flag overrides
+`default-members` entirely. `default-members` governs only a bare `cargo build`, and even there it is
+moot, since this package has no target a plain build would produce. **The distinction matters because
+it is the reason the standing gate set names the `--all-targets` commands** -- `cargo test
+--workspace` passing says nothing about whether this member compiles.
