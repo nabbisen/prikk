@@ -106,7 +106,12 @@ while landing them, recorded because a later reader would otherwise assume both 
 no CI job. **DC-62's peak-RSS work — genuinely good measurement — can regress invisibly**, and so can
 the two performance walls tracked in `ROADMAP.md`'s corrective program.
 
-## 5a. Amended 2026-09-03 — increment B is not a migration, and §5 has one question left
+## 5a. Amended 2026-09-03 — increment B is not a migration; §5's remaining question moved to RFC 133
+
+**SUPERSEDED in part, 2026-09-03.** On the owner's instruction the measurement concern was extracted
+into **`rfcs/proposed/133-performance-cost-and-its-evidence.md`**, which carries the peak-RSS ruling
+unchanged (RFC 133 §6) and adds what this section could not: **measured numbers**. The analysis below
+stands as written and is left intact; only the open question moved. **RFC 126 no longer waits on it.**
 
 **Increment A shipped** (`cb2e2a2`, amended `2fec604`/`fb107c7`): `tools/benchmarks`, criterion `0.7`
 pinned against the `1.85.0` MSRV, one `commit` benchmark, outside `default-members`.
@@ -163,8 +168,8 @@ not exist.
 architect's first answer on accessibility and long-term stability grounds, and those same two
 properties decide this one.
 
-**Until that ruling, §5 has no further increment**, and RFC 126's remaining dev-team work is §4's
-kernel doctests alone.
+**That ruling now lives in RFC 133 §6, not here.** §4's kernel doctests landed at `5a5315f`, so
+**RFC 126 has no work of its own left at all.**
 
 ## 6. The ruling this RFC needs: criterion as a dev-dependency
 

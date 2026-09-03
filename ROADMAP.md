@@ -246,6 +246,7 @@ item is open.
 - [`130-module-coupling-invariant.md`](rfcs/proposed/130-module-coupling-invariant.md) — RFC 130, A coupling invariant for `prikk-store` and the gate that holds it (**ACCEPTED by the owner 2026-09-01**; touches no files and conflicts with nothing in flight, so it can land during band 1)
 - [`131-module-grouping-and-visibility-scoping.md`](rfcs/proposed/131-module-grouping-and-visibility-scoping.md) — RFC 131, Grouping the 123 top-level entries and scoping reach with `pub(in ...)` (**ACCEPTED by the owner 2026-09-01**; large file move — after RFC 130 and between feature arcs, not during one)
 - [`132-error-taxonomy-structure.md`](rfcs/proposed/132-error-taxonomy-structure.md) — RFC 132, `PrikkError` carries less than it knows, and cannot grow (external audit 2026-08-31 as `AUD-04`; **ACCEPTED by the owner 2026-09-03**; **increment 1 COMPLETE** (`264ba73`) with its evidence accepted; increment 2 unruled — `source()`, the 45-site re-classification, and a non-optional `kind`)
+- [`133-performance-cost-and-its-evidence.md`](rfcs/proposed/133-performance-cost-and-its-evidence.md) — RFC 133, What performance costs this project has, and what evidence holds them (extracted from RFC 126 §5/§5a on the owner's instruction 2026-09-03; **owner ruling required** — whether peak RSS gets standing protection; absorbs `AUD-01`/`AUD-02`'s cost description and the measured commit-memory shape)
 <!-- open-work-index:end -->
 
 **Two backlog tables elsewhere in this file carry live open rows of their own, referenced here
@@ -325,7 +326,7 @@ remained. Whether the contract is ever promoted into a stability *promise* stays
 | **Before the next cut** | ~~RFC 127~~ **delivered 2026-09-01 (`e8a10d5`)**; RFC 121's EPIPE fix alone; ~~RFC 122~~ **delivered 2026-09-01 (`bc443e8`)**; RFC 128's `SECURITY.md` | 127 is a regression that has already shipped in a published artifact. EPIPE is a panic every user who pipes to `head` meets. 122 is the only High-severity broken command on the mainline. `SECURITY.md` is one page and its absence is disproportionate for a trust-centric product |
 | **Next** | ~~RFC 125~~ **delivered 2026-09-02 (`c6fc625`)**; ~~RFC 126 §3–§4~~ **delivered 2026-09-02 (`1d324a5`)**; ~~the rest of RFC 121~~ **delivered 2026-09-02 (`a4aea59`) — RFC 121 complete** | 125 is latent security, cheap, and encode/decode-symmetric. 126's first half is a CI job and a lint flag — the two gates that stop everything else drifting silently |
 | **Unblocked by the 2026-09-01 rulings** | ~~RFC 123's `note:` line~~ **delivered 2026-09-02 (`c1335ad`)**; ~~RFC 124~~ **delivered 2026-09-02 (`9491bf0`)**; ~~RFC 126 §2~~ **delivered 2026-09-03 (`8608db0`)**; RFC 126 §5 | RFC 123's interim stopped the active harm. RFC 124 needs no ruling — only §3's design questions answered |
-| **Unscheduled** | RFC 123's schema-3 design; the two performance walls; the pre-1.0 API debt below | The schema-3 field and the API debt are both gated behind RFC 114's stability work rather than racing it |
+| **Unscheduled** | RFC 123's schema-3 design; ~~the two performance walls~~ **phrase retired by RFC 133 §4 — it was referenced three times and defined nowhere**; the pre-1.0 API debt below | The schema-3 field and the API debt are both gated behind RFC 114's stability work rather than racing it |
 
 **Bands 1 and 2 are complete.** Every item in "Before the next cut" and "Next" landed between
 2026-09-01 and 2026-09-02, with RFCs 121, 122, 125 and 127 closed and moved to `rfcs/done/`.
@@ -410,8 +411,8 @@ others do not: **before any stability promise.**
 
 | ID | Item | Completion condition |
 |---|---|---|
-| AUD-01 | `IndexSnapshot::lookup` is a linear scan (`object_store.rs:174-179`); `verify`/`seal` do O(objects) lookups | A map built inside `IndexSnapshot::open`, last-entry-wins preserved, with the existing RFC 111 cost gate extended to cover it |
-| AUD-02 | `wal.rs:171` replays the whole WAL on every append — O(N²) over a queue of N commits | Per-invocation replay cache, or `(last_seq, clean-tail offset)` tracking with tail-only re-verification |
+| AUD-01 | `IndexSnapshot::lookup` is a linear scan (`object_store.rs:174-179`); `verify`/`seal` do O(objects) lookups. **Cost described in RFC 133 §3, re-verified at `995d144`; unmeasured** | A map built inside `IndexSnapshot::open`, last-entry-wins preserved, with the existing RFC 111 cost gate extended to cover it |
+| AUD-02 | `wal.rs:171` replays the whole WAL on every append — O(N²) over a queue of N commits. **Cost described in RFC 133 §3, re-verified at `995d144`; unmeasured** | Per-invocation replay cache, or `(last_seq, clean-tail offset)` tracking with tail-only re-verification |
 | AUD-03 | Four-plus hand-copied TLV cursors; the duplicate-field strictness split in RFC 125 §2.3 exists because each copy evolved separately | One canonical cursor in `prikk-object::canonical`, decoders migrated incrementally |
 | AUD-04 | `PrikkError` discards `io::ErrorKind`, implements no `source()`, and is not `#[non_exhaustive]` | **Adopted into RFC 132 on 2026-09-03**, which found the row understates it: `Io` is a catch-all with 45 hand-built non-I/O uses, so a mandatory `kind` would be a lie at nearly every site. Increment 1 (`#[non_exhaustive]`, `Io { kind: Option<ErrorKind>, context }`, plus the evidence increment 2 needs) is ruled and handed over; `source()` is refused there as unimplementable without dropping the type's derives. Still **before any stability promise** |
 
