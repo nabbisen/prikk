@@ -167,14 +167,17 @@ Two limits are worth stating plainly, because they define what verification mean
 
 | Cost | Status |
 |---|---|
-| `prikk verify` is roughly **O(N³)** in sealed block count — 34 s at 160 blocks | Tracked, unowned |
+| ~~`prikk verify` is roughly **O(N³)** in sealed block count — 34 s at 160 blocks~~ **Resolved 2026-08-18.** `verify` is linear: **27.04 ms at 160 blocks**, per-doubling ratio **1.97** | Closed, and held by a gate — see below |
 | Node lifecycle state grows with cumulative history, not the current tree | Tracked; the project has no theory of forgetting yet |
 | Windows mutation's anchored path resolution cannot close the inter-component TOCTOU window `openat` closes on Linux/macOS | Accepted, documented ([platform support](./platform-support.md)) — requires a concurrent local attacker to matter |
 | DC-76's negative controls are only partly demonstrated on Windows, for the eight guarantees that remain (G5 retired in DC-98) — see [platform support](./platform-support.md) for the per-guarantee table | Reported per DC-76's own precedent, unowned |
 | Commit cost is not yet bounded independently of repository size (NFR-PERF-01) | Reduced, still missed |
 | Merge complexity scoped to active block size (NFR-PERF-03) is **argued, not benchmarked** | Unowned |
 
-These are recorded in `FINDINGS.md` in the repository rather than left implicit.
+These are recorded rather than left implicit. The findings register they once pointed at was
+retired deliberately — reviews carry findings while they are live, and documentation and RFCs
+carry what outlives them — so this table, `ROADMAP.md`'s open-work index, and the RFCs themselves
+are where they live now.
 
 ## What the block design trades, and what it does not
 
@@ -193,16 +196,25 @@ for a **conservative subset** it can prove, and returns a typed conflict witness
 **Cost is bounded by refusing hard cases, not by exploring them.** Sealing history into immutable blocks
 then keeps that reasoning confined to the active working set, which is itself capped (NFR-PERF-02).
 
-**But the trade is real, and it is worth stating plainly rather than leaving for someone to discover:**
+**The trade was real, it was measured, and it has been paid. That history is worth stating plainly:**
 
-> **The mechanism that bounds patch cost is the one that creates prikk's actual cost.** History is sealed
-> into a chain carrying state roots, and `verify` re-derives that chain **from genesis, for every
-> block** — which is exactly the O(N³) term above.
+> **The mechanism that bounds patch cost also created prikk's own cost.** History is sealed into a
+> chain carrying state roots, and `verify` must re-derive those roots to check them. The first
+> implementation re-derived each block's state **from genesis**, so verifying the block at position
+> *i* cost O(i²) and the whole chain O(N³) — about 34 seconds at 160 blocks.
 
-**Prikk did not inherit Darcs's problem. It has a different one, and it lives in the verification path
-rather than the merge path.** That distinction matters strategically: verification is this project's
-central claim in a way that merge throughput is not, so the cubic cost is a dependency of the claim
-rather than a performance ticket beside it.
+**Prikk did not inherit Darcs's problem. It had a different one, and it lived in the verification path
+rather than the merge path** — which mattered more, not less, because verification is this project's
+central claim in a way that merge throughput is not. **It was found by measurement rather than by
+reading the design, and it is now fixed.**
 
-The fix is known and does not require a design change — memoize the lineage walk and reuse the
-accumulated state across the per-block loop.
+`verify` derives each block's state **once, forward from its already-verified parent, memoizing as it
+goes** — never from genesis per block — and checks the result against that block's recorded state
+root. Combined with removing a repeated full-index decode on the same path, the cost is **linear**:
+**27.04 ms at 160 blocks, per-doubling ratio 1.97**, against 167.85 ms and ×3.51 at the intermediate
+stage.
+
+**The property is held by a gate rather than by a measurement**: `rfc111_index_decode_cost_gate.rs`
+fails if `verify`'s full-index-decode count ever grows with repository size again, and it was observed
+failing before its fix. **So the block-oriented design's central trade held** — the cost it created
+was real, was found, and is now bounded and defended.

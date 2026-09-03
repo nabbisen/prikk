@@ -12,8 +12,7 @@ non-Linux target on every change; see [Non-Linux CI conformance](#non-linux-ci-c
 filesystem primitives use no-follow, nonblocking, atomic-rename, and no-clobber-install capabilities
 ([durability and crash recovery](./durability-recovery.md)) with a reviewed implementation on each of
 those three platforms — `LinuxDurability`, `MacosDurability` (DC-81/DC-82; G3 uses
-`fcntl_fullfsync` in place of `fsync`, measured ~180x slower on the GitHub macOS runner and recorded
-in `FINDINGS.md`), and `WindowsDurability` (DC-87 Stage 2) — and no reviewed equivalent on any other
+`fcntl_fullfsync` in place of `fsync`, measured ~180x slower on the GitHub macOS runner), and `WindowsDurability` (DC-87 Stage 2) — and no reviewed equivalent on any other
 platform yet
 ([DC-37](https://github.com/prikk-vcs/prikk/blob/main/rfcs/accepted/DC-37-REQUIRED-FILESYSTEM-DURABILITY.md),
 superseded for Linux/macOS/Windows by DC-87).
