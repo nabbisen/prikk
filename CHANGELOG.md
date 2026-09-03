@@ -47,14 +47,18 @@ None of this changes behaviour; it changes what the project can catch.
 - **The architecture reference's `verify` cost section was corrected.** It described `verify` as
   roughly O(N³) — about 34 seconds at 160 blocks — which stopped being true on 2026-08-18. `verify`
   is linear: **27.04 ms at 160 blocks**, and the property is held by a gate.
-- **A newly found limitation is recorded**, in the architecture reference's known-costs table. Two
-  text edits to one file whose replaced spans are textually *and* contextually identical do not
-  survive being replayed in sequence, because a span's identity includes its position among identical
-  occurrences and the first edit renumbers the second. **`merge` can reach it** when a candidate
-  branch spans two such commits, and the result is a refusal — the candidate is reported malformed
-  instead of getting a verdict. **Nothing is corrupted and no history is at risk.** It is not new in
-  this release; it was found by this release's own new property tests, which is why it is named here.
-  Tracked as RFC 134.
+- **A latent fragility is recorded**, in the architecture reference's known-costs table. A text
+  span's identity includes its position among textually- and contextually-identical occurrences,
+  recomputed against the buffer in front of it — so a sequence of edits authored against a *shared*
+  baseline, rather than each against its predecessor's result, does not replay. It was found by this
+  release's own new property tests. Tracked as RFC 134.
+
+  **Corrected 2026-09-04, same day, before any wider claim rested on it:** this bullet first said
+  *"`merge` can reach it"*. **It cannot.** Every `EditText` is authored against the text its
+  predecessors produced, so the operations `merge` composes carry indices consistent with the replay
+  that reproduces them — verified by building the exact two-commit case and replaying it, not by
+  reading. **No user-facing path reaches this**; what remains is an unstated invariant that nothing
+  checks, and a refusal reported as malformed evidence rather than as what it is.
 
 ## 0.29.0 — 2026-09-03
 

@@ -63,7 +63,54 @@ believed the state unreachable.**
 chained `replay_sequence_order` that `check_confluence` actually uses for one side's own sequence, and
 never the identical-value case. **A passing control over the wrong path.**
 
-## 3. It is user-reachable, through merge
+## 3. CORRECTED 2026-09-04 — it is NOT user-reachable, and the first ruling was wrong
+
+**This section originally ruled the defect reachable through `merge`. That ruling was wrong, and it
+reached a released changelog and the architecture reference before it was caught.** Both are corrected;
+the correction is recorded here rather than overwritten, because how the error was made is the useful
+part.
+
+**The error.** Reachability was asserted from a structural reading — `candidate_sequence`
+(`merge_evidence.rs:345-359`) concatenates operations across every block between baseline and target,
+so a merge side spans commits — **without checking the authoring side that decides whether the failing
+*shape* can arise at all.** That is the same defect this RFC documents in §2's control: reasoning about
+one mechanism while the question lived in another.
+
+**What is actually true.** `current_text_for_node` (`node_authoring.rs:877-899`) resolves a node's
+text through the queued-patch text cache, then the stored blob, then replay — so **every `EditText` is
+authored against the state its predecessors produced**, never against a shared baseline. A second
+commit editing the surviving duplicate sees one candidate and records `dup_index = 0`; replaying the
+chain reproduces exactly that state, and the index matches.
+
+**Verified empirically, not by reading.** A repository was built with two identical `f` spans separated
+by uniform 96-byte filler (so both anchors match), then committed, then each span edited in its own
+commit:
+
+```
+init -> 0 | commit(genesis) -> 0 | commit(edit word1) -> 0 | commit(edit word2) -> 0
+verify -> 0 ; final text exactly filler+"a"+filler+"b"+filler
+```
+
+**`merge` composes sequentially-authored operations, so it cannot construct the failing sequence.** The
+property test's generator builds both of one side's operations against the *same* pristine baseline —
+a shape this codebase's authoring never produces.
+
+## 3a. What the finding actually is
+
+**Not a live defect. A latent fragility resting on an unstated invariant**, plus a diagnosis gap:
+
+- **The invariant**: each `EditText` is authored against the state its predecessors produced. Every
+  authoring path upholds it. **Nothing states it and nothing checks it.**
+- **The consequence if it is ever violated** — a crafted patch, an externally-produced sequence, or a
+  future authoring path that batches edits against one baseline — is a refusal reported as
+  `EvidenceError::Malformed`, i.e. correct behaviour with a misleading diagnosis.
+- **`ensure_flat_sequence` validating against the pristine baseline remains a real gap**; it simply
+  is not reachable by our own authoring today.
+
+**Severity is therefore lower than §1 first implied, and the property test remains valuable**: it found
+an undocumented invariant that the type system does not enforce and no test asserted.
+
+
 
 - **One commit cannot produce it.** `plan_edit_text` (`node_authoring.rs:625-665`) returns a single
   `PlannedOp` per file from one whole-text diff. No commit emits two `EditText` operations for one node.
