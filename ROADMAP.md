@@ -247,6 +247,7 @@ item is open.
 - [`131-module-grouping-and-visibility-scoping.md`](rfcs/proposed/131-module-grouping-and-visibility-scoping.md) — RFC 131, Grouping the 123 top-level entries and scoping reach with `pub(in ...)` (**ACCEPTED by the owner 2026-09-01**; large file move — after RFC 130 and between feature arcs, not during one)
 - [`132-error-taxonomy-structure.md`](rfcs/proposed/132-error-taxonomy-structure.md) — RFC 132, `PrikkError` carries less than it knows, and cannot grow (external audit 2026-08-31 as `AUD-04`; **ACCEPTED by the owner 2026-09-03**; **increment 1 COMPLETE** (`264ba73`); **increment 2 ruled DEFERRED 2026-09-03** — `#[non_exhaustive]` discharged the sequencing constraint, and the rest has no consumer while the CLI flattens errors to strings; three named triggers re-open it)
 - [`133-performance-cost-and-its-evidence.md`](rfcs/proposed/133-performance-cost-and-its-evidence.md) — RFC 133, What performance costs this project has, and what evidence holds them (extracted from RFC 126 §5/§5a on the owner's instruction 2026-09-03; **owner ruling required** — whether peak RSS gets standing protection; absorbs `AUD-01`/`AUD-02`'s cost description and the measured commit-memory shape)
+- [`134-text-span-identity-under-composition.md`](rfcs/proposed/134-text-span-identity-under-composition.md) — RFC 134, A text span's identity is not stable under composition (found 2026-09-03 by RFC 126 §2's property tests; **user-reachable through `merge`, refuses rather than corrupts**; the naive fix is a format break under RFC 114, so three shapes are recorded and none ruled)
 <!-- open-work-index:end -->
 
 **Two backlog tables elsewhere in this file carry live open rows of their own, referenced here
@@ -335,10 +336,11 @@ remained. Whether the contract is ever promoted into a stability *promise* stays
 §6a and §6b followed on 2026-09-03. **`AUD-05` through `AUD-10` are all delivered** — the whole
 no-design-decision half of this program — leaving `AUD-01` through `AUD-04`, which are design work.
 
-### Release position — 0.30.0 prepared and HELD 2026-09-03
+### Release position — 0.30.0 shipped 2026-09-04
 
-**`0.30.0` is bumped, changelogged, and deliberately not tagged.** The version commit is `b81b1eb`;
-`Cargo.toml` reads `0.30.0` on `main` with no `0.30.0` tag, which is the intended held state.
+**`0.30.0` was cut at `dd3fc1e`**: CI 15/15 with macOS green, `release.yml` green across four build
+targets, 16 assets, all eight crates live on crates.io. **It was held for one day and released after
+the blocking finding was made reproducible**, not after it was fixed — see below.
 
 **Why it is held.** CI failed one job of fifteen on that commit —
 `property_b_composition_can_disagree_even_when_every_pairwise_check_agrees`, on macOS. **Not caused by
@@ -348,14 +350,16 @@ every cross pair commutes and the composed replay then fails, which `commutation
 unreachable. **The system refuses rather than accepts, so this is a diagnosis defect, not a
 data-safety one.**
 
-**Held on the owner's authorization** rather than re-rolling CI until the dice fall right. Handoff
-issued: `rfcs/handoffs/126-verification-infrastructure-coverage/property-b-evidence-error-handoff-v1.md`
-— make the failure reproducible and keep the sweep honest first; the classification question is ruled
-against a captured case afterwards.
+**Held on the owner's authorization** rather than re-rolling CI until the dice fall right. The
+finding was then made reproducible at `e8f55ff` — persisted seed, replays in ~1.2s — and **ruled: it
+is user-reachable through `merge`, refuses rather than corrupts, and predates every release.** Holding
+`0.30.0` therefore protected nobody, so it shipped with the limitation named in `CHANGELOG.md` and in
+the architecture reference's known-costs table. **Owned by RFC 134.**
 
-**Before tagging, check the date.** `CHANGELOG.md`'s heading reads `## 0.30.0 — 2026-09-03`. If the
-cut lands on a later day, that heading and the tag date must move together — "today is the release
-date" is the standing rule, and a held release is exactly where that silently goes wrong.
+**The date trap fired, and the note caught it.** The heading was written `2026-09-03` when the
+release was prepared; the cut landed on `2026-09-04` and the heading was corrected to match before
+tagging. **A held release is exactly where "today is the release date" goes wrong silently** — worth
+keeping in the cut procedure rather than in one release's notes.
 
 ### Release position — 0.29.0 shipped 2026-09-03
 
