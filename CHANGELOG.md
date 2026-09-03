@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.30.0 — 2026-09-03
+
+**A verification and library-surface release.** Nothing about using `prikk` from the command line
+changes except two help lines. The one breaking change is in the library API, and it is the kind that
+makes *future* releases less disruptive rather than more.
+
+### Breaking change — `PrikkError` (library only, no CLI effect)
+
+- **`PrikkError` is now `#[non_exhaustive]`.** Code that matches on it must carry a wildcard arm.
+  **This is the change worth having**: from here, adding a new error variant is no longer a breaking
+  change for anyone matching on the type.
+- **`Io(String)` became `Io { kind: Option<std::io::ErrorKind>, context: String }`**, and
+  `From<std::io::Error>` now preserves the operating system's error kind instead of discarding it.
+  `kind` is `None` at the sites that construct the variant by hand — which is most of them today, and
+  is recorded honestly rather than filled with a placeholder.
+
+**No message text and no exit code changed.** `Display` renders exactly as before, and the CLI
+converts every error to a string before it reaches you, so this release is invisible from the command
+line except for the help text below.
+
+Crate source APIs remain an explicitly unstable compatibility surface
+([release compatibility](https://prikk-vcs.github.io/prikk/reference/release-compatibility.html)).
+
+### Changed
+
+- `prikk commit --help` and `prikk worktree-status --help` now mention `.prikkignore`, which shipped
+  in `0.29.0` without appearing in either.
+
+### Verification
+
+None of this changes behaviour; it changes what the project can catch.
+
+- **Ten doctests on the kernel entry points** — compiler-verified examples on `ObjectId`,
+  `CanonicalWriter`, path validation, the Ed25519 surface, and `RefStore::publish`. The workspace
+  previously ran **zero**.
+- **Property tests for the patch algebra**, covering classifier conservatism and the difference
+  between pairwise and full-order replay.
+- **A `prikk-benchmarks` workspace member** carrying criterion, outside `default-members` so it
+  reaches no product crate's manifest and no shipped dependency graph.
+
+### Documentation
+
+- **`.prikkignore` now has a guide page** describing its syntax, the two commands that consult it,
+  the surfaces it deliberately does not affect, and its limits.
+- **The architecture reference's `verify` cost section was corrected.** It described `verify` as
+  roughly O(N³) — about 34 seconds at 160 blocks — which stopped being true on 2026-08-18. `verify`
+  is linear: **27.04 ms at 160 blocks**, and the property is held by a gate.
+
 ## 0.29.0 — 2026-09-03
 
 **Generated files can be kept out of a commit.** Until now `commit` scanned and signed everything in
