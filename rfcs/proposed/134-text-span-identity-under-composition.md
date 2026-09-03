@@ -208,6 +208,90 @@ verdict — but it is not a fix: the sequence still fails to replay.
 
 **Shape 3 stays the fallback**, and stays the owner's, if shape 4 does not survive design.
 
+## 7. Ruled 2026-09-04 — containment now, stable identity as the answer
+
+**The owner's challenge was the right axis**: is shape 1 strongly safe *in future*, not only now. It is
+not, and the architect's earlier recommendation of it as the answer was wrong. Recorded with the
+reasoning rather than replaced.
+
+### 7.1 Why containment alone is not safe forward
+
+**The invariant is an accident of current authoring, not a law.** It holds because `plan_edit_text`
+emits one operation per file and `current_text_for_node` resolves through the queued-patch cache.
+**Two directions already on this project's board would break it:**
+
+- **RFC 113 — history import from Git, Subversion, CVS.** Converting foreign history constructs
+  operations programmatically, and the natural implementation authors several edits to one file
+  against a single baseline state. **That is precisely the failing shape.**
+- **Any per-hunk or interactive commit mode**, whose natural implementation does the same.
+
+**And the cost of waiting rises monotonically.** `span_id` is inside signed, sealed history. Every
+commit adds more history under the positional scheme, so the only variable under our control is how
+much exists when it changes. **Containment alone defers the work to the moment it blocks a feature** —
+under schedule pressure, at maximum accrued cost.
+
+### 7.2 Correcting this RFC's own framing: shape 3 is not a format break
+
+**§5 called shape 3 "a format-breaking change requiring migration". That was wrong**, and it made the
+option look more expensive than it is.
+
+RFC 114's contract is explicit:
+
+> **Any prikk release can read every object any prior release wrote, and verifies it to the same
+> conclusion. Storage may require a migration step, which is documented and tested. Object identity
+> and signatures never require one.**
+
+and
+
+> **Freezing is not "never add a field".** `schema_version` is *inside* the id preimage, so a new field
+> means a new schema version, new ids for new objects, and **no change whatsoever to objects already
+> written.**
+
+**So a v2 span identity is an additive schema version, not a break** — the pattern `DC-75` already used
+for `Block` 1 → 2, and which `RefState` carries two of at once. **The design anticipated it**: the
+preimages are already domain-separated and versioned (`PRIKK-TEXT-SPAN-v1`,
+`PRIKK-TEXT-LEFT-ANCHOR-v1`, FDD-01 §5.1).
+
+**Migration sketch: none is required for identity.** Existing `EditText` operations keep resolving
+through the v1 path, unchanged, forever — they were authored under the invariant and are sound.
+New operations are authored and resolved under v2. Nothing is rewritten, nothing is re-signed, and no
+repository becomes unreadable.
+
+**The failure to design against is recorded in RFC 114 itself**: DC-53 Stage 2's `PBNDL001` →
+`PBNDL002` bump severed the bundle migration path and made every repository below format 6
+unmigratable. **A v2 identity must not touch the transport or the repository-format gate**, and the
+increment that lands it must demonstrate an old-format repository still round-trips.
+
+### 7.3 The two candidate identities
+
+**(a) Guarantee uniqueness at authoring.** Extend the anchor window until the span is unique in the
+buffer and record the length used. **`dup_index` disappears.** If no extension can make it unique — a
+wholly uniform file — **refuse at authoring time**, where the user can still act, rather than at replay
+where they cannot. Content-based, stable under composition, small model change.
+
+**(b) Spans as first-class identified entities**, minted like node ids and carried in node state.
+Cleanest and most sophisticated; the largest change, since a node's state must then carry span identity
+rather than only bytes.
+
+**The architect's recommendation is (a)**, for the same reason RFC 126 §6 chose criterion: it removes
+the fragile mechanism rather than managing it, and its failure mode is a refusal at authoring — early,
+visible, and actionable — rather than a mismatch at replay. **(b) is the better model and the worse
+trade today**: it changes what a node *is*, and nothing yet demands that.
+
+**Both are the owner's to authorize**, because both add a schema version to signed history.
+
+### 7.4 Disposition
+
+1. **Shape 1 ships as containment** — report a violating sequence as operations that are mutually
+   inconsistent, not as malformed evidence — **and the invariant is written down** in `text_span.rs`'s
+   module doc, where `dup_index` lives. Cheap, immediate, no format involvement.
+2. **Shape 4 is refused.** The oracle (`replay_oracle.rs:231`) and real materialization
+   (`patch_replay/apply.rs:272`) call `locate_text_span` identically **by design** — that sameness is
+   what makes the oracle's prediction sound. Shape 4 must land in both or neither; in both it changes
+   materialization on existing history, trades a cryptographic context check for offset arithmetic, and
+   makes the system *accept* a sequence whose refusal looks correct.
+3. **Shape 3 proceeds as design**, options (a) and (b), recommendation (a).
+
 ## 6. Scope
 
 **In:** the mechanism (§1), the invisibility (§2), the reachability path (§3), the evidence table (§4),
@@ -216,8 +300,10 @@ and the three shapes (§5).
 **Out:** any change to `commutation.rs`'s allowlist entry, which is the correct interim and keeps the
 finding named in the property sweep's own output.
 
-**Updated 2026-09-04:** shape 2 is refused (§5a) and **shape 4 is the candidate to design against**.
-Choosing between shape 4 and shape 1 is the architect's; shape 3 remains the owner's.
+**Updated 2026-09-04 (§7):** shapes 2 and 4 are both refused; **shape 1 ships as containment and shape
+3 proceeds as design**, with options (a) and (b) and a recommendation of (a). §5's characterisation of
+shape 3 as a format break is **corrected in §7.2** — it is an additive schema version requiring no
+migration for identity.
 
 **One non-negotiable for whatever is chosen: the persisted seed must go on failing until it passes for
 the right reason.** The allowlist entry names this RFC; removing it without the underlying replay
