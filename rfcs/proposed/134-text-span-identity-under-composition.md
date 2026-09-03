@@ -108,13 +108,69 @@ rather than a patch.
 3. **Change span identity** to something stable under composition. Correct at the root, and a
    format-breaking change requiring migration or a schema bump.
 
+## 5a. Ruled 2026-09-04 — shape 2 is unsound, and a fourth shape exists
+
+**Shape 2 (tolerant lookup) is refused. It cannot work, and the reason is visible in one loop**
+(`text_span.rs:183-195`):
+
+```rust
+for (dup_index, &(start, end)) in anchor_matching.iter().enumerate() {
+    let sid = compute_span_id(node_id, old_span_hash, record_left, record_right, dup_index as u32);
+    if sid == *record_span_id { matches.push((start, end)); }
+}
+```
+
+**Every input to `compute_span_id` except `dup_index` is taken from the record and is constant across
+the loop. The candidate's own `(start, end)` never enters the hash.** And every candidate is, by
+construction, identical in the remaining inputs — `occurrences` matched the same `old_span_text`, and
+the filter kept only entries whose anchors equal the record's.
+
+**Therefore `sid` is a pure function of `dup_index`, not of position.** A span id does not identify a
+span; it identifies *an index into a candidate list*, and the list is rebuilt from the current buffer.
+
+**So widening the search over `dup_index` recovers which index the record used and learns nothing
+about which surviving candidate that was** — all survivors produce the same id for the same index. In
+the persisted case one candidate survives and a tolerant lookup could only guess; with three originals
+and two survivors it would guess between them. **A wrong guess silently edits the wrong span, which is
+strictly worse than today's refusal.** Refused.
+
+**Noted while proving it: the `Ambiguous` arm at `:200` is unreachable.** Distinct indices give
+distinct ids, so `matches` holds zero or one element. A defensive arm that cannot fire is the shape
+this project refuses elsewhere; it should be either proved reachable or replaced by a statement of why
+it is not.
+
+### Shape 4 — resolve against the baseline, track offsets through the sequence
+
+**Identity-preserving, no format break, and it addresses the cause rather than the report.**
+
+The recorded `dup_index` is valid against **the buffer the operation was authored against**. It stops
+being valid only because sequence replay resolves each operation against the *running* buffer. So
+resolve against the baseline text — where the candidate set is the one the id was computed from — and
+carry the resulting byte range forward through the edits already applied in the same sequence.
+
+**Replay has what this needs**: `replay_operations` starts from a baseline `OracleState`, whose
+`texts: BTreeMap<NodeId, Vec<u8>>` holds the original content.
+
+**Unproven, and it is design work, not a patch.** Offset tracking has real edge cases — an earlier edit
+landing inside a later span, overlapping ranges, an edit that changes the candidate set the baseline
+resolution depended on. **This RFC records shape 4 as the first candidate to design against, not as a
+decision.**
+
+**Shape 1 remains available as containment** — converting a malformed-evidence error into an honest
+verdict — but it is not a fix: the sequence still fails to replay.
+
+**Shape 3 stays the fallback**, and stays the owner's, if shape 4 does not survive design.
+
 ## 6. Scope
 
 **In:** the mechanism (§1), the invisibility (§2), the reachability path (§3), the evidence table (§4),
 and the three shapes (§5).
 
-**Out:** choosing among them. **Out:** any change to `commutation.rs`'s allowlist entry, which is the
-correct interim and keeps the finding named in the property sweep's own output.
+**Out:** any change to `commutation.rs`'s allowlist entry, which is the correct interim and keeps the
+finding named in the property sweep's own output.
+
+**Updated 2026-09-04:** shape 2 is refused (§5a) and **shape 4 is the candidate to design against**.
+Choosing between shape 4 and shape 1 is the architect's; shape 3 remains the owner's.
 
 **One non-negotiable for whatever is chosen: the persisted seed must go on failing until it passes for
 the right reason.** The allowlist entry names this RFC; removing it without the underlying replay
