@@ -2,10 +2,18 @@
 
 **Status.** **ACCEPTED by the project owner 2026-09-03**, at the scope written here — including
 §5's two-increment split, §5's refusal of `source()` in increment 1, and §6's requirement that
-`Display` output not change. Increment 1 was ruled by the architect the same day and its handoff
-is issued. Raised by the external
-architecture audit of 2026-08-31 as **`ROADMAP.md`'s `AUD-04`**, the last of that program's four
-remaining rows and the only one carrying a sequencing constraint: **before any stability promise.**
+`Display` output not change.
+
+**Increment 1 is COMPLETE** (`264ba73`, CI 15/15) **and its evidence accepted by the owner the same
+day**, re-accepting this RFC after §5's evidence section was added. That section is therefore
+settled input, not a proposal: increment 2 may be scoped against it without re-deriving the
+classification or the derive answer.
+
+**Increment 2 remains unruled.** What it must decide is listed at the end of §5.
+
+Raised by the external architecture audit of 2026-08-31 as **`ROADMAP.md`'s `AUD-04`**, the last of
+that program's four remaining rows and the only one carrying a sequencing constraint: **before any
+stability promise.**
 
 **Tracks.** The shape of one public type. **No user-visible message changes in increment 1** — see §6.
 
