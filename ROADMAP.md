@@ -335,6 +335,28 @@ remained. Whether the contract is ever promoted into a stability *promise* stays
 §6a and §6b followed on 2026-09-03. **`AUD-05` through `AUD-10` are all delivered** — the whole
 no-design-decision half of this program — leaving `AUD-01` through `AUD-04`, which are design work.
 
+### Release position — 0.30.0 prepared and HELD 2026-09-03
+
+**`0.30.0` is bumped, changelogged, and deliberately not tagged.** The version commit is `b81b1eb`;
+`Cargo.toml` reads `0.30.0` on `main` with no `0.30.0` tag, which is the intended held state.
+
+**Why it is held.** CI failed one job of fifteen on that commit —
+`property_b_composition_can_disagree_even_when_every_pairwise_check_agrees`, on macOS. **Not caused by
+the release commit**, which touches only `Cargo.toml`, `Cargo.lock` and `CHANGELOG.md`, and **not
+macOS-specific**: reproduced on Linux at 1.5M proptest cases, clean at 250k. `check_confluence` proves
+every cross pair commutes and the composed replay then fails, which `commutation.rs:224-231` treats as
+unreachable. **The system refuses rather than accepts, so this is a diagnosis defect, not a
+data-safety one.**
+
+**Held on the owner's authorization** rather than re-rolling CI until the dice fall right. Handoff
+issued: `rfcs/handoffs/126-verification-infrastructure-coverage/property-b-evidence-error-handoff-v1.md`
+— make the failure reproducible and keep the sweep honest first; the classification question is ruled
+against a captured case afterwards.
+
+**Before tagging, check the date.** `CHANGELOG.md`'s heading reads `## 0.30.0 — 2026-09-03`. If the
+cut lands on a later day, that heading and the tag date must move together — "today is the release
+date" is the standing rule, and a held release is exactly where that silently goes wrong.
+
 ### Release position — 0.29.0 shipped 2026-09-03
 
 **`0.29.0` was cut at `5ee307a`**: CI 15/15, `release.yml` green across four build targets, sixteen
