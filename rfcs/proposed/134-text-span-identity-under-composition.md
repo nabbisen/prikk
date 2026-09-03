@@ -1,6 +1,14 @@
 # RFC 134 — A text span's identity is not stable under composition
 
-**Status.** **Proposed.** Found 2026-09-03 by RFC 126 §2's patch-algebra property tests — the
+**Status.** **ACCEPTED by the project owner 2026-09-04** — the analysis, not a fix. **§5's three
+shapes remain unruled**, which is what this RFC deliberately left open.
+
+**Who rules them.** Shapes 1 and 2 are identity-preserving implementation design and are the
+architect's. **Shape 3 changes `span_id`'s definition and is therefore a format break under RFC 114's
+stability contract — that one is the owner's**, and would arrive as an escalation rather than a
+handoff.
+
+Found 2026-09-03 by RFC 126 §2's patch-algebra property tests — the
 increment whose own subject was that the property the RFC originally named could not fail. Reachability
 and mechanism established by the architect at `e8f55ff`/`dd3fc1e`; **shipped in `0.30.0`'s known-costs
 table rather than held**, because the defect predates every release and refuses rather than corrupts.
