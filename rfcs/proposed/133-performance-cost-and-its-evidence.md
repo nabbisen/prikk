@@ -3,9 +3,11 @@
 **Status.** **ACCEPTED by the project owner 2026-09-03**, as the extraction they instructed: the
 measurement concern is *"an independent subject or theme"*, not a verification-culture gate.
 
-**Accepting this RFC did not rule §6.** §6 escalates a question rather than settling one, exactly as
-RFC 126 §5a did before it — **does peak RSS get any standing protection, and in what shape?** Until
-that is answered, §5's table stands as written: **time has two gates, memory has none.**
+**Accepting this RFC did not rule §6, and §6 has since been rewritten.** Its first draft asked
+"does peak RSS get standing protection, and in what shape?" — **the wrong question**, as the owner's
+challenge established: most of it was already settled by the 2026-07-30 steady-state ruling and by
+DC-86's exchange limits. **§6 now asks the one thing genuinely outstanding: whether memory
+independence from repository size should be a stated requirement at all.**
 
 **§7 holds: no increment is handed over from this RFC until §6 is ruled**, because the ruling decides
 whether a fix must arrive with a standing measurement or without one.
@@ -123,36 +125,74 @@ whoever knows must say so; otherwise the named costs above are the whole list.
 
 **Time has two gates; memory has none.** That asymmetry is the subject of §6.
 
-## 6. The ruling this RFC carries over — the owner's
+## 5.1 What the published documentation tells users — one row is badly stale
 
-**Does peak RSS get any standing protection, and in what shape?** Moved intact from RFC 126 §5a,
-now asked against §2's numbers instead of an abstraction.
+`docs/src/reference/architecture.md`'s known-limits table is the user-facing version of §5. Two rows
+concern this RFC:
 
-**Criterion cannot answer it**: it measures wall-clock time against a stored baseline and has no
-memory axis. `dc59_commit_benchmark.rs`'s `VmHWM` pass is the only peak-RSS instrument in the project
-and is `#[ignore]`d, so **nothing stands between a regression and a release except someone
-remembering to run it by hand.**
+| Published row | State |
+|---|---|
+| *"`prikk verify` is roughly **O(N³)** in sealed block count — 34 s at 160 blocks — Tracked, unowned"* | **FALSE, and has been since 2026-08-18.** `MILESTONES.md` criterion 3 records `verify` **linear**, **27.04 ms at N=160**, per-doubling ratio 1.97 — MET via DC-92 and RFC 111, and now held by `rfc111_index_decode_cost_gate.rs` |
+| *"Commit cost is not yet bounded independently of repository size (NFR-PERF-01) — Reduced, still missed"* | **Status genuinely open** — see §6 |
 
-**Three shapes, unchanged from §5a:**
+**The first row tells readers a solved problem is live, by a factor of about 1,250.** It is the
+inverse of the usual documentation risk: the project is understating itself in public. **Correcting it
+is documentation currency, not a decision** — the architect owns it and it needs no ruling.
 
-1. **A scheduled CI job** at one fixed size against a recorded threshold. Catches order-of-magnitude
-   regressions; carries the drift risk RFC 126 §6 named.
-2. **A release-cut-only check** — run before a tag rather than per increment. Cheaper; fails the
-   "invisible between cuts" test.
-3. **Record that peak RSS is unmeasured on a standing basis** and stop implying otherwise.
+## 6. The ruling this RFC carries — corrected 2026-09-03 after the owner questioned its shape
 
-**No architect recommendation is offered, deliberately.** RFC 126 §6 chose criterion over a
-hand-maintained threshold because criterion's baseline maintains itself; **for memory the better
-option does not exist**, so that reasoning does not transfer. Accessibility and long-term stability
-decided §6 and decide this.
+**The first draft of this section asked "does peak RSS get standing protection?" That was the wrong
+question**, and the owner was right to ask what part of it is even this project's responsibility.
+Checking the record answers most of it:
 
-**§2 does change one input to the decision**: the exposure is now known to be first-import and
-mass-add, not everyday commits. Whether that makes standing protection more or less worth its cost is
-the judgement being asked for.
+**What is already settled, and was before this RFC existed:**
+
+- **Memory is not covered by any requirement at all.** DC-56 §163, verbatim: *"Objective 2 is not
+  covered by any requirement. NFR-PERF-01 bounds cost in a latency sense; nothing names"* memory.
+- **The owner already ruled the genesis case out of scope on 2026-07-30**: *"NFR-PERF-01 bounds
+  **steady-state** commit cost, not every commit including the first."* §2's 137 MiB genesis figure
+  is therefore outside what this project has ever committed to bound — **the owner's instinct that a
+  large import is the user's matter is not a new opinion, it is the standing ruling.**
+- **Untrusted input is already validated.** DC-86's `PRIKK_BUNDLE_MAX_BYTES` /
+  `PRIKK_EXCHANGE_MAX_BYTES` / `..._MAX_OBJECTS` bound what a received bundle can make this process
+  allocate. That is the part which genuinely was a validation problem, and it is done.
+
+**So the residue is one question, and it is a requirements question rather than a testing one:**
+
+> **Should "commit cost does not scale with repository size" be a stated requirement covering
+> *memory*, as `NFR-PERF-01` already states it for latency — or is memory deliberately left
+> unbounded?**
+
+**Why it is the owner's:** requirements are. Nothing else here needs a ruling — if the answer is yes,
+the evidence follows mechanically from §2's method and the architect writes it; if no, §5's table
+gets a row saying memory is deliberately unbounded and this RFC closes.
+
+**What §2 contributes to the decision:** the property is currently **true and free**. Incremental
+commit measured **16.3 MiB against a 128 MiB repository**, independent of size — DC-56 already won
+it. The question is only whether winning it should be *kept* by evidence rather than by nobody
+noticing it broke.
+
+**The cost of yes:** a test that builds two repositories of different sizes and asserts the ratio
+between their incremental-commit peaks, run in the ordinary suite. It needs no threshold to
+maintain — a ratio does not drift when the machine changes, which was RFC 126 §6's whole objection to
+hand-maintained numbers. Its real cost is build time on every gate run, at sizes large enough for the
+signal.
+
+**The cost of no:** honest, and cheaper. It means a future change that reintroduces a full-worktree
+read on the incremental path passes all 1,558 tests and reaches a release, and the first report comes
+from a user with a large repository.
+
+**A separate matter, also the owner's, surfaced by the same reading:** `NFR-PERF-01` itself is
+recorded **unmet** — `MILESTONES.md`'s M1 row, DC-56's criterion 8 (*"Recorded 2026-07-31: still
+missed"*), and the published table above. **Nothing has re-checked that claim since DC-64, RFC 111,
+and DC-92 landed.** Whether it can now be claimed was always the owner's on evidence (DC-92 §101),
+and no such evidence has been gathered. **This RFC does not ask for that ruling — it records that the
+question is open and unmeasured**, since §2 measured memory and `NFR-PERF-01` bounds latency.
 
 ## 7. Scope
 
-**In:** the costs named in §2 and §3; the evidence table in §5; §6's ruling; retiring §4's phrase.
+**In:** the costs named in §2 and §3; the evidence tables in §5 and §5.1; §6's ruling; retiring §4's
+phrase; correcting `architecture.md`'s stale `O(N³)` row.
 
 **Out:** fixing any of them. `AUD-01` and `AUD-02` keep their `ROADMAP.md` rows and their completion
 conditions; this RFC is where their cost is described, not where it is repaired. **No increment
