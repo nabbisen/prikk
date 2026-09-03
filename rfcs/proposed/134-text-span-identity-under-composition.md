@@ -274,11 +274,63 @@ Cleanest and most sophisticated; the largest change, since a node's state must t
 rather than only bytes.
 
 **The architect's recommendation is (a)**, for the same reason RFC 126 §6 chose criterion: it removes
-the fragile mechanism rather than managing it, and its failure mode is a refusal at authoring — early,
-visible, and actionable — rather than a mismatch at replay. **(b) is the better model and the worse
-trade today**: it changes what a node *is*, and nothing yet demands that.
+the fragile mechanism rather than managing it, and its failure mode is a refusal a user can act on
+rather than a mismatch at replay. **§7.5 re-reviews (b) against the threat model and refuses it** —
+the first pass called it "the better model and the worse trade", which was wrong.
 
 **Both are the owner's to authorize**, because both add a schema version to signed history.
+
+### 7.5 Re-reviewed 2026-09-04 against the data model, the lifecycle, and the threat model
+
+**The owner asked for this judgement to be re-examined. It changed: (b) is not "the better model and
+the worse trade" — it is a security regression, and (a) is stronger than the first pass argued.**
+
+**Data model.** `NodeContent::File { blob_id, mode }` (`prikk-replay/src/node_lifecycle/types.rs:9`)
+carries a blob reference and mode; **content has no sub-identity, and `compute_state_root`
+(`state_root.rs:116`) hashes the resulting blob, not spans.** So span identity is a *resolution
+mechanism*, not a verification-bearing value: **neither option changes what any state root means.**
+That de-risks both, and it is why a v2 identity affects only new Patch ids.
+
+**Threat model — the decisive input.** `text_span.rs:159` states a deliberate property:
+
+> The stored `span_id` is recomputed, never trusted directly.
+
+That is load-bearing, not incidental, because
+`docs/src/reference/trust-threat-model.md` records that a received Patch's contents are
+adversary-controlled in the relevant sense:
+
+> an attacker who re-signs a Patch with their own key and ships that key in the bundle produces a
+> bundle that verifies perfectly.
+
+**So signature verification does not constrain an `EditText`'s fields.** The only thing stopping a
+crafted operation from relocating an edit somewhere of the attacker's choosing is that resolution
+**recomputes** the identity from the victim's actual buffer content and demands a match.
+
+**(b) breaks exactly that.** A minted span id is by construction *not* derivable from content, so it
+cannot be recomputed and compared; resolution would consult a mapping instead, and a crafted operation
+could carry an id chosen to redirect the edit. **Elegant in the abstract, weaker against the adversary
+this project actually models.** Refused on that ground, not on weight.
+
+**(a) preserves the property.** Identity stays `H(node, old_span_hash, left_anchor, right_anchor)` —
+fully content-derived, fully recomputable — with `dup_index` deleted and the anchor *lengths* recorded.
+An attacker must still produce text and context matching the victim's buffer, exactly as today, and the
+positional ambiguity disappears.
+
+**And (a)'s feared failure case does not exist.** The first pass worried it would refuse a wholly
+uniform file. **Uniqueness is always achievable for a finite file**: extending the left anchor
+eventually reaches the file start, and distinct positions have distinct prefixes. **Anchors are
+hashed**, so a longer anchor costs one recorded integer, not more bytes.
+
+**(a)'s real cost, stated honestly:** disambiguating in highly repetitive content requires long anchors,
+and a long anchor is sensitive to *any* nearby edit — so some legitimate composed sequences will be
+refused that a positional scheme would have accepted. **That is the right trade**: the refusal is an
+honest anchor mismatch meaning *"the context you authored against has changed"*, surfaced at authoring
+or replay, and it can never silently resolve to the wrong span. **The current scheme's failure mode is
+a mismatch nobody can explain; (a)'s is a sentence a user can act on.**
+
+**Conclusion unchanged, reasoning replaced: (a).** And the recommendation is now stronger than
+"preferred" — **(b) should not be adopted** while `span_id` remains adversary-supplied and
+recompute-verified.
 
 ### 7.4 Disposition
 
