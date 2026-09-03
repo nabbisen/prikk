@@ -245,6 +245,7 @@ item is open.
 - [`128-outward-facing-project-surface.md`](rfcs/proposed/128-outward-facing-project-surface.md) — RFC 128, What an outsider finds before they read any code (external audit 2026-08-31; §2 **ruled 2026-09-01** — advisories-only; `SECURITY.md` shipped, three items open: `CONTRIBUTING.md`, the Cargo metadata pass, the Git→prikk mapping page)
 - [`130-module-coupling-invariant.md`](rfcs/proposed/130-module-coupling-invariant.md) — RFC 130, A coupling invariant for `prikk-store` and the gate that holds it (**ACCEPTED by the owner 2026-09-01**; touches no files and conflicts with nothing in flight, so it can land during band 1)
 - [`131-module-grouping-and-visibility-scoping.md`](rfcs/proposed/131-module-grouping-and-visibility-scoping.md) — RFC 131, Grouping the 123 top-level entries and scoping reach with `pub(in ...)` (**ACCEPTED by the owner 2026-09-01**; large file move — after RFC 130 and between feature arcs, not during one)
+- [`132-error-taxonomy-structure.md`](rfcs/proposed/132-error-taxonomy-structure.md) — RFC 132, `PrikkError` carries less than it knows, and cannot grow (external audit 2026-08-31 as `AUD-04`; **increment 1 ruled 2026-09-03**, handoff issued; `source()` and the 45-site re-classification deferred to increment 2)
 <!-- open-work-index:end -->
 
 **Two backlog tables elsewhere in this file carry live open rows of their own, referenced here
@@ -412,7 +413,7 @@ others do not: **before any stability promise.**
 | AUD-01 | `IndexSnapshot::lookup` is a linear scan (`object_store.rs:174-179`); `verify`/`seal` do O(objects) lookups | A map built inside `IndexSnapshot::open`, last-entry-wins preserved, with the existing RFC 111 cost gate extended to cover it |
 | AUD-02 | `wal.rs:171` replays the whole WAL on every append — O(N²) over a queue of N commits | Per-invocation replay cache, or `(last_seq, clean-tail offset)` tracking with tail-only re-verification |
 | AUD-03 | Four-plus hand-copied TLV cursors; the duplicate-field strictness split in RFC 125 §2.3 exists because each copy evolved separately | One canonical cursor in `prikk-object::canonical`, decoders migrated incrementally |
-| AUD-04 | `PrikkError` discards `io::ErrorKind`, implements no `source()`, and is not `#[non_exhaustive]` | A structured `Io { kind, context }` variant, `source()`, and `#[non_exhaustive]` — **before any stability promise**, no new dependency |
+| AUD-04 | `PrikkError` discards `io::ErrorKind`, implements no `source()`, and is not `#[non_exhaustive]` | **Adopted into RFC 132 on 2026-09-03**, which found the row understates it: `Io` is a catch-all with 45 hand-built non-I/O uses, so a mandatory `kind` would be a lie at nearly every site. Increment 1 (`#[non_exhaustive]`, `Io { kind: Option<ErrorKind>, context }`, plus the evidence increment 2 needs) is ruled and handed over; `source()` is refused there as unimplementable without dropping the type's derives. Still **before any stability promise** |
 
 ### Recorded, and deliberately not corrective work
 
