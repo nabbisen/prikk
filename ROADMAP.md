@@ -245,7 +245,7 @@ item is open.
 - [`128-outward-facing-project-surface.md`](rfcs/proposed/128-outward-facing-project-surface.md) — RFC 128, What an outsider finds before they read any code (external audit 2026-08-31; §2 **ruled 2026-09-01** — advisories-only; `SECURITY.md` shipped, three items open: `CONTRIBUTING.md`, the Cargo metadata pass, the Git→prikk mapping page)
 - [`130-module-coupling-invariant.md`](rfcs/proposed/130-module-coupling-invariant.md) — RFC 130, A coupling invariant for `prikk-store` and the gate that holds it (**ACCEPTED by the owner 2026-09-01**; touches no files and conflicts with nothing in flight, so it can land during band 1)
 - [`131-module-grouping-and-visibility-scoping.md`](rfcs/proposed/131-module-grouping-and-visibility-scoping.md) — RFC 131, Grouping the 123 top-level entries and scoping reach with `pub(in ...)` (**ACCEPTED by the owner 2026-09-01**; large file move — after RFC 130 and between feature arcs, not during one)
-- [`132-error-taxonomy-structure.md`](rfcs/proposed/132-error-taxonomy-structure.md) — RFC 132, `PrikkError` carries less than it knows, and cannot grow (external audit 2026-08-31 as `AUD-04`; **increment 1 ruled 2026-09-03**, handoff issued; `source()` and the 45-site re-classification deferred to increment 2)
+- [`132-error-taxonomy-structure.md`](rfcs/proposed/132-error-taxonomy-structure.md) — RFC 132, `PrikkError` carries less than it knows, and cannot grow (external audit 2026-08-31 as `AUD-04`; **ACCEPTED by the owner 2026-09-03**; increment 1 ruled and handed over; `source()` and the 45-site re-classification deferred to increment 2)
 <!-- open-work-index:end -->
 
 **Two backlog tables elsewhere in this file carry live open rows of their own, referenced here

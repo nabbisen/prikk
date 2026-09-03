@@ -1,6 +1,9 @@
 # RFC 132 — `PrikkError` carries less than it knows, and cannot grow
 
-**Status.** **Proposed; increment 1 ruled by the architect 2026-09-03.** Raised by the external
+**Status.** **ACCEPTED by the project owner 2026-09-03**, at the scope written here — including
+§5's two-increment split, §5's refusal of `source()` in increment 1, and §6's requirement that
+`Display` output not change. Increment 1 was ruled by the architect the same day and its handoff
+is issued. Raised by the external
 architecture audit of 2026-08-31 as **`ROADMAP.md`'s `AUD-04`**, the last of that program's four
 remaining rows and the only one carrying a sequencing constraint: **before any stability promise.**
 
