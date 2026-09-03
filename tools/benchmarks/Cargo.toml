@@ -1,0 +1,24 @@
+[package]
+name = "prikk-benchmarks"
+description = "Repository-internal Prikk performance benchmarks (RFC 126 §5). Not part of the shipped product; not built by default."
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+prikk-store = { workspace = true }
+
+[dev-dependencies]
+criterion = "0.7"
+tempfile = "3"
+
+[[bench]]
+name = "commit"
+harness = false
+
+[lints]
+workspace = true

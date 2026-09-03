@@ -88,7 +88,14 @@ pub(crate) fn run(root: &Path) -> Result<BoundaryReport> {
 fn check_members(root: &Path, metadata: &Metadata, errors: &mut Vec<BoundaryError>) {
     let expected: BTreeMap<&str, &str> = PRODUCTS
         .into_iter()
-        .chain([("prikk-release-policy", "tools/release-policy/Cargo.toml")])
+        .chain([
+            ("prikk-release-policy", "tools/release-policy/Cargo.toml"),
+            // RFC 126 §5 increment A / owner's §6 ruling (option 4): criterion lives in its own
+            // member, outside `PRODUCTS`, so `placement.rs`'s dependency-placement scan (which
+            // iterates `PRODUCTS`) never sees it -- adding it here, not to `PRODUCTS`, is the whole
+            // mechanism that keeps it out of the shipped dependency graph.
+            ("prikk-benchmarks", "tools/benchmarks/Cargo.toml"),
+        ])
         .collect();
     let members = packages_by_id(metadata, &metadata.workspace_members);
     let actual: BTreeMap<&str, String> = members
