@@ -1,12 +1,25 @@
 # RFC 134 — A text span's identity is not stable under composition
 
-**Status.** **ACCEPTED by the project owner 2026-09-04** — the analysis, not a fix. **§5's three
-shapes remain unruled**, which is what this RFC deliberately left open.
+**Status.** **ACCEPTED IN FULL by the project owner 2026-09-04**, including §8's design. Accepted in
+three steps the same day: the analysis first, then option (a) over (b), then §8's design of (a).
 
-**Who rules them.** Shapes 1 and 2 are identity-preserving implementation design and are the
-architect's. **Shape 3 changes `span_id`'s definition and is therefore a format break under RFC 114's
-stability contract — that one is the owner's**, and would arrive as an escalation rather than a
-handoff.
+**Every shape is now ruled.**
+
+| Shape | Outcome |
+|---|---|
+| **1** — fix the classification, write the invariant down | **Ruled as containment (§7.4).** **No handoff issued yet — see below** |
+| **2** — tolerant lookup | **Refused (§5a):** `sid` is a pure function of `dup_index`, so it cannot disambiguate |
+| **3** — stable identity | **Authorized as option (a) (§7.3/§8); handoff issued** |
+| **4** — resolve against baseline, map offsets | **Refused (§7.4/§7.5):** oracle and materialization must resolve identically |
+
+**One piece of ruled work has no handoff: shape 1's containment.** §8's v2 identity does not retire it
+— v1 operations rely on the invariant forever, and a crafted or imported sequence that violates it is
+still reported as malformed evidence rather than as operations that are mutually inconsistent.
+**Writing the invariant into `text_span.rs`'s module doc and correcting the diagnosis remains
+outstanding**, and is small and independent of §8.
+
+**§5's characterisation of shape 3 as a format break is corrected in §7.2**: it is an additive schema
+version under RFC 114, requiring no migration for identity.
 
 Found 2026-09-03 by RFC 126 §2's patch-algebra property tests — the
 increment whose own subject was that the property the RFC originally named could not fail. Reachability
