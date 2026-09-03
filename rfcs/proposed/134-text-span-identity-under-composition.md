@@ -279,6 +279,7 @@ rather than a mismatch at replay. **§7.5 re-reviews (b) against the threat mode
 the first pass called it "the better model and the worse trade", which was wrong.
 
 **Both are the owner's to authorize**, because both add a schema version to signed history.
+**(a) was authorized 2026-09-04; the design is §8.**
 
 ### 7.5 Re-reviewed 2026-09-04 against the data model, the lifecycle, and the threat model
 
@@ -343,6 +344,78 @@ recompute-verified.
    materialization on existing history, trades a cryptographic context check for offset arithmetic, and
    makes the system *accept* a sequence whose refusal looks correct.
 3. **Shape 3 proceeds as design**, options (a) and (b), recommendation (a).
+
+## 8. Design — option (a), authorized by the project owner 2026-09-04
+
+**Content-unique anchors: identity stays fully content-derived and recomputable, `dup_index` is
+deleted, and uniqueness is guaranteed at authoring instead of disambiguated at replay.**
+
+### 8.1 The schema
+
+`admitted_schemas(ObjectType::Patch)` currently returns `&[1, PATCH_PARENT_IDS_RETIRED_SCHEMA]`, and
+`PATCH_PARENT_IDS_RETIRED_SCHEMA = 2` (`prikk-object/src/payload/patch.rs:59`). **v2 identity mints
+Patch schema 3**, admitted alongside both.
+
+**`EditText` gains two optional fields**, tags **10** (`left_anchor_len`) and **11**
+(`right_anchor_len`), `u32` each. **Optional and absent below schema 3**, exactly as tags 7 and 8
+already are — so **no object already written changes by a single byte.**
+
+### 8.2 The identity function
+
+**v2**, domain-separated from v1 as FDD-01 §5.1's `-v1` suffixes already anticipated:
+
+```
+PRIKK-TEXT-SPAN-v2 ‖ node_id ‖ old_span_hash ‖ left_anchor ‖ right_anchor ‖ left_len ‖ right_len
+```
+
+**`dup_index` does not appear.** Anchors are `PRIKK-TEXT-LEFT-ANCHOR-v2` / `-RIGHT-ANCHOR-v2` over
+exactly `left_anchor_len` bytes preceding the span and `right_anchor_len` following it, rather than the
+fixed `TEXT_ANCHOR_WINDOW = 64`.
+
+### 8.3 Authoring
+
+Choose the **smallest** lengths, each at least the current 64, that make the span **unique** among
+occurrences of `old_span_text` in the authoring buffer.
+
+**This always succeeds for a finite file.** Extending the left anchor eventually reaches the file
+start, and distinct positions have distinct prefixes. **Anchors are hashed**, so a long anchor costs
+one recorded integer, not more bytes.
+
+### 8.4 Resolution
+
+**v2** — find occurrences of `old_span_text`; filter by the two anchors computed at the *recorded*
+lengths; **require exactly one**; recompute the id and compare. Uniqueness is a property of the record,
+not of a rescanned list, so **nothing renumbers under composition.**
+
+**v1 — unchanged and frozen forever.** Operations below schema 3 keep resolving through the existing
+`dup_index` path. They were authored under the invariant of §3a and are sound.
+
+### 8.5 What must not change, and why
+
+- **Every v1 object's bytes, id, and resolution.** RFC 114: *"keep every version ever written
+  decodable, forever, and keep its bytes hashing the way they did on the day they were written."*
+- **The repository-format gate and bundle transport.** RFC 114 records that DC-53 Stage 2's
+  `PBNDL001` → `PBNDL002` bump severed the migration path and made every repository below format 6
+  unmigratable. **A schema addition must not touch transport**, and the increment must *demonstrate* an
+  older repository still round-trips rather than assume it.
+- **`compute_state_root`'s inputs.** It hashes the resulting blob, not spans (§7.5), so what history
+  *means* is untouched.
+
+### 8.6 The known trade
+
+Highly repetitive content needs long anchors, and a long anchor is sensitive to any nearby edit — so
+some composed sequences that a positional scheme accepted will now be refused. **That is the intended
+trade** (§7.5): the refusal is an honest anchor mismatch a user can act on, and it can never silently
+resolve to the wrong span.
+
+### 8.7 Sequencing
+
+**One increment, not two.** A half-landed version scheme — the identity function without authoring, or
+authoring without resolution — is worse than either end state.
+
+**The Property B allowlist entry stays** until the property generator itself is moved to v2 and the
+underlying sequence passes *for the right reason*. Removing it because v2 landed would convert a
+recorded finding into a hidden one.
 
 ## 6. Scope
 
