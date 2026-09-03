@@ -1,8 +1,19 @@
 # RFC 126 — Four flanks the verification culture never reached
 
-**Status.** **Proposed; §6 ruled.** Raised by the external architecture audit of 2026-08-31
-(`audit-2026-08-31-task-2.md` §3 cross-cutting, `task-3.md` §2c/§2d, Top-10 #10). All four
-independently confirmed at `3a8d730`.
+**Status.** **Proposed; §6 ruled; §5a accepted by the project owner 2026-09-03.** Raised by the
+external architecture audit of 2026-08-31 (`audit-2026-08-31-task-2.md` §3 cross-cutting,
+`task-3.md` §2c/§2d, Top-10 #10). All four independently confirmed at `3a8d730`.
+
+**Delivered:** §2, §3, §4's CI half, §5 increment A, §6a, §6b. **Handed over:** §4's kernel doctests,
+this RFC's last implementable item.
+
+**ONE RULING OUTSTANDING, and accepting §5a did not answer it.** §5a escalated a question rather
+than settling one: **does peak RSS get any standing protection, and in what shape?** Its three
+options are stated there with no architect recommendation, deliberately — §6's reasoning does not
+transfer, because for peak RSS there is no criterion equivalent to weigh a threshold against. **Until
+that is ruled, `dc59_commit_benchmark.rs`'s `VmHWM` pass remains the project's only peak-RSS
+measurement and remains `#[ignore]`d**, which is the exact condition §5 was written to complain
+about.
 
 **RULED by the project owner 2026-09-01: §6 option 4** — criterion enters the workspace in **its own
 member, outside `default-members`**, the shape `tools/release-policy` already established. It appears
