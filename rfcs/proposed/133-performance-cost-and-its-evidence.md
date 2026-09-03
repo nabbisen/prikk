@@ -3,6 +3,9 @@
 **Status.** **ACCEPTED by the project owner 2026-09-03**, as the extraction they instructed: the
 measurement concern is *"an independent subject or theme"*, not a verification-culture gate.
 
+**The §6 rewrite was accepted by the owner 2026-09-03. That accepted the question's shape, not an
+answer — §6 remains unruled.**
+
 **Accepting this RFC did not rule §6, and §6 has since been rewritten.** Its first draft asked
 "does peak RSS get standing protection, and in what shape?" — **the wrong question**, as the owner's
 challenge established: most of it was already settled by the 2026-07-30 steady-state ruling and by
@@ -136,8 +139,28 @@ concern this RFC:
 | *"Commit cost is not yet bounded independently of repository size (NFR-PERF-01) — Reduced, still missed"* | **Status genuinely open** — see §6 |
 
 **The first row tells readers a solved problem is live, by a factor of about 1,250.** It is the
-inverse of the usual documentation risk: the project is understating itself in public. **Correcting it
-is documentation currency, not a decision** — the architect owns it and it needs no ruling.
+inverse of the usual documentation risk: the project is understating itself in public.
+
+**And it is not one row.** `architecture.md:197-205` carries a dependent passage that restates DC-92
+§1's *problem statement* almost verbatim, including its strategic framing:
+
+> **The mechanism that bounds patch cost is the one that creates prikk's actual cost.** History is
+> sealed into a chain carrying state roots, and `verify` re-derives that chain **from genesis, for
+> every block** — which is exactly the O(N³) term above.
+>
+> **Prikk did not inherit Darcs's problem. It has a different one, and it lives in the verification
+> path rather than the merge path.**
+
+**That is the project's own published answer to "did the block-oriented approach fail?", and it froze
+at the moment the problem was stated.** DC-92 went on to fix it — `verify` is linear and gate-held —
+so a reader today is told prikk traded a merge-path cost for a cubic verification-path cost that is
+still open. **It is not.**
+
+**Correcting it needs care, not just a number swap.** The passage's mechanism claim — "`verify`
+re-derives that chain from genesis, for every block" — may itself no longer describe what happens:
+`verify.rs` now routes through `lifecycle_cache::incremental`, and DC-92 was memoization. **A fix that
+updates the cost and leaves a stale mechanism sentence would replace one wrong claim with another.**
+Tracked here as its own piece of work rather than done in passing.
 
 ## 6. The ruling this RFC carries — corrected 2026-09-03 after the owner questioned its shape
 
