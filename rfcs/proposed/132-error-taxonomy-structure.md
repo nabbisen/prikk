@@ -108,6 +108,33 @@ worse than leaving it absent.
 non-optional, and decide `source()` against the derive question. **This one changes user-facing
 messages** and therefore needs release notes and a `troubleshooting.md` pass.
 
+### Increment 1's evidence, delivered 2026-09-03 (`264ba73`) and verified by the architect
+
+**The 29 production sites classify as:** 12 caller-precondition violations, 6 validation failures,
+5 "the entry disappeared" races, 4 real OS I/O failures, 2 platform-capability refusals. The
+remaining 16 of the 45 are test-only — including `fsutil/anchored/failpoints.rs:256`, which is under
+no `tests/` path but whose only call site is `#[cfg(test)]`-gated.
+
+**The "entry disappeared" race is a sixth category increment 2 must carry**: five sites report a
+directory entry or worktree file vanishing between one syscall and the next. They synthesize rather
+than wrap an `io::Error`, but they describe a genuine external race, not a caller mistake.
+`fsutil.rs:114` (a `getrandom` failure) is filed as a platform-capability refusal rather than I/O and
+is explicitly flagged as arguable — **increment 2 rules it, rather than inheriting the placement.**
+
+**The derive question is answered, by perturbation rather than by grep, and reproduced independently:**
+
+- **`Clone` is dead.** Removing it produces **zero** compile errors across `--workspace
+  --all-targets`. It can go whenever increment 2 wants it gone.
+- **`PartialEq`/`Eq` are load-bearing — 56 compile errors — but not for the reason the question
+  assumed.** Nothing compares two `PrikkError` values. The dependency is entirely transitive:
+  `Result<T, E>: PartialEq` requires `E: PartialEq`, and **54 sites across 11 files in two crates**
+  write `assert_eq!(result, Ok(x))`. Heaviest are `prikk-object/src/payload/tests.rs` (19),
+  `prikk-store/src/wal/tests.rs` (10) and `refs/tests.rs` (10); all 11 are test-only, `vectors/hard.rs`
+  included (`vectors.rs` is `#![cfg(test)]`).
+
+**So `source()`'s real price is rewriting 54 test assertions**, not redesigning the type. That is the
+number increment 2 is scoped against.
+
 ## 6. What must not change in increment 1
 
 **`Display` output, exactly.** `Io` must still render `i/o error: {context}` — the structured field is
