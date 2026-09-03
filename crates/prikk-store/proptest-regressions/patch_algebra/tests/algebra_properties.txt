@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 1f0b465f837d87ce4ef8091671f21c5a7ecf29d5de5cb63886432a4011175e04 # shrinks to (BaselineSpec { text_a_word1: [102], text_a_word2: [102], text_a_mode: 33188, text_b_content: [97, 32, 97], text_b_mode: 33188, binary_c_blob: ObjectId(0000000000000000000000000000000000000000000000000000000000000000), binary_c_mode: 33188 }, [EditTextAWord1([97]), EditTextAWord2([97])], [CreateTextNew1([])])

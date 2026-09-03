@@ -723,15 +723,51 @@ fn build_sequence(choices: &[OpChoice], spec: &BaselineSpec) -> Option<Vec<Decod
         .collect()
 }
 
+/// `check_confluence`'s composed replay can fail even after every cross pair between the two
+/// sequences has already been proven to commute (`property-b-evidence-error-handoff-v1.md`):
+/// `commutation.rs::replay_sequence_order` treats that as unreachable and Property B found a case
+/// where it is not (roughly one in several hundred thousand generated pairs). **Whether that is a
+/// production classification defect or a generator producing a sequence pair no real author's own
+/// history could ever produce is the architect's open ruling, not this test's** -- this allowlist
+/// exists to keep the finding visible (any *other* reason still hard-fails the sweep, exactly as
+/// before) without asserting how many times it occurs, since the failing seed is random per run and
+/// a pinned count would make this test flaky for the wrong reason the moment the seed changes.
+const ALLOWLISTED_EVIDENCE_ERROR_REASONS: &[&str] =
+    &["composed replay failed after confluence proof"];
+
+/// Bucket an `EvidenceError` by its own `reason` string where it has one (`Malformed`/
+/// `Unreadable`); the other three variants carry no free-text reason at all, so their own variant
+/// name is the bucket -- and none of those three is ever allowlisted, since they indicate a gap in
+/// this harness's own evidence registration, not the composed-replay finding this exists to track.
+fn evidence_error_bucket(error: &EvidenceError) -> String {
+    match error {
+        EvidenceError::Malformed { reason, .. } | EvidenceError::Unreadable { reason, .. } => {
+            reason.clone()
+        }
+        EvidenceError::Missing { .. } => "missing".to_string(),
+        EvidenceError::WrongObjectType { .. } => "wrong-object-type".to_string(),
+        EvidenceError::WrongBlobKind { .. } => "wrong-blob-kind".to_string(),
+    }
+}
+
 /// Property B (handoff §3): generate two operation *sequences* from the same baseline and look for
 /// the composition failure `check_confluence`'s own `FinalStateInequality` witness exists to catch
 /// -- every cross pair between the two sequences commutes, and the two full replay orders still
 /// disagree. Unlike Property A, a hit here would be a correctness finding, not an availability one.
+///
+/// `source_file: Some(file!())` (`property-b-evidence-error-handoff-v1.md` §2.1): this test builds
+/// its own `TestRunner` rather than using the `proptest!` macro, so proptest's default
+/// `FileFailurePersistence::SourceParallel` has no source path to resolve a regression file from
+/// unless one is supplied explicitly here -- without it, a failing case is never persisted, and
+/// every reproduction pays the full case count again. With it, a failing seed lands under
+/// `crates/prikk-store/proptest-regressions/patch_algebra/tests/algebra_properties.txt` and replays
+/// first, deterministically, on every subsequent run.
 #[test]
 fn property_b_composition_can_disagree_even_when_every_pairwise_check_agrees() {
     let cases = 4000;
     let mut runner = TestRunner::new(Config {
         cases,
+        source_file: Some(file!()),
         ..Config::default()
     });
     let generated = std::cell::Cell::new(0u32);
@@ -739,6 +775,7 @@ fn property_b_composition_can_disagree_even_when_every_pairwise_check_agrees() {
     let reached_full_sequence_replay = std::cell::Cell::new(0u32);
     let confluent = std::cell::Cell::new(0u32);
     let final_state_inequality_hits = std::cell::Cell::new(0u32);
+    let evidence_errors = std::cell::RefCell::new(BTreeMap::<String, u32>::new());
     let strategy = (
         baseline_spec_strategy(),
         op_sequence_strategy(),
@@ -760,24 +797,34 @@ fn property_b_composition_can_disagree_even_when_every_pairwise_check_agrees() {
                 evidence = register_choice_evidence(evidence, choice);
             }
 
-            let result = check_confluence_result(
+            // Collected by reason, not asserted per-case (§2.2): a hard `.expect()` here would
+            // panic the very first time the composed-replay finding below is generated, which
+            // contradicts this test's own stated design one paragraph down -- every finding is
+            // collected into a bucket, and only an *unlisted* reason hard-fails the sweep.
+            match check_confluence_result(
                 &state,
                 &evidence,
                 EvidenceScope::UnsealedCandidateOptional,
                 &left,
                 &right,
-            )
-            .expect("evidence is fully registered for every generated candidate");
-
-            if let ConfluenceResult::NotConfluent { witness } = &result {
-                if witness.kind == ConfluenceWitnessKind::FinalStateInequality {
-                    reached_full_sequence_replay.set(reached_full_sequence_replay.get() + 1);
-                    final_state_inequality_hits.set(final_state_inequality_hits.get() + 1);
+            ) {
+                Ok(result) => {
+                    if let ConfluenceResult::NotConfluent { witness } = &result {
+                        if witness.kind == ConfluenceWitnessKind::FinalStateInequality {
+                            reached_full_sequence_replay
+                                .set(reached_full_sequence_replay.get() + 1);
+                            final_state_inequality_hits.set(final_state_inequality_hits.get() + 1);
+                        }
+                    }
+                    if matches!(result, ConfluenceResult::Confluent { .. }) {
+                        reached_full_sequence_replay.set(reached_full_sequence_replay.get() + 1);
+                        confluent.set(confluent.get() + 1);
+                    }
                 }
-            }
-            if matches!(result, ConfluenceResult::Confluent { .. }) {
-                reached_full_sequence_replay.set(reached_full_sequence_replay.get() + 1);
-                confluent.set(confluent.get() + 1);
+                Err(error) => {
+                    let bucket = evidence_error_bucket(&error);
+                    *evidence_errors.borrow_mut().entry(bucket).or_insert(0) += 1;
+                }
             }
             Ok(())
         })
@@ -788,12 +835,23 @@ fn property_b_composition_can_disagree_even_when_every_pairwise_check_agrees() {
     let reached_full_sequence_replay = reached_full_sequence_replay.get();
     let confluent = confluent.get();
     let final_state_inequality_hits = final_state_inequality_hits.get();
+    let evidence_errors = evidence_errors.into_inner();
     let discard_rate = f64::from(discarded) / f64::from(generated) * 100.0;
     println!(
         "Property B: {generated} cases, {discarded} discarded ({discard_rate:.2}%), \
          {reached_full_sequence_replay} reached full-order replay ({confluent} confluent, \
          {final_state_inequality_hits} FinalStateInequality)"
     );
+    println!("  evidence errors by reason: {evidence_errors:?}");
+    for (bucket, count) in &evidence_errors {
+        assert!(
+            ALLOWLISTED_EVIDENCE_ERROR_REASONS.contains(&bucket.as_str()),
+            "unexpected evidence error while composing two sequences every cross pair already \
+             proved commute: {bucket:?} ({count} case(s)) -- this is a new finding, not the one \
+             `property-b-evidence-error-handoff-v1.md` allowlisted; do not widen the allowlist to \
+             silence it"
+        );
+    }
     assert_eq!(
         final_state_inequality_hits, 0,
         "found a sequence pair where every cross pair commutes but the two full replay orders \
