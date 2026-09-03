@@ -366,7 +366,13 @@ These apply to all work above and are not restated in each handoff.
    amendment in the same increment.
 9. **Gate set for every candidate.** `cargo fmt --all -- --check`;
    `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`;
-   `cargo test --workspace --locked`; `cargo +1.85.0 test --workspace --locked`; `git diff --check`;
+   `cargo test --workspace --locked`; `cargo +1.85.0 test --workspace --locked`;
+   `cargo +1.85.0 check --workspace --all-targets --locked` (RFC 126 §5 — added 2026-09-03: the
+   MSRV *test* command does not compile `[[bench]]` targets, proved by planting a syntax error in
+   `tools/benchmarks/benches/commit.rs` and watching `cargo +1.85.0 test --workspace --locked`
+   exit `0`. CI's `msrv-1.85.0` job already ran `--all-targets`, so nothing shipped broken — the
+   *local* set was the weaker one, and this closes that gap rather than fixing a live defect);
+   `git diff --check`;
    `cargo audit --no-fetch`; `RUSTDOCFLAGS="-D rustdoc::private_intra_doc_links" cargo doc
    --workspace --no-deps` (RFC 126 §4 — added 2026-09-02 after this exact lint sat unchecked at 7
    live warnings, since `cargo doc` had never run anywhere, local gate set or CI, before then);
