@@ -82,6 +82,66 @@ doctest campaign across 566 items would be a large ongoing cost for a small marg
 no CI job. **DC-62's peak-RSS work — genuinely good measurement — can regress invisibly**, and so can
 the two performance walls tracked in `ROADMAP.md`'s corrective program.
 
+## 5a. Amended 2026-09-03 — increment B is not a migration, and §5 has one question left
+
+**Increment A shipped** (`cb2e2a2`, amended `2fec604`/`fb107c7`): `tools/benchmarks`, criterion `0.7`
+pinned against the `1.85.0` MSRV, one `commit` benchmark, outside `default-members`.
+
+**The architect's own handoff described increment B as "migrating `dc59_commit_benchmark.rs`
+(1,064 lines) and `dc92_lineage_replay_benchmark.rs` (718)". That framing was wrong**, and reading
+what those files measure is what corrects it:
+
+| Harness | Measures | Can criterion express it? |
+|---|---|---|
+| `dc59` | repository size **10 → 10,000 files** (3 samples at the top point), a change-count axis, **peak RSS by `.spawn()`ing the binary and polling `/proc/<pid>/status` for `VmHWM`**, plus memory and timing floors | **No.** Criterion samples many iterations of a small fixed operation; a 10,000-file commit cannot be iterated 100 times, and criterion has no memory axis at all |
+| `dc92` | `verify`/`seal` against **sealed-history length to 160 blocks**, built to expose an O(N³)/O(N²) complexity question | **No**, for the same iteration-count reason |
+
+**Ruling: neither harness is migrated, and neither is retired.** They are *on-demand instruments*,
+a legitimate category distinct from a regression detector. They live under `tests/`, so the compiler
+maintains them on every `cargo test --workspace` even while `#[ignore]`d — they cannot silently
+bit-rot, which is the usual argument for retiring a dormant harness and does not apply here.
+
+**Retiring `dc92` was considered and refused.** Its question is closed — MILESTONES criterion 3 is
+**MET** (`verify` linear, 27.04 ms at N=160, ratio 1.97) — and both halves are now held by standing
+gates rather than by measurement: `rfc111_index_decode_cost_gate.rs` for `verify`,
+`rfc111_seal_decode_cost_gate.rs` for `seal`. **But a gate proves a property holds; it cannot
+re-derive the curve if the gate itself is ever questioned.** Deleting 718 compiler-maintained lines
+to buy tidiness is the wrong trade for a project that values robustness over initial effort.
+
+**So increment B carries no dev-team work.** §5's "benchmarks exist and never run" is answered for
+*regression detection* by increment A, and the two instruments are correctly on-demand.
+
+### The one thing §5 still needs, and it is the owner's
+
+**§5's stated motivation is that "DC-62's peak-RSS work — genuinely good measurement — can regress
+invisibly." Nothing built under this RFC addresses that.** Criterion measures wall-clock time.
+`dc59`'s `VmHWM` pass remains the project's only peak-RSS measurement and is `#[ignore]`d, so peak RSS
+has **no standing protection of any kind**.
+
+**This cannot be ruled by the architect, because the only available mechanism is the one §6 decided
+against.** §6 chose criterion over a fixed-threshold job, and the deciding argument was that
+hand-maintained thresholds drift into vacuous gates while criterion's stored baseline maintains itself
+as a by-product of running. **For peak RSS there is no criterion equivalent** — the choice is a fixed
+threshold or nothing, and §6's reasoning does not transfer to a question where the better option does
+not exist.
+
+**Three shapes, for the owner:**
+
+1. **A scheduled CI job** running `dc59`'s RSS pass at one small fixed size against a recorded
+   threshold. Catches order-of-magnitude regressions; carries exactly the drift risk §6 named, now
+   with no better alternative to compare against.
+2. **A local-only gate-set addition** — the RSS pass run on demand before a release cut rather than
+   per increment. Cheaper, and it fails the "invisible regression" test between cuts.
+3. **Record that peak RSS is unmeasured on a standing basis and stop implying otherwise.** §5's own
+   option 3 for the timing axis, applied honestly to the axis that still lacks cover.
+
+**No recommendation is offered here deliberately.** §6's reversal came from the owner questioning the
+architect's first answer on accessibility and long-term stability grounds, and those same two
+properties decide this one.
+
+**Until that ruling, §5 has no further increment**, and RFC 126's remaining dev-team work is §4's
+kernel doctests alone.
+
 ## 6. The ruling this RFC needs: criterion as a dev-dependency
 
 **The dependency gate permits it, and I verified why rather than taking the audit's word.**
