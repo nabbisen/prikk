@@ -86,6 +86,19 @@ documented and not one carries a compiler-verified example. Recommendation is de
 `Ed25519KeyPair`, `verify_ed25519`, `CanonicalWriter`, `RefStore::publish`, and peers). A blanket
 doctest campaign across 566 items would be a large ongoing cost for a small marginal gain.
 
+**Delivered 2026-09-03 (`5a5315f`): ten doctests, `0 passed` → `10 passed`.** Two properties found
+while landing them, recorded because a later reader would otherwise assume both the other way:
+
+- **Doctest bodies are not linted.** rustdoc compiles each example as its own crate, outside cargo's
+  clippy pipeline, so AUD-06's `deny`-level `unwrap_used`/`expect_used`/`indexing_slicing` **do not
+  bind them** — confirmed empirically (`canonical.rs`'s example carries five `unwrap()` calls and
+  `cargo clippy -p prikk-object -- -D warnings` exits `0`). This is fine and idiomatic for examples,
+  but it means doctests are the one body of code in this workspace those three lints do not reach.
+- **The cost is per-crate, not per-example.** Adding the first doctest to a crate costs roughly what
+  several more in that same crate cost (`0.26s` → `0.86s` for the whole `--doc` run), so the ceiling
+  that matters is filesystem-touching examples, not example count. Only `RefStore::publish` touches
+  a repository; its own real work is ~`0.13s` of the total.
+
 ## 5. Benchmarks exist and never run
 
 `dc59_commit_benchmark.rs` (1,064 lines) is `#[ignore]`d; `dc92_lineage_replay_benchmark.rs` runs
