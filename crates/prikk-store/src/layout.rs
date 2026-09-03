@@ -699,8 +699,9 @@ impl RepositoryLayout {
     pub(crate) fn repository_relative(&self, path: &Path) -> Result<PathBuf> {
         path.strip_prefix(&self.prikk_dir)
             .map(Path::to_path_buf)
-            .map_err(|_| {
-                PrikkError::Io("path is outside repository mutation authority".to_string())
+            .map_err(|_| PrikkError::Io {
+                kind: None,
+                context: "path is outside repository mutation authority".to_string(),
             })
     }
 

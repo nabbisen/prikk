@@ -111,10 +111,10 @@ fn insert_regular_file(
     let stat: RootFileStat = stat_file_state_if_exists(layout.worktree_mutation_root(), path)
         .map_err(AuthorError::Store)?
         .ok_or_else(|| {
-            AuthorError::Store(PrikkError::Io(format!(
-                "worktree entry disappeared: {}",
-                path.display()
-            )))
+            AuthorError::Store(PrikkError::Io {
+                kind: None,
+                context: format!("worktree entry disappeared: {}", path.display()),
+            })
         })?;
     out.insert(
         repo_path.as_str().to_string(),

@@ -9,6 +9,12 @@ use core::fmt;
 pub type Result<T> = core::result::Result<T, PrikkError>;
 
 /// Error type used by the initial implementation crates.
+///
+/// `#[non_exhaustive]` (RFC 132 increment 1): `prikk-error` is published, and until this attribute
+/// landed, adding any new variant was a breaking change for every downstream match. Verified free to
+/// add before landing it: no exhaustive `match` on a `PrikkError` value exists anywhere in this
+/// workspace.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PrikkError {
     /// Canonical encoding failed because input data violates the frozen schema contract.
@@ -36,8 +42,18 @@ pub enum PrikkError {
     LockConflict(String),
     /// The requested object type cannot be persisted in the requested store.
     UnsupportedObjectType(String),
-    /// Placeholder for I/O errors without making this crate depend on std::io::Error in variants.
-    Io(String),
+    /// An I/O failure. `kind` is `Some` only when this value was built from a real
+    /// `std::io::Error` via [`From`] -- every explicit construction site elsewhere in the workspace
+    /// (a caller-precondition violation, a platform-capability refusal, or a validation failure
+    /// wearing this variant rather than one that describes it) sets `kind: None`, which is the
+    /// truth, not a placeholder to "tidy" into something non-optional. RFC 132 increment 2 is
+    /// expected to move those sites onto variants that describe them and narrow this field.
+    Io {
+        /// The underlying `std::io::ErrorKind`, when this was built from a real `std::io::Error`.
+        kind: Option<std::io::ErrorKind>,
+        /// Human-readable context. Alone carries the full `Display` message -- see that impl.
+        context: String,
+    },
 }
 
 impl fmt::Display for PrikkError {
@@ -57,7 +73,7 @@ impl fmt::Display for PrikkError {
             Self::Integrity(msg) => write!(f, "integrity error: {msg}"),
             Self::LockConflict(msg) => write!(f, "lock conflict: {msg}"),
             Self::UnsupportedObjectType(msg) => write!(f, "unsupported object type: {msg}"),
-            Self::Io(msg) => write!(f, "i/o error: {msg}"),
+            Self::Io { context, .. } => write!(f, "i/o error: {context}"),
         }
     }
 }
@@ -66,6 +82,9 @@ impl std::error::Error for PrikkError {}
 
 impl From<std::io::Error> for PrikkError {
     fn from(value: std::io::Error) -> Self {
-        Self::Io(value.to_string())
+        Self::Io {
+            kind: Some(value.kind()),
+            context: value.to_string(),
+        }
     }
 }

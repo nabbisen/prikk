@@ -122,7 +122,10 @@ fn verify_repository_detects_wal_checksum_mismatch() -> Result<()> {
     let mut bytes = std::fs::read(wal.path())?;
     let last_byte = bytes
         .last_mut()
-        .ok_or_else(|| prikk_error::PrikkError::Io("WAL file unexpectedly empty".to_string()))?;
+        .ok_or_else(|| prikk_error::PrikkError::Io {
+            kind: None,
+            context: "WAL file unexpectedly empty".to_string(),
+        })?;
     *last_byte ^= 0x01;
     std::fs::write(wal.path(), &bytes)?;
 
@@ -204,16 +207,23 @@ fn verify_repository_detects_rollback_draft_operation_sequence_mismatch() -> Res
         "expected exactly one op_seq field header in the encoded payload, found {}",
         matches.len()
     );
-    let match_offset = *matches.first().ok_or_else(|| {
-        prikk_error::PrikkError::Io("unreachable: length just checked".to_string())
+    let match_offset = *matches.first().ok_or_else(|| prikk_error::PrikkError::Io {
+        kind: None,
+        context: "unreachable: length just checked".to_string(),
     })?;
     let value_start = match_offset + op_seq_field_header.len();
     let value_end = value_start
         .checked_add(4)
-        .ok_or_else(|| prikk_error::PrikkError::Io("op_seq value range overflow".to_string()))?;
+        .ok_or_else(|| prikk_error::PrikkError::Io {
+            kind: None,
+            context: "op_seq value range overflow".to_string(),
+        })?;
     let value_bytes = payload_bytes
         .get_mut(value_start..value_end)
-        .ok_or_else(|| prikk_error::PrikkError::Io("op_seq value out of range".to_string()))?;
+        .ok_or_else(|| prikk_error::PrikkError::Io {
+            kind: None,
+            context: "op_seq value out of range".to_string(),
+        })?;
     assert_eq!(value_bytes, &1_u32.to_be_bytes());
     value_bytes.copy_from_slice(&2_u32.to_be_bytes());
 

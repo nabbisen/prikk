@@ -822,9 +822,10 @@ fn read_worktree_file_bytes(
     read_file_if_exists(layout.worktree_mutation_root(), Path::new(path))
         .map_err(AuthorError::Store)?
         .ok_or_else(|| {
-            AuthorError::Store(PrikkError::Io(format!(
-                "worktree entry disappeared: {path}"
-            )))
+            AuthorError::Store(PrikkError::Io {
+                kind: None,
+                context: format!("worktree entry disappeared: {path}"),
+            })
         })
 }
 

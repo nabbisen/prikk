@@ -15,14 +15,18 @@ use rustix::fs::{self, FileType, Mode, OFlags};
 /// Platform-neutral path decomposition, shared by every backend that resolves a relative mutation
 /// path one component at a time (Unix's fd-anchored walk, Windows' path-anchored walk).
 pub(super) fn required_parent(path: &Path) -> Result<&Path> {
-    path.parent()
-        .ok_or_else(|| PrikkError::Io("relative mutation path has no parent".to_string()))
+    path.parent().ok_or_else(|| PrikkError::Io {
+        kind: None,
+        context: "relative mutation path has no parent".to_string(),
+    })
 }
 
 /// See `required_parent`.
 pub(super) fn required_file_name(path: &Path) -> Result<&std::ffi::OsStr> {
-    path.file_name()
-        .ok_or_else(|| PrikkError::Io("relative mutation path has no file name".to_string()))
+    path.file_name().ok_or_else(|| PrikkError::Io {
+        kind: None,
+        context: "relative mutation path has no file name".to_string(),
+    })
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]

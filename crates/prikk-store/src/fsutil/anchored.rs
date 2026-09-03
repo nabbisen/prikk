@@ -198,9 +198,10 @@ fn prikk_to_io(error: PrikkError) -> std::io::Error {
     not(any(target_os = "linux", target_os = "macos", target_os = "windows"))
 ))]
 fn unsupported_mutation<T>() -> Result<T> {
-    Err(PrikkError::Io(
-        "repository mutation requires Linux, macOS, or Windows root-scoped filesystem \
+    Err(PrikkError::Io {
+        kind: None,
+        context: "repository mutation requires Linux, macOS, or Windows root-scoped filesystem \
          capabilities"
             .to_string(),
-    ))
+    })
 }

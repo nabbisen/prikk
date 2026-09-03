@@ -218,7 +218,12 @@ fn scan_untracked(
 ) -> Result<()> {
     let entries = match fs::read_dir(current) {
         Ok(entries) => entries,
-        Err(err) => return Err(PrikkError::Io(err.to_string())),
+        Err(err) => {
+            return Err(PrikkError::Io {
+                kind: None,
+                context: err.to_string(),
+            });
+        }
     };
     for entry in entries {
         let entry = entry?;

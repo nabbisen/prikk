@@ -105,13 +105,16 @@ pub(crate) use anchored::set_anchor_verification_barrier_for_test;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub(crate) fn temporary_path(path: &Path) -> Result<PathBuf> {
     let Some(file_name) = path.file_name() else {
-        return Err(PrikkError::Io(
-            "temporary path destination has no file name".to_string(),
-        ));
+        return Err(PrikkError::Io {
+            kind: None,
+            context: "temporary path destination has no file name".to_string(),
+        });
     };
     let mut random = [0_u8; 16];
-    getrandom::fill(&mut random)
-        .map_err(|error| PrikkError::Io(format!("temporary path randomness failed: {error}")))?;
+    getrandom::fill(&mut random).map_err(|error| PrikkError::Io {
+        kind: None,
+        context: format!("temporary path randomness failed: {error}"),
+    })?;
     let mut name = file_name.to_os_string();
     name.push(format!(
         ".tmp.{}.{:032x}",

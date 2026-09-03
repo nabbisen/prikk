@@ -108,18 +108,21 @@ fn a_replacement_installed_between_path_re_derivation_and_open_is_refused()
     // Rendezvous 2: releases the operation thread now that the replacement is in place.
     barrier.wait();
 
-    let join_result = handle
-        .join()
-        .map_err(|_| prikk_error::PrikkError::Io("anchor race thread panicked".to_string()))?;
+    let join_result = handle.join().map_err(|_| prikk_error::PrikkError::Io {
+        kind: None,
+        context: "anchor race thread panicked".to_string(),
+    })?;
 
     let _ = std::fs::remove_dir_all(&root_path);
     let _ = std::fs::remove_dir_all(&aside_path);
 
-    rename_result.map_err(|error| {
-        prikk_error::PrikkError::Io(format!("renaming the anchor aside: {error}"))
+    rename_result.map_err(|error| prikk_error::PrikkError::Io {
+        kind: None,
+        context: format!("renaming the anchor aside: {error}"),
     })?;
-    create_result.map_err(|error| {
-        prikk_error::PrikkError::Io(format!("creating the replacement anchor: {error}"))
+    create_result.map_err(|error| prikk_error::PrikkError::Io {
+        kind: None,
+        context: format!("creating the replacement anchor: {error}"),
     })?;
 
     match join_result {

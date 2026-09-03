@@ -92,7 +92,10 @@ fn verify_repository_reports_two_independent_stage_failures_together() -> Result
     let prefix_dir = layout
         .object_path(ObjectType::Blob, stray_id)
         .parent()
-        .ok_or_else(|| PrikkError::Io("object path has no parent".to_string()))?
+        .ok_or_else(|| PrikkError::Io {
+            kind: None,
+            context: "object path has no parent".to_string(),
+        })?
         .to_path_buf();
     std::fs::create_dir_all(prefix_dir.join("stray-directory"))?;
 
@@ -510,7 +513,10 @@ fn verify_repository_with_options_halts_every_later_stage_when_stop_on_first_err
     let prefix_dir = layout
         .object_path(ObjectType::Blob, stray_id)
         .parent()
-        .ok_or_else(|| PrikkError::Io("object path has no parent".to_string()))?
+        .ok_or_else(|| PrikkError::Io {
+            kind: None,
+            context: "object path has no parent".to_string(),
+        })?
         .to_path_buf();
     std::fs::create_dir_all(prefix_dir.join("stray-directory"))?;
 
@@ -522,9 +528,10 @@ fn verify_repository_with_options_halts_every_later_stage_when_stop_on_first_err
     let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
     wal.append_patch(&patch)?;
     let mut bytes = std::fs::read(wal.path())?;
-    let last_byte = bytes
-        .last_mut()
-        .ok_or_else(|| PrikkError::Io("WAL file unexpectedly empty".to_string()))?;
+    let last_byte = bytes.last_mut().ok_or_else(|| PrikkError::Io {
+        kind: None,
+        context: "WAL file unexpectedly empty".to_string(),
+    })?;
     *last_byte ^= 0x01;
     std::fs::write(wal.path(), &bytes)?;
 
@@ -701,7 +708,10 @@ fn verify_repository_with_options_stop_on_first_error_reports_exactly_one_outcom
     let prefix_dir = layout
         .object_path(ObjectType::Blob, stray_id)
         .parent()
-        .ok_or_else(|| PrikkError::Io("object path has no parent".to_string()))?
+        .ok_or_else(|| PrikkError::Io {
+            kind: None,
+            context: "object path has no parent".to_string(),
+        })?
         .to_path_buf();
     std::fs::create_dir_all(prefix_dir.join("stray-directory"))?;
 

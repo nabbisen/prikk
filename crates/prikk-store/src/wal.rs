@@ -208,9 +208,10 @@ impl Wal {
         // cannot exist without its directory -- this call could not help even if the directory were
         // somehow absent.
         if relative.parent().is_none() {
-            return Err(PrikkError::Io(
-                "WAL path has no parent directory".to_string(),
-            ));
+            return Err(PrikkError::Io {
+                kind: None,
+                context: "WAL path has no parent directory".to_string(),
+            });
         }
         append_file_required(root, relative, &bytes)?;
         Ok(next_seq)
@@ -318,20 +319,20 @@ impl Wal {
         self.mutation
             .as_ref()
             .map(|(root, relative)| (root, relative.as_path()))
-            .ok_or_else(|| {
-                PrikkError::Io(
-                    "WAL mutation requires a validated repository layout capability".to_string(),
-                )
+            .ok_or_else(|| PrikkError::Io {
+                kind: None,
+                context: "WAL mutation requires a validated repository layout capability"
+                    .to_string(),
             })
     }
 
     fn require_current_format(&self) -> Result<()> {
         self.layout
             .as_ref()
-            .ok_or_else(|| {
-                PrikkError::Io(
-                    "WAL mutation requires a validated repository layout capability".to_string(),
-                )
+            .ok_or_else(|| PrikkError::Io {
+                kind: None,
+                context: "WAL mutation requires a validated repository layout capability"
+                    .to_string(),
             })?
             .require_current_format()
     }

@@ -47,7 +47,10 @@ pub(super) struct WindowsAuthority {
 }
 
 fn io_error(path: &Path, error: std::io::Error) -> PrikkError {
-    PrikkError::Io(format!("{}: {error}", path.display()))
+    PrikkError::Io {
+        kind: None,
+        context: format!("{}: {error}", path.display()),
+    }
 }
 
 impl WindowsAuthority {

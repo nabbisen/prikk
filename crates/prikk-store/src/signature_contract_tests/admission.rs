@@ -119,9 +119,12 @@ fn ref_log_rejects_nonzero_schema1_clock_before_filesystem_mutation() -> prikk_e
     envelope.canonical_payload = update.to_canonical_bytes()?;
 
     let log_path = layout.ref_log_path("heads/main");
-    let parent = log_path.parent().ok_or_else(|| {
-        prikk_error::PrikkError::Io("test ref-log path has no parent".to_string())
-    })?;
+    let parent = log_path
+        .parent()
+        .ok_or_else(|| prikk_error::PrikkError::Io {
+            kind: None,
+            context: "test ref-log path has no parent".to_string(),
+        })?;
     let parent_existed = parent.exists();
     assert!(append_log_record_for_signature_test(&layout, "heads/main", &envelope).is_err());
     assert!(!log_path.exists());

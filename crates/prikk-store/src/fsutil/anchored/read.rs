@@ -103,11 +103,12 @@ pub(crate) fn list_directory(root: &MutationRoot, relative: &Path) -> Result<Vec
 
 /// Read and require a root-relative regular file.
 pub(crate) fn read_file_required(root: &MutationRoot, relative: &Path) -> Result<Vec<u8>> {
-    read_file_if_exists(root, relative)?.ok_or_else(|| {
-        PrikkError::Io(format!(
+    read_file_if_exists(root, relative)?.ok_or_else(|| PrikkError::Io {
+        kind: None,
+        context: format!(
             "required root-relative file is absent: {}",
             relative.display()
-        ))
+        ),
     })
 }
 
@@ -190,9 +191,11 @@ impl AnchoredReader for PosixReader {
     fn list_directory(&self, root: &MutationRoot, relative: &Path) -> Result<Vec<RootDirEntry>> {
         use std::os::unix::ffi::OsStrExt;
 
-        let directory = open_existing_directory_for_read(root, relative)?.ok_or_else(|| {
-            PrikkError::Io(format!("directory is absent: {}", relative.display()))
-        })?;
+        let directory =
+            open_existing_directory_for_read(root, relative)?.ok_or_else(|| PrikkError::Io {
+                kind: None,
+                context: format!("directory is absent: {}", relative.display()),
+            })?;
         let mut stream = fs::Dir::read_from(&directory.fd).map_err(io_error)?;
         let mut entries = Vec::new();
         for entry in &mut stream {
@@ -202,8 +205,9 @@ impl AnchoredReader for PosixReader {
                 continue;
             }
             let child = join_relative(relative, &name);
-            let kind = inspect_entry(root, &child)?.ok_or_else(|| {
-                PrikkError::Io(format!("directory entry disappeared: {}", child.display()))
+            let kind = inspect_entry(root, &child)?.ok_or_else(|| PrikkError::Io {
+                kind: None,
+                context: format!("directory entry disappeared: {}", child.display()),
             })?;
             entries.push(RootDirEntry { name, kind });
         }
@@ -280,10 +284,10 @@ impl AnchoredReader for WindowsReader {
 
     fn list_directory(&self, root: &MutationRoot, relative: &Path) -> Result<Vec<RootDirEntry>> {
         let Some(resolved) = open_existing_windows_directory_for_read(root, relative)? else {
-            return Err(PrikkError::Io(format!(
-                "directory is absent: {}",
-                relative.display()
-            )));
+            return Err(PrikkError::Io {
+                kind: None,
+                context: format!("directory is absent: {}", relative.display()),
+            });
         };
         let mut entries = Vec::new();
         for entry in std::fs::read_dir(&resolved)
@@ -293,9 +297,12 @@ impl AnchoredReader for WindowsReader {
                 entry.map_err(|error| fallback_io_error(&resolved, "read directory", error))?;
             let name = entry.file_name();
             let child = join_relative(relative, &name);
-            let kind = self.inspect_entry(root, &child)?.ok_or_else(|| {
-                PrikkError::Io(format!("directory entry disappeared: {}", child.display()))
-            })?;
+            let kind = self
+                .inspect_entry(root, &child)?
+                .ok_or_else(|| PrikkError::Io {
+                    kind: None,
+                    context: format!("directory entry disappeared: {}", child.display()),
+                })?;
             entries.push(RootDirEntry { name, kind });
         }
         Ok(entries)
@@ -382,10 +389,10 @@ impl AnchoredReader for PathOnlyReader {
         let reader = match std::fs::read_dir(&path) {
             Ok(reader) => reader,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Err(PrikkError::Io(format!(
-                    "directory is absent: {}",
-                    relative.display()
-                )));
+                return Err(PrikkError::Io {
+                    kind: None,
+                    context: format!("directory is absent: {}", relative.display()),
+                });
             }
             Err(error) => return Err(fallback_io_error(&path, "open directory", error)),
         };
@@ -394,8 +401,9 @@ impl AnchoredReader for PathOnlyReader {
             let entry = entry.map_err(|error| fallback_io_error(&path, "read directory", error))?;
             let name = entry.file_name();
             let child = join_relative(relative, &name);
-            let kind = inspect_entry(root, &child)?.ok_or_else(|| {
-                PrikkError::Io(format!("directory entry disappeared: {}", child.display()))
+            let kind = inspect_entry(root, &child)?.ok_or_else(|| PrikkError::Io {
+                kind: None,
+                context: format!("directory entry disappeared: {}", child.display()),
             })?;
             entries.push(RootDirEntry { name, kind });
         }
@@ -442,7 +450,10 @@ fn classify(file_type: FileType) -> EntryKind {
 /// attempting, not just the OS errno.
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn fallback_io_error(path: &Path, action: &str, error: std::io::Error) -> PrikkError {
-    PrikkError::Io(format!("failed to {action} {}: {error}", path.display()))
+    PrikkError::Io {
+        kind: None,
+        context: format!("failed to {action} {}: {error}", path.display()),
+    }
 }
 
 fn join_relative(parent: &Path, name: &std::ffi::OsStr) -> PathBuf {

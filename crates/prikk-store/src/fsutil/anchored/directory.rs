@@ -369,9 +369,10 @@ pub(super) fn relative_components(path: &Path) -> Result<Vec<&std::ffi::OsStr>> 
             Component::CurDir => {}
             Component::Normal(value) => components.push(value),
             Component::RootDir | Component::ParentDir | Component::Prefix(_) => {
-                return Err(PrikkError::Io(
-                    "path must be relative to its authority root".to_string(),
-                ));
+                return Err(PrikkError::Io {
+                    kind: None,
+                    context: "path must be relative to its authority root".to_string(),
+                });
             }
         }
     }
@@ -384,9 +385,10 @@ fn validate_relative(path: &Path) -> Result<()> {
             component,
             Component::RootDir | Component::ParentDir | Component::Prefix(_)
         ) {
-            return Err(PrikkError::Io(
-                "path must be relative to its authority root".to_string(),
-            ));
+            return Err(PrikkError::Io {
+                kind: None,
+                context: "path must be relative to its authority root".to_string(),
+            });
         }
     }
     Ok(())

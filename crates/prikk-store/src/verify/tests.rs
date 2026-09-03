@@ -1168,7 +1168,10 @@ fn verify_repository_detects_every_directory_shape_violation() -> Result<()> {
     let prefix_dir = layout
         .object_path(ObjectType::Blob, id)
         .parent()
-        .ok_or_else(|| PrikkError::Io("object path has no parent".to_string()))?
+        .ok_or_else(|| PrikkError::Io {
+            kind: None,
+            context: "object path has no parent".to_string(),
+        })?
         .to_path_buf();
     std::fs::create_dir_all(prefix_dir.join("stray-directory"))?;
     let report = verify_repository(&layout)?;

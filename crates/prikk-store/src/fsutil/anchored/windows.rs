@@ -65,7 +65,10 @@ const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
 const SHARE_READ_WRITE_DELETE: u32 = 0x0000_0001 | 0x0000_0002 | 0x0000_0004;
 
 fn io_error(path: &Path, error: io::Error) -> PrikkError {
-    PrikkError::Io(format!("{}: {error}", path.display()))
+    PrikkError::Io {
+        kind: None,
+        context: format!("{}: {error}", path.display()),
+    }
 }
 
 /// The single open primitive every operation in this module funnels through -- the enforcement
@@ -102,16 +105,19 @@ fn open_directory_handle(path: &Path) -> io::Result<File> {
 fn validate_directory_not_reparse_point(file: &File, path: &Path) -> Result<()> {
     let metadata = file.metadata().map_err(|error| io_error(path, error))?;
     if is_reparse_point(&metadata) {
-        return Err(PrikkError::Io(format!(
-            "refusing to resolve through a reparse point: {}",
-            path.display()
-        )));
+        return Err(PrikkError::Io {
+            kind: None,
+            context: format!(
+                "refusing to resolve through a reparse point: {}",
+                path.display()
+            ),
+        });
     }
     if !metadata.is_dir() {
-        return Err(PrikkError::Io(format!(
-            "expected a directory: {}",
-            path.display()
-        )));
+        return Err(PrikkError::Io {
+            kind: None,
+            context: format!("expected a directory: {}", path.display()),
+        });
     }
     Ok(())
 }
@@ -231,16 +237,16 @@ pub(super) fn open_existing_file_no_follow(
         Ok(file) => {
             let metadata = file.metadata().map_err(|error| io_error(path, error))?;
             if is_reparse_point(&metadata) {
-                return Err(PrikkError::Io(format!(
-                    "refusing to open a reparse point: {}",
-                    path.display()
-                )));
+                return Err(PrikkError::Io {
+                    kind: None,
+                    context: format!("refusing to open a reparse point: {}", path.display()),
+                });
             }
             if !metadata.is_file() {
-                return Err(PrikkError::Io(format!(
-                    "expected a regular file: {}",
-                    path.display()
-                )));
+                return Err(PrikkError::Io {
+                    kind: None,
+                    context: format!("expected a regular file: {}", path.display()),
+                });
             }
             Ok(Some(file))
         }
@@ -250,8 +256,10 @@ pub(super) fn open_existing_file_no_follow(
 }
 
 fn required_existing_file_no_follow(path: &Path, options: &mut OpenOptions) -> Result<File> {
-    open_existing_file_no_follow(path, options)?
-        .ok_or_else(|| PrikkError::Io(format!("required file is absent: {}", path.display())))
+    open_existing_file_no_follow(path, options)?.ok_or_else(|| PrikkError::Io {
+        kind: None,
+        context: format!("required file is absent: {}", path.display()),
+    })
 }
 
 fn resolved_existing_path(root: &MutationRoot, relative: &Path) -> Result<PathBuf> {

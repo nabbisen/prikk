@@ -253,9 +253,10 @@ fn check(point: Point) -> Result<()> {
             Some((selected, remaining)) if *selected == point => {
                 if *remaining == 0 {
                     *next = None;
-                    return Err(PrikkError::Io(format!(
-                        "injected filesystem failure at {point:?}"
-                    )));
+                    return Err(PrikkError::Io {
+                        kind: None,
+                        context: format!("injected filesystem failure at {point:?}"),
+                    });
                 }
                 *remaining = remaining.saturating_sub(1);
             }

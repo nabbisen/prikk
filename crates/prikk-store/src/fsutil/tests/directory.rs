@@ -45,8 +45,9 @@ fn concurrent_required_directory_creation_is_idempotent() -> prikk_error::Result
         }));
     }
     for handle in handles {
-        handle.join().map_err(|_| {
-            prikk_error::PrikkError::Io("directory race thread panicked".to_string())
+        handle.join().map_err(|_| prikk_error::PrikkError::Io {
+            kind: None,
+            context: "directory race thread panicked".to_string(),
         })??;
     }
     assert!(path.join("shared/shard").is_dir());
