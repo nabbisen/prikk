@@ -9,7 +9,8 @@ day**, re-accepting this RFC after §5's evidence section was added. That sectio
 settled input, not a proposal: increment 2 may be scoped against it without re-deriving the
 classification or the derive answer.
 
-**Increment 2 remains unruled.** What it must decide is listed at the end of §5.
+**Increment 2 is RULED 2026-09-03: deferred, with three named triggers** (§5). **RFC 132 therefore
+has no outstanding work**, and the `PrikkError` change it landed is ready to ship.
 
 Raised by the external architecture audit of 2026-08-31 as **`ROADMAP.md`'s `AUD-04`**, the last of
 that program's four remaining rows and the only one carrying a sequencing constraint: **before any
@@ -112,9 +113,47 @@ costs nothing is open only while the project is pre-1.0 and says so.
 source, storing a source cannot be costed without item 4's answer, and implementing it vacuously is
 worse than leaving it absent.
 
-**Increment 2 (not ruled; needs increment 1's evidence):** re-classify the 45 sites, make `kind`
-non-optional, and decide `source()` against the derive question. **This one changes user-facing
-messages** and therefore needs release notes and a `troubleshooting.md` pass.
+**Increment 2 — RULED by the architect 2026-09-03: DEFERRED, with a named trigger.**
+
+**The sequencing constraint that made `AUD-04` urgent is discharged.** *"Before any stability
+promise"* applied to the changes that are **breaking**: `#[non_exhaustive]` and `Io`'s shape. Both
+landed in increment 1. **With `#[non_exhaustive]` in place, adding descriptive variants later is no
+longer a breaking change** — every downstream match must already carry a wildcard. Moving a site off
+`Io` changes an observable *message*, not a compile contract.
+
+**The remaining work has no consumer today, and that is measured rather than assumed:**
+
+- **The CLI discards all of it.** `CliError` is `Usage(String) | Failure(String)`, reached through
+  **126** `map_err(|err| err.to_string())` sites. Nothing in the CLI matches a `PrikkError` variant,
+  so no re-classification changes any exit code or any control flow.
+- **No embedder is relying on it.** `docs/src/reference/release-compatibility.md:14`:
+  *"Cargo APIs, CLI behavior, object schemas, and repository formats are **not generally stable**."*
+  Crate source APIs are named there as their own compatibility surface, deliberately unstable.
+
+**The cost is immediate and the benefit is hypothetical:**
+
+| Item | Cost |
+|---|---|
+| Re-classify the 29 production sites | ~29 user-facing message changes, a `troubleshooting.md` pass, release notes, and 2-3 new variants |
+| Make `kind` non-optional | gated on the above |
+| `source()` | rewriting **54** test assertions across 11 files in two crates |
+
+**Doing that now is speculative API work with a measured cost against a hypothetical consumer**,
+which is the trade this project refuses elsewhere. **Deferred.**
+
+**What re-opens it — any one of these, and it should be taken up immediately:**
+
+1. **A first real embedder** of `prikk-store`/`prikk-object` outside this workspace.
+2. **The CLI stops flattening errors to strings** — JSON error output, or exit-code granularity
+   beyond RFC 121's ruled `0`/`1`/`2`. Either creates the consumer that makes discrimination worth
+   something.
+3. **Any move toward a library stability promise**, which is the point at which the additive
+   escape hatch stops being free for the *shape* changes.
+
+**Not done, and deliberately:** `Clone` is measured dead (zero compile errors on removal) but is left
+in place. Removing it is change without a beneficiary, and re-adding a derive later is not breaking —
+so it costs nothing to keep and nothing to drop later. **Recorded so the next person does not
+re-derive the measurement.**
 
 ### Increment 1's evidence, delivered 2026-09-03 (`264ba73`) and verified by the architect
 
