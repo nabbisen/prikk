@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.30.0 — 2026-09-03
+## 0.30.0 — 2026-09-04
 
 **A verification and library-surface release.** Nothing about using `prikk` from the command line
 changes except two help lines. The one breaking change is in the library API, and it is the kind that
@@ -47,6 +47,14 @@ None of this changes behaviour; it changes what the project can catch.
 - **The architecture reference's `verify` cost section was corrected.** It described `verify` as
   roughly O(N³) — about 34 seconds at 160 blocks — which stopped being true on 2026-08-18. `verify`
   is linear: **27.04 ms at 160 blocks**, and the property is held by a gate.
+- **A newly found limitation is recorded**, in the architecture reference's known-costs table. Two
+  text edits to one file whose replaced spans are textually *and* contextually identical do not
+  survive being replayed in sequence, because a span's identity includes its position among identical
+  occurrences and the first edit renumbers the second. **`merge` can reach it** when a candidate
+  branch spans two such commits, and the result is a refusal — the candidate is reported malformed
+  instead of getting a verdict. **Nothing is corrupted and no history is at risk.** It is not new in
+  this release; it was found by this release's own new property tests, which is why it is named here.
+  Tracked as RFC 134.
 
 ## 0.29.0 — 2026-09-03
 

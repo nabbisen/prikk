@@ -173,6 +173,7 @@ Two limits are worth stating plainly, because they define what verification mean
 | DC-76's negative controls are only partly demonstrated on Windows, for the eight guarantees that remain (G5 retired in DC-98) — see [platform support](./platform-support.md) for the per-guarantee table | Reported per DC-76's own precedent, unowned |
 | Commit cost is not yet bounded independently of repository size (NFR-PERF-01) | Reduced, still missed |
 | Merge complexity scoped to active block size (NFR-PERF-03) is **argued, not benchmarked** | Unowned |
+| Two `EditText` operations on one node whose old spans are textually **and** anchor-identical do not survive replay in sequence: span identity includes a duplicate-occurrence index recomputed against the current buffer, so the first edit renumbers the second. Reachable through `merge` when a candidate branch spans two such commits — the result is a **malformed-candidate refusal instead of a verdict**, not a corruption path | Found 2026-09-03 by the patch-algebra property tests; owned by RFC 134 |
 
 These are recorded rather than left implicit. The findings register they once pointed at was
 retired deliberately — reviews carry findings while they are live, and documentation and RFCs
