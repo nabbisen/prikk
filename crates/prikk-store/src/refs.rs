@@ -193,6 +193,77 @@ impl RefStore {
     /// Publish a signed RefState with ref-specific locking and CAS. Writes through a freshly
     /// decoded `FileObjectStore` -- the safe default for any caller not holding its own session. See
     /// [`Self::publish_with_object_store`] for a caller that already has one (RFC 111 §6.1 Stage 2).
+    ///
+    /// # Examples
+    ///
+    /// `publish` validates the `RefState`/`RefUpdate` pair for internal consistency and requires
+    /// each envelope to carry at least one signature -- it does not itself dereference the target
+    /// block, so this example signs a placeholder id rather than sealing a real one, keeping the
+    /// example to what this specific entry point actually checks. `expected_previous_ref_state_id:
+    /// None` is genesis CAS: it fails closed if the ref already has a current state, the same
+    /// signal `branch create`/`seal`'s own first publish use.
+    ///
+    /// ```
+    /// use prikk_object::{
+    ///     CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, RefKind, RefStatePayload,
+    ///     RefUpdatePayload,
+    /// };
+    /// use prikk_store::{
+    ///     Ed25519MaintainerSigner, MaintainerSigner as _, RefPublication, RefStore,
+    ///     RepositoryLayout, maintainer_signature,
+    /// };
+    ///
+    /// # fn main() -> prikk_error::Result<()> {
+    /// let root = std::env::temp_dir().join(format!("prikk-doctest-publish-{}", std::process::id()));
+    /// std::fs::create_dir_all(&root)?;
+    /// let layout = RepositoryLayout::init(&root)?;
+    /// let signer = Ed25519MaintainerSigner::from_seed("doctest-maintainer", &[3u8; 32])?;
+    ///
+    /// let target_object_id = ObjectId::from_bytes([9u8; 32]);
+    /// let ref_state = RefStatePayload {
+    ///     ref_name: "heads/main".to_string(),
+    ///     kind: RefKind::Branch,
+    ///     target_object_id,
+    ///     update_seq: 1,
+    ///     previous_ref_state_id: None,
+    ///     required_attestation_ids: Vec::new(),
+    ///     closed: false,
+    /// };
+    /// let mut ref_state_envelope =
+    ///     ObjectEnvelope::unsigned(ObjectType::RefState, 1, ref_state.to_canonical_bytes()?);
+    /// let ref_state_id = ref_state_envelope.object_id();
+    /// ref_state_envelope
+    ///     .add_signature(maintainer_signature(&signer, ObjectType::RefState, ref_state_id)?)?;
+    ///
+    /// let ref_update = RefUpdatePayload {
+    ///     ref_name: "heads/main".to_string(),
+    ///     old_ref_state_id: None,
+    ///     new_ref_state_id: ref_state_id,
+    ///     new_target_object_id: target_object_id,
+    ///     update_seq: 1,
+    ///     created_at: 0,
+    ///     author_key_id: signer.key_id().to_string(),
+    /// };
+    /// let mut ref_update_envelope =
+    ///     ObjectEnvelope::unsigned(ObjectType::RefUpdate, 1, ref_update.to_canonical_bytes()?);
+    /// let ref_update_id = ref_update_envelope.object_id();
+    /// ref_update_envelope
+    ///     .add_signature(maintainer_signature(&signer, ObjectType::RefUpdate, ref_update_id)?)?;
+    ///
+    /// let store = RefStore::new(layout);
+    /// let published_id = store.publish(&RefPublication {
+    ///     ref_name: "heads/main".to_string(),
+    ///     expected_previous_ref_state_id: None,
+    ///     ref_state: ref_state_envelope,
+    ///     ref_update: ref_update_envelope,
+    /// })?;
+    /// assert_eq!(published_id, ref_state_id);
+    /// assert_eq!(store.read_current_ref_state_id("heads/main")?, Some(ref_state_id));
+    ///
+    /// # let _ = std::fs::remove_dir_all(&root);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn publish(&self, publication: &RefPublication) -> Result<ObjectId> {
         self.publish_with_object_store(&mut FileObjectStore::new(self.layout.clone()), publication)
     }

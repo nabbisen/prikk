@@ -143,6 +143,28 @@ impl ObjectId {
     }
 
     /// Compute an object ID from object type, schema version, and unsigned canonical payload.
+    ///
+    /// # Examples
+    ///
+    /// Identity is a pure function of these three inputs: the same triple always produces the
+    /// same id, and changing any one of them -- not only the payload bytes -- changes it. A
+    /// caller who forgets to fold `object_type` or `schema_version` into whatever they hash
+    /// themselves would get collisions across types that this function never does.
+    ///
+    /// ```
+    /// use prikk_object::{ObjectId, ObjectType};
+    ///
+    /// let payload = b"canonical bytes";
+    /// let first = ObjectId::from_canonical_payload(ObjectType::Blob, 1, payload);
+    /// let second = ObjectId::from_canonical_payload(ObjectType::Blob, 1, payload);
+    /// assert_eq!(first, second, "identical inputs must produce identical ids");
+    ///
+    /// let different_type = ObjectId::from_canonical_payload(ObjectType::Patch, 1, payload);
+    /// assert_ne!(first, different_type, "object type is part of the id's own preimage");
+    ///
+    /// let different_schema = ObjectId::from_canonical_payload(ObjectType::Blob, 2, payload);
+    /// assert_ne!(first, different_schema, "schema version is part of the id's own preimage");
+    /// ```
     #[must_use]
     pub fn from_canonical_payload(
         object_type: ObjectType,

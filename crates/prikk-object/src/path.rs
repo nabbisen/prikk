@@ -39,6 +39,21 @@ const MAX_COMPONENT_LEN: usize = 255;
 const MAX_TOTAL_LEN: usize = 1024;
 
 /// Validate that a path is safe as a repository-relative path.
+///
+/// # Examples
+///
+/// A caller who never inspects the `Result` and just writes wherever the string points would not
+/// notice a traversal attempt until it escaped the repository -- checking the return value here is
+/// what turns a silent misuse into an explicit refusal.
+///
+/// ```
+/// use prikk_object::validate_repo_path;
+///
+/// assert!(validate_repo_path("src/lib.rs").is_ok());
+///
+/// let escape = validate_repo_path("../outside-the-repo");
+/// assert!(escape.is_err(), "a `..` component must never validate");
+/// ```
 pub fn validate_repo_path(value: &str) -> Result<()> {
     if value.is_empty() {
         return Err(PrikkError::InvalidName(
@@ -123,6 +138,20 @@ fn validate_component(component: &str) -> Result<()> {
 /// regardless of host OS. Exposed for other storage surfaces that build a literal filesystem path
 /// component from user-supplied text outside the `RepoPath` grammar (DC-72).
 #[must_use]
+/// # Examples
+///
+/// `con.txt` is an ordinary-looking filename that creates and reads back fine on Linux and macOS --
+/// the reservation is invisible there, which is exactly why silently skipping this check would be a
+/// defect nobody notices until the same repository is checked out on Windows. Matching is by the
+/// component's name before its first `.`, case-insensitively, so an extension does not hide it.
+///
+/// ```
+/// use prikk_object::is_windows_reserved_name;
+///
+/// assert!(is_windows_reserved_name("con.txt"));
+/// assert!(is_windows_reserved_name("NUL"));
+/// assert!(!is_windows_reserved_name("console.txt"));
+/// ```
 pub fn is_windows_reserved_name(component: &str) -> bool {
     let base = component
         .split('.')

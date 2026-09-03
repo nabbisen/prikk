@@ -51,6 +51,33 @@ pub trait CanonicalEncode {
 }
 
 /// Canonical TLV writer.
+///
+/// # Examples
+///
+/// Fields must be written in non-decreasing tag order -- callers cannot encode two fields in
+/// argument-list order and rely on the writer to sort them, since there is no sort. Two writers fed
+/// the same fields in the same order always produce byte-identical output, which is what object
+/// identity is computed from.
+///
+/// ```
+/// use prikk_object::CanonicalWriter;
+///
+/// let mut first = CanonicalWriter::new();
+/// first.field_u32(1, 7).unwrap();
+/// first.field_string(2, "example").unwrap();
+///
+/// let mut second = CanonicalWriter::new();
+/// second.field_u32(1, 7).unwrap();
+/// second.field_string(2, "example").unwrap();
+/// assert_eq!(first.finish(), second.finish(), "identical fields must encode identically");
+///
+/// let mut out_of_order = CanonicalWriter::new();
+/// out_of_order.field_u32(2, 7).unwrap();
+/// assert!(
+///     out_of_order.field_string(1, "example").is_err(),
+///     "a tag lower than the last one written must be refused, not silently accepted"
+/// );
+/// ```
 #[derive(Debug, Default)]
 pub struct CanonicalWriter {
     bytes: Vec<u8>,

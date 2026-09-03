@@ -23,6 +23,22 @@ pub struct RepoPath(String);
 
 impl RepoPath {
     /// Validate and construct a repository-relative path.
+    ///
+    /// # Examples
+    ///
+    /// A validated `RepoPath` carries its own string back out unchanged -- construction does not
+    /// normalize case or separators, only refuse what is unsafe. Two paths differing only by case
+    /// both construct successfully as distinct values; [`validate_no_path_collisions`] is the
+    /// separate check that catches them being used together.
+    ///
+    /// ```
+    /// use prikk_replay::RepoPath;
+    ///
+    /// let path = RepoPath::parse("src/lib.rs").unwrap();
+    /// assert_eq!(path.as_str(), "src/lib.rs");
+    ///
+    /// assert!(RepoPath::parse("../outside").is_err());
+    /// ```
     pub fn parse(value: &str) -> Result<Self> {
         validate_repo_path(value)?;
         Ok(Self(value.to_string()))
@@ -36,6 +52,27 @@ impl RepoPath {
 }
 
 /// Reject duplicate paths and case-insensitive collisions.
+///
+/// # Examples
+///
+/// `README.md` and `readme.md` are two different, individually valid paths -- each passes
+/// [`RepoPath::parse`] on its own. Committing both side by side is silently fine on a
+/// case-sensitive filesystem (Linux) and silently *not the same two files* on a case-insensitive
+/// one (macOS's and Windows' defaults) -- exactly the hazard this check exists to refuse before it
+/// becomes a materialization surprise on a different platform than the one that authored it.
+///
+/// ```
+/// use prikk_replay::{RepoPath, validate_no_path_collisions};
+///
+/// let distinct = [RepoPath::parse("a.txt").unwrap(), RepoPath::parse("b.txt").unwrap()];
+/// assert!(validate_no_path_collisions(&distinct).is_ok());
+///
+/// let colliding = [RepoPath::parse("README.md").unwrap(), RepoPath::parse("readme.md").unwrap()];
+/// assert!(
+///     validate_no_path_collisions(&colliding).is_err(),
+///     "paths differing only by case must be refused together"
+/// );
+/// ```
 pub fn validate_no_path_collisions(paths: &[RepoPath]) -> Result<()> {
     let mut exact = BTreeSet::<&str>::new();
     let mut folded = BTreeSet::<String>::new();

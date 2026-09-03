@@ -72,6 +72,23 @@ impl Ed25519AuthorSigner {
     }
 
     /// Construct from a non-empty key id and a 32-byte secret seed (caller-provided key material).
+    ///
+    /// # Examples
+    ///
+    /// The key id is validated here, at construction -- not deferred to the first `sign` call or
+    /// to whatever later tries to read it back off a signed envelope. A caller who typos a key id
+    /// with, say, a colon in it finds out immediately, rather than authoring a real patch first and
+    /// only failing when it is signed or replayed.
+    ///
+    /// ```
+    /// use prikk_store::Ed25519AuthorSigner;
+    ///
+    /// let signer = Ed25519AuthorSigner::from_seed("dev-author", &[1u8; 32]);
+    /// assert!(signer.is_ok());
+    ///
+    /// let invalid = Ed25519AuthorSigner::from_seed("dev:author", &[1u8; 32]);
+    /// assert!(invalid.is_err(), "a key id with a colon must be refused, not accepted silently");
+    /// ```
     pub fn from_seed(
         key_id: impl Into<String>,
         seed: &[u8; prikk_crypto::ED25519_KEY_LEN],

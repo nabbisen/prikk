@@ -16,6 +16,28 @@ pub const ED25519_KEY_LEN: usize = 32;
 pub const ED25519_SIGNATURE_LEN: usize = 64;
 
 /// An Ed25519 keypair used to produce detached signatures.
+///
+/// # Examples
+///
+/// `from_seed` is deterministic -- the same 32-byte seed always derives the same public key, which
+/// is what lets a caller re-derive a signer from stored key material rather than a `KeyPair` value
+/// itself needing to be persisted.
+///
+/// ```
+/// use prikk_crypto::Ed25519KeyPair;
+///
+/// let seed = [7u8; 32];
+/// let first = Ed25519KeyPair::from_seed(&seed);
+/// let second = Ed25519KeyPair::from_seed(&seed);
+/// assert_eq!(
+///     first.public_key_bytes(),
+///     second.public_key_bytes(),
+///     "the same seed must derive the same public key every time"
+/// );
+///
+/// let signature = first.sign(b"a message");
+/// assert_eq!(signature.len(), prikk_crypto::ED25519_SIGNATURE_LEN);
+/// ```
 pub struct Ed25519KeyPair {
     signing: SigningKey,
 }
@@ -59,6 +81,27 @@ impl Ed25519KeyPair {
 ///
 /// Uses strict verification (rejects non-canonical encodings and small-order keys). Returns an
 /// error if the public key or signature is malformed, or if verification fails.
+///
+/// # Examples
+///
+/// A signature is only valid for the exact message it was produced over -- verifying it against
+/// different bytes must fail rather than silently succeed, which is the property every caller
+/// checking authenticity actually relies on.
+///
+/// ```
+/// use prikk_crypto::{Ed25519KeyPair, verify_ed25519};
+///
+/// let keypair = Ed25519KeyPair::from_seed(&[9u8; 32]);
+/// let public_key = keypair.public_key_bytes();
+/// let message = b"authenticate this";
+/// let signature = keypair.sign(message);
+///
+/// assert!(verify_ed25519(&public_key, message, &signature).is_ok());
+/// assert!(
+///     verify_ed25519(&public_key, b"a different message", &signature).is_err(),
+///     "a signature must not verify against bytes it was never produced over"
+/// );
+/// ```
 pub fn verify_ed25519(
     public_key: &[u8; ED25519_KEY_LEN],
     message: &[u8],
