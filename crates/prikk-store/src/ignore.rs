@@ -27,7 +27,8 @@
 //! pruning, ignoring it would not actually let a real project commit at all.
 //!
 //! **`.prikkignore` is itself an ordinary, tracked worktree file.** It is not a config file (there is
-//! none — `main.rs:344` defers one deliberately) and it is not per-user or per-checkout: it lives in
+//! none — `main.rs`'s `ActivePatchThresholds` doc comment defers a durable configuration mechanism to
+//! a future increment) and it is not per-user or per-checkout: it lives in
 //! the worktree, `commit` scans and signs it like anything else unless a rule inside it also covers
 //! itself, and it travels with every checkout of this history the same way any other tracked file
 //! does — including through `bundle`/`sync`, so a received repository's own future commits are
