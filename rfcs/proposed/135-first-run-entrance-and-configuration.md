@@ -145,6 +145,34 @@ sources, keeping convenience separate from persistence.
 the tool never invents. **Worth naming even if refused** — refusing it deliberately is a different act
 from never having considered it.
 
+## 5a. Who this is for — answered by the owner 2026-09-04
+
+The architect asked which pain the entrance primarily addresses: the visitor who withdraws, or the
+adopted user re-exporting eight policy variables in every shell and CI job. **The owner's answer
+closes the question:**
+
+> **"Now, there is no user 'who has already adopted it'. prikk has never been in production use yet."**
+
+**So the second constituency does not exist**, and §5's sequencing follows from that rather than from
+preference:
+
+- **The eight policy values have no current beneficiary.** Their only consumer today is this project's
+  own testing. Building durable configuration for them now is **speculative work against a hypothetical
+  user** — the same trade RFC 132 §5 refused for `source()`, and it should be refused here for the same
+  reason and revisited by the same trigger: **a first real adopter.**
+- **The visitor is the only real user of this surface**, so §5(b) `key` and §5(c) `setup` are where the
+  value is, and the measure of success is **how few unfamiliar steps precede the first working
+  repository.**
+
+**And the causation may run the other way, which sharpens it.** There are no adopters *and* the
+entrance is four opaque hex exports before anything happens. **This RFC should not assume those facts
+are unrelated.**
+
+**One consequence for what "success" means here.** With adoption not yet the goal, the entrance's job
+is to get a reader to *understand what is different* — which is the same job
+`docs/src/reference/git-mapping.md` (RFC 128 §5) was just built for. **The entrance and that page are
+one surface, and should be designed as one**, not as a CLI change beside a docs page.
+
 ## 6. Security — the part that must not be rushed
 
 **Persisting a seed means private key material at rest**, owned by prikk, on a path prikk chooses,
