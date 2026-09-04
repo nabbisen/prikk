@@ -14,6 +14,18 @@
 //!
 //! Conformance is pinned by golden vectors in [`vectors`].
 //!
+//! **Sequencing invariant (RFC 134 §7.4 item 1, permanent — v2's schema 3 does not retire it):**
+//! every `EditText` is authored against the state its predecessors produced — never against a
+//! shared baseline. v1 identity depends on this because `dup_index` is recomputed against the
+//! buffer at lookup; v2 depends on it because anchors are. **What upholds it**: `plan_edit_text`
+//! (`worktree_patch/node_authoring.rs`) emits one operation per file per commit, and
+//! `current_text_for_node` resolves through the queued-patch cache, then the stored blob, then
+//! replay — so ordinary authoring can never produce two operations on the same node against the
+//! same baseline. **What breaks it, and it is not hypothetical**: a sequence built
+//! programmatically against one baseline (RFC 113's Git/Subversion/CVS import is the named case),
+//! or a crafted or externally-produced patch. When it breaks, resolution correctly refuses — see
+//! `patch_algebra::commutation::replay_sequence_order`'s own doc for what that refusal means.
+//!
 //! Split across three files (DC-58): this file keeps the identity primitives shared by both replay
 //! and authoring (`locate_text_span`, `splice_text`, `text_blob_id`, `occurrences`,
 //! `compute_span_id`, the anchor hashes); `authoring.rs` holds deterministic span selection for

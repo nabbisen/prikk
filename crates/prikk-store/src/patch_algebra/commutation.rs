@@ -204,6 +204,14 @@ fn has_prefix_dependency<R: PatchAlgebraEvidence>(
     Ok(false)
 }
 
+/// Replay `first` then `second` as one chained sequence, over `baseline`. `OracleFailure::Replay`
+/// here is not evidence corruption: every pairwise confluence check already passed, so this is
+/// specifically the RFC 134 §7.4 item 1 sequencing invariant breaking — the sequence's own
+/// operations were authored against a shared baseline rather than each predecessor's own result
+/// (`text_span.rs`'s own module doc states the invariant, what upholds it, and what breaks it).
+/// **Keep this a refusal, not a repair**: resolving it by re-localizing against the composed state
+/// was considered and refused (RFC 134 §7.4/§7.5, "shape 4") — the pairwise verdicts stay sound,
+/// what fails is that the operations do not compose.
 fn replay_sequence_order<R: PatchAlgebraEvidence>(
     baseline: &NodeLifecycleState,
     evidence: &R,
@@ -229,7 +237,7 @@ fn replay_sequence_order<R: PatchAlgebraEvidence>(
             scope: candidate_scope,
             fact: EvidenceFact::Operation,
             object_id: None,
-            reason: "composed replay failed after confluence proof".to_string(),
+            reason: "sequence operations do not compose against a shared baseline".to_string(),
         },
     })
 }

@@ -725,15 +725,18 @@ fn build_sequence(choices: &[OpChoice], spec: &BaselineSpec) -> Option<Vec<Decod
 
 /// `check_confluence`'s composed replay can fail even after every cross pair between the two
 /// sequences has already been proven to commute (`property-b-evidence-error-handoff-v1.md`):
-/// `commutation.rs::replay_sequence_order` treats that as unreachable and Property B found a case
-/// where it is not (roughly one in several hundred thousand generated pairs). **Whether that is a
-/// production classification defect or a generator producing a sequence pair no real author's own
-/// history could ever produce is the architect's open ruling, not this test's** -- this allowlist
-/// exists to keep the finding visible (any *other* reason still hard-fails the sweep, exactly as
-/// before) without asserting how many times it occurs, since the failing seed is random per run and
-/// a pinned count would make this test flaky for the wrong reason the moment the seed changes.
+/// Property B found a case where `left`'s own two operations were authored against a shared
+/// baseline rather than each other's result, violating the RFC 134 §7.4 item 1 sequencing
+/// invariant (`text_span.rs`'s own module doc states it; `commutation.rs::replay_sequence_order`'s
+/// own doc explains the refusal). **Ruled** (RFC 134, 2026-09-04): this generator still builds
+/// v1-shaped operations that can produce exactly this shared-baseline shape; the allowlist exists
+/// to keep the finding visible (any *other* reason still hard-fails the sweep, exactly as before)
+/// without asserting how many times it occurs, since the failing seed is random per run and a
+/// pinned count would make this test flaky for the wrong reason the moment the seed changes. It
+/// retires only once the generator moves to v2 and the case passes for the right reason -- not
+/// because this wording changed.
 const ALLOWLISTED_EVIDENCE_ERROR_REASONS: &[&str] =
-    &["composed replay failed after confluence proof"];
+    &["sequence operations do not compose against a shared baseline"];
 
 /// Bucket an `EvidenceError` by its own `reason` string where it has one (`Malformed`/
 /// `Unreadable`); the other three variants carry no free-text reason at all, so their own variant
