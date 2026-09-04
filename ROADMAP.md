@@ -336,6 +336,28 @@ remained. Whether the contract is ever promoted into a stability *promise* stays
 §6a and §6b followed on 2026-09-03. **`AUD-05` through `AUD-10` are all delivered** — the whole
 no-design-decision half of this program — leaving `AUD-01` through `AUD-04`, which are design work.
 
+### Release position — 0.31.0 shipped 2026-09-04
+
+**`0.31.0` was cut at `534dca8`**: CI 15/15, `release.yml` green on four build targets, 16 assets, all
+eight crates live on crates.io.
+
+**It is the first release that older builds cannot read.** Every patch it authors is recorded at
+`Patch` schema 3, which `0.30.0` and earlier do not admit — **for every commit, not only text edits.**
+Both the local-read and the `bundle export` → `bundle import` cases were **demonstrated against a
+locally built `0.30.0` binary** before the cut, not inferred:
+
+```
+0.30.0 status  -> integrity error: format-2 patch does not accept envelope schema 3 (accepted: [1, 2])
+0.30.0 import  -> the same refusal, on a bundle exported by 0.31.0
+```
+
+**Inside RFC 114's contract**, which promises backward compatibility (any release reads what any prior
+release wrote) and never forward. The release notes lead with it, and with the instruction to upgrade
+every machine sharing a repository before committing.
+
+**Carried:** RFC 134 end to end — content-unique span identity, the vector pinning it, the non-Linux
+dead-code repair, and shape 1's containment. No command, flag, exit code, or message changed.
+
 ### Release position — 0.30.0 shipped 2026-09-04
 
 **`0.30.0` was cut at `dd3fc1e`**: CI 15/15 with macOS green, `release.yml` green across four build
