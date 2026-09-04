@@ -62,6 +62,14 @@ caller sits behind such a gate elsewhere, also needs the two cross-target `clipp
 macOS targets) — this project has been caught by CI going red from exactly that gap before, on a
 change that carried no `cfg(target_os)` of its own.
 
+In restricted environments where the default temporary directory is read-only, use a workspace-local
+one for the integration tests:
+
+```sh
+mkdir -p target/tmp
+TMPDIR="$PWD/target/tmp" cargo test --workspace --locked
+```
+
 ## Reporting a security vulnerability
 
 That is not what this file is for — see [SECURITY.md](SECURITY.md).

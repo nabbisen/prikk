@@ -71,72 +71,21 @@ Prikk is not yet the right tool if you need:
 
 ## Install
 
-The fastest path — no Rust toolchain, no `cargo binstall` — on Linux (`x86_64`/`aarch64`) and macOS
-(Apple Silicon):
-
 ```sh
 curl -fsSL https://github.com/prikk-vcs/prikk/releases/latest/download/install.sh | sh
 ```
 
-Downloads the release page's own prebuilt archive for your platform, verifies its checksum, and
-installs to `~/.local/bin` (override with `PRIKK_INSTALL_DIR`, or `--prefix`) — refusing to install
-anything if the checksum does not match. **A checksum proves integrity of transport, not authority of
-origin** — see **Release authority** below; the script states this itself when it finishes. Pin a
-version with `sh install.sh --version X.Y.Z` (or `PRIKK_INSTALL_VERSION`); prefer to read the script
-before running it? `curl -fsSL .../install.sh -o install.sh`, inspect it, then `sh install.sh`. To
-remove what it installed: `curl -fsSL .../uninstall.sh | sh` (same base URL). Windows is not
-supported by this script yet — use `cargo install prikk` below, or download the `.zip` from the
-release page by hand. See the [install guide](./docs/src/guide/install.md#the-shell-installer) for
-what it writes to disk, install-location details, and the uninstall guarantee.
+Downloads the prebuilt archive for your platform, verifies its checksum, and installs to
+`~/.local/bin`. Also available as `cargo binstall prikk`, `cargo install prikk`, or a direct download
+from the [release page](https://github.com/prikk-vcs/prikk/releases).
 
-Prebuilt binary, no Rust toolchain required — Linux (`x86_64`/`aarch64`), macOS (`aarch64`), and
-Windows (`x86_64`):
+**Repository mutation runs on Linux, macOS, and Windows; read-only commands build and run on every
+platform Rust targets.** A checksum proves integrity of transport, not authority of origin — no
+release passes the signer-authority audit yet.
 
-```sh
-cargo binstall prikk
-```
-
-Or download directly from the [release page](https://github.com/prikk-vcs/prikk/releases), verify the
-attached `.sha256` checksum, and extract. Every target archive contains the `prikk` binary, `LICENSE`,
-and a `.build-info.txt` recording the exact toolchain and command used to build it — reproducible from
-the tag with `cargo build -p prikk --release --target <triple> --locked`.
-
-**Release authority.** Prebuilt binaries carry no more signer authority than the source tarball already
-carries none of — `release-signers.toml` is empty and fail-closed, so no release, including its
-attached binaries, passes the DC-35 signer-authority audit yet. A checksum proves integrity of
-transport, not authority of origin; see the [release-compatibility
-reference](./docs/src/reference/release-compatibility.md).
-
-From crates.io, requires a Rust toolchain:
-
-```sh
-cargo install prikk
-```
-
-**Repository *mutation* runs on Linux, macOS, and Windows** (as of 0.21.0; Windows carries two named
-narrower guarantees — see the platform support reference below). **Read-only commands build and run on
-all three**
-(`verify`, `log`, `status`, `doctor`, `checkout --plan-only`/`--snapshot-plan`/`--patch-plan`/
-`--patch-delete-plan`, `merge-evidence`, `merge-plan`, `inverse-plan`, `rollback-preview`,
-`rollback-draft-verify`, `branch [list]`, `tag [list]`, `worktree-status` — the full, durable list is
-in the [platform support
-reference](./docs/src/reference/platform-support.md)). This closes a defect fixed by DC-71:
-`prikk-store` previously failed to compile at all off Linux due to inconsistently
-`#[cfg(target_os = "linux")]`-gated imports; CI now builds and actually *runs* the read-only command
-set against a real repository on GitHub's `windows-latest` and `macos-latest` runners on every
-change, so this cannot silently rot again.
-
-**On a platform with no prebuilt binary — other Linux architectures, or a BSD — build it yourself.**
-Nothing in prikk is gated on CPU architecture, only on the operating system, so any architecture Rust
-targets on Linux builds with no reduction in capability. FreeBSD compiles too, but **mutation is
-refused at runtime off Linux/macOS/Windows**, so it is read-only there. See the [install
-guide](./docs/src/guide/install.md#build-from-source).
-
-To build from a clone — also the path to use when working on prikk itself:
-
-```sh
-cargo build -p prikk --release --locked && export PATH="$PWD/target/release:$PATH"
-```
+The [install guide](./docs/src/guide/install.md) covers pinning a version, verifying checksums by
+hand, building from source, uninstalling, and the per-platform detail; the [platform support
+reference](./docs/src/reference/platform-support.md) has the exact command-by-command matrix.
 
 ## Quick Start
 
@@ -288,26 +237,10 @@ CLI can be built from crates.io — **their APIs may change without notice befor
 
 ## Development Gates
 
-The three commands below are the ones worth running constantly while working:
-
-```sh
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-cargo test --workspace --locked
-```
-
-**They are not the full gate set.** Every change this project accepts passes the complete list in
-[`rfcs/EXECUTION-ORDER.md`](./rfcs/EXECUTION-ORDER.md) §6 rule 9 — which also covers the MSRV test
-run, `git diff --check`, `cargo audit`, a rustdoc lint, and the three `release-policy` checks. That
-document is the authority; this section is a convenience, and deliberately does not restate it.
-
-In restricted environments where the default temporary directory is read-only, use a workspace-local
-temporary directory for integration tests:
-
-```sh
-mkdir -p target/tmp
-TMPDIR="$PWD/target/tmp" cargo test --workspace --locked
-```
+Every change this project accepts passes the full gate set in
+[`rfcs/EXECUTION-ORDER.md`](./rfcs/EXECUTION-ORDER.md) §6 rule 9, which that document owns. The three
+commands worth running constantly, the rest of the set, and how work is reviewed here are in
+[`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
 ## More Detail
 
