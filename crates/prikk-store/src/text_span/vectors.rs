@@ -12,8 +12,9 @@
 use prikk_object::{NodeId, text_span_hash};
 
 use super::{
-    TextSpanResolutionFailure, compute_span_id, left_anchor, locate_text_span, locate_text_span_v2,
-    occurrences, plan_authored_text_span, right_anchor, splice_text, text_blob_id,
+    TextSpanResolutionFailure, compute_span_id, compute_span_id_v2, left_anchor, left_anchor_v2,
+    locate_text_span, locate_text_span_v2, occurrences, plan_authored_text_span, right_anchor,
+    right_anchor_v2, splice_text, text_blob_id,
 };
 
 fn nid(b: u8) -> NodeId {
@@ -87,6 +88,60 @@ fn check_vector(
     assert_eq!(located, (start, end), "localized byte range");
 
     // Splice (definitional) and derived content identity.
+    let new_text = splice_text(text, start, end, replacement).expect("splice");
+    assert_eq!(new_text, exp_new_text, "resulting text bytes");
+    let blob = text_blob_id(&new_text).expect("blob id");
+    assert_eq!(blob.to_hex(), exp_blob, "resulting text blob id");
+}
+
+/// RFC 134 §8 amendment: `check_vector`'s own shape, for v2's content-unique identity
+/// (`left_anchor_v2`/`right_anchor_v2`/`compute_span_id_v2`/`locate_text_span_v2`) instead of v1's.
+/// `exp_span_id` is a freeze of `compute_span_id_v2`'s own observed output for these named inputs
+/// -- computed once by running the function, then pasted in -- not an independently derived
+/// expectation. It exists so v2's identity *function* is pinned, not only the wire encoding of its
+/// two new length fields (which `rfc114_vector_15`, in `signature_contract_tests/vectors.rs`,
+/// already covers).
+#[allow(clippy::too_many_arguments)]
+fn check_vector_v2(
+    text: &[u8],
+    node_byte: u8,
+    start: usize,
+    end: usize,
+    replacement: &[u8],
+    left_len: u32,
+    right_len: u32,
+    exp_left: &str,
+    exp_right: &str,
+    exp_span_id: &str,
+    exp_new_text: &[u8],
+    exp_blob: &str,
+) {
+    let node = nid(node_byte);
+    let old_span = &text[start..end];
+    let old_span_hash = text_span_hash(old_span);
+
+    let left = left_anchor_v2(text, start, left_len);
+    let right = right_anchor_v2(text, end, right_len);
+    assert_eq!(hex(&left), exp_left, "left_anchor_hash (v2)");
+    assert_eq!(hex(&right), exp_right, "right_anchor_hash (v2)");
+
+    let span_id = compute_span_id_v2(node, &old_span_hash, &left, &right, left_len, right_len);
+    assert_eq!(hex(&span_id), exp_span_id, "span_id (v2)");
+
+    let located = locate_text_span_v2(
+        text,
+        old_span,
+        &left,
+        &right,
+        &span_id,
+        node,
+        &old_span_hash,
+        left_len,
+        right_len,
+    )
+    .expect("v2 localization");
+    assert_eq!(located, (start, end), "localized byte range (v2)");
+
     let new_text = splice_text(text, start, end, replacement).expect("splice");
     assert_eq!(new_text, exp_new_text, "resulting text bytes");
     let blob = text_blob_id(&new_text).expect("blob id");
@@ -403,6 +458,28 @@ fn fdd01_text_span_v7_duplicate_anchor_filtered_indices() {
         "ecdd21dc10bd0164cd578bb1d13b4ce813bcf908fdbcb6b98aa93ef4ee41bca4",
         &expected_new_text,
         "68153c238ae9d4128112cb1ea82dd1a5fb7e767e8843561fdba4b40508d4bfcc",
+    );
+}
+
+#[test]
+fn fdd134_text_span_v2_content_unique_identity() {
+    // Asymmetric lengths (64 left, 96 right) so the vector also exercises the two length fields
+    // independently, not just a single shared value. exp_span_id is a freeze of
+    // compute_span_id_v2's own observed output for these named inputs (computed once, pasted in),
+    // not an independently derived expectation -- see check_vector_v2's own doc.
+    check_vector_v2(
+        b"lorem ipsum dolor sit amet",
+        0x56,
+        6,
+        11,
+        b"IPSUM",
+        64,
+        96,
+        "e5c418875eba91942bf3b60c065720a7cff273951f0babcfc458ea6998ee261b",
+        "9a8ba1ebf5044a132b8c8daa2457f5d128e6e2b0a5c4c3130f1478d05e435a45",
+        "9742bbe801b6973fce0628ce91190ef65129dd429bd34227d67a496d1150af08",
+        b"lorem IPSUM dolor sit amet",
+        "fa91addeec13c2aae1b180b57afd2ba5941704a704d0537032f913857ffbd437",
     );
 }
 
