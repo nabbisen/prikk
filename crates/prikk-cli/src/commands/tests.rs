@@ -64,6 +64,7 @@ const DECLARED_DOCUMENTS: &[&str] = &[
     "docs/src/guide/status.md",
     "docs/src/guide/sync.md",
     "docs/src/guide/troubleshooting.md",
+    "docs/src/guide/tutorial.md",
     "docs/src/guide/worktree-status.md",
     "docs/src/reference/architecture.md",
     "docs/src/reference/concurrency-locking.md",
