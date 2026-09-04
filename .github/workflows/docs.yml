@@ -23,12 +23,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    env:
-      # RFC 137 §7 increment 3: staged outside the repository tree so nothing new appears under
-      # docs/ -- no .gitignore entry needed, and a local run cannot leave a third directory beside
-      # src/ and book/.
-      SITE_DIR: ${{ runner.temp }}/site
-
     defaults:
       run:
         working-directory: docs
@@ -51,13 +45,17 @@ jobs:
 
       # RFC 137 §7 increment 3: the landing page (docs/landing/) is the site root, the built book
       # goes under /docs/. docs.yml's own `paths:` filter is already `docs/**`, so docs/landing/
-      # needs no filter change.
+      # needs no filter change. Staged outside the repository tree (under $RUNNER_TEMP) so nothing
+      # new appears under docs/ -- no .gitignore entry needed, and a local run cannot leave a third
+      # directory beside src/ and book/. $RUNNER_TEMP is a plain environment variable present in
+      # every runner shell; the `runner` expression context it would otherwise come from is not
+      # available in a job-level `env:` block, only in step-level contexts.
       - name: Stage site
         run: |
-          mkdir -p "$SITE_DIR"
-          cp -r landing/. "$SITE_DIR/"
-          mkdir -p "$SITE_DIR/docs"
-          cp -r book/. "$SITE_DIR/docs/"
+          mkdir -p "$RUNNER_TEMP/site/docs"
+          cp -r landing/. "$RUNNER_TEMP/site/"
+          cp -r book/. "$RUNNER_TEMP/site/docs/"
+          echo "SITE_DIR=$RUNNER_TEMP/site" >> "$GITHUB_ENV"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5

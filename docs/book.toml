@@ -7,9 +7,10 @@ src = "src"
 [output.html]
 git-repository-url = "https://github.com/prikk-vcs/prikk"
 additional-js = ["mermaid.min.js", "mermaid-init.js"]
-# RFC 137 §7 increment 2. Sets the <base href="..."> mdBook writes into every generated page
-# (verified in docs/book/404.html, not assumed from the manual): without it, <base href="/">, so a
-# 404 served at /docs/guide/nope.html resolves its relative CSS refs against the site root and gets
+# RFC 137 §7 increment 2. Sets the <base href="..."> mdBook writes into the generated 404 page
+# (verified in docs/book/404.html, not assumed from the manual -- other pages use relative paths
+# and carry no <base> tag at all): without it, <base href="/">, so a 404 served at
+# /docs/guide/nope.html resolves its relative CSS refs against the site root and gets
 # a path that does not exist. site-url is a HOST-root path, not a site-root one -- today the book is
 # served under a repository path (prikk-vcs.github.io/prikk/docs/), not the domain apex, so this is
 # "/prikk/docs/", not "/docs/". CUTOVER: this must become "/docs/" the same increment that sets
