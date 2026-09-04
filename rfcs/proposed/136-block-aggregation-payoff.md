@@ -1,13 +1,24 @@
 # RFC 136 — The block aggregation payoff: what sealing a block should make cheap
 
-**Status.** **PROPOSED, 2026-09-04.** Opened at the project owner's instruction the same day, in
-answer to their own question: the block concept came from the fact that patch-based version control is
-forced into heavy calculation, and the intent was *"to make it by far more efficient by aggregating
-multiple patches into a single patch as block when a cycle of development on some theme is finished."*
+**Status.** **ACCEPTED by the project owner 2026-09-04**, the same day it was opened at their
+instruction, in answer to their own question: the block concept came from the fact that patch-based
+version control is forced into heavy calculation, and the intent was *"to make it by far more efficient
+by aggregating multiple patches into a single patch as block when a cycle of development on some theme
+is finished."*
 
-**Nothing here is ruled.** This RFC states the problem, the evidence, and the option space. §7 carries
-the question for the owner. No increment is handed over until it is answered, because the answer
-decides which of three materially different artifacts gets built.
+**What the acceptance covers, stated because a bare acceptance is scope-ambiguous.** It accepts the
+problem record, the evidence, and the shape of the question — the same reading RFC 133's acceptance
+carried. **It does not answer §7**, and §7 remains the one thing outstanding. Following RFC 101/102's
+precedent, **acceptance clears §9's measurements only**: no object-model change, no snapshot policy,
+no composition definition, no handoff.
+
+**§9.1 was measured under that clearance on 2026-09-04, and it eliminates one option.** Option B's
+collapse ratio over this project's own 600-commit history is **1.16-1.25x at realistic block sizes**,
+and the measured figure is an *upper bound* on what composition could achieve. **The architect
+recommends against Option B**; Options A and C are untouched by it, because neither depends on
+collapse. §7's question is unchanged and still the owner's.
+
+**Nothing else is ruled.
 
 **Author-review independence.** The architect wrote this RFC and is also its only reviewer, the
 standing gap recorded on every architect-authored design in this project. Compensated at
@@ -162,6 +173,9 @@ Store the block's **net effect** as one operation sequence, alongside (not inste
 - **Costs:** composition must be defined and proven equal to sequential replay, over the full
   operation set including `EditText` — and RFC 134 is this project's own evidence that composition
   over text spans is where the hard cases live. No field exists.
+- **MEASURED 2026-09-04 (§9.1): the payoff is 1.16-1.25x at realistic block sizes, and that figure is
+  a ceiling.** **Architect recommends against.** Not refused — the owner rules — but the proof cost is
+  not proportionate to a 20% reduction in operations replayed.
 - **Travels in bundles:** yes.
 - **Identity:** same question as A.
 
@@ -213,8 +227,54 @@ yet, and this RFC should not be implemented on any of them assumed:
 4. **Snapshot storage cost under a candidate policy**, once the format is path-to-Blob-id rather than
    inline (§5).
 
-Item 3 is the one that can kill an option outright, and it is cheap to obtain from this repository's
-own sealed history.
+Item 3 is the one that can kill an option outright, and it is cheap to obtain. **It was measured on
+2026-09-04 — see §9.1, which is why Option B is no longer recommended.** Items 1, 2 and 4 remain
+unmeasured and no option may be implemented on any of them assumed.
+
+## 9.1 Measured 2026-09-04 — Option B's collapse ratio, and why it is a ceiling
+
+**Source.** This project's own last 600 non-merge commits, file lists from
+`git log --pretty=format:'@@%H' --name-only --no-merges -n 600`. Mean 3.37 files changed per commit.
+A block is modelled as a run of K consecutive commits — non-overlapping windows, the shape a real
+"seal every finished theme" produces.
+
+**Metric.** `sum(files touched by each patch) / count(distinct files in the window)`. This is exactly
+the factor by which composition collapses *file-level* operations.
+
+| Block size K | aggregate ratio | median | p90 | blocks collapsing **nothing** |
+|---:|---:|---:|---:|---:|
+| 2 | 1.05 | 1.00 | 1.67 | 77% |
+| 3 | 1.11 | 1.01 | 1.50 | 50% |
+| 5 | 1.16 | 1.16 | 1.67 | 17% |
+| 8 | 1.22 | 1.23 | 1.64 | 4% |
+| 10 | 1.25 | 1.22 | 1.62 | 2% |
+| 20 | 1.35 | 1.40 | 1.75 | 0% |
+| 50 | 1.55 | 1.65 | 1.92 | 0% |
+
+**This is a ceiling, not an estimate.** For a file touched by *n* patches in a block, the composed net
+effect is *at most* `n` operations (all spans disjoint) and *at least* 1 (fully overlapping). So
+composed operation count is bounded below by the distinct-file count, and the true operation-granular
+collapse can only be **less** than the table. Composition cannot do better than these numbers; it can
+do worse.
+
+**What it means.** At realistic block sizes a block's patches touch mostly disjoint files. Option B
+would buy roughly a **20% reduction in operations replayed** while requiring composition to be defined
+and proven equal to sequential replay across the full operation set — including `EditText`, where
+RFC 134 is this project's own evidence of how hard that is. At K=3, half of all blocks would collapse
+nothing at all. **The proof cost is not proportionate to the payoff, and this is the option closest to
+the original wording — which is why the number had to be taken before ruling rather than after.**
+
+**Three limits on this measurement, stated so it is not over-read.**
+
+1. **It is prikk's git history, not prikk sealed history**, because no prikk repository with realistic
+   development history exists to measure. Git commits stand in for patches. Prikk's own granularity is
+   the same or finer, since `commit` queues several patches per seal.
+2. **It is one project with a disciplined one-theme-per-commit rhythm.** A project that accumulates
+   many small fixups against the same file would show a higher ratio. This bounds *prikk's* case, not
+   every case.
+3. **It says nothing about Options A or C.** A full-tree snapshot's payoff depends on tree size against
+   history depth, not on how much a block's patches overlap. Both remain fully live, and §7's question
+   is unaffected.
 
 ## 10. Scope
 
