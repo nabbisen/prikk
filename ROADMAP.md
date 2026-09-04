@@ -325,6 +325,84 @@ remained. Whether the contract is ever promoted into a stability *promise* stays
 
 ### Proposed ordering — the architect's proposal; sequencing is the owner's to authorize
 
+**REPLACED 2026-09-04 on the owner's instruction** — *"Rearrange RFCs order and release cycles on
+schedule. In my opinion, there are RFCs which should be prioritized even though they were not directly
+relevant to release - such as RFC 135 or 137."* The band table this replaces is preserved below as
+history; **it is complete** and its axis is the problem.
+
+#### Why the old scheme could never schedule RFCs 135 and 137
+
+The band table was the 2026-08-31 audit's corrective program, and its axis was **severity**. RFCs 135
+and 137 fix no defect and block no release, so under a severity axis they can never rise above
+anything — not because they are unimportant, but because the scheme has no dimension they score on.
+**The owner's observation identifies a flaw in the ordering, not a mis-ranking within it.**
+
+#### Correction first: four of sixteen "open" items are finished
+
+The Open-Work Index counts completed work as open, and a schedule built on it would be built on a
+false inventory:
+
+| RFC | True state |
+|---|---|
+| **126** — verification infrastructure | **No implementable work remains.** All four flanks delivered. Its one outstanding item is an owner ruling that **RFC 133 §6 now also carries** — the same ruling tracked in two places, which is how one gets answered once and left open in the other |
+| **128** — outward-facing surface | **Complete.** `SECURITY.md`, `CONTRIBUTING.md` (`f68a5fe`), crate metadata (`bfb84f5`), the Git→prikk mapping page (`c128572`), `tutorial.md` declared (`3fc3201`) |
+| **132** — error taxonomy | **Closed with triggers.** Increment 1 at `264ba73`; increment 2 ruled deferred with three named re-open triggers |
+| **134** — text span identity | **Fully delivered** (`59fa298`, `906d015`, `6076d52`, `2c8289a`). What remains is a watch on RFC 113, not work |
+
+**Retiring these four to `rfcs/done/` is scheduled item 0 below** — six places each, per the checklist
+DC-44's closure established. The real queue is **twelve**, not sixteen.
+
+#### The new scheme — two lanes, and a rule about which yields
+
+| Lane | Contents |
+|---|---|
+| **Entrance** — what a person meets before and just after `install` | **RFC 137** (landing page, 5 increments), then **RFC 135** (first run, undesigned) |
+| **Product** — correctness, format, structure, cost | RFC 123, RFC 130, RFC 131, RFC 136, RFC 133 |
+| **Owner-blocked** | DC-43 (signer bootstrap), RFC 133 §6 (peak-RSS ruling), RFCs 109/110/113 (direction) |
+| **Externally blocked** | RFC 136 (external architect review request issued 2026-09-04) |
+
+**The rule that makes this stick, because a lane without one is a preference:**
+
+> **Entrance work is displaced only by a defect that is user-reachable or blocks a release.** No
+> structural, cost, or design-debt item outranks it.
+
+That is deliberately strict. It is what the old scheme lacked, and stating it as a rule rather than an
+intention is the whole point of rewriting this section.
+
+#### The order
+
+| # | Item | Lane | Why here |
+|---|---|---|---|
+| **0** | Retire RFCs 126, 128, 132, 134 to `done/` | — | A schedule on a false inventory is not a schedule. Cheap, and it also resolves 126/133's duplicated ruling |
+| **1** | **RFC 137 increment 1** — HTML code context in the gate | Entrance | **Handed over 2026-09-04.** Gates increment 4 |
+| **2** | **RFC 137 increments 2-3** — `site-url`, `docs.yml` staging | Entrance | Two small config changes; one silent-failure mode each |
+| **3** | **RFC 137 increment 4** — build the landing page | Entrance | The deliverable the owner raised the theme for |
+| **4** | **RFC 123** — the message field at `Patch` schema 4 | Product | The highest-severity open defect: `-m` is required, validated, and discarded. A format change, so it wants a release of its own |
+| **5** | **RFC 130** — the coupling gate | Product | Accepted, touches no files, conflicts with nothing |
+| **6** | **RFC 135** — first-run entrance | Entrance | Follows 137 by design (§8's seam); deliberately unhurried per the owner |
+| **7** | **RFC 131** — module grouping | Product | Large file move; belongs between feature arcs, and after 130 |
+| — | RFC 136, RFC 133 §6, DC-43, 109/110/113 | blocked | Not schedulable by the architect; each waits on a named answer |
+
+#### Release cycles
+
+**The current cadence is four releases in three days** (0.28.0 through 0.31.0, 2026-09-02 to
+09-04), and 0.31.0 was the first release older builds cannot read. **That pace is not a target to
+maintain.** Cut when there is a reason, not on a clock.
+
+| Cut | Trigger | Carries |
+|---|---|---|
+| **0.32.0** | Items 1-3 landed **and** the crates.io metadata is overdue | RFC 137 increments 1-4 (landing page + gate), **RFC 128 §4's crate metadata, which is on `main` and unpublished — eight crates remain uncategorized on crates.io until the next publish**, and RFC 137 increment 5 (`homepage` → `https://prikk.org/`) if the domain resolves by then. **This cut needs a crates.io publish, not only a tag** — the metadata is the reason for it |
+| **0.33.0** | RFC 123 lands | A `Patch` schema 4 format change, alone. Format changes should not share a cut with anything that complicates bisecting them |
+| after | no scheduled cadence | Cut on reason: a user-reachable defect, a format change that needs to be reachable, or accumulation |
+
+**Standing:** the cut itself needs the owner's authorization; executing it does not.
+
+---
+
+#### History — the superseded band table (2026-08-31 corrective program, complete)
+
+
+
 | Band | Items | Why here |
 |---|---|---|
 | **Before the next cut** | ~~RFC 127~~ **delivered 2026-09-01 (`e8a10d5`)**; RFC 121's EPIPE fix alone; ~~RFC 122~~ **delivered 2026-09-01 (`bc443e8`)**; RFC 128's `SECURITY.md` | 127 is a regression that has already shipped in a published artifact. EPIPE is a panic every user who pipes to `head` meets. 122 is the only High-severity broken command on the mainline. `SECURITY.md` is one page and its absence is disproportionate for a trust-centric product |
