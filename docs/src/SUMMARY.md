@@ -35,6 +35,8 @@
 # Reference
 
 - [Git → prikk](reference/git-mapping.md)
+- [Command Surface](reference/commands.md)
+- [Current State](reference/current-state.md)
 - [Release, Versioning, and Compatibility](reference/release-compatibility.md)
 - [Platform Support](reference/platform-support.md)
 - [System Architecture](reference/architecture.md)

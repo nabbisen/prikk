@@ -53,22 +53,6 @@ Prikk may be a good match if you are:
 - contributing to a Rust implementation of a correctness-sensitive CLI and storage system;
 - reviewing security, durability, and publication-trust boundaries.
 
-## Not a Good Fit Yet
-
-Prikk is not yet the right tool if you need:
-
-- a production replacement for Git;
-- stable repository-format compatibility;
-- Git object compatibility or transparent Git interoperability;
-- hosted forge workflows, or remotes;
-- complete branch management, or semantic merge;
-- plugin/audit execution, attestations, or automated publication controls;
-- mature key lifecycle features such as revocation, rotation, hardware signing, or thresholds;
-- flexible exclusion of generated files — `.prikkignore` (since 0.29.0) takes literal repo-relative
-  path prefixes, one per line, with no globbing, no negation, and no per-directory files, so
-  patterns like `*.log` do not work; and a file swept into history by mistake still cannot be
-  removed later.
-
 ## Install
 
 ```sh
@@ -132,80 +116,13 @@ Every command accepts `--help` for its own usage:
 prikk <command> --help
 ```
 
-```text
-prikk init [path]
-prikk trust maintainer add --key-id ID --public-key HEX
-prikk commit [--ref heads/<branch>] -m <message>
-prikk seal --allow-no-audit [--ref heads/<branch>]
-prikk status
-prikk log [path] [--limit N] [--ref REF]
-prikk checkout --plan-only [path] [--ref REF]
-prikk checkout --snapshot-plan [path] [--ref REF]
-prikk checkout --snapshot-materialize [path] [--ref REF]
-prikk checkout --patch-plan [path] [--ref REF]
-prikk checkout --patch-materialize [path] [--ref REF]
-prikk checkout --patch-delete-plan [path] [--ref REF]
-prikk checkout --patch-materialize-delete [path] [--ref REF]
-prikk merge-evidence --baseline-block ID (--left-block ID|--left-ref REF) (--right-block ID|--right-ref REF) [path]
-prikk merge-plan --baseline-block ID (--left-block ID|--left-ref REF) (--right-block ID|--right-ref REF) [path]
-prikk merge --allow-no-audit --baseline-block ID --into REF --from REF [path]
-prikk inverse-plan [path] [--ref REF]
-prikk rollback-preview [path] [--ref REF]
-prikk rollback-draft --append-inverse [path] [--ref REF] -m <message>
-prikk rollback-draft-verify [path] [--ref REF]
+The full inventory, with exit-code semantics, is the [command surface
+reference](./docs/src/reference/commands.md).
 
-prikk branch [list] [--all]
-prikk branch create heads/<name> [--from REF]
-prikk branch close heads/<name>
-prikk tag [list]
-prikk tag create tags/<name> --target <ref|block> [-m <message>]
-prikk bundle export --ref REF --output <file> [--force]
-prikk bundle import --input <file>
-prikk bundle verify --input <file>
-prikk sync summary --output <file>
-prikk sync compare --summary <file>
-prikk sync have <ref> --output <file>
-prikk sync build <ref> --have <file> --output <file> [--force]
-prikk sync accept <file> [--claims-out <file>] [--force]
-prikk sync pending
-prikk sync seal <ref> --claim <id>
-prikk sync tags
-prikk sync adopt-tag <name>
-prikk worktree-status [path] [--ref REF]
-prikk verify [path]
-prikk doctor [path]
-prikk doctor [path] --repair-wal-tail
-prikk unlock
-prikk unlock --lock <path> [--yes]
-prikk compact --pointer-index|--received-index|--trust-policy|--all [--plan-only]
-```
+## Current State
 
-**Exit codes.** `0` — the operation succeeded and did what was asked. `1` — operational failure:
-verification findings, an integrity failure, a refusal, a dirty worktree. `2` — usage error: an
-unknown argument, a missing required flag, a duplicate flag. Graded verification results are in
-`prikk verify --format json`, not in the exit code.
-
-## Current Status
-
-The local core can initialize a repository, author signed patches, seal them into blocks, inspect
-history, verify integrity, diagnose common repository issues, perform safe checkout planning and
-materialization for the supported subset, display merge evidence and merge plans for explicit sealed
-candidates, and **execute a merge** when the two sides are proven confluent — refusing cleanly, with no
-object, WAL, or ref write, when they are not.
-
-**Cross-platform history identity is tested, not assumed.** Prikk authors, commits, and checks out on Linux, macOS, and Windows, and CI requires a repository authored on Linux, mutated on Windows, and verified back on Linux to produce byte-identical object ids — so the claim that anyone can verify anyone's history holds across the three.
-
-Known limits worth stating up front: merge-base discovery is manual; conflicts are detected and refused
-but never resolved; sync exists between repositories, but **prikk does not move the bytes itself** —
-confidentiality is the user's channel's property, not prikk's — negotiation is branch-scoped (tags
-travel and are adopted separately, under the receiver's own key), and there is no discovery or
-remote-tracking; `verify` cost is linear in history length; `verify` checks author signatures
-repository-wide, but only as trust-on-first-use continuity — it proves the same author signed as last
-time, not who that author is on first contact; and `verify` checks a locally-published tag's
-maintainer signature against this repository's own trust policy, but a received, not-yet-adopted tag
-is deliberately exempt — its signature is the sender's, under a key this repository has not adopted.
-
-Next increment candidates are tracked in `ROADMAP.md`.
+What works today, and the limits worth knowing before relying on it, are in the [current state
+reference](./docs/src/reference/current-state.md).
 
 ## Crates
 
@@ -222,18 +139,6 @@ CLI can be built from crates.io — **their APIs may change without notice befor
 | [`prikk-hash`](https://crates.io/crates/prikk-hash) | SHA-256 primitives | [![crates.io](https://img.shields.io/crates/v/prikk-hash.svg?label=%20)](https://crates.io/crates/prikk-hash) | [![docs.rs](https://img.shields.io/docsrs/prikk-hash?version=latest&label=%20)](https://docs.rs/prikk-hash) | [![Dependency Status](https://deps.rs/crate/prikk-hash/latest/status.svg)](https://deps.rs/crate/prikk-hash) |
 | [`prikk-error`](https://crates.io/crates/prikk-error) | shared error taxonomy | [![crates.io](https://img.shields.io/crates/v/prikk-error.svg?label=%20)](https://crates.io/crates/prikk-error) | [![docs.rs](https://img.shields.io/docsrs/prikk-error?version=latest&label=%20)](https://docs.rs/prikk-error) | [![Dependency Status](https://deps.rs/crate/prikk-error/latest/status.svg)](https://deps.rs/crate/prikk-error) |
 | [`prikk-ffi`](https://crates.io/crates/prikk-ffi) | Windows filesystem-identity FFI bindings | [![crates.io](https://img.shields.io/crates/v/prikk-ffi.svg?label=%20)](https://crates.io/crates/prikk-ffi) | [![docs.rs](https://img.shields.io/docsrs/prikk-ffi?version=latest&label=%20)](https://docs.rs/prikk-ffi) | [![Dependency Status](https://deps.rs/crate/prikk-ffi/latest/status.svg)](https://deps.rs/crate/prikk-ffi) |
-
-## Project Structure
-
-- `crates/` — Rust workspace crates for the CLI, object model, crypto, repository store, replay
-  semantics, hash primitives, and shared errors.
-- `docs/` — mdBook documentation.
-- `release/` — release-policy schemas and review fixtures; root `release-signers.toml` is the fail-closed
-  official signer allowlist.
-- `rfcs/` — design records and lifecycle state. `rfcs/done/000-rfc-lifecycle-policy.md` defines how
-  `proposed/`, `accepted/`, `done/`, `archive/`, and `handoffs/` are used.
-- `ROADMAP.md` — current release and upcoming theme summary.
-- `CHANGELOG.md` — released changes.
 
 ## Development Gates
 

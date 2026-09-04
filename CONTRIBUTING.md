@@ -70,6 +70,18 @@ mkdir -p target/tmp
 TMPDIR="$PWD/target/tmp" cargo test --workspace --locked
 ```
 
+## Repository layout
+
+- `crates/` — Rust workspace crates for the CLI, object model, crypto, repository store, replay
+  semantics, hash primitives, and shared errors.
+- `docs/` — mdBook documentation.
+- `release/` — release-policy schemas and review fixtures; root `release-signers.toml` is the fail-closed
+  official signer allowlist.
+- `rfcs/` — design records and lifecycle state. `rfcs/done/000-rfc-lifecycle-policy.md` defines how
+  `proposed/`, `accepted/`, `done/`, `archive/`, and `handoffs/` are used.
+- `ROADMAP.md` — current release and upcoming theme summary.
+- `CHANGELOG.md` — released changes.
+
 ## Reporting a security vulnerability
 
 That is not what this file is for — see [SECURITY.md](SECURITY.md).
