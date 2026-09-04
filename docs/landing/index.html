@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prikk</title>
+<meta name="description" content="Prikk is a distributed version control system built around block-oriented patch theory.">
+<link rel="icon" href="assets/logo.webp" type="image/webp">
+<style>
+  :root{
+    --cream:#f8f3ec; --paper:#fffdfa; --sage:#7f9179; --sage-dim:#93a48d;
+    --beige:#dcc9b6; --clay:#d4794f; --ink:#2c352f; --ink-soft:#5a6560;
+    --rule:#e7ddd0; --focus:#d4794f; --btn-ink:#fffdfa;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --cream:#1c201d; --paper:#232823; --sage:#93a48d; --sage-dim:#7f9179;
+      --beige:#4a4238; --clay:#e08a60; --ink:#e8e3da; --ink-soft:#a9b0a8;
+      --rule:#333a34; --btn-ink:#1c201d;
+    }
+  }
+  :root[data-theme="dark"]{
+    --cream:#1c201d; --paper:#232823; --sage:#93a48d; --sage-dim:#7f9179;
+    --beige:#4a4238; --clay:#e08a60; --ink:#e8e3da; --ink-soft:#a9b0a8;
+    --rule:#333a34; --btn-ink:#1c201d;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--cream); color:var(--ink);
+    font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1000px;margin:0 auto;padding:0 28px}
+  a{color:inherit}
+  h1,h2,h3,p{margin-top:0}
+  /* Universal, not scoped to a/button: `pre.term` and `.panels` are both `overflow-x:auto`, which
+     makes Chromium/Firefox put them in the tab order for keyboard scrolling even with no
+     `tabindex` -- without this rule they show the browser's own default outline instead of this
+     page's, discovered by tabbing through the real page rather than assumed from the CSS alone. */
+  :focus-visible{outline:2px solid var(--focus);outline-offset:3px;border-radius:3px}
+
+  /* ---- header ---- */
+  header.site-header{padding:24px 0}
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:20px}
+  .brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:650;letter-spacing:.01em}
+  .brand img{width:28px;height:28px;border-radius:7px;display:block}
+  nav[aria-label="Primary"]{display:flex;align-items:center;gap:22px;font-size:14.5px}
+  nav[aria-label="Primary"] a{text-decoration:none;color:var(--ink-soft)}
+  nav[aria-label="Primary"] a:hover{color:var(--ink)}
+  .nav-cta{color:var(--ink) !important;font-weight:600}
+
+  /* ---- eyebrow / heading rhythm (draft-01) ---- */
+  .eyebrow{
+    margin:0 0 14px; font-size:.72rem; line-height:1; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--sage-dim); font-weight:700;
+  }
+
+  /* ---- buttons ---- */
+  .button{
+    display:inline-flex; align-items:center; justify-content:center; min-height:44px;
+    padding:0 22px; border-radius:999px; text-decoration:none; font-weight:620;
+    font-size:.92rem; border:1px solid transparent;
+  }
+  .button-primary{background:var(--sage);color:var(--btn-ink);border-color:var(--sage)}
+  .button-primary:hover{background:var(--sage-dim);border-color:var(--sage-dim)}
+  .button-quiet{background:transparent;border-color:var(--rule);color:var(--ink)}
+  .button-quiet:hover{border-color:var(--sage)}
+
+  /* ---- hero, two columns (draft-01) ---- */
+  .hero{padding:64px 0 12px}
+  .hero-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(240px,.85fr);align-items:center;gap:48px}
+  .hero-copy{max-width:560px}
+  h1{font-size:clamp(2.5rem,6vw,4.1rem);line-height:1.03;letter-spacing:-.03em;font-weight:680;margin-bottom:20px}
+  .lead{max-width:480px;margin-bottom:22px;font-size:clamp(1.05rem,1.6vw,1.2rem);line-height:1.6;color:var(--ink-soft)}
+  .maturity{
+    margin:0 0 26px; max-width:52ch; font-size:13.5px; color:var(--ink-soft);
+    border:1px solid var(--rule); border-radius:9px; padding:10px 14px; background:var(--paper);
+  }
+  .maturity strong{color:var(--ink);font-weight:650}
+  .cta{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+  .hero-note{margin:0;color:var(--ink-soft);font-size:.85rem}
+  .hero-note code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+
+  .hero-art{justify-self:end;width:100%;max-width:340px}
+  .hero-art svg{width:100%;height:auto;display:block}
+  .blk{fill:var(--sage)}
+  .blk.beige{fill:var(--beige)}
+  .blk.clay{fill:var(--clay)}
+  .path{fill:none;stroke:var(--beige);stroke-width:3.2;stroke-linecap:round}
+  .node{fill:var(--beige)}
+  /* Reduced motion is the opt-IN default here: arriving blocks are fully visible and static
+     unless the browser confirms motion is welcome (no-preference), never the reverse -- an
+     override that starts animated and turns itself off is the wrong direction of this test. */
+  .arriving{opacity:1}
+  @media (prefers-reduced-motion: no-preference){
+    .arriving{opacity:0;animation:settle 9s ease-in-out infinite}
+    .a2{animation-delay:3s}
+    .a3{animation-delay:6s}
+  }
+  @keyframes settle{0%{opacity:0;transform:translateY(-6px)}14%,74%{opacity:1;transform:none}94%,100%{opacity:0;transform:none}}
+  .art-caption{margin:14px 0 0;text-align:center;font-size:12.5px;color:var(--ink-soft)}
+
+  /* ---- sections ---- */
+  section{border-top:1px solid var(--rule);padding:68px 0}
+  section h2{font-size:clamp(1.7rem,3.2vw,2.5rem);line-height:1.08;letter-spacing:-.03em;margin-bottom:16px}
+
+  /* ---- numbered principles (draft-01) ---- */
+  .principle-grid{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--rule);margin-top:38px}
+  .principle-grid article{padding:26px 22px 6px 0}
+  .principle-grid article + article{padding-left:22px;border-left:1px solid var(--rule)}
+  .number{display:block;margin-bottom:30px;font-size:.74rem;color:var(--ink-soft)}
+  .principle-grid h3{font-size:1.2rem;margin-bottom:8px}
+  .principle-grid p{margin:0;line-height:1.6;color:var(--ink-soft)}
+
+  /* ---- the shape of it ---- */
+  .flow-steps{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:.95rem;margin-top:8px}
+  .step{border:1px solid var(--rule);background:var(--paper);border-radius:8px;padding:9px 15px}
+  .step b{font-weight:650}
+  .step span{color:var(--ink-soft)}
+  .arrow{color:var(--ink-soft)}
+  .note{font-size:13.5px;color:var(--ink-soft);max-width:60ch;margin-top:20px}
+
+  /* ---- terminal ---- */
+  pre.term{
+    background:var(--paper); border:1px solid var(--rule); border-radius:10px;
+    padding:18px 20px; overflow-x:auto; font-size:13px; line-height:1.6; margin:0; color:var(--ink);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  .term .p{color:var(--sage)}
+  .term .c{color:var(--ink-soft)}
+
+  /* ---- story (split panels, real HTML text) ---- */
+  .panels{list-style:none;margin:38px 0 0;padding:0;display:flex;gap:28px;overflow-x:auto}
+  .panels li{flex:0 0 auto;width:170px;text-align:center}
+  .panels .chip{
+    display:inline-block; margin:0 0 12px; font-size:.72rem; letter-spacing:.06em;
+    color:var(--ink-soft); border:1px solid var(--rule); border-radius:999px; padding:4px 12px; background:var(--paper);
+  }
+  .panels img{display:block;max-width:100%;height:auto;margin:0 auto}
+  .panels .caption{margin:14px 0 0;font-size:13.5px;color:var(--ink-soft);line-height:1.5}
+
+  /* ---- feature strip ---- */
+  .feature-strip{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:0;
+    border:1px solid var(--rule);border-radius:12px;background:var(--paper)}
+  .feature-strip li{padding:22px 20px;border-left:1px solid var(--rule)}
+  .feature-strip li:first-child{border-left:0}
+  .feature-strip h3{font-size:.95rem;margin-bottom:6px}
+  .feature-strip p{margin:0;font-size:13px;color:var(--ink-soft)}
+
+  /* ---- install ---- */
+  .install-block{display:grid;gap:12px;max-width:660px;margin-top:30px}
+  .cmdrow{display:flex;align-items:center;gap:10px;background:var(--paper);border:1px solid var(--rule);
+    border-radius:9px;padding:11px 14px;max-width:100%}
+  /* The command wraps rather than scrolling: a scrollable strip hides part of a command the
+     reader is about to pipe into `sh`, and the scrollbar that would signal the hidden part is
+     an overlay one on Linux/macOS -- invisible until already being dragged. Wrapping also keeps
+     the row inside WCAG 2.1 1.4.10 (reflow) at 320px, which a horizontal scroller does not. */
+  .cmdrow code{flex:1 1 auto;min-width:0;font-size:13.5px;line-height:1.55;white-space:pre-wrap;
+    overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+  .copy{flex:0 0 auto;border:1px solid var(--rule);background:transparent;color:var(--ink-soft);
+    border-radius:6px;padding:5px 11px;font-size:12.5px;cursor:pointer;font:inherit}
+  .copy:hover{color:var(--ink);border-color:var(--sage)}
+  .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* ---- closing bookend ---- */
+  .closing{text-align:center}
+  .closing h2{max-width:640px;margin-left:auto;margin-right:auto}
+  .closing .cta{justify-content:center}
+
+  /* ---- footer ---- */
+  footer{padding:44px 0 60px;font-size:14px;color:var(--ink-soft)}
+  .fbrand{font-weight:650;color:var(--ink)}
+  footer nav{display:flex;gap:16px;margin-top:8px}
+  footer nav a{text-decoration:none}
+  footer nav a:hover{text-decoration:underline}
+  footer p{margin:14px 0 0}
+
+  @media (max-width:820px){
+    .hero-grid{grid-template-columns:1fr}
+    .hero-art{justify-self:center;max-width:260px;order:-1}
+    .principle-grid{grid-template-columns:1fr}
+    .principle-grid article,.principle-grid article + article{border-left:0;border-top:1px solid var(--rule);padding:20px 0}
+    .principle-grid article:first-child{border-top:0}
+    .feature-strip{grid-template-columns:1fr}
+    .feature-strip li{border-left:0;border-top:1px solid var(--rule)}
+    .feature-strip li:first-child{border-top:0}
+    /* Direction §16: the sequence must read without a horizontal diagram on mobile, so the row
+       becomes a stack rather than an overflow-x strip -- each panel keeps its own natural size
+       instead of being squeezed to fit a fixed track width. */
+    .panels{flex-direction:column;overflow-x:visible;align-items:center;gap:32px}
+    .panels li{width:100%;max-width:260px}
+  }
+  @media (max-width:460px){
+    .wrap{padding:0 18px}
+    .cmdrow{flex-wrap:wrap;gap:8px}
+    .cmdrow code{flex:1 1 100%}
+    .copy{margin-left:auto}
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap bar">
+    <a class="brand" href="#top">
+      <img src="assets/logo.webp" alt="" width="28" height="28">
+      <span>Prikk</span>
+    </a>
+    <nav aria-label="Primary">
+      <a href="docs/index.html">Docs</a>
+      <a href="https://github.com/prikk-vcs/prikk">GitHub</a>
+      <a class="nav-cta" href="#start">Get started</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Version control, patch by patch</p>
+        <h1>Patches build projects.</h1>
+        <p class="lead">Small, deliberate changes — sealed into history anyone can verify.</p>
+        <p class="maturity"><strong>Early implementation.</strong> Good for review, experimentation,
+          and contribution. Not yet a place to keep history you cannot lose.</p>
+        <div class="cta">
+          <a class="button button-primary" href="#start">Get started</a>
+          <a class="button button-quiet" href="https://github.com/prikk-vcs/prikk">View on GitHub</a>
+        </div>
+        <p class="hero-note"><code>$ prikk --help</code></p>
+      </div>
+
+      <div class="hero-art">
+        <svg viewBox="0 0 320 210" role="img" aria-labelledby="artt">
+          <title id="artt">Patches accumulate and are sealed into blocks, connected in a verifiable chain.</title>
+          <rect class="blk beige" x="12"  y="130" width="52" height="52" rx="13"/>
+          <rect class="blk"       x="76"  y="130" width="52" height="52" rx="13"/>
+          <rect class="blk"       x="76"  y="60"  width="52" height="52" rx="13"/>
+          <rect class="blk beige" x="140" y="130" width="52" height="52" rx="13"/>
+          <path class="path" d="M38 130 V104 H102 V86"/>
+          <circle class="node" cx="102" cy="104" r="5"/>
+          <g class="arriving">
+            <rect class="blk clay" x="204" y="130" width="52" height="52" rx="13"/>
+            <path class="path" d="M166 130 H230"/>
+            <circle class="node" cx="166" cy="130" r="5"/>
+          </g>
+          <g class="arriving a2">
+            <rect class="blk" x="268" y="60" width="40" height="122" rx="13"/>
+          </g>
+        </svg>
+        <p class="art-caption">A quiet chain: patches arrive, and the project grows.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="principles">
+    <div class="wrap">
+      <p class="eyebrow">The idea</p>
+      <h2>Small changes. Clear history.</h2>
+      <div class="principle-grid">
+        <article>
+          <span class="number">01</span>
+          <h3>Patch</h3>
+          <p>Describe a change as a first-class piece of project history.</p>
+        </article>
+        <article>
+          <span class="number">02</span>
+          <h3>Evidence</h3>
+          <p>Keep the path from change to result explicit and inspectable.</p>
+        </article>
+        <article>
+          <span class="number">03</span>
+          <h3>Growth</h3>
+          <p>Integrate useful changes without making the project harder to reason about.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="flow">
+    <div class="wrap">
+      <p class="eyebrow">A calmer way to work</p>
+      <h2>Commit. Seal. Verify.</h2>
+      <div class="flow-steps">
+        <span class="step"><b>commit</b> <span>— queue a signed patch</span></span>
+        <span class="arrow" aria-hidden="true">→</span>
+        <span class="step"><b>seal</b> <span>— fix it into a block</span></span>
+        <span class="arrow" aria-hidden="true">→</span>
+        <span class="step"><b>verify</b> <span>— anyone, offline</span></span>
+      </div>
+      <p class="note">Committing does not publish. A patch is queued and signed first, and only
+        sealing makes it history.</p>
+    </div>
+  </section>
+
+  <section class="terminal-section">
+    <div class="wrap">
+      <p class="eyebrow">Try it</p>
+      <h2>What it looks like</h2>
+      <pre class="term"><code><span class="p">$</span> prikk commit --from-worktree -m "genesis"
+recorded worktree patch in active WAL
+baseline ref: heads/main
+patch id: c29910f552275f805d9b8efd513a4c47995249393ccc...
+WAL sequence: 1
+operations: 1
+referenced blobs: 1
+text edits: 0
+  create-file hello.txt
+<span class="c">note: multi-operation text diff minimization, patch algebra, rename detection, and audit plugins remain later increments
+note: the message is validated but not stored -- it will not appear in `prikk log`; persisting it is a later increment</span></code></pre>
+      <p class="note">Real output, not a mockup.</p>
+    </div>
+  </section>
+
+  <section class="story">
+    <div class="wrap">
+      <p class="eyebrow">Patch by patch</p>
+      <h2>Projects grow. Then they shine.</h2>
+      <ol class="panels">
+        <li>
+          <p class="chip">Start</p>
+          <img src="assets/panel-1-start.webp" width="270" height="170"
+            alt="A small flat platform holding a few scattered blocks.">
+          <p class="caption">A new project begins.</p>
+        </li>
+        <li>
+          <p class="chip">Patches</p>
+          <img src="assets/panel-2-patches.webp" width="150" height="310"
+            alt="Four small cards, each one a focused change, feeding toward the project.">
+          <p class="caption">Small, focused patches flow in.</p>
+        </li>
+        <li>
+          <p class="chip">Integrated</p>
+          <img src="assets/panel-3-integrated.webp" width="240" height="300"
+            alt="The blocks assembled into one connected, glowing stack.">
+          <p class="caption">Prikk integrates and validates with confidence.</p>
+        </li>
+        <li>
+          <p class="chip">Growing</p>
+          <img src="assets/panel-4-growing.webp" width="265" height="400"
+            alt="The stack taller, with new shoots growing from it.">
+          <p class="caption">The project grows steadily.</p>
+        </li>
+        <li>
+          <p class="chip">Shining</p>
+          <img src="assets/panel-5-shining.webp" width="340" height="400"
+            alt="The full stack, lit from within, surrounded by growth.">
+          <p class="caption">A robust project shines its value.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="wrap">
+      <p class="eyebrow">What you get</p>
+      <h2>Validation, not vibes.</h2>
+      <ul class="feature-strip">
+        <li>
+          <h3>Validation &amp; Evidence</h3>
+          <p>Trust built in.</p>
+        </li>
+        <li>
+          <h3>Confident Merge</h3>
+          <p>Proven-confluent, or refused with a reason.</p>
+        </li>
+        <li>
+          <h3>Read-only Merge Evidence</h3>
+          <p>See a change before you take it.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="install" id="start">
+    <div class="wrap">
+      <p class="eyebrow">Get started</p>
+      <h2>Try Prikk</h2>
+      <div class="install-block">
+        <div class="cmdrow">
+          <code id="c1">curl -fsSL https://github.com/prikk-vcs/prikk/releases/latest/download/install.sh | sh</code>
+          <button class="copy" type="button" data-for="c1">Copy</button>
+        </div>
+        <div class="cmdrow">
+          <code id="c2">cargo install prikk</code>
+          <button class="copy" type="button" data-for="c2">Copy</button>
+        </div>
+      </div>
+      <p class="note">Linux, macOS, and Windows. The
+        <a href="docs/guide/install.html">install guide</a> covers pinning a version, verifying
+        checksums, and building from source.</p>
+      <p aria-live="polite" class="visually-hidden" id="copied"></p>
+    </div>
+  </section>
+
+  <section class="closing">
+    <div class="wrap">
+      <p class="eyebrow">Prikk</p>
+      <h2>Build with patches, not uncertainty.</h2>
+      <div class="cta">
+        <a class="button button-primary" href="#start">Get started</a>
+        <a class="button button-quiet" href="https://github.com/prikk-vcs/prikk">GitHub</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="fbrand">Prikk</div>
+    <nav aria-label="Footer">
+      <a href="docs/index.html">Docs</a>
+      <a href="https://github.com/prikk-vcs/prikk">GitHub</a>
+      <a href="https://github.com/prikk-vcs/prikk/blob/main/LICENSE">License</a>
+    </nav>
+    <p>Open source software for thoughtful project evolution.</p>
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll(".copy").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var target = document.getElementById(button.dataset.for);
+      if (!target) { return; }
+      navigator.clipboard.writeText(target.textContent).then(function () {
+        var original = button.textContent;
+        button.textContent = "Copied";
+        var status = document.getElementById("copied");
+        if (status) { status.textContent = "Copied to clipboard."; }
+        setTimeout(function () { button.textContent = original; }, 1600);
+      });
+    });
+  });
+</script>
+</body>
+</html>

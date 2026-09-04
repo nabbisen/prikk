@@ -18,7 +18,7 @@
 //! the one bare-listing block among the declared documents. A mention there alone does not count
 //! as an explanation.
 
-#![allow(clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+#![allow(clippy::expect_used, clippy::panic)]
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -38,8 +38,13 @@ use super::COMMANDS;
 /// `docs/src/guide/troubleshooting.md`, `docs/src/reference/durability-recovery.md` — none of
 /// which had ever been declared here (RFC 128 outward-surface handoff §4). `docs/src/guide/tutorial.md`
 /// also mentions real commands in fenced code and remains undeclared — found during the same
-/// sweep, reported rather than added since it was outside that handoff's named scope).
+/// sweep, reported rather than added since it was outside that handoff's named scope). Plus
+/// `docs/landing/index.html`, added along with the page itself (RFC 137 §7 increment 4) — checked
+/// by rule (A) like every other declared document, but excluded from rule (B)'s search by
+/// `document_text`'s own `LANDING_PAGE_PATH_PREFIX` arm, since naming a command there is not an
+/// explanation of it.
 const DECLARED_DOCUMENTS: &[&str] = &[
+    "docs/landing/index.html",
     "docs/src/guide/backup-restore.md",
     "docs/src/guide/checkout/checkout.md",
     "docs/src/guide/checkout/snapshot-checkout.md",
@@ -130,23 +135,28 @@ fn every_declared_document_exists() {
 /// so `<pre` never matches a different tag sharing the prefix (`<precise>`, `<codex>`). Does not
 /// handle a literal `>` inside a quoted attribute value (e.g. `title=">"`) -- deliberately simple,
 /// matching this function's own no-parser, no-dependency approach for Markdown fences below; no
-/// declared document's authored HTML does this. Tag names are matched case-sensitively (lowercase
-/// only) for the same reason -- hand-authored HTML in this project uses lowercase tags, and a
-/// case-insensitive match is not worth the extra code for an input that does not occur.
+/// declared document's authored HTML does this. Tag names are matched **case-insensitively**: HTML
+/// tag names are case-insensitive by spec, and matching only lowercase would make an `<CODE>` or
+/// `<Pre>` in a declared document invisible to this scan -- a vacuous pass, not a missed style
+/// nit, since rule (A)/(B) would silently stop checking that block's commands at all rather than
+/// flagging anything. Every declared document (including the landing page, `docs/landing/`) is
+/// hand-authored in this project using lowercase tags, so this costs nothing today and closes the
+/// gap for whatever is authored next (review v1 §7.2).
 ///
 /// An opening tag with no matching closing tag is treated exactly like the fenced-block arm's own
 /// unterminated case below: everything from the opening tag onward is one region, and the scan for
 /// this tag name stops there -- matching the existing arm's behaviour is the obvious choice, and
 /// being deliberate about it is what the handoff asked for, not silence on the question.
 fn html_tag_regions<'a>(text: &'a str, tag: &str) -> Vec<(&'a str, (usize, usize))> {
+    let lower = text.to_ascii_lowercase();
     let open_needle = format!("<{tag}");
     let close_needle = format!("</{tag}>");
     let mut out = Vec::new();
     let mut offset = 0usize;
-    while let Some(rel) = text[offset..].find(open_needle.as_str()) {
+    while let Some(rel) = lower[offset..].find(open_needle.as_str()) {
         let start = offset + rel;
         let after_name = start + open_needle.len();
-        let is_real_tag = text[after_name..]
+        let is_real_tag = lower[after_name..]
             .chars()
             .next()
             .is_some_and(|c| c == '>' || c.is_whitespace());
@@ -157,12 +167,12 @@ fn html_tag_regions<'a>(text: &'a str, tag: &str) -> Vec<(&'a str, (usize, usize
             offset = after_name;
             continue;
         }
-        let Some(close_rel) = text[after_name..].find('>') else {
+        let Some(close_rel) = lower[after_name..].find('>') else {
             // The opening tag itself never closes; nothing genuine follows it either.
             break;
         };
         let after_open = after_name + close_rel + 1;
-        match text[after_open..].find(close_needle.as_str()) {
+        match lower[after_open..].find(close_needle.as_str()) {
             Some(end_rel) => {
                 let end = after_open + end_rel + close_needle.len();
                 out.push((&text[start..end], (start, end)));
@@ -205,8 +215,17 @@ fn code_regions(text: &str) -> Vec<&str> {
 
     // `<pre>...</pre>` plays the same container role as a ``` fence -- recorded next, into the
     // same `fenced_ranges`, so an inline `<code>` or backtick span starting inside one is never
-    // also scanned separately (the `<pre><code>...</code></pre>` case, the common one).
+    // also scanned separately (the `<pre><code>...</code></pre>` case, the common one). Also skip
+    // any `<pre>` that starts inside an already-recorded ``` fence -- the same precedence the
+    // `<code>` and backtick arms below already give a ``` fence, so a `<pre>` block sitting inside
+    // a Markdown fence is scanned once, not twice.
     for (region, range) in html_tag_regions(text, "pre") {
+        if fenced_ranges
+            .iter()
+            .any(|&(range_start, range_end)| range.0 >= range_start && range.0 < range_end)
+        {
+            continue;
+        }
         regions.push(region);
         fenced_ranges.push(range);
     }
@@ -296,11 +315,10 @@ fn strip_readme_command_listing(text: &str) -> String {
 /// rule (B) (via `is_explained`, below), a command mentioned only there would read as documented,
 /// closing a real documentation gap on a marketing sentence. A prefix, not one exact path: RFC 137
 /// §3 fixes the directory (`docs/landing/`) but increment 4 (which builds the page) fixes its
-/// filename, so matching the directory means this arm needs no further change when that lands.
-/// **Not yet declared in `DECLARED_DOCUMENTS`** -- the file does not exist until increment 4 builds
-/// it -- so this arm is unreached today; it exists now so landing the page needs no further gate
-/// change, per this increment's own reason for existing (`rfcs/proposed/137-...md` §1: a gate added
-/// after the artifact documents what happened instead of constraining it).
+/// filename, so matching the directory means this arm needs no further change if a second file
+/// were ever added under it. `docs/landing/index.html` was declared in `DECLARED_DOCUMENTS` in the
+/// same increment that created it (RFC 137 §7 increment 4), so rule (A) does check it -- only rule
+/// (B)'s search is what this arm exempts it from.
 const LANDING_PAGE_PATH_PREFIX: &str = "docs/landing/";
 
 fn document_text(root: &Path, path: &str) -> String {
@@ -394,7 +412,10 @@ fn code_regions_finds_bare_html_code_and_pre() {
         1,
         "expected exactly one region, got {regions:?}"
     );
-    assert_eq!(command_tokens(regions[0]), vec!["seal"]);
+    assert_eq!(
+        command_tokens(regions.first().expect("checked len == 1 above")),
+        vec!["seal"]
+    );
 
     let pre_only = "<pre>prikk verify</pre>";
     let regions = code_regions(pre_only);
@@ -403,7 +424,10 @@ fn code_regions_finds_bare_html_code_and_pre() {
         1,
         "expected exactly one region, got {regions:?}"
     );
-    assert_eq!(command_tokens(regions[0]), vec!["verify"]);
+    assert_eq!(
+        command_tokens(regions.first().expect("checked len == 1 above")),
+        vec!["verify"]
+    );
 }
 
 /// Attribute forms (§5 control 3): `<code id="x">`, `<code class="a b">`, and `<pre class="term">`
@@ -422,7 +446,7 @@ fn code_regions_recognizes_attributed_html_tags() {
             "{text:?}: expected one region, got {regions:?}"
         );
         assert_eq!(
-            command_tokens(regions[0]),
+            command_tokens(regions.first().expect("checked len == 1 above")),
             vec![expected],
             "input: {text:?}"
         );
@@ -460,8 +484,41 @@ fn code_regions_does_not_double_count_pre_code_nesting() {
         1,
         "expected the nested form to yield exactly one region, got {regions:?}"
     );
-    assert_eq!(regions[0], text);
-    assert_eq!(command_tokens(regions[0]), vec!["seal"]);
+    let only_region = regions.first().expect("checked len == 1 above");
+    assert_eq!(*only_region, text);
+    assert_eq!(command_tokens(only_region), vec!["seal"]);
+}
+
+/// Review v1 §7.1: a `<pre>` starting inside an already-recorded ``` fence must not be counted a
+/// second time -- the `<pre>` arm used to record it without checking `fenced_ranges` first, unlike
+/// the `<code>` and backtick arms below it, which already did. Proven the same way as the
+/// `<pre><code>` case above: by region count, not by counting panics.
+#[test]
+fn code_regions_does_not_double_count_pre_inside_a_fence() {
+    let text = "```\n<pre>prikk seal</pre>\n```";
+    let regions = code_regions(text);
+    assert_eq!(
+        regions.len(),
+        1,
+        "expected the fenced form to yield exactly one region, got {regions:?}"
+    );
+    let only_region = regions.first().expect("checked len == 1 above");
+    assert_eq!(*only_region, text);
+}
+
+/// Review v1 §7.2: tag names are matched case-insensitively, so an `<CODE>` or `<Pre>` opening
+/// tag is still found rather than silently yielding zero regions (a vacuous pass for rule (A)/(B)
+/// rather than a mere style nit, since a mismatch here means the block is never scanned at all).
+#[test]
+fn code_regions_matches_html_tags_case_insensitively() {
+    assert_eq!(
+        code_regions("<CODE>prikk seal</CODE>"),
+        vec!["<CODE>prikk seal</CODE>"]
+    );
+    assert_eq!(
+        code_regions("<Pre>prikk verify</Pre>"),
+        vec!["<Pre>prikk verify</Pre>"]
+    );
 }
 
 /// An opening `<pre>`/`<code>` with no matching closing tag runs to end-of-text and stops the scan
