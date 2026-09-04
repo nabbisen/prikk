@@ -109,6 +109,6 @@ Seeded from the external architecture audit's 2026-08-31 feature-completeness ma
 (`audit-2026-08-31-task-1a-design-functionality.md` §4), re-verified against `main` at the time of
 writing rather than copied — several rows in that matrix are now stale (`worktree-status` was broken
 then and is fixed; `.prikkignore` did not exist then and does now). [RFC
-128](https://github.com/prikk-vcs/prikk/blob/main/rfcs/proposed/128-outward-facing-project-surface.md)
+128](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/128-outward-facing-project-surface.md)
 §5 requested this page. It does not cover RFC 113 (history import) or any importer tool — neither
 exists yet.

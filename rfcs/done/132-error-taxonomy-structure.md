@@ -1,6 +1,14 @@
 # RFC 132 — `PrikkError` carries less than it knows, and cannot grow
 
-**Status.** **ACCEPTED by the project owner 2026-09-03**, at the scope written here — including
+**Status.** **CLOSED 2026-09-04 and moved to `rfcs/done/`**, on the owner's authorization of the
+2026-09-04 schedule (`ROADMAP.md`, "Proposed ordering", item 0). Increment 1 is delivered
+(`264ba73`); increment 2 is ruled deferred with three named re-open triggers (§5).
+
+**Closed does not mean the triggers lapse.** If any of §5's three fire, this RFC is the design record
+to reopen against — that is what `done/` holding a deferred increment means here, and it is why the
+triggers are named rather than described.
+
+Everything below is the record as it stood. Previously: **ACCEPTED by the project owner 2026-09-03**, at the scope written here — including
 §5's two-increment split, §5's refusal of `source()` in increment 1, and §6's requirement that
 `Display` output not change.
 

@@ -1,6 +1,16 @@
 # RFC 128 — What an outsider finds before they read any code
 
-**Status.** **Proposed; §2 ruled.** Raised by the external architecture audit of 2026-08-31
+**Status.** **CLOSED 2026-09-04 and moved to `rfcs/done/`**, on the owner's authorization of the
+2026-09-04 schedule (`ROADMAP.md`, "Proposed ordering", item 0). **Every item is delivered:**
+`SECURITY.md`; `CONTRIBUTING.md` (`f68a5fe`); the crate metadata pass (`bfb84f5`); the Git→prikk
+mapping page and the four pages it found undeclared (`c128572`); `tutorial.md` declared (`3fc3201`).
+
+**One consequence outlives this RFC and is scheduled elsewhere.** §4's crate metadata is on `main` and
+**unpublished** — eight crates remain uncategorized on crates.io until the next `cargo publish`, which
+is why the 0.32.0 cut is scheduled as a publish rather than only a tag (`ROADMAP.md`, "Release
+cycles"). That is a release action, not open design work.
+
+Everything below is the record as it stood. Previous status: **Proposed; §2 ruled.** Raised by the external architecture audit of 2026-08-31
 (`audit-2026-08-31-task-2.md` §1, §3, §4). All items independently confirmed at `3a8d730`.
 
 **RULED by the project owner 2026-09-01: §2 option 1 — advisories-only, as project policy.**

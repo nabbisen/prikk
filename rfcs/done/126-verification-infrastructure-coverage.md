@@ -1,6 +1,16 @@
 # RFC 126 — Four flanks the verification culture never reached
 
-**Status.** **Proposed; §6 ruled; §5a accepted by the project owner 2026-09-03.** Raised by the
+**Status.** **CLOSED 2026-09-04 and moved to `rfcs/done/`**, on the owner's authorization of the
+2026-09-04 schedule (`ROADMAP.md`, "Proposed ordering", item 0). **No implementable work remains: all
+four flanks are delivered.**
+
+**Its one outstanding item was not work but a ruling, and that ruling now lives in exactly one
+place.** §5a's question — does peak RSS get any standing protection — was tracked here *and* in
+RFC 133 §6 simultaneously, which is how a ruling gets answered once and left open in the other. **RFC
+133 §6 is now its sole home.** Nothing about the question changes; only where it is tracked.
+
+Everything below is the record as it stood. Previous status: **Proposed; §6 ruled; §5a accepted by the
+project owner 2026-09-03.** Raised by the
 external architecture audit of 2026-08-31 (`audit-2026-08-31-task-2.md` §3 cross-cutting,
 `task-3.md` §2c/§2d, Top-10 #10). All four independently confirmed at `3a8d730`.
 

@@ -1,6 +1,15 @@
 # RFC 134 — A text span's identity is not stable under composition
 
-**Status.** **ACCEPTED IN FULL by the project owner 2026-09-04**, including §8's design. Accepted in
+**Status.** **CLOSED 2026-09-04 and moved to `rfcs/done/`**, on the owner's authorization of the
+2026-09-04 schedule (`ROADMAP.md`, "Proposed ordering", item 0). **All ruled work is delivered**
+(`59fa298`, `906d015`, `6076d52`, `2c8289a`).
+
+**What remains is a watch, not work, and closing this RFC does not discharge it.** v1 operations
+depend permanently on the sequencing invariant stated in `text_span.rs`'s module doc, and **RFC 113's
+Git/Subversion/CVS import is the named direction that would violate it** — whoever designs history
+import meets this RFC first, in `done/` rather than `proposed/`.
+
+Everything below is the record as it stood. Previously: **ACCEPTED IN FULL by the project owner 2026-09-04**, including §8's design. Accepted in
 three steps the same day: the analysis first, then option (a) over (b), then §8's design of (a).
 
 **Every shape is now ruled.**
