@@ -1,7 +1,18 @@
 # RFC 137 — The project's entrance: a landing page, and how it stays true
 
-**Status.** **PROPOSED, 2026-09-04.** Opened at the project owner's instruction after a design
-discussion the same day that settled the whole option space. **This RFC records decisions already
+**Status.** **ACCEPTED by the project owner 2026-09-04**, the same day it was opened at their
+instruction, after a design discussion that settled the whole option space.
+
+**What the acceptance covers, stated because a bare acceptance is scope-ambiguous.** Unlike RFC 136,
+this RFC carries no open question, so acceptance **clears §7's increments 1-4 to be handed over**;
+increment 5 waits on the domain and on the next publish. It also accepts §5's three-surface division
+**including the maturity asymmetry the architect explicitly flagged for overrule** — that placing
+"Current Status"/"Not a Good Fit Yet" in the landing page's first screen runs against the owner's own
+guideline ruling that they are *secondary* in `README.md`. The owner did not overrule it, so **the
+asymmetry stands as designed**: secondary in `README.md`, first-screen on the landing page.
+
+**Increment 1's handoff is issued:**
+`rfcs/handoffs/137-project-entrance-landing-page/increment-1-html-code-context-handoff-v1.md`. **This RFC records decisions already
 made rather than re-opening them** (§3), and contributes the two things the discussion did not
 settle: **how a landing page stays true** (§4) and **what it may say that the other two entrance
 surfaces do not** (§5).
