@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.31.0 — 2026-09-04
+
+**Read this before upgrading one machine and not another.** Nothing about using `prikk` changes —
+no command, flag, exit code, or message differs from `0.30.0`. **But repositories written by this
+release cannot be read by older ones.**
+
+### Breaking change — repositories written by 0.31.0 are not readable by 0.30.0 or earlier
+
+Every patch this release authors is recorded at **`Patch` schema 3**, which earlier releases do not
+admit. This applies to **every commit**, not only ones that edit text.
+
+An older `prikk` reads such a repository, or imports a bundle exported from one, and refuses:
+
+```
+error: integrity error: format-2 patch does not accept envelope schema 3 (accepted: [1, 2])
+```
+
+**It fails closed with an accurate message — nothing is corrupted and no history is lost** — but the
+older build cannot proceed. Both the local case and the `bundle export` → `bundle import` case were
+demonstrated against a `0.30.0` build, not assumed.
+
+**Upgrade every machine that shares a repository before committing with `0.31.0`.**
+
+**This direction is the one the compatibility contract does not promise.** `prikk` guarantees that
+any release can read every object any prior release wrote, and that identity and signatures never
+require migration — **backward, not forward.** Repositories written before this release keep working
+exactly as they did, and the operations inside them still resolve through their original scheme,
+permanently.
+
+### Why the schema changed
+
+A text edit records *which* span it replaces. Until now that identity included the span's **position
+among identical occurrences**, recomputed against whatever the file looked like at the time — so an
+edit to one of two identical passages could renumber the other. Schema 3 replaces that with an
+identity derived only from content and surrounding context, and guarantees uniqueness when the edit
+is authored rather than guessing at replay.
+
+**The old behaviour was not reachable through ordinary use** — every edit is authored against the
+result of the ones before it, which kept the numbering consistent — and it was recorded as a known
+limitation in `0.30.0`. This release removes the fragility rather than continuing to rely on that
+invariant holding.
+
+Found by this project's own patch-algebra property tests
+([RFC 134](https://github.com/prikk-vcs/prikk/blob/main/rfcs/proposed/134-text-span-identity-under-composition.md)).
+
+### Changed
+
+- A sequence of operations that cannot compose is now refused as *"sequence operations do not compose
+  against a shared baseline"* rather than reported as malformed evidence — the same refusal, named for
+  what it is.
+
 ## 0.30.0 — 2026-09-04
 
 **A verification and library-surface release.** Nothing about using `prikk` from the command line
