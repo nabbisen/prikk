@@ -60,15 +60,39 @@ Every `PRIKK_*` variable the CLI reads:
 - **The two seeds are private key material**, and everything about persisting them is a security
   decision (§6).
 
-## 4. The constraint that rules out the obvious answer
+## 4. The dependency question — a decision, not a prohibition
 
-**`placement.rs`'s `ALLOWED_THIRD_PARTY` lists `("prikk", &[])` — the CLI crate is gated at *zero*
-third-party dependencies**, and the gate runs in the standing set.
+**Corrected 2026-09-04.** The architect first wrote that `placement.rs`'s `ALLOWED_THIRD_PARTY` entry
+`("prikk", &[])` puts every settings crate *"out by construction"*. **The owner refused that reasoning
+and was right.**
 
-**So every off-the-shelf settings crate is out by construction**, as the owner noted of
-`app-json-settings`. A configuration file must be parsed **with `std` alone**, which is a design input
-rather than an inconvenience: it argues for a format that is trivial to parse and impossible to
-half-parse.
+**The constant states no policy.** It is a per-crate allowlist in which every non-empty entry carries a
+recorded reason — `windows-sys` cites DC-96 — and `("prikk", &[])` records **what the CLI currently
+depends on, not what it may ever depend on.** It is the same allowlist-with-reasons idiom as
+`UNSAFE_EXEMPT_CRATES`, whose own module doc states the principle: *a visible edit to a reviewed
+constant is the control; invisibility was the problem.*
+
+**So adding a dependency to the CLI is a reviewable act, not an impossibility** — the same act that
+admitted `sha2`, `ed25519-dalek`, `getrandom`, `rustix`, and `windows-sys` to their crates.
+
+**The owner's position, recorded because it governs this RFC's design:** *"monolith without
+carefulness is not preferred. If some external crate is well designed and properly maintained, there
+is (or is not) possibility to rely on it. Of course, we should be really careful and take sufficient
+verification."*
+
+**This project already has a method for exactly that question, and it should be used rather than
+re-invented.** **DC-50** was an explicit return-on-investment decision on whether to depend on `sha2`
+or write SHA-256 first-party; it produced a decision record, and **DC-55** implemented the outcome.
+**DC-79** and **DC-80** are dependency *upgrades* carried out as their own reviewed increments. The
+project has both adopted and displaced dependencies deliberately, with evidence each time.
+
+**What survives of the original point, as a preference rather than a constraint:** a configuration file
+that `std` alone can parse has no supply-chain surface, no version-skew risk, and cannot half-parse.
+**That is an argument to weigh, not a rule that decides.** If a settings crate is well designed and
+well maintained, DC-50's method is how this project finds out whether depending on it is the better
+trade — and the shipped binary's dependency surface is one input to that, not the whole answer.
+
+**The precedent for the std-only shape**, if it wins:
 
 **The precedent exists and is recent.** `.prikkignore` (RFC 124, `text_span`'s sibling `ignore.rs`) is
 line-oriented, one directive per line, whitespace-trimmed, blank lines skipped, **fail-closed on
@@ -129,5 +153,9 @@ success not require both, since `init` → `commit` → `verify` works today wit
 The shape (§5), whether prikk ever stores a secret (§6), and the format of any config file (§4).
 
 **What it does establish**: the gap in §2 is real and measured; the three concerns in §3 are
-separable; and the zero-dependency constraint in §4 rules out the usual answers before the design
-starts.
+separable; and §4's dependency question is **open and decidable by DC-50's own method**, not closed by
+the current allowlist.
+
+**And one correction worth carrying**: the architect twice today read a *mechanism* as a *policy* —
+first `candidate_sequence`'s structure as proof of reachability (RFC 134 §3), then this allowlist as a
+prohibition. **A control that makes a change visible is not a rule forbidding it.**
