@@ -385,15 +385,37 @@ intention is the whole point of rewriting this section.
 
 #### Release cycles
 
-**The current cadence is four releases in three days** (0.28.0 through 0.31.0, 2026-09-02 to
-09-04), and 0.31.0 was the first release older builds cannot read. **That pace is not a target to
-maintain.** Cut when there is a reason, not on a clock.
+**RULED by the project owner 2026-09-04, against the architect's proposal: rapid releases are
+appropriate at this stage.** Their reasoning: *"We are now in eager development stage for v1. Also,
+there is no project who actually introduced `prikk`. No production use yet."*
+
+**The architect's "four releases in three days is not a target to maintain" is withdrawn — it treated
+cadence as a risk, and cadence is not the variable.** With no adopters, nearly everything a cut can
+get wrong is reversible in the next one, and each cut exercises the whole release path — build,
+tag, workflow, publish — often enough that its defects stay small. 0.27.1 exists because a cut found
+an installer defect; that is the mechanism working.
+
+**What is actually irreversible, and therefore the thing to keep deliberate:**
+
+| Act | Reversible? |
+|---|---|
+| A tag | Effectively yes, at this stage |
+| A GitHub release | Yes — editable, deletable |
+| A format change | **Yes today** — reversible precisely because nobody holds data written by it |
+| **A crates.io publish** | **No.** 44 versions of `prikk` are published and permanent; a version number, once used, is burned |
+
+So the constraint on a cut is **that its gates and CI actually ran green**, which is a per-cut
+property, not a cadence one. Frequency is free; publication is not.
+
+**The trigger that changes this ruling: the first adopter.** A format change stops being reversible
+the moment someone holds data written by it, and that is when cadence begins to cost something. Stated
+now so it is a recognised threshold rather than a later surprise.
 
 | Cut | Trigger | Carries |
 |---|---|---|
 | **0.32.0** | Items 1-3 landed **and** the crates.io metadata is overdue | RFC 137 increments 1-4 (landing page + gate), **RFC 128 §4's crate metadata, which is on `main` and unpublished — eight crates remain uncategorized on crates.io until the next publish**, and RFC 137 increment 5 (`homepage` → `https://prikk.org/`) if the domain resolves by then. **This cut needs a crates.io publish, not only a tag** — the metadata is the reason for it |
 | **0.33.0** | RFC 123 lands | A `Patch` schema 4 format change, alone. Format changes should not share a cut with anything that complicates bisecting them |
-| after | no scheduled cadence | Cut on reason: a user-reachable defect, a format change that needs to be reachable, or accumulation |
+| after | **no brake** | Cut freely while gates are green. The listed reasons — a user-reachable defect, a format change that needs to be reachable, accumulation — are *occasions*, not preconditions |
 
 **Standing:** the cut itself needs the owner's authorization; executing it does not.
 
