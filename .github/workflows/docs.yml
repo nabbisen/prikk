@@ -23,6 +23,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      # RFC 137 §7 increment 3: staged outside the repository tree so nothing new appears under
+      # docs/ -- no .gitignore entry needed, and a local run cannot leave a third directory beside
+      # src/ and book/.
+      SITE_DIR: ${{ runner.temp }}/site
+
     defaults:
       run:
         working-directory: docs
@@ -43,10 +49,20 @@ jobs:
       - name: Build book
         run: mdbook build
 
+      # RFC 137 §7 increment 3: the landing page (docs/landing/) is the site root, the built book
+      # goes under /docs/. docs.yml's own `paths:` filter is already `docs/**`, so docs/landing/
+      # needs no filter change.
+      - name: Stage site
+        run: |
+          mkdir -p "$SITE_DIR"
+          cp -r landing/. "$SITE_DIR/"
+          mkdir -p "$SITE_DIR/docs"
+          cp -r book/. "$SITE_DIR/docs/"
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: docs/book
+          path: ${{ env.SITE_DIR }}
 
   deploy:
     environment:
