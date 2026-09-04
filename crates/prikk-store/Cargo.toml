@@ -2,12 +2,16 @@
 name        = "prikk-store"
 description = "Repository storage engine for Prikk -- layout, object storage, WAL durability, verification, and patch replay. Internal to the prikk CLI; its API may change without notice before 1.0."
 readme      = "README.md"
+documentation = "https://docs.rs/prikk-store"
 version.workspace       = true
 edition.workspace       = true
 rust-version.workspace  = true
 license.workspace       = true
 authors.workspace       = true
 repository.workspace    = true
+homepage.workspace      = true
+categories.workspace    = true
+keywords.workspace      = true
 
 [features]
 # Non-default. Exposes storage-damaging simulation helpers (e.g. dropping one ref's pointer entry)

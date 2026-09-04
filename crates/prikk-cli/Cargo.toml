@@ -2,6 +2,7 @@
 name        = "prikk"
 description = "A standalone distributed version control system built around block-oriented patch theory."
 readme      = "../../README.md"
+documentation = "https://docs.rs/prikk"
 version.workspace       = true
 edition.workspace       = true
 rust-version.workspace  = true

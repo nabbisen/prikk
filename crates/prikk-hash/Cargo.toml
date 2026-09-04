@@ -2,12 +2,16 @@
 name        = "prikk-hash"
 description = "SHA-256 hash primitives for Prikk. Internal to the prikk CLI; its API may change without notice before 1.0."
 readme      = "README.md"
+documentation = "https://docs.rs/prikk-hash"
 version.workspace       = true
 edition.workspace       = true
 rust-version.workspace  = true
 license.workspace       = true
 authors.workspace       = true
 repository.workspace    = true
+homepage.workspace      = true
+categories.workspace    = true
+keywords.workspace      = true
 
 [dependencies]
 sha2 = { workspace = true }

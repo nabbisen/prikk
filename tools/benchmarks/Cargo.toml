@@ -1,6 +1,7 @@
 [package]
 name = "prikk-benchmarks"
 description = "Repository-internal Prikk performance benchmarks (RFC 126 §5). Not part of the shipped product; not built by default."
+readme = "README.md"
 publish = false
 version.workspace = true
 edition.workspace = true

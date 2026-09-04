@@ -1,6 +1,7 @@
 [package]
 name = "prikk-release-policy"
 description = "Repository-internal Prikk release-policy verifier."
+readme = "README.md"
 publish = false
 version.workspace = true
 edition.workspace = true
