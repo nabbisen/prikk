@@ -1,8 +1,19 @@
 # RFC 123 — The commit message is validated and then discarded
 
 **Status.** **RULED by the project owner 2026-09-01: Option A — the message is evidence.** A new
-optional `message` field on `PatchPayload`, inside object identity, at `Patch` schema 3, mirroring
-`TagPayload.message`. **Option C-revised is taken immediately and independently**: `-m` stays required
+optional `message` field on `PatchPayload`, inside object identity, at ~~`Patch` schema 3~~ **the next
+free `Patch` schema, now 4**, mirroring `TagPayload.message`.
+
+**Schema-number correction, 2026-09-04.** This ruling named schema 3 on 2026-09-01. **RFC 134 §8 then
+minted `PATCH_TEXT_SPAN_V2_SCHEMA = 3` for content-unique span identity, on 2026-09-04, without the
+architect checking whether an accepted ruling had already claimed that number** — the architect's
+error, caught while surveying open work. **Nothing is broken**: schema 3 is span identity, correctly
+implemented, and this RFC is unimplemented. **The number here moves to 4; the ruling's substance is
+untouched.**
+
+**The lesson, recorded where the next schema mint will meet it:** a schema number is a shared, ordered
+namespace across every open RFC. **Before minting one, check every ruled-but-unimplemented RFC for a
+claim on it** — `admitted_schemas` shows what is *taken*, never what is *promised*. **Option C-revised is taken immediately and independently**: `-m` stays required
 and `commit` prints a `note:` line saying the message is not yet stored, in the CLI's existing idiom
 for unimplemented areas. **The author display name stays deferred** (§5) and is not scoped with this.
 
@@ -76,7 +87,7 @@ job.
 
 ## 4. The options
 
-### Option A — identity-bearing `message` field on `Patch`, at schema 3
+### Option A — identity-bearing `message` field on `Patch`, at the next free schema (4 — see the Status block's 2026-09-04 correction)
 
 A new optional field, mirroring `TagPayload.message` exactly.
 
@@ -161,7 +172,7 @@ of them is about effort:
 
 **And the format machinery is why this is cheap for prikk specifically**: the admitted-schema table,
 the `PATCH_PARENT_IDS_RETIRED_SCHEMA` retirement precedent, and format-refusal tests against real
-committed fixtures all exist. A schema-3 `Patch` field is a well-trodden path here in a way it would
+committed fixtures all exist. A new-schema `Patch` field is a well-trodden path here in a way it would
 not be in most projects.
 
 ## 7. Non-goals
