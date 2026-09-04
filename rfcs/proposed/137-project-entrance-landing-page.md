@@ -1,7 +1,10 @@
 # RFC 137 — The project's entrance: a landing page, and how it stays true
 
 **Status.** **ACCEPTED by the project owner 2026-09-04**, the same day it was opened at their
-instruction, after a design discussion that settled the whole option space.
+instruction, after a design discussion that settled the whole option space. **This RFC records decisions
+already made rather than re-opening them** (§3), and contributes the two things the discussion did
+not settle: **how a landing page stays true** (§4) and **what it may say that the other two entrance
+surfaces do not** (§5).
 
 **What the acceptance covers, stated because a bare acceptance is scope-ambiguous.** Unlike RFC 136,
 this RFC carries no open question, so acceptance **clears §7's increments 1-4 to be handed over**;
@@ -17,10 +20,7 @@ asymmetry stands as designed**: secondary in `README.md`, first-screen on the la
 `rfcs/handoffs/137-project-entrance-landing-page/increments-2-3-site-url-and-staging-handoff-v1.md`
 (**increment 2 delivered `ea687c9`, accepted and pushed 2026-09-05; increment 3 delivered `d3124e4`,
 held unpushed and re-made in the increment-4 round — it fails without a landing page**);
-`rfcs/handoffs/137-project-entrance-landing-page/increment-4-landing-page-handoff-v1.md`. **This RFC records decisions already
-made rather than re-opening them** (§3), and contributes the two things the discussion did not
-settle: **how a landing page stays true** (§4) and **what it may say that the other two entrance
-surfaces do not** (§5).
+`rfcs/handoffs/137-project-entrance-landing-page/increment-4-landing-page-handoff-v1.md`.
 
 **Coupled to RFC 135 (first-run entrance and configuration), deliberately.** The landing page ends at
 an install command; RFC 135 begins at what a new user meets once that command has run. They are two
