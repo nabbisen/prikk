@@ -18,7 +18,7 @@
 //! the one bare-listing block among the declared documents. A mention there alone does not count
 //! as an explanation.
 
-#![allow(clippy::expect_used, clippy::panic)]
+#![allow(clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -120,11 +120,69 @@ fn every_declared_document_exists() {
     }
 }
 
-/// Extract every fenced (``` ... ```) and inline (`` `...` ``) code region from `text`, in the
-/// order they start. Deliberately simple (byte-offset scanning against `text` directly, no
-/// Markdown parser, no dependency): this project's docs never nest one inside the other, and
-/// totality (never panicking on arbitrary text) matters more than handling every theoretical
-/// Markdown edge case a hand-authored doc page will never actually contain.
+/// Every `<tag ...>...</tag>` occurrence in `text`, in the order they start, as
+/// `(region_text, (start, end))` pairs. RFC 137 §4.3: taught to `code_regions` so a declared HTML
+/// document (the landing page, `docs/landing/`) is checked by rule (A) the same way a Markdown one
+/// is, with one definition of "code context" for every declared document rather than a
+/// format-conditional branch.
+///
+/// Recognizes an opening tag only when the tag name is followed immediately by `>` or whitespace,
+/// so `<pre` never matches a different tag sharing the prefix (`<precise>`, `<codex>`). Does not
+/// handle a literal `>` inside a quoted attribute value (e.g. `title=">"`) -- deliberately simple,
+/// matching this function's own no-parser, no-dependency approach for Markdown fences below; no
+/// declared document's authored HTML does this. Tag names are matched case-sensitively (lowercase
+/// only) for the same reason -- hand-authored HTML in this project uses lowercase tags, and a
+/// case-insensitive match is not worth the extra code for an input that does not occur.
+///
+/// An opening tag with no matching closing tag is treated exactly like the fenced-block arm's own
+/// unterminated case below: everything from the opening tag onward is one region, and the scan for
+/// this tag name stops there -- matching the existing arm's behaviour is the obvious choice, and
+/// being deliberate about it is what the handoff asked for, not silence on the question.
+fn html_tag_regions<'a>(text: &'a str, tag: &str) -> Vec<(&'a str, (usize, usize))> {
+    let open_needle = format!("<{tag}");
+    let close_needle = format!("</{tag}>");
+    let mut out = Vec::new();
+    let mut offset = 0usize;
+    while let Some(rel) = text[offset..].find(open_needle.as_str()) {
+        let start = offset + rel;
+        let after_name = start + open_needle.len();
+        let is_real_tag = text[after_name..]
+            .chars()
+            .next()
+            .is_some_and(|c| c == '>' || c.is_whitespace());
+        if !is_real_tag {
+            // A different tag sharing this prefix (e.g. `<precise>` while scanning for `<pre`) --
+            // not a match; keep scanning from just past the prefix, not past the whole tag, since
+            // we do not know where (or whether) this unrelated tag closes.
+            offset = after_name;
+            continue;
+        }
+        let Some(close_rel) = text[after_name..].find('>') else {
+            // The opening tag itself never closes; nothing genuine follows it either.
+            break;
+        };
+        let after_open = after_name + close_rel + 1;
+        match text[after_open..].find(close_needle.as_str()) {
+            Some(end_rel) => {
+                let end = after_open + end_rel + close_needle.len();
+                out.push((&text[start..end], (start, end)));
+                offset = end;
+            }
+            None => {
+                out.push((&text[start..], (start, text.len())));
+                break;
+            }
+        }
+    }
+    out
+}
+
+/// Extract every fenced (``` ... ```), inline (`` `...` ``), and HTML (`<pre>`/`<code>`, RFC 137
+/// §4.3) code region from `text`, in the order they start. Deliberately simple (byte-offset
+/// scanning against `text` directly, no Markdown or HTML parser, no dependency): this project's
+/// docs never nest one inside the other, and totality (never panicking on arbitrary text) matters
+/// more than handling every theoretical edge case a hand-authored doc page will never actually
+/// contain.
 fn code_regions(text: &str) -> Vec<&str> {
     let mut fenced_ranges = Vec::new();
     let mut regions = Vec::new();
@@ -143,6 +201,14 @@ fn code_regions(text: &str) -> Vec<&str> {
         regions.push(&text[start..end]);
         fenced_ranges.push((start, end));
         offset = end;
+    }
+
+    // `<pre>...</pre>` plays the same container role as a ``` fence -- recorded next, into the
+    // same `fenced_ranges`, so an inline `<code>` or backtick span starting inside one is never
+    // also scanned separately (the `<pre><code>...</code></pre>` case, the common one).
+    for (region, range) in html_tag_regions(text, "pre") {
+        regions.push(region);
+        fenced_ranges.push(range);
     }
 
     // Inline spans, skipping any that start inside an already-collected fenced range -- so a
@@ -164,6 +230,20 @@ fn code_regions(text: &str) -> Vec<&str> {
         regions.push(&text[start..end]);
         offset = end;
     }
+
+    // `<code>...</code>` spans, the same precedence as an inline backtick span: skip any that
+    // start inside an already-recorded fenced range (a ``` fence or a `<pre>` block), so
+    // `<pre><code>...</code></pre>` is scanned once, not twice.
+    for (region, (start, _end)) in html_tag_regions(text, "code") {
+        if fenced_ranges
+            .iter()
+            .any(|&(range_start, range_end)| start >= range_start && start < range_end)
+        {
+            continue;
+        }
+        regions.push(region);
+    }
+
     regions
 }
 
@@ -212,7 +292,21 @@ fn strip_readme_command_listing(text: &str) -> String {
     result
 }
 
+/// RFC 137 §4.3: the landing page names commands but does not explain them -- if it counted for
+/// rule (B) (via `is_explained`, below), a command mentioned only there would read as documented,
+/// closing a real documentation gap on a marketing sentence. A prefix, not one exact path: RFC 137
+/// §3 fixes the directory (`docs/landing/`) but increment 4 (which builds the page) fixes its
+/// filename, so matching the directory means this arm needs no further change when that lands.
+/// **Not yet declared in `DECLARED_DOCUMENTS`** -- the file does not exist until increment 4 builds
+/// it -- so this arm is unreached today; it exists now so landing the page needs no further gate
+/// change, per this increment's own reason for existing (`rfcs/proposed/137-...md` §1: a gate added
+/// after the artifact documents what happened instead of constraining it).
+const LANDING_PAGE_PATH_PREFIX: &str = "docs/landing/";
+
 fn document_text(root: &Path, path: &str) -> String {
+    if path.starts_with(LANDING_PAGE_PATH_PREFIX) {
+        return String::new();
+    }
     let text = fs::read_to_string(root.join(path))
         .unwrap_or_else(|err| panic!("declared document {path} must read: {err}"));
     if path == "README.md" {
@@ -285,4 +379,124 @@ fn declared_undocumented_names_are_real_registry_entries() {
             "DECLARED_UNDOCUMENTED entry for `{name}` has no reason"
         );
     }
+}
+
+// ---- RFC 137 §4.3: code_regions' HTML arm (`<pre>`/`<code>`) ----
+
+/// Basic recognition: a bare `<code>` span and a bare `<pre>` block each yield one region, and
+/// `command_tokens` finds the real command inside either.
+#[test]
+fn code_regions_finds_bare_html_code_and_pre() {
+    let code_only = "See <code>prikk seal</code> for details.";
+    let regions = code_regions(code_only);
+    assert_eq!(
+        regions.len(),
+        1,
+        "expected exactly one region, got {regions:?}"
+    );
+    assert_eq!(command_tokens(regions[0]), vec!["seal"]);
+
+    let pre_only = "<pre>prikk verify</pre>";
+    let regions = code_regions(pre_only);
+    assert_eq!(
+        regions.len(),
+        1,
+        "expected exactly one region, got {regions:?}"
+    );
+    assert_eq!(command_tokens(regions[0]), vec!["verify"]);
+}
+
+/// Attribute forms (§5 control 3): `<code id="x">`, `<code class="a b">`, and `<pre class="term">`
+/// are all recognised as real opening tags.
+#[test]
+fn code_regions_recognizes_attributed_html_tags() {
+    for (text, expected) in [
+        (r#"<code id="c1">prikk commit</code>"#, "commit"),
+        (r#"<code class="a b">prikk log</code>"#, "log"),
+        (r#"<pre class="term">prikk doctor</pre>"#, "doctor"),
+    ] {
+        let regions = code_regions(text);
+        assert_eq!(
+            regions.len(),
+            1,
+            "{text:?}: expected one region, got {regions:?}"
+        );
+        assert_eq!(
+            command_tokens(regions[0]),
+            vec![expected],
+            "input: {text:?}"
+        );
+    }
+}
+
+/// The prefix trap (§5 control 3): `<codex>` and `<precise>` share a prefix with `<code`/`<pre`
+/// but are different tags, and must not be matched as opening tags of either.
+#[test]
+fn code_regions_does_not_match_html_tag_name_prefix() {
+    assert_eq!(
+        code_regions("<codex>prikk notacommand</codex>"),
+        Vec::<&str>::new(),
+        "`<codex>` must not be recognised as a `<code>` opening tag"
+    );
+    assert_eq!(
+        code_regions("<precise>prikk notacommand</precise>"),
+        Vec::<&str>::new(),
+        "`<precise>` must not be recognised as a `<pre>` opening tag"
+    );
+}
+
+/// `<pre><code>...</code></pre>` (§5 control 2, the common form) must be scanned once, not twice:
+/// `<pre>` is recorded first as a container, and the nested `<code>` starts inside it, so the
+/// `<code>` arm must skip it. This is also the direct, permanent version of the positive control
+/// the handoff asked for by hand: a fixture naming a real command inside this nesting must still
+/// be found by rule (A) exactly once (proven here by region count, not by counting panics, since a
+/// panicking `assert!` cannot distinguish "found once" from "found twice").
+#[test]
+fn code_regions_does_not_double_count_pre_code_nesting() {
+    let text = "<pre><code>prikk seal</code></pre>";
+    let regions = code_regions(text);
+    assert_eq!(
+        regions.len(),
+        1,
+        "expected the nested form to yield exactly one region, got {regions:?}"
+    );
+    assert_eq!(regions[0], text);
+    assert_eq!(command_tokens(regions[0]), vec!["seal"]);
+}
+
+/// An opening `<pre>`/`<code>` with no matching closing tag runs to end-of-text and stops the scan
+/// for that tag name, mirroring the fenced-block arm's own unterminated behaviour exactly (§4.1 of
+/// the handoff: a deliberate choice, not silence on the question).
+#[test]
+fn code_regions_html_unterminated_tag_runs_to_end_of_text() {
+    let text = "before <code>prikk seal";
+    let regions = code_regions(text);
+    assert_eq!(regions, vec!["<code>prikk seal"]);
+}
+
+/// §4.2: an HTML entity cannot appear *inside* a token -- `&`/`#`/`;` are all outside
+/// `command_tokens`' own character class, so an entity terminates a token rather than being
+/// silently absorbed into one. Not the shape the landing page actually uses (it writes `prikk
+/// seal` as literal text, per the handoff), but confirmed rather than assumed, per the handoff's
+/// own instruction.
+#[test]
+fn command_tokens_cannot_absorb_an_html_entity() {
+    assert_eq!(
+        command_tokens("prikk se&amp;al"),
+        vec!["se"],
+        "an entity must terminate the token, never be absorbed into it"
+    );
+}
+
+/// RFC 137 §4.3: a path under the landing page's directory is excluded from rule (B) -- named
+/// there, but nothing on it ever counts as an explanation. The path used here does not exist on
+/// disk; `document_text` must not attempt to read it, since increment 4 has not built the page yet.
+#[test]
+fn document_text_returns_nothing_for_the_landing_page() {
+    let root = repo_root();
+    let text = document_text(&root, "docs/landing/index.html");
+    assert_eq!(
+        text, "",
+        "the landing page must contribute nothing to rule (B)"
+    );
 }
