@@ -28,16 +28,25 @@ use super::COMMANDS;
 /// `README.md` plus every `docs/src/` page found (by direct search, not glob) to mention a real
 /// `prikk <command>` — declared, not scanned by wildcard (§3), so a new `docs/` file cannot
 /// silently escape the gate and a deleted one fails loudly (`every_declared_document_exists`
-/// below). **33 files under `docs/src/`** (31 found in the original search, plus
+/// below). **38 files under `docs/src/`** (31 found in the original search, plus
 /// `docs/src/guide/status.md`, added along with the page itself to close the one gap this gate
 /// found — review v1 §1/§4; plus `docs/src/guide/backup-restore.md`, added along with the page
-/// itself for the same reason — DC-44 increment 4's own amendment §7.5).
+/// itself for the same reason — DC-44 increment 4's own amendment §7.5; plus
+/// `docs/src/reference/git-mapping.md`, added along with the page itself (RFC 128 §5), and four
+/// pre-existing pages found mentioning real commands in code context while preparing that same
+/// page — `docs/src/guide/ignore.md`, `docs/src/guide/faq.md`,
+/// `docs/src/guide/troubleshooting.md`, `docs/src/reference/durability-recovery.md` — none of
+/// which had ever been declared here (RFC 128 outward-surface handoff §4). `docs/src/guide/tutorial.md`
+/// also mentions real commands in fenced code and remains undeclared — found during the same
+/// sweep, reported rather than added since it was outside that handoff's named scope).
 const DECLARED_DOCUMENTS: &[&str] = &[
     "docs/src/guide/backup-restore.md",
     "docs/src/guide/checkout/checkout.md",
     "docs/src/guide/checkout/snapshot-checkout.md",
     "docs/src/guide/checkout/snapshot-materialization.md",
+    "docs/src/guide/faq.md",
     "docs/src/guide/history.md",
+    "docs/src/guide/ignore.md",
     "docs/src/guide/merge-evidence.md",
     "docs/src/guide/merge.md",
     "docs/src/guide/merge-plan.md",
@@ -54,11 +63,14 @@ const DECLARED_DOCUMENTS: &[&str] = &[
     "docs/src/guide/security-setup.md",
     "docs/src/guide/status.md",
     "docs/src/guide/sync.md",
+    "docs/src/guide/troubleshooting.md",
     "docs/src/guide/worktree-status.md",
     "docs/src/reference/architecture.md",
     "docs/src/reference/concurrency-locking.md",
     "docs/src/reference/data-model-lifecycle.md",
     "docs/src/reference/data-model.md",
+    "docs/src/reference/durability-recovery.md",
+    "docs/src/reference/git-mapping.md",
     "docs/src/reference/integrity-recovery.md",
     "docs/src/reference/patch-algebra.md",
     "docs/src/reference/path-safety.md",

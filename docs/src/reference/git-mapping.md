@@ -1,0 +1,114 @@
+# Git → prikk: a vocabulary map, not a feature map
+
+If you know Git, prikk's commands will look familiar and several of them mean something different.
+`commit` does not publish. There is no `HEAD`, no staging area, no branch switching. `seal` has no
+Git counterpart at all. Reading prikk's words as Git's words will make you wrong about several things
+at once, and you will not notice, because nothing will error — the commands will simply do something
+other than what you expected.
+
+This page is a vocabulary map for a human, not a migration tool. It does not import Git history and
+does not promise to; the closest active work on that is
+[RFC 113](https://github.com/prikk-vcs/prikk/blob/main/rfcs/proposed/113-history-import-foundations.md),
+which is a design for the import *contract*, and nothing implements it yet.
+
+## Command correspondence
+
+| Git | prikk | What differs |
+|---|---|---|
+| `git init` | [`prikk init`](../guide/tutorial.md) | Same idea: create the repository layout. |
+| `git clone` | — | **Missing.** [`prikk bundle import`](../guide/backup-restore.md) reads a bundle file into an untrusted, unmerged `remotes/<ref>` pointer — it does not create a worktree or a local branch. There is no network transport at all: bundles and sync artifacts are files you move yourself. |
+| `git add` (staging) | — | **Missing, deliberately.** There is no index and no staging area. `prikk commit --from-worktree` always considers the whole worktree (governed by `.prikkignore`, which is a flat list of literal path prefixes — no globbing, no negation, unlike `.gitignore`; see [Ignoring Worktree Paths](../guide/ignore.md)). You cannot stage part of a change. |
+| `git commit` | [`prikk commit --from-worktree -m <message>`](../guide/patches/worktree-patch.md) | **Two-phase, not one.** `commit` only queues a signed Patch into a local WAL; nothing is published yet. See [Commit versus seal](#commit-versus-seal-a-two-phase-model) below. **The message is validated (required, non-empty) and then discarded** — see [Messages are not yet stored](#messages-are-not-yet-stored). |
+| — | [`prikk seal --allow-no-audit`](../guide/patches/worktree-patch.md) | **No Git counterpart.** Publishes the queued WAL as a signed Block, moving the branch ref. Nothing is visible to `log` or a peer before this runs. |
+| `git status` | [`prikk status`](../guide/status.md) + [`prikk worktree-status`](../guide/worktree-status.md) | Split in two: `status` reports the repository/WAL/queue state; `worktree-status` reports the worktree's own drift against the replay baseline `commit` would author against. Neither is `git status`'s single combined view. |
+| `git log` | [`prikk log`](../guide/history.md) | Block and ref metadata only — target Block ID, RefState ID, kind, parent/Patch counts, rollback classification. **No commit message, author, or date is shown**, because none is stored yet (see below). |
+| `git show` / `git diff` | — | **Missing.** The closest things today are [`worktree-status`](../guide/worktree-status.md) (worktree vs. baseline) and [`merge-evidence`](../guide/merge-evidence.md)'s operation listings — neither renders a content diff. |
+| `git branch` | [`prikk branch list`](../guide/faq.md) / `branch create <name>` | List and create work the same way in spirit. |
+| `git branch -d` | `prikk branch close <name>` | **Diverged.** Closing marks the branch (a schema-2 `closed` RefState); nothing is deleted or reclaimed, and there is no reopen verb. |
+| `git checkout <branch>` / `git switch` | — | **Missing, deliberately — see [No `HEAD`, no switching](#no-head-no-branch-switching) below.** `prikk branch`'s own `--help` text says so directly: *"there is no `branch switch` yet, and no current-branch pointer; switching needs a separate, not-yet-designed increment; every command resolves `--ref` explicitly in the meantime."* |
+| `git checkout -- <path>` / `git restore` | [`prikk checkout --patch-materialize`](../guide/checkout/checkout.md) (and the sibling `--snapshot-*`/`--patch-*` flags) | Materializes files for one `--ref`, plan-first (`--plan-only`, `--snapshot-plan`, `--patch-plan`). No pathspec — it is whole-ref, not a partial restore. |
+| `git tag` | [`prikk tag create <name> --target <ref\|block> [-m <message>]`](../guide/history.md) | **The tag message *is* persisted** — unlike a commit message, `TagPayload` already carries one. |
+| `git merge` | [`prikk merge-evidence`](../guide/merge-evidence.md) → [`merge-plan`](../guide/merge-plan.md) → [`prikk merge --allow-no-audit`](../guide/merge.md) | Three explicit steps, not one. `merge` executes only a merge already proven confluent by evidence; a merge that is not refuses with a witness rather than producing a conflicted worktree. |
+| `git rebase` / `git cherry-pick` | — | **Missing.** The closest thing to cherry-pick is `prikk sync seal --claim <id>`, which seals one already-*received* patch — it cannot take an arbitrary patch from your own history. |
+| `git revert` | [`prikk rollback-preview`](../guide/rollback/rollback-preview.md) → [`rollback-draft --append-inverse -m <message>`](../guide/rollback/rollback-draft.md) → [`rollback-draft-verify`](../guide/rollback/rollback-draft-verify.md) → `seal` | Four explicit steps producing a preimage-exact inverse Patch, rather than one command that also commits. |
+| `git stash` / `git submodule` / `git worktree` (multiple) | — | **Missing.** One worktree per repository; nothing analogous to any of the three exists. |
+| `git gc` | [`prikk compact --pointer-index\|--received-index\|--trust-policy\|--all`](../guide/backup-restore.md) | **Diverged, not equivalent.** prikk's object model never deletes an object — `compact` reclaims stale *index and policy* records only. There is no object pruning of any kind. |
+| `git fsck` | [`prikk verify [--format json] [--stop-on-first-error]`](../reference/integrity-recovery.md) | Broader: object/WAL/ref integrity plus three-valued publication-trust classification in one pass. |
+| `git reflog` | — | **No user-facing verb.** Every ref update is a signed, append-only `RefUpdate` log entry internally, but nothing surfaces it to a command today. |
+| `git config` | — | **Missing.** Environment variables only (`PRIKK_AUTHOR_KEY_ID` and its siblings — see [Security and Signing Setup](../guide/security-setup.md)); no config file or command exists. |
+| `git blame` / `git bisect` / `git grep` | — | **Missing.** None exists in any form. |
+| `.gitignore` | [`.prikkignore`](../guide/ignore.md) | **Diverged, and narrower on purpose.** Literal repository-relative path prefixes only — no globbing, no negation, no per-directory files, and it binds only at `commit`'s worktree walk and `worktree-status`'s scan, never at replay or verification. |
+| `git remote add` / remote tracking | — | **Missing.** No remote registry or URLs of any kind — see [File-based distribution](#file-based-distribution-instead-of-remotes) below. |
+| N/A — no counterpart | [`prikk doctor`](../guide/troubleshooting.md) | Health diagnostics with one real repair (`--repair-wal-tail`); `--repair-main-ref` is recognized and always refused — there is no implemented repair behind it. |
+| N/A — no counterpart | [`prikk unlock`](../guide/backup-restore.md) | Lists or clears a held file lock. Nothing in Git needs this because Git has no equivalent lock. |
+| N/A — no counterpart | [`prikk trust maintainer add/remove`](../guide/security-setup.md) | Manages the local MAINTAINER trust set. Git has no signer-trust concept at this layer; the closest analogue is a GPG keyring, and it is not the same model. |
+
+## Commit versus seal, a two-phase model
+
+Git's `commit` does one thing: it creates a commit object and moves the branch pointer in the same
+step. prikk splits that into two commands with nothing in between them optional:
+
+```sh
+prikk commit --from-worktree -m "message"   # queues a signed Patch to the local WAL
+prikk seal --allow-no-audit                 # publishes the queue as a Block, moves the ref
+```
+
+A queued-but-unsealed commit is genuinely not part of history yet — it does not appear in `log`, and
+a peer reading your repository cannot see it. You can queue several commits before sealing them
+together. There is no Git operation that maps onto `commit` alone; it is closer to `git add` plus
+`git commit --no-verify` into a holding area that Git does not have, and `seal` is the step that
+actually behaves like `git commit`'s publishing half.
+
+## No `HEAD`, no branch switching
+
+There is no current-branch pointer and no working-directory state that says "you are on `main`."
+Every command that needs a target names it explicitly with `--ref`. This is not a missing feature
+with a planned fix on this page's own authority — `branch`'s own `--help` text states it as a
+present-tense limitation: switching "needs a separate, not-yet-designed increment." If you are used
+to `git switch` or `git checkout <branch>` changing what subsequent commands operate on implicitly,
+expect to write `--ref` every time instead.
+
+## Messages are not yet stored
+
+`prikk commit -m <message>` requires a non-empty message, validates it, and then discards it —
+`commit` itself prints a note saying so on every invocation. `prikk log` shows only block and ref
+metadata, never a message, an author, or a date. This is a known, named gap
+([RFC 123](https://github.com/prikk-vcs/prikk/blob/main/rfcs/proposed/123-commit-message-and-authorship-metadata.md)),
+not an oversight this page is
+covering for: persisting the message is a later increment, ruled but not yet implemented. A `tag`'s
+message, by contrast, **is** persisted today — the two commands are not symmetric.
+
+## File-based distribution instead of remotes
+
+There is no remote registry, no URLs, and no network transport of any kind in the binary. Moving
+history between repositories is always a file you produce and hand to the other side yourself:
+
+- [`prikk bundle export`/`import`/`verify`](../guide/backup-restore.md) — a complete, self-contained
+  history bundle in one file.
+- [`prikk sync`](../guide/sync.md)'s `summary`/`compare`/`have`/`build`/`accept`/`pending`/`seal`
+  subcommands — an incremental, gap-closing exchange, still file-based, still no sockets.
+
+Either way, what you receive lands as an untrusted `remotes/<name>` pointer — readable by `log`,
+`merge-evidence`, and `merge`, but not automatically merged or trusted the way a Git remote-tracking
+branch is once fetched.
+
+## Claim-to-Source Anchors
+
+| Claim | Source anchors |
+|---|---|
+| `commit` only queues a signed Patch to the local WAL; `seal` publishes it as a Block and moves the branch ref. | [`node_authoring.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/worktree_patch/node_authoring.rs), [`seal.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/seal.rs) |
+| There is no current-branch pointer or `HEAD`; every command resolves `--ref` explicitly. | [`branch.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/branch.rs), [`commands.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/commands.rs) |
+| `commit -m`'s message is validated non-empty and then discarded; `tag create -m`'s message is persisted. | [`main.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/main.rs), [`payload/tag.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-object/src/payload/tag.rs), [RFC 123](https://github.com/prikk-vcs/prikk/blob/main/rfcs/proposed/123-commit-message-and-authorship-metadata.md) |
+| There is no staging area; `commit --from-worktree` always considers the whole worktree, filtered only by `.prikkignore`. | [`worktree_files.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/worktree_patch/node_authoring/worktree_files.rs), [`ignore.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/ignore.rs) |
+| No remote registry or network transport exists; distribution is `bundle export`/`import`/`verify` or `sync`, both file-based, landing as an untrusted `remotes/<name>` pointer. | [`bundle.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/bundle.rs), [`sync.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/sync.rs), [`received.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/received.rs) |
+| Every command named on this page is a real registered command. | [`commands.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/commands.rs) (`COMMANDS`), checked mechanically by [RFC 118 §8's rule (A)](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/commands/tests.rs) |
+
+## Provenance
+
+Seeded from the external architecture audit's 2026-08-31 feature-completeness matrix
+(`audit-2026-08-31-task-1a-design-functionality.md` §4), re-verified against `main` at the time of
+writing rather than copied — several rows in that matrix are now stale (`worktree-status` was broken
+then and is fixed; `.prikkignore` did not exist then and does now). [RFC
+128](https://github.com/prikk-vcs/prikk/blob/main/rfcs/proposed/128-outward-facing-project-surface.md)
+§5 requested this page. It does not cover RFC 113 (history import) or any importer tool — neither
+exists yet.

@@ -34,6 +34,7 @@
 
 # Reference
 
+- [Git → prikk](reference/git-mapping.md)
 - [Release, Versioning, and Compatibility](reference/release-compatibility.md)
 - [Platform Support](reference/platform-support.md)
 - [System Architecture](reference/architecture.md)
