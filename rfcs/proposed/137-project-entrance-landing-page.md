@@ -11,8 +11,10 @@ increment 5 waits on the domain and on the next publish. It also accepts §5's t
 guideline ruling that they are *secondary* in `README.md`. The owner did not overrule it, so **the
 asymmetry stands as designed**: secondary in `README.md`, first-screen on the landing page.
 
-**Increment 1's handoff is issued:**
-`rfcs/handoffs/137-project-entrance-landing-page/increment-1-html-code-context-handoff-v1.md`. **This RFC records decisions already
+**Handoffs issued:**
+`rfcs/handoffs/137-project-entrance-landing-page/increment-1-html-code-context-handoff-v1.md`
+(**delivered `3126a24`, accepted and pushed 2026-09-04**);
+`rfcs/handoffs/137-project-entrance-landing-page/increments-2-3-site-url-and-staging-handoff-v1.md`. **This RFC records decisions already
 made rather than re-opening them** (§3), and contributes the two things the discussion did not
 settle: **how a landing page stays true** (§4) and **what it may say that the other two entrance
 surfaces do not** (§5).
@@ -192,17 +194,33 @@ Ordered. Each is independently reviewable; **1 gates 4.**
 
 1. **Extend `code_regions` for `<code>`/`<pre>`** (§4.3). Must not change what it finds in the 40
    Markdown documents — that is the review's negative control.
-2. **`book.toml` gains `site-url = "/docs/"`.** Without it the book's generated 404 page loads its
-   assets from the site root and renders unstyled. One line, silent failure if skipped.
-3. **`docs.yml` gains a staging step** — landing page at the artifact root, built book under `docs/`.
-   Its `paths:` filter already covers `docs/**`, so `docs/landing/` needs no filter change.
+2. **`book.toml` gains `site-url`.** **CORRECTED 2026-09-05, measured against mdBook 0.5.4 while
+   writing the handoff:** the mechanism is a `<base>` tag in the generated 404 page, not absolute
+   asset hrefs — asset references stay relative either way. Without `site-url` the page carries
+   `<base href="/">`, so a 404 served at `/docs/guide/nope.html` resolves its CSS against the host
+   root and renders unstyled. The effect this RFC described is real; the cause was stated wrongly.
+   **And the value is host-dependent**: `/prikk/docs/` on today's `prikk-vcs.github.io/prikk/`
+   deployment, `/docs/` after the domain — so this increment is **not** correct against the current
+   deployment with the value this RFC originally named. One line, silent failure if skipped or set
+   wrong.
+3. **`docs.yml` gains a staging step** — landing page at the artifact root, built book under `docs/`,
+   staged in the runner's temp directory so nothing new appears under `docs/`. Its `paths:` filter
+   already covers `docs/**`, so `docs/landing/` needs no filter change. **BINDING ORDERING
+   CONSTRAINT, found 2026-09-05:** landed alone this breaks the published site — it moves the book
+   off the artifact root while no landing page exists, so `https://prikk-vcs.github.io/prikk/` would
+   serve nothing. **Increment 3 must not reach `origin/main` before increment 4.** A placeholder page
+   is not the answer: it would be publicly served as the project's front page, which is worse for a
+   visitor than the documentation index there now.
 4. **Build the page** at `docs/landing/`: the two drafts merged, the story image split into panels
    with HTML captions, the GIF dropped, the repository URL corrected, and the three false claims of
    §4.1 removed. Declare it in `DECLARED_DOCUMENTS`.
 5. **`homepage` → `https://prikk.org/`** in `Cargo.toml`, at whatever release publishes next (§6).
 
-**Not blocked on the domain.** 1-4 are all correct against the current `prikk-vcs.github.io/prikk/`
-deployment; only 5 waits.
+**Not blocked on the domain**, with one qualification found 2026-09-05: increments 1, 3 and 4 are
+correct against the current `prikk-vcs.github.io/prikk/` deployment, and **increment 2 is correct there
+only with the host-appropriate value** (`/prikk/docs/`, not `/docs/`). Increment 5 waits on the domain,
+and **the `site-url` cutover rides with it** — the two are one change, recorded here so the second is
+not forgotten.
 
 ## 8. The seam with RFC 135
 
