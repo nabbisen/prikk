@@ -86,11 +86,36 @@ or write SHA-256 first-party; it produced a decision record, and **DC-55** imple
 **DC-79** and **DC-80** are dependency *upgrades* carried out as their own reviewed increments. The
 project has both adopted and displaced dependencies deliberately, with evidence each time.
 
-**What survives of the original point, as a preference rather than a constraint:** a configuration file
-that `std` alone can parse has no supply-chain surface, no version-skew risk, and cannot half-parse.
-**That is an argument to weigh, not a rule that decides.** If a settings crate is well designed and
-well maintained, DC-50's method is how this project finds out whether depending on it is the better
-trade — and the shipped binary's dependency surface is one input to that, not the whole answer.
+**Corrected again, same day.** The architect then wrote that a `std`-only format *"has no
+supply-chain surface, no version-skew risk, and **cannot half-parse**."* **The last clause is false**,
+and the owner refused it: *"Independence is not always the safest. It is on the premise that there are
+solid design and sufficient tests / verification. I care about ours is not config file parser."*
+
+**A hand-rolled parser half-parses exactly as easily as any other** — more easily if it is written once
+and lightly tested. `.prikkignore` fails closed **because it was designed and reviewed to**, not
+because `std` parsed it.
+
+**The honest accounting, then:**
+
+| | `std`-only, ours | A crate |
+|---|---|---|
+| Supply-chain surface | none | real |
+| Version skew | none | real |
+| Correctness | **ours to design, test, and maintain, forever** | someone else's, and their maintenance is the thing being trusted |
+| Competence | **not this project's domain** | their domain |
+
+**This project's own history is the sharpest evidence, and it is against writing another parser.**
+`AUD-03` records *"four-plus hand-copied TLV cursors; the duplicate-field strictness split in RFC 125
+§2.3 exists because each copy evolved separately."* And RFC 125's own outcome records that **the class
+was larger than the RFC said**: §2.3 named two files, implementation found seven plus a second decoder
+inside one of them. **When this project writes its own parsers they multiply and drift**, and the
+correction is still open work.
+
+**So neither side is automatically safer, and the burden is symmetric**: a crate asks us to verify
+someone else's maintenance; our own parser asks us to fund verification in a domain that is not
+prikk's, to the standard prikk holds everything else to. **DC-50's method is how that gets decided, and
+one of its inputs must be what our own parser would cost to verify properly** — DC-50's answer for
+SHA-256 came with frozen vectors and a 10,000-case differential, which is the price of doing it right.
 
 **The precedent for the std-only shape**, if it wins:
 
@@ -156,6 +181,11 @@ The shape (§5), whether prikk ever stores a secret (§6), and the format of any
 separable; and §4's dependency question is **open and decidable by DC-50's own method**, not closed by
 the current allowlist.
 
-**And one correction worth carrying**: the architect twice today read a *mechanism* as a *policy* —
-first `candidate_sequence`'s structure as proof of reachability (RFC 134 §3), then this allowlist as a
-prohibition. **A control that makes a change visible is not a rule forbidding it.**
+**And two corrections worth carrying**, both from the owner, both on the same reflex:
+
+1. **A mechanism read as a policy** — `candidate_sequence`'s structure as proof of reachability
+   (RFC 134 §3), then this allowlist as a prohibition. **A control that makes a change visible is not
+   a rule forbidding it.**
+2. **Independence assumed to be safety.** *"Cannot half-parse"* was asserted of code this project would
+   have to write, test and maintain. **Owning the code moves the risk; it does not remove it** — and
+   `AUD-03` is this project's own standing evidence of where that lands.
