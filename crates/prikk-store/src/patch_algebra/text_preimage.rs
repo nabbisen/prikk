@@ -13,6 +13,8 @@ pub(super) struct TextPreimage<'a> {
     pub(super) left_anchor_hash: &'a [u8; 32],
     pub(super) right_anchor_hash: &'a [u8; 32],
     pub(super) old_span_text: &'a [u8],
+    pub(super) left_anchor_len: Option<u32>,
+    pub(super) right_anchor_len: Option<u32>,
 }
 
 pub(super) fn validate_text_preimage<R: PatchAlgebraEvidence>(
@@ -55,7 +57,7 @@ pub(super) fn validate_text_preimage<R: PatchAlgebraEvidence>(
             Evidence::Known(text) => text,
             other => return Err(other.into_error()),
         };
-    match text_span::locate_text_span(
+    match text_span::resolve_text_span(
         &current_text,
         preimage.old_span_text,
         preimage.left_anchor_hash,
@@ -63,6 +65,8 @@ pub(super) fn validate_text_preimage<R: PatchAlgebraEvidence>(
         &preimage.span_id,
         node_id,
         preimage.old_span_hash,
+        preimage.left_anchor_len,
+        preimage.right_anchor_len,
     ) {
         Ok(_) => Ok(PreimageStatus::Valid),
         Err(_) => Ok(PreimageStatus::Conflict {

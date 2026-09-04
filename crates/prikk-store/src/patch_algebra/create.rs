@@ -232,6 +232,8 @@ fn classify_create_then_edit_text<R: PatchAlgebraEvidence>(
         left_anchor_hash,
         right_anchor_hash,
         old_span_text,
+        left_anchor_len,
+        right_anchor_len,
         ..
     } = edit
     else {
@@ -247,7 +249,7 @@ fn classify_create_then_edit_text<R: PatchAlgebraEvidence>(
             *span_id,
         ));
     }
-    match text_span::locate_text_span(
+    match text_span::resolve_text_span(
         &content,
         old_span_text,
         left_anchor_hash,
@@ -255,6 +257,8 @@ fn classify_create_then_edit_text<R: PatchAlgebraEvidence>(
         span_id,
         node_id,
         old_span_hash,
+        *left_anchor_len,
+        *right_anchor_len,
     ) {
         Ok(_) => Ok(ordered(
             required_order,

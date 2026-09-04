@@ -5,14 +5,22 @@
 use prikk_error::PrikkError;
 use prikk_object::{EditText, NodeId, text_span_hash};
 
-use super::authoring::anchor_filtered_dup_index;
-use super::{compute_span_id, left_anchor, locate_text_span, right_anchor, splice_text};
+use super::authoring::choose_anchor_lengths_v2;
+use super::{
+    compute_span_id_v2, left_anchor_v2, locate_text_span_v2, resolve_text_span, right_anchor_v2,
+    splice_text,
+};
 
 /// Deterministically derive the direct inverse of one supported arbitrary-span [`EditText`].
 ///
-/// The inverse identity is computed against the post-forward text. The derived inverse is then
-/// localized back against that same post-forward text and applied, requiring exact byte recovery of
-/// the pre-forward text.
+/// The forward span is resolved through [`resolve_text_span`] (RFC 134 §8), dispatching on whether
+/// the forward operation is v1- or v2-identified via `forward_left_anchor_len`/
+/// `forward_right_anchor_len`. **The derived inverse is always minted as v2**, regardless of the
+/// forward operation's own scheme — an inverse is a freshly authored operation, and new authoring
+/// always uses the content-unique identity; there is no requirement that an inverse match the
+/// scheme of the operation it inverts. The inverse identity is computed against the post-forward
+/// text, then localized back against that same post-forward text and applied, requiring exact byte
+/// recovery of the pre-forward text.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn derive_inverse_edit_text(
     pre_text: &[u8],
@@ -23,6 +31,8 @@ pub(crate) fn derive_inverse_edit_text(
     right_anchor_hash: &[u8; 32],
     replacement_text: &[u8],
     old_span_text: &[u8],
+    forward_left_anchor_len: Option<u32>,
+    forward_right_anchor_len: Option<u32>,
 ) -> Result<(EditText, Vec<u8>), PrikkError> {
     let pre_utf8 = core::str::from_utf8(pre_text)
         .map_err(|_| PrikkError::Integrity("EditText inverse pre-text is not UTF-8".to_string()))?;
@@ -37,7 +47,7 @@ pub(crate) fn derive_inverse_edit_text(
             "EditText inverse old_span_hash does not match old_span_text".to_string(),
         ));
     }
-    let (start, end) = locate_text_span(
+    let (start, end) = resolve_text_span(
         pre_text,
         old_span_text,
         left_anchor_hash,
@@ -45,6 +55,8 @@ pub(crate) fn derive_inverse_edit_text(
         span_id,
         node_id,
         old_span_hash,
+        forward_left_anchor_len,
+        forward_right_anchor_len,
     )
     .map_err(|reason| {
         PrikkError::Integrity(format!(
@@ -79,27 +91,28 @@ pub(crate) fn derive_inverse_edit_text(
     let inverse_old_span_text = replacement_text.to_vec();
     let inverse_replacement_text = old_span_text.to_vec();
     let inverse_old_span_hash = text_span_hash(&inverse_old_span_text);
-    let inverse_left_anchor_hash = left_anchor(&post_text, inverse_start);
-    let inverse_right_anchor_hash = right_anchor(&post_text, inverse_end);
-    let inverse_dup_index = anchor_filtered_dup_index(
+    let (inverse_left_anchor_len, inverse_right_anchor_len) = choose_anchor_lengths_v2(
         &post_text,
         &inverse_old_span_text,
         inverse_start,
         inverse_end,
-        &inverse_left_anchor_hash,
-        &inverse_right_anchor_hash,
     )
     .map_err(|err| {
         PrikkError::Integrity(format!(
-            "EditText inverse duplicate index could not be derived: {err}"
+            "EditText inverse anchor lengths could not be derived: {err}"
         ))
     })?;
-    let inverse_span_id = compute_span_id(
+    let inverse_left_anchor_hash =
+        left_anchor_v2(&post_text, inverse_start, inverse_left_anchor_len);
+    let inverse_right_anchor_hash =
+        right_anchor_v2(&post_text, inverse_end, inverse_right_anchor_len);
+    let inverse_span_id = compute_span_id_v2(
         node_id,
         &inverse_old_span_hash,
         &inverse_left_anchor_hash,
         &inverse_right_anchor_hash,
-        inverse_dup_index,
+        inverse_left_anchor_len,
+        inverse_right_anchor_len,
     );
     let inverse = EditText {
         node_id,
@@ -111,8 +124,10 @@ pub(crate) fn derive_inverse_edit_text(
         presentation_hint_line: None,
         presentation_hint_column: None,
         old_span_text: inverse_old_span_text,
+        left_anchor_len: Some(inverse_left_anchor_len),
+        right_anchor_len: Some(inverse_right_anchor_len),
     };
-    let located_inverse = locate_text_span(
+    let located_inverse = locate_text_span_v2(
         &post_text,
         &inverse.old_span_text,
         &inverse.left_anchor_hash,
@@ -120,6 +135,8 @@ pub(crate) fn derive_inverse_edit_text(
         &inverse.span_id,
         node_id,
         &inverse.old_span_hash,
+        inverse_left_anchor_len,
+        inverse_right_anchor_len,
     )
     .map_err(|reason| {
         PrikkError::Integrity(format!(

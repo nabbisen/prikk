@@ -291,6 +291,92 @@ pub(crate) fn publish_text_create_then_edit_block(
                     presentation_hint_line: None,
                     presentation_hint_column: None,
                     old_span_text: span.old_span_text,
+                    left_anchor_len: Some(span.left_anchor_len),
+                    right_anchor_len: Some(span.right_anchor_len),
+                }),
+            },
+        ],
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+    };
+    let mut patch = ObjectEnvelope::unsigned(
+        ObjectType::Patch,
+        prikk_object::PATCH_TEXT_SPAN_V2_SCHEMA,
+        patch_payload.to_canonical_bytes()?,
+    );
+    patch.add_signature(dummy_signature())?;
+    let patch_id = object_store.write_object(&patch)?;
+    let state_root = crate::derive_next_state_root(&object_store, None, &[patch_id])?;
+    let block = signed_block_with_state_root(
+        BlockKind::Root,
+        Vec::new(),
+        vec![patch_id],
+        None,
+        state_root,
+    );
+    let block_id = object_store.write_object(&block)?;
+
+    let ref_store = RefStore::new(layout.clone());
+    let ref_state = signed_ref_state_envelope("heads/main", None, block_id, 1);
+    let ref_state_id = ref_state.object_id();
+    let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, block_id, 1);
+    ref_store.publish(&RefPublication {
+        ref_name: "heads/main".to_string(),
+        expected_previous_ref_state_id: None,
+        ref_state,
+        ref_update,
+    })?;
+    Ok(())
+}
+
+/// RFC 134 §8, §3.2 ("demonstrate, do not assume" a v1-`EditText`-history repository still
+/// transports and verifies cleanly): `publish_text_create_then_edit_block`'s own pre-§8 shape,
+/// kept alive here so a genuine v1 (schema 1, `dup_index`-positional identity) fixture can still be
+/// built for that demonstration -- production authoring no longer emits this shape (see
+/// `plan_authored_text_span_v1`'s own doc), so this is the only way left to construct one.
+#[cfg(test)]
+pub(crate) fn publish_text_create_then_edit_block_v1(
+    layout: &RepositoryLayout,
+    old: &[u8],
+    new: &[u8],
+) -> prikk_error::Result<()> {
+    let mut object_store = FileObjectStore::new(layout.clone());
+    let node_id = NodeId::from_bytes([0x81; 32]);
+    let old_blob = write_blob(&mut object_store, old)?;
+    let span = crate::text_span::plan_authored_text_span_v1(old, new, node_id)
+        .map_err(|err| prikk_error::PrikkError::Integrity(err.to_string()))?
+        .ok_or_else(|| prikk_error::PrikkError::Integrity("test edit is unchanged".to_string()))?;
+
+    let patch_payload = PatchPayload {
+        operations: vec![
+            Operation {
+                op_seq: 1,
+                op_id: None,
+                preconditions: Vec::new(),
+                kind: OperationKind::CreateFile(CreateFile {
+                    path: "README.md".to_string(),
+                    node_id,
+                    blob_id: old_blob,
+                    mode: 0o100644,
+                }),
+            },
+            Operation {
+                op_seq: 2,
+                op_id: None,
+                preconditions: Vec::new(),
+                kind: OperationKind::EditText(EditText {
+                    node_id,
+                    span_id: span.span_id,
+                    old_span_hash: span.old_span_hash,
+                    left_anchor_hash: span.left_anchor_hash,
+                    right_anchor_hash: span.right_anchor_hash,
+                    replacement_text: span.replacement_text,
+                    presentation_hint_line: None,
+                    presentation_hint_column: None,
+                    old_span_text: span.old_span_text,
+                    left_anchor_len: None,
+                    right_anchor_len: None,
                 }),
             },
         ],
@@ -364,6 +450,8 @@ pub(crate) fn publish_text_edit_then_unsupported_rename_path_block(
                     presentation_hint_line: None,
                     presentation_hint_column: None,
                     old_span_text: span.old_span_text,
+                    left_anchor_len: Some(span.left_anchor_len),
+                    right_anchor_len: Some(span.right_anchor_len),
                 }),
             },
             Operation {
@@ -381,8 +469,11 @@ pub(crate) fn publish_text_edit_then_unsupported_rename_path_block(
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
     };
-    let mut patch =
-        ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch_payload.to_canonical_bytes()?);
+    let mut patch = ObjectEnvelope::unsigned(
+        ObjectType::Patch,
+        prikk_object::PATCH_TEXT_SPAN_V2_SCHEMA,
+        patch_payload.to_canonical_bytes()?,
+    );
     patch.add_signature(dummy_signature())?;
     let patch_id = object_store.write_object(&patch)?;
     let state_root = crate::derive_next_state_root(&object_store, None, &[patch_id])?;

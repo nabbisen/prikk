@@ -130,6 +130,7 @@ pub(super) fn apply_for_oracle_with_text(
             right_anchor_hash,
             replacement_text,
             old_span_text,
+            ..
         } => {
             let current_text = texts
                 .get(node_id)

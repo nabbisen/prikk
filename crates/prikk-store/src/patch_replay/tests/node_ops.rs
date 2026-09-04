@@ -284,6 +284,8 @@ fn decode_edit_text_via_object_encoder_is_supported() {
         presentation_hint_line: None,
         presentation_hint_column: None,
         old_span_text: b"old".to_vec(),
+        left_anchor_len: None,
+        right_anchor_len: None,
     }));
     let ops = decode_patch_operations(&bytes, 1).expect("decodes");
     match &ops.first().expect("one operation").kind {
@@ -295,6 +297,7 @@ fn decode_edit_text_via_object_encoder_is_supported() {
             right_anchor_hash,
             replacement_text,
             old_span_text,
+            ..
         } => {
             assert_eq!(node_id.as_bytes(), &[0x22; 32]);
             assert_eq!(span_id, &[0x10; 32]);

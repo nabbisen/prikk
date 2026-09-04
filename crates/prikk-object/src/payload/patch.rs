@@ -58,6 +58,20 @@ pub fn validate_text_anchor_id(value: &str) -> Result<()> {
 /// misinterpret it as the old `parent_patch_ids` shape.
 pub const PATCH_PARENT_IDS_RETIRED_SCHEMA: u32 = 2;
 
+/// `Patch` schema at and above which `EditText` may carry tags 10/11 (`left_anchor_len`,
+/// `right_anchor_len`) — RFC 134 §8's content-unique span identity. Below this schema the fields
+/// are absent, exactly as before this schema existed, so no existing object's bytes move. At and
+/// above it a present pair of anchor-length fields switches resolution from v1's positional
+/// `dup_index` to v2's content-unique identity; v1 resolution stays available forever for
+/// operations that omit the fields (RFC 114: keep every version ever written decodable).
+pub const PATCH_TEXT_SPAN_V2_SCHEMA: u32 = 3;
+
+/// Minimum length, in bytes, of a v2 `EditText` anchor (`left_anchor_len`/`right_anchor_len`).
+/// Matches v1's fixed anchor window (`TEXT_ANCHOR_WINDOW` in `prikk-store`) — v2 anchors are never
+/// shorter than v1's, only ever longer when uniqueness demands it. Defined here, not in
+/// `prikk-store`, because `prikk-store` depends on `prikk-object` and not the reverse.
+pub const TEXT_SPAN_ANCHOR_MIN_LEN: u32 = 64;
+
 /// Patch payload.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PatchPayload {

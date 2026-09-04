@@ -73,6 +73,11 @@ pub(crate) enum DecodedOperationKind {
         right_anchor_hash: [u8; TEXT_SPAN_HASH_BYTES],
         replacement_text: Vec<u8>,
         old_span_text: Vec<u8>,
+        /// RFC 134 §8: present (with `right_anchor_len`) only at
+        /// `PATCH_TEXT_SPAN_V2_SCHEMA` and above; `None` means `span_id` is v1's
+        /// positional identity.
+        left_anchor_len: Option<u32>,
+        right_anchor_len: Option<u32>,
     },
     /// Replace a binary node's blob (node-addressed; apply is 4.4).
     ReplaceBinary {
@@ -173,7 +178,7 @@ pub(crate) fn decode_patch_operations(
                 // single check, so raw persisted/imported bytes cannot carry an
                 // alternate canonical operation order.
                 let index = operations.len();
-                operations.push(decode_operation(field.value, index)?);
+                operations.push(decode_operation(field.value, index, schema_version)?);
             }
             2 => {
                 if schema_version >= PATCH_PARENT_IDS_RETIRED_SCHEMA {
@@ -233,7 +238,11 @@ pub(crate) fn decode_patch_parent_ids(bytes: &[u8]) -> Result<Vec<ObjectId>> {
     Ok(parent_patch_ids)
 }
 
-fn decode_operation(bytes: &[u8], index: usize) -> Result<DecodedPatchOperation> {
+fn decode_operation(
+    bytes: &[u8],
+    index: usize,
+    schema_version: u32,
+) -> Result<DecodedPatchOperation> {
     let mut cursor = TlvCursor::new(bytes);
     let mut op_seq = None;
     // FDD-03 §9.2: an Operation record carries exactly one operation-kind field
@@ -289,7 +298,7 @@ fn decode_operation(bytes: &[u8], index: usize) -> Result<DecodedPatchOperation>
     let kind = match kind_tag {
         10 => decode_create_file(value),
         11 => decode_delete_node(value),
-        12 => decode_edit_text(value),
+        12 => decode_edit_text(value, schema_version),
         13 => decode_rename_path(value),
         14 => decode_change_perm(value),
         15 => decode_create_symlink(value),

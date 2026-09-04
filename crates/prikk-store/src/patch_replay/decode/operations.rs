@@ -2,7 +2,10 @@
 //! behaviour change, all items moved verbatim.
 
 use prikk_error::{PrikkError, Result};
-use prikk_object::{NodeKind, is_canonical_file_mode, text_span_hash};
+use prikk_object::{
+    NodeKind, PATCH_TEXT_SPAN_V2_SCHEMA, TEXT_SPAN_ANCHOR_MIN_LEN, is_canonical_file_mode,
+    text_span_hash,
+};
 
 use crate::path::RepoPath;
 
@@ -198,7 +201,7 @@ pub(super) fn decode_delete_node(bytes: &[u8]) -> Result<DecodedOperationKind> {
     }
 }
 
-pub(super) fn decode_edit_text(bytes: &[u8]) -> Result<DecodedOperationKind> {
+pub(super) fn decode_edit_text(bytes: &[u8], schema_version: u32) -> Result<DecodedOperationKind> {
     // Reconcile the FDD-03 §9.3 EditText record on read (node-addressed, span-
     // anchored), then report unsupported: span-anchored application/inverse is
     // FDD-01 §7.2.1 algebra and requires node-model tracking, both later
@@ -212,6 +215,8 @@ pub(super) fn decode_edit_text(bytes: &[u8]) -> Result<DecodedOperationKind> {
     let mut right_anchor_hash = None;
     let mut replacement_text = None;
     let mut old_span_text = None;
+    let mut left_anchor_len = None;
+    let mut right_anchor_len = None;
     while let Some(field) = cursor.next_field()? {
         match field.tag {
             1 => {
@@ -275,6 +280,34 @@ pub(super) fn decode_edit_text(bytes: &[u8]) -> Result<DecodedOperationKind> {
                 }
                 old_span_text = Some(field.read_bytes_vec()?);
             }
+            10 => {
+                if left_anchor_len.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate EditText left_anchor_len field".to_string(),
+                    ));
+                }
+                if schema_version < PATCH_TEXT_SPAN_V2_SCHEMA {
+                    return Err(PrikkError::MalformedData(format!(
+                        "Patch schema {schema_version} must not carry EditText left_anchor_len \
+                         (tag 10); requires schema {PATCH_TEXT_SPAN_V2_SCHEMA}"
+                    )));
+                }
+                left_anchor_len = Some(field.read_u32()?);
+            }
+            11 => {
+                if right_anchor_len.is_some() {
+                    return Err(PrikkError::MalformedData(
+                        "duplicate EditText right_anchor_len field".to_string(),
+                    ));
+                }
+                if schema_version < PATCH_TEXT_SPAN_V2_SCHEMA {
+                    return Err(PrikkError::MalformedData(format!(
+                        "Patch schema {schema_version} must not carry EditText right_anchor_len \
+                         (tag 11); requires schema {PATCH_TEXT_SPAN_V2_SCHEMA}"
+                    )));
+                }
+                right_anchor_len = Some(field.read_u32()?);
+            }
             other => {
                 return Err(PrikkError::MalformedData(format!(
                     "unknown EditText field tag: {other}"
@@ -316,6 +349,25 @@ pub(super) fn decode_edit_text(bytes: &[u8]) -> Result<DecodedOperationKind> {
             "EditText replacement_text is not well-formed UTF-8".to_string(),
         ));
     }
+    // RFC 134 §8: left_anchor_len/right_anchor_len must be both present or both absent, and each
+    // at least TEXT_SPAN_ANCHOR_MIN_LEN when present -- mirrors EditText::validate() (prikk-object),
+    // re-asserted here as defense-in-depth against raw/imported bytes (review erratum P1 pattern).
+    match (left_anchor_len, right_anchor_len) {
+        (None, None) => {}
+        (Some(left), Some(right)) => {
+            if left < TEXT_SPAN_ANCHOR_MIN_LEN || right < TEXT_SPAN_ANCHOR_MIN_LEN {
+                return Err(PrikkError::MalformedData(format!(
+                    "EditText anchor lengths must each be at least {TEXT_SPAN_ANCHOR_MIN_LEN}"
+                )));
+            }
+        }
+        _ => {
+            return Err(PrikkError::MalformedData(
+                "EditText left_anchor_len and right_anchor_len must be both present or both absent"
+                    .to_string(),
+            ));
+        }
+    }
     Ok(DecodedOperationKind::EditText {
         node_id,
         span_id,
@@ -324,6 +376,8 @@ pub(super) fn decode_edit_text(bytes: &[u8]) -> Result<DecodedOperationKind> {
         right_anchor_hash,
         replacement_text,
         old_span_text,
+        left_anchor_len,
+        right_anchor_len,
     })
 }
 

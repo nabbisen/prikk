@@ -111,6 +111,8 @@ fn validate_preimage<R: PatchAlgebraEvidence>(
             left_anchor_hash,
             right_anchor_hash,
             old_span_text,
+            left_anchor_len,
+            right_anchor_len,
         } => validate_text_preimage(
             baseline,
             text_resolver,
@@ -121,6 +123,8 @@ fn validate_preimage<R: PatchAlgebraEvidence>(
                 left_anchor_hash,
                 right_anchor_hash,
                 old_span_text,
+                left_anchor_len: *left_anchor_len,
+                right_anchor_len: *right_anchor_len,
             },
         ),
         Action::ReplaceBinary {

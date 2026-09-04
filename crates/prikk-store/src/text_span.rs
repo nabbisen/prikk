@@ -30,6 +30,8 @@ mod authoring;
 mod inverse;
 
 pub(crate) use authoring::plan_authored_text_span;
+#[cfg(test)]
+pub(crate) use authoring::{choose_anchor_lengths_v2, plan_authored_text_span_v1};
 pub(crate) use inverse::derive_inverse_edit_text;
 
 /// Canonical anchor context window (FDD-01 §5.1 anchor-window clarification): up to 64 bytes of raw
@@ -46,6 +48,9 @@ pub(crate) enum TextSpanResolutionFailure {
     NoMatchingSpanId,
     /// More than one occurrence reproduced the record's `span_id` (defensive; needs a collision).
     Ambiguous,
+    /// RFC 134 §8: a record carried exactly one of `left_anchor_len`/`right_anchor_len`. Decode
+    /// already refuses this; this is defense-in-depth for a caller that bypasses decode.
+    MalformedAnchorLengths,
 }
 
 impl fmt::Display for TextSpanResolutionFailure {
@@ -54,6 +59,9 @@ impl fmt::Display for TextSpanResolutionFailure {
             Self::AnchorMismatch => "no occurrence's anchors matched the record",
             Self::NoMatchingSpanId => "no anchor-filtered occurrence reproduced the span_id",
             Self::Ambiguous => "more than one occurrence reproduced the span_id",
+            Self::MalformedAnchorLengths => {
+                "exactly one of left_anchor_len/right_anchor_len was present"
+            }
         };
         f.write_str(s)
     }
@@ -136,6 +144,52 @@ pub(crate) fn compute_span_id(
     prikk_hash::sha256(&preimage)
 }
 
+/// SHA-256 of the left context of exactly `len` bytes preceding `start` (RFC 134 §8), clamped at
+/// the buffer start exactly as [`left_anchor`] clamps at its fixed 64-byte window. `len` is not
+/// itself part of the domain-separated preimage; `anchor_hash` already folds in the clamped
+/// context's own byte length, which is what makes every position's anchor distinct once `len`
+/// reaches `start` (§8.3's uniqueness-always-achievable argument).
+pub(crate) fn left_anchor_v2(text: &[u8], start: usize, len: u32) -> [u8; 32] {
+    let lo = start.saturating_sub(len as usize);
+    anchor_hash(
+        b"PRIKK-TEXT-LEFT-ANCHOR-v2",
+        text.get(lo..start).unwrap_or(&[]),
+    )
+}
+
+/// SHA-256 of the right context of exactly `len` bytes following `end` (RFC 134 §8). See
+/// [`left_anchor_v2`].
+pub(crate) fn right_anchor_v2(text: &[u8], end: usize, len: u32) -> [u8; 32] {
+    let hi = end.saturating_add(len as usize).min(text.len());
+    anchor_hash(
+        b"PRIKK-TEXT-RIGHT-ANCHOR-v2",
+        text.get(end..hi).unwrap_or(&[]),
+    )
+}
+
+/// `span_id` per RFC 134 §8: content-unique identity, no `dup_index`. The anchor lengths are
+/// folded into the preimage as big-endian `u32`, matching [`compute_span_id`]'s existing
+/// `dup_index.to_be_bytes()` convention -- chosen, not incidental, so this identity's byte
+/// encoding follows the one precedent already established for a `u32` in this preimage shape.
+pub(crate) fn compute_span_id_v2(
+    node_id: NodeId,
+    old_span_hash: &[u8; 32],
+    left: &[u8; 32],
+    right: &[u8; 32],
+    left_len: u32,
+    right_len: u32,
+) -> [u8; 32] {
+    let mut preimage = Vec::with_capacity(18 + 32 * 4 + 8);
+    preimage.extend_from_slice(b"PRIKK-TEXT-SPAN-v2");
+    preimage.extend_from_slice(node_id.as_bytes());
+    preimage.extend_from_slice(old_span_hash);
+    preimage.extend_from_slice(left);
+    preimage.extend_from_slice(right);
+    preimage.extend_from_slice(&left_len.to_be_bytes());
+    preimage.extend_from_slice(&right_len.to_be_bytes());
+    prikk_hash::sha256(&preimage)
+}
+
 /// Canonical-order occurrences of `needle` in `text` (overlapping). For an empty needle, the
 /// insertion positions `0..=len`.
 pub(crate) fn occurrences(text: &[u8], needle: &[u8]) -> Vec<usize> {
@@ -198,6 +252,95 @@ pub(crate) fn locate_text_span(
         [] => Err(TextSpanResolutionFailure::NoMatchingSpanId),
         [one] => Ok(*one),
         _ => Err(TextSpanResolutionFailure::Ambiguous),
+    }
+}
+
+/// Localize an `EditText` span in `text` (RFC 134 §8, v2): among canonical-order occurrences of
+/// `old_span_text` whose anchor hashes at the *recorded* `left_len`/`right_len` match the record,
+/// require exactly one, then recompute `span_id` and compare. **No `dup_index`** -- v2 disambiguates
+/// occurrences by anchor length at authoring time, not by position at replay time, so this is a
+/// tamper/consistency check, never a disambiguation step.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn locate_text_span_v2(
+    text: &[u8],
+    old_span_text: &[u8],
+    record_left: &[u8; 32],
+    record_right: &[u8; 32],
+    record_span_id: &[u8; 32],
+    node_id: NodeId,
+    old_span_hash: &[u8; 32],
+    left_len: u32,
+    right_len: u32,
+) -> Result<(usize, usize), TextSpanResolutionFailure> {
+    let span_len = old_span_text.len();
+    let anchor_matching: Vec<(usize, usize)> = occurrences(text, old_span_text)
+        .into_iter()
+        .map(|start| (start, start + span_len))
+        .filter(|&(start, end)| {
+            left_anchor_v2(text, start, left_len) == *record_left
+                && right_anchor_v2(text, end, right_len) == *record_right
+        })
+        .collect();
+
+    let (start, end) = match anchor_matching.as_slice() {
+        [] => return Err(TextSpanResolutionFailure::AnchorMismatch),
+        [one] => *one,
+        _ => return Err(TextSpanResolutionFailure::Ambiguous),
+    };
+
+    let sid = compute_span_id_v2(
+        node_id,
+        old_span_hash,
+        record_left,
+        record_right,
+        left_len,
+        right_len,
+    );
+    if sid != *record_span_id {
+        return Err(TextSpanResolutionFailure::NoMatchingSpanId);
+    }
+    Ok((start, end))
+}
+
+/// Localize an `EditText` span, dispatching between v1's positional identity and RFC 134 §8's v2
+/// content-unique identity based on whether `left_anchor_len`/`right_anchor_len` are present.
+/// **This is the single dispatch every production call site must share** (`patch_replay/apply.rs`
+/// and the algebra oracle `patch_algebra/replay_oracle.rs` chief among them) -- if they diverge on
+/// this decision, the algebra predicts something materialization does not do.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn resolve_text_span(
+    text: &[u8],
+    old_span_text: &[u8],
+    record_left: &[u8; 32],
+    record_right: &[u8; 32],
+    record_span_id: &[u8; 32],
+    node_id: NodeId,
+    old_span_hash: &[u8; 32],
+    left_anchor_len: Option<u32>,
+    right_anchor_len: Option<u32>,
+) -> Result<(usize, usize), TextSpanResolutionFailure> {
+    match (left_anchor_len, right_anchor_len) {
+        (None, None) => locate_text_span(
+            text,
+            old_span_text,
+            record_left,
+            record_right,
+            record_span_id,
+            node_id,
+            old_span_hash,
+        ),
+        (Some(left_len), Some(right_len)) => locate_text_span_v2(
+            text,
+            old_span_text,
+            record_left,
+            record_right,
+            record_span_id,
+            node_id,
+            old_span_hash,
+            left_len,
+            right_len,
+        ),
+        _ => Err(TextSpanResolutionFailure::MalformedAnchorLengths),
     }
 }
 

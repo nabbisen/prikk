@@ -223,12 +223,14 @@ fn apply_text_edit<R: PatchAlgebraEvidence>(
         right_anchor_hash,
         replacement_text,
         old_span_text,
+        left_anchor_len,
+        right_anchor_len,
     } = &operation.kind
     else {
         return Err(OracleFailure::Replay);
     };
     let current_text = current_text(oracle, evidence, *node_id)?;
-    let (start, end) = text_span::locate_text_span(
+    let (start, end) = text_span::resolve_text_span(
         &current_text,
         old_span_text,
         left_anchor_hash,
@@ -236,6 +238,8 @@ fn apply_text_edit<R: PatchAlgebraEvidence>(
         span_id,
         *node_id,
         old_span_hash,
+        *left_anchor_len,
+        *right_anchor_len,
     )
     .map_err(|_| OracleFailure::Replay)?;
     let new_text = text_span::splice_text(&current_text, start, end, replacement_text)

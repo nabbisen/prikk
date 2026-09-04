@@ -10,8 +10,8 @@ use std::collections::BTreeMap;
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
     CanonicalEncode, ChangePerm, CreateFile, DeleteNode, DeleteNodePreimage, NodeId, NodeKind,
-    ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind,
-    PATCH_PARENT_IDS_RETIRED_SCHEMA, PatchPayload, PatchPurpose, ReplaceBinary,
+    ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind, PATCH_TEXT_SPAN_V2_SCHEMA,
+    PatchPayload, PatchPurpose, ReplaceBinary,
 };
 
 use crate::layout::RepositoryLayout;
@@ -145,9 +145,11 @@ pub fn prepare_patch_inverse_plan(
         purpose: PatchPurpose::Normal,
     };
     let inverse_payload_bytes = inverse_payload.to_canonical_bytes()?;
+    // RFC 134 §8: must match the schema rollback_draft.rs actually writes for this payload, or the
+    // hint id would predict a different envelope than the one later signed and stored.
     let inverse_patch_id_hint = ObjectEnvelope::unsigned(
         ObjectType::Patch,
-        PATCH_PARENT_IDS_RETIRED_SCHEMA,
+        PATCH_TEXT_SPAN_V2_SCHEMA,
         inverse_payload_bytes,
     )
     .object_id();
@@ -270,6 +272,8 @@ fn derive_inverse_operation(
             right_anchor_hash,
             replacement_text,
             old_span_text,
+            left_anchor_len,
+            right_anchor_len,
         } => {
             let live = live_nodes.get(&node_id).ok_or_else(|| {
                 PrikkError::Integrity("EditText inverse target node is not live".to_string())
@@ -294,6 +298,8 @@ fn derive_inverse_operation(
                 &right_anchor_hash,
                 &replacement_text,
                 &old_span_text,
+                left_anchor_len,
+                right_anchor_len,
             )?;
             files.insert(live.path.clone(), post_text);
             Ok(Operation {

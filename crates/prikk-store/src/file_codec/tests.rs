@@ -105,10 +105,12 @@ proptest! {
                 schema_version == 1 || schema_version == prikk_object::REF_STATE_CLOSED_SCHEMA
             }
             // Patch schema 2 handoff: `PATCH_PARENT_IDS_RETIRED_SCHEMA` retires tag 2
-            // (`parent_patch_ids`) outright, so Patch also now accepts two schemas.
+            // (`parent_patch_ids`) outright. RFC 134 §8: `PATCH_TEXT_SPAN_V2_SCHEMA` admits
+            // `EditText` tags 10/11. Patch now accepts three schemas.
             ObjectType::Patch => {
                 schema_version == 1
                     || schema_version == prikk_object::PATCH_PARENT_IDS_RETIRED_SCHEMA
+                    || schema_version == prikk_object::PATCH_TEXT_SPAN_V2_SCHEMA
             }
             ObjectType::RefUpdate
             | ObjectType::Tag

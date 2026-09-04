@@ -12,8 +12,8 @@
 use prikk_object::{NodeId, text_span_hash};
 
 use super::{
-    TextSpanResolutionFailure, compute_span_id, left_anchor, locate_text_span, occurrences,
-    plan_authored_text_span, right_anchor, splice_text, text_blob_id,
+    TextSpanResolutionFailure, compute_span_id, left_anchor, locate_text_span, locate_text_span_v2,
+    occurrences, plan_authored_text_span, right_anchor, splice_text, text_blob_id,
 };
 
 fn nid(b: u8) -> NodeId {
@@ -105,7 +105,8 @@ fn check_plan_vector(
     exp_left: &str,
     exp_right: &str,
     exp_old_span_hash: &str,
-    exp_dup: u32,
+    exp_left_len: u32,
+    exp_right_len: u32,
     exp_span_id: &str,
     exp_blob: &str,
 ) {
@@ -124,10 +125,11 @@ fn check_plan_vector(
     assert_eq!(hex(&plan.left_anchor_hash), exp_left, "left anchor");
     assert_eq!(hex(&plan.right_anchor_hash), exp_right, "right anchor");
     assert_eq!(hex(&plan.old_span_hash), exp_old_span_hash, "old span hash");
-    assert_eq!(plan.dup_index, exp_dup, "duplicate index");
+    assert_eq!(plan.left_anchor_len, exp_left_len, "left anchor length");
+    assert_eq!(plan.right_anchor_len, exp_right_len, "right anchor length");
     assert_eq!(hex(&plan.span_id), exp_span_id, "span id");
 
-    let (start, end) = locate_text_span(
+    let (start, end) = locate_text_span_v2(
         old,
         &plan.old_span_text,
         &plan.left_anchor_hash,
@@ -135,6 +137,8 @@ fn check_plan_vector(
         &plan.span_id,
         node,
         &plan.old_span_hash,
+        plan.left_anchor_len,
+        plan.right_anchor_len,
     )
     .expect("selection localizes");
     assert_eq!((start, end), exp_old_range, "localized range");
@@ -157,11 +161,12 @@ fn dc12_span_selection_replacement_middle_pins_bytes() {
         (6, 11),
         "776f726c64",
         "7072696b6b",
-        "62136ffd5ad9a2e057700bdc6d652bb27f57cb10c23c37cf762c11c42f0ff0e9",
-        "17658e9fdfdf301aca924208fed9df375387409959fbecfe211893611771d7b8",
+        "acdae73d4309661c1c137229106fdf00771acdcc3420eb2d0e8b8c7df83c7f07",
+        "5cc28673903ef8d8769649f1c6579ab153c2a4d045c14bdec1895e73e86a3c49",
         "486ea46224d1bb4fb680f34f7c9ad96a8f24ec88be73ea8e5a6c65260e9cb8a7",
-        0,
-        "7e703780eb2aff226a71f0b54c166625029214d6d8e2f3e94148c6cdab40c84a",
+        64,
+        64,
+        "1eb17073a6c2cb812067f5bf59f51b0e39c027d243cb7798078f9569b79fd03d",
         "1b05e8e870004a5852990d93a5610d80e56507b129e6bc90a82bd050c8a4f878",
     );
 }
@@ -176,11 +181,12 @@ fn dc12_span_selection_insertion_and_deletion_pin_empty_sides() {
         (1, 3),
         "",
         "5859",
-        "fed24d8f3610cfc6192abe666a9fb6ef2e9a5d7f97ab9d5631371a982097d49a",
-        "e9a3d04a23647053c5bb7fc2ad48982b6cacef1079d96347a5223ab1b1a35728",
+        "fe79445a886a85a5f86aef1913b10c0806b77f11ad1064250e528df179bf8412",
+        "185b724858ff64f330958f185830e4c7b4ac519969020016e4c4a96f6db467d9",
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        0,
-        "012e9d1fc386a0c8d70e82ac1f77588c5a7594d4d3a61069fc2bdc27e9793e71",
+        64,
+        64,
+        "fda82b90d738bfee48dfdea54b1899efc89d5db06280716752733b8bab96741f",
         "0c476748d3996e6ba30485cbb253fc9546107f0c4caefcff2c46e08a2e543614",
     );
     check_plan_vector(
@@ -191,11 +197,12 @@ fn dc12_span_selection_insertion_and_deletion_pin_empty_sides() {
         (1, 1),
         "5859",
         "",
-        "fed24d8f3610cfc6192abe666a9fb6ef2e9a5d7f97ab9d5631371a982097d49a",
-        "e9a3d04a23647053c5bb7fc2ad48982b6cacef1079d96347a5223ab1b1a35728",
+        "fe79445a886a85a5f86aef1913b10c0806b77f11ad1064250e528df179bf8412",
+        "185b724858ff64f330958f185830e4c7b4ac519969020016e4c4a96f6db467d9",
         "c07a3de039fbc0914689549f041eae295d621de7f7f647fd863f6d2f8db2080e",
-        0,
-        "41397960139c49e5e44d2c475a1be444d8cd9d73444943d59627c3ef8fb9a7b2",
+        64,
+        64,
+        "10daa2efd2e8a1e99743816e084667aef9693672c4d657de9c7b1dc11c0ebefe",
         "5b20e6b32faaac39492a52d9ae441b8b020f994af260a9093dbae92c698ff1f0",
     );
 }
@@ -210,11 +217,12 @@ fn dc12_span_selection_widens_subcharacter_edits() {
         (0, 2),
         "c3a9",
         "c3a8",
-        "26a405baea8556d018906cea0e268b6f7d78044689f09830bcdc652f211d6ace",
-        "17658e9fdfdf301aca924208fed9df375387409959fbecfe211893611771d7b8",
+        "3f0f58a045b7b4f476227697ab5575be5b5660d777bc8f2c604bd547963e0045",
+        "5cc28673903ef8d8769649f1c6579ab153c2a4d045c14bdec1895e73e86a3c49",
         "4a99557e4033c3539de2eb65472017cad5f9557f7a0625a09f1c3f6e2ba69c4c",
-        0,
-        "e9dceed0dbdf37366262ee350530a68c6adc7e672846d63a102aee2f8dd00ecf",
+        64,
+        64,
+        "44089ddc36c53b96b8a7deb8c4268a2a232559477b1182e85ace6f5d7d3dc0c4",
         "9a1a64b30545e1d1bcccb3c51046b8147b17d3c30fa7f40751737954b717d90e",
     );
     check_plan_vector(
@@ -225,11 +233,12 @@ fn dc12_span_selection_widens_subcharacter_edits() {
         (3, 6),
         "e5ad97",
         "e69687",
-        "64d670547a91b8b8d8e4426b82bd75f4eb9bf6775b28818ca0a09d1ebd061e7c",
-        "17658e9fdfdf301aca924208fed9df375387409959fbecfe211893611771d7b8",
+        "8975618fee2c4590e07a2bb6159f287d14f1c7447a8dade87518a50a8e9e7b79",
+        "5cc28673903ef8d8769649f1c6579ab153c2a4d045c14bdec1895e73e86a3c49",
         "c55038b272b109b8bfdb6b59dd1b1048ffa58361caa3d16f56ee881f34ce34f0",
-        0,
-        "5a3c5d31561b7e4871befb439b6b7c0daea9e15e9d04c5b0c912fbe8a88c5340",
+        64,
+        64,
+        "81eb40cd1e0b9d1388acab38ddde5a3c4b877ea0a0d0e9df006d9121f4e97d92",
         "46dc575d0a66126bf87bdaede2e6a811782641189f9dcea83e27772185ca509c",
     );
 }
@@ -244,11 +253,12 @@ fn dc12_span_selection_crlf_and_multihunk_enclosing_span() {
         (0, 7),
         "610d0a620d0a63",
         "410d0a620d0a43",
-        "26a405baea8556d018906cea0e268b6f7d78044689f09830bcdc652f211d6ace",
-        "e731ca539eb51029bda032f6e243c682256092fb02beb28a2eacba2a27994597",
+        "3f0f58a045b7b4f476227697ab5575be5b5660d777bc8f2c604bd547963e0045",
+        "7b45ea78cdf9373e9bb14975001f08ab98e0e0f6bed9c6c7e88849b47aec450b",
         "d37a6c0b581046eec04a3d815bcd9fadbce89bd21784279deff41836a766d570",
-        0,
-        "94e8ae0078df0191fd4f81cb497958c68317a1a9cabfc44898b9eb92edfd3028",
+        64,
+        64,
+        "3c8ad5ff6964a0e07520a39800a1764a172e92d207ee2b209a1f1524259e10f1",
         "bafa20d059386e336f6e812afe698233fa8fe9b1a5608f8d9919c3100d682a26",
     );
 }

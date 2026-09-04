@@ -109,6 +109,8 @@ pub(super) fn apply_decoded_operation(
             right_anchor_hash,
             replacement_text,
             old_span_text,
+            left_anchor_len,
+            right_anchor_len,
         } => {
             apply_edit_text(
                 files,
@@ -120,6 +122,8 @@ pub(super) fn apply_decoded_operation(
                 &right_anchor_hash,
                 &replacement_text,
                 &old_span_text,
+                left_anchor_len,
+                right_anchor_len,
             )?;
         }
         DecodedOperationKind::ReplaceBinary {
@@ -231,6 +235,8 @@ fn apply_edit_text(
     right_anchor_hash: &[u8; 32],
     replacement_text: &[u8],
     old_span_text: &[u8],
+    left_anchor_len: Option<u32>,
+    right_anchor_len: Option<u32>,
 ) -> Result<()> {
     if text_span_hash(old_span_text) != *old_span_hash {
         return Err(PrikkError::Integrity(format!(
@@ -269,7 +275,7 @@ fn apply_edit_text(
             hex32(span_id)
         )));
     }
-    let (start, end) = text_span::locate_text_span(
+    let (start, end) = text_span::resolve_text_span(
         current_text,
         old_span_text,
         left_anchor_hash,
@@ -277,6 +283,8 @@ fn apply_edit_text(
         span_id,
         node_id,
         old_span_hash,
+        left_anchor_len,
+        right_anchor_len,
     )
     .map_err(|reason| {
         PrikkError::Integrity(format!(

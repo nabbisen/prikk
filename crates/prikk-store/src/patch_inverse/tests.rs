@@ -249,7 +249,21 @@ fn write_patch(
     object_store: &mut FileObjectStore,
     payload: PatchPayload,
 ) -> prikk_error::Result<prikk_object::ObjectId> {
-    let mut patch = ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);
+    write_patch_with_schema(object_store, payload, 1)
+}
+
+/// RFC 134 §8: a payload whose `EditText` operations carry v2 anchor-length fields must be written
+/// at `PATCH_TEXT_SPAN_V2_SCHEMA` or decode will refuse tags 10/11 as unauthorized at this schema.
+fn write_patch_with_schema(
+    object_store: &mut FileObjectStore,
+    payload: PatchPayload,
+    schema_version: u32,
+) -> prikk_error::Result<prikk_object::ObjectId> {
+    let mut patch = ObjectEnvelope::unsigned(
+        ObjectType::Patch,
+        schema_version,
+        payload.to_canonical_bytes()?,
+    );
     patch.add_signature(dummy_signature())?;
     object_store.write_object(&patch)
 }
@@ -319,6 +333,8 @@ fn assert_direct_inverse_round_trip(old: &[u8], new: &[u8]) {
         &span.right_anchor_hash,
         &span.replacement_text,
         &span.old_span_text,
+        Some(span.left_anchor_len),
+        Some(span.right_anchor_len),
     );
     assert!(inverse_result.is_ok());
     let (inverse, post) = match inverse_result {
@@ -341,6 +357,8 @@ fn assert_direct_inverse_round_trip(old: &[u8], new: &[u8]) {
         presentation_hint_line: None,
         presentation_hint_column: None,
         old_span_text: span.old_span_text,
+        left_anchor_len: Some(span.left_anchor_len),
+        right_anchor_len: Some(span.right_anchor_len),
     };
     let round_trip = match apply_edit_text_bytes(&recovered, &forward) {
         Ok(value) => value,
@@ -366,7 +384,7 @@ fn try_apply_inverse_edit(operation: &Operation, bytes: &[u8]) -> prikk_error::R
 }
 
 fn apply_edit_text_bytes(bytes: &[u8], edit: &EditText) -> prikk_error::Result<Vec<u8>> {
-    let (start, end) = crate::text_span::locate_text_span(
+    let (start, end) = crate::text_span::resolve_text_span(
         bytes,
         &edit.old_span_text,
         &edit.left_anchor_hash,
@@ -374,6 +392,8 @@ fn apply_edit_text_bytes(bytes: &[u8], edit: &EditText) -> prikk_error::Result<V
         &edit.span_id,
         edit.node_id,
         &edit.old_span_hash,
+        edit.left_anchor_len,
+        edit.right_anchor_len,
     )
     .map_err(|err| prikk_error::PrikkError::Integrity(err.to_string()))?;
     crate::text_span::splice_text(bytes, start, end, &edit.replacement_text)
@@ -422,6 +442,8 @@ fn publish_text_create_then_two_edit_block(
                     presentation_hint_line: None,
                     presentation_hint_column: None,
                     old_span_text: first.old_span_text,
+                    left_anchor_len: Some(first.left_anchor_len),
+                    right_anchor_len: Some(first.right_anchor_len),
                 }),
             },
             Operation {
@@ -438,6 +460,8 @@ fn publish_text_create_then_two_edit_block(
                     presentation_hint_line: None,
                     presentation_hint_column: None,
                     old_span_text: second.old_span_text,
+                    left_anchor_len: Some(second.left_anchor_len),
+                    right_anchor_len: Some(second.right_anchor_len),
                 }),
             },
         ],
@@ -445,7 +469,11 @@ fn publish_text_create_then_two_edit_block(
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
     };
-    let patch_id = write_patch(&mut object_store, patch_payload)?;
+    let patch_id = write_patch_with_schema(
+        &mut object_store,
+        patch_payload,
+        prikk_object::PATCH_TEXT_SPAN_V2_SCHEMA,
+    )?;
     let block = signed_block(BlockKind::Root, Vec::new(), vec![patch_id], None);
     let block_id = object_store.write_object(&block)?;
     let ref_store = RefStore::new(layout.clone());

@@ -1066,6 +1066,8 @@ fn authored_edit_text_locates_and_splices_arbitrary_span_through_shared_text_spa
                 right_anchor_hash,
                 replacement_text,
                 old_span_text,
+                left_anchor_len,
+                right_anchor_len,
             } => Some((
                 *node_id,
                 *span_id,
@@ -1074,16 +1076,29 @@ fn authored_edit_text_locates_and_splices_arbitrary_span_through_shared_text_spa
                 *right_anchor_hash,
                 replacement_text.clone(),
                 old_span_text.clone(),
+                *left_anchor_len,
+                *right_anchor_len,
             )),
             _ => None,
         })
         .expect("authored patch must carry an EditText op");
-    let (node_id, span_id, old_span_hash, left, right, replacement, op_old_text) = edit;
+    let (
+        node_id,
+        span_id,
+        old_span_hash,
+        left,
+        right,
+        replacement,
+        op_old_text,
+        left_anchor_len,
+        right_anchor_len,
+    ) = edit;
     assert_eq!(op_old_text, b"world");
     assert_eq!(replacement, b"prikk");
 
-    // Replay-side localization over the baseline text, using the shared module.
-    let (start, end) = crate::text_span::locate_text_span(
+    // Replay-side localization over the baseline text, using the shared module. Real authoring
+    // always mints RFC 134 §8 v2 identity, so this resolves through the schema-aware dispatch.
+    let (start, end) = crate::text_span::resolve_text_span(
         old_text,
         &op_old_text,
         &left,
@@ -1091,6 +1106,8 @@ fn authored_edit_text_locates_and_splices_arbitrary_span_through_shared_text_spa
         &span_id,
         node_id,
         &old_span_hash,
+        left_anchor_len,
+        right_anchor_len,
     )
     .expect("authored span must localize uniquely in the baseline text");
     let spliced = crate::text_span::splice_text(old_text, start, end, &replacement).unwrap();

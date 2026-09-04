@@ -200,6 +200,9 @@ pub(super) enum Action {
         left_anchor_hash: [u8; 32],
         right_anchor_hash: [u8; 32],
         old_span_text: Vec<u8>,
+        /// RFC 134 §8: see `DecodedOperationKind::EditText`.
+        left_anchor_len: Option<u32>,
+        right_anchor_len: Option<u32>,
     },
     ReplaceBinary {
         node_id: NodeId,

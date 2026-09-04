@@ -22,7 +22,7 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::{
     BlobKind, BlobPayload, CanonicalEncode, ChangePerm, CreateFile, DeleteNode, DeleteNodePreimage,
     EditText, NodeId, NodeKind, ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind,
-    PATCH_PARENT_IDS_RETIRED_SCHEMA, PatchPayload, PatchPurpose, ReplaceBinary,
+    PATCH_TEXT_SPAN_V2_SCHEMA, PatchPayload, PatchPurpose, ReplaceBinary,
 };
 
 use crate::active::{prepare_empty_active_ref_for_append, require_active_ref_for_non_empty_wal};
@@ -554,9 +554,14 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
         purpose: PatchPurpose::Normal,
     };
     patch_payload.validate().map_err(AuthorError::Store)?;
+    // RFC 134 §8: every EditText this function authors carries v2 anchor-length fields (tags
+    // 10/11), so every newly authored patch is minted at PATCH_TEXT_SPAN_V2_SCHEMA -- unconditionally,
+    // even for patches with no EditText operation, since schema 3 only ever *permits* those tags,
+    // never requires them, and every earlier authoring path already only ever wrote schema 2 or
+    // below (v1 stays frozen for those bytes, forever).
     let mut patch = ObjectEnvelope::unsigned(
         ObjectType::Patch,
-        PATCH_PARENT_IDS_RETIRED_SCHEMA,
+        PATCH_TEXT_SPAN_V2_SCHEMA,
         patch_payload
             .to_canonical_bytes()
             .map_err(AuthorError::Store)?,
@@ -657,6 +662,8 @@ fn plan_edit_text(
             presentation_hint_line: None,
             presentation_hint_column: None,
             old_span_text: span.old_span_text,
+            left_anchor_len: Some(span.left_anchor_len),
+            right_anchor_len: Some(span.right_anchor_len),
         }),
         path: path.to_string(),
         node_id: base.node_id,

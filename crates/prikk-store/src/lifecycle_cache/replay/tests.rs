@@ -102,6 +102,18 @@ impl MockReader {
     }
 
     fn insert_patch(&mut self, id: ObjectId, kinds: Vec<OperationKind>) {
+        self.insert_patch_with_schema(id, kinds, 1);
+    }
+
+    /// RFC 134 §8: a `kinds` list carrying a v2-identified `EditText` (`left_anchor_len`/
+    /// `right_anchor_len` both `Some`) must be inserted at `PATCH_TEXT_SPAN_V2_SCHEMA` or above, or
+    /// decode refuses tags 10/11 as unauthorized at schema 1.
+    fn insert_patch_with_schema(
+        &mut self,
+        id: ObjectId,
+        kinds: Vec<OperationKind>,
+        schema_version: u32,
+    ) {
         let operations = kinds
             .into_iter()
             .enumerate()
@@ -118,9 +130,10 @@ impl MockReader {
             preconditions: Vec::new(),
             purpose: prikk_object::PatchPurpose::Normal,
         };
-        self.insert(
+        self.insert_with_schema(
             id,
             ObjectType::Patch,
+            schema_version,
             payload.to_canonical_bytes().expect("patch"),
         );
     }
@@ -130,8 +143,20 @@ impl MockReader {
     }
 
     fn insert(&mut self, id: ObjectId, object_type: ObjectType, bytes: Vec<u8>) {
-        self.objects
-            .insert(id, ObjectEnvelope::unsigned(object_type, 1, bytes));
+        self.insert_with_schema(id, object_type, 1, bytes);
+    }
+
+    fn insert_with_schema(
+        &mut self,
+        id: ObjectId,
+        object_type: ObjectType,
+        schema_version: u32,
+        bytes: Vec<u8>,
+    ) {
+        self.objects.insert(
+            id,
+            ObjectEnvelope::unsigned(object_type, schema_version, bytes),
+        );
     }
 }
 
@@ -551,6 +576,40 @@ fn author_edit_text(
         presentation_hint_line: None,
         presentation_hint_column: None,
         old_span_text: old_span.to_vec(),
+        left_anchor_len: None,
+        right_anchor_len: None,
+    }
+}
+
+/// Author a valid v2 (RFC 134 §8, content-unique) `EditText` record for the occurrence at byte
+/// `start` in `text`, using the shared v2 authoring primitives (so the round-trip is exact).
+fn author_edit_text_v2(
+    text: &[u8],
+    start: usize,
+    old_span: &[u8],
+    replacement: &[u8],
+    node_id: NodeId,
+) -> EditText {
+    let end = start + old_span.len();
+    let old_span_hash = text_span_hash(old_span);
+    let (left_len, right_len) =
+        text_span::choose_anchor_lengths_v2(text, old_span, start, end).expect("anchor lengths");
+    let left = text_span::left_anchor_v2(text, start, left_len);
+    let right = text_span::right_anchor_v2(text, end, right_len);
+    let span_id =
+        text_span::compute_span_id_v2(node_id, &old_span_hash, &left, &right, left_len, right_len);
+    EditText {
+        node_id,
+        span_id,
+        old_span_hash,
+        left_anchor_hash: left,
+        right_anchor_hash: right,
+        replacement_text: replacement.to_vec(),
+        presentation_hint_line: None,
+        presentation_hint_column: None,
+        old_span_text: old_span.to_vec(),
+        left_anchor_len: Some(left_len),
+        right_anchor_len: Some(right_len),
     }
 }
 
@@ -636,6 +695,58 @@ fn edit_text_preserves_mode_node_id_and_path() {
         NodeContent::File { mode, .. } => assert_eq!(*mode, 0o100_755),
         other => panic!("expected file, got {other:?}"),
     }
+}
+
+/// RFC 134 §8, §3.4 (mixed-history replay -- "the one most likely to be missed"): one node with a
+/// v1 `EditText` (schema 1, positional `dup_index` identity) in the genesis block, then a later v2
+/// `EditText` (`PATCH_TEXT_SPAN_V2_SCHEMA`, content-unique identity) in a child block, replayed
+/// together through the same lineage walk. Each patch resolves through its own scheme
+/// (`resolve_text_span`'s dispatch) without the other patch's schema affecting it.
+#[test]
+fn mixed_v1_then_v2_edit_text_history_replays_correctly() {
+    let (genesis, child, patch_g, patch_c, blob) = (oid(1), oid(2), oid(10), oid(11), oid(20));
+    let mut reader = MockReader::new();
+    reader.insert_text_blob(blob, b"hello world");
+    reader.insert_patch(
+        patch_g,
+        vec![
+            OperationKind::CreateFile(CreateFile {
+                path: "a.txt".to_string(),
+                node_id: nid(0x60),
+                blob_id: blob,
+                mode: 0o100_644,
+            }),
+            // v1: "hello world" -> "hello there".
+            OperationKind::EditText(author_edit_text(
+                b"hello world",
+                6,
+                b"world",
+                b"there",
+                nid(0x60),
+            )),
+        ],
+    );
+    reader.insert_block(genesis, &[], &[patch_g]);
+
+    // v2: "hello there" -> "howdy there".
+    let v2_edit = author_edit_text_v2(b"hello there", 0, b"hello", b"howdy", nid(0x60));
+    reader.insert_patch_with_schema(
+        patch_c,
+        vec![OperationKind::EditText(v2_edit)],
+        prikk_object::PATCH_TEXT_SPAN_V2_SCHEMA,
+    );
+    reader.insert_block(child, &[genesis], &[patch_c]);
+
+    let state = replay_lineage(&reader, child, genesis).expect("mixed v1-then-v2 replay");
+    let node = state.live_node(&nid(0x60)).expect("live");
+    assert_eq!(
+        node.content,
+        NodeContent::File {
+            blob_id: text_blob_id(b"howdy there"),
+            mode: 0o100_644,
+        },
+        "v1 edit then v2 edit must compose to the doubly-edited text"
+    );
 }
 
 #[test]

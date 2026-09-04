@@ -402,6 +402,8 @@ fn edit_text_record_layout_matches_fdd_section_9_3() {
         presentation_hint_line: None,
         presentation_hint_column: None,
         old_span_text: b"old".to_vec(),
+        left_anchor_len: None,
+        right_anchor_len: None,
     };
     let got = top_level_tag_types(&op.to_canonical_bytes().expect("EditText encodes"));
     assert_eq!(
@@ -435,6 +437,8 @@ fn edit_text_record_layout_with_hints() {
         presentation_hint_line: Some(12),
         presentation_hint_column: Some(4),
         old_span_text: b"old".to_vec(),
+        left_anchor_len: None,
+        right_anchor_len: None,
     };
     let got = top_level_tag_types(&op.to_canonical_bytes().expect("EditText encodes"));
     assert_eq!(
@@ -470,6 +474,8 @@ fn edit_text_validators_reject_malformed_records() {
         presentation_hint_line: None,
         presentation_hint_column: None,
         old_span_text: b"old".to_vec(),
+        left_anchor_len: None,
+        right_anchor_len: None,
     };
     // sanity: the base record is valid
     assert!(base.validate().is_ok());

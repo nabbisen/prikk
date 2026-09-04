@@ -158,7 +158,11 @@ pub(super) fn edit_text(
     old_text: &[u8],
     new_text: &[u8],
 ) -> DecodedPatchOperation {
-    let plan = text_span::plan_authored_text_span(old_text, new_text, node_id)
+    // RFC 134 §8 handoff trap #2: stays v1 (plan_authored_text_span_v1), deliberately, so this
+    // generator keeps building v1-shaped operations. Do not switch this to the v2-authoring
+    // plan_authored_text_span -- that is a separate, deliberate future step for the property
+    // generator, not a side effect of this increment.
+    let plan = text_span::plan_authored_text_span_v1(old_text, new_text, node_id)
         .expect("text span plan")
         .expect("changed text");
     DecodedPatchOperation {
@@ -171,6 +175,8 @@ pub(super) fn edit_text(
             right_anchor_hash: plan.right_anchor_hash,
             replacement_text: plan.replacement_text,
             old_span_text: plan.old_span_text,
+            left_anchor_len: None,
+            right_anchor_len: None,
         },
     }
 }

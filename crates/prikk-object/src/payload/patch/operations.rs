@@ -9,7 +9,7 @@ use crate::path::validate_repo_path;
 use crate::payload::node::{NodeId, NodeKind};
 use crate::{CanonicalEncode, CanonicalWriter, ObjectId};
 
-use super::{TEXT_SPAN_HASH_BYTES, text_span_hash};
+use super::{TEXT_SPAN_ANCHOR_MIN_LEN, TEXT_SPAN_HASH_BYTES, text_span_hash};
 
 /// The only two mode values prikk ever authors for a file node (`prikk-store`'s
 /// `worktree_patch/node_authoring.rs::REGULAR_FILE_MODE`/`EXECUTABLE_FILE_MODE`, and
@@ -183,12 +183,23 @@ pub struct EditText {
     pub presentation_hint_column: Option<u32>,
     /// Old span bytes (`bytes`); UTF-8 for v1, verbatim; inverse material.
     pub old_span_text: Vec<u8>,
+    /// RFC 134 §8: v2 content-unique identity's recorded left-anchor length, in bytes. Present
+    /// only at schema `PATCH_TEXT_SPAN_V2_SCHEMA` and above, and only together with
+    /// `right_anchor_len` — never alone. Absent (`None`) means `span_id` is v1's positional
+    /// identity; present means it is v2's content-unique identity computed over anchors of
+    /// exactly this length.
+    pub left_anchor_len: Option<u32>,
+    /// RFC 134 §8: v2 content-unique identity's recorded right-anchor length, in bytes. See
+    /// `left_anchor_len` — always present or absent together with it.
+    pub right_anchor_len: Option<u32>,
 }
 
 impl EditText {
     /// Validate the FDD-03 §9.3 EditText record contract: nonzero `node_id`,
-    /// `old_span_hash == SHA-256(old_span_text)`, and both span-text fields are
-    /// well-formed UTF-8 (non-UTF-8 content must use `ReplaceBinary`).
+    /// `old_span_hash == SHA-256(old_span_text)`, both span-text fields are well-formed UTF-8
+    /// (non-UTF-8 content must use `ReplaceBinary`), and — RFC 134 §8 — `left_anchor_len` and
+    /// `right_anchor_len` are both present or both absent, each at least
+    /// `TEXT_SPAN_ANCHOR_MIN_LEN` when present.
     pub fn validate(&self) -> Result<()> {
         if self.node_id.is_zero() {
             return Err(PrikkError::CanonicalEncoding(
@@ -210,6 +221,22 @@ impl EditText {
                 "EditText replacement_text must be well-formed UTF-8".to_string(),
             ));
         }
+        match (self.left_anchor_len, self.right_anchor_len) {
+            (None, None) => {}
+            (Some(left), Some(right)) => {
+                if left < TEXT_SPAN_ANCHOR_MIN_LEN || right < TEXT_SPAN_ANCHOR_MIN_LEN {
+                    return Err(PrikkError::CanonicalEncoding(format!(
+                        "EditText anchor lengths must each be at least {TEXT_SPAN_ANCHOR_MIN_LEN}"
+                    )));
+                }
+            }
+            _ => {
+                return Err(PrikkError::CanonicalEncoding(
+                    "EditText left_anchor_len and right_anchor_len must be both present or both absent"
+                        .to_string(),
+                ));
+            }
+        }
         Ok(())
     }
 }
@@ -230,6 +257,12 @@ impl CanonicalEncode for EditText {
             writer.field_u32(8, column)?;
         }
         writer.field_bytes(9, &self.old_span_text)?;
+        if let Some(left) = self.left_anchor_len {
+            writer.field_u32(10, left)?;
+        }
+        if let Some(right) = self.right_anchor_len {
+            writer.field_u32(11, right)?;
+        }
         Ok(())
     }
 }

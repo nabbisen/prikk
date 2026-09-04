@@ -40,6 +40,8 @@ fn edit_text_rejects_hash_binding_violation() {
         presentation_hint_line: None,
         presentation_hint_column: None,
         old_span_text: b"old".to_vec(),
+        left_anchor_len: None,
+        right_anchor_len: None,
     };
     assert!(op.validate().is_err());
     assert!(op.to_canonical_bytes().is_err());
@@ -62,6 +64,8 @@ fn patch_operations_must_be_contiguous() {
                 presentation_hint_line: None,
                 presentation_hint_column: None,
                 old_span_text: b"old".to_vec(),
+                left_anchor_len: None,
+                right_anchor_len: None,
             }),
         }],
         intent: None,
@@ -663,6 +667,8 @@ fn patch_purpose_absent_decodes_as_normal() {
                 presentation_hint_line: None,
                 presentation_hint_column: None,
                 old_span_text: b"old".to_vec(),
+                left_anchor_len: None,
+                right_anchor_len: None,
             }),
         }],
         intent: None,

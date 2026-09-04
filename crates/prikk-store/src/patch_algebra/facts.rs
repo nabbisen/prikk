@@ -69,6 +69,8 @@ pub(super) fn operation_facts(
             left_anchor_hash,
             right_anchor_hash,
             old_span_text,
+            left_anchor_len,
+            right_anchor_len,
             ..
         } => Action::EditText {
             node_id: *node_id,
@@ -77,6 +79,8 @@ pub(super) fn operation_facts(
             left_anchor_hash: *left_anchor_hash,
             right_anchor_hash: *right_anchor_hash,
             old_span_text: old_span_text.clone(),
+            left_anchor_len: *left_anchor_len,
+            right_anchor_len: *right_anchor_len,
         },
         DecodedOperationKind::ReplaceBinary {
             node_id,

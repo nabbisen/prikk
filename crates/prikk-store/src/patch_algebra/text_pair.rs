@@ -43,6 +43,8 @@ pub(super) fn classify_mode_and_text_edit<R: PatchAlgebraEvidence>(
             left_anchor_hash,
             right_anchor_hash,
             old_span_text,
+            left_anchor_len,
+            right_anchor_len,
             ..
         } => {
             if text_span_hash(old_span_text) != *old_span_hash {
@@ -55,7 +57,7 @@ pub(super) fn classify_mode_and_text_edit<R: PatchAlgebraEvidence>(
                     *span_id,
                 ));
             }
-            match text_span::locate_text_span(
+            match text_span::resolve_text_span(
                 &current_text,
                 old_span_text,
                 left_anchor_hash,
@@ -63,6 +65,8 @@ pub(super) fn classify_mode_and_text_edit<R: PatchAlgebraEvidence>(
                 span_id,
                 node_id,
                 old_span_hash,
+                *left_anchor_len,
+                *right_anchor_len,
             ) {
                 Ok(_) => Ok(PairClass::Independent),
                 Err(_) => Ok(conflict_with_span(

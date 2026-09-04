@@ -174,6 +174,10 @@ fn edit_text_strategy() -> impl Strategy<Value = EditText> {
                     presentation_hint_line: None,
                     presentation_hint_column: None,
                     old_span_text,
+                    // This harness decodes at PATCH_PARENT_IDS_RETIRED_SCHEMA throughout (schema 2)
+                    // -- RFC 134 §8 v2 fields are schema-3-only, so this strategy stays v1-shaped.
+                    left_anchor_len: None,
+                    right_anchor_len: None,
                 }
             },
         )
@@ -294,6 +298,8 @@ fn expected_decoded(op: &Operation) -> DecodedPatchOperation {
             right_anchor_hash: value.right_anchor_hash,
             replacement_text: value.replacement_text.clone(),
             old_span_text: value.old_span_text.clone(),
+            left_anchor_len: value.left_anchor_len,
+            right_anchor_len: value.right_anchor_len,
         },
         OperationKind::RenamePath(value) => DecodedOperationKind::RenamePath {
             node_id: value.node_id,
@@ -571,6 +577,8 @@ mod duplicate_field_is_refused {
                 presentation_hint_line: None,
                 presentation_hint_column: None,
                 old_span_text,
+                left_anchor_len: None,
+                right_anchor_len: None,
             }),
             12,
             1,

@@ -104,6 +104,8 @@ pub(super) fn apply_state_effect<R: BlobKindResolver + BlobContentResolver>(
             right_anchor_hash,
             replacement_text,
             old_span_text,
+            left_anchor_len,
+            right_anchor_len,
         } => apply_edit_text(
             state,
             text_cache,
@@ -115,6 +117,8 @@ pub(super) fn apply_state_effect<R: BlobKindResolver + BlobContentResolver>(
             right_anchor_hash,
             replacement_text,
             old_span_text,
+            *left_anchor_len,
+            *right_anchor_len,
         ),
     }
 }
@@ -136,6 +140,8 @@ fn apply_edit_text<R: BlobContentResolver>(
     right_anchor_hash: &[u8; 32],
     replacement_text: &[u8],
     old_span_text: &[u8],
+    left_anchor_len: Option<u32>,
+    right_anchor_len: Option<u32>,
 ) -> Result<(), LifecycleReplayError> {
     // Defense-in-depth: the canonical validator binds this at decode; re-assert here.
     if text_span_hash(old_span_text) != *old_span_hash {
@@ -184,7 +190,7 @@ fn apply_edit_text<R: BlobContentResolver>(
     };
 
     // Localize the span (FDD-01 §5.1, anchor-filtered) via the shared text-span module.
-    let (start, end) = text_span::locate_text_span(
+    let (start, end) = text_span::resolve_text_span(
         &current_text,
         old_span_text,
         left_anchor_hash,
@@ -192,6 +198,8 @@ fn apply_edit_text<R: BlobContentResolver>(
         span_id,
         node_id,
         old_span_hash,
+        left_anchor_len,
+        right_anchor_len,
     )
     .map_err(|reason| LifecycleReplayError::TextSpanResolutionFailed {
         node_id,

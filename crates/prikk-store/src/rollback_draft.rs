@@ -8,8 +8,8 @@
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, PATCH_PARENT_IDS_RETIRED_SCHEMA,
-    PatchPurpose, RefStatePayload,
+    CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, PATCH_TEXT_SPAN_V2_SCHEMA, PatchPurpose,
+    RefStatePayload,
 };
 
 use crate::active::prepare_empty_active_ref_for_append;
@@ -119,9 +119,12 @@ pub fn append_rollback_draft(
 
     inverse.inverse_payload.purpose = PatchPurpose::RollbackDraft;
     let canonical_payload = inverse.inverse_payload.to_canonical_bytes()?;
+    // RFC 134 §8: an inverse EditText (text_span::derive_inverse_edit_text) always carries v2
+    // anchor-length fields, so this freshly authored patch is minted at PATCH_TEXT_SPAN_V2_SCHEMA --
+    // unconditionally, for the same reason as node_authoring.rs's own forward-authoring path.
     let mut envelope = ObjectEnvelope::unsigned(
         ObjectType::Patch,
-        PATCH_PARENT_IDS_RETIRED_SCHEMA,
+        PATCH_TEXT_SPAN_V2_SCHEMA,
         canonical_payload,
     );
     let signature = author_signature(signer, envelope.object_id())?;

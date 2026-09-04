@@ -24,8 +24,9 @@ use crate::layout::{ContainerSlot, DEFAULT_ACTIVE_NAME, LockableContainer};
 use crate::lock::{ActiveLock, acquire_container_locks};
 use crate::received::read_received_pointer;
 use crate::test_support::{
-    rollback_patch_blob_envelope, signed_block, signed_patch_blob_envelope, signed_patch_envelope,
-    signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
+    publish_text_create_then_edit_block_v1, rollback_patch_blob_envelope, signed_block,
+    signed_patch_blob_envelope, signed_patch_envelope, signed_ref_state_envelope,
+    signed_ref_update_envelope, unique_temp_dir,
 };
 use crate::{
     Ed25519AuthorSigner, Ed25519MaintainerSigner, FileObjectStore, MaintainerSigner, ObjectReader,
@@ -289,6 +290,42 @@ fn export_then_import_carries_the_full_genesis_complete_closure() -> prikk_error
         target_objects
             .read_typed(child_block_id, ObjectType::Block)?
             .is_some()
+    );
+
+    let _ = std::fs::remove_dir_all(source_root);
+    let _ = std::fs::remove_dir_all(target_root);
+    Ok(())
+}
+
+/// RFC 134 §8, §3.2: a repository containing genuine v1 (schema 1, `dup_index`-positional
+/// identity) `EditText` history must still `bundle export`/`import`/verify cleanly through the
+/// post-§8 code -- demonstrated, not assumed. `PATCH_TEXT_SPAN_V2_SCHEMA`'s admission and the new
+/// decode-side tag-10/11 schema gate touch the same code paths this exercises end to end.
+#[test]
+fn export_then_import_carries_genuine_v1_edit_text_history() -> prikk_error::Result<()> {
+    let source_root = unique_temp_dir("bundle-v1-edittext-source");
+    let source = RepositoryLayout::init(source_root.clone())?;
+    publish_text_create_then_edit_block_v1(&source, b"hello world\n", b"hello prikk\n")?;
+    let source_checked = crate::verify_repository(&source)?.checked_objects;
+    assert!(
+        source_checked.is_some_and(|count| count > 0),
+        "source must verify at least one object"
+    );
+
+    let (report, bytes) = export_bundle(&source, "heads/main")?;
+    assert_eq!(report.ref_name, "heads/main");
+
+    let target_root = unique_temp_dir("bundle-v1-edittext-target");
+    let target = RepositoryLayout::init(target_root.clone())?;
+    let import_report = import_bundle(&target, &bytes, &BundleImportOptions::default_limits())?;
+    assert_eq!(import_report.ref_name, "remotes/heads/main");
+    assert_eq!(import_report.object_count, report.object_count);
+    assert_eq!(import_report.written_object_count, report.object_count);
+
+    assert_eq!(
+        crate::verify_repository(&target)?.checked_objects,
+        source_checked,
+        "target must verify exactly what source verified"
     );
 
     let _ = std::fs::remove_dir_all(source_root);
