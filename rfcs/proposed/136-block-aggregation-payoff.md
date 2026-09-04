@@ -18,7 +18,15 @@ and the measured figure is an *upper bound* on what composition could achieve. *
 recommends against Option B**; Options A and C are untouched by it, because neither depends on
 collapse. §7's question is unchanged and still the owner's.
 
-**Nothing else is ruled.
+**§7 RULED by the project owner 2026-09-04: Option A — the acceleration travels.** Their words:
+*"If you mean it shared among the same projects of the remote, Yes. Not 'purely local'. I prefer that
+blocks are shared in a strict format where they belong to the same context."* Option C is refused;
+Option B was already recommended against on §9.1's measurement. **See §7.1 for the mechanism this
+ruling meets, which is not uniform across prikk's two transport paths, and §7.2 for the check it
+obliges that does not exist today.**
+
+**Still not ruled:** the snapshot format, the policy deciding when a seal emits one, and §9 items 1,
+2 and 4, none of which are measured. No handoff is issued.
 
 **Author-review independence.** The architect wrote this RFC and is also its only reviewer, the
 standing gap recorded on every architect-authored design in this project. Compensated at
@@ -150,7 +158,7 @@ Any option that appears to speed up `verify` has violated this rule and is wrong
 Three shapes are available. They are not variations on one design; they differ in what is stored, what
 travels, and what identity depends on.
 
-### Option A — full-tree snapshot in the block
+### Option A — full-tree snapshot in the block — **RULED 2026-09-04, the owner's choice**
 
 Write `snapshot_blob_ref` at seal, as a path-to-Blob-id manifest (§5, not the v1 inline format).
 
@@ -179,7 +187,7 @@ Store the block's **net effect** as one operation sequence, alongside (not inste
 - **Travels in bundles:** yes.
 - **Identity:** same question as A.
 
-### Option C — a repository-local snapshot cache, outside the object model
+### Option C — a repository-local snapshot cache, outside the object model — **REFUSED 2026-09-04**
 
 Keyed by block id, in the DC-64 mould: persisted, rebuildable, never authoritative, no object-model
 change at all.
@@ -189,9 +197,60 @@ change at all.
   surface, which DC-64 already has an answer for (`REANCHOR_BOUND`).
 - **Identity:** **untouched.** Nothing enters a signed object.
 
-**The question:** *is the acceleration something a repository should be able to hand to another
-repository (A or B), or is it purely local (C)?* Everything else follows from that answer, and it is
-the owner's to give, because it is a question about what prikk distributes, not about how it computes.
+**The question, ANSWERED 2026-09-04:** *is the acceleration something a repository should be able to
+hand to another repository (A or B), or is it purely local (C)?* **The owner ruled that it travels.**
+With B measured out at §9.1, **Option A stands.** §7.1 records what "travels" actually means across
+prikk's two transport paths; §7.2 records the check that ruling now obliges.
+
+## 7.1 What "travels" means — it is not uniform, and the ruling meets only one of two paths
+
+**Blocks travel verbatim through `bundle`, and do not travel at all through `sync`.** This was not in
+this RFC when §7 was written and it is load-bearing for the ruling.
+
+| Path | Do blocks travel? | Would a snapshot travel? |
+|---|---|---|
+| `bundle export` / `import_bundle` (DC-78) | **Yes, verbatim.** Import *"writes exactly those objects plus one `received` pointer"* (`bundle.rs:1-10`), and closure validation already names *"a Block's own `snapshot_blob_ref`"* among the blobs a bundle must carry (`bundle.rs:58-62`) | **Yes** |
+| `sync` (RFC 115/116, `seal_from_accepted.rs`) | **No.** The receiver reconstructs *"a local equivalent of that block — the same patches, in the same order, on the receiver's own parent, sealed under the receiver's own maintainer key"* | **No** |
+
+`seal_from_accepted.rs:1-13` states the reason, and it is a deliberate ruling rather than an
+omission: *"The resulting block id will not equal the claim's `block_id`, and that is correct, not a
+failure... identity lives at the patch level, not the block level."*
+
+**The owner's instinct is already prikk's design, and more strongly than the ruling assumed.** *"Blocks
+are shared in a strict format where they belong to the same context"* — a block is so context-bound
+that it does not survive a move at all. Sync re-seals under the receiver's own key precisely because a
+block belongs to its own repository's context.
+
+**The consequence, which the architect judges is not a gap.** Option A delivers travelling
+acceleration over `bundle` — the whole-history path, where a receiver arriving with nothing is exactly
+who cannot afford to replay everything. A `sync` receiver already holds the lineage and seals its own
+block, so it can build its own snapshot locally at that moment for free. Making a snapshot travel over
+`sync` would mean transporting a block verbatim, which would break the own-key sealing property
+RFC 115 §2.4-§2.7 established on purpose. **That trade is not worth reopening, and this RFC does not
+propose reopening it.** Stated here so the ruling is not read as promising more than the mechanism
+delivers.
+
+## 7.2 The check the ruling obliges, which does not exist today
+
+§6 admits snapshots only as *"checked auxiliary data"*. **Nothing currently checks a snapshot's
+content against anything.**
+
+- The state root is computed from **replay** and compared to the block's own recorded value
+  (`block_state.rs:244-245`, `:534-535`).
+- A snapshot is only checked to **exist** (`verify.rs:1565`, `ensure_object_exists`); its content is
+  never hashed, never compared to `state_merkle_root`.
+- Yet `prepare_snapshot_checkout_plan` (`checkout.rs:88-118`) would materialize a worktree straight
+  from it.
+
+Local-only (Option C) could have leaned on the cache having been built here, from verified replay.
+**A travelling snapshot cannot: it arrives from a remote.** Under the owner's ruling, a bundle can
+carry a snapshot whose content no code has ever checked against the state it claims to represent, and
+checkout would write it to disk.
+
+**Therefore: the content check is a precondition of Option A, not a later refinement.** It must land
+before any path writes a snapshot, and before any path trusts an imported one. This is the same
+ordering argument DC-90 used for its own gate — a boundary added afterwards documents what happened
+instead of constraining it.
 
 ## 8. The identity question — and why it is smaller than it first appears
 
