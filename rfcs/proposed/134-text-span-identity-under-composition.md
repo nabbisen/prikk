@@ -12,11 +12,16 @@ three steps the same day: the analysis first, then option (a) over (b), then §8
 | **3** — stable identity | **Authorized as option (a) (§7.3/§8); handoff issued** |
 | **4** — resolve against baseline, map offsets | **Refused (§7.4/§7.5):** oracle and materialization must resolve identically |
 
-**One piece of ruled work has no handoff: shape 1's containment.** §8's v2 identity does not retire it
-— v1 operations rely on the invariant forever, and a crafted or imported sequence that violates it is
-still reported as malformed evidence rather than as operations that are mutually inconsistent.
-**Writing the invariant into `text_span.rs`'s module doc and correcting the diagnosis remains
-outstanding**, and is small and independent of §8.
+**All ruled work is delivered.** Shape 1's containment landed at `59fa298`: the sequencing invariant
+is stated in `text_span.rs`'s module doc — what upholds it, and that **RFC 113's Git/Subversion/CVS
+import is the named case that would break it** — and the refusal now reads *"sequence operations do
+not compose against a shared baseline"* instead of asserting a state the confluence proof called
+unreachable. §8's v2 identity landed at `906d015`/`6076d52`, with `2c8289a` repairing a
+dead-code break on the two non-Linux jobs.
+
+**What remains is not work but a watch.** v1 operations depend on that invariant permanently, and
+**RFC 113 is the direction that would violate it** — whoever designs history import meets this RFC
+first.
 
 **§5's characterisation of shape 3 as a format break is corrected in §7.2**: it is an additive schema
 version under RFC 114, requiring no migration for identity.
