@@ -25,8 +25,9 @@ Option B was already recommended against on §9.1's measurement. **See §7.1 for
 ruling meets, which is not uniform across prikk's two transport paths, and §7.2 for the check it
 obliges that does not exist today.**
 
-**Still not ruled:** the snapshot format, the policy deciding when a seal emits one, and §9 items 1,
-2 and 4, none of which are measured. No handoff is issued.
+**§9.2 AMENDMENT 2026-09-06 — the external architect answered, and the framing changed.** The residual cost is **replay depth**, not materialization generally; A/C/deltas are one mechanism (a checkpoint), and B was never on that axis. §8.3's principle is replaced by **entailment**; §6.1's dilemma has a third position (**materialization is not certification**, with a derivation gate); §5.3's 211 MiB was an artifact of an every-seal strawman — at reanchor cadence it is **3.4 MiB**. **Both reviewers independently reached the same hold: build the measurement corpus before committing storage and a schema-touching field.**
+
+**Still not ruled:** the snapshot format, the checkpoint cadence work, and §9 items 1, 2 and 4, none of which are measured. No handoff is issued.
 
 **Author-review independence.** The architect wrote this RFC and is also its only reviewer, the
 standing gap recorded on every architect-authored design in this project. Compensated at
@@ -334,6 +335,98 @@ the original wording — which is why the number had to be taken before ruling r
 3. **It says nothing about Options A or C.** A full-tree snapshot's payoff depends on tree size against
    history depth, not on how much a block's patches overlap. Both remain fully live, and §7's question
    is unaffected.
+
+## 9.2 AMENDMENT 2026-09-06 — the external architect's answer, and the reframing it carries
+
+**Received `.git-exclude/tasks/architect/audit-20260904-block-materialization/`; architect's assessment
+at `.git-exclude/reviewed/external-block-materialization-review-20260906-review-v1.md`.** Every
+measurement in §5.1 and §5.3 reproduced independently — §5.3 to the digit, §5.1 within rounding — and
+every code claim held at the cited lines. **Nothing here overturns a number. It overturns the framing,
+which is what §8.4 asked for.**
+
+### 9.2.1 The residual cost is replay *depth*, and that collapses the option space
+
+**§1 of this RFC named the missing payoff one level too low.** The owner's original problem — merge
+reasoning growing with history — **is solved** by block windowing. What remains is that anchoring that
+window needs the baseline *state*, and that is `replay_derived_state` from the lineage horizon
+(`merge_evidence.rs:51`): **O(patches from genesis)**. Checkout has the same shape.
+
+**Named as depth, §7's "three options" are not peers.** A, C and §6.4's state deltas are **one
+mechanism — a checkpoint** — differing only in whether it travels (ruled: it travels) and how it is
+encoded. **The decision is cadence, encoding, and the trust tier of a materialized checkpoint.**
+
+### 9.2.2 Option B's disqualifier is replaced with a better one
+
+**§9.1 set B aside on a 1.16-1.25x collapse ratio measured by a git-history proxy this RFC itself
+distrusted.** The stronger reason: **B reduces the per-block operation constant and leaves depth
+untouched.** A composed block is still block *k* of *n*. Even a hypothetical 10x collapse would not
+move the O(depth) baseline reconstruction. **Same conclusion; no dependence on the proxy.** §9.1's
+measurement stands as a fact and is retired as the *reason*.
+
+### 9.2.3 §8.3's principle proves too much and is replaced by entailment
+
+*"Block ids are already local, so derived data inside them is cheap"* has no limiting principle — it
+would admit a build timestamp equally. **Replaced:**
+
+> **A field may enter a signed, identity-bearing object iff it is a pure function of content that
+> object already commits to.**
+
+The manifest is **entailed** by `state_merkle_root` — it is that root's preimage. A timestamp is
+entailed by nothing. **Id-locality is why the consequence is survivable, not why the field is
+admissible.** Field 5 stays in the block id; the justification changes.
+
+### 9.2.4 §6.1's dilemma has a third position — materialization is not certification
+
+- **(a) self-consistency**: the manifest recomputes to the recorded root, O(entries).
+- **(b) derivation**: that root follows from the patches — replay, `verify`'s alone.
+
+(a) permits **provisional** materialization without replay; a **derivation gate** forbids `commit`,
+`seal` or `accept` from an unverified-materialized base until replay upgrades it. **Both horns
+defeated, and §6's rule preserved exactly.**
+
+**This is stated as a precondition, not a design detail**, on the reviewer's own instruction: *"the
+derivation gate is not optional polish — it is the feature's reason to be safe."* The failure it
+prevents is an unverified state laundering into signed history through a performance feature.
+
+### 9.2.5 §5.3's storage alarm was an artifact of this RFC's own strawman
+
+**Snapshot cadence should be reanchor cadence.** At a `REANCHOR_BOUND` reanchor a **verified full state
+already exists in hand**, so persisting it is near-free *and provably derived* — discharging (b) for
+the local case for free. Storage: 161 KiB x ⌈1344/64⌉ ≈ **3.4 MiB**, not 211 MiB. **§5.3's 15x blowup
+was measured against an every-seal policy nobody would choose.** The real work item is promoting
+`REANCHOR_BOUND` from a commit-path constant to a repository-wide checkpoint cadence.
+
+Between checkpoints: **state-entry deltas** (§6.4), which are an overlay of manifests — O(entries
+changed), no operation semantics, no `EditText`, no algebra. **B's intuition applied to state rather
+than to patches, where the hard proof disappears.**
+
+### 9.2.6 Two corrections of fact
+
+**§8.1's sync judgement is right only conditionally.** A sync receiver self-serves **iff a local
+checkpoint policy exists to fire**. Ship A transport-only and sync is genuinely unserved — the fear
+§6.5 recorded and then dismissed.
+
+**§5's "path-to-Blob-id manifest" is wrong as described.** To recompute the root the manifest must
+carry the **full leaf preimage** — path, `NodeId`, kind, mode, Blob id (`state_root.rs:43-62`). The
+139 B/entry sizing was right; the description was not.
+
+### 9.2.7 One premise of theirs is false, and the fault is ours
+
+They report `checkout.rs:69` as *"materialization is a stub"* and build a recommendation on it. **The
+enum's doc comment says that; the code does not.** `materialize_snapshot_checkout` is fully implemented
+(`worktree.rs:50`), writes under RFC 102 Stage 1's dirty-marking ordering, and is reachable at
+`main.rs:461`. **A stale doc comment misled an external reviewer.** Their conclusion survives — no
+snapshot is ever written, so none is ever materialized — but the comment is a required correction.
+
+### 9.2.8 The hold, reached independently from both ends
+
+§9's item 1 — checkout cost at realistic depth — remains unmeasured, and **the reviewer confirms it has
+no honest git-history proxy**, unlike §5.1 and §5.3: it is a property of replay, not of a file-change
+distribution. Their structural argument is *sound in shape, unquantified in magnitude*, and they say so.
+
+**Their recommendation, which the architect endorses: build the corpus before the snapshot.** It gates
+this RFC and it retires the standing methodological weakness **every** performance decision here
+inherits, RFC 133 included. **That is a scheduling decision and it is the owner's.**
 
 ## 10. Scope
 
