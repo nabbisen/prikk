@@ -2,9 +2,9 @@
 
 use prikk_object::{
     BlockKind, BlockPayload, CanonicalEncode, CreateFile, EditText, MerkleRoot, NodeId,
-    ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind, PatchPayload, PatchPurpose,
-    RefKind, RefStatePayload, RefUpdatePayload, RenamePath, Signature, SignatureAlgorithm,
-    SignerRole,
+    ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind, PATCH_MESSAGE_SCHEMA,
+    PatchPayload, PatchPurpose, RefKind, RefStatePayload, RefUpdatePayload, RenamePath, Signature,
+    SignatureAlgorithm, SignerRole,
 };
 
 use crate::{FileObjectStore, ObjectWriter, RefPublication, RefStore, RepositoryLayout};
@@ -39,6 +39,36 @@ pub(crate) fn signed_patch_envelope() -> ObjectEnvelope {
 
 pub(crate) fn signed_patch_blob_envelope() -> ObjectEnvelope {
     signed_text_blob_envelope(b"patch fixture\n")
+}
+
+/// RFC 123 §8: a schema-4 patch carrying `message`, otherwise identical in shape to
+/// `signed_patch_envelope` above -- used to prove `history::load_ref_history`'s `patch_messages`
+/// surfaces a real message, the counterpart to that function's own `message: None` (schema 1).
+pub(crate) fn signed_patch_envelope_with_message(message: &str) -> ObjectEnvelope {
+    let blob_id = signed_patch_blob_envelope().object_id();
+    let payload = PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::CreateFile(CreateFile {
+                path: "a.txt".to_string(),
+                node_id: NodeId::from_bytes([0x51; 32]),
+                blob_id,
+                mode: 0o100_644,
+            }),
+        }],
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+        message: Some(message.to_string()),
+    };
+    let payload_bytes = payload.to_canonical_bytes();
+    assert!(payload_bytes.is_ok());
+    let bytes = payload_bytes.unwrap_or_default();
+    let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, PATCH_MESSAGE_SCHEMA, bytes);
+    assert!(envelope.add_signature(rollback_author_signature()).is_ok());
+    envelope
 }
 
 /// Return a supported rollback-marked Patch envelope for sealed-history classification tests.

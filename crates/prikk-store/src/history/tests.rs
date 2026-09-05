@@ -11,7 +11,8 @@ use crate::{
 
 use crate::test_support::{
     maintainer_signature, rollback_patch_blob_envelope, rollback_patch_envelope,
-    signed_ref_state_envelope, signed_ref_update_envelope, unique_temp_dir,
+    signed_patch_envelope, signed_patch_envelope_with_message, signed_ref_state_envelope,
+    signed_ref_update_envelope, unique_temp_dir,
 };
 
 #[test]
@@ -168,6 +169,98 @@ fn history_and_verify_classify_sealed_rollback_block() {
         if let Ok(verification) = verification {
             assert_eq!(verification.checked_rollback_blocks, Some(1));
             assert_eq!(verification.checked_sealed_rollback_patches, Some(1));
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// RFC 123 §6/§8.4: a patch carrying a message (schema 4) surfaces it in `patch_messages`, keyed
+/// by the patch's own id, with the exact text -- review v1 §4's required "the message appears"
+/// assertion, at the mechanism this project's history inspection actually reads from.
+#[test]
+fn history_reports_a_patch_message_when_present() {
+    let root = unique_temp_dir("history-patch-message-present");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let mut object_store = FileObjectStore::new(layout.clone());
+        let patch = signed_patch_envelope_with_message("a real commit message");
+        let patch_id = patch.object_id();
+        assert!(object_store.write_object(&patch).is_ok());
+        let block = signed_block_envelope(BlockKind::Root, Vec::new(), vec![patch_id]);
+        let block_id = block.object_id();
+        assert!(object_store.write_object(&block).is_ok());
+
+        let ref_store = RefStore::new(layout.clone());
+        let ref_state = signed_ref_state_envelope("heads/main", None, block_id, 1);
+        let ref_state_id = ref_state.object_id();
+        let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, block_id, 1);
+        let publication = RefPublication {
+            ref_name: "heads/main".to_string(),
+            expected_previous_ref_state_id: None,
+            ref_state,
+            ref_update,
+        };
+        assert!(ref_store.publish(&publication).is_ok());
+
+        let history = load_ref_history(&layout, "heads/main", 20);
+        assert!(history.is_ok());
+        if let Ok(history) = history {
+            let entry = history.entries.first();
+            assert!(entry.is_some());
+            if let Some(entry) = entry {
+                assert_eq!(entry.patch_messages.len(), 1);
+                if let Some(patch_message) = entry.patch_messages.first() {
+                    assert_eq!(patch_message.patch_id, patch_id);
+                    assert_eq!(patch_message.message, "a real commit message");
+                }
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// RFC 123 §6/§8.4, the negative half review v1 §4 named as the one that matters more: a patch
+/// with no message (schema 1 -- `signed_patch_envelope`'s own shape) contributes **no entry at
+/// all** to `patch_messages`, never a placeholder. Absence and emptiness must never read the same
+/// way; this is the test that would fail if a future change ever conflated them.
+#[test]
+fn history_reports_no_patch_message_for_a_patch_without_one() {
+    let root = unique_temp_dir("history-patch-message-absent");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let mut object_store = FileObjectStore::new(layout.clone());
+        let patch = signed_patch_envelope();
+        let patch_id = patch.object_id();
+        assert!(object_store.write_object(&patch).is_ok());
+        let block = signed_block_envelope(BlockKind::Root, Vec::new(), vec![patch_id]);
+        let block_id = block.object_id();
+        assert!(object_store.write_object(&block).is_ok());
+
+        let ref_store = RefStore::new(layout.clone());
+        let ref_state = signed_ref_state_envelope("heads/main", None, block_id, 1);
+        let ref_state_id = ref_state.object_id();
+        let ref_update = signed_ref_update_envelope("heads/main", None, ref_state_id, block_id, 1);
+        let publication = RefPublication {
+            ref_name: "heads/main".to_string(),
+            expected_previous_ref_state_id: None,
+            ref_state,
+            ref_update,
+        };
+        assert!(ref_store.publish(&publication).is_ok());
+
+        let history = load_ref_history(&layout, "heads/main", 20);
+        assert!(history.is_ok());
+        if let Ok(history) = history {
+            let entry = history.entries.first();
+            assert!(entry.is_some());
+            if let Some(entry) = entry {
+                assert!(
+                    entry.patch_messages.is_empty(),
+                    "a schema-1 patch must contribute no patch_messages entry, not an empty-message one"
+                );
+            }
         }
     }
     let _ = std::fs::remove_dir_all(root);
