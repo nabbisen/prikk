@@ -189,6 +189,20 @@ The external architect offered **the coupling-gate script and the full 68-node e
 that offer is cheaper than rebuilding both, and their extraction is the one the measurements in §2
 came from.
 
+**RESOLVED 2026-09-05 by not waiting.** Requested 2026-09-01
+(`.git-exclude/tasks/architect/020-20260901-02-coupling-gate-artifact-request.md`); nothing arrived in
+four days. **The handoff is issued on the basis that rebuilding is better, not merely acceptable**:
+§4.2 item 3 requires the gate's edge definition to be stated and tested, and an allowlist derived from
+a *different* extractor than the gate uses would drift from it silently. Deriving both from one
+definition is the stronger arrangement, and it removes an external dependency from a gate this project
+has to maintain.
+
+**§2's table must be re-measured, not copied.** It is from `04e9391` on 2026-09-01; RFC 122 has since
+moved two hubs (`patch_replay` 12/6 → 13/8 by §4's own diff), and 0.32.0 has shipped. **The four hubs
+named there may not be today's four.**
+
+**Handoff issued:** `rfcs/handoffs/130-module-coupling-invariant/coupling-gate-handoff-v1.md`.
+
 ## 9. Non-goals
 
 No file moves. No visibility changes. No crate split. No change to any product behaviour, object
