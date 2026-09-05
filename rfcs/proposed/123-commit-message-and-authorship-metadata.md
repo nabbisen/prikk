@@ -17,9 +17,17 @@ claim on it** — `admitted_schemas` shows what is *taken*, never what is *promi
 and `commit` prints a `note:` line saying the message is not yet stored, in the CLI's existing idiom
 for unimplemented areas. **The author display name stays deferred** (§5) and is not scoped with this.
 
-**Still open, and deliberately not ruled here:** the schema-3 design itself — length bound, encoding
-position, `verify` treatment, and the compatibility statement for schema-1/2 patches. Those are design
-work under this ruling, not further questions for the owner.
+**Those four open items are now designed — §8, written 2026-09-05.** Length bound: **none, and
+deliberately** (§8.3). Encoding position: **tag 6, optional, schema 4** (§8.1), *optional* rather than
+required because RFC 113's import must be able to represent a Git commit that genuinely had no message
+(§8.2). `verify` treatment: **nothing new, stated as a negative so a redundant check is not added**
+(§8.5). Compatibility: schema 1/2/3 patches keep working forever, but **the decoder refuses unknown
+tags, so this is a second one-way break on every commit** — the same shape as 0.31.0's, and the
+expensive part of the change (§8.6).
+
+**One thing §8 hands back to the owner:** §8.6 makes schema 4 a compatibility *announcement*, not a
+feature, so **whether it ships alone or batched with other `Patch`-shape work is a release decision.**
+None is known today.
 
 Raised as **High** by the external architecture audit of 2026-08-31
 (`audit-2026-08-31-task-1a.md` §3); reproduced independently at `3a8d730`
@@ -180,3 +188,118 @@ not be in most projects.
 No `blame`. No `show`. No commit-message templates, trailers, or conventions. No history rewriting to
 attach messages to patches already sealed — that is impossible here by design and must not be
 implied to users as a future.
+
+## 8. The design — the four items §1's ruling left open, answered 2026-09-05
+
+**Written by the architect on the owner's instruction after the 0.31.1 cut.** The ruling (Option A,
+message-as-evidence) is settled input; nothing here reopens it. **Author-review independence: the
+architect wrote this and is its only reviewer**, the standing gap on every architect-authored design
+here, compensated at implementation review.
+
+### 8.1 Shape and encoding position
+
+**`message: Option<String>` on `PatchPayload`, canonical tag 6, `WireType::String`, emitted only when
+`Some` and only at `Patch` schema 4 and above.**
+
+`PatchPayload`'s tags today: 1 `operations`, **2 retired** (`parent_patch_ids`, never reusable), 3
+`intent`, 4 `preconditions`, 5 `purpose` (`payload/patch.rs:111-126`). **6 is the next free tag** and
+the writer emits in ascending tag order, so the field lands after `purpose` with no existing field's
+bytes moving.
+
+This mirrors `TagPayload.message` (tag 3, `Option<String>`, emitted only when `Some`) exactly, which
+§3.2 named as the precedent.
+
+### 8.2 Optional, not required — and the reason is RFC 113
+
+The obvious simplification is to make the field **required** at schema 4: `-m` is already mandatory at
+every construction site, so every patch this project authors would carry one, and "absent" would never
+occur.
+
+**Refused, on one future the project has already committed to.** RFC 113 is history import from Git,
+Subversion and CVS. **Git permits an empty commit message.** A required field forces an imported
+commit that genuinely had none to carry a fabricated one — a lie inside a signed object, in a system
+whose whole argument is that history is evidence. Optional costs one `Option` and keeps "this commit
+had no message" expressible.
+
+This is the same shape as RFC 134's watch: a decision that looks free today is priced by a direction
+already accepted.
+
+### 8.3 No length bound — deliberately, and this must not be "fixed" later
+
+**The format imposes no maximum message length.** Not an oversight:
+
+- **The same object already carries two unbounded user-controlled byte fields.** `EditText` has
+  `replacement_text: Vec<u8>` and `old_span_text: Vec<u8>` (`payload/patch/operations.rs:179,185`),
+  neither bounded. Bounding the one *new* text field while leaving the two existing ones open would
+  protect nothing and be incoherent.
+- **Transport is already bounded** where untrusted input arrives: `DEFAULT_BUNDLE_MAX_TOTAL_BYTES`
+  (256 MiB) and `DEFAULT_BUNDLE_MAX_OBJECT_COUNT` (100,000), with the exchange and have-list
+  equivalents beside them. A message cannot exceed the artifact carrying it.
+- **A bound inside the identity surface is permanent.** Picking 8 KiB and later wanting more is a new
+  schema, because the bound would be part of what schema 4 means. The cheap-looking safety measure is
+  the expensive-to-reverse one.
+- `TagPayload.message` has no bound either. Adding one here and not there would split the precedent
+  §3.2 rests on.
+
+### 8.4 Empty is refused at both ends, so "absent" and "empty" never both mean "no message"
+
+`PatchPayload::validate()` **must reject `Some("")`** — enforced on decode as well as encode, since
+`validate()` runs in `encode_canonical` and decode goes through the same type. A hostile or merely
+wrong object carrying an empty message is refused rather than admitted as an odd-but-legal patch.
+
+**The format rejects length-zero only; the CLI keeps rejecting whitespace-only.** `args.rs:463`
+already refuses `-m` that is empty after `trim()`, and `tag.rs:222-225` does the same for tags. That
+split is deliberate: a format rule is permanent and should be the simplest thing that removes the
+ambiguity, while `trim()`'s Unicode White_Space semantics are an interface-level nicety that may be
+tuned without touching object identity.
+
+### 8.5 `verify` gains nothing — stated as a negative because someone will otherwise add a check
+
+**No new verification path, no new check, no new report line.** The message is inside the id preimage,
+so:
+
+- **Tampering is already caught** by the existing object-id check — altering one byte of a message
+  changes the patch id, exactly as altering an operation does.
+- **Malformedness is already caught** at decode, because `validate()` (§8.4) runs there.
+
+This is Option A's stated advantage made concrete. **Adding a message-specific check to `verify` would
+be redundant machinery that reads as extra assurance and provides none** — the failure it would look
+for cannot reach it.
+
+### 8.6 Compatibility — and this is a second one-way break, on every commit
+
+`admitted_schemas(ObjectType::Patch)` becomes `[1, 2, 3, 4]` (`prikk-store/src/format.rs:40-44`).
+Schema 1/2/3 patches carry no message and never will; they are not *missing* one — the concept did
+not exist when they were written, and RFC 114 guarantees they stay readable forever, unchanged.
+
+**The reverse direction breaks, and it is not avoidable.** `PatchPayloadFieldCursor` **refuses unknown
+tags** (`payload/patch.rs:178-183`: `"unknown PatchPayload field tag: {other}"`), so there is no
+skip-unknown path that would let an older reader tolerate tag 6. Combined with `-m` being mandatory,
+**every commit authored by the release that mints schema 4 is unreadable by every earlier release** —
+the same shape as 0.31.0's `Patch` schema 3 break, and it must be announced the same way, in the same
+words, leading the release notes.
+
+**The consequence for scheduling, which is the expensive part of this RFC:** the field is cheap and
+the schema bump is not. **If any other `Patch`-shape change is foreseeable, it should ride schema 4
+rather than mint schema 5.** None is known today; whoever finds one before this lands should say so
+rather than take a second break. Check every ruled-but-unimplemented RFC before minting — the lesson
+this RFC's own Status block already records after the schema-3 collision.
+
+### 8.7 What the increment touches
+
+| Site | Change |
+|---|---|
+| `payload/patch.rs` | the field, tag 6, `validate()`'s empty rejection, a `PATCH_MESSAGE_SCHEMA = 4` constant with a doc comment in the house style of the two beside it |
+| `prikk-store/src/format.rs` | `admitted_schemas(Patch)` gains 4 |
+| `worktree_patch/node_authoring.rs:550` | `prikk commit`'s construction site — carry the message through |
+| `patch_inverse.rs:141` | the inverse/rollback-draft construction site — the same |
+| `prikk-object/src/vectors.rs`, `vectors/hard.rs` | **a new schema-4 conformance vector; every existing vector's bytes must not move** |
+| `prikk-cli` | `prikk log` surfaces the message; **the `note:` interim line from Option C-revised is removed in the same commit** — it says the message is not stored, and it would become false the moment this lands |
+| `CHANGELOG.md` | the one-way break, led with, per §8.6 |
+
+### 8.8 What this design does not decide
+
+The author display name stays deferred (§5). No `blame`, no `show`, no trailers (§7). **How `prikk
+log` formats a message** — one line, wrapped, truncated — is presentation and belongs to the increment,
+not here. And the **release grouping** — whether schema 4 ships alone or with other work — is the
+owner's, since §8.6 makes it a compatibility announcement rather than a feature.
