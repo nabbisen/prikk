@@ -409,7 +409,7 @@ now so it is a recognised threshold rather than a later surprise.
 
 | Cut | Trigger | Carries |
 |---|---|---|
-| **0.32.0** | Items 1-3 landed **and** the crates.io metadata is overdue | RFC 137 increments 1-4 (landing page + gate), **RFC 128 §4's crate metadata, which is on `main` and unpublished — eight crates remain uncategorized on crates.io until the next publish**, and RFC 137 increment 5 (`homepage` → `https://prikk.org/`) if the domain resolves by then. **This cut needs a crates.io publish, not only a tag** — the metadata is the reason for it |
+| ~~**0.32.0**~~ **SHIPPED as `0.31.1`, 2026-09-05** — patch, not minor: the range carried no runtime source. See the release position above | Items 1-3 landed **and** the crates.io metadata is overdue | RFC 137 increments 1-4 (landing page + gate), **RFC 128 §4's crate metadata, which is on `main` and unpublished — eight crates remain uncategorized on crates.io until the next publish**, and RFC 137 increment 5 (`homepage` → `https://prikk.org/`) if the domain resolves by then. **This cut needs a crates.io publish, not only a tag** — the metadata is the reason for it |
 | **0.33.0** | RFC 123 lands | A `Patch` schema 4 format change, alone. Format changes should not share a cut with anything that complicates bisecting them |
 | after | **no brake** | Cut freely while gates are green. The listed reasons — a user-reachable defect, a format change that needs to be reachable, accumulation — are *occasions*, not preconditions |
 
@@ -434,6 +434,37 @@ now so it is a recognised threshold rather than a later surprise.
 **Band 3 is complete except RFC 126 §5.** RFC 123's interim, RFC 124, and RFC 126 §2 all landed;
 §6a and §6b followed on 2026-09-03. **`AUD-05` through `AUD-10` are all delivered** — the whole
 no-design-decision half of this program — leaving `AUD-01` through `AUD-04`, which are design work.
+
+### Release position — 0.31.1 shipped 2026-09-05
+
+**`0.31.1` was cut at `e30fdd8`**: CI green on all 15 jobs, `release.yml` green on four build targets,
+16 assets, **all eight crates published to crates.io and confirmed live at `0.31.1` against the sparse
+index**.
+
+**Patch, not minor, and the number was corrected from the "0.32.0" this schedule originally named.**
+`git diff --stat 0.31.0..HEAD -- crates/` was eight `Cargo.toml` manifests and one **test** file —
+**no runtime source at all**, so the binaries are functionally identical to `0.31.0`'s. `0.27.1`, the
+installer-only cut, is the precedent.
+
+**The publish was the point.** RFC 128 §4's crate metadata landed *after* `0.31.0` was tagged, and
+crates.io renders a crate page from its **published** manifest — so every version up to `0.31.0`
+carried no categories, no keywords, and no `documentation` URL, and no amount of editing `main` could
+change that. A tag-only cut would have delivered nothing. Confirmed on the published manifest:
+`development-tools` + `command-line-utilities`, five keywords, `https://docs.rs/prikk`, and `homepage`
+on all eight rather than one.
+
+**Nothing about running `prikk` changes and repositories written by `0.31.1` are readable by
+`0.31.0`** — deliberately the opposite of the previous release, and said plainly in the notes because
+`0.31.0` was one-way.
+
+**One pre-tag control worth keeping:** `release-policy release-notes` was run against a synthetic
+`dist/` fixture *before* tagging, to prove the new `CHANGELOG.md` entry renders. A malformed entry
+fails `release.yml` **after** the tag exists, which is the expensive moment to find out.
+
+**Not held for `prikk.org`**, which still has no DNS record. A custom domain makes
+`prikk-vcs.github.io/prikk/<path>` redirect to `<domain>/<path>`, so this release's permanent
+`homepage` resolves to the landing page after cutover regardless (RFC 137 §7.1).
+
 
 ### Release position — 0.31.0 shipped 2026-09-04
 
