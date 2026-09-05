@@ -149,6 +149,25 @@ longer a breaking change** — every downstream match must already carry a wildc
 **Doing that now is speculative API work with a measured cost against a hypothetical consumer**,
 which is the trade this project refuses elsewhere. **Deferred.**
 
+**AMENDED 2026-09-06 — the deferral's premise is false, and no trigger fired.** The stikk project
+(a TUI/GUI front-end driving prikk through the public CLI) reported two preconditions surfaced under
+unrelated variants, and named a machine-readable error surface as their highest-value ask. **The
+"hypothetical consumer" this deferral was measured against now exists.**
+
+**None of the three triggers below fires, and that is the finding.** stikk never touches the crates
+(not trigger 1); the CLI still flattens to strings (not trigger 2); no stability promise has moved
+(not trigger 3). **Trigger 2 names our own future change rather than the demand for it** — its
+rationale is *"either creates the consumer that makes discrimination worth something"*, so a trigger
+written to detect this consumer cannot fire until we have already done what the consumer is asking
+for. **A trigger phrased as "when we do X" cannot detect "someone needs X."** Carry that into how the
+next deferral is written.
+
+**Increment 2 is still deferred; two of its 29 sites are not.** A `Precondition` variant for the two
+sites the reporter named is handed over separately
+(`rfcs/handoffs/132-error-taxonomy-structure/precondition-variant-handoff-v1.md`) — enabled by
+increment 1's `#[non_exhaustive]`, committing to none of the other 27, and explicitly **not** opening
+increment 2. The machine-readable surface is a design question the owner has not opened.
+
 **What re-opens it — any one of these, and it should be taken up immediately:**
 
 1. **A first real embedder** of `prikk-store`/`prikk-object` outside this workspace.
