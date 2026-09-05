@@ -510,7 +510,10 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     }
 
     if planned.is_empty() {
-        return Err(AuthorError::Store(PrikkError::InvalidName(
+        // RFC 132's Precondition variant: an empty change set names no path and involves no name
+        // validation at all -- `InvalidName`'s own doc ("a path-like name failed Prikk path/ref
+        // validation") never applied here.
+        return Err(AuthorError::Store(PrikkError::Precondition(
             "worktree has no node-addressed changes to commit".to_string(),
         )));
     }

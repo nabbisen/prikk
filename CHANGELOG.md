@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+### Changed — two error messages changed their classification prefix
+
+Reported by an external front-end (stikk) matching on our error text: two refusals were reported
+under the wrong error class, because each was built from whichever `PrikkError` variant happened to
+be nearest the call site rather than one that describes the condition. Both refusals were already
+correct; only the leading word was wrong, and a caller matching on it could reasonably conclude the
+wrong thing about what to do next.
+
+```
+$ prikk commit --from-worktree --ref heads/other -m "x"
+-error: lock conflict: active WAL is owned by heads/main; requested ref heads/other
++error: precondition not met: active WAL is owned by heads/main; requested ref heads/other
+
+$ prikk commit --from-worktree -m "nothing changed"
+-error: invalid name: worktree has no node-addressed changes to commit
++error: precondition not met: worktree has no node-addressed changes to commit
+```
+
+Neither was ever a lock (nothing is held, no other process is racing this one) or a name-validation
+failure (no name is involved). Both are the caller asking for something the current state cannot
+satisfy — waiting does not help, only changing the request does — the case `prikk-error`'s new
+`Precondition` variant (added non-breaking, since `PrikkError` is `#[non_exhaustive]`) now names
+directly. Anything matching on the old `lock conflict:` or `invalid name:` prefix for either of these
+two specific messages needs to match `precondition not met:` instead. No other error site, no exit
+code, and no command's control flow changed.
+
 ## 0.32.0 — 2026-09-05
 
 **Read this before upgrading one machine and not another.** Nothing about using `prikk` changes —

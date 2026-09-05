@@ -40,6 +40,10 @@ pub enum PrikkError {
     Integrity(String),
     /// A lock could not be acquired because another writer may be active.
     LockConflict(String),
+    /// A caller precondition for the requested operation is not satisfied. Distinct from
+    /// [`Self::LockConflict`], which means another writer may hold a lock: nothing here is
+    /// transient and waiting does not help — the caller must change what they asked for.
+    Precondition(String),
     /// The requested object type cannot be persisted in the requested store.
     UnsupportedObjectType(String),
     /// An I/O failure. `kind` is `Some` only when this value was built from a real
@@ -72,6 +76,7 @@ impl fmt::Display for PrikkError {
             Self::MalformedData(msg) => write!(f, "malformed persisted data: {msg}"),
             Self::Integrity(msg) => write!(f, "integrity error: {msg}"),
             Self::LockConflict(msg) => write!(f, "lock conflict: {msg}"),
+            Self::Precondition(msg) => write!(f, "precondition not met: {msg}"),
             Self::UnsupportedObjectType(msg) => write!(f, "unsupported object type: {msg}"),
             Self::Io { context, .. } => write!(f, "i/o error: {context}"),
         }

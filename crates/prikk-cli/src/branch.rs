@@ -284,8 +284,10 @@ fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliErr
                 .into());
             }
             // Owned by a different ref: this branch's own active WAL is not implicated, so closing
-            // it may proceed.
-            Err(PrikkError::LockConflict(_)) => {}
+            // it may proceed. RFC 132's Precondition variant (was LockConflict until this change --
+            // `require_active_ref_for_non_empty_wal` reclassified its "owned by a different ref"
+            // case, and this match would otherwise silently start treating it as fatal).
+            Err(PrikkError::Precondition(_)) => {}
             // Missing or malformed active-ref metadata on a non-empty WAL is an integrity condition,
             // not evidence this branch is uninvolved — fail closed like every other publisher
             // (`node_authoring.rs` propagates the same error via `?`) rather than treat "unknown

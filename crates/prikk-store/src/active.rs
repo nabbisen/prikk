@@ -225,7 +225,10 @@ pub fn require_active_ref_for_non_empty_wal(
     let expected = validate_local_branch_ref(ref_name)?;
     match read_active_ref_metadata(layout)? {
         ActiveRefMetadata::Valid(actual) if actual == expected => Ok(actual),
-        ActiveRefMetadata::Valid(actual) => Err(PrikkError::LockConflict(format!(
+        // RFC 132's Precondition variant: this is an ownership mismatch, not a lock -- nothing is
+        // held and no other process is racing this one, so `LockConflict`'s "another writer may be
+        // active" was never true here.
+        ActiveRefMetadata::Valid(actual) => Err(PrikkError::Precondition(format!(
             "active WAL is owned by {actual}; requested ref {expected}"
         ))),
         ActiveRefMetadata::Missing => Err(PrikkError::Integrity(
