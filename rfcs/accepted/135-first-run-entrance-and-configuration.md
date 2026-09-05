@@ -4,6 +4,12 @@
 Start: *"They are generally unfamiliar with visitors. I doubt it makes visitor feel uneasy and brings
 their withdrawal."*
 
+**Folder corrected 2026-09-06: `proposed/` → `accepted/`.** RFC-000 makes folder location lifecycle
+authority, and `accepted/` means *"review complete; implementer may start"* — which became true the
+moment §9's design was accepted and a handoff was issued. **Caught by the project owner, and this is
+the second time in two days** (123/130/131/137 were the first). §9.9 records what should have caught it
+instead of a person.
+
 **§9 DESIGNS IT, 2026-09-06**, on the owner's instruction after 0.32.0 shipped the landing page and
 made the entrance live. **`prikk config` is deferred with a named trigger — which removes §4's
 dependency question from the critical path entirely** — `prikk key`/`prikk setup` are ruled in, a
@@ -364,6 +370,27 @@ the *seeing*.
 
 §9.1's deferral, §9.2's line, §9.3's argv prohibition, §9.6's refusal, and now §9.8's two rulings are
 all the architect's. **The design is complete and a handoff may be written.**
+
+### 9.9 What should have caught the folder error, instead of a person
+
+**This is the second lifecycle miss in two days**, and the owner caught both. A rule caught by a person
+twice is a rule that should be mechanical.
+
+**The invariant that would have caught both, stated exactly:** *an RFC in `rfcs/proposed/` must not
+have a directory in `rfcs/handoffs/`.* A handoff is an instruction to an implementer to start; RFC-000
+says an RFC an implementer may start on is `accepted/`, not `proposed/`. **The two cannot both be true,
+and the check is a directory listing.**
+
+Measured at `007caf6` before this move: **exactly one violation — this RFC.** After it, none. RFCs
+123, 130, 131 and 137 would each have tripped it on the day their handoff was issued.
+
+**It is narrower and cheaper than RFC 120 §9's widening**, which needs `rfcs/accepted/` drained first
+(52 files, ~45 of them finished). This one needs nothing drained: it binds two directories that are
+both already accurate, and it fires on the exact transition that has now been missed twice.
+
+**Not implemented here.** It belongs in `boundary-check` beside `open_work_index` and `rfc_naming`, and
+it is RFC 120's subject rather than this RFC's. **Recorded as a proposal for the owner**, who has an
+open ruling on §9.4 of that RFC already.
 
 ## 8. What this RFC does not yet decide
 

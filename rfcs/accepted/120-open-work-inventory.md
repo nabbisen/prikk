@@ -253,6 +253,21 @@ the release that ships it* — which 0.32.0 did for RFC 123 — drains the folde
 ordinary work, with no separate campaign. The gate widens when the count of finished files in
 `rfcs/accepted/` reaches zero, and until then `ROADMAP.md`'s prose pointer carries the four open ones.
 
+### 9.4a A second, much cheaper gate — proposed 2026-09-06 after the same error recurred
+
+**Separate from §9.2's drain, needing nothing drained:** *an RFC in `rfcs/proposed/` must not have a
+directory in `rfcs/handoffs/`.* A handoff instructs an implementer to start; RFC-000 says such an RFC
+is `accepted/`. **Both cannot be true, and the check is a directory listing.**
+
+**Why now:** the project owner has caught the same lifecycle miss twice in two days — RFCs 123, 130,
+131, 137 on 2026-09-05, and RFC 135 on 2026-09-06. Measured before the 135 move, that rule had
+**exactly one violation**; after it, none. Each earlier case would have tripped it the day its handoff
+was issued.
+
+**This does not depend on §9.2.** It binds two directories that are both already accurate, so it can
+land whenever the owner wants it — including before any drain, and including if the drain is never
+done. See RFC 135 §9.9, where it was first written down.
+
 ### 9.5 What is not proposed
 
 No change to Q1, Q2 or Q4. No change to the gate's implementation until §9.2 step 3. No change to

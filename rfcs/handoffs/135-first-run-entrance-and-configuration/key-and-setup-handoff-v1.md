@@ -1,6 +1,6 @@
 # RFC 135 — the entrance: `prikk key` and `prikk setup`
 
-**RFC:** `rfcs/proposed/135-first-run-entrance-and-configuration.md` — **§9 is the design and it is
+**RFC:** `rfcs/accepted/135-first-run-entrance-and-configuration.md` — **§9 is the design and it is
 settled input.** §9.1's deferral, §9.2's no-secret-at-rest line, §9.3's argv prohibition, §9.6's
 refusal and §9.8's two rulings are all made; nothing here is a re-derivation exercise.
 **Base:** `main` at `8fcc0e6`.
