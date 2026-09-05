@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.32.0 — 2026-09-05
 
 **Read this before upgrading one machine and not another.** Nothing about using `prikk` changes —
 no command, flag, or exit code differs from `0.31.1`. **But repositories written after this change
