@@ -4,6 +4,12 @@
 Start: *"They are generally unfamiliar with visitors. I doubt it makes visitor feel uneasy and brings
 their withdrawal."*
 
+**§9 DESIGNS IT, 2026-09-06**, on the owner's instruction after 0.32.0 shipped the landing page and
+made the entrance live. **`prikk config` is deferred with a named trigger — which removes §4's
+dependency question from the critical path entirely** — `prikk key`/`prikk setup` are ruled in, a
+helper boundary is deliberately refused, and **§6 is answered: prikk stores no secret**, but may write
+one to a path the user names, `ssh-keygen`-style. **Two questions remain for the owner (§9.8).**
+
 **Deliberately unhurried.** The owner asked for careful design *"now and later with time we need"*, and
 directed that security be considered seriously. **This RFC opens the problem and the option space; it
 settles nothing.** The architect's first framing — a small key command — was rejected by the owner as
@@ -200,6 +206,122 @@ because §6's decision changes its urgency.
 publishing. **This RFC does not propose collapsing them** — but it may propose that a visitor's first
 success not require both, since `init` → `commit` → `verify` works today with the author key alone
 (verified), and the maintainer ceremony is needed only to `seal`.
+
+## 9. The design — §8's three open items, answered 2026-09-06
+
+**Written on the owner's instruction after 0.32.0, when the landing page made the entrance live: a
+visitor now arrives at a front door and meets the hallway this RFC is about.** §5a's ruling (the
+visitor is the only real constituency) is settled input.
+
+**Author-review independence:** the architect wrote this and is its only reviewer, the standing gap on
+every architect-authored design here.
+
+### 9.1 What is ruled in, what is deferred, and one question that disappears
+
+| §5 option | Ruling |
+|---|---|
+| **(a) `prikk config`** — durable policy settings | **DEFERRED**, with a named trigger |
+| **(b) `prikk key`** — generate and derive | **IN** (§9.3) |
+| **(c) `prikk setup`** — a flow owning no secret | **IN** (§9.3) |
+| **(d) a helper boundary** | **REFUSED deliberately** (§9.6) |
+
+**(a) is deferred on §5a's own evidence, not on cost.** The eight policy values have no beneficiary —
+their only consumer today is this project's testing. Building durable configuration for them now is
+speculative work against a hypothetical user: **the same trade RFC 132 §5 refused for `source()`, and
+it re-opens on the same trigger — a first real adopter.**
+
+**The consequence is the most valuable thing in this section: §4's dependency question disappears with
+it.** No config file means no format, no parser, no `serde`-or-hand-rolled decision, and none of the
+supply-chain reasoning §4 opened. **The largest open question in this RFC leaves the critical path by
+being unnecessary rather than by being answered.** It returns, intact and already argued, when (a)
+does.
+
+### 9.2 §6's question — does prikk ever store a secret? **No, with one named exception**
+
+**The line: prikk never invents a location for secret material, never reads one back, and never manages
+its lifecycle.** It may **write** a seed to a path the user explicitly names — once, mode `0600`,
+refusing to overwrite, refusing any path inside `.prikk/`.
+
+**That is the `ssh-keygen` model**, and it is chosen over a keystore for reasons that are permanent
+rather than expedient. Owning key-at-rest means owning file permissions, encryption-or-not, rotation,
+deletion, backup semantics, and Windows-versus-POSIX divergence — **a security surface this project
+would carry forever**, in a product whose own posture is that it does not encrypt sync artifacts and
+tells the user to *"move it only over a channel you trust"*. Inventing a keystore beside that would be
+incoherent.
+
+**Writing to a path the user names is categorically different from owning storage**: prikk does not
+choose the location, does not read it back, and has no opinion about it afterwards. If the owner
+judges even that too much, `key generate` without `--out` still closes §2's gap — the exception is
+convenience, not mechanism.
+
+### 9.3 The commands
+
+**`prikk key generate [--out <path>]`** — draw 32 bytes from the OS CSPRNG, print the seed and its
+public key, and print **exactly the `trust maintainer add` line and the export lines the user needs
+next**. With `--out`, write the seed under §9.2's constraints.
+
+**`prikk key public`** — derive a public key from a seed the user already holds.
+
+> **The seed is read from an environment variable and never from argv. This is a ruling, not a
+> preference.** On Linux `/proc/<pid>/cmdline` is world-readable, and a shell records argv in history;
+> an environment variable is neither. A `--seed <hex>` flag would leak key material to every process
+> on the machine, and it is exactly the flag a hurried implementer would add.
+
+**`prikk setup`** — compose the above with `trust maintainer add` and emit the complete export block.
+**It owns no secret and writes nothing unless `--out` is given.**
+
+### 9.4 A correction to §5(b): *"uses an API that exists"* is half true
+
+`Ed25519KeyPair::from_seed` and `::public_key_bytes` exist, so **`key public` is a thin wrapper over a
+tested API.** But `Ed25519KeyPair::generate()` **discards the seed** — the struct holds only
+`signing: SigningKey` and exposes no accessor (`prikk-crypto/src/lib.rs:41-72`). `key generate` needs a
+seed-returning generator that does not exist yet.
+
+**It belongs in `prikk-crypto`, not in the CLI.** Entropy handling stays in the crate that already owns
+`getrandom` and already fails closed when the OS source is unavailable; and DC-51's placement gate
+makes adding `getrandom` to `prikk-cli` a decision to justify rather than an import to write.
+
+### 9.5 What success is, measured
+
+§5a set the measure: **how few unfamiliar steps precede the first working repository.** Today, for a
+sealed commit, eleven — of which the first three have no prikk support and **the third is impossible**:
+
+1-2. obtain two 32-byte seeds (no tool) · **3. derive the maintainer public key — no command does
+this** · 4-7. export four variables · 8. `init` · 9. `trust maintainer add` · 10. `commit` · 11. `seal`
+
+**The evidence for step 3 is first-hand: while building a test repository during this RFC's own
+session, the project architect obtained the maintainer public key by copying a hex literal out of
+`.github/workflows/ci.yml`,** because nothing in the product derives one. That is what a visitor meets.
+
+**After §9.3: `prikk setup` and the four exports it prints.** The unfamiliar-step count is the number
+this design should be judged on, and it should be re-counted, not assumed, when the increment lands.
+
+### 9.6 (d) refused, and the refusal recorded rather than skipped
+
+§5(d) asked for a helper boundary — git's credential helpers, ssh's agent — to be *named even if
+refused*, because refusing deliberately differs from never considering it.
+
+**Refused.** A helper protocol is a second interface with its own compatibility surface, invented for a
+product with no adopters and no evidence anyone wants to plug anything into it. §9.2's line already
+gets the security benefit a helper would (prikk owns no secret at rest) at none of the cost. **Revisit
+if a user asks for one**, which is a different trigger from (a)'s.
+
+### 9.7 The entrance and `git-mapping.md` are one surface
+
+§5a's closing point, carried into the design: with adoption not yet the goal, the entrance's job is to
+get a reader to **understand what is different**, which is the job `docs/src/reference/git-mapping.md`
+already has. **The docs half is not separate work and must not be scheduled as a follow-up** — a
+`setup` flow that leaves a visitor correctly set up and still surprised has solved the smaller half.
+
+### 9.8 What remains for the owner
+
+1. **Is §9.2's `--out` exception acceptable at all**, or should prikk never write secret material even
+   to a path the user names? The design works without it.
+2. **Is `setup` one command or a documented sequence?** §9.3 assumes a command; a documented sequence
+   is defensible and cheaper, and it keeps prikk out of orchestration.
+
+**Nothing else needs a ruling.** §9.1's deferral, §9.2's line, §9.3's argv prohibition and §9.6's
+refusal are the architect's, recorded here rather than raised.
 
 ## 8. What this RFC does not yet decide
 
