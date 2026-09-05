@@ -140,6 +140,68 @@ every entry state a real reason rather than a placeholder.
    `fsutil`'s only outward edges are test-only, and a gate that counted them would report the
    cleanest module in the crate as coupled.
 
+## 4a. CORRECTION 2026-09-06 — §2.1 was false when written, and §4.1 rejects RFC 122
+
+**Found by the dev team's re-derivation** (the handoff required §2 to be re-measured rather than
+copied) **and its provenance established by the architect.** Verified at source, not counted by
+script: `.git-exclude/reviewed/coupling-gate-graph-contradiction-review-v1.md`.
+
+### 4a.1 There are four cycles, not one, and the crate has a six-module cyclic core
+
+`active`, `refs`, `trust`, `worktree_patch`, `patch_replay` and `lifecycle_cache` form **one
+strongly-connected component**:
+
+| Cycle | At `04e9391`, the commit §2 measured |
+|---|---|
+| `active ↔ refs` | present — known and grandfathered |
+| **`trust ↔ refs`** | **present, and missed** |
+| `lifecycle_cache ↔ patch_replay` | absent — one leg only |
+| `active → worktree_patch → patch_replay → active` | absent — the re-export leg did not exist |
+
+**§2.1's "Both derivations found it, and found no other" was false at the moment it was written.**
+`trust ↔ refs` is production on both legs (`refs.rs:8`'s `mod evidence;` carries no `cfg`; `trust.rs`
+contains no `cfg(test)`) and is spelled with literal `crate::trust::` / `crate::refs::` — **visible to
+the simplest possible extractor**, so the re-export blind spot §1 warns about does not explain the
+miss.
+
+**§2.3's structural conclusion is therefore wrong** — the crate is not "a layered DAG spoiled by four
+middle-hubs and one cycle". It has a six-module cyclic core containing three of the four named hubs.
+Everything else in §2 reproduced: `fsutil`, `layout` and `byte_cursor` match within one edge, and the
+named hubs are still the top four by fan-in.
+
+### 4a.2 The other two cycles were closed by `7a01168` — this RFC's own counter-example
+
+`git log -S` names one commit for both new legs: **RFC 122, thirty-two minutes after `04e9391` and
+not an ancestor of it.**
+
+**§4 uses that exact commit to prove a bare degree bound wrong**, because K = 8 would have rejected
+*"a correct fix for a High-severity defect."* **The same commit completes `lifecycle_cache ↔
+patch_replay`. So §4.1's rule — "a second cycle fails the build, full stop" — would have rejected
+RFC 122 as well.**
+
+**§4 found the right counter-example and applied it to one of its two rules.** Its judgement that on
+acyclicity *"the external review's version is right and needs no amendment"* was made believing there
+was exactly one cycle and that no correct increment had created one. **Both beliefs are measured
+false, by the commit §4 was already examining.**
+
+### 4a.3 §4.1 is re-opened; the gate is not implemented
+
+**The question is no longer how many cycles to grandfather.** It is whether **absolute acyclicity is
+the same mistake as the bare degree bound, one rule down** — §4's own reasoning, that consolidation
+and hub-reduction pull in opposite directions so a structural rule can reject a correct
+consolidation, applies verbatim to acyclicity and was never applied to it.
+
+Three options were surfaced by the dev team and **none is taken**: grandfathering three more cycles
+freezes a core nobody has evaluated; landing red ships a broken build; investigating which cycles are
+accidental presumes acyclicity is the right invariant, which is the presumption now in question.
+
+**Escalation to the external architect is recommended and is the project owner's call** — this
+contradicts their central conclusion on evidence they held.
+
+**Also unresolved before any threshold is derived:** the re-derivation counts 61 production top-level
+modules against §2's 68. That is a methodology difference (eight `#[cfg(test)]`-gated top-level
+modules), not drift, and both numbers cannot seed a threshold.
+
 ## 5. What must not be gated
 
 **Line count and module count.** They are the numbers that prompted this work and the least
@@ -202,6 +264,8 @@ moved two hubs (`patch_replay` 12/6 → 13/8 by §4's own diff), and 0.32.0 has 
 named there may not be today's four.**
 
 **Handoff issued:** `rfcs/handoffs/130-module-coupling-invariant/coupling-gate-handoff-v1.md`.
+
+**STOPPED 2026-09-06 at the re-derivation, correctly and by the handoff's own instruction. See §4a: §2.1's cycle count was false when written, and §4.1's absolute-acyclicity rule would have rejected RFC 122 — the same commit §4 uses to prove the degree bound wrong. No gate is implemented; §4.1's invariant is re-opened.**
 
 ## 9. Non-goals
 
