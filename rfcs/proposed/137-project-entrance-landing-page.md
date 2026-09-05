@@ -217,7 +217,21 @@ Ordered. Each is independently reviewable; **1 gates 4.**
 4. **Build the page** at `docs/landing/`: the two drafts merged, the story image split into panels
    with HTML captions, the GIF dropped, the repository URL corrected, and the three false claims of
    §4.1 removed. Declare it in `DECLARED_DOCUMENTS`.
-5. **`homepage` → `https://prikk.org/`** in `Cargo.toml`, at whatever release publishes next (§6).
+5. **`homepage` → `https://prikk.org/`** in `Cargo.toml`, **together with `book.toml`'s `site-url`
+   moving from `/prikk/docs/` to `/docs/`** — one change, two files, neither correct without the
+   other. **HARD-BLOCKED, measured 2026-09-05: `prikk.org` has no DNS record and does not resolve.**
+   Neither half may land early: `site-url = "/docs/"` would break the 404 page's `<base>` while the
+   book is still served under `/prikk/`, and `homepage` is baked permanently into whatever version
+   publishes. **This does not hold up a release** — see §7.1.
+
+## 7.1 Publishing before the domain exists is safe
+
+**A release need not wait for `prikk.org`.** Setting a custom domain on a GitHub Pages site makes
+`prikk-vcs.github.io/<repo>/<path>` redirect to `<domain>/<path>`, so a crate published today with
+`homepage = "https://prikk-vcs.github.io/prikk/"` — permanent and unchangeable for that version —
+**still resolves to `https://prikk.org/` after the cutover**, landing on the landing page, which is
+what that field means. Increment 5 improves the value for versions published after it; it does not
+rescue anything, and holding a cut for it buys nothing.
 
 **Not blocked on the domain**, with one qualification found 2026-09-05: increments 1, 3 and 4 are
 correct against the current `prikk-vcs.github.io/prikk/` deployment, and **increment 2 is correct there
