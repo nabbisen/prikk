@@ -72,7 +72,7 @@ converts every error to a string before it reaches you, so this release is invis
 line except for the help text below.
 
 Crate source APIs remain an explicitly unstable compatibility surface
-([release compatibility](https://prikk-vcs.github.io/prikk/reference/release-compatibility.html)).
+([release compatibility](https://prikk-vcs.github.io/prikk/docs/reference/release-compatibility.html)).
 
 ### Changed
 
