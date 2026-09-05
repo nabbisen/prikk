@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.31.1 — 2026-09-05
+
+**Nothing about running `prikk` changes, and this release cannot strand a machine.** No command,
+flag, exit code, message, object format or on-disk layout differs from `0.31.0`, and repositories
+written by `0.31.1` are readable by `0.31.0` — the opposite of the previous release, which was
+one-way. Not one line of runtime source changed between the two tags; only crate manifests and one
+test file did.
+
+### Why it exists — the published crates were miscatalogued
+
+Every crate published up to and including `0.31.0` carried no categories, no keywords, and no
+`documentation` URL. crates.io renders a crate's page from its **published** manifest, so the fix had
+to travel in a release; there was no other way to deliver it.
+
+All eight published crates now carry:
+
+- **categories** — `development-tools`, `command-line-utilities` (checked against the live crates.io
+  category list; there is no version-control category anywhere in it)
+- **keywords** — `vcs`, `version-control`, `dvcs`, `patch`, `merge`
+- **documentation** — a per-crate `https://docs.rs/<crate>` link
+- **homepage** — previously set on one crate of eight
+
+### The project has a front page
+
+`https://prikk-vcs.github.io/prikk/` now serves a landing page, and the documentation moved to
+`https://prikk-vcs.github.io/prikk/docs/`. **Existing links to the book need `/docs/` inserting**;
+links to the site root still work and now land on the front page.
+
+This shipped when it was published, not with this tag — it is noted here because the URL moved.
+
+### Also in this release
+
+- `CONTRIBUTING.md`, describing how work is actually reviewed in this repository.
+- A [Git → prikk mapping page](https://prikk-vcs.github.io/prikk/docs/reference/git-mapping.html), a
+  command-correspondence table plus the four places the two models genuinely differ.
+- A slimmer `README.md`, with the command surface, current state and repository layout routed into
+  the book.
+- The documentation-currency gate now reads HTML code context, so the landing page's commands are
+  checked against the live command registry like every other declared page.
+
 ## 0.31.0 — 2026-09-04
 
 **Read this before upgrading one machine and not another.** Nothing about using `prikk` changes —
