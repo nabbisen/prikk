@@ -5,6 +5,13 @@
 section beside it. The milestone half (§6 Q2) and `rfcs/accepted/` (§6 Q3) are **deliberately excluded**
 and need their own decisions.
 
+**§9 AMENDMENT, 2026-09-05, written at the owner's instruction — and it does not do what it was asked
+to do.** The request was to widen the gate to `rfcs/accepted/`. Measured, that folder has gone from 13
+files to **52**, at least 29 of them finished, so widening as-is would list roughly forty-five shipped
+RFCs as open work — **Q3's own refusal, at four times the scale it was refused at.** §9 proposes
+draining the folder first and widening after, and **§9.4 carries the one question the owner must
+answer**: drain now, drain gradually, or never widen. **Nothing is implemented; §9 is a proposal.**
+
 Recorded by the architect at the owner's instruction, 2026-08-26, after answering *"what are our
 remaining themes?"* with an incomplete list. **The scope reduction came from evidence, not from wanting
 less work** — see §5a.
@@ -170,3 +177,83 @@ reduction came from evidence rather than from wanting less work.
 - **Not a claim that the index is true**, only that it is complete with respect to its sources.
 - **Not a replacement for review records.** `.git-exclude/reviewed/` stays where reasoning lives; the
   index carries only that an item is open.
+
+## 9. Amendment 2026-09-05 — Q3 revisited, and the answer is not the one it was asked for
+
+**Raised by the project owner 2026-09-05**, after they caught that four owner-accepted RFCs had been
+left in `rfcs/proposed/` with "ACCEPTED" written in their status text. Correcting that moved 123,
+130, 131 and 137 into `rfcs/accepted/` — and **§6 Q3 excludes `rfcs/accepted/` from this gate**, so
+accepted-but-unshipped work is now visible only in `ROADMAP.md` prose that nothing checks.
+
+Two RFCs had already noticed this and worked around it: **130 and 131 each carried a status paragraph
+saying they would stay in `rfcs/proposed/` until implemented, precisely so they would not fall off the
+gated board.** That is the gap making itself felt — a gate's scope bending the lifecycle to compensate.
+Both paragraphs are now corrected; the workaround is gone and the gap is exposed.
+
+### 9.1 Q3's premise, measured then and measured now
+
+Q3 was not a principle. It was an evidence-based call about one folder's contents:
+
+> Thirteen accepted RFCs are dominated by finished work... **An index that lists eight finished RFCs
+> teaches readers to ignore it.**
+
+| | At the ruling, 2026-08-27 | Measured 2026-09-05 |
+|---|---:|---:|
+| files in `rfcs/accepted/` | 13 | **52** |
+
+**The premise did not weaken; it got four times stronger.** A crude sweep — each file's own status text
+plus `EXECUTION-ORDER.md`'s completion column — puts **at least 29 of the 52** as finished, and the true
+figure is higher, because the sweep misses ones that are demonstrably live in the codebase today:
+RFC 114's format-stability contract, RFC 118's derive-never-transcribe gate, DC-51's dependency
+placement gate. **Genuinely open work in that folder is a handful: 102, 103, 130, 131, 137, and part
+of 108.**
+
+### 9.2 Therefore the amendment is not "widen the gate"
+
+**Widening the gate to `rfcs/accepted/` as it stands today would list roughly forty-five finished RFCs
+as open work** — exactly the "teaches readers to ignore it" failure Q3 named, at four times the scale
+it was refused at. Q3 stays correct on the folder as it is.
+
+**The amendment is: drain the folder, then widen the gate.**
+
+1. **Classify all 52**, on evidence rather than heuristic — a shipped RFC left behind hides nothing,
+   but an unshipped one moved to `done/` hides open work, so the classification must be per-file and
+   checkable, not a regex.
+2. **Move the finished ones to `rfcs/done/`**, each with the full retirement checklist: the file, its
+   own status text, `ROADMAP.md`, `rfcs/README.md`, any live docs link, **and repointing its
+   handoffs** — the step that did not exist until the 2026-09-05 sweep found 35 files citing an RFC at
+   a folder it had left.
+3. **Then widen the gate** to bind `rfcs/proposed/` ∪ `rfcs/accepted/` in both directions, unchanged
+   in every other respect.
+
+### 9.3 Why the order matters, and what the gate buys once it holds
+
+**The gate then enforces the drain it depended on.** A shipped RFC left in `rfcs/accepted/` would
+appear in the open-work index as open work and be visibly wrong to any reader — so the folder cannot
+silently refill. Today nothing notices, which is how 13 became 52.
+
+That is the same shape as this RFC's own §2 thesis: the failure was never that someone forgot, it was
+that **nothing asserted the set was complete.** Q3 was the right call on the evidence available; it
+left the *reason* for the exclusion unaddressed, and the reason has been compounding for nine days.
+
+### 9.4 The cost, stated plainly
+
+**Roughly 45 file moves, each with reference repointing.** The 2026-09-05 sweep found 35 stale paths
+from four moves plus a handful of earlier retirements — so a drain of this size will surface
+substantially more, and every one is a link that currently resolves and would stop resolving.
+
+**This is a day of careful, mechanical work with a real chance of hiding open work if done
+carelessly.** It is not obviously worth doing purely to widen a gate. **The question for the owner is
+whether the folder is drained now, drained gradually as each RFC is next touched, or left as it is
+with `rfcs/accepted/` accepted as a historical archive and the index widened never.**
+
+**The architect's recommendation: drain gradually, widen when it is empty of finished work.** Every
+retirement already carries the checklist; making it a standing rule that *an RFC moves to `done/` in
+the release that ships it* — which 0.32.0 did for RFC 123 — drains the folder as a side effect of
+ordinary work, with no separate campaign. The gate widens when the count of finished files in
+`rfcs/accepted/` reaches zero, and until then `ROADMAP.md`'s prose pointer carries the four open ones.
+
+### 9.5 What is not proposed
+
+No change to Q1, Q2 or Q4. No change to the gate's implementation until §9.2 step 3. No change to
+`MILESTONES.md`, which Q2 excluded for reasons this amendment does not touch.
