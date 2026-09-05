@@ -8,7 +8,7 @@ their withdrawal."*
 made the entrance live. **`prikk config` is deferred with a named trigger — which removes §4's
 dependency question from the critical path entirely** — `prikk key`/`prikk setup` are ruled in, a
 helper boundary is deliberately refused, and **§6 is answered: prikk stores no secret**, but may write
-one to a path the user names, `ssh-keygen`-style. **§9.8's two questions were withdrawn and ruled by the architect the same day, on the owner's challenge that neither should have been asked**: `--out` is in (printing a seed to a terminal is the *less* secure option, and with `--out` the seed is written and never printed), and `setup` is a single command composed over a first-class sequence, which must show the trust decision it makes. **The design is complete; nothing on this RFC awaits the owner.**
+one to a path the user names, `ssh-keygen`-style. **§9.8's two questions were withdrawn and ruled by the architect the same day, on the owner's challenge that neither should have been asked**: `--out` is in (printing a seed to a terminal is the *less* secure option, and with `--out` the seed is written and never printed), and `setup` is a single command composed over a first-class sequence, which must show the trust decision it makes. **The design is complete; nothing on this RFC awaits the owner.** **Handoff issued:** `rfcs/handoffs/135-first-run-entrance-and-configuration/key-and-setup-handoff-v1.md`.
 
 **Deliberately unhurried.** The owner asked for careful design *"now and later with time we need"*, and
 directed that security be considered seriously. **This RFC opens the problem and the option space; it
