@@ -9,10 +9,9 @@ and §7's ordering (this lands before RFC 131).
 settled design, so an implementer may start; RFC-000 puts that in `accepted/`. Caught by the project
 owner. See RFC 123's note for the systemic version of the same error.
 
-**Kept in `rfcs/proposed/` until implemented, deliberately.** RFC 120's Open-Work Index gates
-`rfcs/proposed/*.md` only and §6 Q3 excludes `rfcs/accepted/`; moving an accepted-but-unbuilt RFC out
-of `proposed/` would drop open work off the owner's board. Same reasoning that kept DC-44 in
-`proposed/` until it closed.
+**SUPERSEDED 2026-09-05 — this paragraph argued for the wrong thing and is kept, corrected, rather than deleted.** It said this RFC should stay in `rfcs/proposed/` until implemented, because RFC 120's Open-Work Index gates `rfcs/proposed/*.md` only (§6 Q3 excludes `rfcs/accepted/`) and moving an accepted-but-unbuilt RFC out would drop open work off the owner's board. **The cost is real; the conclusion was not.** RFC-000 makes folder location lifecycle authority, and `accepted/` means an implementer may start — which is true here. Using the folder to compensate for a gate's scope put two facts in conflict and resolved it by making the lifecycle wrong.
+
+**The underlying gap is unresolved and belongs to RFC 120, not to this file's location**: accepted-but-unshipped work is now visible only in `ROADMAP.md`'s prose, not in anything gated. Widening the index to `rfcs/accepted/` is an amendment the architect has offered and the owner has not yet ruled on.
 
 Originated by the project owner 2026-09-01, asking whether `prikk-store`
 should be restructured because *"it is continuously growing now and also perhaps in the future as

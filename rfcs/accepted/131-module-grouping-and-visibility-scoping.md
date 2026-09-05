@@ -10,7 +10,7 @@ increment's work.
 settled design and a stated sequencing constraint (after RFC 130, between feature arcs), so an
 implementer may start. Caught by the project owner.
 
-**Kept in `rfcs/proposed/` until implemented** — see RFC 130's status note for why.
+**SUPERSEDED 2026-09-05** — this said the RFC stays in `rfcs/proposed/` until implemented. RFC-000 makes folder location lifecycle authority and `accepted/` means an implementer may start, which is true here; see RFC 130's corrected status note for the full reasoning and for the RFC 120 gap the old arrangement was compensating for.
 
 Same origin as RFC 130 (owner question 2026-09-01; external architect
 review; architect review of it). **RFC 130 carries the shared evidence and should land first — see
