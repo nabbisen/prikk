@@ -137,6 +137,7 @@ fn dc53_patch_payload() -> PatchPayload {
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     }
 }
 
@@ -388,6 +389,7 @@ fn rfc114_gate_a_every_admitted_pair_is_frozen_or_declared_unwritten() {
             prikk_object::PATCH_PARENT_IDS_RETIRED_SCHEMA,
         ),
         (ObjectType::Patch, prikk_object::PATCH_TEXT_SPAN_V2_SCHEMA),
+        (ObjectType::Patch, prikk_object::PATCH_MESSAGE_SCHEMA),
         (ObjectType::RefUpdate, 1),
         (ObjectType::Tag, 1),
         (ObjectType::Blob, 1),
@@ -825,6 +827,7 @@ fn rfc114_patch_schema2_payload() -> PatchPayload {
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     }
 }
 
@@ -910,6 +913,7 @@ fn rfc114_patch_schema3_payload() -> PatchPayload {
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     }
 }
 
@@ -967,6 +971,85 @@ fn rfc114_vector_15_patch_schema_3_identity_and_signature() -> prikk_error::Resu
         &RFC114_PATCH_SCHEMA3_PUBLIC_KEY,
         &preimage,
         &RFC114_PATCH_SCHEMA3_SIGNATURE,
+    )
+}
+
+/// Vector 16: `(Patch, PATCH_MESSAGE_SCHEMA)`, RFC 123 §8 (`message`, tag 6) -- AUTHOR-signed, same
+/// pattern as vectors 14-15.
+fn rfc114_patch_schema4_payload() -> PatchPayload {
+    PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::CreateFile(CreateFile {
+                path: "rfc114-patch-schema4.txt".to_string(),
+                node_id: NodeId::from_bytes([0x9a; 32]),
+                blob_id: ObjectId::from_bytes([0x9b; 32]),
+                mode: 0o100_644,
+            }),
+        }],
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+        message: Some("rfc123 vector".to_string()),
+    }
+}
+
+const RFC114_PATCH_SCHEMA4_KEY_ID: &str = "rfc114-patch-schema4-author";
+const RFC114_PATCH_SCHEMA4_AUTHOR_SEED: [u8; 32] = [0x9c; 32];
+
+const RFC114_PATCH_SCHEMA4_PUBLIC_KEY: [u8; 32] = [
+    0x23, 0xb6, 0x31, 0x70, 0x9d, 0xf2, 0x28, 0x32, 0xa0, 0x4b, 0x29, 0xa1, 0x67, 0x7a, 0xb7, 0x61,
+    0x05, 0x8e, 0xcb, 0x42, 0x32, 0x9e, 0x14, 0xfd, 0x48, 0x42, 0x69, 0xe6, 0x3f, 0xe5, 0x5c, 0x60,
+];
+
+const RFC114_PATCH_SCHEMA4_SIGNATURE: [u8; 64] = [
+    0x5c, 0x75, 0xfb, 0x93, 0x47, 0xf6, 0x5b, 0xd1, 0xcd, 0xd8, 0xcb, 0x12, 0x0a, 0x2d, 0xea, 0x18,
+    0x79, 0xb6, 0x41, 0x14, 0xd0, 0x51, 0x75, 0xfc, 0xfe, 0xab, 0x38, 0xbf, 0x2b, 0x94, 0x84, 0xfd,
+    0x28, 0xf6, 0xad, 0x77, 0xd7, 0xaa, 0x9d, 0x2d, 0x21, 0xa8, 0xfc, 0x45, 0xd7, 0xcd, 0x69, 0xb9,
+    0xd5, 0xbb, 0xf9, 0x9e, 0x3b, 0xb1, 0x15, 0x82, 0x4f, 0x5f, 0xfc, 0x5c, 0xb8, 0x7b, 0x95, 0x02,
+];
+
+#[test]
+fn rfc114_vector_16_patch_schema_4_identity_and_signature() -> prikk_error::Result<()> {
+    let canonical = rfc114_patch_schema4_payload().to_canonical_bytes()?;
+    assert_eq!(
+        prikk_hash::to_hex(&canonical),
+        "00012100000000000000a2000103000000000000000400000001000a20000000000000008800011300000000000000187266633131342d70617463682d736368656d61342e74787400021100000000000000209a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a00031200000000000000209b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b0004030000000000000004000081a4000610000000000000000d72666331323320766563746f72"
+    );
+    let id = ObjectId::from_canonical_payload(
+        ObjectType::Patch,
+        prikk_object::PATCH_MESSAGE_SCHEMA,
+        &canonical,
+    );
+    assert_eq!(
+        id.to_string(),
+        "788368756085523fbfcca01669d9ec7959e5e145bbe0ade4815074a8b50edb86"
+    );
+    let preimage = Signature::signed_bytes(
+        SignatureAlgorithm::Ed25519,
+        ObjectType::Patch,
+        id,
+        SignerRole::Author,
+        RFC114_PATCH_SCHEMA4_KEY_ID,
+    )?;
+    assert_eq!(
+        prikk_hash::to_hex(&preimage),
+        "7072696b6b2e7369672e763100010001788368756085523fbfcca01669d9ec7959e5e145bbe0ade4815074a8b50edb860001001b7266633131342d70617463682d736368656d61342d617574686f72"
+    );
+    assert_eq!(
+        Ed25519KeyPair::from_seed(&RFC114_PATCH_SCHEMA4_AUTHOR_SEED).public_key_bytes(),
+        RFC114_PATCH_SCHEMA4_PUBLIC_KEY
+    );
+    assert_eq!(
+        Ed25519KeyPair::from_seed(&RFC114_PATCH_SCHEMA4_AUTHOR_SEED).sign(&preimage),
+        RFC114_PATCH_SCHEMA4_SIGNATURE
+    );
+    verify_ed25519(
+        &RFC114_PATCH_SCHEMA4_PUBLIC_KEY,
+        &preimage,
+        &RFC114_PATCH_SCHEMA4_SIGNATURE,
     )
 }
 

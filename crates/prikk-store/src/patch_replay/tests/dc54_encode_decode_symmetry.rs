@@ -81,6 +81,7 @@ fn committed_dc41_reproducer_now_fails_at_encode() {
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     assert!(
         payload.to_canonical_bytes().is_err(),

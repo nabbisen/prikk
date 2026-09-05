@@ -81,6 +81,7 @@ fn publish_node_baseline(layout: &RepositoryLayout, files: &[(&str, &[u8], BlobK
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let mut patch_env =
         ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch.to_canonical_bytes().unwrap());

@@ -75,6 +75,7 @@ fn rollback_payload_with_operations(operations: Vec<Operation>) -> PatchPayload 
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::RollbackDraft,
+        message: None,
     }
 }
 
@@ -375,6 +376,7 @@ fn normal_patch_envelope(label: &str) -> Result<ObjectEnvelope> {
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let mut envelope =
         ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);

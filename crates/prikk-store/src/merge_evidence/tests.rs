@@ -388,6 +388,7 @@ pub(super) fn write_create_block(
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     write_patch_block(layout, kind, parents, patch)
 }
@@ -408,6 +409,7 @@ pub(super) fn write_operation_block(
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     write_patch_block(layout, kind, parents, patch)
 }

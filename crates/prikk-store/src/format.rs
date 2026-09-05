@@ -2,8 +2,8 @@
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    ObjectEnvelope, ObjectType, PATCH_PARENT_IDS_RETIRED_SCHEMA, PATCH_TEXT_SPAN_V2_SCHEMA,
-    REF_STATE_CLOSED_SCHEMA,
+    ObjectEnvelope, ObjectType, PATCH_MESSAGE_SCHEMA, PATCH_PARENT_IDS_RETIRED_SCHEMA,
+    PATCH_TEXT_SPAN_V2_SCHEMA, REF_STATE_CLOSED_SCHEMA,
 };
 
 use crate::layout::RepositoryFormat;
@@ -27,12 +27,13 @@ pub(crate) fn validate_object_envelope(
 /// Every type but `RefState` and `Patch` accepts exactly one schema. `RefState` accepts schema 1
 /// (open, the pre-DC-61 shape) or `REF_STATE_CLOSED_SCHEMA` (closed, DC-61). `Patch` accepts schema
 /// 1 (may carry a `parent_patch_ids` field, tag 2, for backward compatibility with every patch
-/// already written), `PATCH_PARENT_IDS_RETIRED_SCHEMA` (tag 2 retired outright), or
+/// already written), `PATCH_PARENT_IDS_RETIRED_SCHEMA` (tag 2 retired outright),
 /// `PATCH_TEXT_SPAN_V2_SCHEMA` (RFC 134 §8: `EditText` may additionally carry tags 10/11, the
-/// content-unique anchor lengths). `Tag` gained two fields in place at schema 1 after it shipped
-/// (`patch_set_digest`, RFC 117 stage 1; `patch_count`, T7) rather than minting a new schema — the
-/// owner ruled `Tag`'s schema window closed (2026-08-23), so `RefState` and `Patch` are the only
-/// types admitting more than one schema.
+/// content-unique anchor lengths), or `PATCH_MESSAGE_SCHEMA` (RFC 123 §8: the payload may
+/// additionally carry an optional `message`, tag 6). `Tag` gained two fields in place at schema 1
+/// after it shipped (`patch_set_digest`, RFC 117 stage 1; `patch_count`, T7) rather than minting a
+/// new schema — the owner ruled `Tag`'s schema window closed (2026-08-23), so `RefState` and `Patch`
+/// are the only types admitting more than one schema.
 pub(crate) fn admitted_schemas(object_type: ObjectType) -> Option<&'static [u32]> {
     match object_type {
         ObjectType::Block => Some(&[2]),
@@ -41,6 +42,7 @@ pub(crate) fn admitted_schemas(object_type: ObjectType) -> Option<&'static [u32]
             1,
             PATCH_PARENT_IDS_RETIRED_SCHEMA,
             PATCH_TEXT_SPAN_V2_SCHEMA,
+            PATCH_MESSAGE_SCHEMA,
         ]),
         ObjectType::RefUpdate
         | ObjectType::Tag

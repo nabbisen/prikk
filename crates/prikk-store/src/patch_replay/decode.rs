@@ -9,8 +9,8 @@
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    NodeId, NodeKind, ObjectId, PATCH_PARENT_IDS_RETIRED_SCHEMA, PatchPurpose,
-    TEXT_SPAN_HASH_BYTES, WireType,
+    NodeId, NodeKind, ObjectId, PATCH_MESSAGE_SCHEMA, PATCH_PARENT_IDS_RETIRED_SCHEMA,
+    PatchPurpose, TEXT_SPAN_HASH_BYTES, WireType,
 };
 
 mod operations;
@@ -196,6 +196,21 @@ pub(crate) fn decode_patch_operations(
                 field.require_wire(WireType::EnumU16)?;
                 let _ = field.read_u16()?;
             }
+            6 => {
+                // RFC 123 §8.6: schema-gated exactly like EditText's own `left_anchor_len`/
+                // `right_anchor_len` (`operations.rs`) -- a schema-3-or-below patch claiming
+                // tag 6 is refused rather than silently decoded. The value itself is not
+                // needed here; `decode_patch_message` is the single extraction point for
+                // callers that need the text.
+                if schema_version < PATCH_MESSAGE_SCHEMA {
+                    return Err(PrikkError::MalformedData(format!(
+                        "Patch schema {schema_version} must not carry message (tag 6); \
+                         requires schema {PATCH_MESSAGE_SCHEMA}"
+                    )));
+                }
+                field.require_wire(WireType::String)?;
+                let _ = field.read_string()?;
+            }
             other => {
                 return Err(PrikkError::MalformedData(format!(
                     "unknown Patch field tag: {other}"
@@ -236,6 +251,44 @@ pub(crate) fn decode_patch_parent_ids(bytes: &[u8]) -> Result<Vec<ObjectId>> {
         }
     }
     Ok(parent_patch_ids)
+}
+
+/// Decode a Patch's optional `message` (tag 6, `WireType::String`, RFC 123 §8) from its canonical
+/// payload bytes. `decode_patch_operations` above does not extract this field's value; it only
+/// certifies tag 6's schema-tag legality. This function's callers need the actual text (`prikk log`
+/// display), so it re-checks that legality itself rather than trusting a caller to have already run
+/// `decode_patch_operations` first -- the same reasoning `decode_patch_parent_ids` gives for staying
+/// independent of it, not duplicate: a second full scan of the same bytes for one field this file's
+/// other functions do not need.
+///
+/// Refuses `Some("")` (§8.4: "absent" and "empty" must never both mean "no message") and a duplicate
+/// tag 6, exactly as `PatchPayload::validate` does on the write side.
+pub(crate) fn decode_patch_message(bytes: &[u8], schema_version: u32) -> Result<Option<String>> {
+    let mut cursor = TlvCursor::new(bytes);
+    let mut message = None;
+    while let Some(field) = cursor.next_field()? {
+        if field.tag == 6 {
+            if schema_version < PATCH_MESSAGE_SCHEMA {
+                return Err(PrikkError::MalformedData(format!(
+                    "Patch schema {schema_version} must not carry message (tag 6); requires \
+                     schema {PATCH_MESSAGE_SCHEMA}"
+                )));
+            }
+            if message.is_some() {
+                return Err(PrikkError::MalformedData(
+                    "duplicate Patch message field".to_string(),
+                ));
+            }
+            let value = field.read_string()?;
+            if value.is_empty() {
+                return Err(PrikkError::MalformedData(
+                    "Patch message must not be empty".to_string(),
+                ));
+            }
+            message = Some(value);
+        }
+    }
+    Ok(message)
 }
 
 fn decode_operation(

@@ -8,7 +8,7 @@
 
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
-    CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, PATCH_TEXT_SPAN_V2_SCHEMA, PatchPurpose,
+    CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, PATCH_MESSAGE_SCHEMA, PatchPurpose,
     RefStatePayload,
 };
 
@@ -118,15 +118,16 @@ pub fn append_rollback_draft(
     }
 
     inverse.inverse_payload.purpose = PatchPurpose::RollbackDraft;
+    // RFC 123 §8: `-m` is mandatory for `rollback-draft --append-inverse` (checked above), stored
+    // exactly as given, not `trim()`'d -- matching `author_worktree_patch`'s own precedent.
+    inverse.inverse_payload.message = Some(message.to_string());
     let canonical_payload = inverse.inverse_payload.to_canonical_bytes()?;
-    // RFC 134 §8: an inverse EditText (text_span::derive_inverse_edit_text) always carries v2
-    // anchor-length fields, so this freshly authored patch is minted at PATCH_TEXT_SPAN_V2_SCHEMA --
-    // unconditionally, for the same reason as node_authoring.rs's own forward-authoring path.
-    let mut envelope = ObjectEnvelope::unsigned(
-        ObjectType::Patch,
-        PATCH_TEXT_SPAN_V2_SCHEMA,
-        canonical_payload,
-    );
+    // RFC 134 §8 / RFC 123 §8.6: an inverse EditText (text_span::derive_inverse_edit_text) always
+    // carries v2 anchor-length fields, and this draft always carries a message, so this freshly
+    // authored patch is minted at PATCH_MESSAGE_SCHEMA -- unconditionally, for the same reason as
+    // node_authoring.rs's own forward-authoring path.
+    let mut envelope =
+        ObjectEnvelope::unsigned(ObjectType::Patch, PATCH_MESSAGE_SCHEMA, canonical_payload);
     let signature = author_signature(signer, envelope.object_id())?;
     envelope.add_signature(signature)?;
     let inverse_patch_id = envelope.object_id();

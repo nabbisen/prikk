@@ -71,6 +71,7 @@ fn patch_operations_must_be_contiguous() {
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     assert!(patch.to_canonical_bytes().is_err());
 }
@@ -644,6 +645,7 @@ fn patch_payload_rejects_empty_operations() {
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     // §9.1: operations is required with at least one operation.
     assert!(patch.validate().is_err());
@@ -674,6 +676,7 @@ fn patch_purpose_absent_decodes_as_normal() {
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let bytes = patch.to_canonical_bytes();
     assert!(bytes.is_ok());
@@ -693,6 +696,77 @@ fn patch_purpose_explicit_normal_is_rejected() {
     bytes.extend_from_slice(&2_u64.to_be_bytes());
     bytes.extend_from_slice(&PatchPurpose::Normal.code().to_be_bytes());
     assert!(PatchPurpose::decode_from_patch_payload(&bytes).is_err());
+}
+
+/// RFC 123 §8.4: the format rejects `Some("")` on the write side -- `validate()` runs inside
+/// `encode_canonical`, so a message that is present-but-empty must refuse both.
+#[test]
+fn patch_payload_rejects_some_empty_message() {
+    let patch = PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::EditText(EditText {
+                node_id: crate::NodeId::from_bytes([0x22; 32]),
+                span_id: [0x10; 32],
+                old_span_hash: text_span_hash(b"old"),
+                left_anchor_hash: [0x11; 32],
+                right_anchor_hash: [0x12; 32],
+                replacement_text: b"hello".to_vec(),
+                presentation_hint_line: None,
+                presentation_hint_column: None,
+                old_span_text: b"old".to_vec(),
+                left_anchor_len: None,
+                right_anchor_len: None,
+            }),
+        }],
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+        message: Some(String::new()),
+    };
+    assert!(patch.validate().is_err());
+    assert!(patch.to_canonical_bytes().is_err());
+}
+
+/// RFC 123 §8.1: tag 6 (`message`) must not disturb `PatchPurpose::decode_from_patch_payload`'s
+/// own scan -- it is schema-blind by design (this file's own module doc explains why) and must
+/// keep passing tag 6 through rather than treating it as an unknown field.
+#[test]
+fn patch_purpose_decode_tolerates_a_present_message_field() {
+    let patch = PatchPayload {
+        operations: vec![Operation {
+            op_seq: 1,
+            op_id: None,
+            preconditions: Vec::new(),
+            kind: OperationKind::EditText(EditText {
+                node_id: crate::NodeId::from_bytes([0x22; 32]),
+                span_id: [0x10; 32],
+                old_span_hash: text_span_hash(b"old"),
+                left_anchor_hash: [0x11; 32],
+                right_anchor_hash: [0x12; 32],
+                replacement_text: b"hello".to_vec(),
+                presentation_hint_line: None,
+                presentation_hint_column: None,
+                old_span_text: b"old".to_vec(),
+                left_anchor_len: None,
+                right_anchor_len: None,
+            }),
+        }],
+        intent: None,
+        preconditions: Vec::new(),
+        purpose: PatchPurpose::Normal,
+        message: Some("a message".to_string()),
+    };
+    let bytes = patch.to_canonical_bytes();
+    assert!(bytes.is_ok());
+    if let Ok(bytes) = bytes {
+        assert_eq!(
+            PatchPurpose::decode_from_patch_payload(&bytes),
+            Ok(PatchPurpose::Normal)
+        );
+    }
 }
 
 /// RFC 117 T1 `stage-1-tag-payload-digest-handoff-v1.md` §6 row 1: field 6 (`patch_set_digest`) is

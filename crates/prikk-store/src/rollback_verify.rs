@@ -15,7 +15,9 @@ use prikk_object::{
 
 use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryLayout};
 use crate::patch_inverse::prepare_patch_inverse_plan;
-use crate::patch_replay::decode::{decode_patch_operations, ensure_apply_supported};
+use crate::patch_replay::decode::{
+    decode_patch_message, decode_patch_operations, ensure_apply_supported,
+};
 use crate::rollback_draft::is_rollback_draft_envelope;
 use crate::wal::{Wal, WalRecord};
 
@@ -78,6 +80,15 @@ pub fn verify_active_rollback_draft(
 
     let mut inverse = prepare_patch_inverse_plan(layout, ref_name)?;
     inverse.inverse_payload.purpose = PatchPurpose::RollbackDraft;
+    // RFC 123 §8: `prepare_patch_inverse_plan` cannot derive the message -- `append_rollback_draft`
+    // sets it from the caller's `-m` value after the plan returns (`rollback_draft.rs`), the same
+    // way it sets `purpose` above. Read it back from the actual record before reconstructing the
+    // expected payload, or every rollback draft with a message would fail this comparison for a
+    // reason that has nothing to do with whether the draft matches the current inverse plan.
+    inverse.inverse_payload.message = decode_patch_message(
+        &record.envelope.canonical_payload,
+        record.envelope.schema_version,
+    )?;
     let expected_payload = inverse.inverse_payload.to_canonical_bytes()?;
     if record.envelope.canonical_payload != expected_payload {
         return Err(PrikkError::Integrity(

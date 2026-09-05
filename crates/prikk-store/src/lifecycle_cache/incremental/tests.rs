@@ -75,6 +75,7 @@ impl MockReader {
             intent: None,
             preconditions: Vec::new(),
             purpose: PatchPurpose::Normal,
+            message: None,
         };
         self.insert(
             id,

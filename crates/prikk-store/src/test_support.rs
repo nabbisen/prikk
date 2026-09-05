@@ -27,6 +27,7 @@ pub(crate) fn signed_patch_envelope() -> ObjectEnvelope {
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
@@ -58,6 +59,7 @@ pub(crate) fn rollback_patch_envelope() -> ObjectEnvelope {
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::RollbackDraft,
+        message: None,
     };
     let payload_bytes = payload.to_canonical_bytes();
     assert!(payload_bytes.is_ok());
@@ -299,6 +301,7 @@ pub(crate) fn publish_text_create_then_edit_block(
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let mut patch = ObjectEnvelope::unsigned(
         ObjectType::Patch,
@@ -388,6 +391,7 @@ pub(crate) fn publish_text_create_then_edit_block_v1(
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let mut patch =
         ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch_payload.to_canonical_bytes()?);
@@ -473,6 +477,7 @@ pub(crate) fn publish_text_edit_then_unsupported_rename_path_block(
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let mut patch = ObjectEnvelope::unsigned(
         ObjectType::Patch,

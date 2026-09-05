@@ -129,6 +129,7 @@ impl MockReader {
             intent: None,
             preconditions: Vec::new(),
             purpose: prikk_object::PatchPurpose::Normal,
+            message: None,
         };
         self.insert_with_schema(
             id,

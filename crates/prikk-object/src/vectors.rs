@@ -78,6 +78,14 @@ pub(crate) const SNAPSHOT_CASES: &[IdCase] = &[
         schema_version: 2,
         payload: b"payload",
     },
+    // RFC 123 §8: PATCH_MESSAGE_SCHEMA. Additions-only, per this schema's own case set --
+    // isolates the schema-version byte the same way `patch_schema2` does for schema 2.
+    IdCase {
+        name: "patch_schema4",
+        object_type: ObjectType::Patch,
+        schema_version: 4,
+        payload: b"payload",
+    },
     // Renumbered + new types (FDD-03 §3) — empty payloads isolate the type code.
     IdCase {
         name: "empty_refupdate",
@@ -199,6 +207,7 @@ pub(crate) fn patch_operations_populated_payload() -> Vec<u8> {
         intent: None,
         preconditions: Vec::new(),
         purpose: crate::PatchPurpose::Normal,
+        message: None,
     };
     patch.to_canonical_bytes().expect("patch encodes")
 }

@@ -28,6 +28,7 @@ fn valid_patch_payload_bytes() -> Vec<u8> {
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     patch.to_canonical_bytes().expect("patch encodes")
 }

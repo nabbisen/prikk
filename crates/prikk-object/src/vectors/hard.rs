@@ -237,6 +237,7 @@ fn rollback_draft_patch_purpose_vector_is_stable() {
         intent: None,
         preconditions: Vec::new(),
         purpose: crate::PatchPurpose::RollbackDraft,
+        message: None,
     };
     let payload = patch.to_canonical_bytes().expect("rollback draft encodes");
     let got = top_level_tag_types(&payload);

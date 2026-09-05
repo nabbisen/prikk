@@ -165,6 +165,7 @@ fn write_patch(layout: &RepositoryLayout, operations: Vec<Operation>) -> TestRes
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let mut envelope = ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch.to_canonical_bytes()?);
     envelope.add_signature(author_signature())?;

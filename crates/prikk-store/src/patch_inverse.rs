@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use prikk_error::{PrikkError, Result};
 use prikk_object::{
     CanonicalEncode, ChangePerm, CreateFile, DeleteNode, DeleteNodePreimage, NodeId, NodeKind,
-    ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind, PATCH_TEXT_SPAN_V2_SCHEMA,
+    ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind, PATCH_MESSAGE_SCHEMA,
     PatchPayload, PatchPurpose, ReplaceBinary,
 };
 
@@ -143,13 +143,17 @@ pub fn prepare_patch_inverse_plan(
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let inverse_payload_bytes = inverse_payload.to_canonical_bytes()?;
-    // RFC 134 §8: must match the schema rollback_draft.rs actually writes for this payload, or the
-    // hint id would predict a different envelope than the one later signed and stored.
+    // RFC 134 §8 / RFC 123 §8.6: must match the schema rollback_draft.rs actually writes for this
+    // payload, or the hint id would predict a different envelope than the one later signed and
+    // stored. (The hint is already an approximation regardless -- it is computed before the caller
+    // sets `purpose: RollbackDraft`, see `rollback_draft.rs` -- so this is the current schema for a
+    // *new* patch, not a promise the hint id equals what gets written.)
     let inverse_patch_id_hint = ObjectEnvelope::unsigned(
         ObjectType::Patch,
-        PATCH_TEXT_SPAN_V2_SCHEMA,
+        PATCH_MESSAGE_SCHEMA,
         inverse_payload_bytes,
     )
     .object_id();

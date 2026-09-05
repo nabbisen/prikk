@@ -396,6 +396,7 @@ fn decode_patch_operations_rejects_a_hand_crafted_non_canonical_create_file_mode
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let bytes = payload
         .to_canonical_bytes()
@@ -496,6 +497,7 @@ fn single_operation_payload(kind: OperationKind) -> PatchPayload {
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     }
 }
 
@@ -727,6 +729,7 @@ proptest! {
             intent: None,
             preconditions: Vec::new(),
             purpose: PatchPurpose::Normal,
+            message: None,
         };
         // DC-54: encode now legitimately rejects an operation whose path violates the RepoPath
         // grammar (reserved names, traversal, absolute, `.prikk`-prefixed) — generation is

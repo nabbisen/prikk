@@ -1,5 +1,58 @@
 # Changelog
 
+## Unreleased
+
+**Read this before upgrading one machine and not another.** Nothing about using `prikk` changes —
+no command, flag, or exit code differs from `0.31.1`. **But repositories written after this change
+cannot be read by earlier releases.**
+
+### Breaking change — repositories written here are not readable by `0.31.1` or earlier
+
+`prikk commit -m <message>`'s message is no longer discarded: it is now signed, identity-bearing
+evidence, recorded on every `Patch` at **schema 4**, which earlier releases do not admit. This
+applies to **every commit**, not only ones that carry an unusual message — `-m` was already
+mandatory, so every patch this release authors carries one.
+
+An older `prikk` reads such a repository, or imports a bundle exported from one, and refuses:
+
+```
+error: integrity error: format-2 patch does not accept envelope schema 4 (accepted: [1, 2, 3])
+```
+
+A bundle offered directly (bypassing repository-level schema admission) refuses earlier still, at
+decode:
+
+```
+error: malformed persisted data: invalid PatchPurpose canonical form: canonical encoding error: unknown PatchPayload field tag: 6
+```
+
+**It fails closed with an accurate message — nothing is corrupted and no history is lost** — but the
+older build cannot proceed. Both the local case and the `bundle export` → `bundle import` case were
+demonstrated against a `0.31.1` build, not assumed.
+
+**Upgrade every machine that shares a repository before committing with this release.**
+
+**This direction is the one the compatibility contract does not promise.** Repositories written
+before this release keep working exactly as they did — a `0.31.1` build still reads and verifies
+them cleanly, confirmed rather than assumed.
+
+### Why the schema changed
+
+`prikk commit -m <message>` validated the message, then dropped it — a repository whose whole claim
+is that it is evidence could not answer "what was this change?" The message is now an optional,
+identity-bearing field on `Patch` (tag 6), mirroring `TagPayload.message`, and is shown per patch
+under each block in `prikk log`. A patch written before this change carries no message and shows no
+message line — absence, not a placeholder.
+
+Raised by the external architecture audit of 2026-08-31; designed and ruled on in
+[RFC 123](https://github.com/prikk-vcs/prikk/blob/main/rfcs/accepted/123-commit-message-and-authorship-metadata.md).
+
+### Changed
+
+- `prikk commit`'s interim note that the message is "validated but not stored" is removed — it is
+  stored now.
+- `prikk log` prints one line per patch that carries a message, under its block.
+
 ## 0.31.1 — 2026-09-05
 
 **Nothing about running `prikk` changes, and this release cannot strand a machine.** No command,

@@ -76,6 +76,14 @@ pub(crate) fn print_history(layout: &RepositoryLayout, history: &RefHistory) {
             "  required-attestations: {}",
             entry.required_attestation_count
         );
+        // RFC 123 §8: a patch with no message (schema 1/2/3, or a genuinely absent RFC 113
+        // import) contributes no line here at all -- absence is the truth, not a placeholder.
+        for patch_message in &entry.patch_messages {
+            println!(
+                "  patch {}: {}",
+                patch_message.patch_id, patch_message.message
+            );
+        }
         match entry.previous_ref_state_id {
             Some(previous) => println!("  previous-ref-state: {previous}"),
             None => println!("  previous-ref-state: <none>"),

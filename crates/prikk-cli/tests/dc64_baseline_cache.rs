@@ -187,9 +187,14 @@ fn deleting_the_lifecycle_cache_does_not_change_commit_outcome() {
     std::fs::remove_file(lifecycle_cache_path(&without_cache)).unwrap();
     assert!(!lifecycle_cache_path(&without_cache).exists());
 
-    let with_cache_output = commit(&with_cache, "third, cache intact");
+    // RFC 123: the message is now inside object identity, so it must be held constant across
+    // both branches -- the cache is the only variable this test is isolating (see the doc comment
+    // above). Before RFC 123 the two branches used different literal messages here and still
+    // produced the same patch id, since the message was validated and discarded; that is no
+    // longer true, correctly.
+    let with_cache_output = commit(&with_cache, "third commit");
     ok(&with_cache_output, "third commit with cache intact");
-    let without_cache_output = commit(&without_cache, "third, cache deleted");
+    let without_cache_output = commit(&without_cache, "third commit");
     ok(&without_cache_output, "third commit with cache deleted");
 
     assert_eq!(

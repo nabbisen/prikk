@@ -159,6 +159,7 @@ fn seal_two_block_history_with_author(
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let mut patch = ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);
     let patch_object_id = patch.object_id();
@@ -2202,6 +2203,7 @@ fn verify_and_import_agree_a_corrupted_object_whose_id_no_longer_matches_its_byt
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let corrupted_bytes = corrupted_payload.to_canonical_bytes()?;
     let corrupted_objects: Vec<ObjectEnvelope> = objects

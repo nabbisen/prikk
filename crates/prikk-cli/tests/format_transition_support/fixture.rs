@@ -171,6 +171,7 @@ pub(crate) fn build_current_format_strict_wal_fixture(
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let signature = |key_id: &str, byte: u8| Signature {
         algorithm: SignatureAlgorithm::Ed25519,
@@ -239,6 +240,7 @@ fn write_patch(
         intent: None,
         preconditions: Vec::new(),
         purpose,
+        message: None,
     };
     let mut envelope =
         ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);

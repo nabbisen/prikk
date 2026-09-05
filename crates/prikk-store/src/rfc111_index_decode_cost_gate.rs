@@ -70,6 +70,7 @@ fn write_linear_child(
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let mut patch_env = ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch.to_canonical_bytes()?);
     patch_env.add_signature(maintainer_signature())?;

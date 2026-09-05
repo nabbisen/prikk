@@ -275,6 +275,7 @@ fn a_repository_holding_both_patch_schemas_derives_state_correctly() -> prikk_er
         intent: None,
         preconditions: Vec::new(),
         purpose: prikk_object::PatchPurpose::Normal,
+        message: None,
     };
     let schema2_patch = ObjectEnvelope::unsigned(
         ObjectType::Patch,
@@ -303,17 +304,18 @@ fn a_repository_holding_both_patch_schemas_derives_state_correctly() -> prikk_er
          a single patch carrying both operations"
     );
 
-    // Negative control: a Patch envelope at a schema `admitted_schemas` does not accept (4 is
-    // outside Patch's `&[1, PATCH_PARENT_IDS_RETIRED_SCHEMA, PATCH_TEXT_SPAN_V2_SCHEMA]`) must
-    // still be refused when mixed into the same candidate set -- proving the mixed-schema
-    // acceptance above is not because the admitted-schema check was silently accepting everything.
+    // Negative control: a Patch envelope at a schema `admitted_schemas` does not accept (5 is
+    // outside Patch's `&[1, PATCH_PARENT_IDS_RETIRED_SCHEMA, PATCH_TEXT_SPAN_V2_SCHEMA,
+    // PATCH_MESSAGE_SCHEMA]`) must still be refused when mixed into the same candidate set --
+    // proving the mixed-schema acceptance above is not because the admitted-schema check was
+    // silently accepting everything.
     let out_of_range_patch =
-        ObjectEnvelope::unsigned(ObjectType::Patch, 4, schema2_payload.to_canonical_bytes()?);
+        ObjectEnvelope::unsigned(ObjectType::Patch, 5, schema2_payload.to_canonical_bytes()?);
     let out_of_range_id = store.write_object(&out_of_range_patch)?;
     let result = derive_next_state_root(&store, None, &[schema1_id, out_of_range_id]);
     assert!(
         result.is_err(),
-        "a Patch at schema 4 (outside Patch's admitted set) must be refused, not silently applied"
+        "a Patch at schema 5 (outside Patch's admitted set) must be refused, not silently applied"
     );
 
     Ok(())

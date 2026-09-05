@@ -118,6 +118,7 @@ fn publish_snapshot_then_patch_block(layout: &RepositoryLayout) -> prikk_error::
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let patch_id = write_patch(&mut object_store, patch_payload)?;
     publish_root_then_patch_ref(layout, root_block_id, patch_id)
@@ -468,6 +469,7 @@ fn publish_text_create_then_two_edit_block(
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let patch_id = write_patch_with_schema(
         &mut object_store,
@@ -564,6 +566,7 @@ fn publish_binary_file_delete_block(layout: &RepositoryLayout) -> prikk_error::R
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let patch_id = write_patch(&mut object_store, patch_payload)?;
     publish_root_then_patch_ref(layout, root_block_id, patch_id)

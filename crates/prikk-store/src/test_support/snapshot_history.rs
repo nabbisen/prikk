@@ -67,6 +67,7 @@ pub(crate) fn publish_snapshot_then_patch_block(
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let mut root_patch = ObjectEnvelope::unsigned(
         ObjectType::Patch,
@@ -118,6 +119,7 @@ pub(crate) fn publish_snapshot_then_patch_block(
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let mut patch =
         ObjectEnvelope::unsigned(ObjectType::Patch, 1, patch_payload.to_canonical_bytes()?);

@@ -22,7 +22,7 @@ use prikk_error::{PrikkError, Result};
 use prikk_object::{
     BlobKind, BlobPayload, CanonicalEncode, ChangePerm, CreateFile, DeleteNode, DeleteNodePreimage,
     EditText, NodeId, NodeKind, ObjectEnvelope, ObjectId, ObjectType, Operation, OperationKind,
-    PATCH_TEXT_SPAN_V2_SCHEMA, PatchPayload, PatchPurpose, ReplaceBinary,
+    PATCH_MESSAGE_SCHEMA, PatchPayload, PatchPurpose, ReplaceBinary,
 };
 
 use crate::active::{prepare_empty_active_ref_for_append, require_active_ref_for_non_empty_wal};
@@ -179,7 +179,7 @@ pub(crate) fn author_worktree_patch<S: NodeIdEntropySource, A: AuthorSigner>(
 fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
     layout: &RepositoryLayout,
     ref_name: &str,
-    _message: &str,
+    message: &str,
     active_patch_limit: usize,
     generator: &mut NodeIdGenerator<S>,
     signer: &A,
@@ -552,16 +552,21 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        // RFC 123 §8: `-m` is mandatory here (checked in `author_worktree_patch` above), so this
+        // is always `Some`; stored exactly as given, not `trim()`'d, matching `tag create`'s own
+        // -m/--message precedent (`prikk-cli/src/tag.rs`).
+        message: Some(message.to_string()),
     };
     patch_payload.validate().map_err(AuthorError::Store)?;
-    // RFC 134 §8: every EditText this function authors carries v2 anchor-length fields (tags
-    // 10/11), so every newly authored patch is minted at PATCH_TEXT_SPAN_V2_SCHEMA -- unconditionally,
-    // even for patches with no EditText operation, since schema 3 only ever *permits* those tags,
-    // never requires them, and every earlier authoring path already only ever wrote schema 2 or
-    // below (v1 stays frozen for those bytes, forever).
+    // RFC 134 §8 / RFC 123 §8.6: every EditText this function authors carries v2 anchor-length
+    // fields (tags 10/11), and every commit carries a message, so every newly authored patch is
+    // minted at PATCH_MESSAGE_SCHEMA -- unconditionally, even for patches with no EditText
+    // operation, since a schema only ever *permits* its own fields, never requires them, and every
+    // earlier authoring path already only ever wrote a lower schema (each stays frozen for those
+    // bytes, forever).
     let mut patch = ObjectEnvelope::unsigned(
         ObjectType::Patch,
-        PATCH_TEXT_SPAN_V2_SCHEMA,
+        PATCH_MESSAGE_SCHEMA,
         patch_payload
             .to_canonical_bytes()
             .map_err(AuthorError::Store)?,

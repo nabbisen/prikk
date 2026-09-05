@@ -43,6 +43,7 @@ fn distinct_patch_envelope(label: &str) -> prikk_error::Result<ObjectEnvelope> {
         intent: None,
         preconditions: Vec::new(),
         purpose: PatchPurpose::Normal,
+        message: None,
     };
     let mut envelope =
         ObjectEnvelope::unsigned(ObjectType::Patch, 1, payload.to_canonical_bytes()?);

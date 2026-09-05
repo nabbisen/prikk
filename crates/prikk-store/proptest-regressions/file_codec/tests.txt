@@ -7,3 +7,4 @@
 cc b5b1c54e7bb403b11622f167ed135e31a461d501aeac6de29ed7047e2bcfc3e8 # shrinks to object_type = RefState, schema_version = 2
 cc a0ceced355545235fd5f4133efe5b3e3d8807881c7a8d9aff0d815551ff5a3b0 # shrinks to object_type = Patch, schema_version = 2
 cc 51d477bfdfb957ea3cdaaa2e78b041d5226a71e7f475efcc9134b50599d8c9c4 # shrinks to object_type = Patch, schema_version = 3
+cc 83651546e602b1fc779fde560286e88ae9d52712f7d97634e689615f1ba5f255 # shrinks to object_type = Patch, schema_version = 4

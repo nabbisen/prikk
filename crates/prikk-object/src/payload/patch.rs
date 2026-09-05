@@ -66,6 +66,16 @@ pub const PATCH_PARENT_IDS_RETIRED_SCHEMA: u32 = 2;
 /// operations that omit the fields (RFC 114: keep every version ever written decodable).
 pub const PATCH_TEXT_SPAN_V2_SCHEMA: u32 = 3;
 
+/// `Patch` schema at and above which the payload may carry `message` (tag 6, `WireType::String`) --
+/// RFC 123 §8. Below this schema the field is absent, exactly as before this schema existed, so no
+/// existing object's bytes move. Optional even at this schema and above (§8.2): RFC 113's Git
+/// import must be able to represent a commit that genuinely had no message. `Some("")` is refused
+/// by [`PatchPayload::validate`] regardless of schema, so "absent" and "empty" never both mean "no
+/// message". This is the current schema for every newly authored patch -- both authoring sites
+/// (`worktree_patch/node_authoring.rs`, `patch_inverse.rs`/`rollback_draft.rs`) mint it
+/// unconditionally, exactly as they minted [`PATCH_TEXT_SPAN_V2_SCHEMA`] before it.
+pub const PATCH_MESSAGE_SCHEMA: u32 = 4;
+
 /// Minimum length, in bytes, of a v2 `EditText` anchor (`left_anchor_len`/`right_anchor_len`).
 /// Matches v1's fixed anchor window (`TEXT_ANCHOR_WINDOW` in `prikk-store`) — v2 anchors are never
 /// shorter than v1's, only ever longer when uniqueness demands it. Defined here, not in
@@ -83,6 +93,10 @@ pub struct PatchPayload {
     pub preconditions: Vec<OperationConditionEntry>,
     /// Identity-bearing patch purpose. `Normal` is canonical by omission.
     pub purpose: PatchPurpose,
+    /// Commit message (RFC 123 §8): identity-bearing, optional, present only at
+    /// [`PATCH_MESSAGE_SCHEMA`] and above. Mirrors `TagPayload.message` exactly. `Some("")` is
+    /// refused by [`Self::validate`] -- "absent" and "empty" must never both mean "no message".
+    pub message: Option<String>,
 }
 
 impl PatchPayload {
@@ -104,6 +118,11 @@ impl PatchPayload {
                 "patch preconditions must be sorted and unique".to_string(),
             ));
         }
+        if self.message.as_deref() == Some("") {
+            return Err(PrikkError::CanonicalEncoding(
+                "patch message must not be Some(\"\") -- omit it instead".to_string(),
+            ));
+        }
         Ok(())
     }
 }
@@ -122,6 +141,7 @@ impl CanonicalEncode for PatchPayload {
         if self.purpose != PatchPurpose::Normal {
             writer.field_enum_u16(5, self.purpose.code())?;
         }
+        writer.field_string_opt(6, self.message.as_deref())?;
         Ok(())
     }
 }
@@ -157,14 +177,18 @@ impl PatchPurpose {
     }
 
     /// Decode only the top-level `PatchPayload` purpose field, validating tag order and rejecting
-    /// an explicitly encoded `Normal` default. Absence means `Normal`.
+    /// an explicitly encoded `Normal` default. Absence means `Normal`. Schema-blind by design, like
+    /// `decode_patch_parent_ids` in `prikk-store`: tag 6 (`message`, RFC 123 §8) is accepted here
+    /// unconditionally, regardless of schema -- the schema-gated legality check belongs to
+    /// `decode_patch_operations`, the one caller of this function that also knows the envelope's
+    /// declared schema.
     pub fn decode_from_patch_payload(bytes: &[u8]) -> Result<Self> {
         let mut cursor = PatchPayloadFieldCursor::new(bytes);
         let mut purpose = Self::Normal;
         let mut seen_purpose = false;
         while let Some(field) = cursor.next_field()? {
             match field.tag {
-                1..=4 => {}
+                1..=4 | 6 => {}
                 5 => {
                     if seen_purpose {
                         return Err(PrikkError::CanonicalEncoding(

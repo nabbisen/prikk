@@ -10,6 +10,7 @@ use prikk_object::{BlockKind, BlockPayload, ObjectId, ObjectType, RefStatePayloa
 
 use crate::layout::RepositoryLayout;
 use crate::object_store::{ObjectReadSnapshot, ObjectReader};
+use crate::patch_replay::decode::decode_patch_message;
 use crate::refs::RefStore;
 use crate::rollback_verify::verify_rollback_patch_envelope;
 
@@ -56,6 +57,21 @@ pub struct HistoryEntry {
     pub rollback_patch_count: usize,
     /// Whether this entry's target Block contains at least one rollback-marked Patch.
     pub is_rollback_block: bool,
+    /// Messages of this block's own patches that carry one (RFC 123 §8), in `patch_ids` order.
+    /// **Not one entry per patch** -- a schema 1/2/3 patch (or a genuinely absent one) contributes
+    /// no entry at all, since absence of a message is not the same fact as an empty one (§8.4) and
+    /// must not be displayed as if it were.
+    pub patch_messages: Vec<PatchMessage>,
+}
+
+/// One patch's message, found while building a [`HistoryEntry`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PatchMessage {
+    /// The Patch object carrying this message.
+    pub patch_id: ObjectId,
+    /// The message itself -- never empty (`decode_patch_message` refuses `Some("")`, mirroring
+    /// `PatchPayload::validate`).
+    pub message: String,
 }
 
 /// Load history for a ref, newest first.
@@ -86,6 +102,8 @@ pub fn load_ref_history(
         let block = read_block(&object_store, ref_state.target_object_id)?;
         let rollback_patch_count =
             count_rollback_patches(&object_store, ref_state.target_object_id, &block.patch_ids)?;
+        let patch_messages =
+            read_patch_messages(&object_store, ref_state.target_object_id, &block.patch_ids)?;
         entries.push(HistoryEntry {
             ref_state_id,
             block_id: ref_state.target_object_id,
@@ -97,6 +115,7 @@ pub fn load_ref_history(
             required_attestation_count: ref_state.required_attestation_ids.len(),
             rollback_patch_count,
             is_rollback_block: rollback_patch_count != 0,
+            patch_messages,
         });
         current = ref_state.previous_ref_state_id;
     }
@@ -148,6 +167,8 @@ pub fn load_received_ref_history(
         let block = read_block(&object_store, ref_state.target_object_id)?;
         let rollback_patch_count =
             count_rollback_patches(&object_store, ref_state.target_object_id, &block.patch_ids)?;
+        let patch_messages =
+            read_patch_messages(&object_store, ref_state.target_object_id, &block.patch_ids)?;
         entries.push(HistoryEntry {
             ref_state_id,
             block_id: ref_state.target_object_id,
@@ -159,6 +180,7 @@ pub fn load_received_ref_history(
             required_attestation_count: ref_state.required_attestation_ids.len(),
             rollback_patch_count,
             is_rollback_block: rollback_patch_count != 0,
+            patch_messages,
         });
         current = ref_state.previous_ref_state_id;
     }
@@ -216,6 +238,34 @@ fn count_rollback_patches(
         }
     }
     Ok(count)
+}
+
+/// Collect this block's own patches' messages, in `patch_ids` order (RFC 123 §8, `prikk log`
+/// display). A patch with no message (schema 1/2/3, or a genuinely absent RFC 113 import) is
+/// omitted entirely -- not represented by an empty-message entry -- since absence and emptiness
+/// must never read the same way (§8.4).
+fn read_patch_messages(
+    object_store: &impl ObjectReader,
+    block_id: ObjectId,
+    patch_ids: &[ObjectId],
+) -> Result<Vec<PatchMessage>> {
+    let mut messages = Vec::new();
+    for patch_id in patch_ids {
+        let Some(envelope) = object_store.read_typed(*patch_id, ObjectType::Patch)? else {
+            return Err(PrikkError::Integrity(format!(
+                "history Block {block_id} references missing Patch {patch_id}"
+            )));
+        };
+        if let Some(message) =
+            decode_patch_message(&envelope.canonical_payload, envelope.schema_version)?
+        {
+            messages.push(PatchMessage {
+                patch_id: *patch_id,
+                message,
+            });
+        }
+    }
+    Ok(messages)
 }
 
 fn read_block(object_store: &impl ObjectReader, block_id: ObjectId) -> Result<BlockPayload> {
