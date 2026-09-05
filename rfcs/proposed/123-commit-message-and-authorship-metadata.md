@@ -25,9 +25,11 @@ required because RFC 113's import must be able to represent a Git commit that ge
 tags, so this is a second one-way break on every commit** — the same shape as 0.31.0's, and the
 expensive part of the change (§8.6).
 
-**One thing §8 hands back to the owner:** §8.6 makes schema 4 a compatibility *announcement*, not a
-feature, so **whether it ships alone or batched with other `Patch`-shape work is a release decision.**
-None is known today.
+**§8.8's release grouping was AUTHORIZED by the project owner 2026-09-05.** Read as: **schema 4 ships
+alone** — nothing is batched with it, because no other `Patch`-shape change is known. If one is found
+before this lands, that is a stop-and-report, not a silent addition to the bump.
+
+**Handoff issued:** `rfcs/handoffs/123-commit-message-and-authorship-metadata/message-field-schema-4-handoff-v1.md`.
 
 Raised as **High** by the external architecture audit of 2026-08-31
 (`audit-2026-08-31-task-1a.md` §3); reproduced independently at `3a8d730`
