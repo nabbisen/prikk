@@ -1,6 +1,6 @@
 # DC-44 increment 3 — a self-describing bundle manifest
 
-**Authority:** `rfcs/proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md`, design goal 1.
+**Authority:** `rfcs/done/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md`, design goal 1.
 **Base:** `1c13ade` or later `main`. **Under `003-landing-work-on-main.md`** — commit locally on
 `main`, do not push, do not tag.
 

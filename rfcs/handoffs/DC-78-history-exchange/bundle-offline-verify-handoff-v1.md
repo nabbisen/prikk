@@ -1,6 +1,6 @@
 # DC-44 increment 1 — verify an export offline, before restoring it
 
-**Authority:** `rfcs/proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md`, design goal 2 (*"verify an
+**Authority:** `rfcs/done/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md`, design goal 2 (*"verify an
 export offline before restore"*), selected by the owner 2026-08-31. **Base:** `026307c` or later
 `main`. **Under `003-landing-work-on-main.md`** — commit locally on `main`, do not push, do not tag.
 

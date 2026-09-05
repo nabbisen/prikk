@@ -1,6 +1,6 @@
 # Four places the decoder accepts what the encoder would never write — implementation handoff
 
-**Authority:** `rfcs/proposed/125-format-boundary-input-hardening.md`.
+**Authority:** `rfcs/done/125-format-boundary-input-hardening.md`.
 **Base:** current `main` (`679a884`). **Under `003-landing-work-on-main.md`.**
 
 **One increment, four refusals.** They share a governing rule (DC-54's encode/decode symmetry), a

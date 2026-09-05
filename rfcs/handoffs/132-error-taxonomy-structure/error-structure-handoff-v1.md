@@ -1,6 +1,6 @@
 # RFC 132 increment 1 — make `PrikkError` able to grow, and stop it discarding the kind
 
-**Authority:** `rfcs/proposed/132-error-taxonomy-structure.md` §5, increment 1.
+**Authority:** `rfcs/done/132-error-taxonomy-structure.md` §5, increment 1.
 **Base:** current `main` (`663ccf6`). **Under `003-landing-work-on-main.md`.**
 
 **Scope: the four items in §5's increment 1 and nothing else.** `source()` is **refused** for this

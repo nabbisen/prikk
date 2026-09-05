@@ -1,6 +1,6 @@
 # DC-53 Stage 2 — transport and pinning, design v1
 
-**RFC:** `rfcs/proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md`
+**RFC:** `rfcs/done/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md`
 **Stage 1 design:** `design-v1.md` (amended v1.1, v1.2). **Stage 1 merged 2026-08-18 at `970bc27`.**
 **Started on the owner's direction, 2026-08-18** ("Start DC-53 Stage 2"), after criterion 3 closed.
 **Independence:** author-reviewed, the standing ceiling.

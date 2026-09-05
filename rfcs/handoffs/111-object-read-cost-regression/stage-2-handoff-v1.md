@@ -1,6 +1,6 @@
 # RFC 111 Stage 2 — handoff v1
 
-**RFC:** `rfcs/proposed/111-object-read-cost-regression.md` (ACCEPTED 2026-08-18)
+**RFC:** `rfcs/done/111-object-read-cost-regression.md` (ACCEPTED 2026-08-18)
 **Stage 1:** merged at `13f7a4b`. `verify` is linear again — 27.04 ms at N=160 against 167.85 ms before,
 tail ratio 1.97.
 **Scope:** migrate the writing and mixed entry points to `ObjectWriteSession`. §6.2 (positional reads)

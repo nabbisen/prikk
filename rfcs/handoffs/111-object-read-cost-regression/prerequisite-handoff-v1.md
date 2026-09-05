@@ -5,7 +5,7 @@
 > [`stage-2-handoff-v1.md`](stage-2-handoff-v1.md)** in this directory. Kept because its Q1 inventory and
 > Q2-Q4 reasoning are cited by the design and the reviews, not because anything in it is still to do.
 
-**RFC:** `rfcs/proposed/111-object-read-cost-regression.md` (ACCEPTED 2026-08-18)
+**RFC:** `rfcs/done/111-object-read-cost-regression.md` (ACCEPTED 2026-08-18)
 **Scope of this handoff:** RFC 111 §6.1 **and the cost gate in §7**. **§6.2 (positional reads) is held
 back** — it is worth ~5% and must not be bundled in.
 

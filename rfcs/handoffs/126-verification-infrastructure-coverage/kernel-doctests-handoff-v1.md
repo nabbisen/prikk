@@ -1,6 +1,6 @@
 # RFC 126 §4 — the ten kernel doctests
 
-**Authority:** `rfcs/proposed/126-verification-infrastructure-coverage.md` §4.
+**Authority:** `rfcs/done/126-verification-infrastructure-coverage.md` §4.
 **Base:** current `main`. **Under `003-landing-work-on-main.md`.**
 
 **This is RFC 126's last dev-team increment.** §2, §3, §4's CI half, §6a, §6b and §5 increment A have

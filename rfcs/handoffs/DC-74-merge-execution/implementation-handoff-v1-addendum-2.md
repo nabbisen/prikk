@@ -23,7 +23,7 @@ that actually blocks the work.**
 
 ## Your sizing finding now has a permanent home
 
-Rather than leave it in a handoff file, it is `rfcs/proposed/DC-75-MERGE-BLOCK-LINEAGE.md`, credited to
+Rather than leave it in a handoff file, it is `rfcs/done/DC-75-MERGE-BLOCK-LINEAGE.md`, credited to
 you and marked verified by me. It carries your central design question as its §3 — *when a block has two
 parents, what does the derived state mean, and against which parent(s) is it verified?* — with your
 mainline-authoritative / both-parents-verified framing intact, and your four affected tests named in §2 as

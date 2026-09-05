@@ -1,6 +1,6 @@
 # RFC 126 §5 increment A — a benchmark member that criterion can actually live in
 
-**Authority:** `rfcs/proposed/126-verification-infrastructure-coverage.md` §5, under **§6's ruling
+**Authority:** `rfcs/done/126-verification-infrastructure-coverage.md` §5, under **§6's ruling
 (owner, 2026-09-01): option 4** — criterion in its own workspace member, outside `default-members`.
 **Base:** current `main` (`7087428`). **Under `003-landing-work-on-main.md`.**
 

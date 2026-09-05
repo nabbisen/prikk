@@ -6,6 +6,10 @@ already made rather than re-opening them** (§3), and contributes the two things
 not settle: **how a landing page stays true** (§4) and **what it may say that the other two entrance
 surfaces do not** (§5).
 
+**Folder corrected 2026-09-05: `proposed/` → `accepted/`.** Increments 1-4 are implemented and
+shipped in 0.31.1; only increment 5 remains, blocked on DNS. **It is not `done/` yet** — RFC-000
+reserves that for shipped-in-full. Caught by the project owner.
+
 **What the acceptance covers, stated because a bare acceptance is scope-ambiguous.** Unlike RFC 136,
 this RFC carries no open question, so acceptance **clears §7's increments 1-4 to be handed over**;
 increment 5 waits on the domain and on the next publish. It also accepts §5's three-surface division

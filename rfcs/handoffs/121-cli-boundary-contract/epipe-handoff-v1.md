@@ -1,6 +1,6 @@
 # A closed pipe must not panic — implementation handoff
 
-**Authority:** `rfcs/proposed/121-cli-boundary-contract.md` §2.1.
+**Authority:** `rfcs/done/121-cli-boundary-contract.md` §2.1.
 **Base:** current `main` (`94b6cb7`). **Under `003-landing-work-on-main.md`.**
 **The repository moved to `prikk-vcs/prikk` (RFC 129) — confirm your remote before you start.**
 

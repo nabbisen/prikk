@@ -54,9 +54,6 @@ These records are under design review. All proposed RFCs must respect the depend
 | 110 | [Agent Safety and Provenance](./proposed/110-agent-safety-and-provenance.md) | Unscheduled. Owner concept, 2026-08-18, **direction not yet established** and recorded as such. Pillar 1 largely redistributes into RFC 108; Pillar 2 needs criterion 5 as a floor, since provenance sealed over unverified authorship manufactures the appearance of verification. **No design exists** |
 | 113 | [History Import Foundations](./proposed/113-history-import-foundations.md) | Unscheduled. Owner direction 2026-08-19: migrate from Git, Subversion and CVS with history preserved. **Amended the same day — the decoder/encoder tooling becomes its own project**, because prikk's whole third-party runtime surface is five crates and a Git decoder needs `gix` or `libgit2`. **This RFC is therefore prikk's import *contract***, not an importer plan. Records the shared problem (prikk records node identity these systems never had; imported commits cannot carry valid prikk AUTHOR signatures — **DC-53's `Unverifiable` is already the right vocabulary**) and §3.1's three IR questions: what a record is, what must be preserved, what may be omitted. Depends on criteria 2 and 1. **No design exists** |
 | DC-43 | [Release Security and Distribution Controls](./proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) | M2 / **0.20.0** (retargeted from 0.19.0, owner ruling 2026-08-08). **Release-blocked** — inherits key lifecycle from DC-35, which needs amendment, and blocked behind criterion 4's signer bootstrap |
-| 123 | [Commit message and authorship metadata](./proposed/123-commit-message-and-authorship-metadata.md) | Unscheduled. External audit 2026-08-31, **High**. `-m` is required, validated, and discarded. **RULED 2026-09-01: evidence** — an identity-bearing `message` field at `Patch` schema 3, mirroring `TagPayload.message`; `-m` stays required and `commit` gains a `note:` line immediately. A commit *date* is structurally excluded — `created_at` is pinned to 0 and CI proves cross-platform byte-identity from it |
-| 130 | [Module coupling invariant](./proposed/130-module-coupling-invariant.md) | **ACCEPTED by the owner 2026-09-01.** Owner question 2026-09-01 (`prikk-store`'s growth), answered by an independent external architect review and amended by the architect. Two derivations agree: the crate is a layered DAG **spoiled by one cycle (`active ↔ refs`) and four middle-hubs**; size and compile time are not the problem. Gates acyclicity absolutely and new hubs via an allowlist-with-reasons — **a bare degree bound would have rejected RFC 122's own fix**. Touches no files |
-| 131 | [Module grouping and visibility scoping](./proposed/131-module-grouping-and-visibility-scoping.md) | **ACCEPTED by the owner 2026-09-01**, **after RFC 130 and between feature arcs**. Groups the 123 top-level entries (name prefixes cover only 31 of 69 modules; 38 singletons need deliberate groups) and introduces `pub(in crate::<group>)` — the crate has **0 today against 641 `pub(crate)`**. Grouping alone changes nothing about side-effect predictability; the visibility half is the one that does |
 
 **Blocked, not available:** **DC-43** waits on a release-lane event, and additionally
 inherits DC-35's unamended key lifecycle and criterion 4's signer bootstrap, which only the project owner
@@ -68,6 +65,14 @@ re-derived it: the finding is that **line count is the least diagnostic metric a
 owner named lives in one dependency cycle and four middle-hubs. **A crate split is ruled out on evidence**,
 including `fsutil`, the one clean seam — see RFC 130 §6. Both source reviews live under `.git-exclude/` and
 are invisible to a fresh clone, so RFC 130 §2 restates the measurements rather than citing them.
+
+**`accepted/` is where settled-but-unshipped designs live, and it is not listed here.** RFC-000: an
+RFC moves out of `proposed/` the moment review is complete and an implementer may start. **123, 130,
+131 and 137 moved there 2026-09-05** after the project owner caught that they had been left in
+`proposed/` with "ACCEPTED" written in their status text — the folder-versus-status inconsistency
+this file warns about two paragraphs above. The same sweep repointed **35 files** whose handoffs and
+docs still cited an RFC at a folder it had long since left; retiring an RFC had never included that
+step.
 
 **This table is a reading aid and may lag. `ROADMAP.md`'s open-work index is the authoritative
 list of what is proposed** — it is the one bound in both directions by RFC 120's gate

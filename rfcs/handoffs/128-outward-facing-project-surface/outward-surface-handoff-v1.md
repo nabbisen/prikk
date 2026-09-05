@@ -1,6 +1,6 @@
 # RFC 128 §3–§5 — the three items the outward-facing surface still lacks
 
-**Authority:** `rfcs/proposed/128-outward-facing-project-surface.md` **§3, §4, §5**, with §6's
+**Authority:** `rfcs/done/128-outward-facing-project-surface.md` **§3, §4, §5**, with §6's
 constraints binding. §2's `SECURITY.md` shipped in `0.28.0`.
 **Base:** current `main`. **Under `003-landing-work-on-main.md`.**
 

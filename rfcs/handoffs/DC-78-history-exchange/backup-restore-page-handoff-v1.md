@@ -1,6 +1,6 @@
 # DC-44 increment 4 — the page: what backup and restore prove, and what they do not
 
-**Authority:** `rfcs/proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md`, design goal 6.
+**Authority:** `rfcs/done/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md`, design goal 6.
 **Base:** `c135dd0` or later `main`. **Under `003-landing-work-on-main.md`** — commit locally on
 `main`, do not push, do not tag.
 

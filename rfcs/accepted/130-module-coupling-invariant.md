@@ -5,6 +5,10 @@ scope written here, including §4's amendment (the hub bound is an allowlist-wit
 degree threshold), §5 (line and module counts are not gated), §6 (no crate split, `fsutil` included),
 and §7's ordering (this lands before RFC 131).
 
+**Folder corrected 2026-09-05: `proposed/` → `accepted/`.** Owner-accepted 2026-09-01 with a
+settled design, so an implementer may start; RFC-000 puts that in `accepted/`. Caught by the project
+owner. See RFC 123's note for the systemic version of the same error.
+
 **Kept in `rfcs/proposed/` until implemented, deliberately.** RFC 120's Open-Work Index gates
 `rfcs/proposed/*.md` only and §6 Q3 excludes `rfcs/accepted/`; moving an accepted-but-unbuilt RFC out
 of `proposed/` would drop open work off the owner's board. Same reasoning that kept DC-44 in

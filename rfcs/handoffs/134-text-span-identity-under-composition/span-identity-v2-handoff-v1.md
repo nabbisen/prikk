@@ -1,6 +1,6 @@
 # RFC 134 — content-unique span identity, Patch schema 3
 
-**Authority:** `rfcs/proposed/134-text-span-identity-under-composition.md` **§8**, option (a),
+**Authority:** `rfcs/done/134-text-span-identity-under-composition.md` **§8**, option (a),
 **authorized by the project owner 2026-09-04**.
 **Base:** current `main`. **Under `003-landing-work-on-main.md`.**
 

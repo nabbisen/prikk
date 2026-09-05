@@ -1,6 +1,6 @@
 # `SECURITY.md` — implementation handoff
 
-**Authority:** `rfcs/proposed/128-outward-facing-project-surface.md` §2, §2a.
+**Authority:** `rfcs/done/128-outward-facing-project-surface.md` §2, §2a.
 **Base:** current `main` (`94b6cb7`). **Under `003-landing-work-on-main.md`.**
 **Sequenced after RFC 129, which is complete — the repository is now `prikk-vcs/prikk`.**
 

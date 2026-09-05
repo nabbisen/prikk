@@ -1,6 +1,6 @@
 # No ignore mechanism at any layer — implementation handoff
 
-**Authority:** `rfcs/proposed/124-worktree-ignore-mechanism.md`.
+**Authority:** `rfcs/done/124-worktree-ignore-mechanism.md`.
 **Base:** current `main` (`c1335ad`). **Under `003-landing-work-on-main.md`.**
 
 **Two commits, in this order: the disclosure, then the mechanism.** RFC 124 §5 is explicit that the

@@ -1,6 +1,6 @@
 # Per-command `--help`, and four flags the help does not mention — implementation handoff
 
-**Authority:** `rfcs/proposed/121-cli-boundary-contract.md` §2.5.
+**Authority:** `rfcs/done/121-cli-boundary-contract.md` §2.5.
 **Base:** current `main` (`42d0d16`). **Under `003-landing-work-on-main.md`.**
 
 **Scope: discovery only** — what the CLI tells you about itself. §2.1 (EPIPE) shipped at `0c96b06`;

@@ -1,6 +1,6 @@
 # RFC 137 increments 2-3 — the book's `site-url`, and the Pages staging step
 
-**RFC:** `rfcs/proposed/137-project-entrance-landing-page.md` §7 increments 2 and 3.
+**RFC:** `rfcs/accepted/137-project-entrance-landing-page.md` §7 increments 2 and 3.
 **Base:** `main` at `3126a24` (increment 1, accepted and pushed).
 
 **Read §1 before planning the work: one of these two increments cannot be landed on its own, and the

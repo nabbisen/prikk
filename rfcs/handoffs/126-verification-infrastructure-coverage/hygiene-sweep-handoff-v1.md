@@ -1,6 +1,6 @@
 # RFC 126 §6a and §6b — the five-item hygiene sweep
 
-**Authority:** `rfcs/proposed/126-verification-infrastructure-coverage.md` **§6a** (workflow
+**Authority:** `rfcs/done/126-verification-infrastructure-coverage.md` **§6a** (workflow
 permissions) and **§6b** (AUD-05 through AUD-08, adopted 2026-09-02).
 **Base:** current `main` (`8608db0`). **Under `003-landing-work-on-main.md`.**
 

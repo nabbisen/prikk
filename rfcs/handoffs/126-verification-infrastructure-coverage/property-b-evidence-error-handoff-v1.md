@@ -1,6 +1,6 @@
 # Property B found something real, and we cannot replay it — make it reproducible first
 
-**Authority:** `rfcs/proposed/126-verification-infrastructure-coverage.md` §2, whose property tests
+**Authority:** `rfcs/done/126-verification-infrastructure-coverage.md` §2, whose property tests
 landed at `8608db0`.
 **Base:** current `main` (`b81b1eb`). **Under `003-landing-work-on-main.md`.**
 

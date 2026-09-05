@@ -1,6 +1,6 @@
 # RFC 137 increment 4 — build the landing page
 
-**RFC:** `rfcs/proposed/137-project-entrance-landing-page.md` §7 increment 4.
+**RFC:** `rfcs/accepted/137-project-entrance-landing-page.md` §7 increment 4.
 **Base:** `main` at `ea687c9` (increment 2, pushed). **Increment 3's commit `d3124e4` is held,
 unpushed, and is re-made as part of this round — see §1.**
 

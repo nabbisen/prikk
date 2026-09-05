@@ -1,6 +1,6 @@
 # Property tests for the patch algebra — implementation handoff
 
-**Authority:** `rfcs/proposed/126-verification-infrastructure-coverage.md` §2.
+**Authority:** `rfcs/done/126-verification-infrastructure-coverage.md` §2.
 **Base:** current `main` (`9491bf0`). **Under `003-landing-work-on-main.md`.**
 
 **Scope: §2 only.** §5 (benchmarks, criterion in its own member) and the kernel doctests are separate

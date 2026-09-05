@@ -1,6 +1,6 @@
 # Two gates that do not exist: advisory monitoring in CI, and documentation — implementation handoff
 
-**Authority:** `rfcs/proposed/126-verification-infrastructure-coverage.md` §3 and §4.
+**Authority:** `rfcs/done/126-verification-infrastructure-coverage.md` §3 and §4.
 **Base:** current `main` (`42d0d16`). **Under `003-landing-work-on-main.md`.**
 
 **Scope: §3 and §4 only** — RFC 126's cheap half. **§2 (oracle-backed property tests for the patch

@@ -1,6 +1,6 @@
 # The exit-code contract, and the arguments that produce it — implementation handoff
 
-**Authority:** `rfcs/proposed/121-cli-boundary-contract.md` §2.2, §2.3, §2.4, §2.6, and §6/§6a's
+**Authority:** `rfcs/done/121-cli-boundary-contract.md` §2.2, §2.3, §2.4, §2.6, and §6/§6a's
 ruled contract.
 **Base:** current `main` (`42d0d16`). **Under `003-landing-work-on-main.md`.**
 

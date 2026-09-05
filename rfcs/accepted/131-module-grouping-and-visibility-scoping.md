@@ -6,6 +6,10 @@ of the direction and the constraints; §2's central design question (role-based 
 grouping, and what to do with the 38 singletons) is explicitly still open and is the implementing
 increment's work.
 
+**Folder corrected 2026-09-05: `proposed/` → `accepted/`.** Owner-accepted 2026-09-01 with a
+settled design and a stated sequencing constraint (after RFC 130, between feature arcs), so an
+implementer may start. Caught by the project owner.
+
 **Kept in `rfcs/proposed/` until implemented** — see RFC 130's status note for why.
 
 Same origin as RFC 130 (owner question 2026-09-01; external architect

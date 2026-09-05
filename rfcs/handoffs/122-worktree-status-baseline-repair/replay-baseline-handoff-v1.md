@@ -1,6 +1,6 @@
 # `worktree-status` on the replay baseline — implementation handoff
 
-**Authority:** `rfcs/proposed/122-worktree-status-baseline-repair.md`.
+**Authority:** `rfcs/done/122-worktree-status-baseline-repair.md`.
 **Base:** current `main` (`7aef8b5`). **Under `003-landing-work-on-main.md`.**
 **The repository moved to `prikk-vcs/prikk` on 2026-09-01 (RFC 129) — confirm your remote before you
 start.**

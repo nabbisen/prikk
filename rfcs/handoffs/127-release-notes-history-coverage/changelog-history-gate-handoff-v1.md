@@ -1,6 +1,6 @@
 # Restore 0.23.0's changelog heading, and gate every released tag — implementation handoff
 
-**Authority:** `rfcs/proposed/127-release-notes-history-coverage.md`.
+**Authority:** `rfcs/done/127-release-notes-history-coverage.md`.
 **Base:** current `main` (`94b6cb7`). **Under `003-landing-work-on-main.md`.**
 **The repository moved to `prikk-vcs/prikk` (RFC 129) — confirm your remote before you start.**
 

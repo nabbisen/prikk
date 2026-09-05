@@ -73,7 +73,7 @@ expect to write `--ref` every time instead.
 `prikk commit -m <message>` requires a non-empty message, validates it, and then discards it —
 `commit` itself prints a note saying so on every invocation. `prikk log` shows only block and ref
 metadata, never a message, an author, or a date. This is a known, named gap
-([RFC 123](https://github.com/prikk-vcs/prikk/blob/main/rfcs/proposed/123-commit-message-and-authorship-metadata.md)),
+([RFC 123](https://github.com/prikk-vcs/prikk/blob/main/rfcs/accepted/123-commit-message-and-authorship-metadata.md)),
 not an oversight this page is
 covering for: persisting the message is a later increment, ruled but not yet implemented. A `tag`'s
 message, by contrast, **is** persisted today — the two commands are not symmetric.
@@ -98,7 +98,7 @@ branch is once fetched.
 |---|---|
 | `commit` only queues a signed Patch to the local WAL; `seal` publishes it as a Block and moves the branch ref. | [`node_authoring.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/worktree_patch/node_authoring.rs), [`seal.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/seal.rs) |
 | There is no current-branch pointer or `HEAD`; every command resolves `--ref` explicitly. | [`branch.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/branch.rs), [`commands.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/commands.rs) |
-| `commit -m`'s message is validated non-empty and then discarded; `tag create -m`'s message is persisted. | [`main.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/main.rs), [`payload/tag.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-object/src/payload/tag.rs), [RFC 123](https://github.com/prikk-vcs/prikk/blob/main/rfcs/proposed/123-commit-message-and-authorship-metadata.md) |
+| `commit -m`'s message is validated non-empty and then discarded; `tag create -m`'s message is persisted. | [`main.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/main.rs), [`payload/tag.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-object/src/payload/tag.rs), [RFC 123](https://github.com/prikk-vcs/prikk/blob/main/rfcs/accepted/123-commit-message-and-authorship-metadata.md) |
 | There is no staging area; `commit --from-worktree` always considers the whole worktree, filtered only by `.prikkignore`. | [`worktree_files.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/worktree_patch/node_authoring/worktree_files.rs), [`ignore.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/ignore.rs) |
 | No remote registry or network transport exists; distribution is `bundle export`/`import`/`verify` or `sync`, both file-based, landing as an untrusted `remotes/<name>` pointer. | [`bundle.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/bundle.rs), [`sync.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/sync.rs), [`received.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/received.rs) |
 | Every command named on this page is a real registered command. | [`commands.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/commands.rs) (`COMMANDS`), checked mechanically by [RFC 118 §8's rule (A)](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/commands/tests.rs) |

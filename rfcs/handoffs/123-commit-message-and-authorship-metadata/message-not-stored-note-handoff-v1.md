@@ -1,6 +1,6 @@
 # `commit` must say that it is discarding your message — implementation handoff
 
-**Authority:** `rfcs/proposed/123-commit-message-and-authorship-metadata.md` §4 Option C-revised,
+**Authority:** `rfcs/accepted/123-commit-message-and-authorship-metadata.md` §4 Option C-revised,
 **ruled by the project owner 2026-09-01** and ruled to be taken *"immediately and independently"* of
 the schema-3 work.
 **Base:** current `main` (`a660586`). **Under `003-landing-work-on-main.md`.**

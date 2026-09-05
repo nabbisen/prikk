@@ -1,6 +1,6 @@
 # RFC 134 shape 1 — state the invariant, and stop calling a consistent refusal "malformed evidence"
 
-**Authority:** `rfcs/proposed/134-text-span-identity-under-composition.md` **§7.4 item 1**, ruled
+**Authority:** `rfcs/done/134-text-span-identity-under-composition.md` **§7.4 item 1**, ruled
 2026-09-04 and accepted with the RFC.
 **Base:** current `main`. **Under `003-landing-work-on-main.md`.**
 

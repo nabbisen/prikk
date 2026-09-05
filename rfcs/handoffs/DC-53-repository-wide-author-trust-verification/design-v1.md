@@ -7,7 +7,7 @@
 > amendment** — that author key material does not travel, so Stage 2 must carry transport *and* pinning
 > together — is what set Stage 2's scope. Read this for the decisions; work from the Stage 2 design.
 
-**RFC:** `rfcs/proposed/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md`
+**RFC:** `rfcs/done/DC-53-REPOSITORY-WIDE-AUTHOR-TRUST-VERIFICATION.md`
 **Brief:** `design-brief-v1.md` — this document is what that brief asked the design stage to produce.
 
 **Scheduling.** The RFC and brief both say *"sequenced after DC-43."* **The project owner scheduled DC-53

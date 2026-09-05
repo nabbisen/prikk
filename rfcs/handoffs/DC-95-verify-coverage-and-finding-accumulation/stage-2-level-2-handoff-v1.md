@@ -99,7 +99,7 @@ path that no longer exists. `crates/` is not architect-writable, so they are you
 - `crates/prikk-cli/tests/dc78_seal_provenance.rs:3`
 - `crates/prikk-store/src/trust.rs:4`
 
-Both read `rfcs/accepted/DC-78-HISTORY-EXCHANGE.md`; both should read `rfcs/done/…`.
+Both read `rfcs/done/DC-78-HISTORY-EXCHANGE.md`; both should read `rfcs/done/…`.
 
 **Do not sweep for others.** The nearby DC-72 citations in `path.rs`, `trust.rs:180` and
 `refs/publication.rs:141` are correct — DC-72 did not move. Exactly these two lines are wrong.

@@ -1,6 +1,6 @@
 # DC-44 increment 2 — interrupted export and destination collision
 
-**Authority:** `rfcs/proposed/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md`, design goal 5's
+**Authority:** `rfcs/done/DC-44-MIGRATION-BACKUP-RESTORE-EVIDENCE.md`, design goal 5's
 *"interrupted export … destination collision"*. **Base:** `d7c180c` or later `main`.
 **Under `003-landing-work-on-main.md`** — commit locally on `main`, do not push, do not tag.
 

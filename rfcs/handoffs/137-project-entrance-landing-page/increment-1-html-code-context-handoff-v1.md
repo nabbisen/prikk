@@ -1,6 +1,6 @@
 # RFC 137 increment 1 — teach the currency gate to read HTML code context
 
-**RFC:** `rfcs/proposed/137-project-entrance-landing-page.md` §4.3, §7 increment 1.
+**RFC:** `rfcs/accepted/137-project-entrance-landing-page.md` §4.3, §7 increment 1.
 **Base:** `main` at `de192c5`.
 **Gates this increment:** increment 4 (the landing page itself) must not land before this does.
 

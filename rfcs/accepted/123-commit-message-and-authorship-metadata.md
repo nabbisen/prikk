@@ -4,6 +4,13 @@
 optional `message` field on `PatchPayload`, inside object identity, at ~~`Patch` schema 3~~ **the next
 free `Patch` schema, now 4**, mirroring `TagPayload.message`.
 
+**Folder corrected 2026-09-05: `proposed/` → `accepted/`.** RFC-000's 5-folder variant defines
+`proposed/` as *"open for review… implementer should not yet start work"* and `accepted/` as *"review
+complete; implementer may start"*. §8's design is settled and a handoff is issued, so this belonged in
+`accepted/` from the moment that handoff was written. Caught by the project owner; the architect had
+left every owner-accepted RFC in `proposed/` and marked it accepted in the status text instead — the
+exact folder-versus-status inconsistency `rfcs/README.md` warns against.
+
 **Schema-number correction, 2026-09-04.** This ruling named schema 3 on 2026-09-01. **RFC 134 §8 then
 minted `PATCH_TEXT_SPAN_V2_SCHEMA = 3` for content-unique span identity, on 2026-09-04, without the
 architect checking whether an accepted ruling had already claimed that number** — the architect's

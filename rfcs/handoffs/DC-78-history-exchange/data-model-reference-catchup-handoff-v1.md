@@ -136,7 +136,7 @@ exists**; or you find a *fifth* undocumented shipped concept large enough to nee
 **One open item I am NOT asking you to answer** — and a correction to v1 of this handoff.
 
 **v1 of this section said "there is no such concept in prikk". That was wrong**, and the owner caught it.
-**`rfcs/proposed/108-workspace-concurrent-sessions.md` exists** — *"Workspace: concurrent sessions in one
+**`rfcs/accepted/108-workspace-concurrent-sessions.md` exists** — *"Workspace: concurrent sessions in one
 physical project"*, **authored by the project owner** on 2026-08-18, and ranked in `EXECUTION-ORDER.md`.
 My claim came from grepping the two reference files and the shipped code, and I then stated it about
 **prikk as a whole**. The scope of the grep was not the scope of the claim.
