@@ -8,7 +8,7 @@ their withdrawal."*
 made the entrance live. **`prikk config` is deferred with a named trigger — which removes §4's
 dependency question from the critical path entirely** — `prikk key`/`prikk setup` are ruled in, a
 helper boundary is deliberately refused, and **§6 is answered: prikk stores no secret**, but may write
-one to a path the user names, `ssh-keygen`-style. **Two questions remain for the owner (§9.8).**
+one to a path the user names, `ssh-keygen`-style. **§9.8's two questions were withdrawn and ruled by the architect the same day, on the owner's challenge that neither should have been asked**: `--out` is in (printing a seed to a terminal is the *less* secure option, and with `--out` the seed is written and never printed), and `setup` is a single command composed over a first-class sequence, which must show the trust decision it makes. **The design is complete; nothing on this RFC awaits the owner.**
 
 **Deliberately unhurried.** The owner asked for careful design *"now and later with time we need"*, and
 directed that security be considered seriously. **This RFC opens the problem and the option space; it
@@ -313,15 +313,57 @@ get a reader to **understand what is different**, which is the job `docs/src/ref
 already has. **The docs half is not separate work and must not be scheduled as a follow-up** — a
 `setup` flow that leaves a visitor correctly set up and still surprised has solved the smaller half.
 
-### 9.8 What remains for the owner
+### 9.8 Both questions withdrawn and ruled by the architect, 2026-09-06
 
-1. **Is §9.2's `--out` exception acceptable at all**, or should prikk never write secret material even
-   to a path the user names? The design works without it.
-2. **Is `setup` one command or a documented sequence?** §9.3 assumes a command; a documented sequence
-   is defensible and cheaper, and it keeps prikk out of orchestration.
+**The owner asked why either was submitted. Neither should have been — both had an answer in the
+material already in front of the architect, and asking moved a decision rather than making one.**
 
-**Nothing else needs a ruling.** §9.1's deferral, §9.2's line, §9.3's argv prohibition and §9.6's
-refusal are the architect's, recorded here rather than raised.
+#### 9.8.1 `--out` is IN, because not having it is the less secure option
+
+**The background the question omitted, and which decides it:** without `--out`, the only way to capture
+a generated seed is to **read it off a terminal**. That puts secret key material into scrollback, into
+`tmux`/`screen` buffers, into any terminal logging the user has enabled, and then invites them to move
+it into an environment variable by typing or pasting an `export` line — **into shell history.**
+
+**A direct write to a `0600` file is strictly safer than printing**, and the risk it is imagined to
+introduce — a secret at rest — exists either way, because the user must put the seed somewhere to use
+it across shells. The choice was never "secret at rest or not". It was **"secret at rest via a
+controlled write, or via the least controlled channel available."**
+
+**Ruled: `--out` is in, and it strengthens rather than weakens §9.2's line** — prikk still never
+invents the location, never reads it back, never manages its lifecycle.
+
+**With one refinement the question's framing had hidden:** *when `--out` is given, the seed is written
+and **never printed**.* Printing it as well would reintroduce the exact scrollback exposure `--out`
+exists to avoid. Output in that case is the public key and the next steps only.
+
+#### 9.8.2 `setup` is a single command, composed over a first-class sequence
+
+**"A documented sequence is defensible" was lazy and is withdrawn.** It fails this RFC's own success
+measure: §9.5 defines success as **how few unfamiliar steps precede the first working repository**, and
+a documented sequence reduces that count by **zero** — it only writes the steps down. Arguing for it
+on implementation cost was doubly wrong; the owner has ruled that cost is not a factor here, and it
+was not a good argument before that ruling either.
+
+**The owner's own observation is the correct design and is stronger than the question:** *"even a
+single command is actually based on sequence… sequence is essential and perhaps base."* So it is not
+either/or —
+
+- **The individual commands stay first-class and documented** — `key generate`, `trust maintainer add`,
+  `init`. That is the sequence, it is what a reader follows to *understand*, and §9.7 makes
+  understanding the entrance's actual job.
+- **`prikk setup` composes them** for the person who wants a working repository now.
+
+**One constraint that follows from taking security seriously, and does not weaken the command:**
+`setup` **must show the trust decision it makes.** Registering a maintainer key is a trust act; a
+one-shot flow that performs it invisibly teaches a user that trust registration is a formality. It
+should print what it trusted and why that step exists — the composition may remove the *typing*, never
+the *seeing*.
+
+#### 9.8.3 Nothing remains for the owner on this RFC
+
+§9.1's deferral, §9.2's line, §9.3's argv prohibition, §9.6's refusal, and now §9.8's two rulings are
+all the architect's. **The design is complete and a handoff may be written.**
 
 ## 8. What this RFC does not yet decide
 
