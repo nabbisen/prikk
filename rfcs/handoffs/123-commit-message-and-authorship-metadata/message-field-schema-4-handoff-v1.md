@@ -1,6 +1,6 @@
 # RFC 123 — the commit message becomes evidence: `PatchPayload.message` at `Patch` schema 4
 
-**RFC:** `rfcs/accepted/123-commit-message-and-authorship-metadata.md` — the ruling is §6/Status
+**RFC:** `rfcs/done/123-commit-message-and-authorship-metadata.md` — the ruling is §6/Status
 (Option A, message-as-evidence, owner 2026-09-01); **the design is §8, and it is settled input, not a
 starting point for re-derivation.**
 **Base:** `main` at `10c9899`. **Release grouping authorized 2026-09-05: schema 4 ships alone.**

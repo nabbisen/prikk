@@ -247,7 +247,7 @@ item is open.
 **Accepted-but-unshipped RFCs are not in this list, and that is RFC 120's own scope, not an
 omission.** The gate binds `rfcs/proposed/` in both directions, so an `accepted/` file named here
 would fail `boundary-check`. **Open work also lives in `rfcs/accepted/`** — as of 2026-09-05 that is
-**123** (message field, handoff issued), **130** and **131** (coupling gate, module grouping — both
+**130** and **131** (coupling gate, module grouping — both
 owner-accepted 2026-09-01, unimplemented), and **137** (increments 1-4 shipped in 0.31.1, increment 5
 blocked on DNS). See "Proposed ordering" below for where each sits in the schedule.
 
@@ -438,6 +438,40 @@ now so it is a recognised threshold rather than a later surprise.
 **Band 3 is complete except RFC 126 §5.** RFC 123's interim, RFC 124, and RFC 126 §2 all landed;
 §6a and §6b followed on 2026-09-03. **`AUD-05` through `AUD-10` are all delivered** — the whole
 no-design-decision half of this program — leaving `AUD-01` through `AUD-04`, which are design work.
+
+### Release position — 0.32.0 shipped 2026-09-05
+
+**`0.32.0` was cut at `87b65c1`**: CI green on all 15 jobs, `release.yml` green on four build targets,
+16 assets, **all eight crates published to crates.io and confirmed live at `0.32.0` against the sparse
+index**.
+
+**Minor, and the opposite call from `0.31.1` the same day** — that cut moved no runtime source at all;
+this one changes what every new repository contains. **RFC 123 shipped**: `prikk commit -m <message>`
+no longer discards the message. It is signed, identity-bearing evidence at `Patch` **schema 4**, shown
+per patch in `prikk log`, and changing it changes the patch id.
+
+**This is the second one-way break in two days.** Repositories written by `0.32.0` are unreadable by
+`0.31.1` and earlier, on **every commit** — `-m` was already mandatory. Two different refusals,
+demonstrated against a real `0.31.1` build rather than reasoned about, because a bundle's decode path
+reaches `PatchPurpose::decode_from_patch_payload` before repository-level schema admission:
+
+```
+local read : format-2 patch does not accept envelope schema 4 (accepted: [1, 2, 3])
+bundle     : invalid PatchPurpose canonical form: ... unknown PatchPayload field tag: 6
+```
+
+The reverse direction holds: a `0.31.1`-written repository reads and verifies cleanly under `0.32.0`.
+
+**One source break for library consumers**, named in the notes rather than left to be discovered:
+`PatchPayload` gained a public field and is not `#[non_exhaustive]`, so a downstream struct literal
+needs `message: None`.
+
+**Two things this cut also carried, both found by sweeping rather than by being on a list:**
+`docs/src/reference/git-mapping.md` had an entire section titled *"Messages are not yet stored"* plus
+two claim rows that the release made false — a published page contradicting the product on the day it
+shipped. And **RFC 123 moved `accepted/` → `done/`**, including repointing its two handoffs, the
+retirement step that had never existed before the 2026-09-05 lifecycle sweep.
+
 
 ### Release position — 0.31.1 shipped 2026-09-05
 

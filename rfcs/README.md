@@ -68,7 +68,7 @@ are invisible to a fresh clone, so RFC 130 §2 restates the measurements rather 
 
 **`accepted/` is where settled-but-unshipped designs live, and it is not listed here.** RFC-000: an
 RFC moves out of `proposed/` the moment review is complete and an implementer may start. **123, 130,
-131 and 137 moved there 2026-09-05** after the project owner caught that they had been left in
+131 and 137 moved there 2026-09-05**, and **123 moved on to `done/` the same day, shipped in 0.32.0** after the project owner caught that they had been left in
 `proposed/` with "ACCEPTED" written in their status text — the folder-versus-status inconsistency
 this file warns about two paragraphs above. The same sweep repointed **35 files** whose handoffs and
 docs still cited an RFC at a folder it had long since left; retiring an RFC had never included that

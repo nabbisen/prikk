@@ -18,7 +18,7 @@ which is a design for the import *contract*, and nothing implements it yet.
 | `git init` | [`prikk init`](../guide/tutorial.md) | Same idea: create the repository layout. |
 | `git clone` | — | **Missing.** [`prikk bundle import`](../guide/backup-restore.md) reads a bundle file into an untrusted, unmerged `remotes/<ref>` pointer — it does not create a worktree or a local branch. There is no network transport at all: bundles and sync artifacts are files you move yourself. |
 | `git add` (staging) | — | **Missing, deliberately.** There is no index and no staging area. `prikk commit --from-worktree` always considers the whole worktree (governed by `.prikkignore`, which is a flat list of literal path prefixes — no globbing, no negation, unlike `.gitignore`; see [Ignoring Worktree Paths](../guide/ignore.md)). You cannot stage part of a change. |
-| `git commit` | [`prikk commit --from-worktree -m <message>`](../guide/patches/worktree-patch.md) | **Two-phase, not one.** `commit` only queues a signed Patch into a local WAL; nothing is published yet. See [Commit versus seal](#commit-versus-seal-a-two-phase-model) below. **The message is validated (required, non-empty) and then discarded** — see [Messages are not yet stored](#messages-are-not-yet-stored). |
+| `git commit` | [`prikk commit --from-worktree -m <message>`](../guide/patches/worktree-patch.md) | **Two-phase, not one.** `commit` only queues a signed Patch into a local WAL; nothing is published yet. See [Commit versus seal](#commit-versus-seal-a-two-phase-model) below. **The message is stored as signed evidence** since `0.32.0` — see [Messages are stored](#messages-are-stored-authors-and-dates-are-not).
 | — | [`prikk seal --allow-no-audit`](../guide/patches/worktree-patch.md) | **No Git counterpart.** Publishes the queued WAL as a signed Block, moving the branch ref. Nothing is visible to `log` or a peer before this runs. |
 | `git status` | [`prikk status`](../guide/status.md) + [`prikk worktree-status`](../guide/worktree-status.md) | Split in two: `status` reports the repository/WAL/queue state; `worktree-status` reports the worktree's own drift against the replay baseline `commit` would author against. Neither is `git status`'s single combined view. |
 | `git log` | [`prikk log`](../guide/history.md) | Block and ref metadata only — target Block ID, RefState ID, kind, parent/Patch counts, rollback classification. **No commit message, author, or date is shown**, because none is stored yet (see below). |
@@ -68,15 +68,24 @@ present-tense limitation: switching "needs a separate, not-yet-designed incremen
 to `git switch` or `git checkout <branch>` changing what subsequent commands operate on implicitly,
 expect to write `--ref` every time instead.
 
-## Messages are not yet stored
+## Messages are stored; authors and dates are not
 
-`prikk commit -m <message>` requires a non-empty message, validates it, and then discards it —
-`commit` itself prints a note saying so on every invocation. `prikk log` shows only block and ref
-metadata, never a message, an author, or a date. This is a known, named gap
-([RFC 123](https://github.com/prikk-vcs/prikk/blob/main/rfcs/accepted/123-commit-message-and-authorship-metadata.md)),
-not an oversight this page is
-covering for: persisting the message is a later increment, ruled but not yet implemented. A `tag`'s
-message, by contrast, **is** persisted today — the two commands are not symmetric.
+`prikk commit -m <message>` requires a non-empty message and **stores it** — since `0.32.0` it is a
+signed, identity-bearing field on the `Patch` itself (`Patch` schema 4), and `prikk log` prints it
+under its block, one line per patch. Changing a message changes the patch id, exactly as changing an
+operation does: it is evidence, not an annotation
+([RFC 123](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/123-commit-message-and-authorship-metadata.md)).
+
+**A patch written before `0.32.0` carries no message and shows no message line** — absence, not a
+placeholder. Those patches stay readable forever; the message was never recorded and cannot be
+attached retroactively.
+
+**An author display name and a commit date are still not stored, and the date never will be.**
+`created_at` is pinned to zero at every signing site so object ids stay reproducible across machines,
+which CI proves by mutating a repository on Windows and Linux and diffing the resulting id lists. A
+timestamp inside the identity surface would destroy that property. The display name is a separate,
+deferred question (RFC 123 §5). A `tag`'s message is persisted too — the two commands are now
+symmetric in this respect.
 
 ## File-based distribution instead of remotes
 
@@ -98,7 +107,7 @@ branch is once fetched.
 |---|---|
 | `commit` only queues a signed Patch to the local WAL; `seal` publishes it as a Block and moves the branch ref. | [`node_authoring.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/worktree_patch/node_authoring.rs), [`seal.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/seal.rs) |
 | There is no current-branch pointer or `HEAD`; every command resolves `--ref` explicitly. | [`branch.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/branch.rs), [`commands.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/commands.rs) |
-| `commit -m`'s message is validated non-empty and then discarded; `tag create -m`'s message is persisted. | [`main.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/main.rs), [`payload/tag.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-object/src/payload/tag.rs), [RFC 123](https://github.com/prikk-vcs/prikk/blob/main/rfcs/accepted/123-commit-message-and-authorship-metadata.md) |
+| `commit -m`'s message is stored as an identity-bearing `Patch` field since `0.32.0`; `tag create -m`'s message is persisted too. | [`main.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/main.rs), [`payload/tag.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-object/src/payload/tag.rs), [RFC 123](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/123-commit-message-and-authorship-metadata.md) |
 | There is no staging area; `commit --from-worktree` always considers the whole worktree, filtered only by `.prikkignore`. | [`worktree_files.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/worktree_patch/node_authoring/worktree_files.rs), [`ignore.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/ignore.rs) |
 | No remote registry or network transport exists; distribution is `bundle export`/`import`/`verify` or `sync`, both file-based, landing as an untrusted `remotes/<name>` pointer. | [`bundle.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/bundle.rs), [`sync.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/sync.rs), [`received.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/received.rs) |
 | Every command named on this page is a real registered command. | [`commands.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/commands.rs) (`COMMANDS`), checked mechanically by [RFC 118 §8's rule (A)](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/commands/tests.rs) |
