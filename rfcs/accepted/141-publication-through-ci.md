@@ -242,9 +242,33 @@ non-`complete` document rests entirely on one implementation's internal logic; a
 hand-edited file, would pass. **A constraint that only holds when the document already claims success
 is not an integrity constraint.**
 
-**Shape of the fix**, expressible in JSON Schema and left for its own increment: a crate-level
-conditional — *if `checksum_equality` is `match` or `mismatch`, all three checksum fields must be
-present `sha256` values.* Equivalently, a `null` in any of the three forces `"not-observed"`.
+**Shape of the fix — and it is smaller than it first looked, because the rule already exists.**
+`tools/release-policy/src/policy/evidence.rs::crate_checksum_state_valid` **already enforces this in
+Rust, and more strictly than the ruling above asked**: `"match"` requires all three checksums present
+*and equal*; `"mismatch"` requires all three present *and not all equal*; `"not-observed"` is
+unconditional. **This project already decided what an honest crate row looks like. The schema simply
+does not say it.**
+
+So the work is not to invent a rule but to **lift the presence half of an existing one into the
+schema**: a crate-level conditional — *if `checksum_equality` is `match` or `mismatch`, all three
+checksum fields must be present `sha256` values.*
+
+**The equality half cannot follow it.** JSON Schema has no cross-field value comparison, so
+"all three equal" stays in the Rust validator. **That division is the honest one and should be stated
+in the schema's own description** rather than left for a reader to discover: the schema bounds shape,
+the validator bounds agreement.
+
+**Why lifting it matters even though Rust already checks it.** `crate_checksum_state_valid` is reached
+only through `tag_or_artifact_invalid`, which §7a shows rejects any eight-crate document on count
+before reaching it. **The strict rule is currently unreachable for every document this workspace can
+produce.** A schema constraint holds for any producer and any consumer, including ones that never call
+this tool.
+
+**Handoff issued 2026-09-06:**
+`rfcs/handoffs/141-publication-through-ci/tighten-the-evidence-schema-handoff-v1.md`. It carries the
+architect's own pre-check: **all ten fixtures and all 146 oracle entries were scanned and none carries
+the dishonest pattern**, so the constraint should break nothing — and the handoff turns that into an
+instruction, that a fixture which does start failing is **a finding, not a fixture to edit**.
 
 **Not done here, and not folded into increment 4.** It changes the contract the oracle's 73 cases are
 written against, and it is DC-35 material — governance, not plumbing. **It gets its own increment and
