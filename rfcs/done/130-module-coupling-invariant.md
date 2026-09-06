@@ -1,6 +1,30 @@
 # RFC 130 — A coupling invariant for `prikk-store`, and the gate that holds it
 
-**Status.** **ACCEPTED by the project owner 2026-09-01**, together with RFC 131. Accepted at the
+**Status.** **CLOSED 2026-09-06 and moved to `rfcs/done/` — shipped in 0.34.0** (`f1be4c4`).
+The gate exists: `tools/release-policy/src/boundary/coupling.rs` (with `cfg_expr.rs` and `graph.rs`)
+runs inside `boundary-check`, and §4b's ruling is what it enforces — **`DECLARED_CYCLES` and
+`DECLARED_HUBS` are allowlists with reasons, bound in both directions**, so a new cycle or hub fails
+the gate *and* a declared entry that no longer exists in the graph fails it too. §4b.3's requirement
+holds in the code: every cycle entry states what would have to change to remove it, which makes the
+allowlist a ledger of structural debt rather than a list of exemptions.
+
+**The gate proved itself before this cut.** It caught a regression introduced by RFC 138 — a round the
+architect had accepted one turn earlier — which is the strongest evidence available that §3's invariant
+is now held by something other than attention.
+
+**What outlives this RFC, and it is work, tracked elsewhere.** The declarations are debt, not
+resolution: **8 `DECLARED_CYCLES` entries covering 13 directed edges across a six-module
+strongly-connected component, and 5 `DECLARED_HUBS`.** **RFC 131** (module grouping and `pub(in ...)`
+scoping) is the named next move against them, and each entry's `what_would_remove_it` is its input.
+
+**Every count in §2 and §4b.4 is superseded — do not cite them.** §2's table is from `04e9391`; §4b.4
+named four cycles across six modules; the gate's own re-derivation found fifteen edges across seven,
+and carried-defect C's relocation of `maintainer_trust_policy_or_empty` then shrank it to thirteen
+across six by removing the `trust -> recognition_claim` edge RFC 138 had added. **The gate's
+declarations, pinned by `graph::tests::the_scc_has_exactly_this_edge_set` against the real repository,
+are the only current ground truth.**
+
+Everything below is the record as it stood. Previously: **ACCEPTED by the project owner 2026-09-01**, together with RFC 131. Accepted at the
 scope written here, including §4's amendment (the hub bound is an allowlist-with-reasons, not a bare
 degree threshold), §5 (line and module counts are not gated), §6 (no crate split, `fsutil` included),
 and §7's ordering (this lands before RFC 131).

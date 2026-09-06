@@ -1,6 +1,19 @@
 # RFC 138 — Asking what a repository trusts
 
-**Status.** **ACCEPTED by the project owner 2026-09-06**, the same day it was opened.
+**Status.** **CLOSED 2026-09-06 and moved to `rfcs/done/` — shipped in 0.34.0** (`f1be4c4`).
+`prikk trust maintainer list` and `prikk trust maintainer check --key-id <ID>` are released, both with
+`--format json`. **All six of §7's controls hold in the shipped binary**, including the one that was
+the point of the RFC: `check` exits `0` whichever way the question resolves, so a negative answer is an
+answer and not an operational failure (RFC 121).
+
+**What outlives this RFC, and it is not this RFC's work.** The implementing round found that
+`read_current_trust_policy_snapshot` (`prikk-store/src/trust_index.rs`) returns `Ok(None)` for two
+genuinely different states — a policy never configured, and a policy whose *very first* record is torn
+short of its own 50-byte header. **A pre-existing ambiguity `seal` already inherits**, narrow (only
+reachable from a crash during the first-ever `trust maintainer add`) and practically self-correcting,
+but named here because this is the file a future reader of that code will reach for.
+
+Everything below is the record as it stood. Previously: **ACCEPTED by the project owner 2026-09-06**, the same day it was opened.
 
 **Moved to `rfcs/accepted/` 2026-09-06, on the owner's reminder that RFC-000's 5-folder variant is
 adopted.** The trigger is **design complete**, not handoff issued — `accepted/` means *"review
