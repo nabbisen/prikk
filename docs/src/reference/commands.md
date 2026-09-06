@@ -12,11 +12,14 @@ prikk <command> --help
 
 ```text
 prikk init [path]
+prikk key generate [--out <path>]
+prikk key public --seed-env <NAME>
+prikk setup [repo-path] [--author-seed-out <path>] [--maintainer-seed-out <path>]
 prikk trust maintainer add --key-id ID --public-key HEX
 prikk trust maintainer remove --key-id ID
 prikk trust maintainer list [--format json]
 prikk trust maintainer check --key-id ID [--format json]
-prikk commit [--ref heads/<branch>] -m <message>
+prikk commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m <message>
 prikk seal --allow-no-audit [--ref heads/<branch>]
 prikk status
 prikk log [path] [--limit N] [--ref REF]
@@ -50,14 +53,16 @@ prikk sync build <ref> --have <file> --output <file> [--force]
 prikk sync accept <file> [--claims-out <file>] [--force]
 prikk sync pending
 prikk sync seal <ref> --claim <id>
+prikk sync seal <ref> --claims <file>
 prikk sync tags
 prikk sync adopt-tag <name>
 prikk worktree-status [path] [--ref REF]
-prikk verify [path]
+prikk verify [path] [--stop-on-first-error] [--format json]
 prikk doctor [path]
 prikk doctor [path] --repair-wal-tail
+prikk doctor [path] --repair-main-ref
 prikk unlock
-prikk unlock --lock <path> [--yes]
+prikk unlock --lock <path> [--yes|--force]
 prikk compact --pointer-index|--received-index|--trust-policy|--all [--plan-only]
 ```
 
