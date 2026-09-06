@@ -162,6 +162,23 @@ written to detect this consumer cannot fire until we have already done what the 
 for. **A trigger phrased as "when we do X" cannot detect "someone needs X."** Carry that into how the
 next deferral is written.
 
+**SECOND INSTANCE 2026-09-06, and it is now a pattern rather than an incident.** The same consumer
+reported the identical class a second time, four days later, with **six more sites** — every
+remaining `LockConflict` construction site that is not a lock
+(`.git-exclude/external-communication/stikk/receive/004-four-more-preconditions-under-lock-conflict.md`).
+The architect re-derived all ten sites independently and agrees on all ten, including the four the
+reporter excluded. **Still no trigger fires**, for the same reason the amendment above already gave.
+**Handoff issued:** `rfcs/handoffs/132-error-taxonomy-structure/six-preconditions-and-the-broad-arm-handoff-v1.md`.
+
+**That round carries something the reporter could not see, and it is the more important half.**
+`crates/prikk-cli/src/branch.rs:290` matches `Err(PrikkError::Precondition(_))` — an open-ended arm
+meaning *"this branch is uninvolved, closing may proceed."* True of exactly one condition, written as
+a match on the whole variant. **Safe today** (verified: the only other errors that path produces are
+`InvalidName` and `Integrity`), **and unsafe the moment `Precondition` is populated further — which is
+what this very round does.** It is narrowed first, readers before writers. The fix applies RFC 138
+§7.2's ruling internally: *"owned by a different ref"* is an answer, not a failure, and returning it as
+`Err` is what forced the broad match.
+
 **Increment 2 is still deferred; two of its 29 sites are not.** A `Precondition` variant for the two
 sites the reporter named is handed over separately
 (`rfcs/handoffs/132-error-taxonomy-structure/precondition-variant-handoff-v1.md`) — enabled by
