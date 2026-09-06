@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.34.0 — 2026-09-06
 
 ### Added — `prikk trust maintainer list` and `check`: asking what a repository trusts
 
