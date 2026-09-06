@@ -1,0 +1,738 @@
+//! RFC 130's production module graph: which top-level modules exist, which files belong to each
+//! (test-only files and test-only inline `mod` blocks excluded via [`super::cfg_expr`]), and every
+//! `crate::` edge between them (v2 handoff §3.5 items 3/4).
+//!
+//! **Edge extraction (item 3).** Every `crate::<ident>` occurrence in a production file's text, in
+//! *any* position -- `use` statements and expression-position paths alike -- after comments and
+//! string/char literals are blanked out so neither can produce a spurious match. `<ident>` resolves
+//! either to a top-level module of that exact name, or (if it is not one) to the single top-level
+//! module that re-exports an item of that name from `lib.rs`'s own `pub use` block -- the path this
+//! crate's own `patch_replay -> active` edge only exists through (`active`'s `read_active_ref_
+//! metadata`/`ActiveRefMetadata` are `pub use` re-exports; `patch_replay.rs` never writes
+//! `crate::active::` anywhere).
+//!
+//! **Grouped imports** (`use crate::{a, b, module::c};`) are expanded before the bare-`crate::`
+//! scan runs, so each is resolved once rather than the group being treated as a single opaque
+//! match. No nested grouping (`crate::{a::{b, c}, d}`) exists anywhere in this crate today (checked
+//! directly against every `use crate::{` site) -- the flat splitter below would mis-parse one if a
+//! future change ever added it, which is worth stating rather than leaving implicit.
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::path::Path;
+
+use super::cfg_expr::{self, CfgExpr};
+
+/// One classified byte span of source text.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SpanKind {
+    Code,
+    Comment,
+    StringOrChar,
+}
+
+/// The byte at `i`, or `0` past the end -- `0` never appears in real Rust source (the workspace's
+/// own `clippy::indexing_slicing = "deny"` means every scan in this file reads by index this way
+/// instead of `bytes[i]`, and every reader here already gates on `i < bytes.len()` around its own
+/// loop, so the `0` sentinel is never actually reached in practice; it exists only so a boundary
+/// slip degrades to "no match" instead of a panic).
+fn byte_at(bytes: &[u8], i: usize) -> u8 {
+    bytes.get(i).copied().unwrap_or(0)
+}
+
+/// Classify every byte of `text` as code, a comment, or a string/char literal -- one shared scan
+/// so blanking comments-only (for finding `mod`/`cfg` declarations, where a `"linux"` literal
+/// inside a `cfg` attribute is meaningful) and blanking comments-and-strings (for the edge scan,
+/// where a `crate::` substring inside a string or comment must never be mistaken for a real path)
+/// can never disagree about where one span ends and the next begins.
+fn classify(text: &str) -> Vec<SpanKind> {
+    let bytes = text.as_bytes();
+    let mut kinds = vec![SpanKind::Code; bytes.len()];
+    let mut i = 0;
+    while i < bytes.len() {
+        match byte_at(bytes, i) {
+            b'/' if byte_at(bytes, i + 1) == b'/' => {
+                let start = i;
+                while i < bytes.len() && byte_at(bytes, i) != b'\n' {
+                    i += 1;
+                }
+                if let Some(span) = kinds.get_mut(start..i) {
+                    span.fill(SpanKind::Comment);
+                }
+            }
+            b'/' if byte_at(bytes, i + 1) == b'*' => {
+                let start = i;
+                i += 2;
+                let mut depth = 1_u32;
+                while i < bytes.len() && depth > 0 {
+                    if byte_at(bytes, i) == b'/' && byte_at(bytes, i + 1) == b'*' {
+                        depth += 1;
+                        i += 2;
+                    } else if byte_at(bytes, i) == b'*' && byte_at(bytes, i + 1) == b'/' {
+                        depth -= 1;
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                }
+                if let Some(span) = kinds.get_mut(start..i) {
+                    span.fill(SpanKind::Comment);
+                }
+            }
+            b'"' => {
+                let start = i;
+                i += 1;
+                while i < bytes.len() && byte_at(bytes, i) != b'"' {
+                    if byte_at(bytes, i) == b'\\' && i + 1 < bytes.len() {
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                }
+                i = (i + 1).min(bytes.len());
+                if let Some(span) = kinds.get_mut(start..i) {
+                    span.fill(SpanKind::StringOrChar);
+                }
+            }
+            b'\'' if is_char_literal_start(bytes, i) => {
+                let start = i;
+                i += 1;
+                while i < bytes.len() && byte_at(bytes, i) != b'\'' {
+                    if byte_at(bytes, i) == b'\\' && i + 1 < bytes.len() {
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                }
+                i = (i + 1).min(bytes.len());
+                if let Some(span) = kinds.get_mut(start..i) {
+                    span.fill(SpanKind::StringOrChar);
+                }
+            }
+            _ => i += 1,
+        }
+    }
+    kinds
+}
+
+/// Distinguishes a char literal (`'a'`, `'\\''`) from a lifetime (`'a`, `'static`) -- a lifetime's
+/// closing quote never comes back, a char literal's does, within a short, defined lookahead.
+fn is_char_literal_start(bytes: &[u8], quote_pos: usize) -> bool {
+    let mut i = quote_pos + 1;
+    if i >= bytes.len() {
+        return false;
+    }
+    if byte_at(bytes, i) == b'\\' {
+        i += 1; // escape sequence
+        while i < bytes.len() && byte_at(bytes, i) != b'\'' {
+            i += 1;
+            if i - quote_pos > 8 {
+                return false;
+            }
+        }
+        return i < bytes.len() && byte_at(bytes, i) == b'\'';
+    }
+    // A single plain character followed immediately by a closing quote is a char literal;
+    // anything else starting with an identifier character and no closing quote nearby is a
+    // lifetime.
+    i += 1;
+    i < bytes.len() && byte_at(bytes, i) == b'\''
+}
+
+/// Blank matching spans to ASCII space, byte-for-byte -- **never** char-for-char. Replacing a
+/// blanked multi-byte character with one single-byte space would shrink the string, silently
+/// shifting every later byte offset out of alignment with the original text (this is exactly the
+/// bug an em dash inside a string literal or comment exposed: a downstream byte offset, valid
+/// against the *original* text, landed mid-character once a preceding multi-byte character had
+/// been shrunk away). [`classify`] assigns one [`SpanKind`] per byte but always uniformly across a
+/// whole character's bytes (comments and strings are delimited by single-byte ASCII markers, so a
+/// multi-byte character is never split between two spans) -- so replacing every blanked byte with
+/// `b' '` independently, leaving `\n` bytes alone, always yields valid UTF-8 of the exact same
+/// byte length as the input.
+fn blank(text: &str, kinds: &[SpanKind], blank_comments: bool, blank_strings: bool) -> String {
+    let mut bytes = text.as_bytes().to_vec();
+    for (index, byte) in bytes.iter_mut().enumerate() {
+        let kind = kinds.get(index).copied().unwrap_or(SpanKind::Code);
+        let should_blank = matches!(
+            (kind, blank_comments, blank_strings),
+            (SpanKind::Comment, true, _) | (SpanKind::StringOrChar, _, true)
+        );
+        if should_blank && *byte != b'\n' {
+            *byte = b' ';
+        }
+    }
+    // Lossy, never panicking, even though blanking only ever replaces a byte with ASCII space --
+    // which by construction always preserves valid UTF-8 -- because this workspace denies
+    // `expect`/`unwrap` in production code even for invariants proven by construction.
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// One `mod` declaration found in a file's text.
+struct ModDecl {
+    name: String,
+    cfg: Option<CfgExpr>,
+    /// `Some((open, close))` byte offsets (into the comment-blanked text this was found in) of an
+    /// inline `mod name { ... }` block's braces; `None` for a file-based `mod name;`.
+    inline_block: Option<(usize, usize)>,
+}
+
+/// Find every top-level `mod name;` / `mod name { ... }` declaration in `text`, paired with the
+/// nearest preceding `#[cfg(...)]` attribute (other attributes, such as `#[allow(...)]`, are
+/// tolerated between the two -- `text_span/authoring.rs`'s own `#[cfg(test)] #[allow(...)] mod
+/// uniqueness_stress_tests` is exactly this shape). Operates on comment-blanked text so a `mod`
+/// mentioned only in a comment is never matched; string literals are left intact since a `cfg`
+/// attribute's own `"linux"` is meaningful, not noise.
+fn find_mod_declarations(comment_blanked: &str) -> Vec<ModDecl> {
+    let bytes = comment_blanked.as_bytes();
+    let mut decls = Vec::new();
+    let mut pending_cfg: Option<CfgExpr> = None;
+    let mut i = 0;
+    while i < bytes.len() {
+        if byte_at(bytes, i).is_ascii_whitespace() {
+            i += 1;
+            continue;
+        }
+        if byte_at(bytes, i) == b'#' && byte_at(bytes, i + 1) == b'[' {
+            let attr_start = i + 2;
+            let Some(attr_end) = find_matching_bracket(bytes, attr_start) else {
+                break;
+            };
+            // `attr_start`/`attr_end` are the byte positions of `#[`'s `[` plus two, and of the
+            // matching `]` -- both ASCII delimiters, so both are always real char boundaries; the
+            // `unwrap_or_default` only guards a shape this scan cannot actually produce.
+            let attr_text = comment_blanked
+                .get(attr_start..attr_end)
+                .unwrap_or_default();
+            if let Some(inner) = attr_text.trim().strip_prefix("cfg(") {
+                let inner = inner.strip_suffix(')').unwrap_or(inner);
+                pending_cfg = cfg_expr::parse(inner);
+            }
+            i = attr_end + 1;
+            continue;
+        }
+        // Byte-slice comparison, never a `str` slice: a byte slice is always memory-safe to read
+        // regardless of whether `i` sits on a UTF-8 character boundary (only slicing the
+        // underlying `&str` at a non-boundary panics, e.g. when scanning has walked byte-by-byte
+        // through a multi-byte character inside an ordinary, non-comment string literal such as
+        // an em dash in an error message).
+        if bytes.get(i..).is_some_and(|rest| rest.starts_with(b"mod ")) {
+            let name_start = i + 4;
+            let mut name_end = name_start;
+            while name_end < bytes.len()
+                && (byte_at(bytes, name_end).is_ascii_alphanumeric()
+                    || byte_at(bytes, name_end) == b'_')
+            {
+                name_end += 1;
+            }
+            // `name_start..name_end` spans only ASCII identifier bytes (or is empty), so this is
+            // always valid UTF-8 and always a real char-boundary range.
+            let name = bytes
+                .get(name_start..name_end)
+                .and_then(|slice| std::str::from_utf8(slice).ok())
+                .unwrap_or_default()
+                .to_owned();
+            if !name.is_empty() {
+                let mut j = name_end;
+                while j < bytes.len() && byte_at(bytes, j).is_ascii_whitespace() {
+                    j += 1;
+                }
+                let inline_block = if byte_at(bytes, j) == b'{' {
+                    find_matching_brace(bytes, j).map(|close| (j, close))
+                } else {
+                    None
+                };
+                decls.push(ModDecl {
+                    name,
+                    cfg: pending_cfg.take(),
+                    inline_block,
+                });
+                i = inline_block.map_or(name_end, |(_, close)| close + 1);
+                pending_cfg = None;
+                continue;
+            }
+        }
+        // Any other real code token resets a pending cfg -- it was meant for whatever followed it,
+        // not for a `mod` several items later.
+        pending_cfg = None;
+        i += 1;
+    }
+    decls
+}
+
+fn find_matching_bracket(bytes: &[u8], open: usize) -> Option<usize> {
+    let mut depth = 1_u32;
+    let mut i = open;
+    while i < bytes.len() {
+        match byte_at(bytes, i) {
+            b'[' => depth += 1,
+            b']' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+fn find_matching_brace(bytes: &[u8], open: usize) -> Option<usize> {
+    let mut depth = 1_u32;
+    let mut i = open + 1;
+    while i < bytes.len() {
+        match byte_at(bytes, i) {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+/// A production module's own source text, ready for the edge scan: comments and strings blanked,
+/// and any test-only inline `mod name { ... }` block's body blanked too (its own file-based
+/// counterpart is simply never read at all -- this is only needed for the inline form, which
+/// shares a file with production code).
+fn production_edge_text(raw: &str) -> String {
+    let kinds = classify(raw);
+    let comment_blanked = blank(raw, &kinds, true, false);
+    let decls = find_mod_declarations(&comment_blanked);
+    // `open`/`close` are byte offsets into `comment_blanked`, which [`blank`] keeps byte-aligned
+    // with `raw` -- so blanking directly on `raw`'s own bytes (never `char`s, which are indexed by
+    // character position, not byte position) is the only correct way to excise the span.
+    let mut bytes = raw.as_bytes().to_vec();
+    for decl in &decls {
+        if let Some((open, close)) = decl.inline_block {
+            if !cfg_expr::is_possibly_production(decl.cfg.as_ref()) {
+                for byte in bytes.iter_mut().take(close + 1).skip(open) {
+                    if *byte != b'\n' {
+                        *byte = b' ';
+                    }
+                }
+            }
+        }
+    }
+    // Lossy, never panicking -- see `blank`'s own doc for why replacing bytes with ASCII space
+    // always preserves valid UTF-8 by construction, and why this workspace still avoids `expect`.
+    let with_inline_blanked = String::from_utf8_lossy(&bytes).into_owned();
+    let kinds = classify(&with_inline_blanked);
+    blank(&with_inline_blanked, &kinds, true, true)
+}
+
+/// The production top-level module tree, walked from `lib.rs`. `mod.rs`-style files and
+/// `#[path = "..."]` overrides are not resolved (neither is used anywhere in `prikk-store` today,
+/// confirmed directly) -- every child of a file `x.rs` resolves to `x/<name>.rs`, and every
+/// top-level child of the crate root resolves directly under `src/`.
+fn walk(src_root: &Path) -> Result<BTreeMap<String, String>, String> {
+    let lib_rs = src_root.join("lib.rs");
+    let raw = fs::read_to_string(&lib_rs)
+        .map_err(|error| format!("read {}: {error}", lib_rs.display()))?;
+    let kinds = classify(&raw);
+    let comment_blanked = blank(&raw, &kinds, true, false);
+    let mut modules = BTreeMap::new();
+    for decl in find_mod_declarations(&comment_blanked) {
+        if decl.inline_block.is_some() {
+            return Err(format!(
+                "lib.rs declares inline module `{}` -- the walker assumes every top-level module \
+                 is file-based",
+                decl.name
+            ));
+        }
+        if !cfg_expr::is_possibly_production(decl.cfg.as_ref()) {
+            continue;
+        }
+        let file = src_root.join(format!("{}.rs", decl.name));
+        let mut text = String::new();
+        collect_production_text(&file, &mut text)?;
+        modules.insert(decl.name, text);
+    }
+    Ok(modules)
+}
+
+/// Recursively append every production file's own edge-scan text under `file`, walking further
+/// `mod` declarations (file-based only -- see [`walk`]'s doc) relative to `file`'s own
+/// stem-named sibling directory.
+fn collect_production_text(file: &Path, out: &mut String) -> Result<(), String> {
+    let raw =
+        fs::read_to_string(file).map_err(|error| format!("read {}: {error}", file.display()))?;
+    out.push_str(&production_edge_text(&raw));
+    out.push('\n');
+    let kinds = classify(&raw);
+    let comment_blanked = blank(&raw, &kinds, true, false);
+    let children_dir = file
+        .parent()
+        .ok_or_else(|| format!("{} has no parent directory", file.display()))?
+        .join(
+            file.file_stem()
+                .ok_or_else(|| format!("{} has no stem", file.display()))?,
+        );
+    for decl in find_mod_declarations(&comment_blanked) {
+        if decl.inline_block.is_some() {
+            continue; // handled in place by `production_edge_text`, not a separate file
+        }
+        if !cfg_expr::is_possibly_production(decl.cfg.as_ref()) {
+            continue;
+        }
+        let child_file = children_dir.join(format!("{}.rs", decl.name));
+        collect_production_text(&child_file, out)?;
+    }
+    Ok(())
+}
+
+/// `lib.rs`'s own `pub use <module>::{A, B, ...};` / `pub use <module>::Item;` re-export table:
+/// item name -> the single module that re-exports it. An item re-exported from more than one
+/// module is dropped from the map entirely (never resolved), rather than guessed -- correctness
+/// here means "no edge" is always safer than "the wrong edge."
+fn reexports(src_root: &Path) -> Result<BTreeMap<String, String>, String> {
+    let lib_rs = src_root.join("lib.rs");
+    let raw = fs::read_to_string(&lib_rs)
+        .map_err(|error| format!("read {}: {error}", lib_rs.display()))?;
+    let kinds = classify(&raw);
+    let text = blank(&raw, &kinds, true, true);
+    let mut owners: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut rest = text.as_str();
+    while let Some(rel) = rest.find("pub use ") {
+        rest = &rest[rel + "pub use ".len()..];
+        let Some(module_len) = rest.find(|c: char| !(c.is_alphanumeric() || c == '_')) else {
+            break;
+        };
+        let module = rest[..module_len].to_owned();
+        let after_module = rest[module_len..].trim_start();
+        let after_module = after_module.strip_prefix("::").unwrap_or(after_module);
+        if let Some(group) = after_module.strip_prefix('{') {
+            let Some(close) = group.find('}') else { break };
+            for item in group[..close].split(',') {
+                let item = item.trim();
+                let name = item.rsplit("::").next().unwrap_or(item).trim();
+                if !name.is_empty() {
+                    owners
+                        .entry(name.to_owned())
+                        .or_default()
+                        .insert(module.clone());
+                }
+            }
+        } else {
+            let item_len = after_module
+                .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+                .unwrap_or(after_module.len());
+            let name = after_module[..item_len].trim();
+            if !name.is_empty() {
+                owners
+                    .entry(name.to_owned())
+                    .or_default()
+                    .insert(module.clone());
+            }
+        }
+        rest = after_module;
+    }
+    Ok(owners
+        .into_iter()
+        .filter_map(|(name, modules)| {
+            if modules.len() == 1 {
+                modules.into_iter().next().map(|module| (name, module))
+            } else {
+                None
+            }
+        })
+        .collect())
+}
+
+/// Expand grouped `crate::{a, b, module::c}` imports into their individual first-segment idents,
+/// then mask the original group text out of `text` so the plain `crate::<ident>` scan below never
+/// double-counts it.
+fn extract_grouped_idents(text: &mut String) -> Vec<String> {
+    let mut idents = Vec::new();
+    while let Some(rel) = text.find("crate::{") {
+        let group_start = rel + "crate::".len();
+        let bytes = text.as_bytes();
+        let Some(close) = find_matching_brace(bytes, group_start) else {
+            break;
+        };
+        let group_text = text[group_start + 1..close].to_owned();
+        for item in group_text.split(',') {
+            let item = item.trim();
+            let first_segment_len = item
+                .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+                .unwrap_or(item.len());
+            let first_segment = item[..first_segment_len].trim();
+            if !first_segment.is_empty() {
+                idents.push(first_segment.to_owned());
+            }
+        }
+        let span_len = close + 1 - rel;
+        text.replace_range(rel..rel + span_len, &" ".repeat(span_len));
+    }
+    idents
+}
+
+/// Every `crate::<ident>` occurrence's `<ident>`, from grouped imports and plain paths alike.
+fn crate_idents(edge_text: &str) -> Vec<String> {
+    let mut text = edge_text.to_owned();
+    let mut idents = extract_grouped_idents(&mut text);
+    let mut rest = text.as_str();
+    while let Some(rel) = rest.find("crate::") {
+        rest = &rest[rel + "crate::".len()..];
+        let ident_len = rest
+            .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .unwrap_or(rest.len());
+        let ident = rest[..ident_len].trim();
+        if !ident.is_empty() {
+            idents.push(ident.to_owned());
+        }
+        rest = &rest[ident_len..];
+    }
+    idents
+}
+
+/// The production module coupling graph: distinct (from, to) module pairs, self-loops excluded.
+#[derive(Debug, Clone)]
+pub(crate) struct ModuleGraph {
+    pub(crate) modules: BTreeSet<String>,
+    pub(crate) edges: BTreeSet<(String, String)>,
+}
+
+impl ModuleGraph {
+    pub(crate) fn fan_in(&self, module: &str) -> usize {
+        self.edges.iter().filter(|(_, to)| to == module).count()
+    }
+
+    pub(crate) fn fan_out(&self, module: &str) -> usize {
+        self.edges.iter().filter(|(from, _)| from == module).count()
+    }
+
+    /// Every elementary (simple, node-disjoint-except-for-the-repeated-start) cycle in the graph,
+    /// each canonicalised to start at its own lexicographically smallest member so it is reported
+    /// exactly once regardless of which node a search happens to begin from. Restricted to one
+    /// strongly-connected component at a time (via [`tarjan_scc`]) so the search space is always
+    /// just the offending cluster, never the whole graph.
+    pub(crate) fn elementary_cycles(&self) -> Vec<Vec<String>> {
+        let mut successors: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        for (from, to) in &self.edges {
+            successors
+                .entry(from.as_str())
+                .or_default()
+                .push(to.as_str());
+        }
+        let mut cycles = Vec::new();
+        for component in tarjan_scc(&self.modules, &successors) {
+            if component.len() < 2 {
+                continue;
+            }
+            let component_set: BTreeSet<&str> = component.iter().copied().collect();
+            let mut remaining: BTreeSet<&str> = component_set.clone();
+            while let Some(&start) = remaining.iter().next() {
+                find_cycles_through(start, &remaining, &successors, &mut cycles);
+                remaining.remove(start);
+            }
+        }
+        cycles
+    }
+}
+
+fn find_cycles_through<'a>(
+    start: &'a str,
+    remaining: &BTreeSet<&'a str>,
+    successors: &BTreeMap<&'a str, Vec<&'a str>>,
+    cycles: &mut Vec<Vec<String>>,
+) {
+    let mut path = vec![start];
+    let mut visited: BTreeSet<&str> = [start].into_iter().collect();
+    search(
+        start,
+        start,
+        remaining,
+        successors,
+        &mut path,
+        &mut visited,
+        cycles,
+    );
+}
+
+fn search<'a>(
+    start: &'a str,
+    current: &'a str,
+    remaining: &BTreeSet<&'a str>,
+    successors: &BTreeMap<&'a str, Vec<&'a str>>,
+    path: &mut Vec<&'a str>,
+    visited: &mut BTreeSet<&'a str>,
+    cycles: &mut Vec<Vec<String>>,
+) {
+    let Some(next_nodes) = successors.get(current) else {
+        return;
+    };
+    for &next in next_nodes {
+        if !remaining.contains(next) {
+            continue;
+        }
+        if next == start {
+            cycles.push(path.iter().map(|node| (*node).to_owned()).collect());
+        } else if visited.insert(next) {
+            path.push(next);
+            search(start, next, remaining, successors, path, visited, cycles);
+            path.pop();
+            visited.remove(next);
+        }
+    }
+}
+
+/// Tarjan's strongly-connected-components algorithm, iterative-free (this crate's graphs are far
+/// too small to need it) -- returns every component with two or more members or a self-loop;
+/// callers only care about components that can contain a cycle.
+fn tarjan_scc<'a>(
+    nodes: &'a BTreeSet<String>,
+    successors: &BTreeMap<&'a str, Vec<&'a str>>,
+) -> Vec<Vec<&'a str>> {
+    struct State<'a> {
+        index: BTreeMap<&'a str, usize>,
+        low_link: BTreeMap<&'a str, usize>,
+        on_stack: BTreeSet<&'a str>,
+        stack: Vec<&'a str>,
+        next_index: usize,
+        components: Vec<Vec<&'a str>>,
+    }
+    fn strong_connect<'a>(
+        node: &'a str,
+        successors: &BTreeMap<&'a str, Vec<&'a str>>,
+        state: &mut State<'a>,
+    ) {
+        state.index.insert(node, state.next_index);
+        state.low_link.insert(node, state.next_index);
+        state.next_index += 1;
+        state.stack.push(node);
+        state.on_stack.insert(node);
+
+        if let Some(next_nodes) = successors.get(node) {
+            for &next in next_nodes {
+                if !state.index.contains_key(next) {
+                    strong_connect(next, successors, state);
+                    if let (Some(&node_low), Some(&next_low)) =
+                        (state.low_link.get(node), state.low_link.get(next))
+                    {
+                        state.low_link.insert(node, node_low.min(next_low));
+                    }
+                } else if state.on_stack.contains(next) {
+                    if let (Some(&node_low), Some(&next_index)) =
+                        (state.low_link.get(node), state.index.get(next))
+                    {
+                        state.low_link.insert(node, node_low.min(next_index));
+                    }
+                }
+            }
+        }
+
+        let is_root = matches!(
+            (state.low_link.get(node), state.index.get(node)),
+            (Some(low), Some(index)) if low == index
+        );
+        if is_root {
+            let mut component = Vec::new();
+            while let Some(member) = state.stack.pop() {
+                state.on_stack.remove(member);
+                component.push(member);
+                if member == node {
+                    break;
+                }
+            }
+            state.components.push(component);
+        }
+    }
+
+    let mut state = State {
+        index: BTreeMap::new(),
+        low_link: BTreeMap::new(),
+        on_stack: BTreeSet::new(),
+        stack: Vec::new(),
+        next_index: 0,
+        components: Vec::new(),
+    };
+    for node in nodes {
+        if !state.index.contains_key(node.as_str()) {
+            strong_connect(node.as_str(), successors, &mut state);
+        }
+    }
+    state
+        .components
+        .into_iter()
+        .filter(|component| {
+            component.len() > 1
+                || component.first().is_some_and(|&node| {
+                    successors
+                        .get(node)
+                        .is_some_and(|targets| targets.contains(&node))
+                })
+        })
+        .collect()
+}
+
+/// Owned-`String` wrapper over [`tarjan_scc`], for callers (this module's own gate check, and its
+/// tests) that need components outliving the graph's borrow.
+pub(crate) fn strongly_connected_components(graph: &ModuleGraph) -> Vec<Vec<String>> {
+    let mut successors: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for (from, to) in &graph.edges {
+        successors
+            .entry(from.as_str())
+            .or_default()
+            .push(to.as_str());
+    }
+    tarjan_scc(&graph.modules, &successors)
+        .into_iter()
+        .map(|component| component.into_iter().map(str::to_owned).collect())
+        .collect()
+}
+
+/// Build the production module coupling graph for `prikk-store`. `src_root` is that crate's
+/// `src/` directory.
+pub(crate) fn build(src_root: &Path) -> Result<ModuleGraph, String> {
+    let module_texts = walk(src_root)?;
+    let owners = reexports(src_root)?;
+    let modules: BTreeSet<String> = module_texts.keys().cloned().collect();
+    let mut edges = BTreeSet::new();
+    for (module, text) in &module_texts {
+        for ident in crate_idents(text) {
+            let target = if modules.contains(&ident) {
+                Some(ident)
+            } else {
+                owners.get(&ident).cloned()
+            };
+            if let Some(target) = target {
+                if &target != module {
+                    edges.insert((module.clone(), target));
+                }
+            }
+        }
+    }
+    Ok(ModuleGraph { modules, edges })
+}
+
+/// Test-only accessors to otherwise-private scan steps, so `graph::tests` can assert on each stage
+/// (comment/string stripping, inline-block excision, re-export resolution, module discovery)
+/// independently of the assembled [`build`] result. `#[cfg(test)]`, not merely `pub(crate)`: the
+/// non-test compilation of this binary (`cargo clippy --all-targets`'s own non-test target) never
+/// calls these, and this workspace denies warnings, so an always-`pub(crate)` helper used only
+/// under `#[cfg(test)]` would fail that other compilation as dead code.
+#[cfg(test)]
+pub(crate) fn production_edge_text_for_tests(raw: &str) -> String {
+    production_edge_text(raw)
+}
+
+#[cfg(test)]
+pub(crate) fn reexports_for_tests(src_root: &Path) -> Result<BTreeMap<String, String>, String> {
+    reexports(src_root)
+}
+
+#[cfg(test)]
+pub(crate) fn walk_root_for_tests(src_root: &Path) -> Result<BTreeSet<String>, String> {
+    Ok(walk(src_root)?.into_keys().collect())
+}
+
+#[cfg(test)]
+#[path = "graph/tests.rs"]
+mod tests;

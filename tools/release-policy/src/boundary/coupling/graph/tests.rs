@@ -1,0 +1,228 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
+
+use std::path::Path;
+
+use super::{build, production_edge_text_for_tests, reexports_for_tests, walk_root_for_tests};
+
+fn store_src_root() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("repository root")
+        .join("crates/prikk-store/src")
+}
+
+#[test]
+fn production_edge_text_strips_comments_and_strings() {
+    let raw = "// crate::commented_out\nfn f() { let s = \"crate::in_a_string\"; crate::real_edge::Thing::new(); }";
+    let text = production_edge_text_for_tests(raw);
+    assert!(!text.contains("commented_out"));
+    assert!(!text.contains("in_a_string"));
+    assert!(text.contains("crate::real_edge"));
+}
+
+#[test]
+fn production_edge_text_excises_inline_test_only_blocks() {
+    let raw = "fn f() {}\n#[cfg(test)]\nmod inline_tests {\n    fn g() { crate::should_not_count::X; }\n}\n";
+    let text = production_edge_text_for_tests(raw);
+    assert!(!text.contains("should_not_count"));
+}
+
+#[test]
+fn production_edge_text_keeps_inline_non_test_blocks() {
+    let raw = "mod ordinary {\n    fn g() { crate::should_count::X; }\n}\n";
+    let text = production_edge_text_for_tests(raw);
+    assert!(text.contains("crate::should_count"));
+}
+
+#[test]
+fn production_edge_text_tolerates_an_attribute_between_cfg_and_mod() {
+    let raw = "#[cfg(test)]\n#[allow(clippy::foo)]\nmod inline_tests {\n    fn g() { crate::should_not_count::X; }\n}\n";
+    let text = production_edge_text_for_tests(raw);
+    assert!(!text.contains("should_not_count"));
+}
+
+/// The exact worked example RFC 130 uses to prove a substring check on the word "test" is wrong.
+#[test]
+fn fsutil_none_module_is_counted_as_production() {
+    let modules = walk_root_for_tests(&store_src_root()).expect("walk succeeds");
+    assert!(modules.contains("fsutil"));
+    let text = std::fs::read_to_string(store_src_root().join("fsutil/anchored/none.rs"))
+        .expect("none.rs exists");
+    // If this file were wrongly excluded, the crate::fsutil self-reference it contains would
+    // never reach the edge scan at all -- assert on the file being reachable instead of on the
+    // (self-loop, hence invisible) edge itself.
+    assert!(text.contains("crate::fsutil::contract::DurabilityContract"));
+}
+
+#[test]
+fn walk_finds_the_confirmed_production_module_count() {
+    let modules = walk_root_for_tests(&store_src_root()).expect("walk succeeds");
+    // 69 total top-level `mod` declarations in lib.rs, 8 `#[cfg(test)]` -- 61 production. Matches
+    // the coupling-gate-graph-contradiction round's own independent count exactly (report §1.1),
+    // itself the settlement of RFC 130 §4a's "61 vs 68" methodology question this gate depends on.
+    assert_eq!(modules.len(), 61, "modules: {modules:?}");
+    assert!(modules.contains("fsutil"));
+    assert!(modules.contains("layout"));
+    assert!(!modules.contains("dc55_identity_evidence"));
+    assert!(!modules.contains("test_support"));
+}
+
+#[test]
+fn reexports_resolve_active_ref_metadata_to_active() {
+    let owners = reexports_for_tests(&store_src_root()).expect("reexports parse");
+    assert_eq!(
+        owners.get("read_active_ref_metadata").map(String::as_str),
+        Some("active")
+    );
+    assert_eq!(
+        owners.get("ActiveRefMetadata").map(String::as_str),
+        Some("active")
+    );
+}
+
+/// The concrete re-export-only edge RFC 130 §1 warned a naive extractor would miss:
+/// `patch_replay.rs` never writes `crate::active::` anywhere, only the re-exported names.
+#[test]
+fn patch_replay_never_writes_crate_active_directly() {
+    let text = std::fs::read_to_string(store_src_root().join("patch_replay.rs")).unwrap();
+    assert!(!text.contains("crate::active::"));
+}
+
+#[test]
+fn graph_finds_the_re_export_only_edge_from_patch_replay_to_active() {
+    let graph = build(&store_src_root()).expect("graph builds");
+    assert!(
+        graph
+            .edges
+            .contains(&("patch_replay".to_owned(), "active".to_owned())),
+        "patch_replay -> active must be found through the read_active_ref_metadata/\
+         ActiveRefMetadata re-exports even though the module never writes crate::active:: \
+         directly"
+    );
+}
+
+#[test]
+fn graph_matches_every_cited_cycle_leg() {
+    let graph = build(&store_src_root()).expect("graph builds");
+    for (from, to) in [
+        ("active", "refs"),
+        ("refs", "active"),
+        ("refs", "trust"),
+        ("trust", "refs"),
+        ("lifecycle_cache", "patch_replay"),
+        ("patch_replay", "lifecycle_cache"),
+        ("active", "worktree_patch"),
+        ("worktree_patch", "patch_replay"),
+        ("patch_replay", "active"),
+    ] {
+        assert!(
+            graph.edges.contains(&(from.to_owned(), to.to_owned())),
+            "expected edge {from} -> {to}"
+        );
+    }
+}
+
+#[test]
+fn no_self_loops_in_the_graph() {
+    let graph = build(&store_src_root()).expect("graph builds");
+    for (from, to) in &graph.edges {
+        assert_ne!(from, to, "self-loop is not a real coupling edge");
+    }
+}
+
+#[test]
+fn fsutil_has_zero_production_out_edges() {
+    let graph = build(&store_src_root()).expect("graph builds");
+    assert_eq!(graph.fan_out("fsutil"), 0);
+    assert!(graph.fan_in("fsutil") > 0);
+}
+
+/// The full strongly-connected component's own edge set, pinned exactly -- **seven** modules, not
+/// six: `recognition_claim` joined it only because RFC 138's own `load_maintainer_trust_policy_
+/// or_empty` wrapper (`trust.rs`) calls `crate::recognition_claim::maintainer_trust_policy_or_
+/// empty` rather than relocating that helper, closing a cycle where only a one-way
+/// `recognition_claim -> trust` edge existed before. Also fifteen edges, not the eight the four
+/// cycles named in RFC 130 §4b.4/the v2 handoff would predict (two per pair, one pair -- `active
+/// <-> refs` -- shared with a third relationship) -- five more were found by this re-derivation and
+/// are documented in this round's report, each confirmed at source and dated older than `04e9391`
+/// except the `recognition_claim` pair. This test exists so a future change to any of these edges
+/// is caught here first, not discovered again by surprise.
+#[test]
+fn the_scc_has_exactly_this_edge_set() {
+    let graph = build(&store_src_root()).expect("graph builds");
+    let scc_nodes = [
+        "active",
+        "refs",
+        "trust",
+        "worktree_patch",
+        "patch_replay",
+        "lifecycle_cache",
+        "recognition_claim",
+    ];
+    let mut edges: Vec<(String, String)> = graph
+        .edges
+        .iter()
+        .filter(|(a, b)| scc_nodes.contains(&a.as_str()) && scc_nodes.contains(&b.as_str()))
+        .cloned()
+        .collect();
+    edges.sort();
+    let mut expected: Vec<(String, String)> = [
+        ("active", "refs"),
+        ("active", "worktree_patch"),
+        ("lifecycle_cache", "patch_replay"),
+        ("patch_replay", "active"),
+        ("patch_replay", "lifecycle_cache"),
+        ("patch_replay", "refs"),
+        ("recognition_claim", "trust"),
+        ("refs", "active"),
+        ("refs", "trust"),
+        ("trust", "recognition_claim"),
+        ("trust", "refs"),
+        ("worktree_patch", "active"),
+        ("worktree_patch", "lifecycle_cache"),
+        ("worktree_patch", "patch_replay"),
+        ("worktree_patch", "refs"),
+    ]
+    .into_iter()
+    .map(|(a, b)| (a.to_owned(), b.to_owned()))
+    .collect();
+    expected.sort();
+    assert_eq!(
+        edges, expected,
+        "SCC edge set changed -- update this test and DECLARED_CYCLES together"
+    );
+}
+
+/// Every SCC-internal edge must be accounted for by some [`super::super::DECLARED_CYCLES`] entry
+/// -- the property the gate itself checks, proven directly against the real graph rather than only
+/// trusted because `check()` is green (which could also be green from a bug that finds no edges at
+/// all).
+#[test]
+fn every_scc_edge_is_covered_by_a_declared_cycle() {
+    let graph = build(&store_src_root()).expect("graph builds");
+    let declared: std::collections::BTreeSet<(String, String)> = super::super::DECLARED_CYCLES
+        .iter()
+        .flat_map(|entry| {
+            entry
+                .edges
+                .iter()
+                .map(|(a, b)| ((*a).to_owned(), (*b).to_owned()))
+        })
+        .collect();
+    for component in super::strongly_connected_components(&graph) {
+        if component.len() < 2 {
+            continue;
+        }
+        let members: std::collections::BTreeSet<&str> =
+            component.iter().map(String::as_str).collect();
+        for (from, to) in &graph.edges {
+            if members.contains(from.as_str()) && members.contains(to.as_str()) {
+                assert!(
+                    declared.contains(&(from.clone(), to.clone())),
+                    "undeclared SCC edge: {from} -> {to}"
+                );
+            }
+        }
+    }
+}
