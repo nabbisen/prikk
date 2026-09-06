@@ -403,6 +403,8 @@ shipped; RFC 137's increment 5 is DNS-blocked), so nothing is being displaced by
 | **1** | **RFC 141 §7b** — tighten the evidence schema | Governance | **Proposed for this position.** Small, and it closes the gap that lets a dishonest document validate. **Ordered ahead of increment 4** because increment 4's own output should be checked against the corrected contract, not the loose one. Touches the oracle's 73 cases, so it gets its own review |
 | **2** | **RFC 139 increment 2** — the builder, determinism, and the build-cost curve | Product | Increment 1 landed early (`735eee1`) because it was conflict-free `tools/` work, exactly as the previous order anticipated. **§5a's determinism ruling is settled input** — the test compares the builder's action manifest, not sealed heads, because a CLI-built corpus cannot have a stable sealed head. **This increment ends in a build-cost number** that decides whether the depth target is reachable, and that number gates RFC 136 |
 | **3** | **RFC 131** — module grouping and `pub(in ...)` scoping | Product | **Now genuinely next-after**, and the mechanical objection has expired: the two handoffs whose file:line citations it would have invalidated are both delivered and closed. RFC 130 §7 says a large file move belongs **between feature arcs**, and the moment after a release is one |
+| **4** | **Open the content surface RFC** — `show`/`diff`, or content per changed path | Product | **Scheduled 2026-09-06 on the owner's instruction to schedule hosting, because it is what actually gates it.** Also the stikk project's oldest carried dependency (`UD-09`, since their 0.1.0), which two of their designed views are blocked on. **Already ruled: if a content surface lands, its JSON form is designed at the same time, not a release later.** Architect work to open; implementation follows acceptance |
+| **5** | **Open the hosting-shape RFC** — `prikk instaweb` vs. a separate small server | Product | **Scheduled 2026-09-06, deliberately not first**, per the owner: *"No need to take it as the most prioritized."* Rules which of the owner's two named shapes to build. **Gated on item 4** — a browse view with no content surface hits exactly the wall stikk hit: it can name changed paths and show no line of what changed |
 | — | RFC 120 §9.4, §9.4a; RFC 133 §6 | **owner rulings** | Consume no dev-team capacity and can be answered at any point. **§9.4a would stop an error now on its third occurrence** |
 | — | RFC 137 increment 5; RFC 136; DC-43; RFCs 109/110/113 | blocked | Each waits on a named external answer — `prikk.org` DNS, the corpus, the signer bootstrap, a direction. **RFC 137 is accepted-but-unshipped and still not rankable here**: its increment 5 is a DNS action, not dev capacity, and it re-enters the queue the day the domain resolves |
 
@@ -419,8 +421,23 @@ breaks shipped in three days.
 re-derived:** *"Will be happy if we have either of prikk subcommand like git's `git instaweb` or
 another project of a small hosting server."*
 
-**Nothing is opened by this.** It is a direction, not an instruction, and it would be a multi-RFC
-program outranking everything above. **What is available today without any of that work**: because
+**CORRECTED 2026-09-06, same day, after the owner asked for it to be scheduled.** The five gaps above
+answer the question that was asked — *GitLab/Forgejo-shaped hosting* — and they are right for it. **They
+over-answer the owner's first shape.** `git instaweb` is **read-only, single-repository, local, and
+served by the same binary that wrote the repository**: it accepts no pushes, has no accounts, and
+addresses no remote. **Four of the five gaps are about accepting writes from strangers and do not apply
+to it** — ref authorization, repository identity, multi-user concurrency, and long-term format
+stability all fall away. The architect's original answer did not separate the two shapes, and the
+owner's follow-up is what forced the distinction.
+
+**What genuinely gates the instaweb shape is a different thing entirely: there is no content surface.**
+`prikk` has no `show` and no `diff`, and nothing renders a line of what changed — confirmed against the
+full command inventory. A browse view built today could show history, block structure, changed paths,
+trust state and a verify verdict, and **could not show a single line of content**. That is exactly the
+wall the stikk project reported as their oldest carried dependency.
+
+**So scheduling hosting schedules the content surface first**, and that is items 4 and 5 in the order
+above rather than a program deferred indefinitely. **What is available today without any of that work**: because
 sync is artifact-based, any existing host — object storage, a web server, a shared directory — can
 serve prikk artifacts as dumb bytes with no prikk-specific code, which is exactly what RFC 116 §4
 anticipates (*"with no network code at all"*).
