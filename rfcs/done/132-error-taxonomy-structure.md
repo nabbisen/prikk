@@ -185,7 +185,16 @@ comparison already held, under container locks held continuously across both rea
 against a lock-discipline regression, not a live CAS gate** — a reason to keep it, and now directly
 tested. A third handoff (`record-the-cas-guard-reachability-handoff-v3.md`) puts that where the next
 reader will be: the function itself carries no doc comment at all, and reads exactly like the
-operative guard.
+operative guard. **Delivered and accepted** (`587e84b`).
+
+**ROUND CLOSED 2026-09-06.** Five commits — `b5c2c4d` (the broad arm narrowed onto a two-variant
+answer type), `a050725` (six sites reclassified), `0f264f3` (the four that stay, guarded), `587e84b`
+(the reachability finding recorded at the function). **Nothing outstanding.**
+
+**Two things were found that the external reporter could not see and that their own letter did not
+ask for**: the `branch.rs` broad-arm hazard, found in review before the round began, and the CAS-guard
+unreachability, found by the implementer while building a test for a site nobody suspected. **Both
+came from treating the reporter's six sites as a starting point rather than a work order.**
 
 **That round carries something the reporter could not see, and it is the more important half.**
 `crates/prikk-cli/src/branch.rs:290` matches `Err(PrikkError::Precondition(_))` — an open-ended arm
