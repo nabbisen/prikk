@@ -324,6 +324,18 @@ product with no adopters and no evidence anyone wants to plug anything into it. 
 gets the security benefit a helper would (prikk owns no secret at rest) at none of the cost. **Revisit
 if a user asks for one**, which is a different trigger from (a)'s.
 
+**External confirmation, 2026-09-06 — unsolicited, and the refusal was made without it.** The stikk
+project (a TUI/GUI front-end driving prikk through the public CLI) declared the opposite boundary from
+their side, unprompted: they *"will never invoke"* `prikk key generate` or `prikk key public`, hold a
+**presence-only rule** on key material — checking that `PRIKK_*_SEED` is set and never reading, writing
+or carrying its value — and enforce it with a test that walks their prikk-invoking module tree and
+fails their build if either subcommand name appears. They point users at `setup`'s own output verbatim
+instead. **The first real consumer of this entrance independently drew the boundary this section
+refused to cross for them**, which is the strongest evidence available that (d)'s refusal was right,
+and it arrived four days after the refusal was written. Recorded here because §9.6 was reasoned from
+first principles with no consumer to check it against. Source:
+`.git-exclude/external-communication/stikk/receive/003-standing-requests-content-and-enumeration.md`.
+
 ### 9.7 The entrance and `git-mapping.md` are one surface
 
 §5a's closing point, carried into the design: with adoption not yet the goal, the entrance's job is to
