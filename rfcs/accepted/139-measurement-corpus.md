@@ -203,6 +203,66 @@ already Linux-scoped for their memory pass (`/proc`-based, skipped cleanly elsew
 timings across platforms was never meaningful. What is required is that a corpus is identical to
 itself on the machine measuring it.
 
+## 5a. AMENDED 2026-09-06 — §5 and §7 were in direct conflict, and §5 is the one that yields
+
+**Increment 1 found a contradiction between two of this RFC's own requirements.** §5 demands that two
+builds from one profile produce "identical sealed head, identical state roots at every depth,
+identical object set". §7 demands the builder drive `commit`/`seal` through the ordinary CLI. **Both
+cannot hold**, and the reason is structural rather than incidental:
+
+- A `NodeId` is *"a uniform 256-bit draw from the OS CSPRNG"* — `crates/prikk-store/src/node_id_gen.rs`'s
+  own module doc — deliberately **not** derived from path, content, position, timestamp or baseline
+  state, because it must survive rename, edit, chmod and binary replacement, and it is part of the
+  text `span_id` preimage.
+- `commit_worktree_changes_signed` — the public, CLI-reachable entry — hardcodes
+  `NodeIdGenerator::production()`. The injectable form, `commit_worktree_changes_with_generator`, is
+  **`pub(crate)` and documented test-only**.
+- `node_id` sits in seven operation payload fields, so it is inside object identity.
+
+So a CLI-built corpus mints fresh random node ids on every build, and every object id, state root and
+sealed head differs. **Verified independently by the architect at the cited lines, not accepted from
+the report.** *(Nothing else varies: Ed25519 signing here is deterministic — `getrandom` appears only
+in `generate_seed()` — and `RefUpdatePayload.created_at` is pinned to `0`. The node id is the whole
+of it.)*
+
+### 5a.1 Two ways out, both refused
+
+**Widening `commit_worktree_changes_with_generator` to public — refused.** It would let the builder
+inject a deterministic generator, at the cost of promoting a documented test-only seam into a shipped
+crate's public API, and of building the corpus through a path no real command sequence uses. **That is
+exactly what §7 refuses**, and §7's reasoning is unchanged by this problem.
+
+**A CLI-level deterministic-entropy override — refused, and this one on security grounds.** A flag or
+environment variable whose only purpose is to make identity minting predictable is a hazard out of
+proportion to a measurement convenience: node-id collision-avoidance is a fail-closed invariant of the
+minting authority, and an override that escaped into ordinary use could mint colliding identities
+across repositories. **The owner's standing instruction is that security be protected as strongly as
+possible and reasonable**; shipping a predictable-identity switch to every user so that an internal
+benchmark can diff two heads is not that. If a future round finds an independent reason to want one,
+it is its own design with its own review — not a corner of this RFC.
+
+### 5a.2 RULED: determinism is a property of the builder's actions, not of the repository's bytes
+
+**§5's requirement is replaced, not relaxed away.** What must be identical between two builds from one
+profile is **the sequence of operations the builder performs** — the same paths, created and edited
+and deleted in the same order, with the same content and sizes, at the same depths. The builder emits
+a manifest of exactly that, and **the determinism test compares manifests**, not sealed heads.
+
+**Why this is sufficient for everything the corpus exists to do.** Cost follows shape: replay depth,
+tree size, operation counts, file bytes. None of the quantities §1 and §6 care about reads a node id
+or an object id as anything but an opaque key. Two structurally identical corpora are as comparable
+for cost purposes as one corpus measured twice.
+
+**The limit, stated rather than discovered later: any measurement whose result depends on the
+*values* of ids is not comparable across builds** — anything sensitive to ordering within an
+id-keyed structure, or to hash distribution. **A measurement of that kind must run against a single
+built corpus, twice, and must say so.** No such measurement is currently planned; this exists so the
+first person who wants one recognizes the constraint instead of trusting a cross-build comparison.
+
+**§5's other requirements stand unchanged**: a seeded generator with the seed in the profile, the
+determinism test running in the ordinary suite rather than joining the `#[ignore]`d instruments, and
+no claim of cross-platform determinism.
+
 ## 6. Depth — a target this RFC deliberately does not fix
 
 The external architect asked for *"a synthetic-but-realistic prikk history of a few thousand sealed
@@ -296,6 +356,11 @@ Define the profile file's shape and the provenance fields §4 requires. Re-deriv
 at a stated revision, using the RFC 136 §9.1 command recorded verbatim. Cheap: the extraction is
 already proven, and this increment mostly writes down what §9.1 did in a form a builder can read.
 
+**Increment 1 — DELIVERED and ACCEPTED 2026-09-06** (`735eee1`). `tools/corpus`, the profile format,
+the pure extractor, and `profiles/prikk-self.toml` at 600 commits / 875 distinct paths. **The
+provenance recipe was re-run by the architect and re-derived the committed profile byte-identically.**
+It also produced §5a's finding, which is worth more than the increment.
+
 **Increment 2 — the builder, determinism, and the build-cost curve.**
 The library-plus-binary of §7, driving the CLI through the existing `tests/support` surface. The
 determinism test of §5, shallow and in the ordinary suite. Then the build-cost curve of §6 —
@@ -314,6 +379,19 @@ A structurally different project per §4, chosen for the opposite change-concent
 
 **Ordering is not negotiable between 1 and 2**, since a builder needs a format to build from; 3 and 4
 are independent of each other and either may go first.
+
+**Three things increment 1 hands to increment 2, all settled input:**
+
+1. **§5a's ruling** — the determinism test compares the builder's **action manifest**, not sealed
+   heads. The builder must emit one.
+2. **The `--name-status` letter → `OperationKind` mapping is increment 2's own decision.** The profile
+   records git's letter vocabulary (`added`/`modified`/`deleted`/`renamed`/`copied`/`type_changed`)
+   because `M` cannot be resolved to `EditText` / `ReplaceBinary` / `ChangePerm` without text-vs-binary
+   and content-vs-mode information `--name-status` does not carry. **Increment 1 was right not to
+   invent it.**
+3. **The profile carries distributions, not a sequence.** Choosing an application order is increment
+   2's design work, not a gap in the format — RFC 139 §3's "a profile plus a builder, not a
+   recording".
 
 ## 10. Scope
 
