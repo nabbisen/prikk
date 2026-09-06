@@ -279,7 +279,7 @@ count is a **methodology difference to settle before any threshold is derived**,
 not ruled; this ruling does not wait on it. Telling them that §2.1 was false at `04e9391` remains
 worth doing — for their practice and because they may have a view — but it is now informational.
 
-**The handoff is superseded and must be reissued.**
+**Handoff v2 issued 2026-09-06:** `rfcs/handoffs/130-module-coupling-invariant/coupling-gate-handoff-v2.md`. v1 stays in the tree marked do-not-work-from, as the record of what was ruled out and why.
 `rfcs/handoffs/130-module-coupling-invariant/coupling-gate-handoff-v1.md` instructs an implementer to
 build §4.1's absolute rule. **It must not be worked from as written.**
 
