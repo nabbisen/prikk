@@ -447,6 +447,17 @@ impl RefStore {
         }))
     }
 
+    /// RFC 132 follow-up: this refusal is defence against a lock-discipline regression, not a live
+    /// CAS gate on the only path that reaches it today. Its sole production call site is
+    /// `publish_locked`'s `PublicationState::Ready` branch (`refs/publication.rs`), which is chosen
+    /// only when `classify_state` has already read the same `read_current_ref_state_id` value and
+    /// found it equal to `expected` -- and both reads happen under the same `RefPointerIndex`/
+    /// `RefLog` container locks, held continuously by `publish_locked` across the whole span between
+    /// them, so nothing can write in between. By the time this function re-reads and compares, the
+    /// equality is already established; it cannot fail through that path. It stays because it is
+    /// exactly what would catch a future change that broke that locking discipline. Exercised
+    /// directly (not through `publish`, which cannot reach the failing branch) by the
+    /// `ensure_current_matches_refuses_a_mismatched_expectation` test.
     fn ensure_current_matches(&self, ref_name: &str, expected: Option<ObjectId>) -> Result<()> {
         let current = self.read_current_ref_state_id(ref_name)?;
         if current != expected {
