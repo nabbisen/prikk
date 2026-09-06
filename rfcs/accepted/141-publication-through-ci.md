@@ -178,7 +178,10 @@ propose new machinery, only that the file be recognized for what it becomes.
 
 ## 7. Increments
 
-1. **The evidence producer.** A `release-policy` subcommand that stages a crate, records the three
+1. **The evidence producer.** **DELIVERED and ACCEPTED 2026-09-06** (`555cc65`) — a pure builder with
+   a thin observation layer, `publish_level` derived from the real workspace graph and proven so
+   against a synthetic on-disk workspace, and self-validation against the schema before emitting.
+   Produced §7a's and §7b's findings. A `release-policy` subcommand that stages a crate, records the three
    SHA-256 values DC-35 names, and emits a `release-evidence-v1` document the existing oracle already
    validates. **Testable entirely offline against fixtures** — no registry, no credentials, no
    workflow. This is where the substance is, and it is deliberately first.
@@ -200,6 +203,53 @@ could ship.
 
 **Increment 1 is worth having even if 3 and 4 never land** — it makes manual publication produce the
 evidence DC-35 requires, which is a strict improvement over today regardless of who runs it.
+
+## 7a. RULED — `CRATE_ORDER` blocks increment 4, and the fix is not a drive-by
+
+**Increment 1 delivered** (`555cc65`) and found a live instance of the hazard its own handoff warned
+about. `tools/release-policy/src/policy/evidence.rs` carries `CRATE_ORDER: [(&str, u64); 7]` — seven
+entries, **missing `prikk-ffi`** — consumed as `if crates.len() != CRATE_ORDER.len() { return true; }`
+inside `tag_or_artifact_invalid`, where `true` means **invalid**.
+
+**Consequence: a genuine eight-crate evidence document is rejected on crate count alone.** That is a
+blocker for §7 increment 4, not a cosmetic staleness.
+
+**Ruled: the implementing round was right to leave it alone, and it is now increment 4's first task
+rather than a loose end.** Changing `CRATE_ORDER` changes what the oracle's 73 release-evidence cases
+assert, and those cases are frozen against a 0.18.0-era seven-crate fixture. **Two options, and
+increment 4 must choose deliberately and say why:** derive the expected set from the workspace the way
+`publish_levels` now does — which removes the list that can go stale — or keep a literal list and
+update the fixtures with it. **The first is consistent with everything this RFC argues; the second is
+cheaper and keeps the fixtures untouched.** It is a real trade and it is not being pre-empted here.
+
+## 7b. RULED — the schema permits a dishonest document, and should not
+
+**Increment 1's most valuable finding, and it is a defect in a guard this RFC's own handoff
+specified.** The handoff named "defaulting `checksum_equality` to `match`" as the most damaging thing
+the increment could ship, and listed "the oracle accepts your output" among the controls guarding it.
+**It does not guard it**, which the implementing round established by perturbing the hazard and
+watching the control pass.
+
+**Verified at the schema:** `$defs/crate` carries no conditional at all; `checksum_equality` is a bare
+enum; the only top-level conditionals are `sequence == "001"` and `overall_status == "complete"`, and
+`checksum_equality` is tied to the checksum fields **only inside the second**. So a `pending`,
+`partial` or `superseded` document may assert `checksum_equality: "match"` over three `null`
+checksums and remain schema-valid.
+
+**Ruled: the schema should be tightened, and the reason is the artifact's whole purpose.** Release
+evidence exists to be trustworthy *without trusting its producer*. Today the honesty of every
+non-`complete` document rests entirely on one implementation's internal logic; a second producer, or a
+hand-edited file, would pass. **A constraint that only holds when the document already claims success
+is not an integrity constraint.**
+
+**Shape of the fix**, expressible in JSON Schema and left for its own increment: a crate-level
+conditional — *if `checksum_equality` is `match` or `mismatch`, all three checksum fields must be
+present `sha256` values.* Equivalently, a `null` in any of the three forces `"not-observed"`.
+
+**Not done here, and not folded into increment 4.** It changes the contract the oracle's 73 cases are
+written against, and it is DC-35 material — governance, not plumbing. **It gets its own increment and
+its own review**, and the existing fixtures must be re-checked against it rather than assumed
+compatible.
 
 ## 8. Scope
 

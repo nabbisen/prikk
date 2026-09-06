@@ -399,11 +399,31 @@ shipped; RFC 137's increment 5 is DNS-blocked), so nothing is being displaced by
 | ~~**1**~~ | ~~RFC 132's round~~ | Product | **DONE 2026-09-06** (`b5c2c4d`, `a050725`, `0f264f3`, `587e84b`). Six sites reclassified, the four that stay guarded, and **two things found that the reporter could not see**: the `branch.rs` broad-arm hazard and the CAS-guard unreachability |
 | ~~**2**~~ | ~~RFC 140~~ | Product | **DONE 2026-09-06** (`c2cf4b0`). Retired to `rfcs/done/` at this cut |
 | ~~**3**~~ | ~~Cut the release carrying items 1 and 2~~ | — | **DONE 2026-09-06** — `0.35.0`. See the release position below |
-| **1** | **RFC 141 increment 1** — the release-evidence producer | Governance | **Proposed for this position, owner to authorize.** Small, **offline-testable against fixtures** (no registry, no credentials, no workflow), and it closes a standing compliance gap: DC-35's evidence regime is specified, schema'd, and carries **73 oracle cases**, and **nine releases have produced none**. **Every further cut without it widens that gap**, and this project cuts often — two releases on 2026-09-06 alone. Worth having even if RFC 141's later increments never land, since it makes *manual* publication produce the evidence too |
+| ~~**1**~~ | ~~RFC 141 increment 1 — the release-evidence producer~~ | Governance | **DONE 2026-09-06** (`555cc65`). Produced two rulings recorded in RFC 141 §7a/§7b: `CRATE_ORDER` rejects an eight-crate document on count alone and blocks increment 4, and the evidence schema permits a `pending`/`partial` document to claim `checksum_equality: "match"` over null checksums |
+| **1** | **RFC 141 §7b** — tighten the evidence schema | Governance | **Proposed for this position.** Small, and it closes the gap that lets a dishonest document validate. **Ordered ahead of increment 4** because increment 4's own output should be checked against the corrected contract, not the loose one. Touches the oracle's 73 cases, so it gets its own review |
 | **2** | **RFC 139 increment 2** — the builder, determinism, and the build-cost curve | Product | Increment 1 landed early (`735eee1`) because it was conflict-free `tools/` work, exactly as the previous order anticipated. **§5a's determinism ruling is settled input** — the test compares the builder's action manifest, not sealed heads, because a CLI-built corpus cannot have a stable sealed head. **This increment ends in a build-cost number** that decides whether the depth target is reachable, and that number gates RFC 136 |
 | **3** | **RFC 131** — module grouping and `pub(in ...)` scoping | Product | **Now genuinely next-after**, and the mechanical objection has expired: the two handoffs whose file:line citations it would have invalidated are both delivered and closed. RFC 130 §7 says a large file move belongs **between feature arcs**, and the moment after a release is one |
 | — | RFC 120 §9.4, §9.4a; RFC 133 §6 | **owner rulings** | Consume no dev-team capacity and can be answered at any point. **§9.4a would stop an error now on its third occurrence** |
 | — | RFC 137 increment 5; RFC 136; DC-43; RFCs 109/110/113 | blocked | Each waits on a named external answer — `prikk.org` DNS, the corpus, the signer bootstrap, a direction. **RFC 137 is accepted-but-unshipped and still not rankable here**: its increment 5 is a DNS action, not dev capacity, and it re-enters the queue the day the domain resolves |
+
+**Owner direction recorded 2026-09-06 — hosting, and it is not scheduled.** Asked whether prikk is
+ready to support a hosting service (GitLab/Forgejo-shaped), the architect's assessment was **no**, on
+five structural grounds: **there is no network transport at all** (`sync` is file-based end to end,
+and RFC 116 §1 states *"prikk stays off the network"* as a position, not a gap); **no ref
+authorization model** (trust is object trust — *"adopting a key never lets it move a ref"* — with no
+accounts and no ACLs); repositories are **anonymous** by settled design; multi-user concurrency is
+undesigned (RFC 108 D5); and the **format is explicitly unstable in public**, with two one-way schema
+breaks shipped in three days.
+
+**The owner's response names the shape they would want, and it is recorded so it is not
+re-derived:** *"Will be happy if we have either of prikk subcommand like git's `git instaweb` or
+another project of a small hosting server."*
+
+**Nothing is opened by this.** It is a direction, not an instruction, and it would be a multi-RFC
+program outranking everything above. **What is available today without any of that work**: because
+sync is artifact-based, any existing host — object storage, a web server, a shared directory — can
+serve prikk artifacts as dumb bytes with no prikk-specific code, which is exactly what RFC 116 §4
+anticipates (*"with no network code at all"*).
 
 **Possible inbound, unscheduled:** the stikk project's standing feature asks — a per-patch/-file
 content surface (`show`/`diff`, or content in `--format json`) and queued-patch enumeration — if they
