@@ -1,6 +1,22 @@
 # RFC 139 — The measurement corpus: a repository worth measuring against
 
-**Status.** **PROPOSED, 2026-09-06.** Opened at the project owner's instruction to proceed on the
+**Status.** **ACCEPTED by the project owner 2026-09-06**, the same day it was opened.
+
+**Moved to `rfcs/accepted/` 2026-09-06 on acceptance.** The trigger is **design complete**, not
+handoff issued — RFC-000's 5-folder variant defines `accepted/` as *"review complete; implementer may
+start"*, and §9's increment 1 is startable. Moved in the same act as the acceptance rather than when
+a handoff issues, which is the error this project corrected three times in the preceding week.
+
+**What the acceptance covers, stated because a bare acceptance is scope-ambiguous.** It accepts the
+whole design as written: §3's ruling that the corpus is **a profile plus a deterministic builder and
+never a stored repository**; §4's provenance requirements and the demand for a second, structurally
+different profile; §5's determinism-as-a-tested-property; §6's deliberate refusal to fix a depth
+target ahead of the build-cost curve, with 2,048 sealed blocks as a **floor** rather than a target;
+§7's placement and its two prohibitions (**not a CI job, not a correctness fixture**); and §9's four
+increments in their stated ordering. **It does not rule anything §8 lists as out of scope** — RFC 133
+§6 in particular remains the owner's and is untouched by this acceptance.
+
+Originally opened as: **PROPOSED, 2026-09-06**, at the project owner's instruction to proceed on the
 measurement corpus, which they approved as the next scheduled item on 2026-09-06 (`ROADMAP.md`, "The
 order", item 1).
 
