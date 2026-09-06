@@ -1,0 +1,13 @@
+source_repository = "fixture (subprocess determinism test)"
+revision = "0000000000000000000000000000000000000000"
+extraction_commands = ["fixture, not a real extraction"]
+extraction_date = "2026-01-01"
+rename_detection = true
+
+[builder_inputs]
+generator_seed = 1
+author_key_id = "fixture-author"
+author_seed_hex = "1111111111111111111111111111111111111111111111111111111111111111"
+maintainer_key_id = "fixture-maintainer"
+maintainer_seed_hex = "2222222222222222222222222222222222222222222222222222222222222222"
+known_nondeterminism_risks = []

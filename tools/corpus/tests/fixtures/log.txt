@@ -1,0 +1,14 @@
+@@aaa0000000000000000000000000000000000000
+A	one.txt
+A	two.txt
+A	three.txt
+A	four.txt
+A	five.txt
+
+@@aaa1111111111111111111111111111111111111
+M	one.txt
+
+@@aaa2222222222222222222222222222222222222
+M	one.txt
+D	two.txt
+R100	three.txt	six.txt

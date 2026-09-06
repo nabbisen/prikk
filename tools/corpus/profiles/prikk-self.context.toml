@@ -1,0 +1,18 @@
+source_repository = "prikk (self)"
+revision = "0d0d06667ee4830c1f1bebf922ef877215dc37e8"
+extraction_commands = [
+    "git log --pretty=format:'@@%H' --name-status --no-merges -n 600",
+    "git ls-tree -r -l 0d0d06667ee4830c1f1bebf922ef877215dc37e8",
+]
+extraction_date = "2026-09-06"
+rename_detection = true
+
+[builder_inputs]
+generator_seed = 139
+author_key_id = "prikk-corpus-author"
+author_seed_hex = "3333333333333333333333333333333333333333333333333333333333333333"
+maintainer_key_id = "prikk-corpus-maintainer"
+maintainer_seed_hex = "4444444444444444444444444444444444444444444444444444444444444444"
+known_nondeterminism_risks = [
+    "NodeId is minted from the OS CSPRNG at authoring time (crates/prikk-store/src/node_id_gen.rs), not derived from the generator seed or any other builder input, and has no CLI-level override. A corpus built through the ordinary `prikk commit` surface (RFC 139 §7) will mint different node ids -- and therefore different object ids, state roots, and sealed heads -- on every build from this same profile. Determinism at the level RFC 139 §5 requires cannot be reached without either a CLI-level deterministic-entropy override (a crates/ change, out of scope for this increment) or a re-reading of the determinism requirement.",
+]

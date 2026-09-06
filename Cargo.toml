@@ -10,6 +10,7 @@ members = [
     "crates/prikk-replay",
     "crates/prikk-store",
     "tools/benchmarks",
+    "tools/corpus",
     "tools/release-policy",
 ]
 default-members = [

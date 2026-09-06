@@ -98,6 +98,12 @@ fn check_members(root: &Path, metadata: &Metadata, errors: &mut Vec<BoundaryErro
             // iterates `PRODUCTS`) never sees it -- adding it here, not to `PRODUCTS`, is the whole
             // mechanism that keeps it out of the shipped dependency graph.
             ("prikk-benchmarks", "tools/benchmarks/Cargo.toml"),
+            // RFC 139 increment 1: the measurement-corpus profile format and extractor. Same
+            // treatment as `prikk-benchmarks` above and for the same reason -- `publish = false`,
+            // outside `default-members`, declares `toml`/`serde` with literal versions rather than
+            // through `[workspace.dependencies]` (handoff §5: tools are outside `PRODUCTS`'
+            // dependency-placement scan by construction), and ships to nobody.
+            ("prikk-corpus", "tools/corpus/Cargo.toml"),
         ])
         .collect();
     let members = packages_by_id(metadata, &metadata.workspace_members);
