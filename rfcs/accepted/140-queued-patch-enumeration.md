@@ -1,6 +1,21 @@
 # RFC 140 — Which patches, not how many
 
-**Status.** **PROPOSED, 2026-09-06.** Opened after the project owner authorized the architect's
+**Status.** **ACCEPTED by the project owner 2026-09-06**, the same day it was opened.
+
+**Moved to `rfcs/accepted/` on acceptance** — the trigger is design complete, not handoff issued.
+
+**What the acceptance covers.** The whole design as written: §4's ruling of **option (b)** with (a) and
+(c) refused; §5's cost position — a **bound, not a measurement**, with the prose path required to pay
+nothing new and the increment required to report an observed figure into RFC 133; §6's narrow surface
+scoping, which settles `--format json` for `status` and for nothing else; §7's refusals, including the
+explicit refusal to add a path to `EditText`; and §9's requirement that unresolved node ids be marked
+rather than fail the command. **It opens nothing in §7** — the content surface and the general
+machine-readable surface both remain unopened.
+
+**One correction made on acceptance, found while writing the handoff.** §5 argued the cost bound from
+`commit`. **`prikk worktree-status` is the better witness and is now the stated one** — see §5.
+
+Originally opened as: **PROPOSED, 2026-09-06**, after the project owner authorized the architect's
 recommendation on stikk letter 003, which included queued-patch enumeration as part 3 of one round.
 
 **This RFC exists because the architect's recommendation understated the work, and the correction is
@@ -107,11 +122,22 @@ of it** — which is precisely the methodological weakness RFC 139 exists to ret
 
 **It does not have to wait for RFC 139's corpus, and the argument is not "it is probably fine."**
 
-> **The resolution is the same derivation `commit` already performs, against the same baseline, every
-> time a user commits.** `node_authoring.rs:37` imports `resolve_folded_worktree_baseline` and
-> `:258` runs it on the ordinary commit path. So its cost is **bounded above by an operation the user
-> already runs routinely**, and a `status` that costs no more than a `commit` is not a new class of
-> cost — it is a known one appearing in a second place.
+> **A CLI read command already performs exactly this derivation.** `prikk worktree-status`
+> (`crates/prikk-cli/src/commands.rs:236`) calls `resolve_folded_worktree_baseline`
+> (`prikk-store/src/worktree_status.rs:24`) — and RFC 122 made that the *single* derivation every
+> worktree-comparing command uses, precisely so a second one could not drift from it. `commit` runs
+> the same call (`node_authoring.rs:37`, `:258`).
+>
+> So the cost is **bounded above by a read-only command a user already runs**, not merely by a
+> mutation. `status --format json` doing this is a known cost appearing in a third place, not a new
+> class of cost on the read path.
+
+**CORRECTED on acceptance.** This section first argued the bound from `commit` alone. That was the
+weaker witness: `commit` is a mutation, and "a read costs no more than a write" invites the objection
+that reads should be cheaper. `worktree-status` is a **read** that already pays it, which is the
+argument that actually holds. The resolution accessor is `NodeLifecycleState::live_node(&node_id)
+-> Option<&LiveNode>` with `LiveNode.path` — public, and `Option` by construction, which is what makes
+§9's "mark unresolved" requirement implementable rather than aspirational.
 
 **That is a bound, not a measurement, and the RFC says so.** It is enough to proceed, and it is not
 enough to claim `status` stays cheap. Two consequences:
@@ -154,6 +180,17 @@ not reopen it.
   presentation, not a case for changing the operation model. **Adding a path to `EditText` would be a
   schema change to fix a display problem** and is refused here explicitly so that nobody proposes it
   later as an optimization.
+
+## 7a. Handoff
+
+**Issued 2026-09-06:**
+`rfcs/handoffs/140-queued-patch-enumeration/status-json-and-enumeration-handoff-v1.md`, after the
+move to `rfcs/accepted/` and not before it.
+
+**It carries one instruction this RFC did not think to give: write the `EditText` control first.** A
+test that creates a file and queues it produces `CreateFile`, which carries a path, and passes — so
+the entire §3 problem is invisible to the obvious test. The defect this RFC exists to prevent would
+survive a green suite.
 
 ## 8. Scope
 
