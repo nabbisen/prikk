@@ -202,6 +202,87 @@ contradicts their central conclusion on evidence they held.
 modules against §2's 68. That is a methodology difference (eight `#[cfg(test)]`-gated top-level
 modules), not drift, and both numbers cannot seed a threshold.
 
+## 4b. RULED 2026-09-06 — acyclicity becomes an allowlist, for §4.1's own reason
+
+**§4a re-opened the invariant; this rules it.** The question was whether absolute acyclicity is the
+same mistake as the bare degree bound, one rule down.
+
+### 4b.1 The analogy is imperfect, and it does not need to be perfect
+
+**A degree bound punishes a good outcome by measuring a proxy.** §4's counter-example is exact: RFC
+122 replaced two duplicate baseline derivations with one, and consolidation *raises* the consolidated
+module's degree. Degree is a correlate of coupling, not coupling.
+
+**A cycle is not a proxy — it is the thing.** *"What breaks if I change this?"* is unanswerable inside
+a cycle because the answer includes the question. So acyclicity is not wrong in the way a degree bound
+is wrong.
+
+**But §4a's fact stands regardless: RFC 122 — a correct fix for a High-severity defect, found by an
+external audit and required by the architect — created a cycle.** An absolute rule would have blocked
+it. That cannot be argued away, and it is not a reason to keep the rule and hope.
+
+### 4b.2 The real defect is that §4 applied its own amendment to one rule and not the other
+
+§4.1 states the principle in the sentence immediately below the one being amended:
+
+> **The gate forces a recorded decision; it does not adjudicate one.**
+
+**That is the right principle and §4.1 applied it to hubs only.** The same paragraph then made
+acyclicity absolute — a gate that adjudicates. **The inconsistency is internal to §4, and correcting it
+is not a weakening: it is finishing the amendment.**
+
+**Ruled: a new cycle fails the build until it is declared with a reason**, the same idiom as hubs,
+`DECLARED_UNDOCUMENTED` and `RFC114_ADMITTED_BUT_UNWRITTEN`. RFC 122 would have passed with one entry.
+
+### 4b.3 A cycle's entry carries more than a hub's, because a cycle is worse
+
+A hub entry says *why this is consolidation and not sprawl* — a judgement about the present.
+
+**A cycle entry must additionally state what would have to change to remove it.** That makes the
+allowlist a **ledger of structural debt** rather than a list of permanent excuses, and it is the one
+place this ruling is stricter than §4.1's treatment of hubs. An entry that cannot say what would
+remove the cycle is an entry nobody understands, and that is a finding rather than a formality.
+
+### 4b.4 The gate's first act is four evaluations nobody has done
+
+The four cycles are declared, not grandfathered wholesale:
+
+| Cycle | Standing |
+|---|---|
+| `active ↔ refs` | the only one anyone has ever evaluated |
+| `trust ↔ refs` | **present at `04e9391` and missed by two derivations** — never evaluated |
+| `lifecycle_cache ↔ patch_replay` | created by `7a01168`; never evaluated |
+| `active → worktree_patch → patch_replay → active` | created by `7a01168`; never evaluated |
+
+**Writing three of those reasons *is* the evaluation that has never happened.** If a reason cannot be
+written — if `trust ↔ refs` turns out to be accidental coupling nobody intended — **that is the gate
+paying for itself before it has run once**, and it is a stop-and-report, not an entry to invent.
+
+**Per-cycle entries, not one per-SCC entry.** The six-module component is the *symptom*; the four
+cycles are the *causes*, and three of them are independently removable. One entry covering the cluster
+would record the symptom and lose every cause.
+
+### 4b.5 This makes the gate more urgent, not less
+
+**Two cycles formed thirty-two minutes after the measurement and nobody noticed for five days**, in a
+crate an external architect had just reviewed for exactly this. §4a is not an argument that the gate
+was a bad idea; it is the strongest available argument that it is needed — and that its **absolute**
+form would have been unshippable, which is a different claim.
+
+### 4b.6 What this does not change
+
+**§4.2's four open design questions stand**, including the threshold — and the 61-versus-68 module
+count is a **methodology difference to settle before any threshold is derived**, not drift (§4a).
+**§5 (line and module counts not gated), §6 (no crate split) and §7 (RFC 131 after) are untouched.**
+
+**Escalation to the external architect is no longer blocking.** §4a recommended it and the owner has
+not ruled; this ruling does not wait on it. Telling them that §2.1 was false at `04e9391` remains
+worth doing — for their practice and because they may have a view — but it is now informational.
+
+**The handoff is superseded and must be reissued.**
+`rfcs/handoffs/130-module-coupling-invariant/coupling-gate-handoff-v1.md` instructs an implementer to
+build §4.1's absolute rule. **It must not be worked from as written.**
+
 ## 5. What must not be gated
 
 **Line count and module count.** They are the numbers that prompted this work and the least
@@ -265,7 +346,7 @@ named there may not be today's four.**
 
 **Handoff issued:** `rfcs/handoffs/130-module-coupling-invariant/coupling-gate-handoff-v1.md`.
 
-**STOPPED 2026-09-06 at the re-derivation, correctly and by the handoff's own instruction. See §4a: §2.1's cycle count was false when written, and §4.1's absolute-acyclicity rule would have rejected RFC 122 — the same commit §4 uses to prove the degree bound wrong. No gate is implemented; §4.1's invariant is re-opened.**
+**STOPPED 2026-09-06 at the re-derivation, correctly and by the handoff's own instruction. See §4a: §2.1's cycle count was false when written, and §4.1's absolute-acyclicity rule would have rejected RFC 122 — the same commit §4 uses to prove the degree bound wrong. No gate is implemented; §4.1's invariant is re-opened.** **RULED 2026-09-06 in §4b: acyclicity becomes an allowlist-with-reasons, the same idiom §4.1 already chose for hubs — the gate forces a recorded decision rather than adjudicating one, which §4 applied to one of its two rules and not the other. A cycle's entry must also state what would remove it. **Handoff v1 is superseded and must be reissued.**
 
 ## 9. Non-goals
 

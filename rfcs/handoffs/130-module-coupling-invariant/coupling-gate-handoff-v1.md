@@ -5,6 +5,8 @@
 and §7's ordering.
 **Base:** `main` at `9184bf2`.
 
+> **SUPERSEDED 2026-09-06 — DO NOT WORK FROM THIS.** It instructs building §4.1's *absolute* acyclicity rule. RFC 130 §4a found four cycles rather than one, and that the absolute rule would have rejected RFC 122 — the same commit §4 uses to prove the degree bound wrong. **§4b ruled 2026-09-06: acyclicity becomes an allowlist-with-reasons.** A replacement handoff will be issued; §1's no-external-artifact reasoning and §2's re-measure instruction survive unchanged.
+
 **Read §1 before planning: the RFC's §8 waits on an external artifact that has not arrived, and the
 work does not need it. §2 is why re-deriving is better than inheriting.**
 
