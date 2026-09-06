@@ -465,8 +465,13 @@ no-design-decision half of this program — leaving `AUD-01` through `AUD-04`, w
 
 ### Release position — 0.35.0 shipped 2026-09-06
 
-**`0.35.0` was cut at `0b5345a`**, the second cut of the day. CI green, signed tag verified before
-pushing.
+**`0.35.0` was cut at `0b5345a`**, the second cut of the day. CI green on all 15 jobs, signed tag
+verified before pushing, `release.yml` green on four build targets, 16 assets, **all eight crates
+published to crates.io and confirmed live against the sparse index**. Verified past the workflows'
+own reports: the published Linux asset's SHA-256 checked and its binary run, then **both shipped
+features exercised on a clean `cargo install prikk --version 0.35.0`** — an `EditText` resolving to a
+real path, and `rollback-draft` answering `precondition not met:` where it used to say
+`lock conflict:`.
 
 **A seal ceremony can now say *which*, not only *how many*.** RFC 140 shipped `prikk status --format
 json` and queued-patch enumeration. Before it, `status` reported a count and an owning ref — so the
