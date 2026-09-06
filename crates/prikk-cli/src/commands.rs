@@ -94,6 +94,21 @@ pub(crate) const COMMANDS: &[Command] = &[
         ],
     },
     Command {
+        name: "key",
+        run: crate::run_key,
+        help_lines: &[
+            "  prikk key generate [--out <path>]         Generate an Ed25519 seed; --out writes it (mode 0600) and never prints it",
+            "  prikk key public --seed-env <NAME>        Derive a public key from a seed already held in the named environment variable",
+        ],
+    },
+    Command {
+        name: "setup",
+        run: crate::run_setup,
+        help_lines: &[
+            "  prikk setup [repo-path] [--author-seed-out <path>] [--maintainer-seed-out <path>]  Init, generate both keys, trust the maintainer key, and print the exports",
+        ],
+    },
+    Command {
         name: "trust",
         run: crate::run_trust,
         help_lines: &[

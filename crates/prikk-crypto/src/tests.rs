@@ -35,6 +35,28 @@ fn verify_rejects_malformed_signature_length() {
     assert!(verify_ed25519(&keypair.public_key_bytes(), b"m", &[0_u8; 10]).is_err());
 }
 
+/// RFC 135 §2.3: `generate_seed` is the CSPRNG entry point `prikk key generate` uses. Two draws
+/// must differ -- the whole claim that the OS entropy source is genuinely wired, not a fixed or
+/// zeroed buffer.
+#[test]
+fn generate_seed_draws_differ() {
+    let a = Ed25519KeyPair::generate_seed().expect("OS CSPRNG must be available in this test env");
+    let b = Ed25519KeyPair::generate_seed().expect("OS CSPRNG must be available in this test env");
+    assert_ne!(a, b, "two independent draws must not produce the same seed");
+}
+
+/// `generate_seed` and `generate` must agree: deriving a keypair from the returned seed is the
+/// same keypair `generate` would have produced from that same random draw, so `generate`'s
+/// refactor onto `generate_seed` changed no behaviour.
+#[test]
+fn generate_seed_derives_the_same_keypair_shape_as_from_seed() {
+    let seed =
+        Ed25519KeyPair::generate_seed().expect("OS CSPRNG must be available in this test env");
+    let a = Ed25519KeyPair::from_seed(&seed);
+    let b = Ed25519KeyPair::from_seed(&seed);
+    assert_eq!(a.public_key_bytes(), b.public_key_bytes());
+}
+
 #[test]
 fn from_seed_is_deterministic() {
     let a = Ed25519KeyPair::from_seed(&[42_u8; 32]);

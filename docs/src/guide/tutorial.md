@@ -57,6 +57,7 @@ referenced blobs: 1
 
 **The seed above is a public example, shown in this documentation and in the project's README —
 never use it, or any seed you have shown anyone else, for real signing.** See
+[First Run](first-run.md) for how to generate your own, and
 [Security and Signing Setup](security-setup.md) for how real key material is meant to be handled;
 this tutorial only needs you to get past the refusal, not to understand key management yet.
 

@@ -27,9 +27,11 @@ mod bundle;
 mod commands;
 mod compact;
 mod durable_output;
+mod key;
 mod merge;
 mod output;
 mod seal;
+mod setup;
 mod stdout;
 mod sync;
 mod tag;
@@ -210,6 +212,20 @@ fn run_branch(args: Vec<String>) -> std::result::Result<(), CliError> {
     let root = current_dir()?;
     branch::run_branch(root, args)?;
     Ok(())
+}
+
+/// `prikk key` needs no repository -- a visitor must be able to generate a key *before* `init`
+/// (RFC 135). No `root` to inject, but wrapped anyway for the same reason every other entry in
+/// `COMMANDS` is: one uniform `crate::run_*` shape at the call site.
+fn run_key(args: Vec<String>) -> std::result::Result<(), CliError> {
+    key::run_key(args)
+}
+
+/// `prikk setup` takes its own repository path as a positional argument (mirroring `init`'s own
+/// `[path]`, since `setup` performs `init` as its first step) rather than resolving the current
+/// directory, so it also needs no `root` injected here.
+fn run_setup(args: Vec<String>) -> std::result::Result<(), CliError> {
+    setup::run_setup(args)
 }
 
 fn run_tag(args: Vec<String>) -> std::result::Result<(), CliError> {
@@ -718,6 +734,15 @@ pub(crate) fn maintainer_signer_from_env() -> Result<Ed25519MaintainerSigner, St
     })?;
     let seed = decode_seed_hex(&seed_hex, "PRIKK_MAINTAINER_SEED")?;
     Ed25519MaintainerSigner::from_seed(key_id, &seed).map_err(|err| err.to_string())
+}
+
+/// Read a 32-byte Ed25519 secret seed from the named environment variable (RFC 135 §9.3: the
+/// caller passes the variable's *name* on argv, never the seed itself). Shared by `prikk key
+/// public --seed-env` and any future command that must derive from a seed the user already holds.
+pub(crate) fn read_seed_env(var_name: &str) -> std::result::Result<[u8; 32], CliError> {
+    let value = std::env::var(var_name)
+        .map_err(|_| CliError::Usage(format!("environment variable {var_name} is not set")))?;
+    decode_seed_hex(&value, var_name).map_err(CliError::Usage)
 }
 
 /// Decode exactly 64 hex characters into a 32-byte Ed25519 secret seed.

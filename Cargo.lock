@@ -1019,6 +1019,7 @@ dependencies = [
 name = "prikk"
 version = "0.32.0"
 dependencies = [
+ "prikk-crypto",
  "prikk-error",
  "prikk-hash",
  "prikk-object",

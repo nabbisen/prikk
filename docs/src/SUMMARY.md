@@ -5,6 +5,7 @@
 # Guide
 
 - [Install](guide/install.md)
+- [First Run: Keys and Setup](guide/first-run.md)
 - [Tutorial](guide/tutorial.md)
 - [Troubleshooting](guide/troubleshooting.md)
 - [FAQ](guide/faq.md)

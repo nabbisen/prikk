@@ -76,6 +76,9 @@ reference](./docs/src/reference/platform-support.md) has the exact command-by-co
 The commands below, with explanation and the two refusals you will actually hit along the way, are
 the [Tutorial](./docs/src/guide/tutorial.md) — this block is a copy-pasteable summary of it, not a
 second, independent walkthrough; its authority for what each step means and why is the tutorial page.
+It reuses the tutorial's own fixed example seed so it is exactly reproducible; for **your own** key
+instead of this shared example, see [First Run](./docs/src/guide/first-run.md) — `prikk setup` reaches
+the same working repository without typing or copying any of the values below.
 
 ```sh
 mkdir -p ./sample-repo && cd ./sample-repo

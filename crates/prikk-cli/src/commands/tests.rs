@@ -42,7 +42,8 @@ use super::COMMANDS;
 /// `docs/landing/index.html`, added along with the page itself (RFC 137 §7 increment 4) — checked
 /// by rule (A) like every other declared document, but excluded from rule (B)'s search by
 /// `document_text`'s own `LANDING_PAGE_PATH_PREFIX` arm, since naming a command there is not an
-/// explanation of it.
+/// explanation of it. Plus `docs/src/guide/first-run.md`, added along with the page itself
+/// (RFC 135 §4/§9.7) to explain the two new registry entries, `key` and `setup`.
 const DECLARED_DOCUMENTS: &[&str] = &[
     "docs/landing/index.html",
     "docs/src/guide/backup-restore.md",
@@ -50,6 +51,7 @@ const DECLARED_DOCUMENTS: &[&str] = &[
     "docs/src/guide/checkout/snapshot-checkout.md",
     "docs/src/guide/checkout/snapshot-materialization.md",
     "docs/src/guide/faq.md",
+    "docs/src/guide/first-run.md",
     "docs/src/guide/history.md",
     "docs/src/guide/ignore.md",
     "docs/src/guide/merge-evidence.md",

@@ -58,10 +58,21 @@ impl Ed25519KeyPair {
     ///
     /// Fails closed if the OS entropy source is unavailable.
     pub fn generate() -> Result<Self> {
+        let seed = Self::generate_seed()?;
+        Ok(Self::from_seed(&seed))
+    }
+
+    /// Draw a fresh 32-byte secret seed from the operating-system CSPRNG.
+    ///
+    /// Fails closed if the OS entropy source is unavailable. Unlike [`Self::generate`], which
+    /// derives a keypair and discards the seed, this returns the seed itself -- for a caller
+    /// (RFC 135's `prikk key generate`) that must let the user keep it. The returned bytes are the
+    /// sole secret; treat them with the same confidentiality as any other private key material.
+    pub fn generate_seed() -> Result<[u8; ED25519_KEY_LEN]> {
         let mut seed = [0_u8; ED25519_KEY_LEN];
         getrandom::fill(&mut seed)
             .map_err(|e| PrikkError::Integrity(format!("OS CSPRNG unavailable: {e}")))?;
-        Ok(Self::from_seed(&seed))
+        Ok(seed)
     }
 
     /// The 32-byte public (verifying) key for this keypair.

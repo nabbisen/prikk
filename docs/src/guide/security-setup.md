@@ -10,10 +10,13 @@ paths, see [repository layout and authority](../reference/repository-layout.md).
 
 - Prikk is early implementation software and is not a production Git replacement.
 - Current key input is environment-variable based and intentionally minimal.
-- Seeds are secret key material. Prikk does not store, encrypt, rotate, revoke, expire, back up, or
-  generate private keys.
-- Prikk currently has no key-generation command and no command that derives a public key from a seed.
-- Operators must obtain matched Ed25519 seed and public-key material with external tooling.
+- Seeds are secret key material. Prikk does not store, encrypt, rotate, revoke, expire, or back up
+  private keys — `prikk key generate --out` writes one, once, to a path you name, and never reads it
+  back or manages it afterward (see [First Run](first-run.md)).
+- `prikk key generate` draws a fresh seed from the OS CSPRNG; `prikk key public --seed-env` derives a
+  public key from a seed you already hold; `prikk setup` composes both roles plus
+  `trust maintainer add` into one command. External tooling is no longer required, though nothing
+  stops you from bringing your own matched seed/public-key pair instead.
 - Maintainer trust is repository-local, held as a set of adopted MAINTAINER keys with `required = 1`
   (any one adopted key's signature suffices), and enforces trust-on-first-use per key id.
 - AUTHOR signatures are real Ed25519 signatures, but Prikk does not currently enforce a
@@ -51,8 +54,9 @@ The CLI reads MAINTAINER key material from:
 Each seed value is a caller-supplied 32-byte Ed25519 secret seed encoded as 64 hex characters. Missing
 variables, empty key ids, wrong-length seed hex, and non-hex seed bytes fail closed before signing.
 
-Prikk does not currently derive the MAINTAINER public key from `PRIKK_MAINTAINER_SEED`. The operator
-must provide the matching public key separately when configuring repository-local maintainer trust.
+`prikk key public --seed-env PRIKK_MAINTAINER_SEED` derives the matching public key directly — see
+[First Run](first-run.md). Nothing computes it automatically as part of reading the environment
+variable itself; deriving it is a separate, explicit step.
 
 ## Maintainer Trust Store Setup
 
@@ -76,10 +80,16 @@ remote trust distribution.
 
 ## Minimal Local Workflow
 
-Use placeholders for seed and key values in documentation, scripts, and notes. Before running the
-workflow below, populate the local shell variables `AUTHOR_SECRET_SEED_64_HEX`,
-`MAINTAINER_SECRET_SEED_64_HEX`, and `MAINTAINER_PUBLIC_KEY_64_HEX` with key material generated and
-handled outside Prikk.
+The shortest path is one command — see [First Run](first-run.md) for the full walkthrough and output:
+
+```sh
+prikk setup ./sample-repo
+```
+
+`setup` prints the exports to run next, having already run `init`, generated both an AUTHOR and a
+MAINTAINER seed, and registered the MAINTAINER key. If you would rather bring your own matched
+seed/public-key pair instead of a generated one, or understand each step separately, the same result
+composed by hand:
 
 ```sh
 prikk init ./sample-repo
@@ -98,6 +108,10 @@ echo "hello prikk" > ./sample-repo/readme.txt
 (cd ./sample-repo && prikk seal --allow-no-audit)
 (cd ./sample-repo && prikk verify)
 ```
+
+`AUTHOR_SECRET_SEED_64_HEX`, `MAINTAINER_SECRET_SEED_64_HEX`, and `MAINTAINER_PUBLIC_KEY_64_HEX` are
+placeholders for values you supply — `prikk key generate` and `prikk key public --seed-env` produce
+them if you do not already have your own.
 
 The MAINTAINER seed and public key above must be matched private/public halves of one Ed25519 keypair.
 If they do not match, seal fails because the configured signer is not trusted by the repository-local
@@ -133,11 +147,15 @@ contract.
 
 ## Deferred Work
 
-Still deferred: key-generation commands, public-key derivation commands, local secret storage,
-keychain integration, passphrase handling, key rotation, key expiration, compromise recovery, hardware
-signing, multi-maintainer thresholds, repository-wide AUTHOR trust policy (including AUTHOR-identity
-revocation — only MAINTAINER key revocation is supported), remote trust, hosted identity, JSON
-key-management output, stable trust-policy migration, stable repository-format migration, and
+Key generation and public-key derivation shipped — see [First Run](first-run.md). Still deferred: a
+general configuration command and every durable, non-secret policy setting (no beneficiary yet — a
+first real adopter is the named trigger); a credential-helper boundary (refused deliberately, git/ssh-style, in
+favor of the write-once-where-you-name-it model `key generate --out` already uses); local secret
+storage beyond that single named write, keychain integration, passphrase handling, key rotation, key
+expiration, compromise recovery, hardware signing, multi-maintainer thresholds, repository-wide
+AUTHOR trust policy (including AUTHOR-identity revocation — only MAINTAINER key revocation is
+supported), remote trust, hosted identity, JSON key-management output, stable trust-policy migration,
+stable repository-format migration, and
 production readiness.
 
 ## Claim-to-Source Anchors
@@ -147,7 +165,7 @@ production readiness.
 | AUTHOR and MAINTAINER production signing use real Ed25519 signatures. | [`author_signing.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/author_signing.rs), [`maintainer_signing.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/maintainer_signing.rs), [DC-10](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/DC-10-ROLLBACK-DRAFT-SIGNING.md), [DC-11](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/DC-11-MAINTAINER-TRUST-STORE.md) |
 | Signature preimages bind algorithm, object type, object id, signer role, and key id. | [`signature.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-object/src/signature.rs), [`author_signing.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/author_signing.rs), [`maintainer_signing.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/maintainer_signing.rs) |
 | The CLI reads AUTHOR and MAINTAINER key material from environment variables and expects 64-hex secret seeds. | [`main.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/main.rs), [`author_signing.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/author_signing.rs), [`maintainer_signing.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/maintainer_signing.rs) |
-| Prikk currently exposes `trust maintainer add` but no key-generation or public-key-derivation command. | [`main.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/main.rs), [`help.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/output/help.rs), [DC-30](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/DC-30-KEY-MANAGEMENT-SIGNING-SETUP-GUIDE.md) |
+| Prikk exposes `trust maintainer add`, key generation (`key generate`), and public-key derivation (`key public`) — since RFC 135. | [`key.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/key.rs), [`commands.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/commands.rs), [DC-30](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/DC-30-KEY-MANAGEMENT-SIGNING-SETUP-GUIDE.md) |
 | The maintainer trust store is repository-local and fixed to one MAINTAINER key with `required = 1`. | [`trust.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/trust.rs), [DC-11](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/DC-11-MAINTAINER-TRUST-STORE.md), [trust and threat model](../reference/trust-threat-model.md) |
 | Seal verifies the configured MAINTAINER signer against local trust before publication. | [`seal.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`trust.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/trust.rs) |
 | Verify checks publication trust for Block, RefState, and RefUpdate objects against local MAINTAINER trust. | [`verify.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/verify.rs), [`trust.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/trust.rs), [integrity and recovery diagnostics](../reference/integrity-recovery.md) |
