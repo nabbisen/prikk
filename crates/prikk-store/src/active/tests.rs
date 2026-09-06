@@ -145,6 +145,40 @@ fn active_session_append_does_not_overwrite_other_ref_metadata() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// RFC 132 part 1: `active_ref_ownership` is the question form
+/// `require_active_ref_for_non_empty_wal` asserts an answer to -- both cases, exercised directly
+/// rather than only through `ActiveSession::append_patch`'s own coverage above.
+#[test]
+fn active_ref_ownership_answers_owned_and_owned_by_other_as_values_not_errors() {
+    let root = unique_temp_dir("active-ref-ownership");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    write_active_ref_metadata(&layout, "heads/main").unwrap();
+
+    assert_eq!(
+        crate::active_ref_ownership(&layout, "heads/main").unwrap(),
+        crate::ActiveRefOwnership::Owned
+    );
+    assert_eq!(
+        crate::active_ref_ownership(&layout, "heads/topic").unwrap(),
+        crate::ActiveRefOwnership::OwnedByOther("heads/main".to_string())
+    );
+
+    // The assertion form is written in terms of the question form, not a second, independent
+    // comparison -- so its two outcomes must match exactly what the question form just answered.
+    assert!(
+        crate::require_active_ref_for_non_empty_wal(&layout, "heads/main").is_ok(),
+        "assertion form must agree with Owned"
+    );
+    let err = crate::require_active_ref_for_non_empty_wal(&layout, "heads/topic").unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("active WAL is owned by heads/main"),
+        "assertion form must agree with OwnedByOther: {err}"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
 #[test]
 fn active_ref_metadata_round_trips_and_removes() {
     let root = unique_temp_dir("active-ref");

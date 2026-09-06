@@ -217,25 +217,57 @@ pub(crate) fn prepare_empty_active_ref_for_append(
     write_active_ref_metadata(layout, ref_name)
 }
 
-/// Validate active ref metadata for a non-empty active WAL.
-pub fn require_active_ref_for_non_empty_wal(
+/// Who owns the active WAL for a non-empty session, the read-only question
+/// [`require_active_ref_for_non_empty_wal`] asserts an answer to (RFC 132 part 1). **A value, not
+/// a `Result`**: "owned by a different ref" is a legitimate answer to an ownership question, not a
+/// failure. Returning it as `Err(PrikkError::Precondition(_))` forced `prikk branch close` to
+/// un-file the answer by variant (`Err(PrikkError::Precondition(_)) => {}`) -- a match broad
+/// enough that any *other* `Precondition` reaching that same call site would have been silently
+/// treated the same way, the exact defect this part exists to close before part 2 adds six more
+/// `Precondition` sites elsewhere in the crate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ActiveRefOwnership {
+    /// The active WAL is owned by the ref that was asked about.
+    Owned,
+    /// The active WAL is owned by a different ref, named here.
+    OwnedByOther(String),
+}
+
+/// Answer which ref owns the active WAL for a non-empty session. Missing or malformed active-ref
+/// metadata is still a hard error here, not an ownership answer -- an active WAL that has records
+/// but cannot say whose they are is an integrity condition regardless of which ref asked.
+pub fn active_ref_ownership(
     layout: &RepositoryLayout,
     ref_name: &str,
-) -> Result<String> {
+) -> Result<ActiveRefOwnership> {
     let expected = validate_local_branch_ref(ref_name)?;
     match read_active_ref_metadata(layout)? {
-        ActiveRefMetadata::Valid(actual) if actual == expected => Ok(actual),
-        // RFC 132's Precondition variant: this is an ownership mismatch, not a lock -- nothing is
-        // held and no other process is racing this one, so `LockConflict`'s "another writer may be
-        // active" was never true here.
-        ActiveRefMetadata::Valid(actual) => Err(PrikkError::Precondition(format!(
-            "active WAL is owned by {actual}; requested ref {expected}"
-        ))),
+        ActiveRefMetadata::Valid(actual) if actual == expected => Ok(ActiveRefOwnership::Owned),
+        ActiveRefMetadata::Valid(actual) => Ok(ActiveRefOwnership::OwnedByOther(actual)),
         ActiveRefMetadata::Missing => Err(PrikkError::Integrity(
             "active WAL has records but active ref metadata is missing".to_string(),
         )),
         ActiveRefMetadata::Invalid(reason) => Err(PrikkError::Integrity(format!(
             "active WAL has records but active ref metadata is malformed: {reason}"
+        ))),
+    }
+}
+
+/// Validate active ref metadata for a non-empty active WAL -- the assertion form of
+/// [`active_ref_ownership`], written in terms of it rather than re-deriving the same comparison,
+/// for the two callers (`ActiveSession::append_patch`, `node_authoring::author_inner`) that want a
+/// plain `?` refusal and use the returned ref name for nothing but confirming it matched.
+pub fn require_active_ref_for_non_empty_wal(
+    layout: &RepositoryLayout,
+    ref_name: &str,
+) -> Result<String> {
+    match active_ref_ownership(layout, ref_name)? {
+        ActiveRefOwnership::Owned => Ok(ref_name.to_string()),
+        // RFC 132's Precondition variant: this is an ownership mismatch, not a lock -- nothing is
+        // held and no other process is racing this one, so `LockConflict`'s "another writer may be
+        // active" was never true here.
+        ActiveRefOwnership::OwnedByOther(actual) => Err(PrikkError::Precondition(format!(
+            "active WAL is owned by {actual}; requested ref {ref_name}"
         ))),
     }
 }

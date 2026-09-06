@@ -36,15 +36,14 @@ use std::path::PathBuf;
 use crate::arg_scan::{SetOnce, flag_value, mark_seen, unknown_argument};
 use crate::commands::CliError;
 use crate::stdout::println;
-use prikk_error::PrikkError;
 use prikk_object::{
     CanonicalEncode, ObjectEnvelope, ObjectId, ObjectType, RefKind, RefStatePayload,
     RefUpdatePayload,
 };
 use prikk_store::{
-    DEFAULT_ACTIVE_NAME, DEFAULT_CHECKOUT_REF, FileObjectStore, GatedOperation, MaintainerSigner,
-    ObjectReader, ObjectWriteSession, RefPublication, RefStore, Wal, maintainer_signature,
-    require_active_ref_for_non_empty_wal, validate_local_branch_ref, verify_signer_trusted,
+    ActiveRefOwnership, DEFAULT_ACTIVE_NAME, DEFAULT_CHECKOUT_REF, FileObjectStore, GatedOperation,
+    MaintainerSigner, ObjectReader, ObjectWriteSession, RefPublication, RefStore, Wal,
+    active_ref_ownership, maintainer_signature, validate_local_branch_ref, verify_signer_trusted,
 };
 
 /// Envelope schema version for a `RefState` carrying no `closed` field (every ordinary
@@ -276,18 +275,19 @@ fn run_close(root: PathBuf, args: Vec<String>) -> std::result::Result<(), CliErr
         );
     }
     if !replay.records.is_empty() {
-        match require_active_ref_for_non_empty_wal(&layout, &canonical) {
-            Ok(_) => {
+        match active_ref_ownership(&layout, &canonical) {
+            Ok(ActiveRefOwnership::Owned) => {
                 return Err(format!(
                     "cannot close {canonical}: it owns a non-empty active WAL; seal it before closing"
                 )
                 .into());
             }
             // Owned by a different ref: this branch's own active WAL is not implicated, so closing
-            // it may proceed. RFC 132's Precondition variant (was LockConflict until this change --
-            // `require_active_ref_for_non_empty_wal` reclassified its "owned by a different ref"
-            // case, and this match would otherwise silently start treating it as fatal).
-            Err(PrikkError::Precondition(_)) => {}
+            // it may proceed. RFC 132 part 1: this is an answer to an ownership question, carried
+            // as a plain value on a two-variant local enum rather than filed under a broad error
+            // variant, precisely so this match cannot also swallow some *other*, unrelated
+            // precondition that later starts reaching this same call site.
+            Ok(ActiveRefOwnership::OwnedByOther(_)) => {}
             // Missing or malformed active-ref metadata on a non-empty WAL is an integrity condition,
             // not evidence this branch is uninvolved — fail closed like every other publisher
             // (`node_authoring.rs` propagates the same error via `?`) rather than treat "unknown

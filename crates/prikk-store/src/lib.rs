@@ -99,9 +99,9 @@ mod test_support;
 mod trust_gated_operations_binding_gate;
 
 pub use active::{
-    ActiveCommitResult, ActiveRefMetadata, ActiveSession, finish_active_publication_cleanup,
-    read_active_ref_metadata, remove_active_ref_metadata, require_active_ref_for_non_empty_wal,
-    write_active_ref_metadata,
+    ActiveCommitResult, ActiveRefMetadata, ActiveRefOwnership, ActiveSession, active_ref_ownership,
+    finish_active_publication_cleanup, read_active_ref_metadata, remove_active_ref_metadata,
+    require_active_ref_for_non_empty_wal, write_active_ref_metadata,
 };
 pub use author_signing::{AuthorSigner, Ed25519AuthorSigner, author_signature};
 pub use block_state::{
