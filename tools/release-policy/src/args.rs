@@ -6,6 +6,7 @@ use crate::installer;
 use crate::oracle;
 use crate::policy;
 use crate::reference;
+use crate::release_evidence;
 use crate::release_notes;
 
 pub(crate) fn run(arguments: Vec<String>) -> Result<()> {
@@ -16,6 +17,7 @@ pub(crate) fn run(arguments: Vec<String>) -> Result<()> {
         "oracle-check" => oracle_check(&root, rest),
         "boundary-check" => boundary_check(&root, rest),
         "reference-check" => reference_check(&root, rest),
+        "produce-release-evidence" => produce_release_evidence_command(&root, rest),
         "release-notes" => release_notes_command(&root, rest),
         "generate-installer" => generate_installer_command(rest),
         "-h" | "--help" | "help" if rest.is_empty() => {
@@ -57,6 +59,63 @@ fn reference_check(root: &std::path::Path, arguments: &[String]) -> Result<()> {
     } else {
         Err(Error::new("release-policy reference verification failed"))
     }
+}
+
+fn produce_release_evidence_command(root: &std::path::Path, arguments: &[String]) -> Result<()> {
+    let mut observations_path = None;
+    let mut prior_path = None;
+    let mut expect_prior_sha256 = None;
+    let mut out_path = None;
+    let mut index = 0;
+    while index < arguments.len() {
+        match arguments.get(index).map(String::as_str) {
+            Some("--observations") => {
+                observations_path = Some(next_value(arguments, &mut index, "--observations")?);
+            }
+            Some("--prior") => {
+                prior_path = Some(next_value(arguments, &mut index, "--prior")?);
+            }
+            Some("--expect-prior-sha256") => {
+                expect_prior_sha256 =
+                    Some(next_value(arguments, &mut index, "--expect-prior-sha256")?);
+            }
+            Some("--out") => {
+                out_path = Some(next_value(arguments, &mut index, "--out")?);
+            }
+            _ => return Err(Error::new(usage())),
+        }
+    }
+    let observations_path = observations_path.ok_or_else(|| Error::new(usage()))?;
+    let prior = match (prior_path, expect_prior_sha256) {
+        (Some(path), Some(expected_sha256)) => Some(release_evidence::PriorLink {
+            path: PathBuf::from(path),
+            expected_sha256,
+        }),
+        (None, None) => None,
+        _ => {
+            return Err(Error::new(
+                "produce-release-evidence: --prior and --expect-prior-sha256 must be given together",
+            ));
+        }
+    };
+    let observations =
+        release_evidence::load_observations(std::path::Path::new(&observations_path))?;
+    let document = release_evidence::produce(root, observations, prior.as_ref())?;
+    let rendered = serde_json::to_string_pretty(&document)?;
+    match out_path {
+        Some(path) => std::fs::write(path, rendered)?,
+        None => println!("{rendered}"),
+    }
+    Ok(())
+}
+
+fn next_value(arguments: &[String], index: &mut usize, flag: &str) -> Result<String> {
+    let value = arguments
+        .get(*index + 1)
+        .ok_or_else(|| Error::new(format!("{flag} requires a value")))?
+        .clone();
+    *index += 2;
+    Ok(value)
 }
 
 fn release_notes_command(root: &std::path::Path, arguments: &[String]) -> Result<()> {
@@ -103,5 +162,5 @@ fn repository_root() -> Result<PathBuf> {
 }
 
 fn usage() -> &'static str {
-    "usage: prikk-release-policy <check|oracle-check|boundary-check|reference-check> [--format json] [--self-test]\n       prikk-release-policy release-notes <tag> <dist-dir>\n       prikk-release-policy generate-installer <dist-dir>"
+    "usage: prikk-release-policy <check|oracle-check|boundary-check|reference-check> [--format json] [--self-test]\n       prikk-release-policy produce-release-evidence --observations <path> [--prior <path> --expect-prior-sha256 <hex>] [--out <path>]\n       prikk-release-policy release-notes <tag> <dist-dir>\n       prikk-release-policy generate-installer <dist-dir>"
 }

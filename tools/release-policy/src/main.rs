@@ -11,6 +11,7 @@ mod json;
 mod oracle;
 mod policy;
 mod reference;
+mod release_evidence;
 mod release_notes;
 mod schema;
 mod time;
