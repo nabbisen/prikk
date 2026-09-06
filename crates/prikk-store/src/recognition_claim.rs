@@ -42,10 +42,8 @@ use prikk_object::{
     SignatureAlgorithm, SignerRole,
 };
 
-use crate::layout::RepositoryLayout;
 use crate::object_store::ObjectReader;
-use crate::trust::{MaintainerTrustPolicy, load_maintainer_trust_policy};
-use crate::trust_index::read_current_trust_policy_snapshot;
+use crate::trust::MaintainerTrustPolicy;
 
 /// Which field of a `RecognitionClaimPayload` a `RecognitionClaimConsistency::Contradicted`
 /// outcome names as the one that disagreed with the held block (N3 §4) -- lets a caller
@@ -195,25 +193,6 @@ pub(crate) fn verify_claim_signature(
                 key_id: signature.key_id.clone(),
             })
         }
-    }
-}
-
-/// `load_maintainer_trust_policy` deliberately errors when no policy snapshot has ever been
-/// appended -- correct for *publication* trust (`trust.rs`'s own module doc: a repository with no
-/// adopted maintainer is a trust failure for every publication), because a Block/RefState needs a
-/// definitively trusted signer to be considered sealed at all. A `RecognitionClaim`'s own signature
-/// check has no such requirement: design D3 rules a claim **never gates** on trust, so a repository
-/// that has never adopted anyone must read every claim's signer as simply not adopted -- the same
-/// outcome as an adopted-but-empty policy would produce -- not refuse over a question claim
-/// verification was never supposed to ask. A genuinely damaged policy or key-material container
-/// still propagates its error unchanged; only the "nothing has ever been adopted" case is treated
-/// as empty here.
-pub(crate) fn maintainer_trust_policy_or_empty(
-    layout: &RepositoryLayout,
-) -> Result<MaintainerTrustPolicy> {
-    match read_current_trust_policy_snapshot(layout)? {
-        Some(_) => load_maintainer_trust_policy(layout),
-        None => Ok(MaintainerTrustPolicy { keys: Vec::new() }),
     }
 }
 

@@ -20,22 +20,24 @@
 //! **What this gate does not do** (§5 / v2 handoff §6): it does not gate line count or module
 //! count, it does not repair the graph, and declaring an entry is not licence to act on it.
 //!
-//! ## This round's own re-derivation found more than RFC 130's own table names
+//! ## History: a round found more than RFC 130's own table named, and a later one shrank it back
 //!
-//! §4b.4 names four cycles across six modules. Re-measuring independently (v2 handoff §3.2's own
-//! instruction, not optional) found **fifteen distinct directed edges across seven modules** —
-//! five edges and one module (`recognition_claim`) beyond that table. Every one of the five extra
-//! edges is confirmed at source and, via `git log -S`, predates `04e9391` (RFC 130's own
-//! measurement commit) by weeks to months — present when the external review counted "exactly one
-//! cycle" and missed since, the same way `trust ↔ refs` was. The seventh module,
-//! `recognition_claim`, joined the component only because *this session's own* RFC 138 round added
-//! `trust -> recognition_claim` (`trust.rs`'s `load_maintainer_trust_policy_or_empty`, calling an
-//! existing helper by its current address rather than relocating it) atop the pre-existing
-//! `recognition_claim -> trust` edge. See this round's report for the full derivation and the
-//! git-blame evidence; every one of the resulting ten entries below states its own reason and
-//! removal statement, per §4b.3 — declaring them **is** the evaluation RFC 130 keeps saying has
-//! never happened, extended to cover what re-measuring actually found rather than what was
-//! expected.
+//! §4b.4 named four cycles across six modules. The coupling-gate round's own re-derivation (v2
+//! handoff §3.2's instruction to re-measure, not copy) found **fifteen distinct directed edges
+//! across seven modules** — five edges and one module (`recognition_claim`) beyond that table,
+//! each confirmed at source and, via `git log -S`, predating `04e9391` by weeks to months, except
+//! one: `recognition_claim` had joined the component only because that same session's RFC 138
+//! round added `trust -> recognition_claim` (`trust.rs`'s `load_maintainer_trust_policy_or_empty`,
+//! calling an existing helper by its current address rather than relocating it).
+//!
+//! **RFC 138 carried-defects C then relocated that helper** into `trust.rs` itself, removing the
+//! edge it had added. `recognition_claim -> trust` (the old, legitimate leg) survived — but with
+//! the return leg gone, `recognition_claim` is no longer part of any cycle, and needs no
+//! `DECLARED_CYCLES` entry at all. The component is back to six modules and thirteen edges; the
+//! `trust` hub crossing that same edge caused is gone with it. [`DECLARED_CYCLES`] and
+//! [`DECLARED_HUBS`] below reflect the post-relocation graph; `graph::tests::the_scc_has_exactly_
+//! this_edge_set` and `graph::tests::recognition_claim_to_trust_survives_but_is_no_longer_cyclic`
+//! pin both facts against the real repository.
 
 mod cfg_expr;
 mod graph;
@@ -46,15 +48,15 @@ use std::path::Path;
 use super::{BoundaryError, push};
 
 /// A module pair is a hub if it has at least this much fan-in *and* fan-out (`min(fan_in,
-/// fan_out) >= HUB_THRESHOLD`). Derived from this round's own measured distribution (report
-/// §3.5.1), not asserted -- sorted by `min(fan_in, fan_out)`, today's ranking is 13 (`refs`), 11
-/// (`patch_replay`), 8 (`lifecycle_cache`), then a three-way tie at 6 (`wal`, `active`, `trust`),
-/// then a clean drop to 5. The break sits between 6 and 5, not between 8 and 6: `active` tying
-/// `wal` was already flagged as a live trend by the coupling-gate-graph-contradiction round: this
-/// derivation confirms it, and finds `trust` has now joined them too -- specifically because this
-/// session's own RFC 138 round added one outgoing edge (`trust -> recognition_claim`) that moved
-/// `trust` from fan-out 5 to 6. See `graph::tests::the_scc_has_exactly_this_edge_set` for the exact
-/// numbers this constant is checked against.
+/// fan_out) >= HUB_THRESHOLD`). Derived from the measured distribution, not asserted -- sorted by
+/// `min(fan_in, fan_out)`, today's ranking is 13 (`refs`), 11 (`patch_replay`), 8
+/// (`lifecycle_cache`), then a two-way tie at 6 (`wal`, `active`), then a clean drop to 5
+/// (`trust`, `merge_evidence`, `author_key_index`). The break sits between 6 and 5.
+/// **`trust` was part of the tier-6 tie until carried-defect C's relocation** (see the module doc)
+/// removed the one outgoing edge (`trust -> recognition_claim`) that had put it at fan-out 6; it
+/// now sits at 5, alongside the tier it would have joined anyway if RFC 138 had never added that
+/// edge. See `graph::tests::the_scc_has_exactly_this_edge_set` for the exact numbers this constant
+/// is checked against.
 const HUB_THRESHOLD: usize = 6;
 
 /// One declared cycle-forming edge: the reason it exists, and — the property that makes a cycle
@@ -70,10 +72,11 @@ struct DeclaredCycle {
     what_would_remove_it: &'static str,
 }
 
-/// Every edge found inside `prikk-store`'s one strongly-connected component today. Ten entries,
-/// covering all fifteen directed edges among `active`, `refs`, `trust`, `worktree_patch`,
-/// `patch_replay`, `lifecycle_cache`, `recognition_claim` — five mutual pairs plus five one-way
-/// edges that close longer cycles through them. Checked exhaustively against the real graph by
+/// Every edge found inside `prikk-store`'s one strongly-connected component today. Eight entries,
+/// covering all thirteen directed edges among `active`, `refs`, `trust`, `worktree_patch`,
+/// `patch_replay`, `lifecycle_cache` — four mutual pairs (eight edges) plus four one-way
+/// relationships (one grouped pair, three singles; five edges) that close longer cycles through
+/// them. Checked exhaustively against the real graph by
 /// `graph::tests::every_scc_edge_is_covered_by_a_declared_cycle`.
 const DECLARED_CYCLES: &[DeclaredCycle] = &[
     DeclaredCycle {
@@ -126,28 +129,6 @@ const DECLARED_CYCLES: &[DeclaredCycle] = &[
                                 worktree_patch's authoring functions instead of worktree_patch \
                                 asking active for it mid-call -- a real, scoped option, not \
                                 attempted here for the same §7 reason as the pair above",
-    },
-    DeclaredCycle {
-        edges: &[
-            ("trust", "recognition_claim"),
-            ("recognition_claim", "trust"),
-        ],
-        reason: "NOT the same shape as the others, and said so plainly: `recognition_claim -> \
-                  trust` is old and legitimate (a claim's signer must be checked against trust \
-                  policy). `trust -> recognition_claim` is new -- added by this session's own RFC \
-                  138 round, whose `load_maintainer_trust_policy_or_empty` wrapper called the \
-                  existing `maintainer_trust_policy_or_empty` helper by its current address \
-                  (`recognition_claim.rs`) rather than relocating it. This is the gate finding \
-                  exactly the failure mode RFC 130 exists to catch, one round after the gate was \
-                  proposed, in this developer's own prior work",
-        what_would_remove_it: "moving `maintainer_trust_policy_or_empty` out of `recognition_claim.rs` \
-                                and into `trust.rs`, where it reads more naturally anyway (it is a \
-                                trust-policy read helper, not a recognition-claim-specific one), \
-                                and updating its three callers (`recognition_claim.rs` itself, \
-                                `tag_travel.rs`, `seal_from_accepted.rs`) to call it from `trust` \
-                                instead -- a real, mechanical, low-risk fix, recommended as a \
-                                near-term follow-up and not attempted here because RFC 130 §7 rules \
-                                out module changes in this increment",
     },
     DeclaredCycle {
         edges: &[
@@ -214,11 +195,12 @@ struct DeclaredHub {
     reason: &'static str,
 }
 
-/// Today's six hubs by `min(fan_in, fan_out)` (report §3.5.1's re-derivation). The RFC's original
-/// four (`refs`, `patch_replay`, `wal`, `lifecycle_cache`) plus two new entrants tied with `wal` at
-/// the threshold: `active` (a trend the coupling-gate-graph-contradiction round already flagged)
-/// and `trust` (newly crossing specifically because this session's own RFC 138 round added one
-/// outgoing edge).
+/// Today's five hubs by `min(fan_in, fan_out)`. The RFC's original four (`refs`, `patch_replay`,
+/// `wal`, `lifecycle_cache`) plus one new entrant tied with `wal` at the threshold: `active` (a
+/// trend the coupling-gate-graph-contradiction round already flagged). `trust` briefly joined this
+/// list too, for exactly as long as RFC 138's own `trust -> recognition_claim` edge existed;
+/// carried-defects C removed that edge along with the cycle it caused, and `trust` dropped back
+/// below the threshold with it (see the module doc).
 const DECLARED_HUBS: &[DeclaredHub] = &[
     DeclaredHub {
         module: "refs",
@@ -257,15 +239,6 @@ const DECLARED_HUBS: &[DeclaredHub] = &[
                   by the coupling-gate-graph-contradiction round, driven by the same cyclic \
                   relationships (with refs, worktree_patch, patch_replay) declared above, not by \
                   unrelated scope creep",
-    },
-    DeclaredHub {
-        module: "trust",
-        reason: "the publication-trust layer every publish-gated operation checks a signer \
-                  against, with fan-out already near this threshold before this round. Crosses it \
-                  specifically because of this session's own RFC 138 change (`trust -> \
-                  recognition_claim`, declared above) -- named here rather than treated as sprawl \
-                  because the underlying edge already has its own honest accounting, including a \
-                  recommended fix that would remove both the cycle and this hub crossing together",
     },
 ];
 

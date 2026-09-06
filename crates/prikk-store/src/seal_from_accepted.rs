@@ -59,10 +59,9 @@ use crate::lock::ActiveLock;
 use crate::maintainer_signing::{MaintainerSigner, maintainer_signature};
 use crate::object_store::{ObjectReadSnapshot, ObjectReader, ObjectWriteSession, ObjectWriter};
 use crate::patch_exchange::accepted_but_unsealed_patch_ids;
-use crate::recognition_claim::maintainer_trust_policy_or_empty;
 use crate::recognition_claim::{ClaimSignatureVerification, verify_claim_signature};
 use crate::refs::{RefPublication, RefStore, validate_local_branch_ref};
-use crate::trust::{GatedOperation, verify_signer_trusted};
+use crate::trust::{GatedOperation, load_maintainer_trust_policy_or_empty, verify_signer_trusted};
 use crate::wal::Wal;
 
 /// The result of [`seal_from_accepted_claim`].
@@ -159,7 +158,7 @@ pub fn seal_from_accepted_claim(
     // early checks.
     verify_signer_trusted(layout, signer, GatedOperation::SyncSeal)?;
 
-    let trust_policy = maintainer_trust_policy_or_empty(layout)?;
+    let trust_policy = load_maintainer_trust_policy_or_empty(layout)?;
     let claim_signature_outcome = verify_claim_signature(&claim_envelope, &trust_policy)?;
 
     let active_lock = ActiveLock::acquire(layout, DEFAULT_ACTIVE_NAME)?;

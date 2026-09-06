@@ -20,10 +20,9 @@ use crate::patch_replay::decode::{
     DecodedDeletePreimage, DecodedOperationKind, decode_patch_operations, decode_patch_parent_ids,
 };
 use crate::patch_set_digest::compute_patch_set_digest;
-use crate::recognition_claim::{
-    check_recognition_claim_consistency, maintainer_trust_policy_or_empty, verify_claim_signature,
-};
+use crate::recognition_claim::{check_recognition_claim_consistency, verify_claim_signature};
 use crate::tag_travel::verify_tag_signature;
+use crate::trust::load_maintainer_trust_policy_or_empty;
 use crate::verify::AuthorSignatureVerification;
 
 pub use crate::recognition_claim::ClaimSignatureVerification;
@@ -250,7 +249,7 @@ pub fn accept_exchange_artifact(
 
     // Phase C items 8-9: every claim's own MAINTAINER signature, then every claim against blocks
     // this repository already holds.
-    let trust_policy = maintainer_trust_policy_or_empty(layout)?;
+    let trust_policy = load_maintainer_trust_policy_or_empty(layout)?;
     let mut claim_signature_outcomes = Vec::with_capacity(decoded.claims.len());
     for envelope in &decoded.claims {
         let claim_id = envelope.object_id();

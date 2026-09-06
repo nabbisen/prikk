@@ -199,7 +199,7 @@ pub enum ReceivedTagResolution {
 /// resolution state -- the read side of `prikk sync tags`.
 pub fn list_received_tags(layout: &RepositoryLayout) -> Result<Vec<ReceivedTagSummary>> {
     let object_store = ObjectReadSnapshot::open(layout)?;
-    let trust_policy = crate::recognition_claim::maintainer_trust_policy_or_empty(layout)?;
+    let trust_policy = crate::trust::load_maintainer_trust_policy_or_empty(layout)?;
     let mut summaries = Vec::new();
     for tag_id in received_tag_ids(layout)? {
         let envelope = object_store

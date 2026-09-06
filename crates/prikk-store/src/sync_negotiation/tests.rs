@@ -16,10 +16,10 @@ use super::{
     build_sync_summary, compute_sync_delta, decode_have_list, decode_sync_summary,
 };
 use crate::RefStore;
-use crate::recognition_claim::maintainer_trust_policy_or_empty;
 use crate::sync_negotiation::sync_test_support::{
     all_container_bytes, cleanup, fresh_repo, publish_branch,
 };
+use crate::trust::load_maintainer_trust_policy_or_empty;
 
 /// §5 row 1: reading a summary, a have-list, or the delta changes no state at all. Checked against
 /// **every** persisted object type's own container bytes
@@ -39,7 +39,7 @@ fn reading_summary_have_list_and_delta_changes_no_state() -> Result<()> {
     let containers_before = all_container_bytes(&layout)?;
     let ref_pointer_before =
         RefStore::new(layout.clone()).read_current_ref_state_id("heads/main")?;
-    let trust_before = maintainer_trust_policy_or_empty(&layout)?;
+    let trust_before = load_maintainer_trust_policy_or_empty(&layout)?;
 
     let summary_bytes = build_sync_summary(&layout)?;
     let _entries = decode_sync_summary(
@@ -58,7 +58,7 @@ fn reading_summary_have_list_and_delta_changes_no_state() -> Result<()> {
     let containers_after = all_container_bytes(&layout)?;
     let ref_pointer_after =
         RefStore::new(layout.clone()).read_current_ref_state_id("heads/main")?;
-    let trust_after = maintainer_trust_policy_or_empty(&layout)?;
+    let trust_after = load_maintainer_trust_policy_or_empty(&layout)?;
 
     assert_eq!(
         containers_before, containers_after,

@@ -235,17 +235,27 @@ pub fn load_maintainer_trust_policy(layout: &RepositoryLayout) -> Result<Maintai
 /// [`load_maintainer_trust_policy`]'s hard error. That error is correct for *publication* trust — a
 /// Block/RefState needs a definitively trusted signer to be sealed at all — but `prikk trust
 /// maintainer list`/`check` (RFC 138) must not refuse a fresh repository that has never adopted
-/// anyone; that is exactly the case those commands are asked about most.
+/// anyone; that is exactly the case those commands are asked about most. A `RecognitionClaim`'s own
+/// signature check has an identical requirement for an unrelated reason (design D3 rules a claim
+/// never gates on trust, so a repository that has never adopted anyone must read every claim's
+/// signer as simply not adopted) — both callers share this one definition.
+///
+/// **Relocated here from `recognition_claim.rs` (RFC 138 carried-defects C).** RFC 130's coupling
+/// gate found that leaving it there, and having this module call it by its old address, closed a
+/// `trust <-> recognition_claim` cycle that existed for no better reason than this function living
+/// in the wrong place. Moving the definition removes the edge outright — `recognition_claim.rs`,
+/// `tag_travel.rs`, and `seal_from_accepted.rs` all already depend on `trust` for other reasons and
+/// now call this from here instead of from `recognition_claim`.
 ///
 /// A genuinely damaged trust container still propagates its error unchanged — only the "nothing has
-/// ever been adopted" case is treated as empty. This is the same distinction
-/// `recognition_claim::maintainer_trust_policy_or_empty` already draws for a different caller (a
-/// `RecognitionClaim`'s signature check never gates on trust), reused here rather than
-/// reimplemented for a second one.
+/// ever been adopted" case is treated as empty.
 pub fn load_maintainer_trust_policy_or_empty(
     layout: &RepositoryLayout,
 ) -> Result<MaintainerTrustPolicy> {
-    crate::recognition_claim::maintainer_trust_policy_or_empty(layout)
+    match read_current_trust_policy_snapshot(layout)? {
+        Some(_) => load_maintainer_trust_policy(layout),
+        None => Ok(MaintainerTrustPolicy { keys: Vec::new() }),
+    }
 }
 
 /// RFC 118 stage 3: the declared set of operations that gate on [`verify_signer_trusted`] -- one

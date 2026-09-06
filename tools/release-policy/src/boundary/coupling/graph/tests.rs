@@ -138,16 +138,14 @@ fn fsutil_has_zero_production_out_edges() {
     assert!(graph.fan_in("fsutil") > 0);
 }
 
-/// The full strongly-connected component's own edge set, pinned exactly -- **seven** modules, not
-/// six: `recognition_claim` joined it only because RFC 138's own `load_maintainer_trust_policy_
-/// or_empty` wrapper (`trust.rs`) calls `crate::recognition_claim::maintainer_trust_policy_or_
-/// empty` rather than relocating that helper, closing a cycle where only a one-way
-/// `recognition_claim -> trust` edge existed before. Also fifteen edges, not the eight the four
-/// cycles named in RFC 130 §4b.4/the v2 handoff would predict (two per pair, one pair -- `active
-/// <-> refs` -- shared with a third relationship) -- five more were found by this re-derivation and
-/// are documented in this round's report, each confirmed at source and dated older than `04e9391`
-/// except the `recognition_claim` pair. This test exists so a future change to any of these edges
-/// is caught here first, not discovered again by surprise.
+/// The full strongly-connected component's own edge set, pinned exactly -- **six** modules and
+/// thirteen edges, down from the seven modules/fifteen edges the coupling-gate round measured.
+/// `recognition_claim` left the component when carried-defect C relocated
+/// `load_maintainer_trust_policy_or_empty` from `recognition_claim.rs` into `trust.rs`: the
+/// `trust -> recognition_claim` leg it added is gone, and `recognition_claim -> trust` (still
+/// real -- `recognition_claim.rs` still uses `MaintainerTrustPolicy`) is no longer part of any
+/// cycle, so it needs no `DECLARED_CYCLES` entry at all. This test exists so a future change to
+/// any of these edges is caught here first, not discovered again by surprise.
 #[test]
 fn the_scc_has_exactly_this_edge_set() {
     let graph = build(&store_src_root()).expect("graph builds");
@@ -158,7 +156,6 @@ fn the_scc_has_exactly_this_edge_set() {
         "worktree_patch",
         "patch_replay",
         "lifecycle_cache",
-        "recognition_claim",
     ];
     let mut edges: Vec<(String, String)> = graph
         .edges
@@ -174,10 +171,8 @@ fn the_scc_has_exactly_this_edge_set() {
         ("patch_replay", "active"),
         ("patch_replay", "lifecycle_cache"),
         ("patch_replay", "refs"),
-        ("recognition_claim", "trust"),
         ("refs", "active"),
         ("refs", "trust"),
-        ("trust", "recognition_claim"),
         ("trust", "refs"),
         ("worktree_patch", "active"),
         ("worktree_patch", "lifecycle_cache"),
@@ -191,6 +186,35 @@ fn the_scc_has_exactly_this_edge_set() {
     assert_eq!(
         edges, expected,
         "SCC edge set changed -- update this test and DECLARED_CYCLES together"
+    );
+}
+
+/// `recognition_claim -> trust` is real (checked directly, not merely absent from the SCC list
+/// above by omission) but no longer cyclic -- confirms carried-defect C's relocation broke the
+/// cycle rather than merely hiding the edge from this test's own filter.
+#[test]
+fn recognition_claim_to_trust_survives_but_is_no_longer_cyclic() {
+    let graph = build(&store_src_root()).expect("graph builds");
+    assert!(
+        graph
+            .edges
+            .contains(&("recognition_claim".to_owned(), "trust".to_owned())),
+        "recognition_claim still legitimately depends on trust (MaintainerTrustPolicy)"
+    );
+    assert!(
+        !graph
+            .edges
+            .contains(&("trust".to_owned(), "recognition_claim".to_owned())),
+        "the relocation must have removed the return leg"
+    );
+    let in_an_scc = super::strongly_connected_components(&graph)
+        .into_iter()
+        .any(|component| {
+            component.len() > 1 && component.contains(&"recognition_claim".to_owned())
+        });
+    assert!(
+        !in_an_scc,
+        "recognition_claim must no longer be in any cycle"
     );
 }
 
