@@ -73,26 +73,15 @@ reference](./docs/src/reference/platform-support.md) has the exact command-by-co
 
 ## Quick Start
 
-The commands below, with explanation and the two refusals you will actually hit along the way, are
-the [Tutorial](./docs/src/guide/tutorial.md) — this block is a copy-pasteable summary of it, not a
-second, independent walkthrough; its authority for what each step means and why is the tutorial page.
-It reuses the tutorial's own fixed example seed so it is exactly reproducible; for **your own** key
-instead of this shared example, see [First Run](./docs/src/guide/first-run.md) — `prikk setup` reaches
-the same working repository without typing or copying any of the values below.
+```sh
+prikk setup ./sample-repo
+cd ./sample-repo
+```
+
+`setup` initialises the repository, generates **your own** author and maintainer keys, adopts the
+maintainer key, and prints the four `export` lines you need. Run those, then:
 
 ```sh
-mkdir -p ./sample-repo && cd ./sample-repo
-prikk init .
-
-export PRIKK_AUTHOR_KEY_ID="dev-author"
-export PRIKK_AUTHOR_SEED="00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
-export PRIKK_MAINTAINER_KEY_ID="dev-maintainer"
-export PRIKK_MAINTAINER_SEED="111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
-
-prikk trust maintainer add \
-  --key-id "$PRIKK_MAINTAINER_KEY_ID" \
-  --public-key "a00899dfd3357aee69729405913f9324dfc033cec04a2215239eda64ae6d9d91"
-
 echo "hello prikk" > readme.txt
 prikk commit -m "genesis"
 prikk seal --allow-no-audit
@@ -102,8 +91,17 @@ prikk verify
 prikk doctor
 ```
 
-The sample seed and key values above are public examples and must never be used for real signing —
-see [Security and Signing Setup](./docs/src/guide/security-setup.md) for the current setup boundary.
+**The seeds `setup` prints are real signing keys and are yours alone.** It says so itself: at least
+one of them lands in your terminal scrollback, so treat it as a secret. See
+[Security and Signing Setup](./docs/src/guide/security-setup.md) for the current setup boundary.
+
+The commands above, with explanation and the two refusals you will actually hit along the way, are
+the [Tutorial](./docs/src/guide/tutorial.md) — this block is a copy-pasteable summary of it, not a
+second, independent walkthrough; its authority for what each step means and why is the tutorial page.
+**The tutorial uses a fixed public example seed instead of `setup`**, so its transcript is exactly
+reproducible and you can compare your output to it line by line — that is the one place a shared,
+publicly known key belongs, and it must never be used for real signing.
+[First Run](./docs/src/guide/first-run.md) covers `setup` itself, including what it does not do.
 
 Ran into a refusal, or wondering why a step works the way it does? The
 [Troubleshooting](./docs/src/guide/troubleshooting.md) and [FAQ](./docs/src/guide/faq.md) pages cover
