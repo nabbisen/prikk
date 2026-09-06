@@ -126,7 +126,7 @@ under each block in `prikk log`. A patch written before this change carries no m
 message line — absence, not a placeholder.
 
 Raised by the external architecture audit of 2026-08-31; designed and ruled on in
-[RFC 123](https://github.com/prikk-vcs/prikk/blob/main/rfcs/accepted/123-commit-message-and-authorship-metadata.md).
+[RFC 123](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/123-commit-message-and-authorship-metadata.md).
 
 ### Changed
 
@@ -217,7 +217,7 @@ limitation in `0.30.0`. This release removes the fragility rather than continuin
 invariant holding.
 
 Found by this project's own patch-algebra property tests
-([RFC 134](https://github.com/prikk-vcs/prikk/blob/main/rfcs/proposed/134-text-span-identity-under-composition.md)).
+([RFC 134](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/134-text-span-identity-under-composition.md)).
 
 ### Changed
 

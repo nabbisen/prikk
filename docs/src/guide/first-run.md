@@ -153,7 +153,7 @@ exported as `PRIKK_AUTHOR_KEY_ID`/`PRIKK_AUTHOR_SEED` works too, with no trust s
 
 ## Provenance
 
-Written for [RFC 135](https://github.com/prikk-vcs/prikk/blob/main/rfcs/accepted/135-first-run-entrance-and-configuration.md)
+Written for [RFC 135](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/135-first-run-entrance-and-configuration.md)
 §9, which measured the unfamiliar-step count to a first sealed commit at eleven, with the third step
 (deriving a maintainer public key) impossible before this page's own commands existed. See
 [Git → prikk](../reference/git-mapping.md) for how prikk's commands relate to Git's, including

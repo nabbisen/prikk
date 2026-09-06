@@ -246,7 +246,7 @@ item is open.
 **Accepted-but-unshipped RFCs are not in this list, and that is RFC 120's own scope, not an
 omission.** The gate binds `rfcs/proposed/` in both directions, so an `accepted/` file named here
 would fail `boundary-check`. **Open work also lives in `rfcs/accepted/`** — as of 2026-09-05 that is
-**130**, **131**, **135** (design complete, handoff issued) (coupling gate, module grouping — both
+**130** and **131** (coupling gate, module grouping — both
 owner-accepted 2026-09-01, unimplemented), and **137** (increments 1-4 shipped in 0.31.1, increment 5
 blocked on DNS). See "Proposed ordering" below for where each sits in the schedule.
 
@@ -438,6 +438,37 @@ now so it is a recognised threshold rather than a later surprise.
 **Band 3 is complete except RFC 126 §5.** RFC 123's interim, RFC 124, and RFC 126 §2 all landed;
 §6a and §6b followed on 2026-09-03. **`AUD-05` through `AUD-10` are all delivered** — the whole
 no-design-decision half of this program — leaving `AUD-01` through `AUD-04`, which are design work.
+
+### Release position — 0.33.0 shipped 2026-09-06
+
+**`0.33.0` was cut at `19f5cea`**: CI green on all 15 jobs, `release.yml` green on four build targets,
+16 assets, **all eight crates published to crates.io and confirmed live at `0.33.0`**.
+
+**The entrance opened.** RFC 135 shipped `prikk setup` and `prikk key generate/public`. **Before this
+release a new user could not reach a sealed commit at all** — it needed two hand-invented 32-byte seeds
+and a public key derived from one, and **no command derived a public key**. Measured on a clean path,
+unfamiliar steps **11 → 5**, and following `setup`'s printed output word for word now reaches a sealed,
+verified commit.
+
+**Minor, and interoperable both ways.** `admitted_schemas` untouched, no schema moved — the opposite of
+the previous two cuts, and said plainly in the notes after them. The one behaviour change is RFC 132's
+two error prefixes, which is a compatibility event for the stikk front-end that matches on message text.
+
+**This cut released the held stikk reply**
+(`.git-exclude/external-communication/002-reply-commit-precondition-error-classes.md`), whose two owed
+edits — name the shipped version, quote the entry rather than promise it — came due with it.
+
+**One process defect this cut caught, for the second time.** `prikk key`/`prikk setup` had **no
+changelog entry** — the headline feature undocumented. **The cause was the handoff**: RFC 123's said
+*"this increment needs a `CHANGELOG.md` entry"*; RFC 135's asked for none. 0.29.0 shipped `.prikkignore`
+undocumented for the same class, and its recorded lesson — *check user-facing claims at cut time* — is
+what caught it again. **The check works; the process did not. Every future handoff that adds or changes
+a user-facing surface names the changelog entry as a deliverable.**
+
+**RFC 135 moved `accepted/` → `done/`** with this cut, including repointing its handoff. §9.1's
+deferral of `prikk config` — and §4's whole dependency question with it — re-opens on a first real
+adopter.
+
 
 ### Release position — 0.32.0 shipped 2026-09-05
 

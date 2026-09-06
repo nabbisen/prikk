@@ -4,6 +4,18 @@
 Start: *"They are generally unfamiliar with visitors. I doubt it makes visitor feel uneasy and brings
 their withdrawal."*
 
+**CLOSED 2026-09-06 and moved to `rfcs/done/` — shipped in 0.33.0** (`19f5cea`). `prikk key
+generate/public` and `prikk setup` are released; the measured entrance cost is **11 unfamiliar steps
+to 5**, and the step that was *impossible* (deriving a public key from a seed) is now a command.
+
+**What outlives this RFC, and it is not work:** §9.1's deferral of `prikk config` — **with §4's whole
+dependency/config-format question deferred alongside it** — re-opens on one named trigger, **a first
+real adopter**. This is the design record to reopen against, and §9.6's refusal of a credential-helper
+boundary carries its own, different trigger (a user asking for one).
+
+**One disclosed gap ships with it:** `--out`'s Windows refusal is compiled but executed by no CI job.
+If DC-87's Windows mutation work lands, that is the untested branch to pick up.
+
 **Folder corrected 2026-09-06: `proposed/` → `accepted/`.** RFC-000 makes folder location lifecycle
 authority, and `accepted/` means *"review complete; implementer may start"* — which became true the
 moment §9's design was accepted and a handoff was issued. **Caught by the project owner, and this is
