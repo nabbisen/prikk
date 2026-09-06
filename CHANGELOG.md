@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.35.0 — 2026-09-06
 
 ### Added — `prikk status --format json`, and which patches a seal will freeze
 
