@@ -169,6 +169,13 @@ remaining `LockConflict` construction site that is not a lock
 The architect re-derived all ten sites independently and agrees on all ten, including the four the
 reporter excluded. **Still no trigger fires**, for the same reason the amendment above already gave.
 **Handoff issued:** `rfcs/handoffs/132-error-taxonomy-structure/six-preconditions-and-the-broad-arm-handoff-v1.md`.
+**DELIVERED and ACCEPTED 2026-09-06** (`b5c2c4d`, `a050725`) — the six moved, the four stayed, and
+`branch.rs` now names `PrikkError` nowhere at all. **One required follow-up**
+(`guard-the-four-lock-conflicts-handoff-v2.md`): the four sites that must remain `LockConflict` had
+**no assertion protecting them**, proved by perturbing `lock.rs:179` and watching the entire workspace
+suite pass. **A round that guards what it changed and not what it deliberately preserved leaves the
+easier half of the distinction unguarded** — and for these four the class word carries the real
+instruction, *wait* rather than *change what you asked for*.
 
 **That round carries something the reporter could not see, and it is the more important half.**
 `crates/prikk-cli/src/branch.rs:290` matches `Err(PrikkError::Precondition(_))` — an open-ended arm
