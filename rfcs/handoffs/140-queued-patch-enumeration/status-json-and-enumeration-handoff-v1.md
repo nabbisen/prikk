@@ -4,7 +4,8 @@
 ruling (option (b), resolve against the folded baseline) and §6's surface scoping are settled input.
 **Base:** `main` at `02ac5c0`.
 **Origin:** stikk letter 003 §2, verified in
-`.git-exclude/reviewed/stikk-letters-003-004-review-v1.md`.
+`.git-exclude/reviewed/stikk-letters-003-004-review-v1.md` — **architect-internal, not in the
+repository** (`.gitignore:30`), cited for provenance only. This handoff is self-contained.
 
 **§3 is the part to read twice.** The obvious implementation ships something that satisfies the
 request and defeats its purpose, and it will look correct in every test written against a

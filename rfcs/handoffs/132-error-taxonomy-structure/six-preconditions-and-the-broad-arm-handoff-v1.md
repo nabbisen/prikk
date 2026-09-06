@@ -7,6 +7,9 @@ not reopened.** This is the same separable treatment the first two sites receive
 **Origin:** stikk letter 004
 (`.git-exclude/external-communication/stikk/receive/004-four-more-preconditions-under-lock-conflict.md`),
 verified independently at `e2e4811` — see `.git-exclude/reviewed/stikk-letters-003-004-review-v1.md`.
+**Both `.git-exclude/` paths above are architect-internal and are not in the repository** (`.gitignore:30`)
+— cited for provenance, not as reading you need. **This handoff is self-contained**: §3 lists every site
+and its message, and §4 lists every site that stays.
 
 **Part 1 lands before part 2. That ordering is the point of this handoff, not a preference** — see §2.
 
