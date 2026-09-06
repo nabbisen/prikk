@@ -125,8 +125,41 @@ whoever knows must say so; otherwise the named costs above are the whole list.
 | Incremental commit memory is independent of repository size | **One measurement, in §2 of this RFC.** No gate |
 | Create-path memory is O(added bytes) | **One measurement, in §2.** No gate |
 | `AUD-01`/`AUD-02` costs | **Nothing.** Source reading only |
+| `status --format json`'s queue enumeration is bounded by `worktree-status` | **One measurement, §5a below.** No gate |
 
 **Time has two gates; memory has none.** That asymmetry is the subject of §6.
+
+## 5a. Queue enumeration cost, measured 2026-09-06 (RFC 140)
+
+**Recorded here because RFC 140 §5 required it, and because the alternative was losing it.** The
+implementing round measured this and reported it into `.git-exclude/review-request/`, which is
+**untracked and invisible to a clone** — a figure that exists only there is not evidence this project
+holds. `rfcs/` is where a measurement survives.
+
+**Method.** One repository, genesis commit sealed, then an unsealed queue grown to 500 patches (one
+file created per commit, thresholds raised so nothing sealed automatically). Five runs per cell,
+wall clock. Reported by the implementing round; **not independently re-timed by the architect**, and
+that limit is stated rather than glossed.
+
+| Command | Empty queue | 500-deep queue | Per call, deep |
+|---|---|---|---|
+| `status` (prose) | 0.004 s | 0.036 s | ~7.2 ms |
+| `status --format json` | 0.004 s | 0.192 s | ~38.4 ms |
+| `worktree-status` | — | 0.154 s | ~30.8 ms |
+
+**What it establishes.** RFC 140 §5 ruled option (b) on a **bound** rather than a measurement: the
+resolution is the same derivation `worktree-status` — a read command — already performs. **The bound
+holds when measured**: ~38 ms against ~31 ms at the same depth, the same order of magnitude, both
+running `resolve_folded_worktree_baseline`.
+
+**On an empty queue prose and JSON cost the same**, because both skip the derivation entirely. The
+architect confirmed the stronger form of that claim structurally rather than by timing: `run_status`'s
+prose body is **byte-identical** to its pre-RFC-140 form — the only deletion in `main.rs` outside
+imports was the function signature.
+
+**This is a figure from before the corpus exists**, taken on one machine with a synthetic queue of one
+shape. **RFC 139's corpus is what will let it be re-measured properly**, and having this number now is
+how we will know whether the corpus changes the answer.
 
 ## 5.1 What the published documentation tells users — one row is badly stale
 

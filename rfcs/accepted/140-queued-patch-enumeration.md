@@ -192,6 +192,27 @@ test that creates a file and queues it produces `CreateFile`, which carries a pa
 the entire §3 problem is invisible to the obvious test. The defect this RFC exists to prevent would
 survive a green suite.
 
+## 7b. RULED 2026-09-06 — unresolvable *metadata*, not just an unresolvable node
+
+**The implementing round raised a case §4 and §9 did not cover, and asked for a ruling rather than
+assuming one.** If the active-ref metadata is itself missing or malformed,
+`resolve_folded_worktree_baseline` refuses outright with `Integrity` — a different failure from "one
+bad node id". Propagating it would make `status --format json` fail in a state where bare `status`
+still succeeds (it prints `<missing metadata>`). They instead reported every node-addressed operation
+as unresolved and let the read succeed.
+
+**Ruled: correct — and the reason is stronger than the one offered.** They justified it by extending
+§4's principle. The justification that actually carries it is that **the condition is signalled
+distinctly rather than hidden**: the document carries `target_ref_status` as
+`"missing-metadata"`/`"malformed-metadata"`/`null`, so a consumer can tell "this repository's
+active-ref metadata is damaged" from "one node id did not resolve". Had the degradation been silent —
+unresolved entries with no distinct signal — it would have been wrong, because missing metadata on a
+non-empty WAL is an **integrity condition**, not a gap.
+
+**The general form, for the next surface that faces this: a read may degrade, but it must say that it
+degraded, and say it in a field a machine can branch on.** Degrading quietly turns damage into
+absence.
+
 ## 8. Scope
 
 **In:** `status --format json` with its own schema; queued-patch enumeration carrying patch id,
