@@ -1,6 +1,6 @@
 # RFC 130 — the module coupling invariant, and the gate that holds it
 
-**RFC:** `rfcs/accepted/130-module-coupling-invariant.md` — accepted by the project owner
+**RFC:** `rfcs/done/130-module-coupling-invariant.md` — accepted by the project owner
 2026-09-01, including §4's amendment (allowlist-with-reasons, **not** a bare degree bound), §5, §6
 and §7's ordering.
 **Base:** `main` at `9184bf2`.

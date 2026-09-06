@@ -356,7 +356,7 @@ DC-44's closure established. The real queue is **twelve**, not sixteen.
 | Lane | Contents |
 |---|---|
 | **Entrance** — what a person meets before and just after `install` | **RFC 137** (landing page, 5 increments), then **RFC 135** (first run, undesigned) |
-| **Product** — correctness, format, structure, cost | RFC 123, RFC 130, RFC 131, RFC 136, RFC 133 |
+| **Product** — correctness, format, structure, cost | ~~RFC 123~~, ~~RFC 130~~ (both shipped), RFC 131, RFC 136, RFC 133 |
 | **Owner-blocked** | DC-43 (signer bootstrap), RFC 133 §6 (peak-RSS ruling), RFCs 109/110/113 (direction) |
 | **Externally blocked** | RFC 136 (external architect review request issued 2026-09-04) |
 
@@ -379,10 +379,10 @@ shipped; RFC 137's increment 5 is DNS-blocked), so nothing is being displaced by
 
 | # | Item | Lane | Why here |
 |---|---|---|---|
-| **1** | **Three carried defects, as one round** | Product | All small, all named twice, none deserving its own round. **One is a documentation defect already shipped**: `docs/src/reference/commands.md` — the master command inventory — lists neither `prikk key` nor `prikk setup`, both released in 0.33.0. Plus the `policy: required=1` literal (printed as if read at `main.rs:295`/`setup.rs:106`, with a three-place fan-out) and RFC 130 entry 5's relocation of `maintainer_trust_policy_or_empty` out of `recognition_claim.rs`. **Before the cut, so 0.34.0 does not ship the inventory defect a second time** |
-| **2** | **Cut 0.34.0** | — | Carries **RFC 138** (`trust maintainer list`/`check` — user-facing, requested by an external consumer whose readiness design currently carries an "unknown" state this removes), **RFC 130** (the coupling gate), and item 1. Unreleased since 0.33.0 |
-| **3** | **The measurement corpus** | Product | Owner-approved 2026-09-06. Gates RFC 136 outright and plausibly RFC 133 §6; retires the methodological weakness every performance decision here inherits. **Both the architect and the external architect reached it independently** |
-| **4** | **RFC 131** — module grouping and `pub(in ...)` scoping | Product | Unblocked: RFC 130 is complete. A large file move, which §7 says belongs **between feature arcs** — and a post-release moment is one |
+| ~~**1**~~ | ~~Three carried defects, as one round~~ | Product | **DONE 2026-09-06** (`fcbee23`, `4470370`, `544f866`, `73835df`). All three closed before the cut, as scheduled — the `commands.md` inventory (six absences, not the two named here), the `required=1` literal (replaced by a derived count, not a third print site), and the `maintainer_trust_policy_or_empty` relocation, which also removed a graph edge and a hub |
+| ~~**2**~~ | ~~Cut 0.34.0~~ | — | **DONE 2026-09-06** (`f1be4c4`). See the release position below |
+| **1** | **The measurement corpus** | Product | Owner-approved 2026-09-06. Gates RFC 136 outright and plausibly RFC 133 §6; retires the methodological weakness every performance decision here inherits. **Both the architect and the external architect reached it independently** |
+| **2** | **RFC 131** — module grouping and `pub(in ...)` scoping | Product | Unblocked: RFC 130 shipped in 0.34.0, and its 8 `DECLARED_CYCLES` entries each carry a `what_would_remove_it` — **this item's input, already written**. A large file move, which §7 says belongs **between feature arcs** — and a post-release moment is one |
 | — | RFC 120 §9.4, §9.4a; RFC 133 §6 | **owner rulings** | Consume no dev-team capacity and can be answered at any point. **§9.4a would stop an error now on its third occurrence** |
 | — | RFC 137 increment 5; RFC 136; DC-43; RFCs 109/110/113 | blocked | Each waits on a named external answer — `prikk.org` DNS, the corpus, the signer bootstrap, a direction |
 
@@ -445,6 +445,47 @@ now so it is a recognised threshold rather than a later surprise.
 **Band 3 is complete except RFC 126 §5.** RFC 123's interim, RFC 124, and RFC 126 §2 all landed;
 §6a and §6b followed on 2026-09-03. **`AUD-05` through `AUD-10` are all delivered** — the whole
 no-design-decision half of this program — leaving `AUD-01` through `AUD-04`, which are design work.
+
+### Release position — 0.34.0 shipped 2026-09-06
+
+**`0.34.0` was cut at `f1be4c4`**: CI green on all 15 jobs, signed tag verified before pushing.
+
+**A repository can now be asked what it trusts.** RFC 138 shipped `prikk trust maintainer list` and
+`prikk trust maintainer check --key-id <ID>`, both with `--format json`. Before this, the only way to
+learn whether a key was adopted was **to attempt a seal and see whether it failed** — which is why the
+stikk project asked for it: their readiness design carried an "unknown" state this removes. **`check`
+exits `0` whichever way the question resolves**, because a negative answer is an answer; filing it as
+`1` would conflate a successful query with an operational failure, the exact thing RFC 121's vocabulary
+exists to prevent.
+
+**Minor, and interoperable both ways.** No schema moved, `admitted_schemas` untouched, no new state and
+no new read — the two commands load a policy every seal already loads. The one behaviour change is
+cosmetic: `trust maintainer add` and `setup` now print `adopted maintainer keys: <n>` instead of
+`policy: required=1`, a literal from a field `MaintainerTrustPolicy` never had.
+
+**The structural half of the cut is invisible to users and is the more consequential one.** RFC 130's
+coupling gate runs inside `boundary-check`: cycles and hubs are allowlists with reasons, each cycle
+entry stating what would have to change to remove it, **bound in both directions** so a stale
+declaration fails as loudly as an undeclared edge. **It caught a regression introduced by RFC 138 — a
+round the architect had accepted one turn earlier.** That is the strongest evidence available that the
+invariant is now held by a gate rather than by attention, and it arrived within hours of the gate
+landing.
+
+**The process defect this cut records is the architect's, not the dev team's.** A red push: `25142ff`
+went to `origin/main` with `boundary-check` failing, and four CI jobs failed behind it. **The cause was
+mechanical — the gate run and the push were chained in one command**, so the push ran regardless of the
+gate's result. Corrected forward at `1f78573`; recorded in
+`.git-exclude/reviewed/red-push-20260906-record-v1.md`. **The rule now: a gate run and a push are never
+the same command.** This cut was executed under it.
+
+**RFC 138 and RFC 130 both moved `accepted/` → `done/`** with this cut, including repointing their
+three handoffs. The retirement also closed a gap in `rfcs/README.md`'s own Done table, which **stopped
+at 129** — RFCs 123, 126, 128, 132, 134 and 135 had all been retired without ever getting a row.
+
+**What outlives the cut:** RFC 130's 8 `DECLARED_CYCLES` entries are a ledger of structural debt, not a
+resolution, and **RFC 131 is the named next move against them** — each entry's `what_would_remove_it` is
+already written and is that item's input.
+
 
 ### Release position — 0.33.0 shipped 2026-09-06
 

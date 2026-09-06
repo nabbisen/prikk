@@ -2,7 +2,7 @@
 
 **Supersedes** `coupling-gate-handoff-v1.md`, which instructed building §4.1's *absolute* acyclicity
 rule and is marked do-not-work-from.
-**RFC:** `rfcs/accepted/130-module-coupling-invariant.md` — **§4b is the ruling and is settled input.**
+**RFC:** `rfcs/done/130-module-coupling-invariant.md` — **§4b is the ruling and is settled input.**
 **Base:** `main` at `c5b1010`.
 
 **The reissue was asked for and it was right to ask.** The dev team stopped rather than work from a

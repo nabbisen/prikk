@@ -1,6 +1,6 @@
 # RFC 138 — `prikk trust maintainer list` and `check`
 
-**RFC:** `rfcs/accepted/138-trust-policy-read-surface.md` — **§7 rules all of §4 and is settled
+**RFC:** `rfcs/done/138-trust-policy-read-surface.md` — **§7 rules all of §4 and is settled
 input.** Both surfaces, `--format json` on both, and the exit-code ruling.
 **Base:** `main` at `373ba5e`.
 
