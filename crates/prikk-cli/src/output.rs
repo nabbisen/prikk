@@ -11,11 +11,15 @@ use prikk_store::{
 
 mod help;
 mod merge_evidence;
+mod trust;
 mod verification;
 mod worktree;
 
 pub(crate) use help::{print_command_help, print_help};
 pub(crate) use merge_evidence::{print_merge_evidence, print_merge_plan};
+pub(crate) use trust::{
+    print_trust_check, print_trust_check_json, print_trust_list, print_trust_list_json,
+};
 pub(crate) use verification::{
     print_active_session_repairs, print_doctor_report, print_verify_report,
     print_verify_report_json,

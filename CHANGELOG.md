@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added — `prikk trust maintainer list` and `check`: asking what a repository trusts
+
+Until now there was no way to ask which MAINTAINER keys a repository currently trusts — a caller
+had to attempt a seal and see whether it failed. `prikk trust maintainer list [--format json]`
+enumerates every currently adopted key, in adoption order; `prikk trust maintainer check --key-id
+<ID> [--format json]` answers whether one specific id is adopted. Both read a policy already
+loaded on every seal; neither adds any new state, and neither changes adoption, revocation, or
+what `seal` requires.
+
+**`check` exits `0` whichever way the question resolves.** *"Key X is not trusted"* is a successful
+answer, not an operational failure — exiting `1` for a negative answer would file a successful
+query as a refusal, the exact conflation a machine-readable exit code exists to avoid. `1` and `2`
+keep their usual meanings: an unreadable policy is `1`, a missing or malformed `--key-id` is `2`.
+
 ## 0.33.0 — 2026-09-06
 
 ### Added — `prikk setup` and `prikk key`: a first repository without inventing anything

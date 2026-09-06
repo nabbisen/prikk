@@ -209,8 +209,8 @@ pub use tag_travel::{
 };
 pub use trust::{
     AdoptedMaintainerKey, GatedOperation, MaintainerTrustPolicy, PublicationTrustIssue,
-    add_trusted_maintainer, load_maintainer_trust_policy, remove_trusted_maintainer,
-    verify_signer_trusted, verify_trusted_publication_envelope,
+    add_trusted_maintainer, load_maintainer_trust_policy, load_maintainer_trust_policy_or_empty,
+    remove_trusted_maintainer, verify_signer_trusted, verify_trusted_publication_envelope,
 };
 pub use unlock::{HeldLock, PidLiveness, clear_lock, find_held_lock, list_held_locks};
 pub use verify::{

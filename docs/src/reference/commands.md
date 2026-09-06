@@ -13,6 +13,9 @@ prikk <command> --help
 ```text
 prikk init [path]
 prikk trust maintainer add --key-id ID --public-key HEX
+prikk trust maintainer remove --key-id ID
+prikk trust maintainer list [--format json]
+prikk trust maintainer check --key-id ID [--format json]
 prikk commit [--ref heads/<branch>] -m <message>
 prikk seal --allow-no-audit [--ref heads/<branch>]
 prikk status

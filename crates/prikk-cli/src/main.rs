@@ -38,7 +38,7 @@ mod tag;
 mod unlock;
 mod verify_verdict;
 
-use arg_scan::{SetOnce, flag_value, unknown_argument};
+use arg_scan::{SetOnce, flag_value, mark_seen, unknown_argument};
 use args::{
     CheckoutMode, MergeEvidenceTargetArg, VerifyOutputFormat, current_dir, parse_checkout_args,
     parse_commit_args, parse_doctor_args, parse_inverse_plan_args, parse_log_args,
@@ -52,21 +52,24 @@ use output::{
     print_help, print_history, print_merge_evidence, print_merge_plan, print_patch_deletion_plan,
     print_patch_inverse_plan, print_patch_materialization_report, print_patch_replay_plan,
     print_rollback_draft_report, print_rollback_draft_verification, print_rollback_preview_plan,
-    print_snapshot_checkout_plan, print_snapshot_materialization_report, print_verify_report,
+    print_snapshot_checkout_plan, print_snapshot_materialization_report, print_trust_check,
+    print_trust_check_json, print_trust_list, print_trust_list_json, print_verify_report,
     print_verify_report_json, print_worktree_status,
 };
+use prikk_object::Signature;
 use prikk_store::{
     ActiveRefMetadata, ActiveSessionRepairStatus, DEFAULT_ACTIVE_NAME, DEFAULT_ACTIVE_PATCH_LIMIT,
     DoctorRepairOptions, Ed25519AuthorSigner, Ed25519MaintainerSigner, MergeEvidenceTarget,
     RefStore, RepositoryLayout, VerifyOptions, Wal, WorktreePatchCommitOptions,
     add_trusted_maintainer, append_rollback_draft, commit_worktree_changes_signed,
-    doctor_repository, list_received_pointers, load_received_ref_history, load_ref_history,
-    materialize_patch_checkout, materialize_patch_checkout_with_deletions,
-    materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan,
-    prepare_merge_evidence, prepare_merge_plan, prepare_patch_inverse_plan,
-    prepare_patch_replay_plan, prepare_rollback_preview, prepare_snapshot_checkout_plan,
-    read_active_ref_metadata, remove_trusted_maintainer, repair_repository,
-    verify_active_rollback_draft, verify_repository_with_options, worktree_status,
+    doctor_repository, list_received_pointers, load_maintainer_trust_policy_or_empty,
+    load_received_ref_history, load_ref_history, materialize_patch_checkout,
+    materialize_patch_checkout_with_deletions, materialize_snapshot_checkout,
+    plan_patch_checkout_deletions, prepare_checkout_plan, prepare_merge_evidence,
+    prepare_merge_plan, prepare_patch_inverse_plan, prepare_patch_replay_plan,
+    prepare_rollback_preview, prepare_snapshot_checkout_plan, read_active_ref_metadata,
+    remove_trusted_maintainer, repair_repository, verify_active_rollback_draft,
+    verify_repository_with_options, worktree_status,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -324,9 +327,83 @@ fn run_trust(args: Vec<String>) -> std::result::Result<(), CliError> {
             }
             Ok(())
         }
+        // RFC 138: a read surface over a policy already loaded on every seal -- no new read, no
+        // new state, no change to adoption, revocation, or what `seal` requires. An empty policy
+        // is a successful empty result (§7.3), never an error, which is why this reads through
+        // `load_maintainer_trust_policy_or_empty` rather than `load_maintainer_trust_policy`.
+        (Some("maintainer"), Some("list")) => {
+            let mut format_json = false;
+            while let Some(arg) = args.next() {
+                match arg.as_str() {
+                    "--format" => {
+                        let value = flag_value(&mut args, "trust maintainer list --format")?;
+                        if value != "json" {
+                            return Err(CliError::Usage(format!(
+                                "trust maintainer list --format does not support {value:?}"
+                            )));
+                        }
+                        mark_seen(&mut format_json, "--format")?;
+                    }
+                    other => return Err(unknown_argument("trust maintainer list", other)),
+                }
+            }
+            let root = current_dir()?;
+            let layout = open_repository(root)?;
+            let policy =
+                load_maintainer_trust_policy_or_empty(&layout).map_err(|err| err.to_string())?;
+            if format_json {
+                print_trust_list_json(&policy);
+            } else {
+                print_trust_list(&policy);
+            }
+            Ok(())
+        }
+        // RFC 138 §3: exits `0` whichever way the question resolves -- "key X is not trusted" is
+        // an answer, not a failure or a refusal (RFC 121's exit-code vocabulary has no slot for a
+        // negative answer to a question that was successfully asked). `1`/`2` keep their ruled
+        // meanings: an unreadable policy is `1`, a missing or malformed `--key-id` is `2`.
+        (Some("maintainer"), Some("check")) => {
+            let mut key_id = None;
+            let mut format_json = false;
+            while let Some(arg) = args.next() {
+                match arg.as_str() {
+                    "--key-id" => {
+                        let value = flag_value(&mut args, "--key-id")?;
+                        key_id.set_once("--key-id", value)?;
+                    }
+                    "--format" => {
+                        let value = flag_value(&mut args, "trust maintainer check --format")?;
+                        if value != "json" {
+                            return Err(CliError::Usage(format!(
+                                "trust maintainer check --format does not support {value:?}"
+                            )));
+                        }
+                        mark_seen(&mut format_json, "--format")?;
+                    }
+                    other => return Err(unknown_argument("trust maintainer check", other)),
+                }
+            }
+            let key_id = key_id.ok_or_else(|| {
+                CliError::Usage("trust maintainer check requires --key-id".to_string())
+            })?;
+            Signature::validate_key_id(&key_id).map_err(|err| CliError::Usage(err.to_string()))?;
+            let root = current_dir()?;
+            let layout = open_repository(root)?;
+            let policy =
+                load_maintainer_trust_policy_or_empty(&layout).map_err(|err| err.to_string())?;
+            let found = policy.keys.iter().find(|key| key.key_id == key_id);
+            if format_json {
+                print_trust_check_json(&key_id, found);
+            } else {
+                print_trust_check(&key_id, found);
+            }
+            Ok(())
+        }
         _ => Err(CliError::Usage(
             "usage: prikk trust maintainer add --key-id <key-id> --public-key <64-hex>\n       \
-             prikk trust maintainer remove --key-id <key-id>"
+             prikk trust maintainer remove --key-id <key-id>\n       \
+             prikk trust maintainer list [--format json]\n       \
+             prikk trust maintainer check --key-id <key-id> [--format json]"
                 .to_string(),
         )),
     }

@@ -114,6 +114,8 @@ pub(crate) const COMMANDS: &[Command] = &[
         help_lines: &[
             "  prikk trust maintainer add --key-id ID --public-key HEX  Trust one MAINTAINER key",
             "  prikk trust maintainer remove --key-id ID Revoke one MAINTAINER key",
+            "  prikk trust maintainer list [--format json]  List every currently adopted key",
+            "  prikk trust maintainer check --key-id ID [--format json]  Whether that id is adopted",
         ],
     },
     Command {

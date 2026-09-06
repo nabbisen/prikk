@@ -26,7 +26,7 @@ fn format_count(count: Option<usize>) -> String {
 /// requires. `StageStatus::Failed`'s message is arbitrary text reaching this from `PrikkError` and
 /// from filesystem paths, so this is proven against hostile input, not a happy path (this module's
 /// own tests).
-fn escape_json_string(input: &str) -> String {
+pub(crate) fn escape_json_string(input: &str) -> String {
     let mut escaped = String::with_capacity(input.len() + 2);
     escaped.push('"');
     for character in input.chars() {

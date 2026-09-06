@@ -230,6 +230,24 @@ pub fn load_maintainer_trust_policy(layout: &RepositoryLayout) -> Result<Maintai
     Ok(MaintainerTrustPolicy { keys })
 }
 
+/// Load the trust policy for a read-only question ("what does this repository currently trust?"),
+/// treating "no policy has ever been adopted" as a valid empty answer rather than
+/// [`load_maintainer_trust_policy`]'s hard error. That error is correct for *publication* trust — a
+/// Block/RefState needs a definitively trusted signer to be sealed at all — but `prikk trust
+/// maintainer list`/`check` (RFC 138) must not refuse a fresh repository that has never adopted
+/// anyone; that is exactly the case those commands are asked about most.
+///
+/// A genuinely damaged trust container still propagates its error unchanged — only the "nothing has
+/// ever been adopted" case is treated as empty. This is the same distinction
+/// `recognition_claim::maintainer_trust_policy_or_empty` already draws for a different caller (a
+/// `RecognitionClaim`'s signature check never gates on trust), reused here rather than
+/// reimplemented for a second one.
+pub fn load_maintainer_trust_policy_or_empty(
+    layout: &RepositoryLayout,
+) -> Result<MaintainerTrustPolicy> {
+    crate::recognition_claim::maintainer_trust_policy_or_empty(layout)
+}
+
 /// RFC 118 stage 3: the declared set of operations that gate on [`verify_signer_trusted`] -- one
 /// variant per distinct publishing act, not one per call site (`Seal` covers both `seal.rs` call
 /// sites: the ordinary path and the signer-backed recovery path for an already-matching WAL, since

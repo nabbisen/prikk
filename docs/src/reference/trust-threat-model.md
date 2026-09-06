@@ -152,9 +152,12 @@ never creates one to begin with.
 Current key input is intentionally minimal. The CLI reads AUTHOR key material from
 `PRIKK_AUTHOR_KEY_ID` and `PRIKK_AUTHOR_SEED`, and MAINTAINER key material from
 `PRIKK_MAINTAINER_KEY_ID` and `PRIKK_MAINTAINER_SEED`. The seed values are caller-provided 32-byte
-Ed25519 secret seeds encoded as 64 hex characters. Prikk does not provide local secret storage, key
-generation, or public-key derivation. For the current setup workflow and seed-handling warnings, see
-the [security and signing setup](../guide/security-setup.md) guide.
+Ed25519 secret seeds encoded as 64 hex characters. **Prikk does not provide local secret storage**,
+but it does provide key generation and public-key derivation: `prikk key generate` draws a fresh
+seed from the OS CSPRNG, `prikk key public --seed-env <NAME>` derives a public key from a seed
+already held, and `prikk setup` composes both with `init` and `trust maintainer add` into one
+command (RFC 135) — see [First Run](../guide/first-run.md). For the current setup workflow and
+seed-handling warnings, see the [security and signing setup](../guide/security-setup.md) guide.
 
 The local maintainer trust store supports a set of repository-local adopted MAINTAINER keys, with
 `required = 1` continuing to mean any one adopted key's signature suffices. `prikk trust maintainer add`
@@ -162,6 +165,14 @@ adds a new key id to the set, or idempotently confirms an already-adopted id's m
 to replace an adopted id's key with a different one. This refusal is a trust-on-first-use rule: the
 first public key seen for a key id is the one trusted for that id, permanently, until an operator
 removes it out-of-band. There is no remote trust distribution.
+
+`prikk trust maintainer list` and `prikk trust maintainer check --key-id <ID>` (RFC 138) read that
+same set without changing it: `list` enumerates every currently adopted key and `check` answers
+whether one specific id is adopted, both with `--format json` for a machine-readable answer. Both
+answer *"whose signatures does this repository accept on objects"* — **object trust, not ref
+authority: adopting a key never lets it move a ref by itself.** `check` exits `0` whichever way the
+question resolves, since a negative answer is a successful query, not an operational failure — `1`
+and `2` are reserved for an unreadable policy and a missing or malformed `--key-id`, respectively.
 
 ## What Seal Checks
 
@@ -240,6 +251,7 @@ as distinct from everything on this list.
 | Tag adoption refuses on a name miss, a name collision among received tags, an unheld patch set, or an ambiguous patch-set resolution — it never picks. | [`tag_travel.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/tag_travel.rs), [`patch_set_digest.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/patch_set_digest.rs) |
 | Maintainer trust is repository-local, held as a set of adopted keys, with `required = 1` meaning any one adopted key's signature suffices. | [`trust.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/trust.rs), [`layout.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/layout.rs), [DC-11 FDD-04 handoff](https://github.com/prikk-vcs/prikk/blob/main/rfcs/handoffs/DC-11-maintainer-trust-store/fdd-04-update.md) |
 | Seal validates the maintainer signer against local trust before publication. | [`seal.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/seal.rs), [`trust.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/trust.rs) |
+| `prikk trust maintainer list`/`check` read the adopted-key set without changing it; `check` exits `0` for both a positive and a negative answer. | [`main.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/main.rs), [`output/trust.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-cli/src/output/trust.rs), [`trust.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/trust.rs) (`load_maintainer_trust_policy_or_empty`) |
 | Verify checks publication trust for Block, RefState, RefUpdate, and locally-published Tag envelopes; a received, unadopted tag is deliberately exempt. | [`verify.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/verify.rs), [`trust.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/trust.rs) |
 | Verify enforces repository-wide AUTHOR verification (DC-53): every reachable Patch's AUTHOR signature is checked against recorded key material, one `key_id` binds to one public key, and material travels with a bundle export (introduced at `PBNDL002`, still carried unchanged at the current `PBNDL003`). It remains trust-on-first-use — continuity, not identity. | [`verify.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/verify.rs), [`rollback_verify.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/rollback_verify.rs), [implementation status](https://github.com/prikk-vcs/prikk/blob/main/rfcs/IMPLEMENTATION-STATUS.md) |
 | Rollback-draft verification is structural and semantic for the supported subset only. | [`rollback_verify.rs`](https://github.com/prikk-vcs/prikk/blob/main/crates/prikk-store/src/rollback_verify.rs), [DC-14](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/DC-14-ARBITRARY-SPAN-TEXT-INVERSE-ROLLBACK.md), [DC-14 FDD-04 handoff](https://github.com/prikk-vcs/prikk/blob/main/rfcs/handoffs/DC-14-arbitrary-span-text-inverse-rollback/fdd-04-update.md) |
