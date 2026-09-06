@@ -355,6 +355,58 @@ pub(super) fn check(root: &Path, errors: &mut Vec<BoundaryError>) {
             );
         }
     }
+
+    check_declared_entries_still_exist(&graph, &declared_edges, errors);
+}
+
+/// Reverse binding (review v1 §5, required follow-up): the allowlist is a ledger of structural
+/// debt (§4b.3), and a ledger with uncollectable entries stops being read (RFC 120 §6 Q3's own
+/// argument, applied here). A declared edge or hub that no longer exists in the graph must fail
+/// the gate by name, the same way `every_declared_document_exists` binds both directions rather
+/// than only forward. A standalone function (not inlined into [`check`]) so
+/// `coupling::tests::stale_declared_entries_are_rejected` can exercise it directly against a
+/// synthetic graph, without needing a real edge or hub to first go stale in `prikk-store` itself.
+fn check_declared_entries_still_exist(
+    graph: &graph::ModuleGraph,
+    declared_edges: &BTreeSet<(String, String)>,
+    errors: &mut Vec<BoundaryError>,
+) {
+    for (from, to) in declared_edges {
+        if !graph.edges.contains(&(from.clone(), to.clone())) {
+            push(
+                errors,
+                "module-coupling",
+                format!(
+                    "stale DECLARED_CYCLES entry: {from} -> {to} no longer exists in the graph -- \
+                     remove the entry (or the edges it groups with, if some still exist)"
+                ),
+            );
+        }
+    }
+    for entry in DECLARED_HUBS {
+        let fan_in = graph.fan_in(entry.module);
+        let fan_out = graph.fan_out(entry.module);
+        if !graph.modules.contains(entry.module) {
+            push(
+                errors,
+                "module-coupling",
+                format!(
+                    "stale DECLARED_HUBS entry: `{}` is not a real module",
+                    entry.module
+                ),
+            );
+        } else if fan_in.min(fan_out) < HUB_THRESHOLD {
+            push(
+                errors,
+                "module-coupling",
+                format!(
+                    "stale DECLARED_HUBS entry: `{}` no longer meets the hub threshold (fan-in \
+                     {fan_in}, fan-out {fan_out}) -- remove the entry",
+                    entry.module
+                ),
+            );
+        }
+    }
 }
 
 /// Self-guard on both allowlists, the same idiom `DECLARED_UNDOCUMENTED`'s own tests use

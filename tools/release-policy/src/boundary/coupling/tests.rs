@@ -1,6 +1,11 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
 
-use super::{DECLARED_CYCLES, DECLARED_HUBS, check, check_allowlists_are_well_formed};
+use std::collections::BTreeSet;
+
+use super::{
+    DECLARED_CYCLES, DECLARED_HUBS, check, check_allowlists_are_well_formed,
+    check_declared_entries_still_exist,
+};
 use crate::boundary::BoundaryError;
 
 fn repo_root() -> std::path::PathBuf {
@@ -62,4 +67,87 @@ fn a_placeholder_reason_is_refused() {
         errors.is_empty(),
         "the real DECLARED_CYCLES/DECLARED_HUBS must already be well-formed"
     );
+}
+
+/// Review v1 §5's required follow-up: the allowlist binds in both directions. A synthetic graph
+/// containing none of `DECLARED_CYCLES`'s edges and none of `DECLARED_HUBS`'s modules at
+/// hub-level fan must report every single declared entry as stale, by name.
+#[test]
+fn stale_declared_entries_are_rejected() {
+    let graph = super::graph::ModuleGraph {
+        modules: DECLARED_HUBS
+            .iter()
+            .map(|entry| entry.module.to_owned())
+            .collect(),
+        edges: BTreeSet::new(),
+    };
+    let declared_edges: BTreeSet<(String, String)> = DECLARED_CYCLES
+        .iter()
+        .flat_map(|entry| {
+            entry
+                .edges
+                .iter()
+                .map(|(a, b)| ((*a).to_owned(), (*b).to_owned()))
+        })
+        .collect();
+    let mut errors = Vec::new();
+    check_declared_entries_still_exist(&graph, &declared_edges, &mut errors);
+
+    for (from, to) in &declared_edges {
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.detail.contains(&format!("{from} -> {to}"))),
+            "expected a stale-entry error for {from} -> {to}: {errors:?}"
+        );
+    }
+    for entry in DECLARED_HUBS {
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.detail.contains(entry.module) && error.detail.contains("hub")),
+            "expected a stale-entry error for hub `{}`: {errors:?}",
+            entry.module
+        );
+    }
+}
+
+/// The inverse: a graph containing exactly the declared edges and hub-level fan must report
+/// nothing stale -- proves the check does not simply always fire.
+#[test]
+fn non_stale_declared_entries_are_accepted() {
+    let mut modules: BTreeSet<String> = DECLARED_HUBS
+        .iter()
+        .map(|entry| entry.module.to_owned())
+        .collect();
+    let declared_edges: BTreeSet<(String, String)> = DECLARED_CYCLES
+        .iter()
+        .flat_map(|entry| {
+            entry
+                .edges
+                .iter()
+                .map(|(a, b)| ((*a).to_owned(), (*b).to_owned()))
+        })
+        .collect();
+    for (from, to) in &declared_edges {
+        modules.insert(from.clone());
+        modules.insert(to.clone());
+    }
+    // Give every declared hub exactly `HUB_THRESHOLD` synthetic fan-in and fan-out neighbours,
+    // distinct per hub so they do not interfere with each other's counts.
+    let mut edges = declared_edges.clone();
+    for entry in DECLARED_HUBS {
+        for i in 0..super::HUB_THRESHOLD {
+            let inbound = format!("__synthetic_in_{}_{i}", entry.module);
+            let outbound = format!("__synthetic_out_{}_{i}", entry.module);
+            modules.insert(inbound.clone());
+            modules.insert(outbound.clone());
+            edges.insert((inbound, entry.module.to_owned()));
+            edges.insert((entry.module.to_owned(), outbound));
+        }
+    }
+    let graph = super::graph::ModuleGraph { modules, edges };
+    let mut errors = Vec::new();
+    check_declared_entries_still_exist(&graph, &declared_edges, &mut errors);
+    assert!(errors.is_empty(), "{errors:?}");
 }
