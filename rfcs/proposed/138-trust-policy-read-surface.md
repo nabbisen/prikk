@@ -1,6 +1,14 @@
 # RFC 138 — Asking what a repository trusts
 
-**Status.** **PROPOSED, 2026-09-06.** Opened at the project owner's instruction after the stikk
+**Status.** **ACCEPTED by the project owner 2026-09-06**, the same day it was opened.
+
+**What the acceptance covers, stated because a bare acceptance is scope-ambiguous.** It accepts the
+problem record and the option space. **§4 was left unruled and did not need the owner** — §7 rules it
+all: **both surfaces**, `list` and `check`, with **`--format json` riding along**, because that is what
+keeps `check` inside RFC 121's exit-code contract rather than filing a negative answer as an
+operational failure. **Nothing in this RFC now awaits the owner; a handoff may be written.**
+
+Originally opened as: **PROPOSED, 2026-09-06.** Opened at the project owner's instruction after the stikk
 project asked for it (`.git-exclude/external-communication/stikk/receive/002-trust-listing-and-the-no-audit-flag.md`),
 and the owner approved the architect's recommendation that it is worth doing.
 
@@ -88,6 +96,66 @@ correctly.
 
 **One thing to keep straight in any output**: §3.1's distinction. A caller who reads "trusted" as "may
 publish here" has been misled by us, not by themselves.
+
+## 7. §4 RULED by the architect, 2026-09-06
+
+**The owner accepted this RFC without answering §4, and §4 does not need them.** RFC 135 §9.8 is the
+precedent: a question the architect has the material to settle is not a question to submit. All of §4
+is settled here.
+
+### 7.1 Both surfaces — (c)
+
+**`prikk trust maintainer list`** and **`prikk trust maintainer check --key-id <ID>`**. They answer
+different questions and neither is a restricted form of the other: one is *"what is here"*, the other
+*"is this here"*. A ceremony asks the second; someone who inherited a repository, or ran `setup` weeks
+ago, asks the first.
+
+**§4(a)'s worry — that listing "commits us to enumerating a trust policy as a public surface" —
+evaporates on §5.** There is nothing to protect: every adopted public key was typed on the operator's
+own command line. **Withholding a listing would be a restriction with no beneficiary**, and the
+requester raised the worry as a guess about our model, not as a position of theirs.
+
+**Cost: one loader, two presentations.** `load_maintainer_trust_policy` already returns exactly what
+both need.
+
+### 7.2 `--format json` rides along — (d) — and it is not a nicety
+
+**It is what keeps §7.1's `check` inside RFC 121's ruled exit-code contract**, which is the part that
+would otherwise go wrong.
+
+RFC 121 ruled the vocabulary: **`0` ok · `1` operational failure — findings, integrity failure,
+refusal · `2` usage error.** *"key X is not trusted"* is **none of those**. The command was asked a
+question and answered it; nothing failed and nothing was refused. **Exiting `1` for a negative answer
+would file a successful query as an operational failure — precisely the conflation the stikk project
+reported to us in their first letter**, committed inside the command written to answer their second.
+
+**So: `check` exits `0` whenever it determines the answer**, and carries the answer in its output.
+`1` and `2` keep their ruled meanings — an unreadable policy, a bad argument.
+
+**And that is exactly why machine-readable output cannot be a follow-up.** Without it, a caller who
+must branch on the answer has only prose to parse, and the pressure to overload the exit code becomes
+real. `verify --format json` is the existing precedent, so this follows a shape rather than inventing
+one.
+
+**This settles the format for these two commands and nothing else.** The general machine-readable
+error surface — RFC 132's amendment records it as the requester's highest-value ask across the whole
+CLI — remains an unopened design question, and one command adopting an existing flag does not answer
+it.
+
+### 7.3 What the output must and must not say
+
+- **Key id and public key**, plus adoption order, which `MaintainerTrustPolicy`'s `Vec` already
+  carries. Nothing here is secret (§5).
+- **It must not say "required=1" or otherwise report a threshold as policy.** §3's finding stands:
+  that literal is printed at two sites and read from nowhere. **This RFC adds no third site.**
+- **It must not read as ref authority.** §3.1: adopting a key means prikk accepts its signatures on
+  objects; it never lets that key move a ref. Wording that lets a caller conclude otherwise is a
+  defect, not a nuance.
+
+### 7.4 Status
+
+**Nothing in this RFC awaits the owner.** §3's `required=1` defect is separate, predates this work, and
+is named for whoever resolves it. A handoff may be written.
 
 ## 6. What this RFC does not decide
 
