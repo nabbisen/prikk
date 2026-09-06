@@ -22,7 +22,7 @@ prikk setup ./my-repo
 ```
 initialized Prikk repository at ./my-repo/.prikk
 trusted maintainer key: maintainer
-policy: required=1
+adopted maintainer keys: 1
 
 export these before committing:
   export PRIKK_AUTHOR_KEY_ID="author"

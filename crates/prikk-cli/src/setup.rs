@@ -14,7 +14,9 @@
 
 use std::path::PathBuf;
 
-use prikk_store::{RepositoryLayout, add_trusted_maintainer};
+use prikk_store::{
+    RepositoryLayout, add_trusted_maintainer, load_maintainer_trust_policy_or_empty,
+};
 
 use crate::arg_scan::{SetOnce, flag_value, unknown_argument};
 use crate::commands::CliError;
@@ -103,7 +105,11 @@ pub fn run_setup(args: Vec<String>) -> std::result::Result<(), CliError> {
         add_trusted_maintainer(&layout, MAINTAINER_KEY_ID, &maintainer_public_key_hex)
             .map_err(|err| err.to_string())?;
     println!("trusted maintainer key: {}", adopted.key_id);
-    println!("policy: required=1");
+    // RFC 138 §4.2 carried-defects B: a derived count, not the `policy: required=1` literal that
+    // used to print here -- see `main.rs`'s identical fix at the `trust maintainer add` site for
+    // why.
+    let policy = load_maintainer_trust_policy_or_empty(&layout).map_err(|err| err.to_string())?;
+    println!("adopted maintainer keys: {}", policy.keys.len());
 
     let any_printed = matches!(author_output, SeedOutput::Printed(_))
         || matches!(maintainer_output, SeedOutput::Printed(_));

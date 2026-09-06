@@ -16,6 +16,14 @@ answer, not an operational failure — exiting `1` for a negative answer would f
 query as a refusal, the exact conflation a machine-readable exit code exists to avoid. `1` and `2`
 keep their usual meanings: an unreadable policy is `1`, a missing or malformed `--key-id` is `2`.
 
+### Changed — `trust maintainer add` and `setup` print a derived count, not a literal
+
+Both used to print `policy: required=1` after adopting a key — a literal, from a policy that has
+no such field (`MaintainerTrustPolicy` holds a `Vec` and nothing else; trust is any-of-N by
+construction). They now print `adopted maintainer keys: <n>`, where `<n>` is read back from the
+policy and changes as more keys are adopted. `prikk trust maintainer list` already states what
+trust means; this line's job is only to say how many.
+
 ## 0.33.0 — 2026-09-06
 
 ### Added — `prikk setup` and `prikk key`: a first repository without inventing anything

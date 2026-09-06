@@ -295,7 +295,13 @@ fn run_trust(args: Vec<String>) -> std::result::Result<(), CliError> {
             } else {
                 println!("maintainer key already trusted: {}", adopted.key_id);
             }
-            println!("policy: required=1");
+            // RFC 138 §4.2 carried-defects B: a derived count, not the `policy: required=1`
+            // literal that used to print here -- `MaintainerTrustPolicy` holds a `Vec` and nothing
+            // else, so this line's job is to say how many, not to restate trust semantics that
+            // `prikk trust maintainer list` already states correctly.
+            let policy =
+                load_maintainer_trust_policy_or_empty(&layout).map_err(|err| err.to_string())?;
+            println!("adopted maintainer keys: {}", policy.keys.len());
             Ok(())
         }
         // RFC 102 Stage 5, design-v1.md §14.9: a supported interface for the revocation capability

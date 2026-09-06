@@ -103,7 +103,7 @@ prikk trust maintainer add \
 
 ```
 trusted maintainer key: dev-maintainer
-policy: required=1
+adopted maintainer keys: 1
 ```
 
 The public key above is the matching half of the example seed — trust-on-first-use means whichever

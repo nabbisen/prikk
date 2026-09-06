@@ -33,7 +33,7 @@ prikk seal --allow-no-audit
 ```
 initialized Prikk repository at /path/to/source-repo/.prikk
 trusted maintainer key: dev-maintainer
-policy: required=1
+adopted maintainer keys: 1
 recorded worktree patch in active WAL
 baseline ref: heads/main
 patch id: ...
@@ -213,7 +213,7 @@ prikk trust maintainer add \
 
 ```
 trusted maintainer key: dev-maintainer
-policy: required=1
+adopted maintainer keys: 1
 ```
 
 Now confirm the restore:
