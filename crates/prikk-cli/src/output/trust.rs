@@ -2,9 +2,10 @@
 //! distinction: adopting a key means Prikk accepts its signatures on objects (Block/RefState); it
 //! never lets that key move a ref. **Neither format ever says "required" or otherwise reports a
 //! threshold as policy** -- `MaintainerTrustPolicy` holds a `Vec` and nothing else, trust is
-//! any-of-N by construction, and this RFC adds no third site repeating the pre-existing
-//! `policy: required=1` literal in the voice of a query (`main.rs`/`setup.rs` already do, out of
-//! scope here).
+//! any-of-N by construction. The `policy: required=1` literal this RFC declined to add a third
+//! site for is gone entirely now: the carried-defects round replaced both existing sites
+//! (`main.rs`'s `trust maintainer add`, `setup.rs`) with a derived `adopted maintainer keys: <n>`
+//! count.
 
 use crate::stdout::println;
 use prikk_store::{AdoptedMaintainerKey, MaintainerTrustPolicy};
