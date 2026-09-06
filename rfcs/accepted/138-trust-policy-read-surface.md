@@ -2,11 +2,17 @@
 
 **Status.** **ACCEPTED by the project owner 2026-09-06**, the same day it was opened.
 
+**Moved to `rfcs/accepted/` 2026-09-06, on the owner's reminder that RFC-000's 5-folder variant is
+adopted.** The trigger is **design complete**, not handoff issued — `accepted/` means *"review
+complete; implementer may start"*, and §7.4 said an implementer may start. The architect had said "it
+moves when I issue the handoff", which is one step too late. **Third correction of this kind; §9.4a of
+RFC 120 proposes the gate that would catch it.**
+
 **What the acceptance covers, stated because a bare acceptance is scope-ambiguous.** It accepts the
 problem record and the option space. **§4 was left unruled and did not need the owner** — §7 rules it
 all: **both surfaces**, `list` and `check`, with **`--format json` riding along**, because that is what
 keeps `check` inside RFC 121's exit-code contract rather than filing a negative answer as an
-operational failure. **Nothing in this RFC now awaits the owner; a handoff may be written.**
+operational failure. **Nothing in this RFC now awaits the owner.** **Handoff issued:** `rfcs/handoffs/138-trust-policy-read-surface/trust-read-surface-handoff-v1.md`.
 
 Originally opened as: **PROPOSED, 2026-09-06.** Opened at the project owner's instruction after the stikk
 project asked for it (`.git-exclude/external-communication/stikk/receive/002-trust-listing-and-the-no-audit-flag.md`),
