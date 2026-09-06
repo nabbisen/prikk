@@ -448,7 +448,12 @@ no-design-decision half of this program — leaving `AUD-01` through `AUD-04`, w
 
 ### Release position — 0.34.0 shipped 2026-09-06
 
-**`0.34.0` was cut at `f1be4c4`**: CI green on all 15 jobs, signed tag verified before pushing.
+**`0.34.0` was cut at `f1be4c4`**: CI green on all 15 jobs, signed tag verified before pushing,
+`release.yml` green on four build targets, 16 assets, **all eight crates published to crates.io and
+confirmed live at `0.34.0` against the sparse index**. Verified beyond the workflows' own reports:
+the published Linux asset's SHA-256 checked and its binary run (`prikk 0.34.0`), and a clean
+`cargo install prikk --version 0.34.0` from crates.io exercised `trust maintainer list`/`check` —
+**the release's headline surface confirmed in both distribution channels, not just in the build**.
 
 **A repository can now be asked what it trusts.** RFC 138 shipped `prikk trust maintainer list` and
 `prikk trust maintainer check --key-id <ID>`, both with `--format json`. Before this, the only way to
