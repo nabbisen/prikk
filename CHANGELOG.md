@@ -1,6 +1,59 @@
 # Changelog
 
-## Unreleased
+## 0.33.0 — 2026-09-06
+
+### Added — `prikk setup` and `prikk key`: a first repository without inventing anything
+
+**Before this release a new user could not reach a sealed commit at all.** It required two 32-byte
+seeds invented by hand and a public key derived from one of them — and **no command derived a public
+key**. There was no way to do it with prikk.
+
+```console
+$ prikk setup ./my-repo
+initialized Prikk repository at ./my-repo/.prikk
+trusted maintainer key: maintainer
+policy: required=1
+
+export these before committing:
+  export PRIKK_AUTHOR_KEY_ID="author"
+  export PRIKK_AUTHOR_SEED="..."
+  export PRIKK_MAINTAINER_KEY_ID="maintainer"
+  export PRIKK_MAINTAINER_SEED="..."
+note: at least one seed above is now in your terminal scrollback -- treat it as a secret
+
+next steps:
+  prikk commit -m "<message>"
+  prikk seal --allow-no-audit  # no audit trust policy is configured yet; see `prikk seal --help`
+```
+
+**Following that output word for word reaches a sealed, verified commit.** Measured on a clean path,
+the number of unfamiliar steps drops from **eleven to five**.
+
+- **`prikk setup [<path>] [--author-seed-out <path>] [--maintainer-seed-out <path>]`** — creates the
+  repository, generates both keys, registers the maintainer key, and prints what you need next. It
+  **shows the trust decision it makes**: registering a maintainer key is a trust act, and a one-shot
+  flow that performed it invisibly would teach you that the step is a formality.
+- **`prikk key generate [--out <path>]`** — a fresh seed from the OS CSPRNG, with its public key and
+  the exact next commands.
+- **`prikk key public --seed-env <NAME>`** — the public key for a seed you already hold.
+
+### How prikk handles secrets, stated because it is a deliberate limit
+
+**prikk never invents a location for key material, never reads one back, and never manages its
+lifecycle.** It has no keystore and will not gain one.
+
+- `--out` and `--*-seed-out` write a seed **only to a path you name**, mode `0600`, refusing to
+  overwrite an existing file and refusing any path inside `.prikk/`.
+- **When you give an output path the seed is never printed** — the printed `export` line reads
+  `"$(cat <path>)"`, so the secret reaches neither your scrollback nor your shell history. Without a
+  path the seed is printed and prikk says so plainly.
+- **A seed is never accepted as a command-line argument**, only through an environment variable you
+  name. `/proc/<pid>/cmdline` is world-readable on Linux and shells record arguments in history.
+- **`--out` is refused on Windows**, because prikk cannot set restrictive permissions there without
+  facilities it does not use. Use `prikk key generate` without a path and place the seed yourself.
+
+Durable configuration for policy settings (`PRIKK_ACTIVE_PATCH_LIMIT` and the rest) is **deliberately
+not part of this** — see [RFC 135](https://github.com/prikk-vcs/prikk/blob/main/rfcs/done/135-first-run-entrance-and-configuration.md).
 
 ### Changed — two error messages changed their classification prefix
 
