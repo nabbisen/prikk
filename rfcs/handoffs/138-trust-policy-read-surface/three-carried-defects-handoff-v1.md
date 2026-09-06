@@ -1,7 +1,17 @@
 # Three carried defects — one round
 
 **Authority:** `ROADMAP.md`'s "Proposed ordering" item 1, refreshed and approved 2026-09-06.
+**Filed under RFC 138** because all three were surfaced by that RFC's round or its review: **A** was
+named in the RFC 138 implementation report, **B** was found while writing RFC 138 itself (§3), and
+**C**'s edge was created by the RFC 138 commit and caught by RFC 130's gate the next day.
 **Base:** `main` at `6fadfa6`.
+
+> **Filing note, recorded rather than hidden.** This was first written to
+> `rfcs/handoffs/carried-defects-20260906/` and **pushed with `boundary-check` failing** —
+> `rfc-naming` refuses a handoff directory that names no RFC. The architect ran the gate, saw
+> `"valid": false`, and committed in the same chained command without reading it. **The gate was
+> right about more than the name**: RFC-000 requires every handoff to have a related RFC, and a
+> batch citing only a schedule row had no clear authority. Corrected forward, not rewritten.
 
 Three unrelated small items, batched because none deserves a round of its own. **They are independent
 — if one turns out to be larger than described, land the other two and report rather than holding all
