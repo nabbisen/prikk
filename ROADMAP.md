@@ -395,11 +395,11 @@ shipped; RFC 137's increment 5 is DNS-blocked), so nothing is being displaced by
 |---|---|---|---|
 | ~~**1**~~ | ~~Three carried defects, as one round~~ | Product | **DONE 2026-09-06** (`fcbee23`, `4470370`, `544f866`, `73835df`). All three closed before the cut, as scheduled — the `commands.md` inventory (six absences, not the two named here), the `required=1` literal (replaced by a derived count, not a third print site), and the `maintainer_trust_policy_or_empty` relocation, which also removed a graph edge and a hub |
 | ~~**2**~~ | ~~Cut 0.34.0~~ | — | **DONE 2026-09-06** (`f1be4c4`). See the release position below |
-| **1** | **RFC 132's round** — narrow `branch.rs:290`, then reclassify the six sites | Product | **Handed off.** The smallest item and the only one closing a **latent hazard**: `branch.rs:290`'s open-ended `Precondition(_)` arm is armed by this round's own part 2, so part 1 precedes it. Also the item whose handoff goes stalest fastest — it cites six exact file:line sites |
-| **2** | **RFC 140** — `status --format json` and queued-patch enumeration | Product | **Handed off.** User-facing, and the second half of the same external report as item 1. **Adjacent to item 1 on purpose** — see the release note below |
-| **3** | **Cut the release** carrying items 1 and 2 | — | Both items are user-facing (six error prefixes move; a new surface lands) and both answer the same reporter. **The owner's reply-timing ruling — replies go when the necessary releases are finished — makes one release covering both letters into one reply rather than two** |
-| **4** | **The measurement corpus** — **RFC 139**, ACCEPTED 2026-09-06 | Product | Increment 1 handed off and **conflict-free** (`tools/` only, touches no product code), so it can be slotted opportunistically if anything above stalls. **Increment 2 is the one that matters**: it ends in a build-cost number that decides whether the corpus depth target is reachable, and that number gates RFC 136 |
-| **5** | **RFC 131** — module grouping and `pub(in ...)` scoping | Product | **Last of the four, and the reason is mechanical rather than a judgement about value.** It is a large file move. **Both live handoffs above are written against exact current paths and line numbers**; moving modules first invalidates them and costs two rewrites. RFC 130 §7 says this belongs **between feature arcs**, and the moment after item 3's release is one |
+| ~~**1**~~ | ~~RFC 132's round~~ | Product | **DONE 2026-09-06** (`b5c2c4d`, `a050725`, `0f264f3`, `587e84b`). Six sites reclassified, the four that stay guarded, and **two things found that the reporter could not see**: the `branch.rs` broad-arm hazard and the CAS-guard unreachability |
+| ~~**2**~~ | ~~RFC 140~~ | Product | **DONE 2026-09-06** (`c2cf4b0`). Retired to `rfcs/done/` at this cut |
+| ~~**3**~~ | ~~Cut the release carrying items 1 and 2~~ | — | **DONE 2026-09-06** — `0.35.0`. See the release position below |
+| **1** | **RFC 139 increment 2** — the builder, determinism, and the build-cost curve | Product | Increment 1 landed early (`735eee1`) because it was conflict-free `tools/` work, exactly as the previous order anticipated. **§5a's determinism ruling is settled input** — the test compares the builder's action manifest, not sealed heads, because a CLI-built corpus cannot have a stable sealed head. **This increment ends in a build-cost number** that decides whether the depth target is reachable, and that number gates RFC 136 |
+| **2** | **RFC 131** — module grouping and `pub(in ...)` scoping | Product | **Now genuinely next-after**, and the mechanical objection has expired: the two handoffs whose file:line citations it would have invalidated are both delivered and closed. RFC 130 §7 says a large file move belongs **between feature arcs**, and the moment after a release is one |
 | — | RFC 120 §9.4, §9.4a; RFC 133 §6 | **owner rulings** | Consume no dev-team capacity and can be answered at any point. **§9.4a would stop an error now on its third occurrence** |
 | — | RFC 137 increment 5; RFC 136; DC-43; RFCs 109/110/113 | blocked | Each waits on a named external answer — `prikk.org` DNS, the corpus, the signer bootstrap, a direction. **RFC 137 is accepted-but-unshipped and still not rankable here**: its increment 5 is a DNS action, not dev capacity, and it re-enters the queue the day the domain resolves |
 
@@ -462,6 +462,50 @@ now so it is a recognised threshold rather than a later surprise.
 **Band 3 is complete except RFC 126 §5.** RFC 123's interim, RFC 124, and RFC 126 §2 all landed;
 §6a and §6b followed on 2026-09-03. **`AUD-05` through `AUD-10` are all delivered** — the whole
 no-design-decision half of this program — leaving `AUD-01` through `AUD-04`, which are design work.
+
+### Release position — 0.35.0 shipped 2026-09-06
+
+**`0.35.0` was cut at `0b5345a`**, the second cut of the day. CI green, signed tag verified before
+pushing.
+
+**A seal ceremony can now say *which*, not only *how many*.** RFC 140 shipped `prikk status --format
+json` and queued-patch enumeration. Before it, `status` reported a count and an owning ref — so the
+confirmation step before the most irreversible act this tool offers could say how much was about to be
+frozen and not what. **The design brief for it was wrong and the implementation is what proved it**:
+`EditText` is node-addressed, not path-addressed, so paths are not derivable from the queue at all
+without resolving against the folded baseline. Shipping the cheap version would have rendered
+`edit <node 8f2a…>` at exactly the moment the feature exists to make legible.
+
+**Six refusals stopped lying about what they were.** RFC 132's round moved six `LockConflict` sites to
+`Precondition` — a full queue, an incomplete ref publication, three `requires an empty active WAL`
+conditions. None involves a lock. **The clearest case was on the commit path, where the class word
+contradicted the sentence it prefixed**: `lock conflict: ... run \`prikk seal\``.
+
+**This is a compatibility event for the stikk front-end**, which matches on message text and glosses
+`LockConflict` as *"another writer is active"* — the correct gloss for the four sites that stay and the
+wrong one for the six that moved. They reported the defect and have already fixed their side.
+
+**Two findings in that round came from neither the report nor the brief.** `branch.rs`'s
+`Err(PrikkError::Precondition(_)) => {}` was a narrow fact written as a whole-variant match, in the one
+command whose failure mode is silently closing a branch it should refuse to close — safe when written,
+armed by the very round that reported it. And `RefStore::ensure_current_matches`'s CAS refusal cannot
+fire through `publish` at all: it is defence against a lock-discipline regression, now documented at
+the function rather than only in a test.
+
+**Minor, and interoperable both ways.** No schema moved, `admitted_schemas` untouched, no new state.
+The behaviour changes are a new read surface and six message prefixes.
+
+**RFC 139 increment 1 rode along** (`735eee1`) — `tools/corpus`, `publish = false`, shipped to nobody.
+It produced this cut's most consequential finding without shipping a byte to users: **RFC 139 §5 and §7
+contradicted each other**, because a `NodeId` is a CSPRNG draw with no CLI override, so a corpus built
+through the ordinary command surface can never have a stable sealed head. Ruled in §5a.
+
+**RFC 140 moved `accepted/` → `done/`** with this cut, including repointing its handoff and adding its
+row to `rfcs/README.md`'s Done table.
+
+**The held stikk reply comes due with this release.** Both letters' subjects are now shipped, and
+letter 003 §3's premise — that `trust maintainer check` was unreleased — has been false since 0.34.0.
+
 
 ### Release position — 0.34.0 shipped 2026-09-06
 

@@ -1,6 +1,22 @@
 # RFC 140 — Which patches, not how many
 
-**Status.** **ACCEPTED by the project owner 2026-09-06**, the same day it was opened.
+**Status.** **CLOSED 2026-09-06 and moved to `rfcs/done/` — shipped in 0.35.0** (`0b5345a`).
+`prikk status --format json` (`status-report-v1`) is released, and the queue can be enumerated rather
+than counted: patch id, operation kinds, and **resolved** paths, in queue order. Verified against the
+real binary before acceptance — an `EditText`, which carries only a node id in its own payload,
+reports its path.
+
+**What outlives this RFC, and it is a rule rather than work.** §7b's ruling generalizes past this
+surface: **a read may degrade, but it must say that it degraded, in a field a machine can branch on.**
+`target_ref_status` is why the degraded-metadata case was admissible; a silent version of the same
+behaviour would have turned repository damage into apparent absence.
+
+**One measurement outlives it too**, filed where it survives: RFC 133 §5a carries the enumeration cost
+against `worktree-status` at 500 queued patches. **RFC 139's corpus is what will re-measure it
+properly**, and having the figure from before the corpus is how we will know whether the corpus
+changed the answer.
+
+Everything below is the record as it stood. Previously: **ACCEPTED by the project owner 2026-09-06**, the same day it was opened.
 
 **Moved to `rfcs/accepted/` on acceptance** — the trigger is design complete, not handoff issued.
 

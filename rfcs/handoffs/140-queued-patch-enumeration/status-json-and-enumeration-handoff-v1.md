@@ -1,6 +1,6 @@
 # RFC 140 — `prikk status --format json`, and which patches are queued
 
-**RFC:** `rfcs/accepted/140-queued-patch-enumeration.md` — **accepted in full 2026-09-06.** §4's
+**RFC:** `rfcs/done/140-queued-patch-enumeration.md` — **accepted in full 2026-09-06.** §4's
 ruling (option (b), resolve against the folded baseline) and §6's surface scoping are settled input.
 **Base:** `main` at `02ac5c0`.
 **Origin:** stikk letter 003 §2, verified in
