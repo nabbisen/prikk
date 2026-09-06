@@ -175,7 +175,17 @@ reporter excluded. **Still no trigger fires**, for the same reason the amendment
 **no assertion protecting them**, proved by perturbing `lock.rs:179` and watching the entire workspace
 suite pass. **A round that guards what it changed and not what it deliberately preserved leaves the
 easier half of the distinction unguarded** — and for these four the class word carries the real
-instruction, *wait* rather than *change what you asked for*.
+instruction, *wait* rather than *change what you asked for*. **Delivered and accepted** (`0f264f3`);
+verified by perturbing all four at once and confirming exactly four named tests fall over.
+
+**That follow-up produced a finding worth more than the guards it added.** `RefStore::ensure_current_matches`'s
+CAS refusal **cannot fire through `RefStore::publish`**: its only production call site is
+`publish_locked`'s `Ready` branch, and `classify_state` reaches `Ready` only where the same
+comparison already held, under container locks held continuously across both reads. **It is defence
+against a lock-discipline regression, not a live CAS gate** — a reason to keep it, and now directly
+tested. A third handoff (`record-the-cas-guard-reachability-handoff-v3.md`) puts that where the next
+reader will be: the function itself carries no doc comment at all, and reads exactly like the
+operative guard.
 
 **That round carries something the reporter could not see, and it is the more important half.**
 `crates/prikk-cli/src/branch.rs:290` matches `Err(PrikkError::Precondition(_))` — an open-ended arm
