@@ -373,6 +373,17 @@ intention is the whole point of rewriting this section.
 
 #### The order
 
+**RE-ORDERED 2026-09-06 (second time that day), at the owner's request, after the stikk round was
+authorized.** **This puts new external work ahead of the measurement corpus, which the owner had
+approved as the next item** — stated plainly rather than slid in, because it changes an approved
+order. The reasoning is that items 1 and 2 were authorized after that approval, are already handed
+off, are both small, and one of them closes a latent hazard; the corpus loses a few days and nothing
+else. **Sequencing remains the owner's to authorize.**
+
+**Rounds here are serial, not parallel.** The workflow is single-branch — the dev team commits locally
+and the architect pushes — so this is a queue, not a plan with slack in it. The one exception is noted
+at item 4.
+
 **REFRESHED 2026-09-06.** The previous table's items 0-6 are all delivered, and four items appeared
 that were never in it. **The architect had not refreshed it; the owner asked whether the open set was
 ordered, and this is that ordering.** Sequencing remains the owner's to authorize.
@@ -384,10 +395,13 @@ shipped; RFC 137's increment 5 is DNS-blocked), so nothing is being displaced by
 |---|---|---|---|
 | ~~**1**~~ | ~~Three carried defects, as one round~~ | Product | **DONE 2026-09-06** (`fcbee23`, `4470370`, `544f866`, `73835df`). All three closed before the cut, as scheduled — the `commands.md` inventory (six absences, not the two named here), the `required=1` literal (replaced by a derived count, not a third print site), and the `maintainer_trust_policy_or_empty` relocation, which also removed a graph edge and a hub |
 | ~~**2**~~ | ~~Cut 0.34.0~~ | — | **DONE 2026-09-06** (`f1be4c4`). See the release position below |
-| **1** | **The measurement corpus** — **RFC 139**, opened and **ACCEPTED 2026-09-06** | Product | Gates RFC 136 outright; retires the methodological weakness every performance decision here inherits. **Both the architect and the external architect reached it independently.** Designed as a **profile plus a deterministic builder**, not a stored repository, and **not** blocked on RFC 133 §6 — an instrument is not a requirement. Four increments, ordered; **increment 1 handed off** |
-| **2** | **RFC 131** — module grouping and `pub(in ...)` scoping | Product | Unblocked: RFC 130 shipped in 0.34.0, and its 8 `DECLARED_CYCLES` entries each carry a `what_would_remove_it` — **this item's input, already written**. A large file move, which §7 says belongs **between feature arcs** — and a post-release moment is one |
+| **1** | **RFC 132's round** — narrow `branch.rs:290`, then reclassify the six sites | Product | **Handed off.** The smallest item and the only one closing a **latent hazard**: `branch.rs:290`'s open-ended `Precondition(_)` arm is armed by this round's own part 2, so part 1 precedes it. Also the item whose handoff goes stalest fastest — it cites six exact file:line sites |
+| **2** | **RFC 140** — `status --format json` and queued-patch enumeration | Product | **Handed off.** User-facing, and the second half of the same external report as item 1. **Adjacent to item 1 on purpose** — see the release note below |
+| **3** | **Cut the release** carrying items 1 and 2 | — | Both items are user-facing (six error prefixes move; a new surface lands) and both answer the same reporter. **The owner's reply-timing ruling — replies go when the necessary releases are finished — makes one release covering both letters into one reply rather than two** |
+| **4** | **The measurement corpus** — **RFC 139**, ACCEPTED 2026-09-06 | Product | Increment 1 handed off and **conflict-free** (`tools/` only, touches no product code), so it can be slotted opportunistically if anything above stalls. **Increment 2 is the one that matters**: it ends in a build-cost number that decides whether the corpus depth target is reachable, and that number gates RFC 136 |
+| **5** | **RFC 131** — module grouping and `pub(in ...)` scoping | Product | **Last of the four, and the reason is mechanical rather than a judgement about value.** It is a large file move. **Both live handoffs above are written against exact current paths and line numbers**; moving modules first invalidates them and costs two rewrites. RFC 130 §7 says this belongs **between feature arcs**, and the moment after item 3's release is one |
 | — | RFC 120 §9.4, §9.4a; RFC 133 §6 | **owner rulings** | Consume no dev-team capacity and can be answered at any point. **§9.4a would stop an error now on its third occurrence** |
-| — | RFC 137 increment 5; RFC 136; DC-43; RFCs 109/110/113 | blocked | Each waits on a named external answer — `prikk.org` DNS, the corpus, the signer bootstrap, a direction |
+| — | RFC 137 increment 5; RFC 136; DC-43; RFCs 109/110/113 | blocked | Each waits on a named external answer — `prikk.org` DNS, the corpus, the signer bootstrap, a direction. **RFC 137 is accepted-but-unshipped and still not rankable here**: its increment 5 is a DNS action, not dev capacity, and it re-enters the queue the day the domain resolves |
 
 **Possible inbound, unscheduled:** the stikk project's standing feature asks — a per-patch/-file
 content surface (`show`/`diff`, or content in `--format json`) and queued-patch enumeration — if they
