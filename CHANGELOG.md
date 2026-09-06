@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added — `prikk status --format json`, and which patches a seal will freeze
+
+`prikk status` could say how many patches were queued, but not which ones. `--format json`
+(`status-report-v1`) now carries everything the prose form does, plus the queue itself: for each
+queued patch, in queue order, its patch id, its operations' kinds, and the paths those operations
+affect. This is for knowing *which* patches a seal will freeze, not only how many — the same
+information a seal ceremony needs to ask for informed consent before an irreversible act, not just
+a count of how much is about to happen. Bare `prikk status` is unchanged and pays nothing new; the
+queue is only resolved when `--format json` actually asks for it.
+
 ### Changed — six more refusals now say `precondition not met`, not `lock conflict`
 
 A full active-patch queue, an active WAL owned by the wrong ref for a commit, an incomplete ref

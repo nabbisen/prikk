@@ -11,12 +11,14 @@ use prikk_store::{
 
 mod help;
 mod merge_evidence;
+mod status;
 mod trust;
 mod verification;
 mod worktree;
 
 pub(crate) use help::{print_command_help, print_help};
 pub(crate) use merge_evidence::{print_merge_evidence, print_merge_plan};
+pub(crate) use status::{QueueTarget, QueueThresholdStatus, print_status_json};
 pub(crate) use trust::{
     print_trust_check, print_trust_check_json, print_trust_list, print_trust_list_json,
 };

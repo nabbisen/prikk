@@ -48,11 +48,12 @@ use args::{
 };
 use commands::CliError;
 use output::{
-    print_active_session_repairs, print_checkout_plan, print_command_help, print_doctor_report,
-    print_help, print_history, print_merge_evidence, print_merge_plan, print_patch_deletion_plan,
-    print_patch_inverse_plan, print_patch_materialization_report, print_patch_replay_plan,
-    print_rollback_draft_report, print_rollback_draft_verification, print_rollback_preview_plan,
-    print_snapshot_checkout_plan, print_snapshot_materialization_report, print_trust_check,
+    QueueTarget, QueueThresholdStatus, print_active_session_repairs, print_checkout_plan,
+    print_command_help, print_doctor_report, print_help, print_history, print_merge_evidence,
+    print_merge_plan, print_patch_deletion_plan, print_patch_inverse_plan,
+    print_patch_materialization_report, print_patch_replay_plan, print_rollback_draft_report,
+    print_rollback_draft_verification, print_rollback_preview_plan, print_snapshot_checkout_plan,
+    print_snapshot_materialization_report, print_status_json, print_trust_check,
     print_trust_check_json, print_trust_list, print_trust_list_json, print_verify_report,
     print_verify_report_json, print_worktree_status,
 };
@@ -62,14 +63,14 @@ use prikk_store::{
     DoctorRepairOptions, Ed25519AuthorSigner, Ed25519MaintainerSigner, MergeEvidenceTarget,
     RefStore, RepositoryLayout, VerifyOptions, Wal, WorktreePatchCommitOptions,
     add_trusted_maintainer, append_rollback_draft, commit_worktree_changes_signed,
-    doctor_repository, list_received_pointers, load_maintainer_trust_policy_or_empty,
-    load_received_ref_history, load_ref_history, materialize_patch_checkout,
-    materialize_patch_checkout_with_deletions, materialize_snapshot_checkout,
-    plan_patch_checkout_deletions, prepare_checkout_plan, prepare_merge_evidence,
-    prepare_merge_plan, prepare_patch_inverse_plan, prepare_patch_replay_plan,
-    prepare_rollback_preview, prepare_snapshot_checkout_plan, read_active_ref_metadata,
-    remove_trusted_maintainer, repair_repository, verify_active_rollback_draft,
-    verify_repository_with_options, worktree_status,
+    doctor_repository, enumerate_queued_patches, list_received_pointers,
+    load_maintainer_trust_policy_or_empty, load_received_ref_history, load_ref_history,
+    materialize_patch_checkout, materialize_patch_checkout_with_deletions,
+    materialize_snapshot_checkout, plan_patch_checkout_deletions, prepare_checkout_plan,
+    prepare_merge_evidence, prepare_merge_plan, prepare_patch_inverse_plan,
+    prepare_patch_replay_plan, prepare_rollback_preview, prepare_snapshot_checkout_plan,
+    read_active_ref_metadata, remove_trusted_maintainer, repair_repository,
+    verify_active_rollback_draft, verify_repository_with_options, worktree_status,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -415,7 +416,15 @@ fn run_trust(args: Vec<String>) -> std::result::Result<(), CliError> {
     }
 }
 
-fn run_status() -> std::result::Result<(), CliError> {
+/// `status: `--format json` (RFC 140) edits `status`'s own long-standing "accept no arguments"
+/// ruling (RFC 121 §3) rather than opening a gap in it -- `run_status_adapter`
+/// (`commands.rs`) still refuses everything except this one flag. Dispatches to the prose form
+/// (byte-identical to before RFC 140, and paying nothing this RFC added: RFC 140 §5) or the JSON
+/// form (`run_status_json`, below), never both.
+fn run_status(format_json: bool) -> std::result::Result<(), CliError> {
+    if format_json {
+        return run_status_json();
+    }
     let root = current_dir()?;
     let layout = open_repository(root)?;
     let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
@@ -469,6 +478,67 @@ fn run_status() -> std::result::Result<(), CliError> {
         }
     }
     println!("status: multi-operation text diff minimization and plugins not yet implemented");
+    Ok(())
+}
+
+/// `status --format json` (RFC 140 §2/§6): `status-report-v1`, carrying everything the prose form
+/// above does, plus the queue enumeration the prose form cannot (RFC 140's own reason to exist).
+/// Independent of `run_status`'s prose body above by design, the same way
+/// `print_trust_list`/`print_trust_list_json` are independent functions rather than one refactored
+/// into the other (RFC 138) -- so a future prose-wording change cannot silently reach into this
+/// function's own JSON shape, and vice versa.
+fn run_status_json() -> std::result::Result<(), CliError> {
+    let root = current_dir()?;
+    let layout = open_repository(root)?;
+    let wal = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME);
+    let replay = wal.replay().map_err(|err| err.to_string())?;
+    let ref_store = RefStore::new(layout.clone());
+    let main_ref = ref_store
+        .read_current_ref_state_id("heads/main")
+        .map_err(|err| err.to_string())?;
+
+    if replay.records.is_empty() {
+        print_status_json(
+            &layout,
+            replay.records.len(),
+            replay.trailing_partial_bytes,
+            main_ref,
+            None,
+            None,
+            &[],
+        );
+        return Ok(());
+    }
+
+    let target = match read_active_ref_metadata(&layout).map_err(|err| err.to_string())? {
+        ActiveRefMetadata::Valid(ref_name) => QueueTarget::Ref(ref_name),
+        ActiveRefMetadata::Missing => QueueTarget::MissingMetadata,
+        ActiveRefMetadata::Invalid(_) => QueueTarget::MalformedMetadata,
+    };
+    // DC-57 (NFR-PERF-02): the same thresholds the prose form reads, rendered as a status rather
+    // than prose text.
+    let thresholds = ActivePatchThresholds::from_env()?;
+    let threshold_status = if replay.records.len() >= thresholds.limit {
+        QueueThresholdStatus::HardLimit
+    } else if replay.records.len() >= thresholds.warn {
+        QueueThresholdStatus::Warn
+    } else {
+        QueueThresholdStatus::None
+    };
+
+    // RFC 140 §5: this is the derivation the prose path above never performs. Reached only because
+    // `--format json` was requested and the queue is non-empty.
+    let patches = enumerate_queued_patches(&layout).map_err(|err| err.to_string())?;
+
+    print_status_json(
+        &layout,
+        replay.records.len(),
+        replay.trailing_partial_bytes,
+        main_ref,
+        Some(&target),
+        Some((&threshold_status, thresholds.warn, thresholds.limit)),
+        &patches,
+    );
     Ok(())
 }
 

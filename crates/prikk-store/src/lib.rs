@@ -226,5 +226,6 @@ pub use worktree_patch::{
     WorktreePatchOperationKind, WorktreePatchOperationSummary, commit_worktree_changes_signed,
 };
 pub use worktree_status::{
-    WorktreeChange, WorktreeChangeKind, WorktreeStatusReport, worktree_status,
+    QueuedOperationEntry, QueuedPatchEntry, QueuedPathResolution, WorktreeChange,
+    WorktreeChangeKind, WorktreeStatusReport, enumerate_queued_patches, worktree_status,
 };

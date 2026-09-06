@@ -21,7 +21,7 @@ prikk trust maintainer list [--format json]
 prikk trust maintainer check --key-id ID [--format json]
 prikk commit [--from-worktree] [--text-edits] [--ref heads/<branch>] -m <message>
 prikk seal --allow-no-audit [--ref heads/<branch>]
-prikk status
+prikk status [--format json]
 prikk log [path] [--limit N] [--ref REF]
 prikk checkout --plan-only [path] [--ref REF]
 prikk checkout --snapshot-plan [path] [--ref REF]

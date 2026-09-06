@@ -14,16 +14,21 @@ use std::fs;
 use std::path::Path;
 
 use prikk_error::{PrikkError, Result};
+use prikk_object::{NodeId, ObjectId};
 
 use crate::blob_access::ensure_blob_matches_node_kind;
 use crate::ignore::{IgnoreRules, should_skip_discovery};
 use crate::layout::{DEFAULT_ACTIVE_NAME, RepositoryLayout};
 use crate::lifecycle_cache::replay::TextCache;
-use crate::node_lifecycle::NodeContent;
+use crate::node_lifecycle::{NodeContent, NodeLifecycleState};
 use crate::object_store::ObjectReadSnapshot;
+use crate::patch_replay::decode::{
+    DecodedOperationKind, DecodedPatchOperation, decode_patch_operations,
+};
 use crate::patch_replay::resolve_folded_worktree_baseline;
 use crate::path::{RepoPath, join_repo_path_to_root};
 use crate::wal::Wal;
+use crate::{ActiveRefMetadata, read_active_ref_metadata};
 
 /// Read-only worktree status report against the replay baseline.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -294,6 +299,156 @@ fn path_to_repo_string(root: &Path, path: &Path) -> Result<String> {
         ))
     })?;
     crate::path::pathbuf_to_slash_string(relative)
+}
+
+/// One path a queued operation affects (RFC 140 §3/§4). `CreateFile`, `DeleteNode`, `RenamePath`,
+/// and `CreateSymlink` carry their own path(s) directly in the payload and are always `Path` --
+/// there is nothing to resolve or fail to resolve. `EditText`, `ChangePerm`, and `ReplaceBinary`
+/// are node-addressed (`EditText`'s own doc: "node-addressed, not path-addressed") and are
+/// resolved against the folded worktree baseline the queue would author against; `Unresolved` is a
+/// real answer for one of those, not a defect -- RFC 140 §4 requires it be reported, never turned
+/// into a refusal of the whole enumeration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QueuedPathResolution {
+    /// A repository-relative path, read from the payload or resolved against the baseline.
+    Path(String),
+    /// A node-addressed operation whose node id is not live in the folded baseline -- hex-encoded,
+    /// matching the format this project already uses for key material (`prikk_hash::to_hex`).
+    Unresolved {
+        /// Hex-encoded node id that failed to resolve.
+        node_id: String,
+    },
+}
+
+/// One operation inside a queued patch (RFC 140): a stable, lowercase-hyphenated kind label (the
+/// same idiom as [`WorktreeChangeKind::as_str`]) plus the path(s) it affects, in payload order.
+/// Every kind reports exactly one path except `rename-path`, which reports two:
+/// `[old_path, new_path]`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueuedOperationEntry {
+    /// Stable kind label: `create-file`, `delete-node`, `edit-text`, `rename-path`,
+    /// `change-perm`, `create-symlink`, or `replace-binary`.
+    pub kind: &'static str,
+    /// The path(s) this operation affects, in payload order.
+    pub paths: Vec<QueuedPathResolution>,
+}
+
+/// One queued patch, in queue order (RFC 140).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueuedPatchEntry {
+    /// Signed Patch object id.
+    pub patch_id: ObjectId,
+    /// This patch's own operations, in their own canonical (`op_seq`) order.
+    pub operations: Vec<QueuedOperationEntry>,
+}
+
+/// Enumerate the active WAL's queued patches, in queue order, with node-addressed operations
+/// resolved against the same folded-baseline derivation `commit` and `worktree-status` already use
+/// (`resolve_folded_worktree_baseline`, RFC 122 §3) -- not a second derivation (RFC 140 §3).
+///
+/// **Called only when enumeration is actually requested** (`status --format json`): an empty
+/// active WAL returns an empty list without calling that derivation at all, so the ordinary,
+/// argument-less `status` path -- which never reaches this function -- keeps paying nothing new
+/// (RFC 140 §5).
+///
+/// **A queue whose owning ref cannot be determined still enumerates.** If the active-ref metadata
+/// is missing or malformed, every node-addressed operation in the queue is reported `Unresolved`
+/// rather than failing the whole read -- the same principle §4 states for one bad node id inside
+/// an otherwise-good baseline, extended to a queue that has no good baseline to resolve against at
+/// all. Path-addressed operations (which need no resolution) are reported normally regardless.
+pub fn enumerate_queued_patches(layout: &RepositoryLayout) -> Result<Vec<QueuedPatchEntry>> {
+    let wal = Wal::for_layout(layout, DEFAULT_ACTIVE_NAME);
+    let active_replay = wal.replay()?;
+    if active_replay.records.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let resolved_state = match read_active_ref_metadata(layout)? {
+        ActiveRefMetadata::Valid(owner) => {
+            let object_store = ObjectReadSnapshot::open(layout)?;
+            let mut text_cache = TextCache::new();
+            let folded = resolve_folded_worktree_baseline(
+                layout,
+                &object_store,
+                &owner,
+                &active_replay,
+                &mut text_cache,
+            )?;
+            Some(folded.state)
+        }
+        ActiveRefMetadata::Missing | ActiveRefMetadata::Invalid(_) => None,
+    };
+
+    let mut entries = Vec::with_capacity(active_replay.records.len());
+    for record in &active_replay.records {
+        let operations = decode_patch_operations(
+            &record.envelope.canonical_payload,
+            record.envelope.schema_version,
+        )?;
+        entries.push(QueuedPatchEntry {
+            patch_id: record.envelope.object_id(),
+            operations: operations
+                .iter()
+                .map(|operation| queued_operation_entry(operation, resolved_state.as_ref()))
+                .collect(),
+        });
+    }
+    Ok(entries)
+}
+
+fn queued_operation_entry(
+    operation: &DecodedPatchOperation,
+    resolved_state: Option<&NodeLifecycleState>,
+) -> QueuedOperationEntry {
+    match &operation.kind {
+        DecodedOperationKind::CreateFile { path, .. } => single_path("create-file", path.clone()),
+        DecodedOperationKind::DeleteNode { path, .. } => single_path("delete-node", path.clone()),
+        DecodedOperationKind::CreateSymlink { path, .. } => {
+            single_path("create-symlink", path.clone())
+        }
+        DecodedOperationKind::RenamePath {
+            old_path, new_path, ..
+        } => QueuedOperationEntry {
+            kind: "rename-path",
+            paths: vec![
+                QueuedPathResolution::Path(old_path.clone()),
+                QueuedPathResolution::Path(new_path.clone()),
+            ],
+        },
+        DecodedOperationKind::EditText { node_id, .. } => {
+            resolved_node_path("edit-text", *node_id, resolved_state)
+        }
+        DecodedOperationKind::ChangePerm { node_id, .. } => {
+            resolved_node_path("change-perm", *node_id, resolved_state)
+        }
+        DecodedOperationKind::ReplaceBinary { node_id, .. } => {
+            resolved_node_path("replace-binary", *node_id, resolved_state)
+        }
+    }
+}
+
+fn single_path(kind: &'static str, path: String) -> QueuedOperationEntry {
+    QueuedOperationEntry {
+        kind,
+        paths: vec![QueuedPathResolution::Path(path)],
+    }
+}
+
+fn resolved_node_path(
+    kind: &'static str,
+    node_id: NodeId,
+    resolved_state: Option<&NodeLifecycleState>,
+) -> QueuedOperationEntry {
+    let resolution = resolved_state
+        .and_then(|state| state.live_node(&node_id))
+        .map(|node| QueuedPathResolution::Path(node.path.as_str().to_string()))
+        .unwrap_or_else(|| QueuedPathResolution::Unresolved {
+            node_id: prikk_hash::to_hex(node_id.as_bytes()),
+        });
+    QueuedOperationEntry {
+        kind,
+        paths: vec![resolution],
+    }
 }
 
 #[cfg(test)]

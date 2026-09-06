@@ -73,13 +73,31 @@ fn run_init_adapter(args: Vec<String>) -> std::result::Result<(), CliError> {
     crate::run_init(path)
 }
 
-/// `status` is the other non-uniform arm: no arguments at all. RFC 121 §3: this used to accept and
-/// silently ignore any argument (`prikk status --nonsense` exited `0`); now any argument is refused.
+/// `status` is the other non-uniform arm: no arguments at all except RFC 140's `--format json`.
+/// RFC 121 §3: this used to accept and silently ignore any argument (`prikk status --nonsense`
+/// exited `0`); now any argument other than `--format json` is refused, and `--format` itself
+/// accepts no other value -- the same pattern RFC 138's `trust maintainer list`/`check` already
+/// use (`main.rs`'s own `--format` arms), copied rather than re-derived (RFC 140 §2).
 fn run_status_adapter(args: Vec<String>) -> std::result::Result<(), CliError> {
-    if let Some(extra) = args.into_iter().next() {
-        return Err(CliError::Usage(format!("unknown status argument: {extra}")));
+    use crate::arg_scan::{flag_value, mark_seen};
+
+    let mut format_json = false;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--format" => {
+                let value = flag_value(&mut iter, "status --format")?;
+                if value != "json" {
+                    return Err(CliError::Usage(format!(
+                        "status --format does not support {value:?}"
+                    )));
+                }
+                mark_seen(&mut format_json, "--format")?;
+            }
+            other => return Err(CliError::Usage(format!("unknown status argument: {other}"))),
+        }
     }
-    crate::run_status()
+    crate::run_status(format_json)
 }
 
 /// Order here is the `--help` rendering order (`output::help::print_help` iterates this table
@@ -130,7 +148,7 @@ pub(crate) const COMMANDS: &[Command] = &[
         name: "status",
         run: run_status_adapter,
         help_lines: &[
-            "  prikk status                              Check repository and active WAL status",
+            "  prikk status [--format json]               Check repository and active WAL status",
         ],
     },
     Command {
