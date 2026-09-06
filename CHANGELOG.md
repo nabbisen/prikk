@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Changed — six more refusals now say `precondition not met`, not `lock conflict`
+
+A full active-patch queue, an active WAL owned by the wrong ref for a commit, an incomplete ref
+publication, a non-empty active WAL at rollback-draft or seal-from-accepted time, and an active WAL
+holding more than a rollback draft at verify time were all reported as `lock conflict: ...`. None
+of them involve a lock: nothing is held, no other writer is racing, and waiting never made any of
+them go away — only running `seal`, `doctor`, or retrying with the right ref did. They now read
+`precondition not met: ...`, matching what was actually wrong and what actually fixes it.
+
 ## 0.34.0 — 2026-09-06
 
 ### Added — `prikk trust maintainer list` and `check`: asking what a repository trusts

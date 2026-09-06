@@ -155,7 +155,10 @@ pub fn append_rollback_draft(
     // `rfcs/handoffs/DC-66-multi-commit-queuing/queuing-baseline-design-v1.md` §5. A user who wants a
     // rollback draft seals the queue first.
     if !replay.records.is_empty() {
-        return Err(PrikkError::LockConflict(
+        // RFC 132 part 2: a non-empty active WAL is a caller precondition here, not a lock --
+        // nothing is held and no other writer is racing this one; the caller must seal the queue
+        // first, not wait.
+        return Err(PrikkError::Precondition(
             "rollback-draft requires an empty active WAL".to_string(),
         ));
     }

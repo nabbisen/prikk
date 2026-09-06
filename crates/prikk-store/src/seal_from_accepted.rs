@@ -185,7 +185,10 @@ pub fn seal_from_accepted_claim(
         ));
     }
     if !replay.records.is_empty() {
-        return Err(PrikkError::LockConflict(
+        // RFC 132 part 2: a non-empty active WAL is a caller precondition here, not a lock --
+        // nothing is held and no other writer is racing this one; the caller must seal or discard
+        // local work first, not wait.
+        return Err(PrikkError::Precondition(
             "sealing from an accepted claim requires an empty active WAL -- seal or discard \
              local work first"
                 .to_string(),

@@ -175,7 +175,9 @@ fn single_wal_record(records: &[WalRecord]) -> Result<Option<&WalRecord>> {
     match records {
         [] => Ok(None),
         [record] => Ok(Some(record)),
-        _ => Err(PrikkError::LockConflict(
+        // RFC 132 part 2: an active WAL holding more than the rollback draft is a caller
+        // precondition, not a lock -- nothing is held and no other writer is racing this one.
+        _ => Err(PrikkError::Precondition(
             "rollback-draft-verify requires an active WAL containing only the rollback draft"
                 .to_string(),
         )),

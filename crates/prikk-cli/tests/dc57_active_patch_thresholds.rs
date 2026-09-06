@@ -182,6 +182,13 @@ fn scaled_thresholds_warn_then_hard_block_then_seal_recovers() {
         blocked_stderr.contains("seal"),
         "the refusal must name `seal` as the remedy: {blocked_stderr}"
     );
+    // RFC 132 part 2, control 5: a full active-patch queue is a caller precondition, not a lock --
+    // nothing is held and no other writer is racing this one. Driven through a real repository at
+    // the configured limit (this test's own setup), not unit-tested against the constructor.
+    assert!(
+        blocked_stderr.contains("precondition not met:"),
+        "a full active-patch queue is a caller precondition, not a lock conflict: {blocked_stderr}"
+    );
 
     // `seal` remains available at and above the hard bound and fully drains the queue.
     seal(&repo);

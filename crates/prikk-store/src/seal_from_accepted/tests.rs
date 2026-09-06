@@ -4,7 +4,7 @@
 
 #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
 
-use prikk_error::Result;
+use prikk_error::{PrikkError, Result};
 use prikk_object::{
     BlobKind, BlobPayload, CanonicalEncode, CreateFile, NodeId, ObjectEnvelope, ObjectId,
     ObjectType, Operation, OperationKind, PatchPayload, PatchPurpose, RecognitionClaimPayload,
@@ -631,9 +631,18 @@ fn row10_a_non_empty_active_wal_refuses() -> Result<()> {
         fixture.claim_id,
         &fixture.signer,
     );
+    let err = result.err().ok_or_else(|| {
+        PrikkError::Integrity("a non-empty active WAL must refuse the seal".to_string())
+    })?;
+    // RFC 132 part 2: a non-empty active WAL is a caller precondition here, not a lock -- nothing
+    // is held and no other writer is racing this one.
     assert!(
-        result.is_err(),
-        "a non-empty active WAL must refuse the seal"
+        matches!(err, PrikkError::Precondition(_)),
+        "unexpected error variant: {err:?}"
+    );
+    assert!(
+        err.to_string().starts_with("precondition not met:"),
+        "unexpected error: {err}"
     );
     assert!(current_tip(&fixture.layout)?.is_none());
     cleanup(&fixture.layout);

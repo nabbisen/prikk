@@ -630,6 +630,12 @@ fn doctor_rechecks_publication_guard_after_acquiring_active_lock() -> prikk_erro
             .to_string()
             .contains("repository mutation is blocked by incomplete ref publication")
     );
+    // RFC 132 part 2: an incomplete publication is a caller precondition, not a lock -- nothing is
+    // held and no other writer is racing this one.
+    assert!(
+        error.to_string().starts_with("precondition not met:"),
+        "unexpected error: {error}"
+    );
     assert_eq!(std::fs::read(layout.default_queue_wal_path())?, before);
     assert_eq!(std::fs::read(&candidate)?, b"candidate");
     let _ = std::fs::remove_dir_all(root);

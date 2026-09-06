@@ -61,6 +61,37 @@ fn active_session_appends_signed_patch_under_lock() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// RFC 132 part 2: a full active-patch queue is a caller precondition here too, not a lock --
+/// exercised directly against `ActiveSession::append_patch`, since this method (unlike
+/// `node_authoring.rs`'s own identical check, covered at the compiled-binary level by
+/// `dc57_active_patch_thresholds.rs`) has no current production caller through the CLI to drive it
+/// with (see this file's own note on the next test).
+#[test]
+fn active_session_append_rejects_at_the_configured_limit_as_a_precondition() {
+    let root = unique_temp_dir("active-session-limit");
+    let layout = RepositoryLayout::init(root.clone()).unwrap();
+    let session = ActiveSession::new(layout.clone());
+
+    let err = session
+        .append_patch(&signed_patch_envelope(), 0)
+        .unwrap_err();
+    assert!(
+        matches!(err, prikk_error::PrikkError::Precondition(_)),
+        "unexpected error variant: {err:?}"
+    );
+    assert!(
+        err.to_string().starts_with("precondition not met:"),
+        "unexpected error: {err}"
+    );
+    assert!(
+        err.to_string()
+            .contains("queued patches, at or above the configured limit"),
+        "unexpected error: {err}"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
 // DC-66: a non-empty active WAL now queues a distinct patch rather than refusing it — this test
 // previously asserted the pre-DC-66 reject behavior; updated per the RFC's raised cap (1 -> N).
 // Ref-ownership-mismatch coverage for a non-empty queue lives at the production `worktree_patch`

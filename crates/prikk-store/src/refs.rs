@@ -130,7 +130,10 @@ pub(crate) fn ensure_no_incomplete_publication(layout: &RepositoryLayout) -> Res
     {
         return Ok(());
     }
-    Err(PrikkError::LockConflict(
+    // RFC 132 part 2: an incomplete publication is a caller precondition, not a lock -- nothing is
+    // held and no other writer is racing this one; the fix is running verify/doctor and retrying
+    // with the right signer, not waiting.
+    Err(PrikkError::Precondition(
         "repository mutation is blocked by incomplete ref publication; run verify/doctor and use signer-backed seal retry"
             .to_string(),
     ))

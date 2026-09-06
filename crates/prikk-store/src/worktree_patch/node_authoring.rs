@@ -235,7 +235,9 @@ fn author_inner<S: NodeIdEntropySource, A: AuthorSigner>(
         active_replay.records.len(),
         active_patch_limit,
     ) {
-        return Err(AuthorError::Store(PrikkError::LockConflict(format!(
+        // RFC 132 part 2: a full active-patch queue is a caller precondition, not a lock -- nothing
+        // is held and no other writer is racing this one; waiting does not help, only sealing does.
+        return Err(AuthorError::Store(PrikkError::Precondition(format!(
             "active WAL has {} queued patches, at or above the configured limit ({active_patch_limit}); \
              run `prikk seal` before committing again",
             active_replay.records.len()
