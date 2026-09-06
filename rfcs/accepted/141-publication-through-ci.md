@@ -1,6 +1,22 @@
 # RFC 141 — Publishing through CI, and the evidence nobody has ever produced
 
-**Status.** **PROPOSED, 2026-09-06.** Opened at the project owner's instruction, on their proposal:
+**Status.** **ACCEPTED by the project owner 2026-09-06**, the same day it was opened.
+
+**Moved to `rfcs/accepted/` on acceptance** — the trigger is design complete, not handoff issued.
+
+**What the acceptance covers, stated because a bare acceptance is scope-ambiguous.** The whole design
+as written: §2's security position; §3's finding and the conclusion drawn from it; **§4's reading of
+DC-35's authority composition**, which settles that registry publication sits in the
+registry-administrator leg and that no past release was out of compliance; **§5.1's hard requirement**
+that publication never become automatic on tag, with the publish job behind a required-reviewer
+environment; §5.2's ordering, idempotence and fail-stop semantics; §5.3's recognition of the
+publishing workflow as a governance surface; and §7's four increments in their stated order.
+
+**It does not authorize anything §6 excludes.** In particular it does not configure Trusted Publishing
+— that is the owner's act on their own account — and it does not touch `release-signers.toml` or the
+signer bootstrap, which sit on a different leg and remain owner-blocked as criterion 4.
+
+Originally opened as: **PROPOSED, 2026-09-06**, at the project owner's instruction, on their proposal:
 *"We had better integrate CI with the publishment. I can configure Trusted Publishing on crates.io."*
 
 **The owner's proposal is right and this RFC recommends adopting it.** It also records the thing that
@@ -169,6 +185,18 @@ propose new machinery, only that the file be recognized for what it becomes.
 2. **The ordered, idempotent, fail-stopped publish routine**, exercised against a dry-run path.
 3. **The workflow**, in an environment with required reviewers, wired to Trusted Publishing.
 4. **The first evidence-carrying release**, attached to the release page as an asset.
+
+**Handoff issued for increment 1, 2026-09-06:**
+`rfcs/handoffs/141-publication-through-ci/release-evidence-producer-handoff-v1.md`, after the move to
+`rfcs/accepted/`.
+
+**It carries one instruction this RFC did not think to give, and it is the increment's sharpest
+hazard.** The three checksums are nullable in the schema and `checksum_equality` has a
+`"not-observed"` value — so **a producer that defaults to `"match"` because nothing contradicted it
+would emit a document asserting an equality nobody checked.** That is strictly worse than the nothing
+we have today: an absent document is an honest gap, a document claiming unverified equality is a false
+record wearing DC-35's authority. The handoff names it as the single most damaging thing the increment
+could ship.
 
 **Increment 1 is worth having even if 3 and 4 never land** — it makes manual publication produce the
 evidence DC-35 requires, which is a strict improvement over today regardless of who runs it.
