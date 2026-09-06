@@ -133,5 +133,12 @@ pub fn run_setup(args: Vec<String>) -> std::result::Result<(), CliError> {
              secret"
         );
     }
+    println!();
+    println!("next steps:");
+    println!("  prikk commit -m \"<message>\"");
+    println!(
+        "  prikk seal --allow-no-audit  # no audit trust policy is configured yet; see \
+         `prikk seal --help`"
+    );
     Ok(())
 }

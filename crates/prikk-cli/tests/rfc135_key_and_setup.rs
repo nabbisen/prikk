@@ -18,7 +18,10 @@ fn extract_after(stdout: &str, prefix: &str) -> Option<String> {
 #[test]
 fn key_generate_twice_produces_different_output() {
     let repo = support::unique_repo("rfc135-key-generate-twice");
-    let first = support::prikk(&repo).args(["key", "generate"]).output().unwrap();
+    let first = support::prikk(&repo)
+        .args(["key", "generate"])
+        .output()
+        .unwrap();
     support::ok(&first, "key generate (first)");
     let second = support::prikk(&repo)
         .args(["key", "generate"])

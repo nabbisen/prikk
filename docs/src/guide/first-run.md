@@ -30,6 +30,10 @@ export these before committing:
   export PRIKK_MAINTAINER_KEY_ID="maintainer"
   export PRIKK_MAINTAINER_SEED="..."
 note: at least one seed above is now in your terminal scrollback -- treat it as a secret
+
+next steps:
+  prikk commit -m "<message>"
+  prikk seal --allow-no-audit  # no audit trust policy is configured yet; see `prikk seal --help`
 ```
 
 **The `...`s draw fresh from your OS's CSPRNG every run — copy your own, never anyone else's.**
