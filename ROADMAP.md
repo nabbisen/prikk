@@ -370,18 +370,25 @@ intention is the whole point of rewriting this section.
 
 #### The order
 
+**REFRESHED 2026-09-06.** The previous table's items 0-6 are all delivered, and four items appeared
+that were never in it. **The architect had not refreshed it; the owner asked whether the open set was
+ordered, and this is that ordering.** Sequencing remains the owner's to authorize.
+
+**The entrance rule is not engaged this round** — nothing in the entrance lane is open (RFC 135
+shipped; RFC 137's increment 5 is DNS-blocked), so nothing is being displaced by it.
+
 | # | Item | Lane | Why here |
 |---|---|---|---|
-| **0** | Retire RFCs 126, 128, 132, 134 to `done/` | — | A schedule on a false inventory is not a schedule. Cheap, and it also resolves 126/133's duplicated ruling |
-| **1** | **RFC 137 increment 1** — HTML code context in the gate | Entrance | **Handed over 2026-09-04.** Gates increment 4 |
-| **2** | **RFC 137 increments 2-3** — `site-url`, `docs.yml` staging | Entrance | Two small config changes; one silent-failure mode each |
-| **3** | **RFC 137 increment 4** — build the landing page | Entrance | The deliverable the owner raised the theme for |
-| **4** | **RFC 123** — the message field at `Patch` schema 4 | Product | The highest-severity open defect: `-m` is required, validated, and discarded. A format change, so it wants a release of its own |
-| **5** | **RFC 130** — the coupling gate | Product | **Stopped 2026-09-06 at the re-derivation and re-ruled the same day.** §4a: the crate has **four cycles, not one** — `trust ↔ refs` was present at the measured commit and missed by two derivations; two more were created by RFC 122 thirty-two minutes later — and **§4.1's absolute acyclicity rule would have rejected RFC 122**, the same commit §4 uses to prove the degree bound wrong. **§4b ruled: acyclicity becomes an allowlist-with-reasons**, finishing an amendment §4 applied to hubs and not to cycles; a cycle's entry must also state what would remove it, and writing three of the four reasons is an evaluation nobody has done. **Handoff v1 superseded; a replacement is owed** |
-| **6** | **RFC 135** — first-run entrance | Entrance | Follows 137 by design (§8's seam); deliberately unhurried per the owner |
-| **6a** | **The measurement corpus** — a synthetic-but-realistic prikk history | Product | **Added 2026-09-06, owner-approved.** Both the architect (RFC 136 §9 item 1) and the external architect reached it independently: checkout cost at realistic depth has **no honest git-history proxy** and has never been measured. Gates RFC 136, plausibly gates RFC 133 §6, and retires the methodological weakness every performance decision here inherits. **Placed after 135, not before it** — the entrance rule (a defect that is user-reachable or blocks a release) does not admit it |
-| **7** | **RFC 131** — module grouping | Product | Large file move; belongs between feature arcs, and after 130 |
-| — | RFC 136, RFC 133 §6, DC-43, 109/110/113 | blocked | Not schedulable by the architect; each waits on a named answer |
+| **1** | **Three carried defects, as one round** | Product | All small, all named twice, none deserving its own round. **One is a documentation defect already shipped**: `docs/src/reference/commands.md` — the master command inventory — lists neither `prikk key` nor `prikk setup`, both released in 0.33.0. Plus the `policy: required=1` literal (printed as if read at `main.rs:295`/`setup.rs:106`, with a three-place fan-out) and RFC 130 entry 5's relocation of `maintainer_trust_policy_or_empty` out of `recognition_claim.rs`. **Before the cut, so 0.34.0 does not ship the inventory defect a second time** |
+| **2** | **Cut 0.34.0** | — | Carries **RFC 138** (`trust maintainer list`/`check` — user-facing, requested by an external consumer whose readiness design currently carries an "unknown" state this removes), **RFC 130** (the coupling gate), and item 1. Unreleased since 0.33.0 |
+| **3** | **The measurement corpus** | Product | Owner-approved 2026-09-06. Gates RFC 136 outright and plausibly RFC 133 §6; retires the methodological weakness every performance decision here inherits. **Both the architect and the external architect reached it independently** |
+| **4** | **RFC 131** — module grouping and `pub(in ...)` scoping | Product | Unblocked: RFC 130 is complete. A large file move, which §7 says belongs **between feature arcs** — and a post-release moment is one |
+| — | RFC 120 §9.4, §9.4a; RFC 133 §6 | **owner rulings** | Consume no dev-team capacity and can be answered at any point. **§9.4a would stop an error now on its third occurrence** |
+| — | RFC 137 increment 5; RFC 136; DC-43; RFCs 109/110/113 | blocked | Each waits on a named external answer — `prikk.org` DNS, the corpus, the signer bootstrap, a direction |
+
+**Possible inbound, unscheduled:** the stikk project's standing feature asks — a per-patch/-file
+content surface (`show`/`diff`, or content in `--format json`) and queued-patch enumeration — if they
+send the written list our reply invited.
 
 #### Release cycles
 
