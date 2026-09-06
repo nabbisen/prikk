@@ -278,9 +278,18 @@ measure them rather than read them.
 
 ## 9. Increments
 
-**No handoff is issued from this RFC while it sits in `rfcs/proposed/`.** Under RFC-000 an
-implementer must not start from a proposed record, and RFC 120 §9.4a proposes the gate that would
-enforce it.
+**Handoff issued for increment 1, 2026-09-06:**
+`rfcs/handoffs/139-measurement-corpus/profile-format-handoff-v1.md`. Issued after the move to
+`rfcs/accepted/`, not before it.
+
+**One design decision was made in the handoff rather than here, and it corrects this RFC's own
+framing.** §4 speaks of "files-changed-per-commit" and cites RFC 136 §9.1's `--name-only` command.
+That is insufficient for a builder: **prikk's operation kinds do not cost the same**
+(`OperationKind` — `CreateFile`, `DeleteNode`, `EditText`, `RenamePath`, `ChangePerm`,
+`CreateSymlink`, `ReplaceBinary`), and a profile without the operation-kind mix would force the
+builder to guess it. The handoff therefore specifies `--name-status`, and adds a file-size
+distribution from `git ls-tree -r -l` because RFC 133 §2 measured that commit cost follows **bytes,
+not paths**. **§4's minimum stands; it was a floor, not a specification.**
 
 **Increment 1 — the profile format, and prikk's own profile.**
 Define the profile file's shape and the provenance fields §4 requires. Re-derive prikk's own profile
