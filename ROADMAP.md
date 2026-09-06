@@ -242,13 +242,15 @@ item is open.
 - [`DC-43-RELEASE-SECURITY-CONTROLS.md`](rfcs/proposed/DC-43-RELEASE-SECURITY-CONTROLS.md) — DC-43, Release Security and Distribution Controls (schedule position stale — cited predecessor superseded and implemented; see the RFC's own status update)
 - [`133-performance-cost-and-its-evidence.md`](rfcs/proposed/133-performance-cost-and-its-evidence.md) — RFC 133, What performance costs this project has, and what evidence holds them (extracted from RFC 126 §5/§5a on the owner's instruction 2026-09-03; **owner ruling required** — whether peak RSS gets standing protection; absorbs `AUD-01`/`AUD-02`'s cost description and the measured commit-memory shape)
 - [`136-block-aggregation-payoff.md`](rfcs/proposed/136-block-aggregation-payoff.md) — RFC 136, The block aggregation payoff: what sealing a block should make cheap (opened and **ACCEPTED 2026-09-04**; the block already bounds merge work to the sealed window, but `snapshot_blob_ref` is written `None` by all three block-creating paths and `SnapshotManifest::encode` is called only from tests, so the materialization half was never built. **§9.1 measured 2026-09-04 eliminates Option B** — composition collapses only 1.16-1.25x at realistic block sizes and that is a ceiling. **§7 RULED 2026-09-04: Option A, the acceleration travels**; Option C refused. Two consequences recorded: **§7.1** blocks travel verbatim by `bundle` but never by `sync`, which re-seals under the receiver's own key by design — so the ruling is met on the path where it matters and cannot be met on the other; **§7.2** nothing checks a snapshot's content against `state_merkle_root` today, and a travelling snapshot cannot lean on local provenance, so that check is a **precondition** of Option A. **Still unruled**: the snapshot format, the when-to-snapshot policy, and §9 items 1/2/4. No handoff issued)
+- [`139-measurement-corpus.md`](rfcs/proposed/139-measurement-corpus.md) — RFC 139, The measurement corpus: a repository worth measuring against (opened 2026-09-06 on the owner's instruction to proceed, as the next scheduled item. The corpus is a **profile plus a deterministic builder**, not a stored repository — a stored one would be a format hostage, could not be extended, and could not be sealed without committing a key. **Awaits no owner ruling.** Explicitly **not** blocked on RFC 133 §6: the corpus is an instrument, not a requirement and not a gate)
 
 **Accepted-but-unshipped RFCs are not in this list, and that is RFC 120's own scope, not an
 omission.** The gate binds `rfcs/proposed/` in both directions, so an `accepted/` file named here
-would fail `boundary-check`. **Open work also lives in `rfcs/accepted/`** — as of 2026-09-05 that is
-**130**, **131** and **138** (design complete, §4 ruled) (coupling gate, module grouping — both
-owner-accepted 2026-09-01, unimplemented), and **137** (increments 1-4 shipped in 0.31.1, increment 5
-blocked on DNS). See "Proposed ordering" below for where each sits in the schedule.
+would fail `boundary-check`. **Open work also lives in `rfcs/accepted/`** — as of 2026-09-06 that is
+**131** (module grouping and `pub(in ...)` scoping, owner-accepted 2026-09-01, unimplemented) and
+**137** (increments 1-4 shipped in 0.31.1, increment 5 blocked on `prikk.org` DNS). **130 and 138
+left `accepted/` for `done/` at the 0.34.0 cut** and are no longer open work. See "The order" below
+for where each sits in the schedule.
 
 <!-- open-work-index:end -->
 
@@ -381,7 +383,7 @@ shipped; RFC 137's increment 5 is DNS-blocked), so nothing is being displaced by
 |---|---|---|---|
 | ~~**1**~~ | ~~Three carried defects, as one round~~ | Product | **DONE 2026-09-06** (`fcbee23`, `4470370`, `544f866`, `73835df`). All three closed before the cut, as scheduled — the `commands.md` inventory (six absences, not the two named here), the `required=1` literal (replaced by a derived count, not a third print site), and the `maintainer_trust_policy_or_empty` relocation, which also removed a graph edge and a hub |
 | ~~**2**~~ | ~~Cut 0.34.0~~ | — | **DONE 2026-09-06** (`f1be4c4`). See the release position below |
-| **1** | **The measurement corpus** | Product | Owner-approved 2026-09-06. Gates RFC 136 outright and plausibly RFC 133 §6; retires the methodological weakness every performance decision here inherits. **Both the architect and the external architect reached it independently** |
+| **1** | **The measurement corpus** — **RFC 139**, opened 2026-09-06 | Product | Owner-approved 2026-09-06. Gates RFC 136 outright; retires the methodological weakness every performance decision here inherits. **Both the architect and the external architect reached it independently.** RFC 139 designs it as a **profile plus a deterministic builder**, not a stored repository, and is **not** blocked on RFC 133 §6 — an instrument is not a requirement. Four increments; **awaits no owner ruling but is not accepted, so no handoff is issued** |
 | **2** | **RFC 131** — module grouping and `pub(in ...)` scoping | Product | Unblocked: RFC 130 shipped in 0.34.0, and its 8 `DECLARED_CYCLES` entries each carry a `what_would_remove_it` — **this item's input, already written**. A large file move, which §7 says belongs **between feature arcs** — and a post-release moment is one |
 | — | RFC 120 §9.4, §9.4a; RFC 133 §6 | **owner rulings** | Consume no dev-team capacity and can be answered at any point. **§9.4a would stop an error now on its third occurrence** |
 | — | RFC 137 increment 5; RFC 136; DC-43; RFCs 109/110/113 | blocked | Each waits on a named external answer — `prikk.org` DNS, the corpus, the signer bootstrap, a direction |
