@@ -231,6 +231,17 @@ fn rollback_draft_rejects_ref_change_between_planning_and_append() {
         assert!(report.is_err());
         if let Err(error) = report {
             assert!(error.to_string().contains("target ref changed"));
+            // RFC 132 follow-up: this is a genuine lock conflict, not a caller precondition -- another
+            // writer raced this rollback-draft between planning and append, and retrying is exactly
+            // the right response, unlike the six sites this taxonomy round moved off `LockConflict`.
+            assert!(
+                matches!(error, prikk_error::PrikkError::LockConflict(_)),
+                "unexpected error variant: {error:?}"
+            );
+            assert!(
+                error.to_string().starts_with("lock conflict:"),
+                "unexpected error: {error}"
+            );
         }
         let replay = Wal::for_layout(&layout, DEFAULT_ACTIVE_NAME).replay();
         assert!(replay.is_ok());

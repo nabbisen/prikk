@@ -387,6 +387,55 @@ fn ref_store_rejects_cas_mismatch() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// RFC 132 follow-up: `RefStore::ensure_current_matches`'s own CAS-mismatch refusal
+/// (`refs.rs:453`) is a genuine lock conflict, not a caller precondition -- it exists to catch
+/// another writer racing this exact publication, and retrying (recomputing the expected previous
+/// state) is exactly the right response, unlike the six sites this taxonomy round moved off
+/// `LockConflict`.
+///
+/// **Not reachable through `RefStore::publish` under ordinary use.** `publish_locked`'s own
+/// `classify_state` reads the same current-ref-state value first, under the same container locks
+/// `ensure_current_matches` later re-reads under -- with nothing else able to write in between
+/// (confirmed above: `ref_store_rejects_cas_mismatch`'s own CAS-mismatch publication is refused by
+/// `classify_state`'s earlier "pointer/log state does not match the expected publication
+/// transition" check, never reaching this one). `ensure_current_matches` is exercised directly here
+/// instead, the same way `active.rs`'s uncalled-in-production `append_patch` limit and
+/// `seal_from_accepted.rs`'s out-of-CLI-scope precondition were tested in v1 -- a private method,
+/// reachable from this file only because `tests` is a descendant module of `refs.rs`.
+#[test]
+fn ensure_current_matches_refuses_a_mismatched_expectation() {
+    let root = unique_temp_dir("ref-cas-direct");
+    let layout = RepositoryLayout::init(root.clone());
+    assert!(layout.is_ok());
+    if let Ok(layout) = layout {
+        let store = RefStore::new(layout);
+        let bogus_expected = Some(sample_object_id("bogus-expected"));
+
+        let result = store.ensure_current_matches("heads/main", bogus_expected);
+        assert!(
+            result.is_err(),
+            "no current state exists yet; expecting one must refuse"
+        );
+        if let Err(error) = result {
+            assert!(
+                matches!(error, prikk_error::PrikkError::LockConflict(_)),
+                "unexpected error variant: {error:?}"
+            );
+            assert!(
+                error.to_string().starts_with("lock conflict:"),
+                "unexpected error: {error}"
+            );
+            assert!(
+                error.to_string().contains("ref CAS mismatch"),
+                "unexpected error: {error}"
+            );
+        }
+
+        assert!(store.ensure_current_matches("heads/main", None).is_ok());
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
+
 #[test]
 fn ref_store_rejects_unborn_publication_when_log_has_history() {
     let root = unique_temp_dir("ref-unborn-log-history");

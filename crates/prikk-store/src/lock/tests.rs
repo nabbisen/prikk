@@ -123,7 +123,27 @@ fn a_held_container_lock_refuses_a_second_acquisition() -> prikk_error::Result<(
     let layout = RepositoryLayout::init(root.clone())?;
     let first = acquire_container_locks(&layout, &[LockableContainer::TrustPolicy])?;
     let second = acquire_container_locks(&layout, &[LockableContainer::TrustPolicy]);
-    assert!(second.is_err());
+    assert!(
+        second.is_err(),
+        "a second acquisition while held must refuse"
+    );
+    if let Err(error) = second {
+        // RFC 132 follow-up: an already-held container lock is a genuine lock conflict -- another
+        // writer is active, and retrying (once it releases) is exactly the right response, unlike
+        // the six sites this taxonomy round moved off `LockConflict`.
+        assert!(
+            matches!(error, prikk_error::PrikkError::LockConflict(_)),
+            "unexpected error variant: {error:?}"
+        );
+        assert!(
+            error.to_string().starts_with("lock conflict:"),
+            "unexpected error: {error}"
+        );
+        assert!(
+            error.to_string().contains("lock already exists"),
+            "unexpected error: {error}"
+        );
+    }
     drop(first);
     assert!(acquire_container_locks(&layout, &[LockableContainer::TrustPolicy]).is_ok());
     let _ = fs::remove_dir_all(root);
@@ -209,5 +229,50 @@ fn duplicate_containers_in_one_request_are_deduplicated() -> prikk_error::Result
     assert!(guard.is_ok());
     drop(guard);
     let _ = fs::remove_dir_all(root);
+    Ok(())
+}
+
+/// RFC 132 follow-up: `ActiveLock::require_layout` refuses an `ActiveLock` acquired against a
+/// different repository's own mutation authority -- a genuine lock conflict (the lock in hand is
+/// simply the wrong one for this repository), not a caller precondition. No production call site
+/// constructs this cross-repository mismatch through ordinary use (`active.rs`/`refs.rs` both call
+/// it with the same `layout` the lock was just acquired from); exercised directly here against two
+/// independently initialized repositories, the only way to construct the mismatch at all.
+#[test]
+fn active_lock_require_layout_refuses_a_different_repository_authority() -> prikk_error::Result<()>
+{
+    let root_a = unique_temp_dir("active-lock-authority-a");
+    let root_b = unique_temp_dir("active-lock-authority-b");
+    let layout_a = RepositoryLayout::init(root_a.clone())?;
+    let layout_b = RepositoryLayout::init(root_b.clone())?;
+    let active_lock = ActiveLock::acquire(&layout_a, DEFAULT_ACTIVE_NAME)?;
+
+    let result = active_lock.require_layout(&layout_b);
+    assert!(
+        result.is_err(),
+        "a lock from a different repository authority must refuse"
+    );
+    if let Err(error) = result {
+        assert!(
+            matches!(error, prikk_error::PrikkError::LockConflict(_)),
+            "unexpected error variant: {error:?}"
+        );
+        assert!(
+            error.to_string().starts_with("lock conflict:"),
+            "unexpected error: {error}"
+        );
+        assert!(
+            error
+                .to_string()
+                .contains("active lock belongs to a different repository authority"),
+            "unexpected error: {error}"
+        );
+    }
+
+    assert!(active_lock.require_layout(&layout_a).is_ok());
+
+    drop(active_lock);
+    let _ = fs::remove_dir_all(root_a);
+    let _ = fs::remove_dir_all(root_b);
     Ok(())
 }
